@@ -25,7 +25,7 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
         let can = Var<TLAValue>("can")
         let cans = coffeeCans(maxBeanCount: maxBeanCount)
         return #spec("CoffeeCan") {
-            Extends("Naturals")
+            Extends(.naturals)
             Variable(can, in: cans)
             Action("PickSameColorBlack") {
                 StateExpr.recordAccess(can.stateExpr, "black")

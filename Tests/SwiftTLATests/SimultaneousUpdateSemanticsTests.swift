@@ -28,7 +28,7 @@ struct SimultaneousUpdateSemanticsTests {
         let initial = try #require(try compilation.initialStateProjections().first)
 
         let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
-        let verification = try ModelChecker(spec: spec, maxStates: 10).check()
+        let verification = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
 
         #expect(try value("left", in: successor) == .int(2))
         #expect(try value("right", in: successor) == .int(1))

@@ -93,10 +93,11 @@ public struct PublicWorkflowConformanceRunner: Sendable {
 
   @discardableResult
   public func run(_ options: Options) throws -> (report: PublicWorkflowDiagnosticReport, reportURL: URL) {
-    let root = options.projectRoot.resolvingSymlinksInPath().standardizedFileURL
+    let root = try ConformanceEvidence.projectRoot(options.projectRoot)
     let runID = UUID()
-    let runDirectory = options.outputRoot.appendingPathComponent("runs/\(runID.uuidString.lowercased())")
-    try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+    let outputRoot = try ConformanceEvidence.createDirectory(options.outputRoot, beneath: root)
+    let runDirectory = try ConformanceEvidence.createDirectory(
+      outputRoot.appendingPathComponent("runs/\(runID.uuidString.lowercased())"), beneath: root)
     let authority: PublicWorkflowEvidenceAuthority = hostedExecutionRequested(options.hostedCI) ? .candidate : .diagnostic
     let checks: [PublicWorkflowDiagnosticCheck]
     do {
@@ -104,7 +105,7 @@ public struct PublicWorkflowConformanceRunner: Sendable {
       let registerData = try Data(contentsOf: registerURL)
       let register = try JSONDecoder().decode(Register.self, from: registerData)
       guard register.schema == Register.schema else {
-        throw PublicWorkflowGovernanceError.invalidSchema(register.schema)
+        throw ConformanceGovernanceError.invalidSchema(register.schema)
       }
       checks = try execute(register: register, root: root, runDirectory: runDirectory, gateRunID: runID, runFixtures: options.runFixtures, runPlatformMatrix: options.runPlatformMatrix, hostedCI: authority == .candidate)
     } catch {
@@ -114,8 +115,8 @@ public struct PublicWorkflowConformanceRunner: Sendable {
     }
     let report = PublicWorkflowDiagnosticReport(runID: runID, authority: authority, checks: checks)
     let reportURL = runDirectory.appendingPathComponent("support-admission.json")
-    try write(report, to: reportURL)
-    try write(report, to: options.outputRoot.appendingPathComponent("support-admission.json"))
+    try ConformanceEvidence.writeCanonical(report, to: reportURL, trailingNewline: true)
+    try ConformanceEvidence.writeCanonical(report, to: outputRoot.appendingPathComponent("support-admission.json"), trailingNewline: true)
     return (report, reportURL)
   }
 
@@ -149,7 +150,7 @@ public struct PublicWorkflowConformanceRunner: Sendable {
     for entry in register.parserBuilder {
       checks.append(try parserCheck(entry, root: root, output: runDirectory.appendingPathComponent(entry.id), gateRunID: gateRunID))
     }
-    let generatedData = try verified(register.generatedBehavior, beneath: root)
+    let generatedData = try ConformanceEvidence.data(for: register.generatedBehavior, beneath: root)
     let generated = try PublicWorkflowGeneratedBehaviorManifest.load(generatedData)
     for fixture in generated.fixtures {
       checks.append(try generatedCheck(fixture.id, expected: fixture.expectedOutcome, manifest: register.generatedBehavior,
@@ -165,11 +166,11 @@ public struct PublicWorkflowConformanceRunner: Sendable {
   }
 
   private func platformCheck(root: URL, output: URL, gateRunID: UUID, hostedCI: Bool) throws -> PublicWorkflowDiagnosticCheck {
-    try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+    _ = try ConformanceEvidence.createDirectory(output, beneath: root)
     let script = root.appendingPathComponent("scripts/run_public_workflow_platform_matrix.sh")
     let package = root.appendingPathComponent("Package.resolved")
-    let source = try reference(for: script, beneath: root)
-    let configuration = try reference(for: package, beneath: root)
+    let source = try ConformanceEvidence.reference(for: script, beneath: root)
+    let configuration = try ConformanceEvidence.reference(for: package, beneath: root)
     let commands: [[String]] = [
       ["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]
     ]
@@ -189,7 +190,7 @@ public struct PublicWorkflowConformanceRunner: Sendable {
         "bridgeClass": "public-workflow-platform-runner", "bridgeSourceSHA256": source.sha256, "bridgeBinarySHA256": source.sha256
       ]
     ]
-    try JSONSerialization.data(withJSONObject: context, options: [.sortedKeys]).write(to: contextURL)
+    try ConformanceEvidence.writeJSON(context, to: contextURL)
     let stdout = output.appendingPathComponent("stdout.log")
     let stderr = output.appendingPathComponent("stderr.log")
     FileManager.default.createFile(atPath: stdout.path, contents: nil)
@@ -206,17 +207,17 @@ public struct PublicWorkflowConformanceRunner: Sendable {
       let retained = try artifactReferences(in: output.appendingPathComponent("evidence"), beneath: root)
       let platformStatuses = try retained.compactMap { reference -> String? in
         guard reference.path.hasSuffix("/result.json") else { return nil }
-        let value = try JSONSerialization.jsonObject(with: try verified(reference, beneath: root)) as? [String: Any]
+        let value = try JSONSerialization.jsonObject(with: try ConformanceEvidence.data(for: reference, beneath: root)) as? [String: Any]
         guard let correlation = value?["correlation"] as? [String: Any],
               correlation["gateRunID"] as? String == gateRunID.uuidString.lowercased(),
               correlation["caseID"] as? String == "public-library-macos",
               let status = value?["status"] as? String else {
-          throw PublicWorkflowGovernanceError.invalidField(record: reference.path, field: "aggregate platform correlation")
+          throw ConformanceGovernanceError.invalidField(record: reference.path, field: "aggregate platform correlation")
         }
         return status
       }
       guard !platformStatuses.isEmpty else {
-        throw PublicWorkflowGovernanceError.invalidField(record: "platform-matrix", field: "retained platform results")
+        throw ConformanceGovernanceError.invalidField(record: "platform-matrix", field: "retained platform results")
       }
       let actual: PublicWorkflowExpectedOutcome? = process.terminationStatus == 0 ? .exact : platformStatuses.contains("failed") ? .difference : nil
       let status: PublicWorkflowDiagnosticCheckStatus
@@ -226,17 +227,17 @@ public struct PublicWorkflowConformanceRunner: Sendable {
       }
       return PublicWorkflowDiagnosticCheck(id: "public-library-platform-matrix", command: "scripts/run_public_workflow_platform_matrix.sh",
         status: status, expectedOutcome: .exact, actualOutcome: actual,
-        evidence: try [reference(for: contextURL, beneath: root), reference(for: stdout, beneath: root), reference(for: stderr, beneath: root)] + retained,
+        evidence: try [ConformanceEvidence.reference(for: contextURL, beneath: root), ConformanceEvidence.reference(for: stdout, beneath: root), ConformanceEvidence.reference(for: stderr, beneath: root)] + retained,
         diagnostic: status == .matched ? nil : "platform matrix exited \(process.terminationStatus)")
     } catch {
       return PublicWorkflowDiagnosticCheck(id: "public-library-platform-matrix", command: "scripts/run_public_workflow_platform_matrix.sh",
         status: .unavailable, expectedOutcome: .exact, actualOutcome: nil,
-        evidence: try [reference(for: contextURL, beneath: root), reference(for: stdout, beneath: root), reference(for: stderr, beneath: root)], diagnostic: String(describing: error))
+        evidence: try [ConformanceEvidence.reference(for: contextURL, beneath: root), ConformanceEvidence.reference(for: stdout, beneath: root), ConformanceEvidence.reference(for: stderr, beneath: root)], diagnostic: String(describing: error))
     }
   }
 
   private func fixtureCheck(root: URL, output: URL, gateRunID: UUID) throws -> PublicWorkflowDiagnosticCheck {
-    try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+    _ = try ConformanceEvidence.createDirectory(output, beneath: root)
     let fixtures = [
       ("TLAModel-valid", "TLAModel", "Valid", "PublicWorkflowTLAModelValid", true),
       ("TLAModel-invalid", "TLAModel", "Invalid", "PublicWorkflowTLAModelInvalid", false),
@@ -250,7 +251,7 @@ public struct PublicWorkflowConformanceRunner: Sendable {
     let xcodebuild = ProcessInfo.processInfo.environment["PUBLIC_WORKFLOW_ANNOTATION_XCODEBUILD"] ?? "/usr/bin/xcodebuild"
     for (id, directory, kind, scheme, shouldBuild) in fixtures {
       let resultDirectory = output.appendingPathComponent(id)
-      try FileManager.default.createDirectory(at: resultDirectory, withIntermediateDirectories: true)
+      _ = try ConformanceEvidence.createDirectory(resultDirectory, beneath: root)
       let stdout = resultDirectory.appendingPathComponent("stdout.log")
       let stderr = resultDirectory.appendingPathComponent("stderr.log")
       let process = Process()
@@ -267,27 +268,27 @@ public struct PublicWorkflowConformanceRunner: Sendable {
         let matched = shouldBuild == (process.terminationStatus == 0)
           && (shouldBuild || diagnostics.contains("Invariant 'withinBounds' violated"))
         differed = differed || !matched
-        try JSONSerialization.data(withJSONObject: ["schema": "PublicWorkflowAnnotationFixtureResult", "gateRunID": gateRunID.uuidString.lowercased(), "id": id, "expected": shouldBuild ? "succeeded" : "failed", "actualExit": process.terminationStatus, "matched": matched], options: [.sortedKeys]).write(to: result)
+        try ConformanceEvidence.writeJSON(["schema": "PublicWorkflowAnnotationFixtureResult", "gateRunID": gateRunID.uuidString.lowercased(), "id": id, "expected": shouldBuild ? "succeeded" : "failed", "actualExit": process.terminationStatus, "matched": matched], to: result)
       } catch {
         unavailable = true
-        try JSONSerialization.data(withJSONObject: ["schema": "PublicWorkflowAnnotationFixtureResult", "gateRunID": gateRunID.uuidString.lowercased(), "id": id, "status": "unavailable", "diagnostic": String(describing: error)], options: [.sortedKeys]).write(to: result)
+        try ConformanceEvidence.writeJSON(["schema": "PublicWorkflowAnnotationFixtureResult", "gateRunID": gateRunID.uuidString.lowercased(), "id": id, "status": "unavailable", "diagnostic": String(describing: error)], to: result)
       }
     }
     let retained = try artifactReferences(in: output, beneath: root)
     for reference in retained where reference.path.hasSuffix("/result.json") {
-      let value = try JSONSerialization.jsonObject(with: try verified(reference, beneath: root)) as? [String: Any]
+      let value = try JSONSerialization.jsonObject(with: try ConformanceEvidence.data(for: reference, beneath: root)) as? [String: Any]
       guard value?["gateRunID"] as? String == gateRunID.uuidString.lowercased() else {
-        throw PublicWorkflowGovernanceError.invalidField(record: reference.path, field: "aggregate annotation correlation")
+        throw ConformanceGovernanceError.invalidField(record: reference.path, field: "aggregate annotation correlation")
       }
     }
     let status: PublicWorkflowDiagnosticCheckStatus = unavailable ? .unavailable : differed ? .differed : .matched
     let actual: PublicWorkflowExpectedOutcome? = status == .matched ? .exact : status == .differed ? .difference : nil
     return PublicWorkflowDiagnosticCheck(id: "annotation-fixtures", command: "xcodebuild annotation fixtures", status: status, expectedOutcome: .exact, actualOutcome: actual,
-      evidence: try [reference(for: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/inventory.json"), beneath: root)] + retained, diagnostic: status == .matched ? nil : "annotation fixture outcome did not match")
+      evidence: try [ConformanceEvidence.reference(for: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/inventory.json"), beneath: root)] + retained, diagnostic: status == .matched ? nil : "annotation fixture outcome did not match")
   }
 
   private func parserCheck(_ entry: Register.Entry, root: URL, output: URL, gateRunID: UUID) throws -> PublicWorkflowDiagnosticCheck {
-    _ = try verified(entry.manifest, beneath: root)
+    _ = try ConformanceEvidence.data(for: entry.manifest, beneath: root)
     let run = try PublicWorkflowParserBuilderAdapter().run(
       manifestURL: root.appendingPathComponent(entry.manifest.path), projectRoot: root, outputDirectory: output,
       correlation: try correlation(caseID: entry.id, gateRunID: gateRunID))
@@ -306,7 +307,7 @@ public struct PublicWorkflowConformanceRunner: Sendable {
 
   private func check(id: String, command: String, expected: PublicWorkflowExpectedOutcome,
                      actual: PublicWorkflowExpectedOutcome, references: [CoreEvidenceReference], root: URL, output: URL) throws -> PublicWorkflowDiagnosticCheck {
-    let comparison = try reference(for: output.appendingPathComponent("comparison.json"), beneath: root)
+    let comparison = try ConformanceEvidence.reference(for: output.appendingPathComponent("comparison.json"), beneath: root)
     return PublicWorkflowDiagnosticCheck(id: id, command: command,
       status: actual == expected ? .matched : .differed, expectedOutcome: expected, actualOutcome: actual,
       evidence: references + [comparison], diagnostic: actual == expected ? nil : "expected \(expected.rawValue), got \(actual.rawValue)")
@@ -316,43 +317,12 @@ public struct PublicWorkflowConformanceRunner: Sendable {
     try PublicWorkflowCaseRunCorrelation(caseID: caseID, gateRunID: gateRunID, fixtureRunID: UUID(), comparisonRunID: UUID())
   }
 
-  private func verified(_ reference: CoreEvidenceReference, beneath root: URL) throws -> Data {
-    let url = root.appendingPathComponent(reference.path).resolvingSymlinksInPath().standardizedFileURL
-    guard url.path.hasPrefix(root.path + "/") else {
-      throw PublicWorkflowGovernanceError.invalidField(record: reference.path, field: "path escape")
-    }
-    guard FileManager.default.fileExists(atPath: url.path) else {
-      throw PublicWorkflowGovernanceError.invalidField(record: reference.path, field: "missing evidence")
-    }
-    let data = try Data(contentsOf: url)
-    guard SHA256.hex(data) == reference.sha256 else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: reference.path, field: "SHA-256")
-    }
-    return data
-  }
-
-  private func reference(for url: URL, beneath root: URL) throws -> CoreEvidenceReference {
-    let resolved = url.resolvingSymlinksInPath().standardizedFileURL
-    let prefix = root.path + "/"
-    guard resolved.path.hasPrefix(prefix) else { throw PublicWorkflowGovernanceError.invalidField(record: resolved.path, field: "evidence path") }
-    return try CoreEvidenceReference(path: String(resolved.path.dropFirst(prefix.count)), sha256: SHA256.hex(try Data(contentsOf: resolved)))
-  }
-
   private func artifactReferences(in directory: URL, beneath root: URL) throws -> [CoreEvidenceReference] {
     guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
     let files = try FileManager.default.subpathsOfDirectory(atPath: directory.path)
       .map { directory.appendingPathComponent($0) }
       .filter { ["json", "log"].contains($0.pathExtension) }
       .sorted { $0.path < $1.path }
-    return try files.map { try reference(for: $0, beneath: root) }
-  }
-
-  private func write<T: Encodable>(_ value: T, to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    var data = try encoder.encode(value)
-    data.append(0x0A)
-    try data.write(to: url, options: .atomic)
+    return try files.map { try ConformanceEvidence.reference(for: $0, beneath: root) }
   }
 }

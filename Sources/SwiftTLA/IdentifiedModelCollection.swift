@@ -14,8 +14,13 @@ public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueTy
   private var entries: [Element.ID: Entry] = [:]
   private var insertionOrder: [Element.ID] = []
 
-  public init(name: String, verificationScope: Int, initial: Value) {
-    precondition(verificationScope > 0, "A symmetric collection requires a positive verification scope")
+  public init(name: String, verificationScope: Int, initial: Value) throws {
+    guard verificationScope > 0 else {
+      throw SymmetricCollectionRuntimeError.invalidVerificationScope(
+        collection: name,
+        scope: verificationScope
+      )
+    }
     self.name = name
     self.verificationScope = verificationScope
     self.initial = initial
@@ -45,9 +50,9 @@ public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueTy
     return removed
   }
 
-  public mutating func update(id: Element.ID, to value: Value, action: String) throws {
+  public mutating func update(id: Element.ID, to value: Value) throws {
     guard var entry = entries[id] else {
-      throw SymmetricCollectionRuntimeError.unknownMember(collection: name, action: action)
+      throw SymmetricCollectionRuntimeError.unknownMember(collection: name)
     }
     entry.value = value
     entries[id] = entry
@@ -55,19 +60,18 @@ public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueTy
 
   public mutating func update(
     id: Element.ID,
-    action: String,
     transforming transform: (Entry) -> Value
   ) throws {
     guard var entry = entries[id] else {
-      throw SymmetricCollectionRuntimeError.unknownMember(collection: name, action: action)
+      throw SymmetricCollectionRuntimeError.unknownMember(collection: name)
     }
     entry.value = transform(entry)
     entries[id] = entry
   }
 
-  public func entry(for id: Element.ID, action: String) throws -> Entry {
+  public func entry(for id: Element.ID) throws -> Entry {
     guard let entry = entries[id] else {
-      throw SymmetricCollectionRuntimeError.unknownMember(collection: name, action: action)
+      throw SymmetricCollectionRuntimeError.unknownMember(collection: name)
     }
     return entry
   }
@@ -86,16 +90,16 @@ extension IdentifiedModelCollection.Entry: Sendable where Element: Sendable, Val
 
 extension IdentifiedModelCollection: Sendable where Element: Sendable, Element.ID: Sendable, Value: Sendable {}
 
-public enum SymmetricCollectionRuntimeError: Error, Equatable, CustomStringConvertible {
-  case unknownMember(collection: String, action: String)
-  case actionNotEnabled(collection: String, action: String)
+public enum SymmetricCollectionRuntimeError: Error, Equatable, Sendable, CustomStringConvertible {
+  case invalidVerificationScope(collection: String, scope: Int)
+  case unknownMember(collection: String)
 
   public var description: String {
     switch self {
-    case .unknownMember(let collection, let action):
-      return "Symmetric collection '\(collection)' cannot route action '\(action)' to an unknown runtime member."
-    case .actionNotEnabled(let collection, let action):
-      return "Symmetric collection '\(collection)' cannot apply action '\(action)' to the selected runtime member in its current state."
+    case .invalidVerificationScope(let collection, let scope):
+      return "Symmetric collection '\(collection)' requires a positive verification scope; received \(scope)."
+    case .unknownMember(let collection):
+      return "Symmetric collection '\(collection)' cannot update an unknown runtime member."
     }
   }
 }

@@ -1,10 +1,8 @@
 import Foundation
 
-/// The non-formal facts needed to emit a Swift machine surface.
+/// Swift field and collection facts used to emit a machine surface.
 ///
-/// These facts are keyed by declarations in the compiled specification. They
-/// intentionally contain type and source-shape information only; expressions,
-/// invariants, and transition bodies stay in `TLASpec`.
+/// The facts are keyed by declarations in the compiled specification.
 public struct MachineSurfaceSwiftFacts: Sendable, Equatable {
     public struct SymmetricCollection: Sendable, Equatable {
         public let elementType: String
@@ -36,9 +34,7 @@ public struct MachineSurfaceSwiftFacts: Sendable, Equatable {
 
 /// A typed failure at the generated-machine boundary.
 ///
-/// This diagnostic deliberately contains no raw formal state dictionary. A
-/// caller can distinguish an inconsistent generated surface from a finite
-/// evaluation that could not complete without crossing that boundary.
+/// The diagnostic carries the failed contract fact and its recovery action.
 public struct GeneratedMachineContractDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
     public enum Code: String, Sendable, Equatable {
         case unknownSwiftFact
@@ -47,7 +43,6 @@ public struct GeneratedMachineContractDiagnostic: Error, Sendable, Equatable, Cu
         case projectionDecodeMismatch
         case behaviorMismatch
         case compilationIdentityMismatch
-        case schemaMismatch
         case evaluationUnavailable
     }
 
@@ -78,11 +73,11 @@ public struct GeneratedMachineContractDiagnostic: Error, Sendable, Equatable, Cu
     }
 }
 
-/// The one emitted-machine view of a compiled specification.
+/// The emitted-machine view of a compiled specification.
 ///
-/// The plan carries declaration descriptors and finite invocation domains, not
-/// a second executable AST. The macro, metadata, label conversion, state
-/// projection codecs, and contract checker all consume these descriptors.
+/// The plan provides declaration descriptors and finite invocation domains to
+/// the macro, metadata, label conversion, state projection codecs, and
+/// contract checker.
 public struct MachineSurfacePlan: Sendable, Equatable {
     public enum FormalValueShape: String, Sendable, Equatable {
         case integer
@@ -180,7 +175,6 @@ public struct MachineSurfacePlan: Sendable, Equatable {
     public let actions: [Action]
     public let symmetricCollections: [SymmetricCollection]
     public let collectionActions: [String: String]
-    public let schemaIdentifier: String
 
     public init(
         compilation: CompiledSpecification,
@@ -240,10 +234,8 @@ public struct MachineSurfacePlan: Sendable, Equatable {
                 bindings: action.bindings.map { binding in
                     Binding(
                         formalName: binding.name,
-                        swiftType: Self.publicActionBindingSwiftType(
-                            swiftFacts.actionBindingTypes[action.name]?[binding.name]
-                                ?? Self.defaultActionBindingSwiftType(for: binding.values[0])
-                        ),
+                        swiftType: swiftFacts.actionBindingTypes[action.name]?[binding.name]
+                            ?? Self.defaultActionBindingSwiftType(for: binding.values[0]),
                         domain: binding.values,
                         isPublic: binding.values.count > 1
                     )
@@ -268,21 +260,15 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         self.actions = actions
         self.symmetricCollections = symmetricCollections
         self.collectionActions = swiftFacts.collectionActions
-        self.schemaIdentifier = Self.schemaIdentifier(
-            identity: compilation.identity,
-            variables: variables,
-            actions: actions,
-            symmetricCollections: symmetricCollections,
-            collectionActions: swiftFacts.collectionActions
-        )
     }
 
     public var metadata: GeneratedMachineMetadata {
         .init(
             compilationIdentity: compilationIdentity,
-            schemaIdentifier: schemaIdentifier,
             variables: variables,
-            actions: actions
+            actions: actions,
+            symmetricCollections: symmetricCollections,
+            collectionActions: collectionActions
         )
     }
 
@@ -330,15 +316,8 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         }
     }
 
-    private static func publicActionBindingSwiftType(_ type: String) -> String {
-        switch type.replacingOccurrences(of: " ", with: "") {
-        case "[String:TLAValue]", "[TLAValue:TLAValue]": "TLAValue"
-        default: type
-        }
-    }
-
     private static func generatedActionIdentifiers(_ names: [String]) -> [String] {
-        let reserved: Set<String> = ["init", "deinit", "subscript", "toInvocation", "rawValue"]
+        let reserved: Set<String> = ["init", "deinit", "subscript", "rawValue"]
         var used: Set<String> = []
         return names.map { name in
             let scalars = name.unicodeScalars.map { scalar -> Character in
@@ -363,73 +342,28 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         }
     }
 
-    private static func schemaIdentifier(
-        identity: CompilationIdentity,
-        variables: [Variable],
-        actions: [Action],
-        symmetricCollections: [SymmetricCollection],
-        collectionActions: [String: String]
-    ) -> String {
-        func field(_ value: String) -> String { "\(value.utf8.count):\(value)" }
-        var source = field(identity.value)
-        for variable in variables {
-            source += field(variable.formalName)
-            source += field(variable.swiftType)
-            source += field(variable.valueShape.rawValue)
-            source += field(String(describing: variable.collectionType))
-        }
-        for action in actions {
-            source += field(action.formalName)
-            source += field(action.swiftIdentifier)
-            for binding in action.bindings {
-                source += field(binding.formalName)
-                source += field(binding.swiftType)
-                source += field(String(binding.isPublic))
-                for value in binding.domain { source += field(String(describing: value)) }
-            }
-        }
-        for collection in symmetricCollections {
-            source += field(collection.formalName)
-            source += field(String(collection.verificationScope))
-            source += field(String(describing: collection.initial))
-            source += field(collection.elementType)
-            source += field(collection.valueType)
-        }
-        for (action, collection) in collectionActions.sorted(by: { $0.key < $1.key }) {
-            source += field(action)
-            source += field(collection)
-        }
-        var hash: UInt64 = 0xcbf29ce484222325
-        for byte in source.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 0x100000001b3
-        }
-        return String(format: "machine-%016llx", hash)
-    }
 }
 
 /// Stable metadata emitted next to the generated Swift machine surface.
 public struct GeneratedMachineMetadata: Sendable, Equatable {
-    public static let currentSchemaVersion = 1
-
-    public let schemaVersion: Int
     public let compilationIdentity: CompilationIdentity
-    public let schemaIdentifier: String
     public let variables: [MachineSurfacePlan.Variable]
     public let actions: [MachineSurfacePlan.Action]
+    public let symmetricCollections: [MachineSurfacePlan.SymmetricCollection]
+    public let collectionActions: [String: String]
 
     public init(
         compilationIdentity: CompilationIdentity,
-        schemaIdentifier: String,
         variables: [MachineSurfacePlan.Variable],
         actions: [MachineSurfacePlan.Action],
-        schemaVersion: Int = Self.currentSchemaVersion
+        symmetricCollections: [MachineSurfacePlan.SymmetricCollection],
+        collectionActions: [String: String]
     ) {
-        self.schemaVersion = schemaVersion
         self.compilationIdentity = compilationIdentity
-        self.schemaIdentifier = schemaIdentifier
         self.variables = variables
         self.actions = actions
+        self.symmetricCollections = symmetricCollections
+        self.collectionActions = collectionActions
     }
 }
 
@@ -495,17 +429,16 @@ public enum GeneratedMachineContractVerifier {
         compilation: CompiledSpecification,
         plan: MachineSurfacePlan,
         metadata: GeneratedMachineMetadata,
-        expectedSchemaIdentifier: String,
-        verificationStateLimit: Int,
+        maximumStateLimit: Int,
         decodeState: @escaping @Sendable (TLAStateProjection) throws -> Void,
         behavior: GeneratedMachineBehavior
     ) -> GeneratedMachineContractReport {
-        guard verificationStateLimit > 0 else {
+        guard maximumStateLimit > 0 else {
             return unavailable(
                 code: .evaluationUnavailable,
-                path: "verificationStateLimit",
+                path: "maximumStateLimit",
                 expected: "a positive finite state limit",
-                actual: String(verificationStateLimit)
+                actual: String(maximumStateLimit)
             )
         }
         guard compilation.identity == plan.compilationIdentity else {
@@ -516,28 +449,11 @@ public enum GeneratedMachineContractVerifier {
                 actual: plan.compilationIdentity.value
             )
         }
-        guard metadata.schemaVersion == GeneratedMachineMetadata.currentSchemaVersion else {
-            return difference(
-                code: .schemaMismatch,
-                path: "metadata.schemaVersion",
-                expected: String(GeneratedMachineMetadata.currentSchemaVersion),
-                actual: String(metadata.schemaVersion)
-            )
-        }
-        guard plan.schemaIdentifier == expectedSchemaIdentifier,
-              metadata.schemaIdentifier == expectedSchemaIdentifier else {
-            return difference(
-                code: .schemaMismatch,
-                path: "schemaIdentifier",
-                expected: expectedSchemaIdentifier,
-                actual: "plan=\(plan.schemaIdentifier), metadata=\(metadata.schemaIdentifier)"
-            )
-        }
         guard metadata == plan.metadata else {
             return difference(
                 code: .metadataDomainMismatch,
                 path: "metadata",
-                expected: "metadata derived from \(plan.schemaIdentifier)",
+                expected: "metadata derived from the compiled specification",
                 actual: "a differing generated-machine metadata surface"
             )
         }
@@ -546,7 +462,9 @@ public enum GeneratedMachineContractVerifier {
         do {
             exploration = try ModelChecker(
                 compilation: compilation,
-                maxStates: verificationStateLimit
+                configuration: try FiniteExplorationConfiguration(
+                    maximumStateLimit: maximumStateLimit
+                )
             ).explore()
         } catch {
             return unavailable(
@@ -560,7 +478,7 @@ public enum GeneratedMachineContractVerifier {
             return unavailable(
                 code: .evaluationUnavailable,
                 path: "formalMachine",
-                expected: "a complete graph within \(verificationStateLimit) states",
+                expected: "a complete graph within \(maximumStateLimit) states",
                 actual: String(describing: exploration.result)
             )
         }

@@ -14,7 +14,7 @@ public struct SymmetryOrbitDifference: Equatable, Codable, Sendable {
 
   public init(kind: SymmetryOrbitDifferenceKind, detail: String) throws {
     guard !detail.isEmpty else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "symmetry difference", field: "detail")
+      throw ConformanceGovernanceError.invalidField(record: "symmetry difference", field: "detail")
     }
     self.kind = kind
     self.detail = detail
@@ -81,7 +81,7 @@ public struct SymmetryOrbitComparisonInput: Sendable {
     try quotientEvidence.validate()
     guard !caseID.isEmpty, correlation.caseID == caseID, configuration.property == nil,
           configuration.symmetryEnabled, !permutations.isEmpty else {
-      throw TemporalSymmetryGovernanceError.inconsistentReference(record: caseID, field: "symmetry input")
+      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "symmetry input")
     }
     let explorations = [swiftRaw, swiftReduced, tlcRaw, tlcReduced]
     guard Set(explorations.map { "\($0.engine.rawValue):\($0.reduced)" }).count == 4,
@@ -90,7 +90,7 @@ public struct SymmetryOrbitComparisonInput: Sendable {
           Set([correlation.gateRunID, correlation.comparisonRunID, swiftRaw.runID, swiftReduced.runID,
                tlcRaw.runID, tlcReduced.runID]).count == 6,
           Set(explorations.map(\.declaredConfigurationSHA256)).count == 1 else {
-      throw TemporalSymmetryGovernanceError.inconsistentReference(record: caseID, field: "symmetry pair configuration")
+      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "symmetry pair configuration")
     }
   }
 }
@@ -187,15 +187,15 @@ public struct SymmetryOrbitComparator: Sendable {
   private func validate(_ exploration: SymmetryExploration, against run: CanonicalRun) throws {
     let stateIDs = Set(run.graph.states.keys.map(\.canonicalEncoding))
     let initialStateIDs = Set(run.graph.initialStateKeys.map(\.canonicalEncoding))
-    let transitions = try Set(run.graph.edgeOccurrences.keys.map {
+    let transitions = try Set(run.graph.edgeOccurrences.map {
       try SymmetryRawTransitionWitness(
-        engine: exploration.engine, sourceStateID: $0.source.canonicalEncoding, action: $0.action,
-        targetStateID: $0.target.canonicalEncoding)
+        engine: exploration.engine, sourceStateID: $0.key.source.canonicalEncoding, action: $0.key.action,
+        targetStateID: $0.key.target.canonicalEncoding, occurrences: $0.value)
     })
     guard Set(exploration.stateIDs) == stateIDs,
           Set(exploration.initialStateIDs) == initialStateIDs,
           Set(exploration.transitions) == transitions else {
-      throw TemporalSymmetryGovernanceError.invalidField(
+      throw ConformanceGovernanceError.invalidField(
         record: exploration.graphID, field: "canonical graph evidence")
     }
   }
@@ -213,10 +213,10 @@ public struct SymmetryOrbitComparator: Sendable {
   }
 
   private func rawWitnesses(_ run: CanonicalRun, engine: SymmetryExplorationEngine) -> [SymmetryRawTransitionWitness] {
-    run.graph.edgeOccurrences.keys.compactMap { edge in
+    run.graph.edgeOccurrences.compactMap { edge, occurrences in
       try? SymmetryRawTransitionWitness(
         engine: engine, sourceStateID: edge.source.canonicalEncoding, action: edge.action,
-        targetStateID: edge.target.canonicalEncoding)
+        targetStateID: edge.target.canonicalEncoding, occurrences: occurrences)
     }.sorted { $0.sourceStateID < $1.sourceStateID }
   }
 

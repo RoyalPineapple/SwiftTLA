@@ -1,113 +1,66 @@
 {
-  "conformant" : false,
-  "correlation" : {
-    "caseID" : "hour-clock-edge-mismatch",
-    "engine" : "runner",
-    "runID" : "f7414e6a-6096-4ed3-9322-e9fa9e8a7465"
+  "actualReceipt": {
+    "compiledModelIdentity": "retained-baseline",
+    "configurationIdentity": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
+    "edgeCount": 12,
+    "edgesDigest": "2b570ef3ae12fdc75967c26342d40afc8564edd1fc83701e847b3e1c1243674c",
+    "explorationStatus": "complete",
+    "format": "canonical-graph-receipt",
+    "graphChunkDigests": [
+      "b9f0950a9976af778c14f8b4d0a44b21d0367233dc42cc528d3f7b7a8a8c0fd9"
+    ],
+    "graphDigest": "331272e1c00b81da1ad01e05d6b0789701aba9ccb7f0e4b7fee25c8f728863f5",
+    "initialStateCount": 12,
+    "initialStatesDigest": "821d722d6cbdd3c4f63fa4859b296256923c50bc1bd06c0ff3334fb9a69a5150",
+    "maximumStateLimit": 100000,
+    "stateCount": 12,
+    "statesDigest": "66cff08ad38a4dd357796dc893bf6c2ef3b65581a3f66473418eb5638e7eafa0",
+    "symmetrySchemaIdentity": "none"
   },
-  "differences" : [
+  "conformant": false,
+  "correlation": {
+    "caseID": "hour-clock-edge-mismatch",
+    "engine": "runner",
+    "runID": "f7414e6a-6096-4ed3-9322-e9fa9e8a7465"
+  },
+  "differences": [
     {
-      "actual" : [
+      "actual": "331272e1c00b81da1ad01e05d6b0789701aba9ccb7f0e4b7fee25c8f728863f5",
+      "category": "receipt",
+      "expected": "a816e85ee1e4bce17219f90f85cb36f16a0f6aee4a1ff47b321db5b50121edb9"
+    },
+    {
+      "actual": [
         {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:10]--48436e7874-->state:[6872=integer:11]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:11]--48436e7874-->state:[6872=integer:12]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:12]--48436e7874-->state:[6872=integer:1]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:1]--48436e7874-->state:[6872=integer:2]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:2]--48436e7874-->state:[6872=integer:3]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:3]--48436e7874-->state:[6872=integer:4]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:4]--48436e7874-->state:[6872=integer:5]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:5]--48436e7874-->state:[6872=integer:6]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:6]--48436e7874-->state:[6872=integer:7]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:7]--48436e7874-->state:[6872=integer:8]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:8]--48436e7874-->state:[6872=integer:9]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:9]--48436e7874-->state:[6872=integer:10]"
+          "count": 1,
+          "edge": "edge:state:[6872=integer:12]--48436e7874-->state:[6872=integer:1]"
         }
       ],
-      "category" : "edges",
-      "expected" : [
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:10]--48436e7874-->state:[6872=integer:11]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:11]--48436e7874-->state:[6872=integer:12]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:12]--48436e7874-->state:[6872=integer:2]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:1]--48436e7874-->state:[6872=integer:2]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:2]--48436e7874-->state:[6872=integer:3]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:3]--48436e7874-->state:[6872=integer:4]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:4]--48436e7874-->state:[6872=integer:5]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:5]--48436e7874-->state:[6872=integer:6]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:6]--48436e7874-->state:[6872=integer:7]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:7]--48436e7874-->state:[6872=integer:8]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:8]--48436e7874-->state:[6872=integer:9]"
-        },
-        {
-          "count" : 1,
-          "edge" : "edge:state:[6872=integer:9]--48436e7874-->state:[6872=integer:10]"
-        }
-      ]
+      "category": "edges",
+      "expected": []
     }
-  ]
+  ],
+  "expectedReceipt": {
+    "compiledModelIdentity": "retained-baseline",
+    "configurationIdentity": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
+    "edgeCount": 12,
+    "edgesDigest": "f820efed3a1394f00f436dba4aeeb49a9908fb34347cdab703f9d81f14702999",
+    "explorationStatus": "complete",
+    "format": "canonical-graph-receipt",
+    "graphChunkDigests": [
+      "e1e925597fb2cb5ee1354036e06718fd6e6415c7fb727bc1076f27738a54b97b"
+    ],
+    "graphDigest": "a816e85ee1e4bce17219f90f85cb36f16a0f6aee4a1ff47b321db5b50121edb9",
+    "initialStateCount": 12,
+    "initialStatesDigest": "821d722d6cbdd3c4f63fa4859b296256923c50bc1bd06c0ff3334fb9a69a5150",
+    "maximumStateLimit": 100000,
+    "stateCount": 12,
+    "statesDigest": "66cff08ad38a4dd357796dc893bf6c2ef3b65581a3f66473418eb5638e7eafa0",
+    "symmetrySchemaIdentity": "none"
+  },
+  "firstDifferentGraphChunk": {
+    "index": 0,
+    "expectedDigest": "e1e925597fb2cb5ee1354036e06718fd6e6415c7fb727bc1076f27738a54b97b",
+    "actualDigest": "b9f0950a9976af778c14f8b4d0a44b21d0367233dc42cc528d3f7b7a8a8c0fd9"
+  }
 }

@@ -47,7 +47,7 @@ private func paxosSpec() -> TLASpec {
     }
 
     return #spec("Paxos") {
-        Extends("Integers")
+        Extends(.integers)
 
         Variable(maxBal, initFunc)
         Variable(maxVBal, initFunc)

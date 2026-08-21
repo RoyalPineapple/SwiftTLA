@@ -5,17 +5,19 @@ import SwiftTLAMacros
 public struct BarrierModel: Sendable {
     public enum BarrierPhase: String, TLAValueType {
         case b0, b1
+
+        public static var defaultValue: Self { .b0 }
     }
 
     public static var spec: TLASpec {
         #spec("Barrier") {
-            Extends("Integers")
-            let pc1 = SharedVar(initial: BarrierPhase.b0)
-            let pc2 = SharedVar(initial: BarrierPhase.b0)
-            let pc3 = SharedVar(initial: BarrierPhase.b0)
-            let pc4 = SharedVar(initial: BarrierPhase.b0)
-            let pc5 = SharedVar(initial: BarrierPhase.b0)
-            let pc6 = SharedVar(initial: BarrierPhase.b0)
+            Extends(.integers)
+            let pc1 = SharedVar("pc1", initial: BarrierPhase.b0)
+            let pc2 = SharedVar("pc2", initial: BarrierPhase.b0)
+            let pc3 = SharedVar("pc3", initial: BarrierPhase.b0)
+            let pc4 = SharedVar("pc4", initial: BarrierPhase.b0)
+            let pc5 = SharedVar("pc5", initial: BarrierPhase.b0)
+            let pc6 = SharedVar("pc6", initial: BarrierPhase.b0)
             Action("b0_1") { pc1 == BarrierPhase.b0 && pc1.becomes(BarrierPhase.b1) }
             Action("b0_2") { pc2 == BarrierPhase.b0 && pc2.becomes(BarrierPhase.b1) }
             Action("b0_3") { pc3 == BarrierPhase.b0 && pc3.becomes(BarrierPhase.b1) }

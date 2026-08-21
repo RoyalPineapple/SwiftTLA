@@ -99,7 +99,7 @@ struct SymmetryOrbitConformanceTests {
   func orbitEvidenceRejectsInvalidRunCorrelation() throws {
     let input = try fixture(reducedStates: [state("A")])
     let collidingSwiftReduced = try exploration(.swift, true, input.correlation.swiftRunID, states: [state("A")])
-    #expect(throws: TemporalSymmetryGovernanceError.inconsistentReference(
+    #expect(throws: ConformanceGovernanceError.inconsistentReference(
       record: "scope-2", field: "symmetry pair configuration")) {
       _ = try SymmetryOrbitComparisonInput(
         caseID: input.caseID, configuration: input.configuration, correlation: input.correlation,
@@ -109,7 +109,7 @@ struct SymmetryOrbitConformanceTests {
         quotientEvidence: input.quotientEvidence, permutations: input.permutations)
     }
     let identifier = UUID()
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "scope-2", field: "TLC raw/reduced run correlation")) {
       _ = try PinnedSymmetryTLCCorrelation(
         caseID: "scope-2", gateRunID: identifier, comparisonRunID: UUID(), rawRunID: identifier, reducedRunID: UUID())
@@ -140,10 +140,10 @@ struct SymmetryOrbitConformanceTests {
   private func exploration(
     _ engine: SymmetryExplorationEngine, _ reduced: Bool, _ runID: UUID, run: CanonicalRun
   ) throws -> SymmetryExploration {
-    let transitions = run.graph.edgeOccurrences.keys.map {
-      try! SymmetryRawTransitionWitness(
-        engine: engine, sourceStateID: $0.source.canonicalEncoding, action: $0.action,
-        targetStateID: $0.target.canonicalEncoding)
+    let transitions = try run.graph.edgeOccurrences.map { edge, occurrences in
+      try SymmetryRawTransitionWitness(
+        engine: engine, sourceStateID: edge.source.canonicalEncoding, action: edge.action,
+        targetStateID: edge.target.canonicalEncoding, occurrences: occurrences)
     }
     return try SymmetryExploration(
       engine: engine, reduced: reduced, runID: runID, graphID: "\(engine.rawValue)-\(reduced)",

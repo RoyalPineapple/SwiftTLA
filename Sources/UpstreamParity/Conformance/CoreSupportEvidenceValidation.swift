@@ -123,29 +123,20 @@ extension CoreSupportGate {
     return true
   }
 
-  func canonicalGraphsAreComplete(
-    _ swift: [String: Any], _ tlc: [String: Any], requireExhaustiveCompletion: Bool
+  func canonicalRunsAreComplete(
+    _ swift: CanonicalRun, _ tlc: CanonicalRun, requireExhaustiveCompletion: Bool
   ) -> Bool {
-    [swift, tlc].allSatisfy { graph in
-      let outcome = graph["outcome"] as? [String: Any]
-      let outcomeIsComplete = requireExhaustiveCompletion
-        ? outcome?["kind"] as? String == "exhaustiveSuccess"
-        : outcome?["kind"] as? String != nil
-      return graph["schema"] as? String == CanonicalSchema.exactFiniteTLCGraph.rawValue
-        && graph["initialStates"] as? [String] != nil
-        && graph["states"] as? [String] != nil
-        && graph["edges"] as? [[String: Any]] != nil
-        && graph["observations"] as? [[String: Any]] != nil
-        && graph["observableActions"] as? [String] != nil
-        && (graph["errors"] as? [[String: Any]])?.isEmpty == true
-        && (graph["traces"] as? [[String: Any]]) != nil
-        && outcomeIsComplete
+    [swift, tlc].allSatisfy { run in
+      run.schema == .exactFiniteTLCGraph
+        && !run.graph.initialStateKeys.isEmpty
+        && !run.graph.states.isEmpty
+        && run.errors.isEmpty
+        && (!requireExhaustiveCompletion || run.outcome.isExhaustiveSuccess)
     }
   }
 
-  func canonicalGraphsAgree(_ swift: [String: Any], _ tlc: [String: Any]) -> Bool {
-    let fields = ["schema", "initialStates", "states", "edges", "observations", "observableActions", "outcome", "errors", "traces"]
-    return fields.allSatisfy { field in canonicalValue(swift[field]) == canonicalValue(tlc[field]) }
+  func canonicalRunsAgree(_ swift: CanonicalRun, _ tlc: CanonicalRun) -> Bool {
+    exactFiniteTLCGraph(expected: tlc, actual: swift).isConformant
   }
 
   func rawArtifactManifestIsComplete(
@@ -215,24 +206,19 @@ extension CoreSupportGate {
   }
 
   func graphEventStreamMatchesCanonicalTLCGraph(
-    at url: URL, expectedCase: CoreConformanceCase, gateRunID: UUID, tlc: [String: Any]
+    at url: URL, expectedCase: CoreConformanceCase, gateRunID: UUID, tlc: CanonicalRun
   ) throws -> Bool {
     let data = try Data(contentsOf: url)
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let stream = try parser.parse(data)
     guard stream.runID == gateRunID, !stream.initialStates.isEmpty else { return false }
 
-    // The event stream is the primary TLC graph record. Rebuild its canonical
-    // graph and require every graph field in tlc.json to be the same record.
     let complete = TLCProcessResult(
       status: 0, stdout: "Model checking completed. No error has been found.", stderr: "")
-    let run = try parser.parseCanonicalRun(data, result: complete)
-    let expected = canonicalGraphProjection(run)
-    let fields = ["schema", "initialStates", "states", "edges", "observations", "observableActions"]
-    for field in fields where canonicalValue(tlc[field]) != canonicalValue(expected[field]) {
-      return false
-    }
-    return true
+    let run = try parser.canonicalRun(stream, result: complete)
+    return run.schema == tlc.schema
+      && run.graph == tlc.graph
+      && run.observableActions == tlc.observableActions
   }
 
   func rawEvidenceMatchesCanonicalOutcome(
@@ -240,7 +226,7 @@ extension CoreSupportGate {
     expectedCase: CoreConformanceCase,
     gateRunID: UUID,
     isViolation: Bool,
-    tlc: [String: Any]
+    tlc: CanonicalRun
   ) throws -> Bool {
     let primaryURL = directory.appendingPathComponent("graph-events.jsonl")
     let primary = try canonicalGraph(at: primaryURL, expectedCase: expectedCase)
@@ -263,8 +249,8 @@ extension CoreSupportGate {
 
     let trace = try canonicalGraph(at: traceURL, expectedCase: expectedCase)
     guard trace.runID == gateRunID,
-          canonicalValue(canonicalGraphProjection(primary.run))
-            == canonicalValue(canonicalGraphProjection(trace.run))
+          primary.run.graph == trace.run.graph,
+          primary.run.observableActions == trace.run.observableActions
     else { return false }
 
     let counterexample = try TLCTraceParser().parseCounterexample(Data(contentsOf: counterexampleURL))
@@ -293,76 +279,19 @@ extension CoreSupportGate {
     return size.intValue > 0
   }
 
-  private func canonicalOutcomeMatchesProcess(_ tlc: [String: Any], isViolation: Bool) -> Bool {
-    guard let outcome = tlc["outcome"] as? [String: Any],
-          (tlc["errors"] as? [[String: Any]])?.isEmpty == true,
-          (tlc["traces"] as? [[String: Any]])?.isEmpty == true
-    else { return false }
+  private func canonicalOutcomeMatchesProcess(_ tlc: CanonicalRun, isViolation: Bool) -> Bool {
+    guard tlc.errors.isEmpty, tlc.traces.isEmpty else { return false }
     if isViolation {
-      return Set(outcome.keys) == ["kind", "message"]
-        && outcome["kind"] as? String == "invariantViolation"
-        && !(outcome["message"] as? String ?? "").isEmpty
+      if case .invariantViolation(let message) = tlc.outcome { return !message.isEmpty }
+      return false
     }
-    return Set(outcome.keys) == ["kind"] && outcome["kind"] as? String == "exhaustiveSuccess"
+    return tlc.outcome.isExhaustiveSuccess
   }
 
-  private func graphMatchesCanonicalTLC(_ graph: ParsedPhaseGraph, tlc: [String: Any]) -> Bool {
-    guard tlc["schema"] as? String == graph.run.schema.rawValue,
-          let initialStates = tlc["initialStates"] as? [String],
-          let states = tlc["states"] as? [String],
-          let edges = tlc["edges"] as? [[String: Any]],
-          let observations = tlc["observations"] as? [[String: Any]],
-          let actions = tlc["observableActions"] as? [String],
-          strictlySortedUnique(initialStates),
-          strictlySortedUnique(states),
-          strictlySortedUnique(actions),
-          initialStates == graph.run.graph.initialStateKeys.map(\.canonicalEncoding).sorted(),
-          states == graph.run.graph.states.keys.map(\.canonicalEncoding).sorted(),
-          actions == graph.run.observableActions.sorted()
-    else { return false }
-
-    var actualEdges: [String: Int] = [:]
-    for (edge, count) in graph.run.graph.edgeOccurrences {
-      let encoded = edge.canonicalEncoding
-      guard actualEdges.updateValue(count, forKey: encoded) == nil else { return false }
-    }
-    guard edges.count == actualEdges.count else { return false }
-    var previousEdge: String?
-    for edge in edges {
-      guard Set(edge.keys) == ["edge", "count"],
-            let encoded = edge["edge"] as? String,
-            let count = edge["count"] as? Int, count > 0,
-            previousEdge.map({ $0 < encoded }) ?? true,
-            actualEdges.removeValue(forKey: encoded) == count
-      else { return false }
-      previousEdge = encoded
-    }
-    guard actualEdges.isEmpty else { return false }
-
-    var actualObservations = Dictionary(
-      uniqueKeysWithValues: graph.run.graph.observations.map { state, observation in
-        (state.canonicalEncoding, observation)
-      })
-    guard observations.count == actualObservations.count else { return false }
-    var previousState: String?
-    for row in observations {
-      guard Set(row.keys) == ["state", "enabledActions", "isTerminal"],
-            let state = row["state"] as? String,
-            let enabledActions = row["enabledActions"] as? [String],
-            let isTerminal = row["isTerminal"] as? Bool,
-            strictlySortedUnique(enabledActions),
-            previousState.map({ $0 < state }) ?? true,
-            let observation = actualObservations.removeValue(forKey: state),
-            enabledActions == observation.enabledActions.sorted(),
-            isTerminal == observation.isTerminal
-      else { return false }
-      previousState = state
-    }
-    return actualObservations.isEmpty
-  }
-
-  private func strictlySortedUnique(_ values: [String]) -> Bool {
-    zip(values, values.dropFirst()).allSatisfy { $0 < $1 }
+  private func graphMatchesCanonicalTLC(_ graph: ParsedPhaseGraph, tlc: CanonicalRun) -> Bool {
+    graph.run.schema == tlc.schema
+      && graph.run.graph == tlc.graph
+      && graph.run.observableActions == tlc.observableActions
   }
 
   private func canonicalGraph(at url: URL, expectedCase: CoreConformanceCase) throws -> ParsedPhaseGraph {
@@ -371,7 +300,7 @@ extension CoreSupportGate {
     let stream = try parser.parse(data)
     let result = TLCProcessResult(
       status: 0, stdout: "Model checking completed. No error has been found.", stderr: "")
-    return ParsedPhaseGraph(runID: stream.runID, run: try parser.parseCanonicalRun(data, result: result))
+    return ParsedPhaseGraph(runID: stream.runID, run: try parser.canonicalRun(stream, result: result))
   }
 
   private func traceBelongsToGraph(
@@ -546,185 +475,56 @@ extension CoreSupportGate {
   }
 
   func comparisonMatchesCanonicalTruth(
-    swift: [String: Any], tlc: [String: Any], comparison: [String: Any]
+    swift: CanonicalRunEvidence,
+    swiftRun: CanonicalRun,
+    tlc: CanonicalRunEvidence,
+    tlcRun: CanonicalRun,
+    comparison: [String: Any]
   ) throws -> (isDifference: Bool, fingerprint: String?) {
-    let expected = try computedComparison(swift: swift, tlc: tlc)
-    guard Set(comparison.keys) == ["correlation", "conformant", "differences"],
-          canonicalValue(comparison["conformant"]) == canonicalValue(expected["conformant"]),
-          canonicalValue(comparison["differences"]) == canonicalValue(expected["differences"])
-    else { throw EvidenceValidationError.invalidCanonicalRecord }
-
-    let isDifference = !(expected["conformant"] as! Bool)
-    let fingerprint = isDifference
-      ? try CoreDivergenceLedger.normalizedDifferenceFingerprint(
-        from: JSONSerialization.data(withJSONObject: expected, options: [.sortedKeys]))
-      : nil
-    return (isDifference, fingerprint)
-  }
-
-  private func computedComparison(swift: [String: Any], tlc: [String: Any]) throws -> [String: Any] {
-    let expected = try validatedCanonicalProjection(tlc)
-    let actual = try validatedCanonicalProjection(swift)
-    var differences: [[String: Any]] = []
-
-    if canonicalValue(expected["observableActions"]) != canonicalValue(actual["observableActions"]) {
-      differences.append([
-        "category": "mapping", "expected": [], "actual": [],
-        "details": ["observable names differ without a declared total bijection"]
-      ])
-    }
-    for field in ["initialStates", "states", "edges", "observations"] where
-      canonicalValue(expected[field]) != canonicalValue(actual[field]) {
-      differences.append(["category": field, "expected": expected[field]!, "actual": actual[field]!])
-    }
-    for field in ["outcome", "errors", "traces"] where
-      canonicalValue(expected[field]) != canonicalValue(actual[field]) {
-      differences.append(["category": field, "expected": expected[field]!, "actual": actual[field]!])
-    }
-    return ["conformant": differences.isEmpty, "differences": differences]
-  }
-
-  private func validatedCanonicalProjection(_ graph: [String: Any]) throws -> [String: Any] {
-    let keys: Set<String> = [
-      "schema", "correlation", "initialStates", "states", "edges", "observations", "observableActions",
-      "outcome", "errors", "traces"
-    ]
-    guard Set(graph.keys) == keys,
-          graph["schema"] as? String == CanonicalSchema.exactFiniteTLCGraph.rawValue,
-          let initialStates = graph["initialStates"] as? [String], !initialStates.isEmpty,
-          let states = graph["states"] as? [String], !states.isEmpty,
-          let edges = graph["edges"] as? [[String: Any]],
-          let observations = graph["observations"] as? [[String: Any]],
-          let actions = graph["observableActions"] as? [String],
-          let outcome = graph["outcome"] as? [String: Any],
-          let errors = graph["errors"] as? [[String: Any]],
-          let traces = graph["traces"] as? [[String: Any]]
-    else { throw EvidenceValidationError.invalidCanonicalRecord }
-    guard Set(initialStates).count == initialStates.count, Set(states).count == states.count,
-          Set(initialStates).isSubset(of: Set(states)), Set(actions).count == actions.count,
-          !actions.contains(where: \.isEmpty), errors.allSatisfy(validDiagnostic),
-          traces.allSatisfy({ validTrace($0, states: Set(states)) }), validOutcome(outcome)
-    else { throw EvidenceValidationError.invalidCanonicalRecord }
-
-    let occurrenceRows = try edgeOccurrences(edges, states: Set(states))
-    let expectedObservations = observationRows(states: states, occurrences: occurrenceRows)
-    guard canonicalValue(observations) == canonicalValue(expectedObservations) else {
+    guard swift.receiptContext == tlc.receiptContext else {
       throw EvidenceValidationError.invalidCanonicalRecord
     }
-    let edgeActions = Set(occurrenceRows.map { $0.action })
-    guard edgeActions == Set(actions) else { throw EvidenceValidationError.invalidCanonicalRecord }
-    return graph
-  }
-
-  private func canonicalGraphProjection(_ run: CanonicalRun) -> [String: Any] {
-    let occurrences = run.graph.edgeOccurrences.map { edge, count in
-      (edge.canonicalEncoding, count)
-    }.sorted { $0.0 < $1.0 }.map { edge, count in
-      ["edge": edge, "count": count] as [String: Any]
-    }
-    return [
-      "schema": run.schema.rawValue,
-      "initialStates": run.graph.initialStateKeys.map(\.canonicalEncoding).sorted(),
-      "states": run.graph.states.keys.map(\.canonicalEncoding).sorted(),
-      "edges": occurrences,
-      "observations": run.graph.observations.map { state, observation in
-        [
-          "state": state.canonicalEncoding,
-          "enabledActions": observation.enabledActions.sorted(),
-          "isTerminal": observation.isTerminal
-        ] as [String: Any]
-      }.sorted { ($0["state"] as! String) < ($1["state"] as! String) },
-      "observableActions": run.observableActions.sorted()
+    let context = swift.receiptContext
+    let expected = exactFiniteTLCGraph(
+      expected: tlcRun, actual: swiftRun,
+      compiledModelIdentity: context.compiledModelIdentity,
+      configurationIdentity: context.configurationIdentity,
+      symmetrySchemaIdentity: context.symmetrySchemaIdentity,
+      maximumStateLimit: context.maximumStateLimit,
+      observableNameMappingIdentity: context.observableNameMappingIdentity
+    )
+    var expectedRecord: [String: Any] = [
+      "conformant": expected.isConformant,
+      "differences": comparisonDifferencesJSON(expected)
     ]
-  }
-
-  private func edgeOccurrences(_ rows: [[String: Any]], states: Set<String>) throws -> [GraphEdgeOccurrence] {
-    var seen = Set<String>()
-    let occurrences = try rows.map { row -> GraphEdgeOccurrence in
-      guard Set(row.keys) == ["edge", "count"], let edge = row["edge"] as? String,
-            let count = row["count"] as? Int, count > 0, seen.insert(edge).inserted,
-            let occurrence = GraphEdgeOccurrence(encoded: edge, count: count, states: states)
-      else { throw EvidenceValidationError.invalidCanonicalRecord }
-      return occurrence
+    if let receipt = expected.expectedReceipt { expectedRecord["expectedReceipt"] = canonicalGraphReceiptJSON(receipt) }
+    if let receipt = expected.actualReceipt { expectedRecord["actualReceipt"] = canonicalGraphReceiptJSON(receipt) }
+    if let expectedReceipt = expected.expectedReceipt,
+       let actualReceipt = expected.actualReceipt,
+       let firstDifferentChunk = firstDifferentGraphChunkJSON(
+        expected: expectedReceipt, actual: actualReceipt
+       ) {
+      expectedRecord["firstDifferentGraphChunk"] = firstDifferentChunk
     }
-    return occurrences
+    guard Set(comparison.keys) == Set(expectedRecord.keys).union(["correlation"]),
+          jsonValue(comparison["conformant"]) == jsonValue(expectedRecord["conformant"]),
+          jsonValue(comparison["differences"]) == jsonValue(expectedRecord["differences"]),
+          jsonValue(comparison["expectedReceipt"]) == jsonValue(expectedRecord["expectedReceipt"]),
+          jsonValue(comparison["actualReceipt"]) == jsonValue(expectedRecord["actualReceipt"]),
+          jsonValue(comparison["firstDifferentGraphChunk"])
+            == jsonValue(expectedRecord["firstDifferentGraphChunk"])
+    else { throw EvidenceValidationError.invalidCanonicalRecord }
+
+    let fingerprint = !expected.isConformant
+      ? try CoreDivergenceLedger.normalizedDifferenceFingerprint(
+        from: JSONSerialization.data(withJSONObject: expectedRecord, options: [.sortedKeys]))
+      : nil
+    return (!expected.isConformant, fingerprint)
   }
 
-  private func occurrenceRows(_ rows: [[String: Any]]) -> [GraphEdgeOccurrence] {
-    // This helper only receives rows produced by canonicalGraphProjection.
-    rows.compactMap { row in
-      guard let edge = row["edge"] as? String, let count = row["count"] as? Int,
-            let separator = edge.range(of: "--"),
-            let targetSeparator = edge.range(of: "-->", options: .backwards) else { return nil }
-      let source = String(edge.dropFirst("edge:".count)[..<separator.lowerBound])
-      let target = String(edge[targetSeparator.upperBound...])
-      let action = String(edge[separator.upperBound..<targetSeparator.lowerBound]).decodedHexUTF8 ?? ""
-      return GraphEdgeOccurrence(source: source, action: action, target: target, count: count)
-    }
-  }
-
-  private func observationRows(states: [String], occurrences: [GraphEdgeOccurrence]) -> [[String: Any]] {
-    let enabled = Dictionary(grouping: occurrences, by: \.source).mapValues { Set($0.map(\.action)).sorted() }
-    return states.sorted().map { state in
-      let actions = enabled[state] ?? []
-      return ["state": state, "enabledActions": actions, "isTerminal": actions.isEmpty]
-    }
-  }
-
-  private func validOutcome(_ outcome: [String: Any]) -> Bool {
-    guard let kind = outcome["kind"] as? String else { return false }
-    switch kind {
-    case "exhaustiveSuccess": return Set(outcome.keys) == ["kind"]
-    case "invariantViolation", "incomplete", "executionError":
-      return Set(outcome.keys) == ["kind", "message"] && !(outcome["message"] as? String ?? "").isEmpty
-    case "deadlock": return Set(outcome.keys) == ["kind", "state"] && !(outcome["state"] as? String ?? "").isEmpty
-    default: return false
-    }
-  }
-
-  private func validDiagnostic(_ diagnostic: [String: Any]) -> Bool {
-    Set(diagnostic.keys) == ["code", "message"]
-      && !(diagnostic["code"] as? String ?? "").isEmpty
-      && !(diagnostic["message"] as? String ?? "").isEmpty
-  }
-
-  private func validTrace(_ trace: [String: Any], states: Set<String>) -> Bool {
-    guard Set(trace.keys) == ["id", "steps"], !(trace["id"] as? String ?? "").isEmpty,
-          let steps = trace["steps"] as? [[String: Any]] else { return false }
-    return steps.allSatisfy {
-      Set($0.keys) == ["state", "action"]
-        && states.contains($0["state"] as? String ?? "")
-        && !($0["action"] as? String ?? "").isEmpty
-    }
-  }
-
-  private func canonicalValue(_ value: Any?) -> Data? {
+  private func jsonValue(_ value: Any?) -> Data? {
     guard let value else { return nil }
     return try? JSONSerialization.data(withJSONObject: ["value": value], options: [.sortedKeys])
-  }
-
-  private struct GraphEdgeOccurrence {
-    let source: String
-    let action: String
-    let target: String
-    let count: Int
-
-    init?(encoded: String, count: Int, states: Set<String>) {
-      guard encoded.hasPrefix("edge:"), let first = encoded.range(of: "--"),
-            let second = encoded.range(of: "-->", options: .backwards) else { return nil }
-      let source = String(encoded.dropFirst("edge:".count)[..<first.lowerBound])
-      let action = String(encoded[first.upperBound..<second.lowerBound]).decodedHexUTF8 ?? ""
-      let target = String(encoded[second.upperBound...])
-      guard states.contains(source), states.contains(target), !action.isEmpty else { return nil }
-      self.init(source: source, action: action, target: target, count: count)
-    }
-
-    init(source: String, action: String, target: String, count: Int) {
-      self.source = source
-      self.action = action
-      self.target = target
-      self.count = count
-    }
   }
 
   private enum EvidenceValidationError: Error { case invalidCanonicalRecord }
@@ -747,20 +547,5 @@ extension CoreSupportGate {
     guard let object, Set(object.keys) == ["caseID", "engine", "runID"] else { return false }
     return object["caseID"] as? String == caseID && object["engine"] as? String == engine
       && object["runID"] as? String == gateRunID.uuidString.lowercased()
-  }
-}
-
-private extension String {
-  var decodedHexUTF8: String? {
-    guard count.isMultiple(of: 2) else { return nil }
-    var bytes: [UInt8] = []
-    var index = startIndex
-    while index < endIndex {
-      let next = self.index(index, offsetBy: 2)
-      guard let byte = UInt8(self[index..<next], radix: 16) else { return nil }
-      bytes.append(byte)
-      index = next
-    }
-    return String(bytes: bytes, encoding: .utf8)
   }
 }

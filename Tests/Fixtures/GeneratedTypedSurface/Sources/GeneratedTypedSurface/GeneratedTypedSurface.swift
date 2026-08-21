@@ -22,6 +22,12 @@ var machine = GeneratedTypedSurface()
 let action: GeneratedTypedSurface.ActionLabel = .advance
 let result = try machine.apply(action)
 
-precondition(result.action == action)
-precondition(result.before.value == 0)
-precondition(result.after.value == 1)
+guard result.action == action,
+      result.before.value == 0,
+      result.after.value == 1 else {
+  throw FixtureError.invalidTransition
+}
+
+private enum FixtureError: Error {
+  case invalidTransition
+}

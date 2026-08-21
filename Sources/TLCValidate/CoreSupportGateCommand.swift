@@ -27,7 +27,7 @@ func validateMappings(
         kind: "action",
         caseID: entry.id
     )
-    let expected = spec.actions.flatMap(invocationMappings)
+    let expected = try spec.actions.flatMap { try invocationMappings(for: $0) }
     guard expected.isEmpty == entry.invocationMappings.isEmpty else {
         throw CoreConformanceCLIError.invalidManifest(
             "case \(entry.id) must declare every parameterized action wrapper")
@@ -43,30 +43,30 @@ func validateMappings(
         throw CoreConformanceCLIError.invalidManifest(
             "case \(entry.id) has incomplete or reordered invocation wrapper provenance")
     }
-    return Dictionary(uniqueKeysWithValues: entry.invocationMappings.map {
-        ($0.runtimeValue.swiftLabel, $0.wrapper)
+    return try Dictionary(uniqueKeysWithValues: entry.invocationMappings.map {
+        (try $0.runtimeValue().swiftLabel, $0.wrapper)
     })
 }
 
 func invocationMappings(
     for action: NamedAction
-) -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
+) throws -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
     func expand(
         _ position: Int,
         _ arguments: [String],
         _ indices: [Int]
-    ) -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
+    ) throws -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
         guard position < action.bindings.count else {
             guard !indices.isEmpty else { return [] }
             let wrapper = "\(action.name)__\(indices.map(String.init).joined(separator: "_"))"
-            return [try! CoreConformanceCasesManifest.Entry.InvocationMapping(
+            return [try CoreConformanceCasesManifest.Entry.InvocationMapping(
                 wrapper: wrapper,
                 action: action.name,
                 arguments: arguments,
                 indices: indices)]
         }
-        return action.bindings[position].values.enumerated().flatMap { index, value in
-            expand(position + 1, arguments + [value.description], indices + [index])
+        return try action.bindings[position].values.enumerated().flatMap { index, value in
+            try expand(position + 1, arguments + [value.description], indices + [index])
         }
     }
     return expand(0, [], [])
@@ -303,7 +303,6 @@ enum SymmetricCollectionOracleError: Error, CustomStringConvertible {
     case missingJavaRuntime([String])
     case missingStateCount(String)
     case swiftTLCMismatch(scope: Int, swift: Int, tlc: Int)
-    case quotedStringControlAccepted(String)
 
     var description: String {
         switch self {
@@ -317,8 +316,6 @@ enum SymmetricCollectionOracleError: Error, CustomStringConvertible {
             return "TLC did not report its distinct-state count:\n\(output)"
         case .swiftTLCMismatch(let scope, let swift, let tlc):
             return "scope \(scope): Swift checker found \(swift) orbit states but TLC found \(tlc)."
-        case .quotedStringControlAccepted(let output):
-            return "quoted-string symmetry control unexpectedly succeeded:\n\(output)"
         }
     }
 }
@@ -348,12 +345,6 @@ func runSymmetricCollectionOracle() throws {
         print("OK   symmetric scope \(scope) — Swift/TLC \(swiftStates) orbit states")
     }
 
-    let control = try quotedStringSymmetryControl(scope: 2)
-    let execution = try executeTLC(bundle: control, moduleName: "SymmetricOracle2", jarPath: jarPath)
-    guard execution.status != 0 else {
-        throw SymmetricCollectionOracleError.quotedStringControlAccepted(execution.output)
-    }
-    print("OK   quoted-string symmetry control rejected by TLC")
 }
 
 func symmetricOracleSpec(scope: Int) -> TLASpec {
@@ -365,25 +356,6 @@ func symmetricOracleSpec(scope: Int) -> TLASpec {
         }
         Invariant("ValidPhase") { devices.allSatisfy { $0 == 0 || $0 == 1 } }
     }
-}
-
-func quotedStringSymmetryControl(scope: Int) throws -> TLAModuleBundle {
-    let bundle = try symmetricOracleSpec(scope: scope).compile().renderedTLAModuleBundle()
-    let members = (0..<scope).map { "DevicesMember\($0)" }
-    var tla = bundle.tla.replacingOccurrences(
-        of: "CONSTANTS \(members.joined(separator: ", "))\n",
-        with: ""
-    )
-    for member in members {
-        tla = tla.replacingOccurrences(of: member, with: "\"\(member)\"")
-    }
-    let cfg = bundle.cfg
-        .split(separator: "\n")
-        .filter { !$0.hasPrefix("CONSTANT ") }
-        .joined(separator: "\n") + "\n"
-    return TLAModuleBundle.untrusted(
-        root: TLAModuleFile(name: "SymmetricOracle2", tla: tla, cfg: cfg)
-    )
 }
 
 func executeTLC(

@@ -1,21 +1,5 @@
 import Foundation
 
-public enum TemporalSymmetryDivergenceClassification: String, CaseIterable, Codable, Sendable {
-  case swiftTLADefect
-  case harnessOrConfigurationDefect
-  case unsupportedConstruct
-  case publishedSemanticsAmbiguity
-  case suspectedTLCDefect
-}
-
-public enum TemporalSymmetryDivergenceDisposition: String, CaseIterable, Codable, Sendable {
-  case open
-  case resolved
-  case unsupported
-  case awaitingSemanticsReview
-  case suspectedReferenceDefect
-}
-
 public struct TemporalSymmetryDivergenceComparison: Equatable, Codable, Sendable {
   public let evidence: CoreEvidenceReference
   public let outcome: TemporalSymmetryExpectedOutcome
@@ -32,14 +16,14 @@ public struct TemporalSymmetryDivergenceComparison: Equatable, Codable, Sendable
     try evidence.validate()
     let needsFingerprint = outcome == .difference
     guard needsFingerprint == (normalizedDifferenceFingerprint?.isEmpty == false) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceFingerprint")
+      throw ConformanceGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceFingerprint")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case evidence, outcome, normalizedDifferenceFingerprint }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       evidence: container.decode(CoreEvidenceReference.self, forKey: .evidence),
       outcome: container.decode(TemporalSymmetryExpectedOutcome.self, forKey: .outcome),
@@ -55,8 +39,8 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
   public let reproducer: CoreFiniteBounds
   public let originalEvidence: CoreEvidenceReference
   public let permanentRegressionCaseID: String
-  public let classification: TemporalSymmetryDivergenceClassification
-  public let disposition: TemporalSymmetryDivergenceDisposition
+  public let classification: ConformanceDivergenceClassification
+  public let disposition: ConformanceDivergenceDisposition
   public let normalizedDifferenceFingerprint: String
   public let latestComparison: TemporalSymmetryDivergenceComparison
 
@@ -68,8 +52,8 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
     reproducer: CoreFiniteBounds,
     originalEvidence: CoreEvidenceReference,
     permanentRegressionCaseID: String,
-    classification: TemporalSymmetryDivergenceClassification,
-    disposition: TemporalSymmetryDivergenceDisposition,
+    classification: ConformanceDivergenceClassification,
+    disposition: ConformanceDivergenceDisposition,
     normalizedDifferenceFingerprint: String,
     latestComparison: TemporalSymmetryDivergenceComparison
   ) throws {
@@ -94,13 +78,13 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
     try latestComparison.validate()
     guard !id.isEmpty, !permanentRegressionCaseID.isEmpty, !normalizedDifferenceFingerprint.isEmpty,
           !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: id, field: "required evidence")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "required evidence")
     }
     guard disposition != .resolved || latestComparison.outcome == .exact else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: id, field: "latestComparison")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "latestComparison")
     }
     guard latestComparison.outcome != .difference || latestComparison.normalizedDifferenceFingerprint == normalizedDifferenceFingerprint else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: id, field: "fingerprint drift")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "fingerprint drift")
     }
   }
 
@@ -110,7 +94,7 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
@@ -119,8 +103,8 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
       reproducer: container.decode(CoreFiniteBounds.self, forKey: .reproducer),
       originalEvidence: container.decode(CoreEvidenceReference.self, forKey: .originalEvidence),
       permanentRegressionCaseID: container.decode(String.self, forKey: .permanentRegressionCaseID),
-      classification: container.decode(TemporalSymmetryDivergenceClassification.self, forKey: .classification),
-      disposition: container.decode(TemporalSymmetryDivergenceDisposition.self, forKey: .disposition),
+      classification: container.decode(ConformanceDivergenceClassification.self, forKey: .classification),
+      disposition: container.decode(ConformanceDivergenceDisposition.self, forKey: .disposition),
       normalizedDifferenceFingerprint: container.decode(String.self, forKey: .normalizedDifferenceFingerprint),
       latestComparison: container.decode(TemporalSymmetryDivergenceComparison.self, forKey: .latestComparison))
   }
@@ -136,12 +120,12 @@ public struct TemporalSymmetryDivergenceLedger: Equatable, Codable, Sendable {
   }
 
   public init(schema: String, records: [TemporalSymmetryDivergenceRecord]) throws {
-    guard schema == Self.schema else { throw TemporalSymmetryGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var ids = Set<String>()
     for record in records {
       try record.validate()
       guard ids.insert(record.id).inserted else {
-        throw TemporalSymmetryGovernanceError.duplicateID(kind: "divergence", id: record.id)
+        throw ConformanceGovernanceError.duplicateID(kind: "divergence", id: record.id)
       }
     }
     self.schema = schema
@@ -151,7 +135,7 @@ public struct TemporalSymmetryDivergenceLedger: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, records }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: container.decode(String.self, forKey: .schema),
       records: container.decode([TemporalSymmetryDivergenceRecord].self, forKey: .records))
@@ -161,15 +145,15 @@ public struct TemporalSymmetryDivergenceLedger: Equatable, Codable, Sendable {
     let casesByID = Dictionary(uniqueKeysWithValues: cases.cases.map { ($0.id, $0) })
     for record in records {
       guard let provenanceCase = casesByID[record.provenance.caseID] else {
-        throw TemporalSymmetryGovernanceError.unknownCaseID(record.provenance.caseID)
+        throw ConformanceGovernanceError.unknownCaseID(record.provenance.caseID)
       }
       guard let permanentRegression = casesByID[record.permanentRegressionCaseID] else {
-        throw TemporalSymmetryGovernanceError.unknownCaseID(record.permanentRegressionCaseID)
+        throw ConformanceGovernanceError.unknownCaseID(record.permanentRegressionCaseID)
       }
       guard provenanceCase.kind == record.kind, permanentRegression.kind == record.kind,
             permanentRegression.expectedOutcome == .difference,
             record.reproducer.isWithin(provenanceCase.finiteBounds) else {
-        throw TemporalSymmetryGovernanceError.inconsistentReference(record: record.id, field: "kind, provenance, regression, or bounds")
+        throw ConformanceGovernanceError.inconsistentReference(record: record.id, field: "kind, provenance, regression, or bounds")
       }
     }
   }

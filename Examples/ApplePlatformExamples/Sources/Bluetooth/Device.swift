@@ -7,36 +7,41 @@ import SwiftTLAMacros
 public struct PeripheralModel {
     public enum Phase: String, CaseIterable, FiniteDomainKey {
         case disconnected, connected, discovering, ready
+        public static var defaultValue: Self { .disconnected }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-phase")
         public var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum ConnectProcess: String, FiniteDomainKey { case connectEvent
+        static var defaultValue: Self { .connectEvent }
         static let formalDomain: [Self] = [.connectEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-connect")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum BeginDiscoveryProcess: String, FiniteDomainKey { case beginDiscoveryEvent
+        static var defaultValue: Self { .beginDiscoveryEvent }
         static let formalDomain: [Self] = [.beginDiscoveryEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-begin-discovery")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum FinishDiscoveryProcess: String, FiniteDomainKey { case finishDiscoveryEvent
+        static var defaultValue: Self { .finishDiscoveryEvent }
         static let formalDomain: [Self] = [.finishDiscoveryEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-finish-discovery")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum DisconnectProcess: String, FiniteDomainKey { case disconnectEvent
+        static var defaultValue: Self { .disconnectEvent }
         static let formalDomain: [Self] = [.disconnectEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-disconnect")
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, PlusCalLabel { case connected, beginDiscovery, finishDiscovery, disconnect }
+    private enum Step: String, PlusCalLabel, CaseIterable { case connected, beginDiscovery, finishDiscovery, disconnect }
 
     public static var spec: TLASpec {
         #spec("PeripheralModel") {
             Algorithm("PeripheralModel") {
-                let phase = SharedVar(initial: Phase.disconnected)
+                let phase = SharedVar("phase", initial: Phase.disconnected)
                 Each(ConnectProcess.all) { _ in
                     Do(Step.connected) {
                         When(phase == .disconnected)

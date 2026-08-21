@@ -1,7 +1,4 @@
-/// A source-location-independent problem encountered while printing Algorithm
-/// IR as PlusCal. Rendering never lowers the program or synthesizes control
-/// state, so a component without a direct PlusCal spelling is reported rather
-/// than approximated.
+/// A problem encountered while printing an Algorithm model as PlusCal.
 public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
     /// The rendering capability that could not be satisfied.
     public let failedConcept: String
@@ -41,29 +38,28 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
     }
 }
 
-/// Ordered module-link layout for the final PlusCal renderer.
+/// Ordered declarations consumed by the PlusCal renderer.
 ///
-/// Literal source definitions remain a deliberate formal-source boundary, but
-/// imports and their order are structural: constants and support definitions
-/// precede instances, which precede the Algorithm; properties follow the
-/// translator-owned section. This carries no machine semantics: `AlgorithmModel`
-/// remains the authored-machine IR.
+/// Constants and support definitions precede instances, which precede the
+/// Algorithm. Properties follow the translator-owned section.
 internal struct AuthoredPlusCalModule: Sendable {
     let name: String
     let extendsModules: [String]
     let constants: [String]
     let definitionsBeforeInstances: [String]
     let instances: [FormalModuleInstance]
+    let instanceArguments: [String: [ModuleArgument]]
     let definitionsAfterInstances: [String]
     let algorithm: AlgorithmModel
     let defineDeclarations: [String]
     let postTranslationDeclarations: [String]
+    let refinements: [RefinementDecl]
 
     var supportDeclarations: [String] {
         constants
             + definitionsBeforeInstances
             + instances.map { instance in
-                let arguments = instance.arguments.map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
+                let arguments = (instanceArguments[instance.name] ?? instance.arguments).map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
                 let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
                 return "\(instance.name) == INSTANCE \(instance.module.name)\(withClause)"
             }
@@ -72,16 +68,17 @@ internal struct AuthoredPlusCalModule: Sendable {
 }
 
 internal struct AlgorithmPlusCalRenderer {
-    let model: AlgorithmModel
+    let module: AuthoredPlusCalModule
 
-    init(model: AlgorithmModel) {
-        self.model = model
+    init(module: AuthoredPlusCalModule) {
+        self.module = module
     }
 
     /// Source-level properties are kept outside the PlusCal comment, where
     /// the official translator leaves TLA+ operators intact.  They come from
     /// the retained Algorithm model rather than the lowered specification.
     func sourcePropertyDefinitions() throws -> [(name: String, definition: String)] {
+        let model = module.algorithm
         try properties(in: model.components, path: "components")
     }
 
@@ -89,38 +86,18 @@ internal struct AlgorithmPlusCalRenderer {
     /// process family.  Emitting the equivalent authored spelling after the
     /// comment would redeclare the translator-owned name.
     func translatorOwnedPropertyNames() -> Set<String> {
+        let model = module.algorithm
         Set(temporals(in: model.components).compactMap { temporal in
             isTranslatorTermination(temporal) ? temporal.name : nil
         })
     }
 
     func render() throws -> String {
-        let sections = try AuthoredPlusCalDeclarationSections(
-            model.formalOperatorDefinitions.map { definition in
-                AuthoredPlusCalDeclaration(
-                    name: definition.name,
-                    text: FormalOperatorDecl(definition).tlaText,
-                    phase: definition.plusCalPhase,
-                    dependencies: definition.plusCalDependencies
-                )
-            }
-        )
-        return try render(
-            AuthoredPlusCalModule(
-                name: moduleName(model.name),
-                extendsModules: ["Naturals", "Integers", "Sequences", "FiniteSets"],
-                constants: [],
-                definitionsBeforeInstances: sections.prelude,
-                instances: [],
-                definitionsAfterInstances: [],
-                algorithm: model,
-                defineDeclarations: sections.define,
-                postTranslationDeclarations: try sourcePropertyDefinitions().map(\.definition)
-            )
-        )
+        try render(module)
     }
 
-    func render(_ module: AuthoredPlusCalModule) throws -> String {
+    private func render(_ module: AuthoredPlusCalModule) throws -> String {
+        let model = module.algorithm
         // TLA+ spells negative values through the unary `-.` operator from
         // `Integers`.  PlusCal's translator preserves that operator in the
         // generated module, so every rendered source must make it available.
@@ -204,6 +181,7 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("StateConstraint == \(constraints.map { "(\($0))" }.joined(separator: " /\\ "))")
         }
         lines += module.postTranslationDeclarations
+        lines += module.refinements.map(\.renderedFormalDeclaration)
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }
@@ -402,7 +380,7 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     private var localFamilyRoots: [String] {
-        model.processes.flatMap { process in
+        module.algorithm.processes.flatMap { process in
             process.components.compactMap { component in
                 guard case .local(let declaration) = component else { return nil }
                 return declaration.root
@@ -455,6 +433,7 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     private func isTranslatorTermination(_ temporal: NamedTemporal) -> Bool {
+        let model = module.algorithm
         guard temporal.name == "Termination", model.processes.count == 1,
               case .eventually(let expression) = temporal.expr,
               case .forAll(let domain, let binding, let predicate) = expression,
@@ -495,7 +474,4 @@ internal struct AlgorithmPlusCalRenderer {
         )
     }
 
-    private func moduleName(_ name: String) -> String {
-        name.replacingOccurrences(of: " ", with: "")
-    }
 }

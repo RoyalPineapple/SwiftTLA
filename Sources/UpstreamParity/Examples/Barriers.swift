@@ -13,6 +13,7 @@ public struct BarriersN6Model: Sendable {
         case five = 5
         case six = 6
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.barriers.n6.process"
@@ -21,18 +22,18 @@ public struct BarriersN6Model: Sendable {
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12
     }
 
     public static var spec: TLASpec {
         #spec("Barriers") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Barriers") {
-                let lock = SharedVar(initial: 1)
-                let gate1 = SharedVar(initial: 0)
-                let gate2 = SharedVar(initial: 0)
-                let rendezvous = SharedVar(initial: 0)
+                let lock = SharedVar("lock", initial: 1)
+                let gate1 = SharedVar("gate1", initial: 0)
+                let gate2 = SharedVar("gate2", initial: 0)
+                let rendezvous = SharedVar("rendezvous", initial: 0)
 
                 let acquire = Macro { (lock: MacroParameter<Int>) in
                     Await(lock == 1)

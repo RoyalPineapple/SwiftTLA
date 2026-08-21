@@ -451,8 +451,8 @@ struct LivenessConformanceTests {
         }
     }
 
-    @Test("ModelChecker keeps liveness and incomplete-exploration results compatible")
-    func modelCheckerCompatibility() throws {
+    @Test("ModelChecker reports liveness violations and bounded exploration separately")
+    func reportsDistinctLivenessAndBoundedOutcomes() throws {
         let x = Var<Int>("x")
         let livenessSpec = TLASpec("liveness") {
             Variable(x, 0)
@@ -469,7 +469,7 @@ struct LivenessConformanceTests {
             Action("step") { x.becomes(x + 1).when(x < 2) }
             Eventually("reachesTwo", x == 2)
         }
-        let incomplete = try ModelChecker(spec: completeSpec, maxStates: 1).checkLiveness()
+        let incomplete = try ModelChecker(spec: completeSpec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).checkLiveness()
         if case .depthExceeded = incomplete.underlyingOutcome {
         } else {
             Issue.record("Expected depth-exceeded result, got \(incomplete)")

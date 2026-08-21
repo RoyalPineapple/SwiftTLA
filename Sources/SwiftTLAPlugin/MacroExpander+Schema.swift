@@ -18,7 +18,6 @@ extension MacroExpander {
         }.joined(separator: ",\n                ")
         return """
         public static let machineSchema = MachineSchema(
-            identifier: \"\(plan.schemaIdentifier)\",
             model: .init(name: \"\(model.typeName)\"),
             state: [
                 \(fields)
@@ -47,7 +46,7 @@ extension MacroExpander {
             }.joined(separator: ", ")
             return ".record(fields: [\(entries)])"
         case .function(let values):
-            guard let first = values.sorted(by: { $0.key.description < $1.key.description }).first else {
+            guard let first = values.sorted(by: { $0.key < $1.key }).first else {
                 return ".function(key: .opaque, value: .opaque)"
             }
             return ".function(key: \(schemaValue(first.key)), value: \(schemaValue(first.value)))"

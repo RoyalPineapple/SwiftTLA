@@ -15,7 +15,7 @@ struct SymmetryReductionTests {
       Invariant("TypeOK") { x >= 1 && x <= 3 }
       Symmetry("x", [1, 2, 3] as Set<Int>)
     }
-    let mc = try ModelChecker(spec: spec, maxStates: 100)
+    let mc = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
     let result = try mc.check()
     guard case .ok(let count) = result else {
       #expect(Bool(false))
@@ -39,7 +39,7 @@ struct SymmetryReductionTests {
       Symmetry("x", [1, 2] as Set<Int>)
       Symmetry("y", [10, 20] as Set<Int>)
     }
-    let mc = try ModelChecker(spec: spec, maxStates: 100)
+    let mc = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
     let result = try mc.check()
     guard case .ok = result else {
       #expect(Bool(false))
@@ -55,7 +55,7 @@ struct SymmetryReductionTests {
       Action("inc") { x < 3 && x.becomes(x + 1) }
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
-    let mc = try ModelChecker(spec: spec, maxStates: 100)
+    let mc = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
     let result = try mc.check()
     guard case .ok(let count) = result else {
       #expect(Bool(false))
@@ -94,12 +94,12 @@ struct SymmetryReductionTests {
       Action("inc") { sv.becomes(sv + 1).when(sv < 5) }
       Invariant("ok") { sv >= 0 && sv <= 5 }
     }
-    let graph1 = try ModelChecker(spec: spec1, maxStates: 100).exploreGraph()
-    let graph2 = try ModelChecker(spec: spec2, maxStates: 100).exploreGraph()
+    let graph1 = try ModelChecker(spec: spec1, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph2 = try ModelChecker(spec: spec2, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph1.states.count == graph2.states.count)
     #expect(graph1.states.count == 6)
-    let result1 = try ModelChecker(spec: spec1, maxStates: 100).check()
-    let result2 = try ModelChecker(spec: spec2, maxStates: 100).check()
+    let result1 = try ModelChecker(spec: spec1, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let result2 = try ModelChecker(spec: spec2, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     if case .ok(let c1) = result1, case .ok(let c2) = result2 {
       #expect(c1 == c2)
     } else {
@@ -111,9 +111,13 @@ struct SymmetryReductionTests {
 enum Mode: Int, TLAValueType, StateExprConvertible {
   case idle = 0
   case active = 1
+
+  static var defaultValue: Self { .idle }
 }
 enum Status: String, TLAValueType, StateExprConvertible {
   case on, off
+
+  static var defaultValue: Self { .on }
 }
 @Suite(.serialized) struct EnumDomainTests { @Test("Int-backed enum Var model-checks correctly")
   func intEnumVar() throws {
@@ -125,7 +129,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (mode == Mode.active) && mode.becomes(Mode.idle)
       }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -139,7 +143,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (mode == Mode.active) && mode.becomes(Mode.idle)
       }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -153,7 +157,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (state == Status.off) && state.becomes(Status.on)
       }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -167,7 +171,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (state == Status.off) && state.becomes(Status.on)
       }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -212,7 +216,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       }
       Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
     }
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     if case .ok(let count) = result {
       #expect(count == 2)
     } else {
@@ -245,7 +249,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       Action("activate") { phase.becomes(Mode.active).when(phase == Mode.idle) }
       Action("deactivate") { phase.becomes(Mode.idle).when(phase == Mode.active) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     let values = try Set(graph.states.values.compactMap { try value("phase", in: $0) })
     #expect(values == Set([TLAValue.int(0), TLAValue.int(1)]))
   }
@@ -335,8 +339,9 @@ extension StateExpr {
   }
 }
 @Suite(.serialized) struct StateExprRoundTripTests {
-  private static func parseExpression(_ source: String) -> ExprSyntax {
-    SwiftParser.Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+  private static func parseExpression(_ source: String) throws -> ExprSyntax {
+    let statement = try #require(SwiftParser.Parser.parse(source: source).statements.first)
+    return try #require(statement.item.as(ExprSyntax.self))
   }
 
   @Test(
@@ -417,12 +422,12 @@ extension StateExpr {
       ("caseExpr", StateExpr.caseExpr([.bool(true), .int(1), .bool(false), .int(2)], .int(0))),
       ("enabledAction", StateExpr.enabledAction("Tick"))
     ] as [(String, StateExpr)])
-  func roundTrip(_ name: String, _ expr: StateExpr) {
+  func roundTrip(_ name: String, _ expr: StateExpr) throws {
     let source = expr.swiftSource
     #expect(!source.isEmpty, "\(name): swiftSource is empty")
     #expect(!source.contains("\\in"), "\(name): swiftSource contains TLA+ syntax: \(source)")
     #expect(!source.contains("<<"), "\(name): swiftSource contains TLA+ tuple syntax: \(source)")
-    let parsed = SpecParser.decodeStateExpr(Self.parseExpression(source))
+    let parsed = SpecParser.decodeStateExpr(try Self.parseExpression(source))
     let parsedNormalized = parsed?.normalized
     #expect(
       parsedNormalized == expr.normalized,
@@ -441,6 +446,6 @@ extension StateExpr {
     #expect(spec.variables.count == 1)
     #expect(spec.variables[0].name == "x")
     #expect(spec.variables[0].initial == .int(0))
-    #expect(try ModelChecker(spec: spec, maxStates: 10).exploreGraph().states.count == 4)
+    #expect(try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).exploreGraph().states.count == 4)
   }
 }

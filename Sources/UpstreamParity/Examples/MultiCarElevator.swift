@@ -4,24 +4,28 @@ public enum MultiCarElevator {
     public enum PersonID: String, CaseIterable, FiniteTLAValueDomain {
         case alice, bob
 
+        public static var defaultValue: Self { .alice }
         public static let finiteValues = allCases
     }
 
     public enum CarID: String, CaseIterable, FiniteTLAValueDomain {
         case carA, carB
 
+        public static var defaultValue: Self { .carA }
         public static let finiteValues = allCases
     }
 
     public enum FloorID: Int, CaseIterable, FiniteTLAValueDomain {
         case ground = 0, middle = 1, top = 2
 
+        public static var defaultValue: Self { .ground }
         public static let finiteValues = allCases
     }
 
     public enum Direction: String, CaseIterable, FiniteTLAValueDomain {
         case up, down
 
+        public static var defaultValue: Self { .up }
         public static let finiteValues = allCases
     }
 

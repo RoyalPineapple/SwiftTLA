@@ -7,8 +7,8 @@ struct BluetoothCLI {
         let arguments = Array(CommandLine.arguments.dropFirst())
         if arguments.contains("--verify") {
             do {
-                try BluetoothModel.verifySpec()
-                try PeripheralModel.verifySpec()
+                try BluetoothModel.verifySpec(configuration: .standard)
+                try PeripheralModel.verifySpec(configuration: .standard)
                 let central = BluetoothModel.Machine()
                 _ = try await central.apply(.poweredOn)
                 _ = try await central.apply(.startScan)

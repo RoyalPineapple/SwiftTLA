@@ -31,7 +31,7 @@ struct ClientCentricModuleTests {
   }
 
   @Test("a selected injective function can concatenate as a TLA sequence")
-  func chosenFunctionRemainsSequenceCompatible() throws {
+  func chosenFunctionConcatenatesAsSequence() throws {
     let selected = StateExpr.choose(
       .functionSet(.integerRange(.int(1), .int(2)), .setLiteral([.int(1), .int(2)])),
       "f",
@@ -51,12 +51,14 @@ struct ClientCentricModuleTests {
 
   private enum TestKey: String, FiniteDomainKey {
     case key = "k"
+    static var defaultValue: Self { .key }
     static let formalDomain: [Self] = [.key]
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.clientCentric.key")
   }
 
   private enum TestValue: String, FiniteDomainKey {
     case none
+    static var defaultValue: Self { .none }
     static let formalDomain: [Self] = [.none]
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.clientCentric.value")
   }

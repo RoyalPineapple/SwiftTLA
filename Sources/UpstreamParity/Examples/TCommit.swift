@@ -13,6 +13,7 @@ public struct TCommitModel: Sendable {
         case two = "r2"
         case three = "r3"
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.tcommit.resourceManager")
 
@@ -24,16 +25,18 @@ public struct TCommitModel: Sendable {
         case prepared
         case committed
         case aborted
+
+        public static var defaultValue: Self { .working }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case operate
     }
 
     public static var spec: TLASpec {
         #spec("TCommit") {
-            Extends("Integers")
-            let rmState = SharedVar(initial: Function<ResourceManager, ManagerState>.literal(
+            Extends(.integers)
+            let rmState = SharedVar("rmState", initial: Function<ResourceManager, ManagerState>.literal(
                 (.one, .working), (.two, .working), (.three, .working)
             ))
 

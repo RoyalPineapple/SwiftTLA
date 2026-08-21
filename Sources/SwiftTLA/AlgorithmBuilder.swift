@@ -1,24 +1,6 @@
 // swiftlint:disable identifier_name
 
-public protocol PlusCalLabel: Hashable, Sendable {}
-
-/// A validated PlusCal program-counter label.
-///
-/// String literals are accepted only at this boundary. The algorithm validator
-/// rejects empty, reserved, and non-identifier labels before lowering.
-public struct ProgramLabel: Hashable, Sendable, RawRepresentable, ExpressibleByStringLiteral {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        self.rawValue = rawValue
-    }
-
-    public init(stringLiteral value: String) {
-        rawValue = value
-    }
-}
-
-extension ProgramLabel: PlusCalLabel {}
+public protocol PlusCalLabel: CaseIterable, RawRepresentable, Hashable, Sendable where RawValue == String {}
 
 public struct FiniteDomain<Value: FiniteDomainKey>: Sendable {
     fileprivate let values: [Value]
@@ -153,7 +135,7 @@ extension WithValue {
 
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(.recordAccess(stateExpr, field.name))
+        Expr<Field>(field.recordAccess(stateExpr))
     }
 
     public subscript<Domain: FiniteDomainKey, Range>(_ index: WithValue<Domain>) -> Expr<Range>
@@ -342,7 +324,11 @@ public struct StatementMacro: Sendable {
         }
         return parameterNames.enumerated().reduce(statements) { expanded, binding in
             expanded.map {
-                substituteMacroParameter($0, from: binding.element, with: arguments[binding.offset])
+                $0.substitutingVariable(
+                    binding.element,
+                    with: arguments[binding.offset],
+                    assignmentTargets: .reject(.statementMacroAssignmentTarget)
+                )
             }
         }.map(StepStatement.init(model:))
     }
@@ -377,120 +363,9 @@ public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
     StatementMacro(parameterNames: [], statements: body().map(\.model))
 }
 
-private func substituteMacroParameter(
-    _ statement: AlgorithmStatementModel,
-    from: String,
-    to: String
-) -> AlgorithmStatementModel {
-    substituteMacroParameter(statement, from: from, with: .variable(to))
-}
-
-private func substituteMacroParameter(
-    _ statement: AlgorithmStatementModel,
-    from: String,
-    with replacement: StateExpr
-) -> AlgorithmStatementModel {
-    func substitute(_ expression: StateExpr) -> StateExpr {
-        StateExpr.substituteVariable(from, with: replacement, in: expression)
-    }
-
-    func substituteTarget(_ target: AlgorithmLValueModel) -> AlgorithmLValueModel? {
-        switch target {
-        case .root(let root):
-            guard root == from else { return .root(root) }
-            guard case .variable(let replacementRoot) = replacement else { return nil }
-            return .root(replacementRoot)
-        case .function(let root, let key):
-            let replacementRoot: String
-            if root == from {
-                guard case .variable(let name) = replacement else { return nil }
-                replacementRoot = name
-            } else {
-                replacementRoot = root
-            }
-            return .function(root: replacementRoot, key: substitute(key))
-        }
-    }
-
-    switch statement {
-    case .rejected: return statement
-    case .await(let expression): return .await(substitute(expression))
-    case .assert(let expression): return .assert(substitute(expression))
-    case .set(let target, let value):
-        guard let substitutedTarget = substituteTarget(target) else {
-            return .rejected(.statementMacroAssignmentTarget)
-        }
-        return .set(target: substitutedTarget, value: substitute(value))
-    case .letBinding(let variable, let value, let body):
-        let (scopedVariable, scopedBody) = captureSafeMacroBody(
-            variable: variable,
-            body: body,
-            replacing: from,
-            with: replacement
-        )
-        return .letBinding(
-            variable: scopedVariable,
-            value: substitute(value),
-            scopedBody
-        )
-    case .with(let variable, let source, let body):
-        let (scopedVariable, scopedBody) = captureSafeMacroBody(
-            variable: variable,
-            body: body,
-            replacing: from,
-            with: replacement
-        )
-        return .with(
-            variable: scopedVariable,
-            source: substitute(source),
-            scopedBody
-        )
-    case .ifElse(let condition, let then, let otherwise):
-        return .ifElse(
-            substitute(condition),
-            then.map { substituteMacroParameter($0, from: from, with: replacement) },
-            otherwise.map { substituteMacroParameter($0, from: from, with: replacement) }
-        )
-    case .either(let first, let second):
-        return .either(
-            first.map { substituteMacroParameter($0, from: from, with: replacement) },
-            second.map { substituteMacroParameter($0, from: from, with: replacement) }
-        )
-    case .choose(let variable, let domain, let body):
-        let (scopedVariable, scopedBody) = captureSafeMacroBody(
-            variable: variable,
-            body: body,
-            replacing: from,
-            with: replacement
-        )
-        return .choose(
-            variable: scopedVariable,
-            domain: domain,
-            scopedBody
-        )
-    case .call(let target, let arguments): return .call(target: target, arguments: arguments.map(substitute))
-    case .goto, .return, .stop, .skip: return statement
-    }
-}
-
-private func captureSafeMacroBody(
-    variable: String,
-    body: [AlgorithmStatementModel],
-    replacing parameter: String,
-    with replacement: StateExpr
-) -> (String, [AlgorithmStatementModel]) {
-    guard variable != parameter else { return (variable, body) }
-    guard replacement.freeVariableNames.contains(variable) else {
-        return (variable, body.map { substituteMacroParameter($0, from: parameter, with: replacement) })
-    }
-    let binderName = generatedBinderName()
-    let renamed = body.map { substituteMacroParameter($0, from: variable, with: .variable(binderName)) }
-    return (binderName, renamed.map { substituteMacroParameter($0, from: parameter, with: replacement) })
-}
-
 /// A typed shared algorithm variable.
 ///
-/// Declare it with `let value = SharedVar(initial: 0)` inside a
+/// Declare it with `let value = SharedVar("value", initial: 0)` inside a
 /// `#spec` algorithm. The `#spec` macro registers the declaration with the
 /// runtime builder, while the parser independently reads the same declaration.
 /// Application code never needs the engine-level `Var` type for this form.
@@ -767,7 +642,7 @@ extension SharedVariable {
 
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(.recordAccess(stateExpr, field.name))
+        Expr<Field>(field.recordAccess(stateExpr))
     }
 
     public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
@@ -978,7 +853,7 @@ extension SharedVariable where Value: FormalTupleValue {
 extension LocalVariable {
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(.recordAccess(stateExpr, field.name))
+        Expr<Field>(field.recordAccess(stateExpr))
     }
 
     public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
@@ -1018,9 +893,6 @@ extension LocalVariable where Value: FormalSetValue {
 }
 
 /// Declares a shared PlusCal-shaped variable.
-///
-/// Use it as a local declaration inside `#spec`; the macro registers the
-/// resulting handle with the enclosing `Algorithm` builder.
 public func SharedVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
@@ -1033,24 +905,8 @@ public func SharedVar<Value: TLAValueType>(
     )
 }
 
-/// The name is supplied from the enclosing `let` binding by `#spec`.
-/// This overload is intentionally useful only inside that macro boundary.
-public func SharedVar<Value: TLAValueType>(initial: Value) -> SharedVariable<Value> {
-    SharedVariable(
-        name: "",
-        initial: .value(initial.tlaValue),
-        initialSet: nil,
-        swiftTypeName: String(reflecting: Value.self)
-    )
-}
-
 /// Declares an integer shared variable with a finite nondeterministic initial
-/// value. The generated initial state contains one state for each member.
-public func SharedVar(in range: ClosedRange<Int>) -> SharedVariable<Int> {
-    SharedVar("", in: range)
-}
-
-/// The named form used by the `#spec` declaration rewrite.
+/// value.
 public func SharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
     let values = range.map { StateExpr.value(.int($0)) }
     return SharedVariable(
@@ -1064,11 +920,6 @@ public func SharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVaria
 /// Declares a shared variable whose initial value is chosen from a static,
 /// finite formal set. This is the typed form for records, enums, functions,
 /// and other bounded formal values.
-public func SharedVar<Value: TLAValueType>(in values: Expr<SetExpr<Value>>) -> SharedVariable<Value> {
-    SharedVar("", in: values)
-}
-
-/// The named form used by the `#spec` declaration rewrite.
 public func SharedVar<Value: TLAValueType>(
     _ name: String,
     in values: Expr<SetExpr<Value>>
@@ -1079,7 +930,7 @@ public func SharedVar<Value: TLAValueType>(
     // neutral value solely as metadata. `initialSet` is the actual Init rule.
     let representative: TLAValue
     if case .set(let members) = try? evaluateClosed(values.raw),
-       let first = members.min(by: { $0.description < $1.description }) {
+       let first = members.min() {
         representative = first
     } else {
         representative = Value.defaultValue.tlaValue
@@ -1101,23 +952,12 @@ public func SharedVar<Value: TLAValueType>(
     SharedVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
-/// The name is supplied from the enclosing `let` binding by `#spec`.
-public func SharedVar<Value: TLAValueType>(initial: Expr<Value>) -> SharedVariable<Value> {
-    SharedVariable(name: "", initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
-}
-
 /// Declares a process-local PlusCal-shaped variable.
 public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
 ) -> LocalVariable<Value> {
     LocalVariable(name: name, initial: .value(initial.tlaValue), initialSet: nil, swiftTypeName: String(reflecting: Value.self))
-}
-
-/// The name is supplied from the enclosing `let` binding by `#spec`.
-/// This overload is intentionally useful only inside that macro boundary.
-public func LocalVar<Value: TLAValueType>(initial: Value) -> LocalVariable<Value> {
-    LocalVariable(name: "", initial: .value(initial.tlaValue), initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// Declares a process-local variable with a typed formal initial expression.
@@ -1134,11 +974,6 @@ public func LocalVar<Value: TLAValueType>(
 /// one designated initiator being active while the other processes wait.
 public func LocalVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
     LocalVariable(name: name, initial: initial, initialSet: nil, swiftTypeName: "Bool")
-}
-
-/// The name is supplied from the enclosing `let` binding by `#spec`.
-public func LocalVar<Value: TLAValueType>(initial: Expr<Value>) -> LocalVariable<Value> {
-    LocalVariable(name: "", initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// Scheduling policy for one `Each` process family.
@@ -1230,10 +1065,6 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: AssumeDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .propertyBoundary)]
-    }
-
-    public static func buildExpression(_ component: DefinitionDecl) -> [AlgorithmElement] {
         [AlgorithmElement(model: .propertyBoundary)]
     }
 
@@ -1357,15 +1188,8 @@ private func process<Value: FiniteDomainKey>(
 ///
 /// All statements in the body read the same pre-state and produce one
 /// transition. The label is the program-counter destination for `Goto`.
-public func Do<Name: PlusCalLabel & RawRepresentable>(
+public func Do<Name: PlusCalLabel>(
     _ label: Name,
-    @DoBuilder _ body: () -> [StepStatement]
-) -> AlgorithmElement where Name.RawValue == String {
-    AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
-}
-
-public func Do(
-    _ label: ProgramLabel,
     @DoBuilder _ body: () -> [StepStatement]
 ) -> AlgorithmElement {
     AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
@@ -1375,20 +1199,8 @@ public func Do(
 ///
 /// Each execution of the body is one atomic transition. When `condition` is
 /// false, control advances to the next `Do` or `While` block.
-public func While<Name: PlusCalLabel & RawRepresentable>(
+public func While<Name: PlusCalLabel>(
     _ label: Name,
-    _ condition: some StateExprConvertible,
-    @DoBuilder _ body: () -> [StepStatement]
-) -> AlgorithmElement where Name.RawValue == String {
-    AlgorithmElement(model: .step(AlgorithmStepModel(
-        label: AlgorithmLabelModel(name: label.rawValue),
-        statements: body().map(\.model),
-        loopCondition: condition.stateExpr
-    )))
-}
-
-public func While(
-    _ label: ProgramLabel,
     _ condition: some StateExprConvertible,
     @DoBuilder _ body: () -> [StepStatement]
 ) -> AlgorithmElement {
@@ -1710,10 +1522,10 @@ public func Finished<Value: FiniteDomainKey>(_ process: ProcessIdentifier<Value>
 ///
 /// This is the typed way to state properties about algorithm control flow.
 /// The generated program counter remains an implementation detail.
-public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
+public func At<Label: PlusCalLabel, Value: FiniteDomainKey>(
     _ label: Label,
     _ process: WithValue<Value>
-) -> StateExpr where Label.RawValue == String {
+) -> StateExpr {
     .equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.init(label.rawValue))
@@ -1721,10 +1533,10 @@ public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
 }
 
 /// True when the current `Each` process is at a named PlusCal label.
-public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
+public func At<Label: PlusCalLabel, Value: FiniteDomainKey>(
     _ label: Label,
     _ process: ProcessIdentifier<Value>
-) -> StateExpr where Label.RawValue == String {
+) -> StateExpr {
     .equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.init(label.rawValue))
@@ -1926,11 +1738,7 @@ public func Choose(
     ))
 }
 
-public func Goto<Label: PlusCalLabel & RawRepresentable>(_ label: Label) -> StepStatement where Label.RawValue == String {
-    StepStatement(model: .goto(AlgorithmLabelModel(name: label.rawValue)))
-}
-
-public func Goto(_ label: ProgramLabel) -> StepStatement {
+public func Goto<Label: PlusCalLabel>(_ label: Label) -> StepStatement {
     StepStatement(model: .goto(AlgorithmLabelModel(name: label.rawValue)))
 }
 

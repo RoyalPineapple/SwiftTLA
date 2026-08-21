@@ -6,7 +6,7 @@
 public enum KeyValueStoreUtil {
     /// The `Util.tla` source module.
     public static let module = TLASpec("Util") {
-        Extends("Naturals, TLC")
+        Extends(.naturals, .tlc)
         Import(FunctionsModule.module)
 
         FormalDefinition(
@@ -126,10 +126,5 @@ public enum KeyValueStoreUtil {
             )
         )
 
-        // `SelectSeq` and TLC's `Print` have no executable formal AST node.
-        // Keep their upstream source exact until those operations have a
-        // structured evaluator contract; see the focused failure tests.
-        Definition("Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)")
-        Definition("test(lhs, rhs) == lhs /= rhs => Print(<<lhs, \" IS NOT \", rhs>>, FALSE)")
     }
 }

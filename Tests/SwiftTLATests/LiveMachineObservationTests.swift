@@ -15,7 +15,6 @@ struct LiveMachineObservationTests {
         return token
     }
     private static let schema = MachineSchema(
-        identifier: "live-machine-observation-tests.counter-v1",
         model: .init(name: "ObservationCounter"),
         state: [.init(id: "count", display: .init(name: "count"), value: .integer, swiftType: "Int")],
         actions: [.init(id: "advance", display: .init(name: "advance"), parameters: [])]

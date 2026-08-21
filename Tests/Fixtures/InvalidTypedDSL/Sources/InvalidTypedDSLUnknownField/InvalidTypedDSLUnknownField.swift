@@ -4,6 +4,7 @@ import SwiftTLAMacros
 enum CarID: String, FiniteTLAValueDomain {
   case carA, carB
 
+  static var defaultValue: Self { .carA }
   static let finiteValues = [Self.carA, .carB]
 }
 

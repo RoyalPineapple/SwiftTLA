@@ -509,9 +509,17 @@ extension LivenessChecker {
             for edge in edges(from: state).sorted(by: edgeOrder) where allowed.contains(edge.target) {
                 if indices[edge.target] == nil {
                     visit(edge.target)
-                    lowlinks[state] = min(lowlinks[state]!, lowlinks[edge.target]!)
+                    guard let stateLowlink = lowlinks[state], let targetLowlink = lowlinks[edge.target] else {
+                        assertionFailure("Tarjan traversal lost a lowlink")
+                        return
+                    }
+                    lowlinks[state] = min(stateLowlink, targetLowlink)
                 } else if onStack.contains(edge.target) {
-                    lowlinks[state] = min(lowlinks[state]!, indices[edge.target]!)
+                    guard let stateLowlink = lowlinks[state], let targetIndex = indices[edge.target] else {
+                        assertionFailure("Tarjan traversal lost an index")
+                        return
+                    }
+                    lowlinks[state] = min(stateLowlink, targetIndex)
                 }
             }
             if lowlinks[state] == indices[state] {

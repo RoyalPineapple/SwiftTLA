@@ -10,7 +10,7 @@ struct CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let executor = FixtureTLCExecutor(
       stream: try graphStream(for: request.expectedCase, runID: request.runID))
     let runner = CoreConformanceRunner(tlcAdapter: TLCProcessAdapter(executor: executor))
@@ -24,16 +24,18 @@ struct CoreConformanceRunnerTests {
     )
     #expect(result.exitCode == .semanticDifference)
     #expect(result.comparison?.differences.contains { $0.category == .edges } == true)
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.graph/000000.jsonl").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.graph/000000.jsonl").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison-diagnostics.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("toolchain.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("arguments.json").path))
-    let swift = try json(at: output.appendingPathComponent("swift.json"))
-    let tlc = try json(at: output.appendingPathComponent("tlc.json"))
+    let swift = try json(at: output.appendingPathComponent("swift-run.json"))
+    let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
     let comparison = try json(at: output.appendingPathComponent("comparison.json"))
     #expect(correlation(in: swift)["engine"] as? String == "swift")
     #expect(correlation(in: tlc)["engine"] as? String == "tlc")
@@ -48,6 +50,7 @@ struct CoreConformanceRunnerTests {
       (expectedReceipt["graphDigest"] as? String) != (actualReceipt["graphDigest"] as? String)
     )
     #expect((comparison["differences"] as? [[String: Any]])?.first?["category"] as? String == "receipt")
+    #expect((comparison["firstDifferentGraphChunk"] as? [String: Any]) != nil)
     let edgeDifference = try #require(
       (comparison["differences"] as? [[String: Any]])?.first {
         $0["category"] as? String == "edges"
@@ -69,7 +72,7 @@ struct CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let runner = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(executor: FailingTLCExecutor()))
     let output = root.appendingPathComponent("failed-evidence")
@@ -82,7 +85,7 @@ struct CoreConformanceRunnerTests {
     )
     #expect(result.exitCode == .failure)
     #expect(result.evidenceDirectory == output)
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("diagnostic.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
@@ -116,7 +119,7 @@ struct CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("wrong-swift-case")
     let result = CoreConformanceRunner().run(
       case: request.expectedCase,
@@ -144,7 +147,7 @@ struct CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let stale = root.appendingPathComponent(
       ".fixture.\(request.runID.uuidString.lowercased()).staging")
     try fileManager.createDirectory(at: stale, withIntermediateDirectories: true)
@@ -186,8 +189,8 @@ struct CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
-    let otherRun = UUID(uuidString: "00000000-0000-4000-8000-000000000006")!
+    let request = try temporaryRequest(in: root)
+    let otherRun = try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000006"))
     let runner = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
         executor: FixtureTLCExecutor(
@@ -206,13 +209,13 @@ struct CoreConformanceRunnerTests {
     #expect(diagnostic["phase"] as? String == "tlc-parsing")
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
   }
-  @Test("runner replaces stale raw output and serializes canonical observations")
-  func replacesStaleRawOutputAndRetainsObservations() throws {
+  @Test("runner replaces stale raw output and serializes one canonical run")
+  func replacesStaleRawOutputAndRetainsCanonicalRun() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     try Data("stale graph stream".utf8).write(to: request.graphEvents)
     let stream = try graphStream(for: request.expectedCase, runID: request.runID)
     let output = root.appendingPathComponent("exact-evidence")
@@ -234,11 +237,10 @@ struct CoreConformanceRunnerTests {
     )
     #expect(result.exitCode == .exact)
     #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == stream)
-    let tlc = try json(at: output.appendingPathComponent("tlc.json"))
-    let observations = try #require(tlc["observations"] as? [[String: Any]])
-    #expect(observations.count == 2)
-    #expect(observations.contains { ($0["enabledActions"] as? [String]) == ["Next"] })
-    #expect(observations.contains { ($0["isTerminal"] as? Bool) == true })
+    let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
+    #expect(tlc["format"] as? String == "canonical-run-evidence")
+    #expect((tlc["states"] as? [String])?.count == 2)
+    #expect((tlc["edges"] as? [[String: Any]])?.count == 1)
   }
 
   @Test("routine matching evidence retains receipts instead of canonical graph copies")
@@ -247,7 +249,7 @@ struct CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("routine-evidence")
     let result = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
@@ -272,8 +274,8 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("receipts.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("arguments.json").path))
-    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
-    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("tlc.json").path))
+    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
+    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
   }
 }
@@ -285,7 +287,7 @@ extension CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let violation = TLCProcessResult(status: 12, stdout: "Error: invariant", stderr: "")
     let replayFailure = TLCProcessResult(status: 1, stdout: "replay output", stderr: "replay error")
     let output = root.appendingPathComponent("replay-failure")
@@ -316,7 +318,7 @@ extension CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("trace-execution-failure")
     let runner = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
@@ -352,7 +354,7 @@ extension CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("replay-execution-failure")
     let runner = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
@@ -387,7 +389,7 @@ extension CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("arbitrary-trace-execution-failure")
     let result = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
@@ -417,7 +419,7 @@ extension CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("arbitrary-replay-execution-failure")
     let result = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
@@ -448,7 +450,7 @@ extension CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("existing-evidence")
     try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
     try Data("keep".utf8).write(to: output.appendingPathComponent("existing.txt"))
@@ -481,7 +483,7 @@ extension CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = temporaryRequest(in: root)
+    let request = try temporaryRequest(in: root)
     let stream = try graphStream(for: request.expectedCase, runID: request.runID)
     let barrier = PublicationRaceBarrier(parties: 2)
     let runner = CoreConformanceRunner(
@@ -514,8 +516,8 @@ extension CoreConformanceRunnerTests {
     #expect(losingEvidence != output)
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("diagnostic.json").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("run.json").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("swift.json").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc.json").path))
+    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("swift-run.json").path))
+    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-run.json").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-process.json").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.trace.stdout.log").path))
@@ -531,8 +533,8 @@ extension CoreConformanceRunnerTests {
     #expect(
       (try String(contentsOf: losingEvidence.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "primary invocation"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
     let run = try json(at: output.appendingPathComponent("run.json"))
     let exitCode = try #require(run["exitCode"] as? Int)
@@ -563,17 +565,17 @@ extension CoreConformanceRunnerTests {
       result: .ok(statesCount: 2)
     )
   }
-  private func temporaryRequest(in root: URL) -> TLCProcessRequest {
+  private func temporaryRequest(in root: URL) throws -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")
     let configuration = root.appendingPathComponent("Fixture.cfg")
-    try! Data().write(to: module)
-    try! Data().write(to: configuration)
-    let declaredCase = try! CoreConformanceCase(
+    try Data().write(to: module)
+    try Data().write(to: configuration)
+    let declaredCase = try CoreConformanceCase(
       id: "fixture",
       moduleSHA256: String(repeating: "c", count: 64),
       cfgSHA256: String(repeating: "d", count: 64),
       arguments: ["-workers", "1"],
-      argumentsSHA256: CoreConformanceCase.argumentsDigest(["-workers", "1"]),
+      argumentsSHA256: try CoreConformanceCase.argumentsDigest(["-workers", "1"]),
       workers: 1,
       fingerprintPolynomial: 1,
       deadlock: false,
@@ -586,14 +588,14 @@ extension CoreConformanceRunnerTests {
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: root.appendingPathComponent("tla2tools.jar"),
       bridgeClasses: root.appendingPathComponent("bridge"),
-      bundle: try! TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
+      bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
       graphEvents: root.appendingPathComponent("events.jsonl"),
       traceOutput: root.appendingPathComponent("trace.json"),
       replayInput: root.appendingPathComponent("trace.json"),
       workingDirectory: root,
       arguments: ["-workers", "1"],
       expectedCase: declaredCase,
-      runID: UUID(uuidString: "00000000-0000-4000-8000-000000000005")!
+      runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000005"))
     )
   }
 }

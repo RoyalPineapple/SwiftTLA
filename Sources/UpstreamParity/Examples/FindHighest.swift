@@ -8,20 +8,20 @@ import SwiftTLAMacros
 /// bounds directly in SwiftTLA instead of hiding them in host-language data.
 @TLAModel
 public struct FindHighestModel: Sendable {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case lb
     }
 
     public static var spec: TLASpec {
         #spec("Highest") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Highest") {
-                let f = SharedVar(in: Sequences(
+                let f = SharedVar("f", in: Sequences(
                     of: SetExpr<Int>.literal(0, 1, 2, 3, 4),
                     lengths: 0...3
                 ))
-                let h = SharedVar(initial: -1)
-                let i = SharedVar(initial: 1)
+                let h = SharedVar("h", initial: -1)
+                let i = SharedVar("i", initial: 1)
 
                 While(Step.lb, i <= f.count) {
                     Assign(h, to: If(h >= f[i], then: h.expr, else: f[i]))

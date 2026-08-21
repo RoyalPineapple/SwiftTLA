@@ -22,7 +22,6 @@ struct LiveMachineRuntimeTests {
     }
 
     private static let counterSchema = MachineSchema(
-        identifier: "live-machine-runtime-tests.counter-v1",
         model: .init(name: "LiveCounter"),
         state: [.init(id: "count", display: .init(name: "count"), value: .integer, swiftType: "Int")],
         actions: [
@@ -51,46 +50,28 @@ struct LiveMachineRuntimeTests {
         successors: (@Sendable (TLAStateProjection, CounterAction) throws -> [TLAStateProjection])? = nil,
         decodeState: @escaping @Sendable (TLAStateProjection) throws -> Void = { _ in }
     ) -> TLALiveMachineTransitionDriver<CounterAction> {
-        let executor = actionExecutor(compilation)
         return TLALiveMachineTransitionDriver(
-            successors: successors ?? { projection, action in
-                try executor.successors(for: action, from: projection)
-            },
+            successors: successors ?? realSuccessors(compilation),
             validateAction: { _ in nil },
             decodeState: decodeState
-        )
-    }
-
-    private static func actionExecutor(_ compilation: CompiledSpecification) -> CompiledActionExecutor<CounterAction> {
-        .init(
-            compilation: compilation,
-            actionOrdinal: { action in
-                switch action {
-                case .advance: 0
-                case .step: 1
-                }
-            },
-            arguments: { action in
-                switch action {
-                case .advance: []
-                case .step(let delta): [.int(delta)]
-                }
-            },
-            label: { ordinal, arguments in
-                switch (ordinal, arguments) {
-                case (0, []): .advance
-                case (1, [.int(let delta)]): .step(delta)
-                default: nil
-                }
-            }
         )
     }
 
     private static func realSuccessors(
         _ compilation: CompiledSpecification
     ) -> @Sendable (TLAStateProjection, CounterAction) throws -> [TLAStateProjection] {
-        let executor = actionExecutor(compilation)
-        return { projection, action in try executor.successors(for: action, from: projection) }
+        return { projection, action in
+            let formalState = try CompiledState(projection: projection, compilation: compilation)
+            let (ordinal, arguments): (Int, [TLAValue]) = switch action {
+            case .advance: (0, [])
+            case .step(let delta): (1, [.int(delta)])
+            }
+            let action = compilation.layout.actions[ordinal].id
+            return try CompiledRuntime(compilation: compilation)
+                .successors(for: action, from: formalState)
+                .filter { $0.arguments == arguments }
+                .map { try $0.state.projection(using: compilation.layout) }
+        }
     }
 
     private static func makeOwner(
@@ -281,11 +262,9 @@ struct LiveMachineRuntimeTests {
         #expect(commit.action == .advance)
         #expect(commit.before == before)
         #expect(commit.before.identity == owner.identity)
-        #expect(commit.before.schemaIdentifier == Self.counterSchema.identifier)
         #expect(commit.before.position == .init(value: 0))
         #expect(commit.before.state.value(for: try Self.countToken()) == .int(0))
         #expect(commit.after.identity == owner.identity)
-        #expect(commit.after.schemaIdentifier == Self.counterSchema.identifier)
         #expect(commit.after.position == .init(value: 1))
         #expect(commit.after.position == commit.before.position.next)
         #expect(commit.after.state.value(for: try Self.countToken()) == .int(1))
@@ -352,7 +331,6 @@ struct LiveMachineRuntimeTests {
 
         let current = try #require(await Self.requireCurrentSnapshot(from: primary))
         #expect(current.identity == owner.identity)
-        #expect(current.schemaIdentifier == Self.counterSchema.identifier)
         #expect(current.state.value(for: try Self.countToken()) == .int(1))
         #expect(current.position == .init(value: 1))
 

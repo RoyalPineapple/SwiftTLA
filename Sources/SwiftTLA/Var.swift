@@ -33,9 +33,7 @@ extension String: TLAValueType {
   }
 }
 
-/// All RawRepresentable Int enums get TLAValueType support.
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
-  public static var defaultValue: Self { Self(rawValue: 0)! }
   public var tlaValue: TLAValue { .int(rawValue) }
   public init?(formalValue: TLAValue) {
     guard case .int(let value) = formalValue else { return nil }
@@ -49,9 +47,7 @@ where Self: RawRepresentable, Self.RawValue == Int, Self: CustomStringConvertibl
   public var description: String { String(describing: self) }
 }
 
-/// All RawRepresentable String enums get TLAValueType support.
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
-  public static var defaultValue: Self { Self(rawValue: "")! }
   public var tlaValue: TLAValue { .string(rawValue) }
   public init?(formalValue: TLAValue) {
     guard case .string(let value) = formalValue else { return nil }
@@ -111,7 +107,7 @@ public enum VarConstraint: Hashable, Sendable {
 public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
   public let raw: StateExpr
   public init(_ raw: StateExpr) { self.raw = raw }
-  public init(_ value: T) { raw = .value(value.tlaValue) }
+  public init(_ value: T) { raw = value.sourceIssue.map(StateExpr.sourceIssue) ?? .value(value.tlaValue) }
   public var stateExpr: StateExpr { raw }
 
   /// Typed equality keeps enum literals contextual in formal expressions:
@@ -137,26 +133,31 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecCompo
   public let name: String
   public let initial: TLAValue?
   public let constraint: VarConstraint?
+  public let sourceIssue: SourceModelIssue?
 
   public init(_ name: String, _ value: T) {
     self.name = name
     self.initial = value.tlaValue
     self.constraint = nil
+    self.sourceIssue = value.sourceIssue
   }
   public init(_ name: String? = nil, _ initial: TLAValue? = nil, constraint: VarConstraint? = nil) {
     self.name = name ?? ""
     self.initial = initial
     self.constraint = constraint
+    self.sourceIssue = nil
   }
   public init(_ name: String? = nil, bounded range: ClosedRange<Int>) where T == Int {
     self.name = name ?? ""
     self.initial = nil
     self.constraint = .intRange(range)
+    self.sourceIssue = nil
   }
   public init(_ name: String? = nil, values: [String]) where T == String {
     self.name = name ?? ""
     self.initial = nil
     self.constraint = .enumValues(values)
+    self.sourceIssue = nil
   }
   public var description: String { name }
   /// Type-safe assignment: `Var<Int>.becomes(5)` — only values matching T.
@@ -197,7 +198,15 @@ extension String: StateExprConvertible { public var stateExpr: StateExpr { .valu
 extension Var: StateExprConvertible { public var stateExpr: StateExpr { .variable(name) } }
 extension TLAValue: StateExprConvertible { public var stateExpr: StateExpr { .value(self) } }
 
-public protocol TLAValueConvertible { var tlaValue: TLAValue { get } }
+public protocol TLAValueConvertible {
+  var tlaValue: TLAValue { get }
+  var sourceIssue: SourceModelIssue? { get }
+}
+
+extension TLAValueConvertible {
+  public var sourceIssue: SourceModelIssue? { nil }
+}
+
 extension TLAValue: TLAValueConvertible { public var tlaValue: TLAValue { self } }
 extension Int: TLAValueConvertible { public var tlaValue: TLAValue { .int(self) } }
 extension Bool: TLAValueConvertible { public var tlaValue: TLAValue { .bool(self) } }

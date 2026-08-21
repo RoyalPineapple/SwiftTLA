@@ -10,7 +10,9 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
   }
 
   public subscript(_ member: SymmetricMember<Element>) -> Expr<Value> {
-    precondition(member.owner == name, "A symmetric member may only select its owning collection")
+    guard member.owner == name else {
+      return Expr(.sourceIssue(.symmetricMember(collection: name, owner: member.owner)))
+    }
     return Expr(.functionApply(.variable(name), member.binding))
   }
 
@@ -19,7 +21,9 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
   }
 
   public func update(_ member: SymmetricMember<Element>, to value: Expr<Value>) -> ActionExpr {
-    precondition(member.owner == name, "A symmetric member may only update its owning collection")
+    guard member.owner == name else {
+      return .assign(name, .sourceIssue(.symmetricMember(collection: name, owner: member.owner)))
+    }
     return .assign(name, .except(.variable(name), member.binding, value.raw))
   }
 
@@ -84,7 +88,7 @@ public struct SymmetricCollectionMetadata: Equatable, Sendable {
   public let symbolOwnership: [String: String]
 
   init(name: String, verificationScope: Int, initial: TLAValue) {
-    let symbolStem = symmetricCollectionSymbolStem(name)
+    let symbolStem = name.prefix(1).uppercased() + name.dropFirst()
     let memberSymbols = verificationScope > 0
       ? (0..<verificationScope).map { "\(symbolStem)Member\($0)" }
       : []
@@ -111,21 +115,6 @@ public struct SymmetricCollectionMetadata: Equatable, Sendable {
       return symbol
     } + [domainSymbol, symmetrySymbol]
   }
-}
-
-func symmetricCollectionSymbolStem(_ name: String) -> String {
-  let sanitized = name.unicodeScalars.map { scalar -> Character in
-    switch scalar.value {
-    case 65...90, 97...122, 48...57, 95:
-      return Character(String(scalar))
-    default:
-      return "_"
-    }
-  }
-  let base = String(sanitized)
-  guard let first = base.first else { return "Collection" }
-  let identifier = first.isNumber ? "Collection_\(base)" : base
-  return identifier.prefix(1).uppercased() + identifier.dropFirst()
 }
 
 struct SymmetricCollectionPermutationGroup: Sendable {
@@ -215,6 +204,7 @@ public struct SymmetricCollectionScope: Equatable, Sendable {
 public enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
   case invalidScope(collection: String, scope: Int)
   case missingCollectionName
+  case invalidCollectionName(String)
   case duplicateCollection(collection: String)
   case symbolCollision(collection: String, symbol: String)
   case invalidOwnership(collection: String)
@@ -228,6 +218,8 @@ public enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
       return "Symmetric collection '\(collection)' has verification scope \(scope); use a positive scope."
     case .missingCollectionName:
       return "A symmetric collection is missing a name; provide a unique collection name."
+    case .invalidCollectionName(let name):
+      return "Symmetric collection '\(name)' is not a formal identifier; use letters, digits, and underscores, beginning with a letter or underscore."
     case .duplicateCollection(let collection):
       return "Symmetric collection '\(collection)' is declared more than once; declare it once with one scope."
     case .symbolCollision(let collection, let symbol):
@@ -266,13 +258,15 @@ public extension TLASpec {
     reservedSymbols.formUnion(recursiveFuncs.map(\.name))
     reservedSymbols.formUnion(symmetrySets.map { "Symm\($0.variableName)" })
     reservedSymbols.formUnion(definitions.compactMap(\.name))
-    reservedSymbols.formUnion(recursiveDefs.compactMap(tlaDeclaredSymbol))
-    reservedSymbols.formUnion(theorems.compactMap(tlaDeclaredSymbol))
+    reservedSymbols.formUnion(theorems.map(\.name))
 
     var product = 1
     for declaration in collections {
       let metadata = declaration.metadata
       guard !metadata.name.isEmpty else { return .missingCollectionName }
+      guard TLAStateProjection.Token(validating: metadata.name) != nil else {
+        return .invalidCollectionName(metadata.name)
+      }
       guard metadata.verificationScope > 0 else {
         return .invalidScope(collection: metadata.name, scope: metadata.verificationScope)
       }

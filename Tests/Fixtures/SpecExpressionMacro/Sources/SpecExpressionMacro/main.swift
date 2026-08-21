@@ -3,13 +3,14 @@ import SwiftTLAMacros
 
 @TLAModel
 struct Counter {
-    enum Step: String, PlusCalLabel {
+    enum Step: String, PlusCalLabel, CaseIterable {
         case advance
     }
 
     enum Node: String, FiniteDomainKey {
         case only
 
+        static var defaultValue: Self { .only }
         static let formalDomain: [Node] = [.only]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "fixture.spec-expression-node")
 
@@ -42,19 +43,20 @@ struct Counter {
         case one
         case two
 
+        static var defaultValue: Self { .one }
         static let finiteValues: [CarID] = [.one, .two]
     }
 
     static var spec: TLASpec {
         #spec("Counter") {
             Algorithm("Counter") {
-                let value = SharedVar(initial: 0)
-                let cars = SharedVar(initial: Function<CarID, Record<CarSchema>>.literal(
+                let value = SharedVar("value", initial: 0)
+                let cars = SharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
                     (.one, Record<CarSchema>.literal(.init(CarSchema.floor, 1), .init(CarSchema.doorsOpen, false))),
                     (.two, Record<CarSchema>.literal(.init(CarSchema.floor, 2), .init(CarSchema.doorsOpen, false)))
                 ))
                 Each(Node.all) { _ in
-                    let visits = LocalVar(initial: 0)
+                    let visits = LocalVar("visits", initial: 0)
                     Do(Step.advance) {
                         When(value < 1)
                         Assign(value, to: value + 1)
@@ -72,5 +74,11 @@ struct Counter {
 
 var counter = Counter()
 let result = try counter.apply(.advance)
-precondition(result.after.value == 1)
-precondition(result.after.cars[.one][Counter.CarSchema.floor] == 2)
+guard result.after.value == 1,
+      result.after.cars[.one][Counter.CarSchema.floor] == 2 else {
+    throw FixtureError.invalidTransition
+}
+
+private enum FixtureError: Error {
+    case invalidTransition
+}

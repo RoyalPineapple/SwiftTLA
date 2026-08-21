@@ -1,91 +1,27 @@
-# SwiftTLA DSL Patterns
+# SwiftTLA DSL patterns
 
-## Core rule: source models compile once
+## Build one source model
 
-Every accepted DSL construct becomes one typed source declaration. Compilation
-binds, links, lowers, and allocates the declaration into one
-`CompiledSpecification`.
-
-`try spec.compile()` produces the source for local exploration, generated
-machines, direct TLA+ bundles, and authored PlusCal bundles. Each output reads
-the same compiled specification.
-
-## Compiler rule: verified models become executable behavior
-
-`@TLAModel` is a compile-time behavioral compiler. Swift types constrain which
-models can be constructed; the macro parses the supported DSL into the existing
-AST, runs global model checking, and emits executable state-machine or actor
-behavior only after that check succeeds. The generated runtime reuses the
-verified model's actions rather than accepting a separate implementation.
-
-## Formal-engine symmetric collections
-
-`SymmetricCollectionVar<Element, Value>` is retained for formal-engine and
-parity fixtures only. Do not use it in new application models, demos, or
-authoring documentation. New models use `#spec` with `Algorithm`, `SharedVar`,
-and typed `Function`, `SetExpr`, and `Record` expressions.
-
-The retained engine surface separates two identity domains.
-Runtime storage is keyed by concrete `Element.ID` values and may contain an
-arbitrary number of live entries. Verification derives exactly
-`verificationScope` opaque `.constant` model members; concrete IDs, including
-Bluetooth UUIDs, never enter `StateExpr`, `TLAValue`, generated TLA+, or TLC
-artifacts.
-
-The collection API does not add a parallel expression language. It lowers to
-established AST forms:
-
-- A selected read is function application.
-- `allSatisfy` lowers to `forAll` over the collection function domain and
-  `contains(where:)` lowers to `exists` over that domain. Both value-only
-  predicates are supported in runtime-built specifications and in `@TLAModel`
-  parsing.
-- `CollectionAction` existentially selects one opaque member. Its selected
-  update lowers to a function `EXCEPT`, leaving every unselected entry
-  unchanged. The generated runtime action instead receives an `Element.ID`,
-  evaluates the authored guard and effect against that selected live entry, and
-  preserves its peers.
-
-The selection token is intentionally opaque: it may select or update only its
-own collection within its `CollectionAction`. It cannot be compared, ordered,
-stringified, persisted, or used to observe a model member's identity. This
-identity blindness is what permits symmetry reduction.
-
-The checker canonicalizes the complete state under every permitted bijection of
-each collection's opaque members, including nested keys and values, and retains
-the deterministic minimum encoding. Collections use independent permutation
-groups and must fit the configured product budget; the checker never silently
-falls back to an unsound reduction.
-
-## Symmetric collection oracle and proof boundary
-
-The TLA+ bundle declares distinct generated constants and its CFG assigns each
-one to a TLC model value, then declares the matching `Permutations(domain)`
-symmetry operator. Do not use quoted strings as member identities: TLC model
-values are the oracle contract. A feature change must run TLC on the generated
-module/CFG at the selected scope and compare its result with the internal
-checker, alongside ordinary DSL tests.
-
-A successful run verifies only the explicitly selected finite scope. It is not
-evidence for larger or arbitrary populations, and it makes no `N → infinity`
-claim. Locality-checked parametric verification is future work; it requires a
-separate proof rather than extrapolation from bounded runs.
-
-## Model authoring rule: use the PlusCal-shaped builders
-
-New application models, demos, and user-facing examples start with one
-canonical shape:
+`#spec` and Swift result builders create typed source declarations. The
+compiler receives that source model once.
 
 ```swift
 @TLAModel
 struct Counter {
+    enum Step: String, PlusCalLabel, CaseIterable {
+        case advance
+    }
+
     static var spec: TLASpec {
         #spec("Counter") {
             Algorithm("Counter") {
-                let value = SharedVar(initial: 0)
-                Do("advance") {
+                let value = SharedVar("value", initial: 0)
+                Do(Step.advance) {
                     When(value < 1)
                     Assign(value, to: value + 1)
+                }
+                Invariant("Bounds") {
+                    value >= 0 && value <= 1
                 }
             }
         }
@@ -93,105 +29,81 @@ struct Counter {
 }
 ```
 
-`SharedVar`, `LocalVar`, `Each`, `Procedure`, `Do`, and the nested statement
-builders describe formal behavior. Their closures do not run application
-logic. The parser and runtime builder are required to produce equivalent
-algorithm models before the one lowerer creates the TLA+ spec used by
-checking, generation, and export.
+Use a named `SharedVar` or `LocalVar` declaration. Use a `PlusCalLabel` enum
+for a finite set of control locations. Use typed expressions in `When`,
+`Assign`, `With`, `Choose`, and property builders.
 
-`Var`, `Variable`, and `Action` remain formal-engine and direct-TLA tools for
-imported modules and parity fixtures. They are not a second application
-authoring style.
+## Choose builders by source scope
 
-## Builder rule: every nested scope gets a builder
+| Source scope | Builder | Source declaration |
+| --- | --- | --- |
+| Specification | `#spec` | variables, algorithms, properties, imports |
+| Algorithm | `Algorithm` | shared variables, processes, procedures |
+| Process family | `Each` | one finite process family |
+| Atomic action | `Do` | guard, assignment, choice, and transfer statements |
+| Procedure | `Procedure` | typed procedure declaration |
+| Formal declaration | `FormalDefinition`, `Invariant`, `Theorem`, `Refinement` | typed formal declaration |
 
-| Construct | Builder | Result |
-|-----------|---------|--------|
-| `TLASpec("Name") { ... }` | `@SpecBuilder` | `SpecComponent[]` |
-| `Algorithm("Name") { ... }` | `@AlgorithmBuilder` | `AlgorithmElement[]` |
-| `Do("Name") { ... }` | `@DoBuilder` | `StepStatement[]` |
-| `Procedure("Name") { ... }` | `@AlgorithmBuilder` | `AlgorithmElement` |
-| `Action("Name") { ... }` | `@ActionBuilder` | `ActionExpr` |
-| `Invariant("Name") { ... }` | `@InvariantBuilder` | `StateExpr` |
-| `Variable(computed: x) { ... }` | `@InvariantBuilder` | `StateExpr` (initExpr) |
-| `DefineRecursive("Name", params:) { ... }` | `@InvariantBuilder` | `StateExpr` (body) |
-| `forAll(set) { _ in ... }` | `@InvariantBuilder` | `StateExpr` |
-| `filterSet(set) { _ in ... }` | `@InvariantBuilder` | `StateExpr` |
-| `exists(name, from:) { _ in ... }` | `(StateExpr) -> ActionExpr` | `ActionExpr` |
+The source builders preserve lexical nesting. Compilation binds each declared
+name to a private identity. The runtime uses those identities and compiled
+state slots.
 
-## Naming rule: enums, never string literals
+## Compile before consuming the model
 
-Every known set of identifiers uses a `String`-backed enum:
+```swift
+let compilation = try Counter.spec.compile()
+let machine = try Counter.makeMachine()
+let transition = try machine.apply(.advance)
+let bundle = try compilation.renderedTLAModuleBundle()
+```
 
-| Domain | Enum | Location |
-|--------|------|----------|
-| State method calls | `StateMethod` | SpecParser |
-| Temporal constructors | `TemporalMethod` | SpecParser |
-| Fairness constructors | `FairnessMethod` | SpecParser |
-| Recursive function declarations | `CompiledRecursiveFunction` | Compiled runtime |
+`CompiledSpecification` is the source for local exploration, generated Swift,
+direct TLA+, authored PlusCal, and conformance evidence. Its description
+exposes declarations, control locations, imports, and identity in canonical
+order.
 
-No bare string literals in pattern-matching switches.
+## Use typed generated APIs
 
-## Type safety rule: compiled runtime state
+Generated `State`, `ActionLabel`, `TransitionResult`, `Live`, actor, and
+observable types form the application API. A generated action label carries
+the action type and argument types selected by the source model.
 
-The runtime stores each state in compiled layout slots as compiled values.
-`TLAStateProjection` validates formal keys and values for formal-tool
-inspection.
+Use `TLAStateProjection` at the formal-tool boundary. It validates the
+identifier and formal values that cross into inspection, serialization, and
+tool adapters.
 
-Generated application APIs expose typed `State`, `Variables`, `ActionLabel`,
-and `TransitionResult` values. `TLAStateProjection` is the guarded bridge for
-formal tooling that must inspect a formal state. See
-[Generated machines](GeneratedMachines.md) for the public contract.
+## Declare modules and refinement structurally
 
-## Formal-engine construct rule: one way to build
+Use `Import` and `Instance` for TLA+ modules. Compilation links their complete
+module closure. Direct TLA+, PlusCal, and TLC staging use the same closure.
 
-There is exactly one builder function per construct type. Internal `*Decl` structs have
-internal initializers — only the builder function can create them.
+Use `FormalDefinition` and `Invariant` for typed formal claims. Use
+`Refinement` with a typed abstract model and state mapping. The local checker
+evaluates mapped initial states and concrete edges against the abstract model.
 
-| Builder function | Creates | Internal type |
-|-----------------|---------|---------------|
-| `Variable(x, 0)` | `VarDecl` | `VarDecl` (compiled runtime / direct TLA+) |
-| `Variable(x, in: set)` | `VarDecl` | `VarDecl` |
-| `Variable(computed: x) { ... }` | `VarDecl` | `VarDecl` |
-| `Action("Name") { ... }` | `ActionDecl` | `ActionDecl` |
-| `Invariant("Name") { ... }` | `InvDecl` | `InvDecl` |
-| `Constant("N", value)` | `ConstantDecl` | `ConstantDecl` |
-| `Constraint(expr)` | `ConstraintDecl` | `ConstraintDecl` |
-| `Assume(expr)` | `AssumeDecl` | `AssumeDecl` |
-| `Extends("Naturals")` | `ExtendsDecl` | `ExtendsDecl` |
-| `DefineRecursive("F", params:) { ... }` | `RecursiveFuncDecl` | `RecursiveFuncDecl` |
-| `Recursive(tlaText)` | `RecursiveDecl` | `RecursiveDecl` |
-| `DeadlockCheck()` | `DeadlockDecl` | `DeadlockDecl` |
+## Verify finite behavior
 
-## Validation rule: upstream parity or oracle twin
+```swift
+let compilation = try Counter.spec.compile()
+let result = try ModelChecker(compilation: compilation).check()
+```
 
-Every ported spec must match TLC state count. Every new DSL feature must be
-exercised by at least one port. No feature without an oracle.
+`FiniteExplorationConfiguration` declares the maximum state limit for an
+exploration. Core conformance compares canonical SwiftTLA and TLC graphs for
+declared finite cases. The exact comparison explains a mismatch; the graph
+receipt identifies the completed exploration.
 
-## Composition rule: every struct composes
+## Own one concern per component
 
-- `TLASpec.extending(other)` — merges two specs (checker + user)
-- `TLASpec.instantiating(constants)` — overrides CONSTANT values
-- `substituteConstants(spec)` — inlines constants across all fields
-- `distributeOr(action)` — single canonical OR-distribution, shared by enumerator and completeAction
-- `CompiledRuntime.initialStates()` — initializes a compiled model
-
-## What goes where
-
-| File | Role | Must have |
-|------|------|-----------|
-| `StateExpr.swift` | Expression AST | 51 cases, description, Codable/Sendable/Equatable |
-| `ActionExpr.swift` | Action AST | 8 cases, overloading operators |
-| `TLAValue.swift` | Runtime value | 8 cases, Comparable, ExpressibleBy*
-| `Var.swift` | Variable refs | Type-safe, operators, @dynamicMemberLookup |
-| `CompiledEvaluator.swift` | Expression eval | Every compiled expression case handled |
-| `CompiledActionEnumerator.swift` | Action expansion | Evaluates compiled actions into slot-backed successors |
-| `ModelChecker.swift` | BFS verification | BFS + invariants + constraints |
-| `CompiledRuntime.swift` | Compiled execution | Evaluates compiled states and actions |
-| `TLASpec.swift` | Spec container | Builder init, global builder fns, component types |
-| `TLASpec+PrettyPrint.swift` | TLA+ export | 13-step generation order, distributeOr, completeAction |
-| `SpecParser.swift` | SwiftSyntax → DSL | parseStateExpr, parseSpecClosure, enums |
-| `StateGraph.swift` | BFS output | States + transitions |
-| `TemporalExpr.swift` | Temporal AST | 5 cases |
-| `SwiftSource.swift` | Swift → Swift | Round-trip for tests |
-| `ModelMacro.swift` | @TLAModel | Compile-time check + emit runtime |
+| Component | Concern |
+| --- | --- |
+| `TLASpec` | typed source model |
+| `SpecParser` | SwiftSyntax input to source declarations |
+| `CompiledLayout` | canonical IDs and slots |
+| `CompiledEvaluator` | compiled expressions and values |
+| `CompiledRuntime` | compiled state and action execution |
+| `ModelChecker` | finite graph exploration |
+| `MachineSurfacePlan` | generated Swift surface |
+| `TLASpec+PrettyPrint` | compiled TLA+ declaration plan |
+| TLC adapter | declared bundle staging and event parsing |
+| canonical graph | exact finite conformance records |

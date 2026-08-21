@@ -11,6 +11,7 @@ public struct TwoBuckets {
     private enum FillThreeProcess: String, FiniteDomainKey {
         case fillThree
 
+        static var defaultValue: Self { .fillThree }
         static let formalDomain: [Self] = [.fillThree]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.fill-three")
 
@@ -20,6 +21,7 @@ public struct TwoBuckets {
     private enum FillFiveProcess: String, FiniteDomainKey {
         case fillFive
 
+        static var defaultValue: Self { .fillFive }
         static let formalDomain: [Self] = [.fillFive]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.fill-five")
 
@@ -29,6 +31,7 @@ public struct TwoBuckets {
     private enum EmptyThreeProcess: String, FiniteDomainKey {
         case emptyThree
 
+        static var defaultValue: Self { .emptyThree }
         static let formalDomain: [Self] = [.emptyThree]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.empty-three")
 
@@ -38,6 +41,7 @@ public struct TwoBuckets {
     private enum EmptyFiveProcess: String, FiniteDomainKey {
         case emptyFive
 
+        static var defaultValue: Self { .emptyFive }
         static let formalDomain: [Self] = [.emptyFive]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.empty-five")
 
@@ -47,6 +51,7 @@ public struct TwoBuckets {
     private enum PourThreeIntoFiveProcess: String, FiniteDomainKey {
         case pourThreeIntoFive
 
+        static var defaultValue: Self { .pourThreeIntoFive }
         static let formalDomain: [Self] = [.pourThreeIntoFive]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.pour-three-into-five")
 
@@ -56,13 +61,14 @@ public struct TwoBuckets {
     private enum PourFiveIntoThreeProcess: String, FiniteDomainKey {
         case pourFiveIntoThree
 
+        static var defaultValue: Self { .pourFiveIntoThree }
         static let formalDomain: [Self] = [.pourFiveIntoThree]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.pour-five-into-three")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case fillThree
         case fillFive
         case emptyThree
@@ -74,8 +80,8 @@ public struct TwoBuckets {
     public static var spec: TLASpec {
         #spec("TwoBuckets") {
             Algorithm("TwoBuckets") {
-                let three = SharedVar(initial: 0)
-                let five = SharedVar(initial: 0)
+                let three = SharedVar("three", initial: 0)
+                let five = SharedVar("five", initial: 0)
 
                 Each(FillThreeProcess.all) { _ in
                     Do(Step.fillThree) {

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import UpstreamParity
 
@@ -101,6 +102,47 @@ struct CanonicalGraphReceiptTests {
     let forwardReceipt = receipt(forward)
     #expect(forwardReceipt.graphChunkDigests.count == 2)
     #expect(forwardReceipt == receipt(reverse))
+  }
+
+  @Test("canonical run evidence verifies its sorted graph chunks")
+  func canonicalRunEvidenceUsesVerifiedChunks() throws {
+    let states = (0...CanonicalGraphReceipt.recordsPerChunk).map {
+      state(counter: $0, values: [.integer($0)])
+    }
+    let initial = try #require(states.first)
+    let graph = try CanonicalGraph(initialStates: [initial], states: states, edges: [])
+    let run = try CanonicalRun(
+      schema: .exactFiniteTLCGraph,
+      graph: graph,
+      observableActions: [],
+      outcome: .exhaustiveSuccess
+    )
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let url = root.appendingPathComponent("swift-run.json")
+    try CanonicalRunEvidence.write(
+      run,
+      correlation: .init(caseID: "chunked", runID: UUID(), engine: .swift),
+      receiptContext: .init(
+        compiledModelIdentity: "model",
+        configurationIdentity: "configuration",
+        symmetrySchemaIdentity: "none",
+        observableNameMappingIdentity: nil,
+        maximumStateLimit: 1_000
+      ),
+      to: url
+    )
+
+    let loaded = try CanonicalRunEvidence.read(from: url)
+    #expect(loaded.run == run)
+    #expect(loaded.evidence.graph.chunks.count == 2)
+
+    let firstChunk = root.appendingPathComponent("swift-run.graph/000000.jsonl")
+    try Data("changed".utf8).write(to: firstChunk, options: .atomic)
+    #expect(throws: CanonicalRunEvidenceError.self) {
+      try CanonicalRunEvidence.read(from: url)
+    }
   }
 
   private func state(counter: Int, values: [CanonicalValue]) -> CanonicalState {

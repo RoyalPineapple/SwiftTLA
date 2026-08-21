@@ -1,27 +1,30 @@
 import SwiftSyntax
-import SwiftParser
-import SwiftBasicFormat
 
 extension ParserSession {
+    struct SymmetricCollectionSourceTypes {
+        let element: TypeSyntax
+        let value: TypeSyntax
+    }
+
     func collectSymmetricCollectionTypes(
         in closure: ClosureExprSyntax
-    ) -> [String: (element: String, value: String)] {
-        var types: [String: (element: String, value: String)] = [:]
+    ) -> [String: SymmetricCollectionSourceTypes] {
+        var types: [String: SymmetricCollectionSourceTypes] = [:]
         for statement in closure.statements {
             guard case .decl(let declaration) = statement.item,
                   let variable = declaration.as(VariableDeclSyntax.self)
             else { continue }
             for binding in variable.bindings {
                 guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                      let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                      let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
-                      specialization.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SymmetricCollectionVar"
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                  let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
+                  terminalTypeName(in: specialization.expression) == "SymmetricCollectionVar"
                 else { continue }
                 let arguments = Array(specialization.genericArgumentClause.arguments)
                 guard arguments.count == 2 else { continue }
-                types[name] = (
-                    arguments[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines),
-                    arguments[1].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                types[name] = .init(
+                    element: arguments[0].argument,
+                    value: arguments[1].argument
                 )
             }
         }
@@ -31,7 +34,7 @@ extension ParserSession {
     func parseSymmetricCollectionDecl(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents,
-        collectionTypes: [String: (element: String, value: String)]
+        collectionTypes: [String: SymmetricCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
         guard let collectionName = arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
@@ -40,7 +43,9 @@ extension ParserSession {
               let scopeLiteral = scopeArgument.as(IntegerLiteralExprSyntax.self),
               let scope = Int(scopeLiteral.literal.text),
               let initialExpression = arguments.first(where: { $0.label?.text == "initial" })?.expression,
-              let initial = parseLiteralValue(initialExpression)
+              let initial = parseLiteralValue(initialExpression),
+              let elementType = sourceTypeSpelling(types.element),
+              let valueType = sourceTypeSpelling(types.value)
         else {
             result.diagnostics.append(.init(
                 message: "Symmetric collections require SymmetricCollectionVar<Element, Value>, "
@@ -53,8 +58,8 @@ extension ParserSession {
         let declaration = SymmetricCollectionDecl(name: collectionName, verificationScope: scope, initial: initial)
         result.symmetricCollections.append(.init(
             name: collectionName,
-            elementType: types.element,
-            valueType: types.value,
+            elementType: elementType,
+            valueType: valueType,
             verificationScope: scope,
             source: call.description,
             declaration: declaration
@@ -191,22 +196,13 @@ extension ParserSession {
                 binding: binding
             )
         }
-        if let sequence = expression.as(SequenceExprSyntax.self),
-           let split = collectionActionSequenceSplit(Array(sequence.elements)) {
-            let left = parseCollectionActionExpression(
-                split.left,
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            return parseCollectionActionSequence(
+                Array(sequence.elements),
                 collection: collection,
                 member: member,
                 binding: binding
             )
-            let right = parseCollectionActionExpression(
-                split.right,
-                collection: collection,
-                member: member,
-                binding: binding
-            )
-            guard let left, let right else { return nil }
-            return split.operatorText == "&&" ? .and(left, right) : .or(left, right)
         }
         if let update = collectionUpdate(expression, collection: collection, member: member) {
             guard let value = decodeStateExpr(update.expression) else { return nil }
@@ -222,27 +218,45 @@ extension ParserSession {
         return decodeStateExpr(expression).map(ActionExpr.guard_)
     }
 
-    func collectionActionSequenceSplit(
-        _ elements: [ExprSyntax]
-    ) -> (left: ExprSyntax, operatorText: String, right: ExprSyntax)? {
-        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
+    func parseCollectionActionSequence(
+        _ elements: [ExprSyntax],
+        collection: String,
+        member: String,
+        binding: String
+    ) -> ActionExpr? {
+        guard !elements.isEmpty, elements.count % 2 == 1 else { return nil }
+        if elements.count == 1 {
+            return parseCollectionActionExpression(
+                elements[0],
+                collection: collection,
+                member: member,
+                binding: binding
+            )
+        }
         let operators = stride(from: 1, to: elements.count, by: 2)
         let splitIndex = operators.first {
             elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
         } ?? operators.first {
             elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
         }
-        guard let splitIndex,
-              let operatorText = elements[splitIndex].as(BinaryOperatorExprSyntax.self)?.operator.text,
-              let left = parseExpression(elements[0..<splitIndex]),
-              let right = parseExpression(elements[(splitIndex + 1)..<elements.count])
+        guard let splitIndex else {
+            return decodeInfixExpr(elements).map(ActionExpr.guard_)
+        }
+        guard let operation = elements[splitIndex].as(BinaryOperatorExprSyntax.self)?.operator.text,
+              let left = parseCollectionActionSequence(
+                  Array(elements[..<splitIndex]),
+                  collection: collection,
+                  member: member,
+                  binding: binding
+              ),
+              let right = parseCollectionActionSequence(
+                  Array(elements[(splitIndex + 1)...]),
+                  collection: collection,
+                  member: member,
+                  binding: binding
+              )
         else { return nil }
-        return (left, operatorText, right)
-    }
-
-    func parseExpression(_ elements: ArraySlice<ExprSyntax>) -> ExprSyntax? {
-        let source = elements.map(\.description).joined()
-        return SwiftParser.Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self)
+        return operation == "&&" ? .and(left, right) : .or(left, right)
     }
 
     func collectionUpdate(
@@ -361,7 +375,7 @@ extension ParserSession {
             return .bool(boolean.literal.text == "true")
         }
         if let string = expression.as(StringLiteralExprSyntax.self) {
-            return .string(string.segments.description.replacingOccurrences(of: "\"", with: ""))
+            return string.representedLiteralValue.map(TLAValue.string)
         }
         return nil
     }
@@ -439,7 +453,8 @@ extension ParserSession {
                 return
             }
             if let stringVal = valExpr.as(StringLiteralExprSyntax.self) {
-                result.variables.append(.init(name: firstName, initial: .string(stringVal.segments.description)))
+                guard let value = stringVal.representedLiteralValue else { return }
+                result.variables.append(.init(name: firstName, initial: .string(value)))
                 return
             }
             // TLAValue.set([]), TLAValue.tuple([]), etc.
@@ -464,7 +479,7 @@ extension ParserSession {
 
     func parsedVariableName(_ expression: ExprSyntax) -> String? {
         if let literal = expression.as(StringLiteralExprSyntax.self) {
-            return literal.segments.description.replacingOccurrences(of: "\"", with: "")
+            return literal.representedLiteralValue
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return reference.baseName.text
@@ -516,6 +531,8 @@ extension ParserSession {
 
     private func staticConstantValue(_ expression: StateExpr) -> TLAValue? {
         switch expression {
+        case .sourceIssue:
+            return nil
         case .value(let value):
             return value
         case .setLiteral(let elements):

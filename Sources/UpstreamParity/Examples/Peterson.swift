@@ -9,6 +9,7 @@ public struct PetersonModel: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.locks-auxiliary-vars.peterson.process"
@@ -17,7 +18,7 @@ public struct PetersonModel: Sendable {
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a0
         case a1
         case a2
@@ -28,12 +29,12 @@ public struct PetersonModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Peterson") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Peterson") {
-                let c = SharedVar(initial: Function<Process, Bool>.literal(
+                let c = SharedVar("c", initial: Function<Process, Bool>.literal(
                     (.one, false), (.two, false)
                 ))
-                let turn = SharedVar(initial: Process.one)
+                let turn = SharedVar("turn", initial: Process.one)
 
                 Each(Process.all) { process in
                     Do(Step.a0) {

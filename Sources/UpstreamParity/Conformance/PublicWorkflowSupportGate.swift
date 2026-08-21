@@ -67,10 +67,10 @@ public struct PublicWorkflowSupportSurfaceEntry: Equatable, Codable, Sendable {
           Set(requiredPlatforms).count == requiredPlatforms.count,
           requiredPlatforms.allSatisfy({ !$0.isEmpty }),
           Set(prerequisiteCategories).count == prerequisiteCategories.count else {
-      throw PublicWorkflowGovernanceError.invalidField(record: id, field: "support entry")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "support entry")
     }
     if requestedStatus != .requested, reason?.isEmpty != false {
-      throw PublicWorkflowGovernanceError.invalidField(record: id, field: "reason")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "reason")
     }
   }
 
@@ -80,7 +80,7 @@ public struct PublicWorkflowSupportSurfaceEntry: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(id: try container.decode(String.self, forKey: .id), behavior: try container.decode(String.self, forKey: .behavior), category: try container.decode(PublicWorkflowCaseCategory.self, forKey: .category), finiteBounds: try container.decode(CoreFiniteBounds.self, forKey: .finiteBounds), mandatoryCaseIDs: try container.decode([String].self, forKey: .mandatoryCaseIDs), requestedStatus: try container.decode(PublicWorkflowSupportRequest.self, forKey: .requestedStatus), releaseClaim: try container.decode(String.self, forKey: .releaseClaim), linkedDivergenceIDs: try container.decodeIfPresent([String].self, forKey: .linkedDivergenceIDs) ?? [], requiredPlatforms: try container.decodeIfPresent([String].self, forKey: .requiredPlatforms) ?? [], prerequisiteCategories: try container.decodeIfPresent([PublicWorkflowPrerequisiteCategory].self, forKey: .prerequisiteCategories) ?? [], reason: try container.decodeIfPresent(String.self, forKey: .reason))
   }
 }
@@ -93,12 +93,12 @@ public struct PublicWorkflowSupportSurface: Equatable, Codable, Sendable {
   public init(entries: [PublicWorkflowSupportSurfaceEntry]) throws { try self.init(schema: Self.schema, entries: entries) }
 
   public init(schema: String, entries: [PublicWorkflowSupportSurfaceEntry]) throws {
-    guard schema == Self.schema else { throw PublicWorkflowGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var ids = Set<String>()
     for entry in entries {
       try entry.validate()
       guard ids.insert(entry.id).inserted else {
-        throw PublicWorkflowGovernanceError.duplicateID(kind: "support", id: entry.id)
+        throw ConformanceGovernanceError.duplicateID(kind: "support", id: entry.id)
       }
     }
     self.schema = schema
@@ -108,7 +108,7 @@ public struct PublicWorkflowSupportSurface: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, entries }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(schema: try container.decode(String.self, forKey: .schema), entries: try container.decode([PublicWorkflowSupportSurfaceEntry].self, forKey: .entries))
   }
 
@@ -118,20 +118,20 @@ public struct PublicWorkflowSupportSurface: Equatable, Codable, Sendable {
     let divergenceIDs = Set(ledger.records.map(\.id))
     for entry in entries {
       for caseID in entry.mandatoryCaseIDs where !caseIDs.contains(caseID) {
-        throw PublicWorkflowGovernanceError.unknownCaseID(caseID)
+        throw ConformanceGovernanceError.unknownCaseID(caseID)
       }
       for caseID in entry.mandatoryCaseIDs {
         guard let record = cases.cases.first(where: { $0.id == caseID }),
               record.category == entry.category, record.finiteBounds == entry.finiteBounds else {
-          throw PublicWorkflowGovernanceError.inconsistentReference(record: entry.id, field: "case category or bounds")
+          throw ConformanceGovernanceError.inconsistentReference(record: entry.id, field: "case category or bounds")
         }
       }
       for divergenceID in entry.linkedDivergenceIDs where !divergenceIDs.contains(divergenceID) {
-        throw PublicWorkflowGovernanceError.unknownDivergenceID(divergenceID)
+        throw ConformanceGovernanceError.unknownDivergenceID(divergenceID)
       }
     }
     guard divergenceIDs.isSubset(of: Set(entries.flatMap(\.linkedDivergenceIDs))) else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "support surface", field: "unlinked divergence")
+      throw ConformanceGovernanceError.invalidField(record: "support surface", field: "unlinked divergence")
     }
   }
 }
@@ -163,7 +163,7 @@ public struct PublicWorkflowAdmissionEntry: Equatable, Codable, Sendable {
   public func validate() throws {
     guard !supportID.isEmpty, !mandatoryCaseIDs.isEmpty, Set(reasonCodes).count == reasonCodes.count,
           Set(mandatoryCaseIDs).count == mandatoryCaseIDs.count, Set(divergenceIDs).count == divergenceIDs.count else {
-      throw PublicWorkflowGovernanceError.invalidField(record: supportID, field: "admission entry")
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "admission entry")
     }
     try evidence.forEach { try $0.validate() }
     try platformEvidence.forEach { try $0.validate() }
@@ -172,17 +172,17 @@ public struct PublicWorkflowAdmissionEntry: Equatable, Codable, Sendable {
             evidence.allSatisfy({ $0.status == .complete && $0.outcome == .exact }),
             Set(evidence.map(\.correlation.caseID)).count == evidence.count,
             platformEvidence.allSatisfy({ $0.status == .succeeded }) else {
-        throw PublicWorkflowGovernanceError.invalidField(record: supportID, field: "admitted evidence")
+        throw ConformanceGovernanceError.invalidField(record: supportID, field: "admitted evidence")
       }
     } else if reasonCodes.isEmpty {
-      throw PublicWorkflowGovernanceError.invalidField(record: supportID, field: "reasonCodes")
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "reasonCodes")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case supportID, decision, reasonCodes, mandatoryCaseIDs, divergenceIDs, evidence, platformEvidence }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(supportID: try container.decode(String.self, forKey: .supportID), decision: try container.decode(PublicWorkflowSupportDecision.self, forKey: .decision), reasonCodes: try container.decode([PublicWorkflowReasonCode].self, forKey: .reasonCodes), mandatoryCaseIDs: try container.decode([String].self, forKey: .mandatoryCaseIDs), divergenceIDs: try container.decode([String].self, forKey: .divergenceIDs), evidence: try container.decodeIfPresent([PublicWorkflowCaseEvidence].self, forKey: .evidence) ?? [], platformEvidence: try container.decodeIfPresent([PublicWorkflowPlatformEvidence].self, forKey: .platformEvidence) ?? [])
   }
 }
@@ -202,18 +202,18 @@ public struct PublicWorkflowAdmission: Equatable, Codable, Sendable {
 
   public init(schema: String, reportID: UUID, gateRunID: UUID, entries: [PublicWorkflowAdmissionEntry], admittedBounds: [String: CoreFiniteBounds], unexplainedDivergenceCount: Int) throws {
     guard schema == Self.schema, !entries.isEmpty, unexplainedDivergenceCount >= 0 else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "admission", field: "report")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "report")
     }
     var ids = Set<String>()
     for entry in entries {
       try entry.validate()
-      guard ids.insert(entry.supportID).inserted else { throw PublicWorkflowGovernanceError.duplicateID(kind: "admission", id: entry.supportID) }
+      guard ids.insert(entry.supportID).inserted else { throw ConformanceGovernanceError.duplicateID(kind: "admission", id: entry.supportID) }
       if entry.decision == .admitted {
-        guard let bounds = admittedBounds[entry.supportID] else { throw PublicWorkflowGovernanceError.invalidField(record: entry.supportID, field: "admitted bounds") }
+        guard let bounds = admittedBounds[entry.supportID] else { throw ConformanceGovernanceError.invalidField(record: entry.supportID, field: "admitted bounds") }
         try bounds.validate()
       }
     }
-    guard Set(admittedBounds.keys).isSubset(of: ids) else { throw PublicWorkflowGovernanceError.invalidField(record: "admission", field: "admitted bounds") }
+    guard Set(admittedBounds.keys).isSubset(of: ids) else { throw ConformanceGovernanceError.invalidField(record: "admission", field: "admitted bounds") }
     self.schema = schema
     self.reportID = reportID
     self.gateRunID = gateRunID
@@ -235,30 +235,30 @@ public struct PublicWorkflowAdmission: Equatable, Codable, Sendable {
     let divergenceIDs = Set(ledger.records.map(\.id))
     let derivedUnexplainedCount = ledger.unexplainedRecords.count
     guard unexplainedDivergenceCount == derivedUnexplainedCount else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "admission", field: "unexplained divergence count")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "unexplained divergence count")
     }
     guard Set(entriesByID.keys) == Set(supportSurface.entries.map(\.id)) else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "admission", field: "support entry coverage")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "support entry coverage")
     }
     for support in supportSurface.entries {
       guard let entry = entriesByID[support.id], Set(entry.mandatoryCaseIDs) == Set(support.mandatoryCaseIDs), Set(entry.divergenceIDs) == Set(support.linkedDivergenceIDs) else {
-        throw PublicWorkflowGovernanceError.inconsistentReference(record: support.id, field: "admission")
+        throw ConformanceGovernanceError.inconsistentReference(record: support.id, field: "admission")
       }
       guard Set(entry.mandatoryCaseIDs).isSubset(of: caseIDs), Set(entry.divergenceIDs).isSubset(of: divergenceIDs) else {
-        throw PublicWorkflowGovernanceError.inconsistentReference(record: support.id, field: "references")
+        throw ConformanceGovernanceError.inconsistentReference(record: support.id, field: "references")
       }
       switch support.requestedStatus {
       case .requested:
         guard entry.decision != .unsupported else {
-          throw PublicWorkflowGovernanceError.invalidField(record: support.id, field: "requested entry downgraded")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "requested entry downgraded")
         }
       case .unsupported:
         guard entry.decision == .unsupported, entry.reasonCodes == [.explicitlyUnsupported] else {
-          throw PublicWorkflowGovernanceError.invalidField(record: support.id, field: "unsupported support state")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "unsupported support state")
         }
       case .blocked:
         guard entry.decision == .blocked, entry.reasonCodes == [.declaredBlocked] else {
-          throw PublicWorkflowGovernanceError.invalidField(record: support.id, field: "blocked support state")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "blocked support state")
         }
       }
       if entry.decision == .admitted {
@@ -286,7 +286,7 @@ public struct PublicWorkflowAdmission: Equatable, Codable, Sendable {
                     expectedRunID: platform.correlation.platformRunID, evidence: platform.stderr)
               }),
               Set(entry.platformEvidence.map(\.platform)).isSuperset(of: Set(support.requiredPlatforms)) else {
-          throw PublicWorkflowGovernanceError.invalidField(record: support.id, field: "correlated hosted workflow evidence")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "correlated hosted workflow evidence")
         }
       } else {
         try validateReasonCodes(entry, support: support, hasUnexplainedDivergence: derivedUnexplainedCount > 0)
@@ -323,14 +323,14 @@ public struct PublicWorkflowAdmission: Equatable, Codable, Sendable {
       supportedReasons = reasons
     }
     guard Set(entry.reasonCodes).isSubset(of: supportedReasons), !supportedReasons.isEmpty else {
-      throw PublicWorkflowGovernanceError.invalidField(record: entry.supportID, field: "unbacked reason codes")
+      throw ConformanceGovernanceError.invalidField(record: entry.supportID, field: "unbacked reason codes")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, reportID, gateRunID, entries, admittedBounds, unexplainedDivergenceCount }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(schema: try container.decode(String.self, forKey: .schema), reportID: try container.decode(UUID.self, forKey: .reportID), gateRunID: try container.decode(UUID.self, forKey: .gateRunID), entries: try container.decode([PublicWorkflowAdmissionEntry].self, forKey: .entries), admittedBounds: try container.decodeIfPresent([String: CoreFiniteBounds].self, forKey: .admittedBounds) ?? [:], unexplainedDivergenceCount: try container.decode(Int.self, forKey: .unexplainedDivergenceCount))
   }
 }

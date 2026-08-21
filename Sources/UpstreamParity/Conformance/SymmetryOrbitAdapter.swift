@@ -19,13 +19,13 @@ public struct SymmetryPermutation: Equatable, Sendable {
           Set(constantMapping.values).count == constantMapping.count,
           Set(constantMapping.keys) == Set(constantMapping.values),
           constantMapping.allSatisfy({ !$0.key.isEmpty && !$0.value.isEmpty }) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "symmetry permutation", field: "constant mapping")
+      throw ConformanceGovernanceError.invalidField(record: "symmetry permutation", field: "constant mapping")
     }
     self.constantMapping = constantMapping
   }
 
-  public func apply(_ state: CanonicalState) -> CanonicalState {
-    CanonicalState(bindings: state.bindings.mapValues(apply))
+  public func apply(_ state: CanonicalState) throws -> CanonicalState {
+    CanonicalState(bindings: try state.bindings.mapValues(apply))
   }
 
   fileprivate static func identity(on domain: Set<String>) throws -> Self {
@@ -33,27 +33,33 @@ public struct SymmetryPermutation: Equatable, Sendable {
   }
 
   fileprivate func composing(after other: Self) throws -> Self {
-    try Self(constantMapping: Dictionary(uniqueKeysWithValues: constantMapping.keys.map {
-      ($0, constantMapping[other.constantMapping[$0]!]!)
+    try Self(constantMapping: Dictionary(uniqueKeysWithValues: try constantMapping.keys.map { key in
+      guard let intermediate = other.constantMapping[key],
+            let result = constantMapping[intermediate] else {
+        throw SymmetryOrbitAdapterError.incompatiblePermutationDomains
+      }
+      return (key, result)
     }))
   }
 
   fileprivate var key: String {
-    constantMapping.keys.sorted().map { "\($0)->\(constantMapping[$0]!)" }.joined(separator: "|")
+    constantMapping.sorted { $0.key < $1.key }
+      .map { "\($0.key)->\($0.value)" }
+      .joined(separator: "|")
   }
 
-  private func apply(_ value: CanonicalValue) -> CanonicalValue {
+  private func apply(_ value: CanonicalValue) throws -> CanonicalValue {
     switch value {
     case .constant(let name):
       .constant(constantMapping[name] ?? name)
     case .orderedSet(let values):
-      .set(values.map(apply))
+      .set(try values.map(apply))
     case .orderedTuple(let values):
-      .tuple(values.map(apply))
+      .tuple(try values.map(apply))
     case .orderedRecord(let fields):
-      .record(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, apply($0.value)) }))
+      .record(try Dictionary(uniqueKeysWithValues: fields.map { ($0.name, try apply($0.value)) }))
     case .orderedFunction(let entries):
-      .function(entries.map { CanonicalFunctionEntry(key: apply($0.key), value: apply($0.value)) })
+      try .function(entries.map { try CanonicalFunctionEntry(key: apply($0.key), value: apply($0.value)) })
     case .integer, .boolean, .string:
       value
     }
@@ -82,7 +88,7 @@ public struct SymmetryOrbitDerivation: Equatable, Sendable {
 
     while let first = unseen.sorted().first {
       guard let state = stateTable[first] else { continue }
-      let members = Set(closure.map { $0.apply(state).key })
+      let members = Set(try closure.map { try $0.apply(state).key })
       guard members.allSatisfy({ stateTable[$0] != nil }) else {
         throw SymmetryOrbitAdapterError.permutationDoesNotPreserveStateSpace
       }
@@ -132,7 +138,7 @@ public struct PinnedSymmetryTLCCorrelation: Equatable, Sendable {
   ) throws {
     guard !caseID.isEmpty,
           Set([gateRunID, comparisonRunID, rawRunID, reducedRunID]).count == 4 else {
-      throw TemporalSymmetryGovernanceError.invalidField(
+      throw ConformanceGovernanceError.invalidField(
         record: caseID, field: "TLC raw/reduced run correlation")
     }
     self.caseID = caseID
@@ -163,20 +169,10 @@ public struct PinnedSymmetryTLCAdapter: Sendable {
     replay: TLCReplayPolicy = .required
   ) throws -> PinnedSymmetryTLCAdapterResult {
     try validatePair(correlation: correlation, raw: raw, reduced: reduced)
-    let rawProcess = try processAdapter.run(raw, replay: replay)
-    let reducedProcess = try processAdapter.run(reduced, replay: replay)
-    let rawEvents = try Data(contentsOf: raw.graphEvents)
-    let reducedEvents = try Data(contentsOf: reduced.graphEvents)
-    let rawParser = TLCGraphEventParser(expectedCase: raw.expectedCase)
-    let reducedParser = TLCGraphEventParser(expectedCase: reduced.expectedCase)
-    guard try rawParser.parse(rawEvents).runID == correlation.rawRunID,
-          try reducedParser.parse(reducedEvents).runID == correlation.reducedRunID else {
-      throw TemporalSymmetryGovernanceError.inconsistentReference(
-        record: correlation.caseID, field: "TLC graph-event run correlation")
-    }
-    let rawRun = try rawParser.parseCanonicalRun(rawEvents, result: rawProcess.primary)
-    let reducedRun = try reducedParser.parseCanonicalRun(reducedEvents, result: reducedProcess.primary)
-    return PinnedSymmetryTLCAdapterResult(correlation: correlation, raw: rawRun, reduced: reducedRun)
+    let rawCapture = try processAdapter.capture(raw, replay: replay)
+    let reducedCapture = try processAdapter.capture(reduced, replay: replay)
+    return PinnedSymmetryTLCAdapterResult(
+      correlation: correlation, raw: rawCapture.graph, reduced: reducedCapture.graph)
   }
 
   private func validatePair(
@@ -192,7 +188,7 @@ public struct PinnedSymmetryTLCAdapter: Sendable {
           raw.bundle.root.tla == reduced.bundle.root.tla,
           raw.bundle.imports == reduced.bundle.imports,
           (raw.bundle.root.cfg == reduced.bundle.root.cfg) == false else {
-      throw TemporalSymmetryGovernanceError.inconsistentReference(
+      throw ConformanceGovernanceError.inconsistentReference(
         record: raw.caseID, field: "pinned TLC raw/reduced pair")
     }
   }

@@ -1,37 +1,6 @@
 import SwiftTLA
 
-/// A pinned nonstandard TLA+ source required by a canonical corpus entry.
-///
-/// These declarations belong beside the model that imports them. Exporters
-/// materialize the declared closure; they do not dispatch on model IDs.
-public struct CanonicalCorpusModuleInput: Sendable, Hashable {
-    public struct Source: Sendable, Hashable {
-        public let repository: String
-        public let commit: String
-        public let path: String
-
-        public init(repository: String, commit: String, path: String) {
-            self.repository = repository
-            self.commit = commit
-            self.path = path
-        }
-    }
-
-    public let name: String
-    public let source: Source
-    public let sha256: String
-
-    public init(name: String, source: Source, sha256: String) {
-        self.name = name
-        self.source = source
-        self.sha256 = sha256
-    }
-}
-
-/// One named claim selected by a corpus TLC configuration.
-///
-/// A check is either compiled from the SwiftTLA model or explicitly retained
-/// as upstream-only TLA+ source. There is no implicit third category.
+/// One compiled claim selected by a corpus TLC configuration.
 public struct CanonicalCorpusCheck: Sendable {
     public enum Kind: String, CaseIterable, Sendable {
         case invariant
@@ -39,19 +8,12 @@ public struct CanonicalCorpusCheck: Sendable {
         case constraint
     }
 
-    public enum Support: Sendable {
-        case compiled
-        case externalOnly(reason: String)
-    }
-
     public let name: String
     public let kind: Kind
-    public let support: Support
 
-    public init(_ name: String, kind: Kind, support: Support = .compiled) {
+    public init(_ name: String, kind: Kind) {
         self.name = name
         self.kind = kind
-        self.support = support
     }
 }
 
@@ -103,6 +65,7 @@ public struct CanonicalCorpusConfiguration: Sendable {
     func validate(against compilation: CompiledSpecification, entryID: String) throws {
         let compiledInvariants = Set(compilation.spec.invariants.map(\.name))
         let compiledProperties = Set(compilation.spec.temporalProperties.map(\.name))
+            .union(compilation.spec.refinements.map(\.name))
         let compiledConstraints = compilation.spec.constraint == nil ? Set<String>() : ["StateConstraint"]
 
         for check in checks {
@@ -111,8 +74,7 @@ public struct CanonicalCorpusConfiguration: Sendable {
             case .property: compiledProperties.contains(check.name)
             case .constraint: compiledConstraints.contains(check.name)
             }
-            if compiled { continue }
-            guard case .externalOnly(let reason) = check.support, !reason.isEmpty else {
+            guard compiled else {
                 throw CanonicalCorpusConfigurationError.unresolvedCheck(
                     entryID: entryID,
                     name: check.name,
@@ -129,7 +91,7 @@ public enum CanonicalCorpusConfigurationError: Error, Sendable, CustomStringConv
     public var description: String {
         switch self {
         case let .unresolvedCheck(entryID, name, kind):
-            "Canonical corpus entry '\(entryID)' configures \(kind.rawValue) '\(name)', but it is neither compiled nor declared external-only."
+            "Canonical corpus entry '\(entryID)' configures \(kind.rawValue) '\(name)', but the compiled specification does not declare it."
         }
     }
 }
@@ -140,20 +102,17 @@ public struct CanonicalCorpusEntry: Sendable {
     public let specification: @Sendable () -> TLASpec
     public let swiftConfiguration: CanonicalCorpusConfiguration
     public let plusCalConfiguration: CanonicalCorpusConfiguration
-    public let externalInputs: [CanonicalCorpusModuleInput]
 
     public init(
         id: String,
         specification: @escaping @Sendable () -> TLASpec,
         swiftConfiguration: CanonicalCorpusConfiguration,
-        plusCalConfiguration: CanonicalCorpusConfiguration,
-        externalInputs: [CanonicalCorpusModuleInput] = []
+        plusCalConfiguration: CanonicalCorpusConfiguration
     ) {
         self.id = id
         self.specification = specification
         self.swiftConfiguration = swiftConfiguration
         self.plusCalConfiguration = plusCalConfiguration
-        self.externalInputs = externalInputs
     }
 
     public func validateConfigurationReferences(in compilation: CompiledSpecification) throws {

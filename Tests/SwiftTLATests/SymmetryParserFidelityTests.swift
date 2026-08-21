@@ -49,13 +49,14 @@ private struct GeneratedSymmetryModel {
     enum Transaction: String, FiniteDomainKey {
         case t1, t2
 
+        static var defaultValue: Self { .t1 }
         static let formalDomain: [Self] = [.t1, .t2]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.symmetry-parser.transaction")
     }
 
     static var spec: TLASpec {
         #spec("GeneratedSymmetry") {
-            let value = SharedVar(initial: 0)
+            let value = SharedVar("value", initial: 0)
             Symmetry("TxId", Set(Transaction.all))
             Invariant("TypeOK") { value >= 0 }
         }

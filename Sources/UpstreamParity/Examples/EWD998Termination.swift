@@ -14,6 +14,7 @@ public struct EWD998TerminationModel: Sendable {
         case two = 2
         case three = 3
 
+        public static var defaultValue: Self { .zero }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.ewd998.node")
 
@@ -22,8 +23,8 @@ public struct EWD998TerminationModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("AsyncTerminationDetection") {
-            Extends("Naturals")
-            let active = SharedVar(in: SetExpr<Function<Node, Bool>>.literal(
+            Extends(.naturals)
+            let active = SharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
                 Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, false)),
                 Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, true)),
                 Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, true), (.three, false)),
@@ -41,10 +42,10 @@ public struct EWD998TerminationModel: Sendable {
                 Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, false)),
                 Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, true))
             ))
-            let pending = SharedVar(initial: Function<Node, Int>.literal(
+            let pending = SharedVar("pending", initial: Function<Node, Int>.literal(
                 (.zero, 0), (.one, 0), (.two, 0), (.three, 0)
             ))
-            let terminationDetected = SharedVar(initial: false)
+            let terminationDetected = SharedVar("terminationDetected", initial: false)
 
             Constraint(
                 pending[.zero] <= 3 && pending[.one] <= 3

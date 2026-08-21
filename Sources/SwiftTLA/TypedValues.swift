@@ -3,20 +3,21 @@ public protocol FiniteTLAValueDomain: TLAValueType, Hashable, Sendable {
 }
 
 extension FiniteTLAValueDomain {
-  private static var validatedFiniteValues: [Self] {
+  static var sourceIssue: SourceModelIssue? {
     let values = finiteValues
     let tlaValues = values.map(\.tlaValue)
-    precondition(!values.isEmpty, "\(Self.self) must declare at least one finite value")
-    precondition(
-      Set(tlaValues).count == tlaValues.count, "\(Self.self) has duplicate finite TLA values")
-    return values
+    guard !values.isEmpty else {
+      return .finiteDomain(type: String(reflecting: Self.self), problem: "no finite values")
+    }
+    guard Set(tlaValues).count == tlaValues.count else {
+      return .finiteDomain(type: String(reflecting: Self.self), problem: "duplicate formal values")
+    }
+    return nil
   }
 
   public static var tlaValues: [TLAValue] {
-    validatedFiniteValues.map(\.tlaValue)
+    finiteValues.map(\.tlaValue)
   }
-
-  public static var defaultValue: Self { validatedFiniteValues[0] }
 }
 
 public protocol TLARecordSchema: Sendable {
@@ -29,6 +30,24 @@ public protocol TLARecordSchema: Sendable {
 
 public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Hashable, Sendable {
   public let name: String
+  fileprivate let sourceIssue: SourceModelIssue?
+
+  fileprivate init(name: String, sourceIssue: SourceModelIssue? = nil) {
+    self.name = name
+    self.sourceIssue = sourceIssue
+  }
+
+  fileprivate func recordAccess(_ record: StateExpr) -> StateExpr {
+    sourceIssue.map(StateExpr.sourceIssue) ?? .recordAccess(record, name)
+  }
+
+  fileprivate var recordSelector: StateExpr {
+    sourceIssue.map(StateExpr.sourceIssue) ?? .value(.string(name))
+  }
+
+  fileprivate func value(_ expression: StateExpr) -> StateExpr {
+    sourceIssue.map(StateExpr.sourceIssue) ?? expression
+  }
 }
 
 extension TLARecordSchema {
@@ -36,7 +55,7 @@ extension TLARecordSchema {
     Self, Value
   > {
     guard let name = fieldName(for: field), !name.isEmpty, fieldNames.contains(name) else {
-      preconditionFailure("\(Self.self) does not declare the requested record field")
+      return TLAField(name: "", sourceIssue: .recordField(schema: String(reflecting: Self.self)))
     }
     return TLAField(name: name)
   }
@@ -48,24 +67,24 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
 
   public init<Value>(_ field: TLAField<Schema, Value>, _ value: Value) {
     self.name = field.name
-    self.value = .value(value.tlaValue)
+    self.value = field.value(value.sourceIssue.map(StateExpr.sourceIssue) ?? .value(value.tlaValue))
   }
 
   public init<Value>(_ field: TLAField<Schema, Value>, _ value: Expr<Value>) {
     self.name = field.name
-    self.value = value.raw
+    self.value = field.value(value.raw)
   }
 
   public init<Value>(_ field: TLAField<Schema, Value>, _ value: ProcessIdentifier<Value>)
   where Value: FiniteDomainKey {
     self.name = field.name
-    self.value = value.stateExpr
+    self.value = field.value(value.stateExpr)
   }
 
   public init<Value>(_ field: TLAField<Schema, Value>, _ value: WithValue<Value>)
   where Value: TLAValueType {
     self.name = field.name
-    self.value = value.stateExpr
+    self.value = field.value(value.stateExpr)
   }
 }
 
@@ -73,10 +92,7 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
   private let values: TLARecord
 
   public init() {
-    guard let value = Self(formalValue: Schema.defaultRecord) else {
-      preconditionFailure("\(Schema.self).defaultRecord must contain every declared field with valid formal values")
-    }
-    values = value.values
+    values = Self(formalValue: Schema.defaultRecord)?.values ?? TLARecord([])
   }
 
   public init?(formalValue: TLAValue) {
@@ -87,21 +103,34 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
   }
 
   public var tlaValue: TLAValue { .record(values) }
+  public var sourceIssue: SourceModelIssue? {
+    Self(formalValue: Schema.defaultRecord) == nil
+      ? .invalidRecordDefault(schema: String(reflecting: Schema.self))
+      : nil
+  }
   public static var defaultValue: Self { Self() }
 
   public subscript<Value: TLAValueType>(_ field: TLAField<Schema, Value>) -> Value {
     guard let raw = values.value(named: field.name), let value = Value(formalValue: raw) else {
-      preconditionFailure("Formal record '\(Schema.self)' contains an invalid '\(field.name)' field")
+      assertionFailure("Record storage contains an invalid declared field")
+      return Value.defaultValue
     }
     return value
   }
 
   public static func literal(_ fields: TLARecordEntry<Schema>...) -> Expr<Self> {
     let names = fields.map(\.name)
-    precondition(Set(names).count == names.count, "\(Schema.self) record literal repeats a field")
-    precondition(
-      Set(names) == Schema.fieldNames,
-      "\(Schema.self) record literal must contain every declared field")
+    let duplicates = Dictionary(grouping: names, by: { $0 })
+      .compactMap { $0.value.count > 1 ? $0.key : nil }
+      .sorted()
+    let missing = Schema.fieldNames.subtracting(names).sorted()
+    guard duplicates.isEmpty, missing.isEmpty else {
+      return Expr(.sourceIssue(.recordLiteral(
+        schema: String(reflecting: Schema.self),
+        duplicateFields: duplicates,
+        missingFields: missing
+      )))
+    }
     return Expr(
       StateExpr.record(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, $0.value) })))
   }
@@ -127,7 +156,8 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
   public subscript(_ key: Domain) -> Range {
     guard let raw = values[key.tlaValue], let value = Range(formalValue: raw) else {
-      preconditionFailure("Formal function '\(Domain.self)' contains an invalid value")
+      assertionFailure("Function storage contains an invalid declared value")
+      return Range.defaultValue
     }
     return value
   }
@@ -142,13 +172,22 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
   }
 
   private static func literal(_ entries: [(Domain, Expr<Range>)]) -> Expr<Self> {
+    if let issue = Domain.sourceIssue {
+      return Expr(.sourceIssue(issue))
+    }
     let keys = entries.map { $0.0.tlaValue }
     let domain = Domain.tlaValues
-    precondition(
-      Set(keys).count == keys.count, "\(Domain.self) function literal repeats a domain value")
-    precondition(
-      Set(keys) == Set(domain) && keys.count == domain.count,
-      "\(Domain.self) function literal must cover its finite domain")
+    let duplicates = Dictionary(grouping: keys, by: { $0 })
+      .compactMap { $0.value.count > 1 ? $0.key : nil }
+      .sorted()
+    let missing = Set(domain).subtracting(keys).sorted()
+    guard duplicates.isEmpty, missing.isEmpty else {
+      return Expr(.sourceIssue(.functionLiteral(
+        domain: String(reflecting: Domain.self),
+        duplicateValues: duplicates.map(\.description),
+        missingValues: missing.map(\.description)
+      )))
+    }
 
     let binding = "_typedFunctionEntry"
     let pairs = entries.flatMap { entry in
@@ -242,10 +281,11 @@ public func Select<Value: TLAValueType>(
     binding,
     predicate(WithValue<Value>(expression: .variable(binding)))
   )
-  guard let value = try? evaluateClosed(choice) else {
-    preconditionFailure("Select(from:matching:) requires a non-empty static formal domain")
+  do {
+    return Expr(.value(try evaluateClosed(choice)))
+  } catch {
+    return Expr(.sourceIssue(.staticSelection(String(describing: error))))
   }
-  return Expr(.value(value))
 }
 
 public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
@@ -372,14 +412,16 @@ public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Has
 
   public var first: First {
     guard let value = First(formalValue: firstValue) else {
-      preconditionFailure("Pair contains an invalid first value")
+      assertionFailure("Pair storage contains an invalid first value")
+      return First.defaultValue
     }
     return value
   }
 
   public var second: Second {
     guard let value = Second(formalValue: secondValue) else {
-      preconditionFailure("Pair contains an invalid second value")
+      assertionFailure("Pair storage contains an invalid second value")
+      return Second.defaultValue
     }
     return value
   }
@@ -480,7 +522,10 @@ public func Sequences<Element: TLAValueType>(
   lengths: ClosedRange<Int>
 ) -> Expr<SetExpr<TupleExpr<Element>>> {
   guard case .setLiteral(let members) = elements.raw else {
-    preconditionFailure("Sequences(of:lengths:) requires SetExpr.literal(...) as its element domain")
+    return Expr(.sourceIssue(.sequenceElementDomain(operation: "Sequences")))
+  }
+  guard lengths.lowerBound >= 0 else {
+    return Expr(.sourceIssue(.negativeSequenceLength(operation: "Sequences", lowerBound: lengths.lowerBound)))
   }
 
   let sequences = formalSequenceExpressions(members: members, lengths: lengths)
@@ -496,7 +541,10 @@ public func ZeroBasedSequences<Element: TLAValueType>(
   lengths: ClosedRange<Int>
 ) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
   guard case .setLiteral(let members) = elements.raw else {
-    preconditionFailure("ZeroBasedSequences(of:lengths:) requires SetExpr.literal(...) as its element domain")
+    return Expr(.sourceIssue(.sequenceElementDomain(operation: "ZeroBasedSequences")))
+  }
+  guard lengths.lowerBound >= 0 else {
+    return Expr(.sourceIssue(.negativeSequenceLength(operation: "ZeroBasedSequences", lowerBound: lengths.lowerBound)))
   }
   return Expr(.setLiteral(formalZeroBasedSequenceExpressions(members: members, lengths: lengths)))
 }
@@ -512,7 +560,10 @@ public func SortedSequences(
   lengths: ClosedRange<Int>
 ) -> Expr<SetExpr<TupleExpr<Int>>> {
   guard case .setLiteral(let members) = elements.raw else {
-    preconditionFailure("SortedSequences(of:lengths:) requires SetExpr.literal(...) as its element domain")
+    return Expr(.sourceIssue(.sequenceElementDomain(operation: "SortedSequences")))
+  }
+  guard lengths.lowerBound >= 0 else {
+    return Expr(.sourceIssue(.negativeSequenceLength(operation: "SortedSequences", lowerBound: lengths.lowerBound)))
   }
   return Expr<SetExpr<TupleExpr<Int>>>(.setLiteral(
     formalSequenceExpressions(members: members, lengths: lengths).filter(formalIntegerSequenceIsSorted)
@@ -526,9 +577,7 @@ func formalSequenceExpressions(
   members: [StateExpr],
   lengths: ClosedRange<Int>
 ) -> [StateExpr] {
-  guard lengths.lowerBound >= 0 else {
-    preconditionFailure("Sequences(of:lengths:) does not accept negative lengths")
-  }
+  guard lengths.lowerBound >= 0 else { return [] }
 
   var result: [StateExpr] = []
   for length in lengths {
@@ -547,9 +596,7 @@ func formalZeroBasedSequenceExpressions(
   members: [StateExpr],
   lengths: ClosedRange<Int>
 ) -> [StateExpr] {
-  guard lengths.lowerBound >= 0 else {
-    preconditionFailure("ZeroBasedSequences(of:lengths:) does not accept negative lengths")
-  }
+  guard lengths.lowerBound >= 0 else { return [] }
   return formalSequenceExpressions(members: members, lengths: lengths).map { tuple in
     guard case .tupleLiteral(let elements) = tuple else { return tuple }
     let index = "__zeroBasedSequenceIndex"
@@ -686,7 +733,7 @@ extension Expr {
 
   public subscript<Schema: TLARecordSchema, Value>(_ field: TLAField<Schema, Value>) -> Expr<Value>
   where T == Record<Schema> {
-    Expr<Value>(.recordAccess(raw, field.name))
+    Expr<Value>(field.recordAccess(raw))
   }
 
   public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
@@ -711,19 +758,19 @@ extension Expr {
   public func updating<Schema: TLARecordSchema, Value>(
     _ field: TLAField<Schema, Value>, to value: Value
   ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(raw, .value(.string(field.name)), .value(value.tlaValue)))
+    Expr<Record<Schema>>(.except(raw, field.recordSelector, field.value(.value(value.tlaValue))))
   }
 
   public func updating<Schema: TLARecordSchema, Value>(
     _ field: TLAField<Schema, Value>, to value: Expr<Value>
   ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(raw, .value(.string(field.name)), value.raw))
+    Expr<Record<Schema>>(.except(raw, field.recordSelector, field.value(value.raw)))
   }
 
   public func updating<Schema: TLARecordSchema, Value>(
     _ field: TLAField<Schema, Value>, to value: WithValue<Value>
   ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(raw, .value(.string(field.name)), value.stateExpr))
+    Expr<Record<Schema>>(.except(raw, field.recordSelector, field.value(value.stateExpr)))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
@@ -907,7 +954,7 @@ extension Expr {
 extension Var {
   public subscript<Schema: TLARecordSchema, Value>(_ field: TLAField<Schema, Value>) -> Expr<Value>
   where T == Record<Schema> {
-    Expr<Value>(.recordAccess(stateExpr, field.name))
+    Expr<Value>(field.recordAccess(stateExpr))
   }
 
   public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
@@ -925,7 +972,7 @@ extension Var {
   public func updating<Schema: TLARecordSchema, Value>(
     _ field: TLAField<Schema, Value>, to value: Value
   ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(stateExpr, .value(.string(field.name)), .value(value.tlaValue)))
+    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(.value(value.tlaValue))))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
@@ -987,8 +1034,15 @@ extension Var {
 }
 
 private func finiteDomainIndex<Domain: FiniteTLAValueDomain>(_ index: Domain) -> StateExpr {
+  if let issue = Domain.sourceIssue {
+    return .sourceIssue(issue)
+  }
   let value = index.tlaValue
-  precondition(
-    Domain.tlaValues.contains(value), "\(value) is not declared by \(Domain.self).finiteValues")
+  guard Domain.tlaValues.contains(value) else {
+    return .sourceIssue(.finiteDomainValue(
+      type: String(reflecting: Domain.self),
+      value: value.description
+    ))
+  }
   return .value(value)
 }

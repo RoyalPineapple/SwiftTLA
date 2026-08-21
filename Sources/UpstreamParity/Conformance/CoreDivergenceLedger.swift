@@ -1,61 +1,5 @@
 import Foundation
 
-public enum CoreGovernanceError: Error, Equatable, Sendable {
-  case invalidSchema(String)
-  case duplicateID(kind: String, id: String)
-  case invalidField(record: String, field: String)
-  case unknownCaseID(String)
-  case unknownDivergenceID(String)
-  case unsupportedCategory(String)
-}
-
-private struct CoreGovernanceAnyCodingKey: CodingKey {
-  let stringValue: String
-  let intValue: Int?
-
-  init?(stringValue: String) {
-    self.stringValue = stringValue
-    intValue = nil
-  }
-
-  init?(intValue: Int) {
-    stringValue = String(intValue)
-    self.intValue = intValue
-  }
-}
-
-enum CoreGovernanceDecoding {
-  static func container<Key>(
-    _ decoder: Decoder,
-    keyedBy keyType: Key.Type
-  ) throws -> KeyedDecodingContainer<Key> where Key: CodingKey & CaseIterable {
-    let actual = try decoder.container(keyedBy: CoreGovernanceAnyCodingKey.self)
-    let known = Set(Key.allCases.map(\.stringValue))
-    let unexpected = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
-    guard unexpected.isEmpty else {
-      throw CoreGovernanceError.invalidField(
-        record: "decode", field: "unknown field \(unexpected.sorted().joined(separator: ","))")
-    }
-    return try decoder.container(keyedBy: Key.self)
-  }
-}
-
-public enum CoreDivergenceClassification: String, CaseIterable, Codable, Sendable {
-  case swiftTLADefect
-  case harnessOrConfigurationDefect
-  case unsupportedConstruct
-  case publishedSemanticsAmbiguity
-  case suspectedTLCDefect
-}
-
-public enum CoreDivergenceDisposition: String, CaseIterable, Codable, Sendable {
-  case open
-  case resolved
-  case unsupported
-  case awaitingSemanticsReview
-  case suspectedReferenceDefect
-}
-
 public enum CoreRegressionOutcome: String, Codable, Sendable {
   case exact
   case difference
@@ -73,14 +17,14 @@ public struct CoreFiniteBounds: Equatable, Codable, Sendable {
 
   public func validate() throws {
     guard !summary.isEmpty, !limits.isEmpty, limits.allSatisfy({ !$0.key.isEmpty && $0.value > 0 }) else {
-      throw CoreGovernanceError.invalidField(record: "finiteBounds", field: "limits")
+      throw ConformanceGovernanceError.invalidField(record: "finiteBounds", field: "limits")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case summary, limits }
 
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       summary: container.decode(String.self, forKey: .summary),
       limits: container.decode([String: Int].self, forKey: .limits))
@@ -136,7 +80,7 @@ public struct CoreDivergenceProvenance: Equatable, Codable, Sendable {
   public func validate() throws {
     guard !caseID.isEmpty, !tlcTag.isEmpty, !tlcCommit.isEmpty, !javaDistribution.isEmpty,
           !javaVersion.isEmpty, !bridgeClass.isEmpty else {
-      throw CoreGovernanceError.invalidField(record: caseID, field: "provenance")
+      throw ConformanceGovernanceError.invalidField(record: caseID, field: "provenance")
     }
     for (field, digest) in [
       ("moduleSHA256", moduleSHA256), ("cfgSHA256", cfgSHA256),
@@ -144,7 +88,7 @@ public struct CoreDivergenceProvenance: Equatable, Codable, Sendable {
       ("javaArchiveSHA256", javaArchiveSHA256),
       ("bridgeSourceSHA256", bridgeSourceSHA256), ("bridgeBinarySHA256", bridgeBinarySHA256)
     ] where !TLCReferencePin.isSHA256(digest) {
-      throw CoreGovernanceError.invalidField(record: caseID, field: field)
+      throw ConformanceGovernanceError.invalidField(record: caseID, field: field)
     }
   }
 
@@ -155,7 +99,7 @@ public struct CoreDivergenceProvenance: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       moduleSHA256: container.decode(String.self, forKey: .moduleSHA256),
@@ -185,14 +129,14 @@ public struct CoreEvidenceReference: Equatable, Codable, Sendable {
 
   public func validate() throws {
     guard !path.isEmpty, !path.hasPrefix("/"), TLCReferencePin.isSHA256(sha256) else {
-      throw CoreGovernanceError.invalidField(record: "evidence", field: "path or sha256")
+      throw ConformanceGovernanceError.invalidField(record: "evidence", field: "path or sha256")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case path, sha256 }
 
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       path: container.decode(String.self, forKey: .path),
       sha256: container.decode(String.self, forKey: .sha256))
@@ -218,7 +162,7 @@ public struct CoreDivergenceComparison: Equatable, Codable, Sendable {
   public func validate() throws {
     try evidence.validate()
     guard outcome == .exact ? normalizedDifferenceFingerprint == nil : normalizedDifferenceFingerprint?.isEmpty == false else {
-      throw CoreGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceFingerprint")
+      throw ConformanceGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceFingerprint")
     }
   }
 
@@ -227,7 +171,7 @@ public struct CoreDivergenceComparison: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       evidence: container.decode(CoreEvidenceReference.self, forKey: .evidence),
       outcome: container.decode(CoreRegressionOutcome.self, forKey: .outcome),
@@ -243,8 +187,8 @@ public struct CoreDivergenceRecord: Equatable, Codable, Sendable {
   public let reproducer: CoreFiniteBounds
   public let originalEvidence: CoreEvidenceReference
   public let permanentRegressionCaseID: String
-  public let classification: CoreDivergenceClassification
-  public let disposition: CoreDivergenceDisposition
+  public let classification: ConformanceDivergenceClassification
+  public let disposition: ConformanceDivergenceDisposition
   public let normalizedDifferenceFingerprint: String
   public let latestComparison: CoreDivergenceComparison
 
@@ -255,8 +199,8 @@ public struct CoreDivergenceRecord: Equatable, Codable, Sendable {
     reproducer: CoreFiniteBounds,
     originalEvidence: CoreEvidenceReference,
     permanentRegressionCaseID: String,
-    classification: CoreDivergenceClassification,
-    disposition: CoreDivergenceDisposition,
+    classification: ConformanceDivergenceClassification,
+    disposition: ConformanceDivergenceDisposition,
     normalizedDifferenceFingerprint: String,
     latestComparison: CoreDivergenceComparison
   ) throws {
@@ -280,13 +224,13 @@ public struct CoreDivergenceRecord: Equatable, Codable, Sendable {
     try latestComparison.validate()
     guard !id.isEmpty, !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }),
           !permanentRegressionCaseID.isEmpty, !normalizedDifferenceFingerprint.isEmpty else {
-      throw CoreGovernanceError.invalidField(record: id, field: "required evidence")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "required evidence")
     }
     guard disposition != .resolved || latestComparison.outcome == .exact else {
-      throw CoreGovernanceError.invalidField(record: id, field: "latestComparison")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "latestComparison")
     }
     guard latestComparison.outcome == .exact || latestComparison.normalizedDifferenceFingerprint == normalizedDifferenceFingerprint else {
-      throw CoreGovernanceError.invalidField(record: id, field: "latestComparison")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "latestComparison")
     }
   }
 
@@ -296,7 +240,7 @@ public struct CoreDivergenceRecord: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: container.decode(String.self, forKey: .id),
       provenance: container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
@@ -304,8 +248,8 @@ public struct CoreDivergenceRecord: Equatable, Codable, Sendable {
       reproducer: container.decode(CoreFiniteBounds.self, forKey: .reproducer),
       originalEvidence: container.decode(CoreEvidenceReference.self, forKey: .originalEvidence),
       permanentRegressionCaseID: container.decode(String.self, forKey: .permanentRegressionCaseID),
-      classification: container.decode(CoreDivergenceClassification.self, forKey: .classification),
-      disposition: container.decode(CoreDivergenceDisposition.self, forKey: .disposition),
+      classification: container.decode(ConformanceDivergenceClassification.self, forKey: .classification),
+      disposition: container.decode(ConformanceDivergenceDisposition.self, forKey: .disposition),
       normalizedDifferenceFingerprint: container.decode(String.self, forKey: .normalizedDifferenceFingerprint),
       latestComparison: container.decode(CoreDivergenceComparison.self, forKey: .latestComparison))
   }
@@ -322,12 +266,12 @@ public struct CoreDivergenceLedger: Equatable, Codable, Sendable {
   }
 
   public init(schema: String, records: [CoreDivergenceRecord]) throws {
-    guard schema == Self.schema else { throw CoreGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var identifiers = Set<String>()
     for record in records {
       try record.validate()
       guard identifiers.insert(record.id).inserted else {
-        throw CoreGovernanceError.duplicateID(kind: "divergence", id: record.id)
+        throw ConformanceGovernanceError.duplicateID(kind: "divergence", id: record.id)
       }
     }
     self.schema = schema
@@ -337,7 +281,7 @@ public struct CoreDivergenceLedger: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, records }
 
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: container.decode(String.self, forKey: .schema),
       records: container.decode([CoreDivergenceRecord].self, forKey: .records))
@@ -346,10 +290,10 @@ public struct CoreDivergenceLedger: Equatable, Codable, Sendable {
   public func validate(caseIDs: Set<String>) throws {
     for record in records {
       guard caseIDs.contains(record.provenance.caseID) else {
-        throw CoreGovernanceError.unknownCaseID(record.provenance.caseID)
+        throw ConformanceGovernanceError.unknownCaseID(record.provenance.caseID)
       }
       guard caseIDs.contains(record.permanentRegressionCaseID) else {
-        throw CoreGovernanceError.unknownCaseID(record.permanentRegressionCaseID)
+        throw ConformanceGovernanceError.unknownCaseID(record.permanentRegressionCaseID)
       }
     }
   }
@@ -362,7 +306,7 @@ public struct CoreDivergenceLedger: Equatable, Codable, Sendable {
     guard let comparison = try JSONSerialization.jsonObject(with: data) as? [String: Any],
           let conformant = comparison["conformant"] as? Bool, !conformant,
           let differences = comparison["differences"] as? [Any], !differences.isEmpty else {
-      throw CoreGovernanceError.invalidField(record: "comparison", field: "differences")
+      throw ConformanceGovernanceError.invalidField(record: "comparison", field: "differences")
     }
     let normalized: [String: Any] = [
       "conformant": false,

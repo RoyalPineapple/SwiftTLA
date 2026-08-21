@@ -31,7 +31,7 @@ public struct SingleLaneBridgeModel: Sendable {
         for car in allCars { locInit[car] = .int(carsRight.contains(car) ? endPos : startPos) }
 
         return #spec("SingleLaneBridge") {
-            Extends("Naturals")
+            Extends(.naturals)
             Constant("CarsRight", SetExpr<String>("r1", "r2"))
             Constant("CarsLeft", SetExpr<String>("l1", "l2"))
             Constant("Bridge", SetExpr<Int>(4, 5))

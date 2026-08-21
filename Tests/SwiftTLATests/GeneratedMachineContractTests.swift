@@ -74,17 +74,17 @@ struct GeneratedMachineContractTests {
         )
         let metadata = GeneratedMachineMetadata(
             compilationIdentity: plan.compilationIdentity,
-            schemaIdentifier: plan.schemaIdentifier,
             variables: plan.variables,
-            actions: [driftedAction]
+            actions: [driftedAction],
+            symmetricCollections: plan.symmetricCollections,
+            collectionActions: plan.collectionActions
         )
 
         let report = GeneratedMachineContractVerifier.verify(
             compilation: compilation,
             plan: plan,
             metadata: metadata,
-            expectedSchemaIdentifier: plan.schemaIdentifier,
-            verificationStateLimit: 4,
+            maximumStateLimit: 4,
             decodeState: { _ in },
             behavior: behavior(compilation, plan: plan)
         )
@@ -102,6 +102,21 @@ struct GeneratedMachineContractTests {
         ])
     }
 
+    @Test("generated action input resolves to compiled action identity")
+    func generatedActionInputResolvesToCompiledIdentity() throws {
+        let compilation = try compilation()
+        let request = try compilation.actionRequest(
+            ordinal: 0,
+            formalArguments: [.int(2)]
+        )
+
+        #expect(request.action == compilation.layout.actions[0].id)
+        #expect(request.arguments == [.integer(2)])
+        let input = try compilation.generatedActionLabelInput(for: request)
+        #expect(input.ordinal == 0)
+        #expect(input.formalArguments == [.int(2)])
+    }
+
     @Test("projection decoding failures are a difference, not unavailable evaluation")
     func distinguishesProjectionDecodeMismatch() throws {
         let compilation = try compilation()
@@ -111,8 +126,7 @@ struct GeneratedMachineContractTests {
             compilation: compilation,
             plan: plan,
             metadata: plan.metadata,
-            expectedSchemaIdentifier: plan.schemaIdentifier,
-            verificationStateLimit: 4,
+            maximumStateLimit: 4,
             decodeState: { _ in
                 throw TLAStateProjectionDiagnostic.typeMismatch(
                     path: "count",
@@ -141,8 +155,7 @@ struct GeneratedMachineContractTests {
             compilation: compilation,
             plan: plan,
             metadata: plan.metadata,
-            expectedSchemaIdentifier: plan.schemaIdentifier,
-            verificationStateLimit: 4,
+            maximumStateLimit: 4,
             decodeState: { _ in },
             behavior: behavior
         )
@@ -170,8 +183,7 @@ struct GeneratedMachineContractTests {
             compilation: compilation,
             plan: plan,
             metadata: plan.metadata,
-            expectedSchemaIdentifier: plan.schemaIdentifier,
-            verificationStateLimit: 4,
+            maximumStateLimit: 4,
             decodeState: { _ in },
             behavior: behavior
         )
@@ -197,8 +209,7 @@ struct GeneratedMachineContractTests {
             compilation: compilation,
             plan: plan,
             metadata: plan.metadata,
-            expectedSchemaIdentifier: plan.schemaIdentifier,
-            verificationStateLimit: 4,
+            maximumStateLimit: 4,
             decodeState: { _ in },
             behavior: behavior
         )
@@ -207,30 +218,36 @@ struct GeneratedMachineContractTests {
         #expect(report.diagnostic?.code == .behaviorMismatch)
     }
 
-    @Test("an expansion-time schema fingerprint rejects runtime plan drift")
-    func rejectsSchemaFingerprintDrift() throws {
+    @Test("metadata rejects collection routing drift")
+    func rejectsCollectionRoutingDrift() throws {
         let compilation = try compilation()
         let plan = try plan(compilation)
+        let metadata = GeneratedMachineMetadata(
+            compilationIdentity: plan.compilationIdentity,
+            variables: plan.variables,
+            actions: plan.actions,
+            symmetricCollections: plan.symmetricCollections,
+            collectionActions: ["advance": "different"]
+        )
 
         let report = GeneratedMachineContractVerifier.verify(
             compilation: compilation,
             plan: plan,
-            metadata: plan.metadata,
-            expectedSchemaIdentifier: "different-schema",
-            verificationStateLimit: 4,
+            metadata: metadata,
+            maximumStateLimit: 4,
             decodeState: { _ in },
             behavior: behavior(compilation, plan: plan)
         )
 
         #expect(report.status == .difference)
-        #expect(report.diagnostic?.code == .schemaMismatch)
+        #expect(report.diagnostic?.code == .metadataDomainMismatch)
     }
 
     @Test("the macro exposes metadata and verifies its generated projection surface")
     func macroGeneratedSurfaceUsesTheMachinePlan() throws {
         let compilation = try GeneratedContractSurfaceModel.compiledSpecification()
         let plan = try MachineSurfacePlan(compilation: compilation)
-        let report = GeneratedContractSurfaceModel.verifyGeneratedMachineContract()
+        let report = GeneratedContractSurfaceModel.verifyGeneratedMachineContract(configuration: .standard)
 
         #expect(GeneratedContractSurfaceModel.generatedMachineMetadata == plan.metadata)
         #expect(plan.variables.map(\.formalName) == compilation.layout.variables.map(\.declaration.name))

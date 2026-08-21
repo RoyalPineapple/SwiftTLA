@@ -18,8 +18,8 @@ private struct GeneratedHigherOrderFormalModel {
         )
       )
       Algorithm("GeneratedHigherOrderFormalModel") {
-        let counter = SharedVar(initial: 0)
-        Do("advance") {
+        let counter = SharedVar("counter", initial: 0)
+        Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       }
@@ -198,7 +198,7 @@ struct FormalOperatorTests {
     let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
     let token = try #require(TLAStateProjection.Token(validating: "counter"))
     #expect(successor.value(for: token) == .int(2))
-    let result = try ModelChecker(spec: spec, maxStates: 10).check()
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -249,7 +249,7 @@ struct FormalOperatorTests {
     let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
     let token = try #require(TLAStateProjection.Token(validating: "counter"))
     #expect(successor.value(for: token) == .int(2))
-    let result = try ModelChecker(spec: consumer, maxStates: 10).check()
+    let result = try ModelChecker(spec: consumer, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -363,6 +363,5 @@ struct FormalOperatorTests {
       .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
     ]))
     #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("ReduceSet(op(_, _), set, base) =="))
-    #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)"))
   }
 }

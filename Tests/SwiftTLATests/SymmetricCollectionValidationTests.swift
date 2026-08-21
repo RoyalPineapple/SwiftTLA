@@ -100,16 +100,8 @@ struct SymmetricCollectionValidationTests {
     #expect(collisionMessage.contains("__symmetric_devices_member_1"))
   }
 
-  @Test("Generated symbols are sanitized and reject every export namespace collision")
-  func generatedSymbolsAreReservedForDirectExport() {
-    let sanitized = SymmetricCollectionVar<Device, Int>("device phases-1")
-    let sanitizedSpec = TLASpec("Sanitized") {
-      SymmetricCollection(sanitized, verificationScope: 1, initial: 0)
-    }
-    #expect(sanitizedSpec.symmetricCollections[0].metadata.generatedSymbols == [
-      "Device_phases_1Member0", "Device_phases_1Keys", "SymmDevice_phases_1"
-    ])
-
+  @Test("generated symbols reserve the direct export namespace")
+  func generatedSymbolsReserveDirectExportNamespace() {
     let variable = Var<Int>("DevicePhasesKeys")
     let variableCollision = TLASpec("VariableCollision") {
       Variable(variable, 0)
@@ -120,18 +112,29 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(SymmetricCollectionVar<Device, Int>("devicePhases"), verificationScope: 1, initial: 0)
     }
     let definitionCollision = TLASpec("DefinitionCollision") {
-      Definition("SymmDevicePhases == TRUE")
+      FormalDefinition("SymmDevicePhases", parameters: [], body: .value(.bool(true)))
       SymmetricCollection(SymmetricCollectionVar<Device, Int>("devicePhases"), verificationScope: 1, initial: 0)
     }
-    let generatedCollision = TLASpec("GeneratedCollision") {
-      SymmetricCollection(SymmetricCollectionVar<Device, Int>("device-phases"), verificationScope: 1, initial: 0)
-      SymmetricCollection(SymmetricCollectionVar<Device, Int>("device phases"), verificationScope: 1, initial: 0)
-    }
-
     #expect(symbolCollision(variableCollision) == "DevicePhasesKeys")
     #expect(symbolCollision(constantCollision) == "DevicePhasesMember0")
     #expect(symbolCollision(definitionCollision) == "SymmDevicePhases")
-    #expect(symbolCollision(generatedCollision) == "Device_phasesMember0")
+  }
+
+  @Test("invalid collection names fail compilation before generated symbols are allocated")
+  func invalidCollectionNamesFailCompilation() {
+    let invalidName = TLASpec("InvalidCollectionName") {
+      SymmetricCollection(SymmetricCollectionVar<Device, Int>("device-phases"), verificationScope: 1, initial: 0)
+    }
+
+    do {
+      _ = try invalidName.compile()
+      Issue.record("Expected an invalid symmetric collection diagnostic.")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .invalidSymmetricCollection)
+      #expect(diagnostic.actual.contains("not a formal identifier"))
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error).")
+    }
   }
 
   @Test("Ordinary specifications do not opt into collection symmetry export")

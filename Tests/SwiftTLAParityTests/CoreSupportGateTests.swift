@@ -7,7 +7,7 @@ struct CoreSupportGateTests {
   @Test("retained MultiCarElevator evidence admits only its declared bounded surface")
   func admitsRetainedElevatorEvidence() throws {
     let input = try GateFixture.retainedElevatorInput()
-    let report = CoreSupportGate().evaluate(input)
+    let report = try CoreSupportGate().evaluate(input)
 
     #expect(report.finalExitClass == .success)
     #expect(report.entries.filter { $0.decision == .admitted }.count == 2)
@@ -22,39 +22,39 @@ struct CoreSupportGateTests {
     let fixture = try GateFixture()
     let gate = CoreSupportGate()
 
-    #expect(reasons(in: gate.evaluate(try fixture.input(excluding: "hour-clock")),
+    #expect(reasons(in: try gate.evaluate(try fixture.input(excluding: "hour-clock")),
                     for: "hour-clock-reachable-state-space").contains(.missingEvidence))
-    #expect(reasons(in: gate.evaluate(try fixture.input(prerequisiteAvailable: false)),
+    #expect(reasons(in: try gate.evaluate(try fixture.input(prerequisiteAvailable: false)),
                     for: "hour-clock-reachable-state-space").contains(.missingPrerequisite))
 
     try fixture.remove("graph-events.jsonl", from: "hour-clock")
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.partialEvidence))
 
     try fixture.reset("hour-clock")
     try fixture.replaceRunID(in: "hour-clock", with: UUID())
-    let foreignRunReport = gate.evaluate(try fixture.input())
+    let foreignRunReport = try gate.evaluate(try fixture.input())
     #expect(reasons(in: foreignRunReport,
                     for: "hour-clock-reachable-state-space").contains(.foreignRun))
 
     try fixture.reset("hour-clock")
     try fixture.replaceJSONValue(in: "hour-clock", file: "case.json", key: "moduleSHA256", with: fixture.digest)
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.manifestDigestMismatch))
 
     try fixture.reset("hour-clock")
     try fixture.remove("governance", fromJSONFile: "case.json", in: "hour-clock")
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.manifestDigestMismatch))
 
     try fixture.reset("hour-clock")
     try fixture.replaceJSONValue(in: "hour-clock", file: "toolchain.json", key: "javaVersion", with: "0")
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.toolchainDigestMismatch))
 
     try fixture.reset("hour-clock")
-    try fixture.replaceJSONValue(in: "hour-clock", file: "swift.json", key: "schema", with: "invented")
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    try fixture.replaceJSONValue(in: "hour-clock", file: "swift-run.json", key: "schema", with: "invented")
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.partialEvidence))
 
     try fixture.reset("hour-clock")
@@ -62,7 +62,7 @@ struct CoreSupportGateTests {
     try fixture.replaceJSONValue(in: "hour-clock", file: "comparison.json", key: "differences", with: [
       ["category": "non-exact", "expected": [], "actual": []]
     ])
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.partialEvidence))
   }
 
@@ -72,7 +72,7 @@ struct CoreSupportGateTests {
     try fixture.replaceJSONValue(in: "hour-clock-edge-mismatch", file: "comparison.json", key: "differences", with: [
       ["category": "different-difference", "expected": [], "actual": []]
     ])
-    let report = CoreSupportGate().evaluate(try fixture.input())
+    let report = try CoreSupportGate().evaluate(try fixture.input())
     #expect(report.finalExitClass == .blocked)
     #expect(reasons(in: report, for: "hour-clock-reachable-state-space").contains(.unresolvedDivergence))
   }
@@ -80,7 +80,7 @@ struct CoreSupportGateTests {
   @Test("a changed ledger fingerprint is unexplained even when retained evidence is otherwise complete")
   func blocksChangedDeclaredFingerprint() throws {
     let fixture = try GateFixture()
-    let report = CoreSupportGate().evaluate(try fixture.input(
+    let report = try CoreSupportGate().evaluate(try fixture.input(
       ledger: try fixture.ledgerWithChangedFingerprint(recordID: "hour-clock-edge-mismatch")))
 
     #expect(report.finalExitClass == .blocked)
@@ -94,20 +94,20 @@ struct CoreSupportGateTests {
     let gate = CoreSupportGate()
 
     try fixture.replaceJSONValue(in: "hour-clock", file: "run.json", key: "exitCode", with: 2)
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.executionFailed))
 
     try fixture.reset("hour-clock")
     try fixture.replaceJSONValue(in: "hour-clock", file: "run.json", key: "exitCode", with: 1)
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.nonExactComparison))
   }
 
   @Test("canonical graph records must satisfy their graph events and comparisons")
   func blocksFabricatedCanonicalGraph() throws {
     let fixture = try GateFixture()
-    try fixture.replaceJSONValue(in: "hour-clock", file: "tlc.json", key: "states", with: [])
-    let report = CoreSupportGate().evaluate(try fixture.input())
+    try fixture.replaceJSONValue(in: "hour-clock", file: "tlc-run.json", key: "states", with: [])
+    let report = try CoreSupportGate().evaluate(try fixture.input())
     #expect(reasons(in: report, for: "hour-clock-reachable-state-space").contains(.partialEvidence))
   }
 
@@ -116,7 +116,7 @@ struct CoreSupportGateTests {
     let fixture = try GateFixture()
     let gate = CoreSupportGate()
 
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").isEmpty)
 
     try fixture.mutateJSONObject(in: "hour-clock", file: "tlc-process.json") { object in
@@ -124,7 +124,7 @@ struct CoreSupportGateTests {
       primary["status"] = 999
       object["primary"] = primary
     }
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.partialEvidence))
 
     try fixture.reset("hour-clock")
@@ -133,12 +133,12 @@ struct CoreSupportGateTests {
       object["attempted"] = ["primary", "replay"]
       object["replay"] = primary
     }
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.partialEvidence))
 
     try fixture.reset("hour-clock")
     try fixture.remove("replay.json", fromJSONFile: "raw-artifacts.json", in: "hour-clock")
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.partialEvidence))
 
     try fixture.reset("hour-clock")
@@ -146,11 +146,11 @@ struct CoreSupportGateTests {
       object["attempted"] = ["primary", "trace"]
       object["replay"] = NSNull()
     }
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").contains(.unresolvedDivergence))
 
     try fixture.reset("die-hard-violation")
-    #expect(reasons(in: gate.evaluate(try fixture.input()),
+    #expect(reasons(in: try gate.evaluate(try fixture.input()),
                     for: "hour-clock-reachable-state-space").isEmpty)
   }
 
@@ -166,7 +166,7 @@ struct CoreSupportGateTests {
     ] {
       try fixture.reset("die-hard-violation")
       try fixture.write(Data("forged".utf8), named: file, in: "die-hard-violation")
-      let report = gate.evaluate(try fixture.input())
+      let report = try gate.evaluate(try fixture.input())
       #expect(reasons(in: report, for: requestedSupport).contains(.unresolvedDivergence))
     }
   }
@@ -178,22 +178,22 @@ struct CoreSupportGateTests {
     let requestedSupport = "hour-clock-reachable-state-space"
 
     try fixture.mutateCounterexampleActionSource(in: "die-hard-violation", file: "counterexample.json")
-    #expect(reasons(in: gate.evaluate(try fixture.input()), for: requestedSupport)
+    #expect(reasons(in: try gate.evaluate(try fixture.input()), for: requestedSupport)
       .contains(.unresolvedDivergence))
 
     try fixture.reset("die-hard-violation")
     try fixture.mutateReplayInitialState(in: "die-hard-violation")
-    #expect(reasons(in: gate.evaluate(try fixture.input()), for: requestedSupport)
+    #expect(reasons(in: try gate.evaluate(try fixture.input()), for: requestedSupport)
       .contains(.unresolvedDivergence))
 
     try fixture.reset("die-hard-violation")
     try fixture.appendReplayTransition(in: "die-hard-violation")
-    #expect(reasons(in: gate.evaluate(try fixture.input()), for: requestedSupport)
+    #expect(reasons(in: try gate.evaluate(try fixture.input()), for: requestedSupport)
       .contains(.unresolvedDivergence))
 
     try fixture.reset("die-hard-violation")
     try fixture.mutateTraceToNonInitialSuffix(in: "die-hard-violation")
-    #expect(reasons(in: gate.evaluate(try fixture.input()), for: requestedSupport)
+    #expect(reasons(in: try gate.evaluate(try fixture.input()), for: requestedSupport)
       .contains(.unresolvedDivergence))
   }
 
@@ -203,10 +203,10 @@ struct CoreSupportGateTests {
     let gate = CoreSupportGate()
     let requestedSupport = "hour-clock-reachable-state-space"
 
-    try fixture.mutateJSONObject(in: "hour-clock", file: "tlc.json") { object in
+    try fixture.mutateJSONObject(in: "hour-clock", file: "tlc-run.json") { object in
       object["outcome"] = ["kind": "invariantViolation", "message": "forged violation"]
     }
-    #expect(reasons(in: gate.evaluate(try fixture.input()), for: requestedSupport).contains(.partialEvidence))
+    #expect(reasons(in: try gate.evaluate(try fixture.input()), for: requestedSupport).contains(.partialEvidence))
 
     try fixture.reset("die-hard-violation")
     try fixture.mutateJSONObject(in: "die-hard-violation", file: "tlc-process.json") { object in
@@ -224,7 +224,7 @@ struct CoreSupportGateTests {
     for file in ["graph-events.trace.jsonl", "graph-events.replay.jsonl", "counterexample.json", "replay.json"] {
       try fixture.remove(file, from: "die-hard-violation")
     }
-    #expect(reasons(in: gate.evaluate(try fixture.input()), for: requestedSupport).contains(.unresolvedDivergence))
+    #expect(reasons(in: try gate.evaluate(try fixture.input()), for: requestedSupport).contains(.unresolvedDivergence))
   }
 
   @Test("resolved divergences retain history but require a current exact reproduction")
@@ -232,7 +232,7 @@ struct CoreSupportGateTests {
     let fixture = try GateFixture()
     try fixture.resetResolvedRegression("hour-clock-edge-mismatch")
     let ledger = try fixture.resolvedLedger(recordID: "hour-clock-edge-mismatch")
-    let report = CoreSupportGate().evaluate(try fixture.input(ledger: ledger))
+    let report = try CoreSupportGate().evaluate(try fixture.input(ledger: ledger))
     #expect(report.entries.first { $0.supportID == "hour-clock-reachable-state-space" }?.decision == .admitted)
   }
 
@@ -249,7 +249,7 @@ struct CoreSupportGateTests {
         reason: entry.reason)
     }
     let incompleteSurface = try CoreSupportSurface(entries: entries)
-    #expect(throws: CoreGovernanceError.invalidField(record: "support surface", field: "unlinked divergence")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: "support surface", field: "unlinked divergence")) {
       try incompleteSurface.validate(caseIDs: Set(input.manifest.cases.map(\.id)), ledger: input.ledger)
     }
   }
@@ -549,8 +549,8 @@ private final class GateFixture {
     ], named: "correlations.json", in: directory)
     try write(["correlation": correlation, "exitCode": declared.governance.expectedRegressionOutcome == .exact ? 0 : 1],
               named: "run.json", in: directory)
-    try rewriteCanonicalRun(named: "swift.json", caseID: caseID, engine: "swift", in: directory)
-    try rewriteCanonicalRun(named: "tlc.json", caseID: caseID, engine: "tlc", in: directory)
+    try rewriteCanonicalRun(named: "swift-run.json", caseID: caseID, engine: "swift", in: directory)
+    try rewriteCanonicalRun(named: "tlc-run.json", caseID: caseID, engine: "tlc", in: directory)
     var comparison = try #require(JSONSerialization.jsonObject(
       with: Data(contentsOf: directory.appendingPathComponent("comparison.json"))) as? [String: Any])
     comparison["correlation"] = correlation
@@ -576,11 +576,20 @@ private final class GateFixture {
   private func rewriteGraphEvents(
     caseID: String, declared: CoreConformanceCasesManifest.Entry, pin: [String: Any], in directory: URL
   ) throws {
+    let tlcTag = try #require(pin["tag"])
+    let tlcCommit = try #require(pin["commit"])
+    let tlcJarSHA256 = try #require(pin["jarSHA256"])
+    let javaDistribution = try #require(pin["javaDistribution"])
+    let javaVersion = try #require(pin["javaVersion"])
+    let javaArchiveSHA256 = try #require(pin["javaArchiveSHA256"])
+    let bridgeClass = try #require(pin["bridgeClass"])
+    let bridgeSourceSHA256 = try #require(pin["bridgeSourceSHA256"])
+    let bridgeBinarySHA256 = try #require(pin["bridgeBinarySHA256"])
     let provenance: [String: Any] = [
-      "tlcTag": pin["tag"]!, "tlcCommit": pin["commit"]!, "tlcJarSha256": pin["jarSHA256"]!,
-      "javaDistribution": pin["javaDistribution"]!, "javaVersion": pin["javaVersion"]!,
-      "javaArchiveSha256": pin["javaArchiveSHA256"]!, "bridgeClass": pin["bridgeClass"]!,
-      "bridgeSourceSha256": pin["bridgeSourceSHA256"]!, "bridgeBinarySha256": pin["bridgeBinarySHA256"]!,
+      "tlcTag": tlcTag, "tlcCommit": tlcCommit, "tlcJarSha256": tlcJarSHA256,
+      "javaDistribution": javaDistribution, "javaVersion": javaVersion,
+      "javaArchiveSha256": javaArchiveSHA256, "bridgeClass": bridgeClass,
+      "bridgeSourceSha256": bridgeSourceSHA256, "bridgeBinarySha256": bridgeBinarySHA256,
       "moduleSha256": declared.moduleSHA256, "cfgSha256": declared.cfgSHA256,
       "arguments": declared.arguments, "argumentsSha256": declared.argumentsSHA256,
       "workers": declared.workers, "fingerprintPolynomial": declared.fingerprintPolynomial,

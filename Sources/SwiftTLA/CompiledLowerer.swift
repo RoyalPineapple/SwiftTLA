@@ -90,6 +90,10 @@ struct CompiledLowerer {
         )
     }
 
+    func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
+        try lower(expression, at: path)
+    }
+
     private func lower(
         _ condition: FairnessCondition,
         actions: [NamedAction],
@@ -142,6 +146,9 @@ struct CompiledLowerer {
     }
 
     private func lower(_ action: NamedAction) throws -> CompiledAction {
+        if let issue = action.sourceIssue {
+            throw issue.compilationDiagnostic(stage: .lowering, path: "actions.\(action.name).bindings")
+        }
         guard let id = bindings.actions[action.name] else {
             throw diagnostic(path: "actions.\(action.name)")
         }
@@ -165,6 +172,8 @@ struct CompiledLowerer {
 
     private func lower(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
         switch expression {
+        case .sourceIssue(let issue):
+            throw issue.compilationDiagnostic(stage: .lowering, path: path)
         case .value(let value): return .value(value)
         case .programCounter: return try valueReference(at: path)
         case .controlLocation: return .controlLocation(try controlLocation(at: path))

@@ -33,13 +33,15 @@ public enum GeneratedDemoTestSuite {
     public static func run(_ target: GeneratedDemoTestTarget) -> [GeneratedDemoTestResult] {
         switch target {
         case .twoBuckets:
-            testResults(for: target.title, verifySpec: TwoBuckets.verifySpec,
-                        verifyTransitions: TwoBuckets.verifyTransitions, verifyInvariants: TwoBuckets.verifyInvariants)
+            testResults(for: target.title, verifySpec: { try TwoBuckets.verifySpec(configuration: .standard) },
+                        verifyTransitions: { try TwoBuckets.verifyTransitions(configuration: .standard) },
+                        verifyInvariants: { try TwoBuckets.verifyInvariants(configuration: .standard) })
         case .duckDuckLeader:
             ringTestResults()
         case .elevatorBank:
-            testResults(for: target.title, verifySpec: ElevatorBank.verifySpec,
-                        verifyTransitions: ElevatorBank.verifyTransitions, verifyInvariants: ElevatorBank.verifyInvariants)
+            testResults(for: target.title, verifySpec: { try ElevatorBank.verifySpec(configuration: .standard) },
+                        verifyTransitions: { try ElevatorBank.verifyTransitions(configuration: .standard) },
+                        verifyInvariants: { try ElevatorBank.verifyInvariants(configuration: .standard) })
         }
     }
 

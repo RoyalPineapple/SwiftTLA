@@ -16,26 +16,27 @@ public struct BoulangerModel: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain: [Self] = [.one, .two]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.boulanger.process")
     }
 
-    private enum Label: String, PlusCalLabel {
+    private enum Label: String, PlusCalLabel, CaseIterable {
         case ncs, e1, e2, e3, e4, w1, w2, cs, exit
     }
 
     public static var spec: TLASpec {
         #spec("Boulanger") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Boulanger") {
-                let num = SharedVar(initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
-                let flag = SharedVar(initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+                let num = SharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = SharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
                 Each(Process.all, fairness: .weak) { selfID in
-                    let unchecked = LocalVar(initial: SetExpr<Process>())
-                    let max = LocalVar(initial: 0)
-                    let nxt = LocalVar(initial: Process.one)
-                    let previous = LocalVar(initial: -1)
+                    let unchecked = LocalVar("unchecked", initial: SetExpr<Process>())
+                    let max = LocalVar("max", initial: 0)
+                    let nxt = LocalVar("nxt", initial: Process.one)
+                    let previous = LocalVar("previous", initial: -1)
 
                     Do(Label.ncs) { Skip() }
 

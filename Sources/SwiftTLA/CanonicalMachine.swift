@@ -7,12 +7,9 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
     case missingValue(path: String)
     case invalidValue(path: String)
     case projectionUnavailable(path: String, reason: String)
-    /// A generated typed state field was absent. This retains the Swift shape
-    /// that the generated machine expected to decode.
+    /// A generated typed state field was absent.
     case missingRequiredValue(path: String, expected: String)
     /// A generated typed state field had a formal value of the wrong kind.
-    /// The formal value is retained so callers can inspect it without
-    /// reaching back into the engine's raw state dictionary.
     case typeMismatch(path: String, expected: String, actual: TLAValue)
 
     public var description: String {
@@ -26,11 +23,11 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
         case .invalidValue(let path):
             return "Invalid TLA state value at \(path)"
         case .projectionUnavailable(let path, let reason):
-            return "Cannot project formal state at \(path): \(reason). No state changed. Inspect the reported boundary before retrying."
+            return "Cannot project formal state at \(path): \(reason). Inspect the reported boundary before retrying."
         case .missingRequiredValue(let path, let expected):
-            return "Cannot decode \(path): expected \(expected), but the formal state has no value; state was not committed. Supply \(expected) for \(path) before retrying."
+            return "Cannot decode \(path): expected \(expected), but the formal state has no value. Supply \(expected) for \(path) before retrying."
         case .typeMismatch(let path, let expected, let actual):
-            return "Cannot decode \(path): expected \(expected), found formal \(actual); state was not committed. Correct \(path) or its formal declaration before retrying."
+            return "Cannot decode \(path): expected \(expected), found formal \(actual). Correct \(path) or its formal declaration before retrying."
         }
     }
 }
@@ -154,12 +151,12 @@ public enum TLAStateProjectionResult: Sendable, Equatable {
     }
 }
 
-public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable, Action: Equatable & Sendable>: Equatable, Sendable {
-    public let action: Action
-    public let before: Snapshot
-    public let after: Snapshot
+package struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable, Action: Equatable & Sendable>: Equatable, Sendable {
+    package let action: Action
+    package let before: Snapshot
+    package let after: Snapshot
 
-    public init(action: Action, before: Snapshot, after: Snapshot) {
+    package init(action: Action, before: Snapshot, after: Snapshot) {
         self.action = action
         self.before = before
         self.after = after
@@ -174,45 +171,56 @@ public enum GeneratedMachineError: Error, Sendable {
     case noMatchingSuccessor
     case liveMachineSchemaMismatch(expected: String, actual: String)
     case liveMachineUnavailable(TLALiveMachineUnavailableReason)
-    /// This action selects a live identified collection member and must use
-    /// the generated `action(id:)` API rather than generic execution.
+    /// This action selects a live identified collection member through the
+    /// generated `action(id:)` API.
     case identityRoutedActionRequiresID
 }
 
-public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
-    public let compilation: CompiledSpecification
-    private let snapshotFromProjection: @Sendable (TLAStateProjection) throws -> Snapshot
-    private var formalState: TLAStateProjection
-    public private(set) var snapshot: Snapshot
+package struct CompiledActionRequest: Sendable {
+    let action: ActionID
+    let arguments: [CompiledValue]
 
-    public init(
+    init(action: ActionID, arguments: [CompiledValue]) {
+        self.action = action
+        self.arguments = arguments
+    }
+}
+
+package struct CanonicalMachine<Snapshot: Equatable & Sendable, Label: Hashable & Sendable>: Sendable {
+    private let compilation: CompiledSpecification
+    private let snapshotFromProjection: @Sendable (TLAStateProjection) throws -> Snapshot
+    private let actionRequest: @Sendable (Label) throws -> CompiledActionRequest
+    private let labelFromRequest: @Sendable (CompiledActionRequest) throws -> Label?
+    private var formalState: TLAStateProjection
+    package private(set) var snapshot: Snapshot
+
+    package init(
         compilation: CompiledSpecification,
         initial: Snapshot,
         formalState: TLAStateProjection,
-        snapshotFromProjection: @escaping @Sendable (TLAStateProjection) throws -> Snapshot
+        snapshotFromProjection: @escaping @Sendable (TLAStateProjection) throws -> Snapshot,
+        actionRequest: @escaping @Sendable (Label) throws -> CompiledActionRequest,
+        labelFromRequest: @escaping @Sendable (CompiledActionRequest) throws -> Label?
     ) {
         self.compilation = compilation
         self.snapshot = initial
         self.formalState = formalState
         self.snapshotFromProjection = snapshotFromProjection
+        self.actionRequest = actionRequest
+        self.labelFromRequest = labelFromRequest
     }
 
-    package func tlaSnapshot() throws -> TLAStateProjection {
-        formalState
-    }
-
-    public func stateProjection() -> TLAStateProjectionResult {
+    package func stateProjection() -> TLAStateProjectionResult {
         .projected(formalState)
     }
 
-    public mutating func apply<Label>(
+    package mutating func apply(
         _ action: Label,
-        using executor: CompiledActionExecutor<Label>,
-        from state: TLAStateProjection,
-        selecting successor: (TLAStateProjection) -> Bool
-    ) throws -> CanonicalTransitionEvidence<Snapshot, Label>
-    where Label: Hashable & Sendable {
-        let successors = try executor.successors(for: action, from: state)
+        from state: TLAStateProjection? = nil,
+        selecting successor: (Snapshot) -> Bool = { _ in true }
+    ) throws -> CanonicalTransitionEvidence<Snapshot, Label> {
+        let state = state ?? formalState
+        let successors = try successors(for: action, from: state)
         return try apply(
             successors,
             action: action,
@@ -221,17 +229,47 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         )
     }
 
+    package func successors(
+        for action: Label,
+        from state: TLAStateProjection
+    ) throws -> [TLAStateProjection] {
+        let formalState = try CompiledState(projection: state, compilation: compilation)
+        let request = try actionRequest(action)
+        return try CompiledRuntime(compilation: compilation)
+            .successors(for: request.action, from: formalState)
+            .filter { try compilation.matches($0.arguments, request: request) }
+            .map { try $0.state.projection(using: compilation.layout) }
+    }
+
+    package func successors(for action: Label) throws -> [TLAStateProjection] {
+        try successors(for: action, from: formalState)
+    }
+
+    package func availableActions(in state: TLAStateProjection) throws -> [Label] {
+        let formalState = try CompiledState(projection: state, compilation: compilation)
+        return try CompiledRuntime(compilation: compilation).successors(from: formalState).reduce(into: []) { labels, successor in
+            let request = try compilation.actionRequest(
+                action: successor.action,
+                formalArguments: successor.arguments
+            )
+            guard let value = try labelFromRequest(request) else {
+                throw GeneratedMachineError.noMatchingSuccessor
+            }
+            if labels.last != value { labels.append(value) }
+        }
+    }
+
     private mutating func apply<Action>(
         _ successors: [TLAStateProjection],
         action: Action,
         from state: TLAStateProjection,
-        selecting successor: (TLAStateProjection) -> Bool
+        selecting successor: (Snapshot) -> Bool
     ) throws -> CanonicalTransitionEvidence<Snapshot, Action>
     where Action: Equatable & Sendable {
         let before = try snapshotFromProjection(state)
         for projection in successors {
-            guard successor(projection) else { continue }
             let after = try snapshotFromProjection(projection)
+            guard successor(after) else { continue }
             snapshot = after
             formalState = projection
             return CanonicalTransitionEvidence(action: action, before: before, after: after)

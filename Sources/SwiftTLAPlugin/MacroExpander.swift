@@ -9,7 +9,7 @@ import SwiftTLA
 
 enum MacroExpander {
     static func generatedActionIdentifiers(actions: [NamedAction]) -> [String] {
-        let reserved: Set<String> = ["init", "deinit", "subscript", "toInvocation", "rawValue"]
+        let reserved: Set<String> = ["init", "deinit", "subscript", "rawValue"]
         var used: Set<String> = []
         return actions.map { action in
             let scalars = action.name.unicodeScalars.map { scalar -> Character in
@@ -61,29 +61,33 @@ enum MacroExpander {
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
         let plan = model.machineSurface
+        let collectionParameters = plan.symmetricCollections.map {
+            "\($0.formalName): IdentifiedModelCollection<\($0.elementType), \($0.valueType)>"
+        }
+        let machineInitializerParameters = (["machine: CanonicalMachine<State, ActionLabel>"] + collectionParameters)
+            .joined(separator: ", ")
+        let collectionAssignments = plan.symmetricCollections.map {
+            "self.\($0.formalName) = \($0.formalName)"
+        }
+        let machineInitializerAssignments = (["_machine = machine"] + collectionAssignments)
+            .joined(separator: "\n            ")
+        let collectionInitializers = plan.symmetricCollections.map { collection in
+            """,
+                \(collection.formalName): try IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>(
+                    name: \"\(collection.formalName)\",
+                    verificationScope: \(collection.verificationScope),
+                    initial: \(literalExpr(for: collection.initial))
+                )"""
+        }.joined()
 
-        decls.append(DeclSyntax(stringLiteral: "public typealias Simulation = Self"))
-
-        decls.append(DeclSyntax(stringLiteral: "private var _machine: CanonicalMachine<State>"))
+        decls.append(DeclSyntax(stringLiteral: "private var _machine: CanonicalMachine<State, ActionLabel>"))
         decls.append(DeclSyntax(stringLiteral: """
-        private init(machine: CanonicalMachine<State>) {
-            _machine = machine
+        private init(\(machineInitializerParameters)) {
+            \(machineInitializerAssignments)
         }
         """))
 
-        if !plan.actions.isEmpty {
-            decls.append(contentsOf: generateActionLabel(actions: plan.actions))
-            decls.append(DeclSyntax(stringLiteral: """
-            private func _actionExecutor() -> CompiledActionExecutor<ActionLabel> {
-                .init(
-                    compilation: _machine.compilation,
-                    actionOrdinal: { Self._actionOrdinal(for: $0) },
-                    arguments: { Self._actionArguments(for: $0) },
-                    label: { Self._actionLabel(actionAt: $0, arguments: $1) }
-                )
-            }
-            """))
-        }
+        decls.append(contentsOf: generateActionLabel(actions: plan.actions))
         decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: model.enumInfos)))
         decls.append(DeclSyntax(stringLiteral: generateMachineSchema(model: model)))
         decls.append(contentsOf: generateCanonicalMachineMembers(
@@ -139,8 +143,21 @@ enum MacroExpander {
                 compilation: compilation,
                 initial: initial,
                 formalState: formalState,
-                snapshotFromProjection: { try State(projection: $0) }
-            ))
+                snapshotFromProjection: { try State(projection: $0) },
+                actionRequest: {
+                    try compilation.actionRequest(
+                        ordinal: Self._actionOrdinal(for: $0),
+                        formalArguments: Self._formalArguments(for: $0)
+                    )
+                },
+                labelFromRequest: { request in
+                    let input = try compilation.generatedActionLabelInput(for: request)
+                    return Self._actionLabel(
+                        actionAt: input.ordinal,
+                        arguments: input.formalArguments
+                    )
+                }
+            )\(collectionInitializers))
         }
         public static func makeMachine() throws -> Self {
             let compilation = try compiledSpecification()
@@ -175,7 +192,6 @@ enum MacroExpander {
 
     static func generateCompilationIdentityCheck(model: MacroCompilation) -> [DeclSyntax] {
         let expectedIdentity = model.compilation.identity.value
-        let expectedSchema = model.machineSurface.schemaIdentifier
         let facts = machineSurfaceSwiftFactsSource(model.swiftFacts)
         let metadata = generatedMachineMetadataSource(model.machineSurface)
         let behaviorSource: String
@@ -210,13 +226,8 @@ enum MacroExpander {
                 from projection: TLAStateProjection
             ) throws -> [TLAStateProjection] {
                 _ = try State(projection: projection)
-                let executor = CompiledActionExecutor(
-                    compilation: try Self.compiledSpecification(),
-                    actionOrdinal: { Self._actionOrdinal(for: $0) },
-                    arguments: { Self._actionArguments(for: $0) },
-                    label: { Self._actionLabel(actionAt: $0, arguments: $1) }
-                )
-                return try executor.successors(for: action, from: projection).map { target in
+                let machine = try Self.makeMachine()
+                return try machine._machine.successors(for: action, from: projection).map { target in
                     _ = try State(projection: target)
                     return target
                 }
@@ -225,19 +236,17 @@ enum MacroExpander {
         }
         let compilationSource = """
         static let _expectedCompilationIdentity = \"\(expectedIdentity)\"
-        static let _expectedMachineSchemaIdentifier = \"\(expectedSchema)\"
         public static let generatedMachineMetadata: GeneratedMachineMetadata = \(metadata)
         private static func _machineSurfacePlan(
             _ compilation: CompiledSpecification
         ) throws -> MachineSurfacePlan {
             let plan = try MachineSurfacePlan(compilation: compilation, swiftFacts: \(facts))
-            guard plan.schemaIdentifier == _expectedMachineSchemaIdentifier,
-                  plan.metadata == generatedMachineMetadata else {
+            guard plan.metadata == generatedMachineMetadata else {
                 throw GeneratedMachineContractDiagnostic(
-                    code: .schemaMismatch,
+                    code: .metadataDomainMismatch,
                     path: "generatedMachineMetadata",
-                    expected: _expectedMachineSchemaIdentifier,
-                    actual: plan.schemaIdentifier,
+                    expected: "metadata derived from the compiled specification",
+                    actual: "a differing generated-machine metadata surface",
                     nextSafeAction: "Compile the model from its current source."
                 )
             }
@@ -256,24 +265,12 @@ enum MacroExpander {
                     nextSafeAction: \"Update the authored #spec declaration so every consumer compiles the same formal model.\"
                 )
             }
-            let plan = try _machineSurfacePlan(compilation)
-            guard compilation.identity == plan.compilationIdentity,
-                  plan.schemaIdentifier == _expectedMachineSchemaIdentifier,
-                  generatedMachineMetadata.compilationIdentity.value == _expectedCompilationIdentity,
-                  generatedMachineMetadata.schemaIdentifier == _expectedMachineSchemaIdentifier else {
-                throw GeneratedMachineContractDiagnostic(
-                    code: .schemaMismatch,
-                    path: \"generatedMachineMetadata\",
-                    expected: _expectedMachineSchemaIdentifier,
-                    actual: plan.schemaIdentifier,
-                    nextSafeAction: \"Compile the model from its current source.\"
-                )
-            }
+            _ = try _machineSurfacePlan(compilation)
             return compilation
         }
         public static func verifyGeneratedMachineContract(
             metadata: GeneratedMachineMetadata? = nil,
-            verificationStateLimit: Int? = nil
+            configuration: FiniteExplorationConfiguration
         ) -> GeneratedMachineContractReport {
             do {
                 let compilation = try compiledSpecification()
@@ -281,8 +278,7 @@ enum MacroExpander {
                     compilation: compilation,
                     plan: try _machineSurfacePlan(compilation),
                     metadata: metadata ?? generatedMachineMetadata,
-                    expectedSchemaIdentifier: _expectedMachineSchemaIdentifier,
-                    verificationStateLimit: verificationStateLimit ?? Self.verificationStateLimit,
+                    maximumStateLimit: configuration.maximumStateLimit,
                     decodeState: { projection in
                         _ = try State(projection: projection)
                     },
@@ -305,8 +301,10 @@ enum MacroExpander {
                 )
             }
         }
-        private static func _verifiedGeneratedMachineContract() throws -> GeneratedMachineContractReport {
-            let report = verifyGeneratedMachineContract()
+        private static func _verifiedGeneratedMachineContract(
+            configuration: FiniteExplorationConfiguration
+        ) throws -> GeneratedMachineContractReport {
+            let report = verifyGeneratedMachineContract(configuration: configuration)
             guard report.status == .exact else {
                 throw VerificationError(report.diagnostic?.description ?? "Generated-machine verification did not complete.")
             }
@@ -381,34 +379,13 @@ enum MacroExpander {
             }.joined(separator: ", ")
             return ".init(formalName: \(quoted(action.formalName)), swiftIdentifier: \(quoted(action.swiftIdentifier)), bindings: [\(bindings)])"
         }.joined(separator: ", ")
-        return ".init(compilationIdentity: .init(value: \(quoted(plan.compilationIdentity.value))), schemaIdentifier: \(quoted(plan.schemaIdentifier)), variables: [\(variables)], actions: [\(actions)])"
-    }
-
-    static func codegenTemporalExpr(_ expression: TemporalExpr) -> String {
-        switch expression {
-        case .always(let state): return ".always(\(codegenStateExpr(state)))"
-        case .eventually(let state): return ".eventually(\(codegenStateExpr(state)))"
-        case .alwaysEventually(let state): return ".alwaysEventually(\(codegenStateExpr(state)))"
-        case .eventuallyAlways(let state): return ".eventuallyAlways(\(codegenStateExpr(state)))"
-        case .leadsTo(let from, let to): return ".leadsTo(\(codegenStateExpr(from)), \(codegenStateExpr(to)))"
-        }
-    }
-
-    static func codegenFairness(_ fairness: FairnessCondition) -> String {
-        switch fairness {
-        case .weakFairness(let action): return ".weakFairness(\"\(action)\")"
-        case .strongFairness(let action): return ".strongFairness(\"\(action)\")"
-        case .weakFairnessNext: return ".weakFairnessNext"
-        case .strongFairnessNext: return ".strongFairnessNext"
-        case .weakFairnessActionCall(let action):
-            return ".weakFairnessActionCall(\(codegenActionCall(action)))"
-        case .strongFairnessActionCall(let action):
-            return ".strongFairnessActionCall(\(codegenActionCall(action)))"
-        }
-    }
-
-    static func codegenActionCall(_ action: FormalActionCall) -> String {
-        ".init(name: \"\(action.name)\", arguments: [\(action.arguments.map(codegenTLAValue).joined(separator: ", "))])"
+        let symmetricCollections = plan.symmetricCollections.map {
+            ".init(formalName: \(quoted($0.formalName)), verificationScope: \($0.verificationScope), initial: \(codegenTLAValue($0.initial)), elementType: \(quoted($0.elementType)), valueType: \(quoted($0.valueType)))"
+        }.joined(separator: ", ")
+        let collectionActions = plan.collectionActions.isEmpty ? "[:]" : "[" + plan.collectionActions.sorted { $0.key < $1.key }
+            .map { "\(quoted($0.key)): \(quoted($0.value))" }
+            .joined(separator: ", ") + "]"
+        return ".init(compilationIdentity: .init(value: \(quoted(plan.compilationIdentity.value))), variables: [\(variables)], actions: [\(actions)], symmetricCollections: [\(symmetricCollections)], collectionActions: \(collectionActions))"
     }
 
     static func codegenTLAValue(_ value: TLAValue) -> String {
@@ -428,127 +405,15 @@ enum MacroExpander {
         }
     }
 
-    static func codegenStateExpr(_ expr: StateExpr) -> String {
-        func cg(_ e: StateExpr) -> String { codegenStateExpr(e) }
-        switch expr {
-        case .variable(let v): return "StateExpr.variable(\"\(v)\")"
-        case .value(let v): return "StateExpr.value(\(codegenTLAValue(v)))"
-        case .programCounter: return "StateExpr.programCounter"
-        case .controlLocation(let reference): return "StateExpr.controlLocation(.init(\(String(reflecting: reference.sourceName))))"
-        case .add(let a, let b): return "StateExpr.add(\(cg(a)), \(cg(b)))"
-        case .subtract(let a, let b): return "StateExpr.subtract(\(cg(a)), \(cg(b)))"
-        case .multiply(let a, let b): return "StateExpr.multiply(\(cg(a)), \(cg(b)))"
-        case .divide(let a, let b): return "StateExpr.divide(\(cg(a)), \(cg(b)))"
-        case .modulo(let a, let b): return "StateExpr.modulo(\(cg(a)), \(cg(b)))"
-        case .negate(let a): return "StateExpr.negate(\(cg(a)))"
-        case .integerDivide(let a, let b): return "StateExpr.integerDivide(\(cg(a)), \(cg(b)))"
-        case .equal(let a, let b): return "StateExpr.equal(\(cg(a)), \(cg(b)))"
-        case .notEqual(let a, let b): return "StateExpr.notEqual(\(cg(a)), \(cg(b)))"
-        case .lessThan(let a, let b): return "StateExpr.lessThan(\(cg(a)), \(cg(b)))"
-        case .lessOrEqual(let a, let b): return "StateExpr.lessOrEqual(\(cg(a)), \(cg(b)))"
-        case .greaterThan(let a, let b): return "StateExpr.greaterThan(\(cg(a)), \(cg(b)))"
-        case .greaterOrEqual(let a, let b): return "StateExpr.greaterOrEqual(\(cg(a)), \(cg(b)))"
-        case .and(let a, let b): return "StateExpr.and(\(cg(a)), \(cg(b)))"
-        case .or(let a, let b): return "StateExpr.or(\(cg(a)), \(cg(b)))"
-        case .not(let a): return "StateExpr.not(\(cg(a)))"
-        case .ifThenElse(let c, let t, let f): return "StateExpr.ifThenElse(\(cg(c)), \(cg(t)), \(cg(f)))"
-        case .cardinality(let s): return "StateExpr.cardinality(\(cg(s)))"
-        case .functionApply(let f, let x): return "StateExpr.functionApply(\(cg(f)), \(cg(x)))"
-        case .recordAccess(let r, let f): return "StateExpr.recordAccess(\(cg(r)), \"\(f)\")"
-        case .in(let e, let s): return "StateExpr.in(\(cg(e)), \(cg(s)))"
-        case .union(let a, let b): return "StateExpr.union(\(cg(a)), \(cg(b)))"
-        case .intersection(let a, let b): return "StateExpr.intersection(\(cg(a)), \(cg(b)))"
-        case .setDifference(let a, let b): return "StateExpr.setDifference(\(cg(a)), \(cg(b)))"
-        case .subset(let a, let b): return "StateExpr.subset(\(cg(a)), \(cg(b)))"
-        case .tupleAccess(let t, let i): return "StateExpr.tupleAccess(\(cg(t)), \(i))"
-        case .tupleDynamicAccess(let tuple, let index): return "StateExpr.tupleDynamicAccess(\(cg(tuple)), \(cg(index)))"
-        case .tupleAppend(let t, let e): return "StateExpr.tupleAppend(\(cg(t)), \(cg(e)))"
-        case .tupleHead(let t): return "StateExpr.tupleHead(\(cg(t)))"
-        case .tupleTail(let t): return "StateExpr.tupleTail(\(cg(t)))"
-        case .tupleLength(let t): return "StateExpr.tupleLength(\(cg(t)))"
-        case .tupleConcatenate(let a, let b): return "StateExpr.tupleConcatenate(\(cg(a)), \(cg(b)))"
-        case .except(let f, let k, let v): return "StateExpr.except(\(cg(f)), \(cg(k)), \(cg(v)))"
-        case .domain(let f): return "StateExpr.domain(\(cg(f)))"
-        case .setFilter(let s, let qv, let p): return "StateExpr.setFilter(\(cg(s)), \"\(qv)\", \(cg(p)))"
-        case .setMap(let e, let qv, let s): return "StateExpr.setMap(\(cg(e)), \"\(qv)\", \(cg(s)))"
-        case .powerSet(let s): return "StateExpr.powerSet(\(cg(s)))"
-        case .unionAll(let s): return "StateExpr.unionAll(\(cg(s)))"
-        case .integerRange(let lower, let upper): return "StateExpr.integerRange(\(cg(lower)), \(cg(upper)))"
-        case .tupleLiteral(let es): return "StateExpr.tupleLiteral([\(es.map(cg).joined(separator: ", "))])"
-        case .recordLiteral(let fs):
-            let fields = fs.fields.map { "\"\($0.name)\": \(cg($0.value))" }.joined(separator: ", ")
-            return "StateExpr.record([\(fields)])"
-        case .setLiteral(let es): return "StateExpr.setLiteral([\(es.map(cg).joined(separator: ", "))])"
-        case .functionLiteral(let d, let qv, let b): return "StateExpr.functionLiteral(\(cg(d)), \"\(qv)\", \(cg(b)))"
-        case .functionSet(let domain, let range):
-            return "StateExpr.functionSet(\(cg(domain)), \(cg(range)))"
-        case .caseExpr(let ps, let fb):
-            let patterns = ps.map(cg).joined(separator: ", ")
-            let fallback = fb.map { cg($0) } ?? "nil"
-            return "StateExpr.caseExpr([\(patterns)], \(fallback))"
-        case .forAll(let set, let variable, let predicate):
-            return "StateExpr.forAll(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
-        case .exists(let set, let variable, let predicate):
-            return "StateExpr.exists(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
-        case .choose(let set, let variable, let predicate):
-            return "StateExpr.choose(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
-        case .enabledAction(let name): return "StateExpr.enabled(\"\(name)\")"
-        case .sequenceFromSet(let values): return "StateExpr.sequenceFromSet(\(cg(values)))"
-        case .setSum(let function, let values): return "StateExpr.setSum(\(cg(function)), \(cg(values)))"
-        case .foldFunction(let operation, let initial, let sequence):
-            let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
-            return "StateExpr.foldFunction(FormalLambda(parameters: [\(parameters)], body: \(cg(operation.body))), initial: \(cg(initial)), sequence: \(cg(sequence)))"
-        case .operatorApplication(let operation, let arguments):
-            let operatorSource: String
-            switch operation {
-            case .lambda(let lambda):
-                let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
-                operatorSource = ".lambda(FormalLambda(parameters: [\(parameters)], body: \(cg(lambda.body))))"
-            case .reference(let name, let arity):
-                operatorSource = ".reference(\"\(name)\", arity: \(arity))"
-            }
-            let argumentSource = arguments.map { argument -> String in
-                switch argument {
-                case .value(let expression): return ".value(\(cg(expression)))"
-                case .operator(.reference(let name, let arity)):
-                    return ".operator(.reference(\"\(name)\", arity: \(arity)))"
-                case .operator(.lambda(let lambda)):
-                    let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
-                    return ".operator(.lambda(FormalLambda(parameters: [\(parameters)], body: \(cg(lambda.body)))))"
-                }
-            }.joined(separator: ", ")
-            return "StateExpr.operatorApplication(\(operatorSource), [\(argumentSource)])"
-        case .recursiveCall(let name, let arguments):
-            return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
-        case .letValue(let name, let value, let body):
-            return "StateExpr.letValue(\"\(name)\", \(cg(value)), \(cg(body)))"
-        case .letIn(let operators, let body):
-            let definitions = operators.map { operation in
-                let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
-                let domain = operation.domain.map { ", domain: \(cg($0))" } ?? ""
-                return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)]\(domain), body: \(cg(operation.body)))"
-            }.joined(separator: ", ")
-            return "StateExpr.letIn([\(definitions)], \(cg(body)))"
-        }
-    }
-
-    static func codegenActionExpr(_ action: ActionExpr) -> String {
-        func cg(_ a: ActionExpr) -> String { codegenActionExpr(a) }
-        func sg(_ e: StateExpr) -> String { codegenStateExpr(e) }
-        switch action {
-        case .assign(let v, let e): return "ActionExpr.assign(\"\(v)\", \(sg(e)))"
-        case .unchanged(let v): return "ActionExpr.unchanged(\"\(v)\")"
-        case .guard_(let e): return "ActionExpr.guard_(\(sg(e)))"
-        case .chooseAction(let v, let s): return "ActionExpr.chooseAction(\"\(v)\", \(sg(s)))"
-        case .existsAction(let v, let s, let b): return "ActionExpr.existsAction(\"\(v)\", \(sg(s)), \(cg(b)))"
-        case .ifElse(let c, let t, let e): return "ActionExpr.ifElse(\(sg(c)), \(cg(t)), \(cg(e)))"
-        case .define(let v, let e, let b): return "ActionExpr.define(\"\(v)\", \(sg(e)), \(cg(b)))"
-        case .and(let a, let b): return "ActionExpr.and(\(cg(a)), \(cg(b)))"
-        case .or(let a, let b): return "ActionExpr.or(\(cg(a)), \(cg(b)))"
-        }
-    }
-
     static func generateActionLabel(actions: [MachineSurfacePlan.Action]) -> [DeclSyntax] {
+        guard actions.isEmpty == false else {
+            return [
+                DeclSyntax(stringLiteral: "public enum ActionLabel: Hashable, Sendable {}"),
+                DeclSyntax(stringLiteral: "private static func _actionOrdinal(for action: ActionLabel) -> Int { switch action {} }"),
+                DeclSyntax(stringLiteral: "private static func _formalArguments(for action: ActionLabel) -> [TLAValue] { switch action {} }"),
+                DeclSyntax(stringLiteral: "private static func _actionLabel(actionAt ordinal: Int, arguments: [TLAValue]) -> ActionLabel? { nil }")
+            ]
+        }
         func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
             switch binding.swiftType {
             case "Int": return ".int(\(binding.formalName))"
@@ -563,8 +428,12 @@ enum MacroExpander {
             codegenTLAValue(binding.domain[0])
         }
 
-        func invocationPattern(for binding: MachineSurfacePlan.Binding, index: Int) -> String {
-            let argument = "invocation.arguments[\(index)]"
+        func actionArgumentPattern(
+            for binding: MachineSurfacePlan.Binding,
+            index: Int,
+            in arguments: String
+        ) -> String {
+            let argument = "\(arguments)[\(index)]"
             switch binding.swiftType {
             case "Int": return "case .int(let \(binding.formalName)) = \(argument)"
             case "Bool": return "case .bool(let \(binding.formalName)) = \(argument)"
@@ -606,8 +475,7 @@ enum MacroExpander {
             }
             let patterns = action.bindings.enumerated().map { index, binding -> String in
                 if binding.isPublic {
-                    return invocationPattern(for: binding, index: index)
-                        .replacingOccurrences(of: "invocation.arguments", with: "arguments")
+                    return actionArgumentPattern(for: binding, index: index, in: "arguments")
                 }
                 return "\(codegenTLAValue(binding.domain[0])) == arguments[\(index)]"
             }.joined(separator: ", ")
@@ -630,7 +498,7 @@ enum MacroExpander {
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionArguments(for action: ActionLabel) -> [TLAValue] {
+        private static func _formalArguments(for action: ActionLabel) -> [TLAValue] {
             switch action {
             \(actionArgumentCases)
             }
@@ -873,10 +741,9 @@ extension MacroExpander {
                     }
                     let evidence = try _machine.apply(
                         .\(action.swiftIdentifier),
-                        using: _actionExecutor(),
                         from: formalState
                     ) { candidate in
-                        guard case .function(let candidateValues) = candidate.value(for: token),
+                        guard case .function(let candidateValues) = candidate.\(collection.formalName),
                               candidateValues[targetKey] != nil else { return false }
                         return candidateValues.allSatisfy { key, value in
                             key == targetKey || originalValues[key] == value
@@ -891,11 +758,7 @@ extension MacroExpander {
                             actual: evidence.after.\(collection.formalName)
                         ))
                     }
-                    do {
-                        try \(collection.formalName).update(id: id, to: nextValue, action: "\(action.formalName)")
-                    } catch {
-                        throw error
-                    }
+                    try \(collection.formalName).update(id: id, to: nextValue)
                     return TransitionResult(
                         action: .\(action.swiftIdentifier),
                         before: evidence.before,
@@ -935,11 +798,7 @@ extension MacroExpander {
     ) -> [DeclSyntax] {
         var declarations = collections.map { collection -> DeclSyntax in
             DeclSyntax(stringLiteral: """
-            public var \(collection.formalName) = IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>(
-                name: \"\(collection.formalName)\",
-                verificationScope: \(collection.verificationScope),
-                initial: \(literalExpr(for: collection.initial))
-            )
+            public var \(collection.formalName): IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>
             """)
         }
         guard !collections.isEmpty else { return declarations }

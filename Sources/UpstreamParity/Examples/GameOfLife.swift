@@ -54,7 +54,7 @@ private func gameOfLifeSpec() -> TLASpec {
     }
 
     return #spec("GameOfLife") {
-        Extends("Integers")
+        Extends(.integers)
         Variable(grid, initFunc)
 
         Invariant("TypeOK") {

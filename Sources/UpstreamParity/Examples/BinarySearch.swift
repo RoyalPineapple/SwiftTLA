@@ -8,22 +8,22 @@ import SwiftTLAMacros
 /// atomic step, including its two scoped `with` bindings.
 @TLAModel
 public struct BinarySearchModel: Sendable {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a
     }
 
     public static var spec: TLASpec {
         #spec("BinarySearch") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("BinarySearch") {
-                let seq = SharedVar(in: SortedSequences(
+                let seq = SharedVar("seq", in: SortedSequences(
                     of: SetExpr<Int>.literal(1, 2, 3, 4, 5),
                     lengths: 0...8
                 ))
-                let val = SharedVar(in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
-                let low = SharedVar(initial: 1)
-                let high = SharedVar(initial: seq.count)
-                let result = SharedVar(initial: 0)
+                let val = SharedVar("val", in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
+                let low = SharedVar("low", initial: 1)
+                let high = SharedVar("high", initial: seq.count)
+                let result = SharedVar("result", initial: 0)
 
                 While(Step.a, low <= high && result == 0) {
                     Let((low + high).integerDivided(by: 2)) { mid in
@@ -69,7 +69,7 @@ extension Example {
         upstreamModule: "specifications/LoopInvariance/BinarySearch.tla",
         upstreamCfg: "specifications/LoopInvariance/MCBinarySearch.cfg",
         expectedDistinct: 27_963,
-        verificationStateLimit: 100_000,
+        maximumStateLimit: 100_000,
         spec: BinarySearchModel.spec,
         notes: "Published BinarySearch with Values = 1...5 and MaxSeqLen = 8."
     )

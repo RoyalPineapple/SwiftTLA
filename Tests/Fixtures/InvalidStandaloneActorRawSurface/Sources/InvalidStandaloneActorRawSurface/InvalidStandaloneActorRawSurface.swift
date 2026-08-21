@@ -13,6 +13,6 @@ actor StandaloneActorSurface {
 }
 
 func rejectRawState(_ machine: StandaloneActorSurface) async {
-  let _: [String: TLAValue] = await machine.tlaSnapshot()
+  _ = await machine.tlaSnapshot()
   _ = StandaloneActorSurface.TransitionEvidence.self
 }

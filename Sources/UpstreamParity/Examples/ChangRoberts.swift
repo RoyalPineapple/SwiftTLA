@@ -13,6 +13,7 @@ public struct ChangRobertsModel: Sendable {
         case two = 2
         case three = 3
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain: [Self] = [.one, .two, .three]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.chang-roberts.node")
 
@@ -23,9 +24,11 @@ public struct ChangRobertsModel: Sendable {
         case candidate = "cand"
         case lost
         case won
+
+        public static var defaultValue: Self { .candidate }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case n0
         case n1
     }
@@ -33,7 +36,7 @@ public struct ChangRobertsModel: Sendable {
     public static var spec: TLASpec {
         #spec("ChangRoberts") {
             Algorithm("ChangRoberts") {
-                let initiator = SharedVar(in: SetExpr<Function<Node, Bool>>.literal(
+                let initiator = SharedVar("initiator", in: SetExpr<Function<Node, Bool>>.literal(
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, false)),
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, true)),
                     Function<Node, Bool>.literal((.one, false), (.two, true), (.three, false)),
@@ -43,17 +46,17 @@ public struct ChangRobertsModel: Sendable {
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, false)),
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, true))
                 ))
-                let processState = SharedVar(initial: Function<Node, ProcessState>.mapping { node in
+                let processState = SharedVar("processState", initial: Function<Node, ProcessState>.mapping { node in
                     If(
                         initiator[node] == true,
                         then: .candidate,
                         else: .lost
                     )
                 })
-                let successor = SharedVar(initial: Function<Node, Node>.literal(
+                let successor = SharedVar("successor", initial: Function<Node, Node>.literal(
                     (.one, .two), (.two, .three), (.three, .one)
                 ))
-                let messages = SharedVar(initial: Function<Node, SetExpr<Node>>.literal(
+                let messages = SharedVar("messages", initial: Function<Node, SetExpr<Node>>.literal(
                     (.one, SetExpr<Node>()),
                     (.two, SetExpr<Node>()),
                     (.three, SetExpr<Node>())

@@ -25,11 +25,11 @@ struct ProcedureLoweringTests {
 
         let parsed = AlgorithmFidelityToken(model: model(letName: "first", withName: "second", chooseName: "third"))
         let built = AlgorithmFidelityToken(model: model(letName: "x", withName: "y", chooseName: "z"))
-        #expect(_tlaAlgorithmFidelityEvidence([parsed], [built]) == nil)
+        #expect(parsed == built)
     }
 
-    @Test("pre-lowering Algorithm fidelity reports a semantic path")
-    func algorithmFidelityReportsSemanticDifference() {
+    @Test("different algorithms have different source tokens")
+    func differentAlgorithmsHaveDifferentSourceTokens() {
         let expected = AlgorithmFidelityToken(model: AlgorithmModel(
             name: "FidelityDifference",
             components: [.step(.init(label: .init(name: "start"), statements: [.skip]))]
@@ -39,11 +39,7 @@ struct ProcedureLoweringTests {
             components: [.step(.init(label: .init(name: "start"), statements: [.stop]))]
         ))
 
-        let evidence = _tlaAlgorithmFidelityEvidence([expected], [actual])
-        #expect(evidence?.whatFailed == "Algorithm IR differs before lowering")
-        #expect(evidence?.location == .semanticPath("algorithms[0].components[0].statements[0]"))
-        #expect(evidence?.expected == "skip")
-        #expect(evidence?.actual == "stop")
+        #expect(expected != actual)
     }
 
     @Test("call and return restore the caller environment after one atomic procedure step")

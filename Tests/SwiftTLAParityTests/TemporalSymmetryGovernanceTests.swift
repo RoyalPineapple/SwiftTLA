@@ -13,11 +13,11 @@ struct TemporalSymmetryGovernanceTests {
     configuration["unknownNestedField"] = true
     cases[0]["configuration"] = configuration
     object["cases"] = cases
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "decode", field: "unknown field unknownNestedField")) {
       _ = try JSONDecoder().decode(TemporalSymmetryCases.self, from: JSONSerialization.data(withJSONObject: object))
     }
-    #expect(throws: TemporalSymmetryGovernanceError.duplicateID(kind: "case", id: item.id)) {
+    #expect(throws: ConformanceGovernanceError.duplicateID(kind: "case", id: item.id)) {
       _ = try TemporalSymmetryCases(cases: [item, item])
     }
   }
@@ -40,18 +40,18 @@ struct TemporalSymmetryGovernanceTests {
       finiteBounds: try CoreFiniteBounds(summary: "four states", limits: ["states": 4]),
       configuration: try temporalConfiguration(), mandatoryCaseIDs: [source.id], requestedStatus: .requested,
       linkedDivergenceIDs: [record.id])
-    #expect(throws: TemporalSymmetryGovernanceError.inconsistentReference(
+    #expect(throws: ConformanceGovernanceError.inconsistentReference(
       record: "wrong-bounds", field: "mandatory case source")) {
       try TemporalSymmetrySupportSurface(entries: [mismatchedBounds]).validate(cases: cases, ledger: ledger)
     }
 
     let wrongKind = try divergenceRecord(provenanceCaseID: source.id, regressionCaseID: regression.id, kind: .symmetry)
-    #expect(throws: TemporalSymmetryGovernanceError.inconsistentReference(
+    #expect(throws: ConformanceGovernanceError.inconsistentReference(
       record: wrongKind.id, field: "kind, provenance, regression, or bounds")) {
       try TemporalSymmetryDivergenceLedger(records: [wrongKind]).validate(cases: cases)
     }
 
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(record: "difference", field: "latestComparison")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: "difference", field: "latestComparison")) {
       _ = try divergenceRecord(provenanceCaseID: source.id, regressionCaseID: regression.id, disposition: .resolved)
     }
   }
@@ -94,7 +94,7 @@ struct TemporalSymmetryGovernanceTests {
     let result = try TemporalPropertyResult(
       availability: .evaluated, outcome: .satisfied, graphID: "graph", initialStateIDs: ["i"],
       traceAvailability: .notApplicable)
-    #expect(throws: TemporalSymmetryGovernanceError.inconsistentReference(
+    #expect(throws: ConformanceGovernanceError.inconsistentReference(
       record: "temporal", field: "complete graph evidence")) {
       _ = try TemporalComparison(
         caseID: "temporal", configuration: configuration, correlation: try correlation("temporal", runID),
@@ -103,7 +103,7 @@ struct TemporalSymmetryGovernanceTests {
         enablednessEvidence: try evidence("enabled.json"), fairComponents: [], rejectedComponents: [],
         diagnosticCode: .exactAgreement)
     }
-    #expect(throws: TemporalSymmetryGovernanceError.inconsistentReference(
+    #expect(throws: ConformanceGovernanceError.inconsistentReference(
       record: "complete graph evidence", field: "run IDs")) {
       _ = try TemporalCompleteGraphEvidence(
         propertyRunID: runID, graphRunID: runID, arguments: [], fingerprintPolynomial: 1,
@@ -115,7 +115,7 @@ struct TemporalSymmetryGovernanceTests {
 
   @Test("P3 symmetry comparison requires complete paired evidence and canonical orbits")
   func symmetryComparisonRequiresCompleteOrbits() throws {
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(record: "orbit", field: "members or representative")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: "orbit", field: "members or representative")) {
       _ = try SymmetryOrbit(
         members: ["b", "a"], semanticRepresentative: "b", swiftExecutableRepresentative: "a",
         tlcExecutableRepresentative: "b")
@@ -166,7 +166,7 @@ struct TemporalSymmetryGovernanceTests {
 
   @Test("P3 temporal evidence keeps unavailable evaluation distinct from a property result")
   func unavailableTemporalEvaluationIsFailClosed() throws {
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "temporal result", field: "unavailable evaluation")) {
       _ = try TemporalPropertyResult(
         availability: .unavailable, outcome: .satisfied, graphID: "graph", initialStateIDs: ["i"],
@@ -178,7 +178,7 @@ struct TemporalSymmetryGovernanceTests {
     let satisfied = try TemporalPropertyResult(
       availability: .evaluated, outcome: .satisfied, graphID: "graph", initialStateIDs: ["i"],
       traceAvailability: .notApplicable)
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "temporal", field: "unavailable temporal result")) {
       _ = try TemporalComparison(
         caseID: "temporal", configuration: try temporalConfiguration(), correlation: try correlation("temporal", UUID()),
@@ -192,14 +192,14 @@ struct TemporalSymmetryGovernanceTests {
   @Test("P3 correlations and temporal diagnostics cannot be silently mismatched")
   func correlationsAndDiagnosticsAreStrict() throws {
     let id = UUID()
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(record: "correlation", field: "caseID")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: "correlation", field: "caseID")) {
       _ = try TemporalSymmetryCaseRunCorrelation(
         caseID: "temporal", gateRunID: id, swiftRunID: id, tlcRunID: UUID(), comparisonRunID: UUID())
     }
     let result = try TemporalPropertyResult(
       availability: .evaluated, outcome: .satisfied, graphID: "graph", initialStateIDs: ["i"],
       traceAvailability: .notApplicable)
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(record: "temporal", field: "exact temporal result")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: "temporal", field: "exact temporal result")) {
       _ = try TemporalComparison(
         caseID: "temporal", configuration: try temporalConfiguration(), correlation: try correlation("temporal", UUID()),
         outcome: .exact, swiftResult: result, tlcResult: result,
@@ -222,7 +222,7 @@ extension TemporalSymmetryGovernanceTests {
     let swiftReduced = try exploration(.swift, true, UUID())
     let tlcRaw = try exploration(.tlc, false, correlation.tlcRunID)
     let tlcReduced = try exploration(.tlc, true, UUID())
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "symmetry", field: "orbit witnesses or quotient")) {
       _ = try SymmetryOrbitComparison(
         caseID: "symmetry", configuration: try symmetryConfiguration(), correlation: correlation,
@@ -236,7 +236,7 @@ extension TemporalSymmetryGovernanceTests {
       engine: .swift, reduced: false, runID: correlation.swiftRunID, graphID: "swift-raw", initialStateIDs: ["a"], stateIDs: ["a"],
       transitions: [try witness(.swift, source: "a", target: "a")], declaredConfigurationSHA256: digest,
       graphEvidence: try evidence("incomplete.json"), invariantOutcome: .satisfied, deadlockOutcome: .notApplicable)
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "symmetry", field: "complete orbit partition")) {
       _ = try SymmetryOrbitComparison(
         caseID: "symmetry", configuration: try symmetryConfiguration(), correlation: correlation,
@@ -255,7 +255,7 @@ extension TemporalSymmetryGovernanceTests {
       tlcExecutableRepresentative: "a")
     let correlation = try correlation("symmetry", UUID())
     let sharedReducedRun = UUID()
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "symmetry", field: "exploration run correlation")) {
       _ = try SymmetryOrbitComparison(
         caseID: "symmetry", configuration: try symmetryConfiguration(), correlation: correlation,
@@ -269,7 +269,7 @@ extension TemporalSymmetryGovernanceTests {
         diagnosticCode: .exactAgreement)
     }
 
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: "symmetry", field: "symmetry difference diagnostic")) {
       _ = try SymmetryOrbitComparison(
         caseID: "symmetry", configuration: try symmetryConfiguration(), correlation: correlation,
@@ -286,7 +286,7 @@ extension TemporalSymmetryGovernanceTests {
     let reducedRun = UUID()
     let changedReduced = try SymmetryExploration(
       engine: .swift, reduced: true, runID: reducedRun, graphID: "swift-reduced-difference", initialStateIDs: ["a"],
-      stateIDs: ["a"], transitions: [try SymmetryRawTransitionWitness(engine: .swift, sourceStateID: "a", action: "other", targetStateID: "a")],
+      stateIDs: ["a"], transitions: [try SymmetryRawTransitionWitness(engine: .swift, sourceStateID: "a", action: "other", targetStateID: "a", occurrences: 1)],
       declaredConfigurationSHA256: digest, graphEvidence: try evidence("swift-reduced-difference.json"),
       invariantOutcome: .satisfied, deadlockOutcome: .notApplicable)
     let structuredDifference = try SymmetryOrbitComparison(
@@ -312,7 +312,7 @@ extension TemporalSymmetryGovernanceTests {
       configuration: try temporalConfiguration(), mandatoryCaseIDs: [source.id], requestedStatus: .requested,
       linkedDivergenceIDs: [divergence.id])
     let surface = try TemporalSymmetrySupportSurface(entries: [support])
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "entries")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: "admission", field: "entries")) {
       _ = try admission(runID: UUID(), entries: [])
     }
 
@@ -330,7 +330,7 @@ extension TemporalSymmetryGovernanceTests {
       caseRunCorrelations: [try correlation(source.id, UUID())])
     let arbitraryReport = try admission(
       runID: arbitrary.caseRunCorrelations[0].gateRunID, entries: [arbitrary], admittedBounds: ["arbitrary": try bounds()])
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "support entry coverage")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: "admission", field: "support entry coverage")) {
       try arbitraryReport.validate(supportSurface: surface, cases: cases, ledger: ledger)
     }
 
@@ -338,7 +338,7 @@ extension TemporalSymmetryGovernanceTests {
       supportID: support.id, decision: .unsupported, reasonCodes: [.explicitlyUnsupported], mandatoryCaseIDs: [source.id],
       divergenceIDs: [divergence.id])
     let downgradedReport = try admission(runID: UUID(), entries: [downgraded])
-    #expect(throws: TemporalSymmetryGovernanceError.invalidField(record: support.id, field: "requested entry downgraded")) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: support.id, field: "requested entry downgraded")) {
       try downgradedReport.validate(supportSurface: surface, cases: cases, ledger: ledger)
     }
   }
@@ -355,7 +355,7 @@ extension TemporalSymmetryGovernanceTests {
       id: "scope", behavior: "bounded temporal", kind: .temporal, finiteBounds: try bounds(),
       configuration: try temporalConfiguration(), mandatoryCaseIDs: [unrelated.id], requestedStatus: .requested,
       linkedDivergenceIDs: [divergence.id])
-    #expect(throws: TemporalSymmetryGovernanceError.inconsistentReference(
+    #expect(throws: ConformanceGovernanceError.inconsistentReference(
       record: entry.id, field: "linked divergence difference")) {
       try TemporalSymmetrySupportSurface(entries: [entry]).validate(cases: cases, ledger: ledger)
     }
@@ -398,7 +398,7 @@ extension TemporalSymmetryGovernanceTests {
 
   private func divergenceRecord(
     provenanceCaseID: String, regressionCaseID: String, kind: TemporalSymmetryCaseKind = .temporal,
-    disposition: TemporalSymmetryDivergenceDisposition = .open
+    disposition: ConformanceDivergenceDisposition = .open
   ) throws -> TemporalSymmetryDivergenceRecord {
     try TemporalSymmetryDivergenceRecord(
       id: "difference", kind: kind,
@@ -428,7 +428,7 @@ extension TemporalSymmetryGovernanceTests {
   private func witness(
     _ engine: SymmetryExplorationEngine, source: String = "a", target: String = "b"
   ) throws -> SymmetryRawTransitionWitness {
-    try SymmetryRawTransitionWitness(engine: engine, sourceStateID: source, action: "step", targetStateID: target)
+    try SymmetryRawTransitionWitness(engine: engine, sourceStateID: source, action: "step", targetStateID: target, occurrences: 1)
   }
 
   private func admission(

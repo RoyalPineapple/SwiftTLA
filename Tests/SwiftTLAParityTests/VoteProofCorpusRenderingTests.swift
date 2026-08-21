@@ -5,9 +5,13 @@ struct VoteProofCorpusRenderingTests {
     @Test("VoteProof preserves typed local recursion and formal module composition")
     func parserBuilderFidelity() throws {
         VoteProofModel._checkParserTree()
-        #expect(try VoteProofModel.spec.compile().spec.name == "VoteProof")
+        let compilation = try VoteProofModel.spec.compile()
+        #expect(compilation.spec.name == "VoteProof")
+        #expect(Set(VoteProofModel.spec.formalOperatorDefinitions.map(\.name)) == ["ChosenIn", "SafeAt", "chosen"])
+        #expect(Set(VoteProofModel.spec.invariants.map(\.name)) == ["TypeOK", "VInv1", "VInv2", "VInv3", "VInv4"])
+        #expect(VoteProofModel.spec.refinements.map(\.name) == ["Refines"])
 
-        let bundle = try VoteProofModel.spec.compile().renderedTLAModuleBundle()
+        let bundle = try compilation.renderedTLAModuleBundle()
         #expect(VoteProofModel.spec.constants == [
             ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
             ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),

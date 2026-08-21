@@ -6,22 +6,23 @@ import SwiftTLAMacros
 public struct CaptureModel {
     public enum Phase: String, CaseIterable, FiniteDomainKey {
         case idle, configured, running, interrupted
+        public static var defaultValue: Self { .idle }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture-phase")
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum ConfigureProcess: String, FiniteDomainKey { case configureEvent; static let formalDomain: [Self] = [.configureEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.configure"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum StartProcess: String, FiniteDomainKey { case startEvent; static let formalDomain: [Self] = [.startEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.start"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum StopProcess: String, FiniteDomainKey { case stopEvent; static let formalDomain: [Self] = [.stopEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.stop"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum InterruptProcess: String, FiniteDomainKey { case interruptEvent; static let formalDomain: [Self] = [.interruptEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.interrupt"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum ResumeProcess: String, FiniteDomainKey { case resumeEvent; static let formalDomain: [Self] = [.resumeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.resume"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum Step: String, PlusCalLabel { case configure, start, stop, interrupt, resume }
+    private enum ConfigureProcess: String, FiniteDomainKey { case configureEvent; static var defaultValue: Self { .configureEvent }; static let formalDomain: [Self] = [.configureEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.configure"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum StartProcess: String, FiniteDomainKey { case startEvent; static var defaultValue: Self { .startEvent }; static let formalDomain: [Self] = [.startEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.start"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum StopProcess: String, FiniteDomainKey { case stopEvent; static var defaultValue: Self { .stopEvent }; static let formalDomain: [Self] = [.stopEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.stop"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum InterruptProcess: String, FiniteDomainKey { case interruptEvent; static var defaultValue: Self { .interruptEvent }; static let formalDomain: [Self] = [.interruptEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.interrupt"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum ResumeProcess: String, FiniteDomainKey { case resumeEvent; static var defaultValue: Self { .resumeEvent }; static let formalDomain: [Self] = [.resumeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.resume"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum Step: String, PlusCalLabel, CaseIterable { case configure, start, stop, interrupt, resume }
 
     public static var spec: TLASpec {
         #spec("CaptureModel") {
             Algorithm("CaptureModel") {
-                let phase = SharedVar(initial: Phase.idle)
+                let phase = SharedVar("phase", initial: Phase.idle)
                 Each(ConfigureProcess.all) { _ in Do(Step.configure) { When(phase == .idle); Assign(phase, to: Phase.configured); Goto(Step.configure) } }
                 Each(StartProcess.all) { _ in Do(Step.start) { When(phase == .configured); Assign(phase, to: Phase.running); Goto(Step.start) } }
                 Each(StopProcess.all) { _ in Do(Step.stop) { When(phase == .running || phase == .interrupted); Assign(phase, to: Phase.idle); Goto(Step.stop) } }

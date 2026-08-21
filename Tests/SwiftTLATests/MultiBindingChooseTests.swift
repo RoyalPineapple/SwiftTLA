@@ -10,7 +10,7 @@ struct MultiBindingChooseTests {
             let selected = SharedVar("selected", initial: 0)
             selected
             Each(MultiBindingChooseModel.Node.all) { _ in
-                Do("choose") {
+                Do(TestControlLabel.choose) {
                     Choose(1...2, 10...11) { first, second in
                         Assign(selected, to: first.expr * 100 + second.expr)
                     }
@@ -41,6 +41,7 @@ struct MultiBindingChooseTests {
 private struct MultiBindingChooseModel {
     enum Node: Int, CaseIterable, FiniteDomainKey {
         case only = 0
+        static var defaultValue: Self { .only }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.multi-binding-choose.node")
     }
@@ -48,9 +49,9 @@ private struct MultiBindingChooseModel {
     static var spec: TLASpec {
         #spec("MultiBindingChoose") {
             Algorithm("MultiBindingChoose") {
-                let selected = SharedVar(initial: 0)
+                let selected = SharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
-                    Do("choose") {
+                    Do(TestControlLabel.choose) {
                         Choose(1...2, 10...11) { first, second in
                             Assign(selected, to: first.expr * 100 + second.expr)
                         }

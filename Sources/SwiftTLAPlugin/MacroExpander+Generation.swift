@@ -10,15 +10,20 @@ extension MacroExpander {
     // MARK: - Spec verification code generation
     static func generateSpecTest() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        public struct VerificationError: Error, CustomStringConvertible {
+        public struct VerificationError: Error, Sendable, CustomStringConvertible {
             public let description: String
             public init(_ description: String) { self.description = description }
         }
         """),
         DeclSyntax(stringLiteral: """
         @discardableResult
-        public static func verifySpec() throws -> Int {
-            let result = try ModelChecker(compilation: Self.compiledSpecification(), maxStates: Self.verificationStateLimit).check()
+        public static func verifySpec(
+            configuration: FiniteExplorationConfiguration
+        ) throws -> Int {
+            let result = try ModelChecker(
+                compilation: Self.compiledSpecification(),
+                configuration: configuration
+            ).check()
             switch result {
             case .ok(let count):
                 guard count > 0 else { throw VerificationError("No states found") }
@@ -40,15 +45,19 @@ extension MacroExpander {
     static func generateTransitionsTest(hasActions: Bool) -> [DeclSyntax] {
         if !hasActions { return [] }
         return [DeclSyntax(stringLiteral: """
-        public static func verifyTransitions() throws -> Int {
-            try Self._verifiedGeneratedMachineContract().transitionCount
+        public static func verifyTransitions(
+            configuration: FiniteExplorationConfiguration
+        ) throws -> Int {
+            try Self._verifiedGeneratedMachineContract(configuration: configuration).transitionCount
         }
         """)]
     }
     static func generateInvariantsTest() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        public static func verifyInvariants() throws -> Int {
-            try Self._verifiedGeneratedMachineContract().invariantCheckCount
+        public static func verifyInvariants(
+            configuration: FiniteExplorationConfiguration
+        ) throws -> Int {
+            try Self._verifiedGeneratedMachineContract(configuration: configuration).invariantCheckCount
         }
         """)]
     }
@@ -70,7 +79,7 @@ extension MacroExpander {
         case .set: "Set<Int>"
         case .tuple: "[TLAValue]"
         case .record: "TLARecord"
-        case .function: "[TLAValue: TLAValue]"
+        case .function: "TLAValue"
         case .constant: "String"
         }
     }
@@ -78,10 +87,14 @@ extension MacroExpander {
         let type = variable.swiftType
         if ["Int", "Bool", "String", "TLAValue"].contains(type) { return type }
         if enumInfos.contains(where: { $0.typeName == type }) { return type }
-        if type.hasPrefix("Record<") || type.hasPrefix("Function<") || type.hasPrefix("SetExpr<") {
+        switch variable.valueShape {
+        case .record, .function:
             return type
+        case .set:
+            return type
+        default:
+            return "TLAValue"
         }
-        return "TLAValue"
     }
     static func extractor(for initial: TLAValue) -> String {
         switch initial {

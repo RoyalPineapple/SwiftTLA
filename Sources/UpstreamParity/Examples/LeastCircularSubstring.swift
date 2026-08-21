@@ -6,7 +6,7 @@ import SwiftTLA
 /// model imports `ZSequences` as a real module, and configures that module's
 /// `Nat` operator with the same finite bound used for model checking.
 public enum LeastCircularSubstringModel {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case l3 = "L3"
         case l5 = "L5"
         case l6 = "L6"
@@ -211,7 +211,7 @@ extension Example {
         upstreamModule: "specifications/LeastCircularSubstring/LeastCircularSubstring.tla",
         upstreamCfg: "specifications/LeastCircularSubstring/MCLeastCircularSubstringSmall.cfg",
         expectedDistinct: 8_554,
-        verificationStateLimit: 10_000,
+        maximumStateLimit: 10_000,
         spec: LeastCircularSubstringModel.spec,
         notes: "Published Kellogg Booth least-circular-substring model with CharSetSize = 2 and MaxStringLength = 6."
     )

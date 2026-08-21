@@ -5,9 +5,9 @@ import SwiftTLAMacros
 public struct DieHardModel: Sendable {
     public static var spec: TLASpec {
         #spec("DieHard") {
-            Extends("Naturals")
-            let big = SharedVar(initial: 0)
-            let small = SharedVar(initial: 0)
+            Extends(.naturals)
+            let big = SharedVar("big", initial: 0)
+            let small = SharedVar("small", initial: 0)
             Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
             Action("FillSmallJug") { small.becomes(3) }
             Action("FillBigJug") { big.becomes(5) }

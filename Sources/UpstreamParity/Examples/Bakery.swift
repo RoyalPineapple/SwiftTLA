@@ -12,12 +12,13 @@ public struct BakeryN2Model: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.bakery.n2.process")
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case ncs
         case e1
         case e2
@@ -31,15 +32,15 @@ public struct BakeryN2Model: Sendable {
 
     public static var spec: TLASpec {
         #spec("Bakery") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Bakery") {
-                let num = SharedVar(initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
-                let flag = SharedVar(initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+                let num = SharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = SharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
                 Each(Process.all, fairness: .weak) { process in
-                    let unchecked: LocalVariable<SetExpr<Process>> = LocalVar(initial: SetExpr<Process>())
-                    let maxSeen = LocalVar(initial: 0)
-                    let next: LocalVariable<Process> = LocalVar(initial: .one)
+                    let unchecked: LocalVariable<SetExpr<Process>> = LocalVar("unchecked", initial: SetExpr<Process>())
+                    let maxSeen = LocalVar("maxSeen", initial: 0)
+                    let next: LocalVariable<Process> = LocalVar("next", initial: .one)
 
                     Do(Step.ncs) {
                         Skip()

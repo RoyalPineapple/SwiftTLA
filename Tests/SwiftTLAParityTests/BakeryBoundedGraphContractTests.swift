@@ -5,9 +5,9 @@ import UpstreamParity
 struct BakeryBoundedGraphContractTests {
     @Test("Bakery PlusCal-shaped model matches its upstream bounded graph")
     func bakeryN2MatchesTLC() throws {
-        try BakeryN2Model.verifySpec()
+        try BakeryN2Model.verifySpec(configuration: .standard)
 
-        let checker = try ModelChecker(spec: BakeryN2Model.spec, maxStates: 50_000)
+        let checker = try ModelChecker(spec: BakeryN2Model.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50_000))
         let graph = try checker.exploreGraph()
         #expect(graph.states.count == Example.bakeryN2.expectedDistinct, "Bakery graph has \(graph.states.count) states; TLC records \(Example.bakeryN2.expectedDistinct).")
 

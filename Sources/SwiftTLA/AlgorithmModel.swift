@@ -123,51 +123,6 @@ public struct AlgorithmFidelityToken: Sendable, Hashable {
     }
 }
 
-/// Returns semantic-path evidence for the first pre-lowering Algorithm
-/// difference. The token is intentionally opaque; callers cannot inspect or
-/// reconstruct the Algorithm IR from it.
-public func _tlaAlgorithmFidelityEvidence(
-    _ expected: [AlgorithmFidelityToken],
-    _ actual: [AlgorithmFidelityToken]
-) -> TLAParserFidelityDiagnostic? {
-    guard expected.count == actual.count else {
-        return TLAParserFidelityDiagnostic(
-            whatFailed: "algorithm count differs",
-            location: .semanticPath("algorithms"),
-            expected: "\(expected.count) algorithm(s)",
-            actual: "\(actual.count) algorithm(s)",
-            nextSafeAction: "Retain every Algorithm declaration in the #spec builder."
-        )
-    }
-    for index in expected.indices where expected[index] != actual[index] {
-        let expectedNodes = algorithmCanonicalNodes(expected[index].canonicalForm)
-        let actualNodes = algorithmCanonicalNodes(actual[index].canonicalForm)
-        let actualValues = Dictionary(uniqueKeysWithValues: actualNodes.map { ($0.path, $0.value) })
-        let firstDifference = expectedNodes.first { node in
-            actualValues[node.path] != node.value
-        } ?? actualNodes.first.map { (path: $0.path, value: "<missing>") }
-        let path = firstDifference.map { "algorithms[\(index)].\($0.path)" } ?? "algorithms[\(index)]"
-        let expectedValue = firstDifference.map(\.value) ?? "<missing canonical node>"
-        let actualValue = firstDifference.flatMap { actualValues[$0.path] } ?? "<missing canonical node>"
-        return TLAParserFidelityDiagnostic(
-            whatFailed: "Algorithm IR differs before lowering",
-            location: .semanticPath(path),
-            expected: expectedValue,
-            actual: actualValue,
-            nextSafeAction: "Inspect this Algorithm's declarations, labels, and scoped statements so parser and builder retain the same formal program."
-        )
-    }
-    return nil
-}
-
-private func algorithmCanonicalNodes(_ encoding: String) -> [(path: String, value: String)] {
-    encoding.split(separator: "\u{1E}", omittingEmptySubsequences: true).compactMap { record in
-        let fields = record.split(separator: "\u{1F}", maxSplits: 1, omittingEmptySubsequences: false)
-        guard fields.count == 2 else { return nil }
-        return (path: String(fields[0]), value: String(fields[1]))
-    }
-}
-
 private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
     var next = 0
     var nodes: [(path: String, value: String)] = []
@@ -333,17 +288,20 @@ internal struct AlgorithmStateModel: Sendable {
     let initial: StateExpr
     let initialSet: StateExpr?
     let swiftTypeName: String?
+    let isTuple: Bool
 
     init(
         root: String,
         initial: StateExpr,
         initialSet: StateExpr? = nil,
-        swiftTypeName: String? = nil
+        swiftTypeName: String? = nil,
+        isTuple: Bool = false
     ) {
         self.root = root
         self.initial = initial
         self.initialSet = initialSet
         self.swiftTypeName = swiftTypeName
+        self.isTuple = isTuple
     }
 }
 

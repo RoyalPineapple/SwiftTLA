@@ -19,11 +19,11 @@ struct ValidActorHost {
 @main
 struct ValidActorFixture {
   static func main() async throws {
-    let transitions = try await ValidActorHost.verifyTransitions()
+    let transitions = try ValidActorHost.verifyTransitions(configuration: .standard)
     guard transitions > 0 else {
       throw ValidActorFixtureError.emptyTransitions
     }
-    _ = try await ValidActorHost.verifyInvariants()
+    _ = try ValidActorHost.verifyInvariants(configuration: .standard)
   }
 }
 

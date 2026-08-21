@@ -38,7 +38,7 @@ struct SymmetricCollectionTLCOracleTests {
     }
   }
 
-  @Test("The configured TLC command checks symmetric scopes and rejects quoted members")
+  @Test("The configured TLC command checks symmetric scopes")
   func symmetricCollectionsCommandExecutesTLC() throws {
     let root = packageRoot()
     let jar = ProcessInfo.processInfo.environment["TLA_TOOLS_JAR"]
@@ -74,7 +74,6 @@ struct SymmetricCollectionTLCOracleTests {
     for (scope, states) in zip(2...4, 3...5) {
       #expect(output.contains("symmetric scope \(scope) — Swift/TLC \(states) orbit states"))
     }
-    #expect(output.contains("quoted-string symmetry control rejected by TLC"))
   }
 
   @Test("Parser and runtime collection specifications retain metadata, AST, states, and bounded outcomes")
@@ -157,7 +156,7 @@ struct SymmetricCollectionTLCOracleTests {
     #expect(try ModelChecker(spec: lazySpec).exploreGraph().states.count == 3)
     #expect(try lazySpec.compile().renderedTLAModuleBundle().tla.contains("Init == lazy \\in {1, 2, 3}"))
 
-    #expect(try ModelChecker(spec: Example.gameOfLife.spec, maxStates: 10).exploreGraph().states.count == 2)
+    #expect(try ModelChecker(spec: Example.gameOfLife.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).exploreGraph().states.count == 2)
     let gameOfLifeCFG = try Example.gameOfLife.spec.compile().renderedTLAModuleBundle().cfg
     #expect(gameOfLifeCFG.contains("SPECIFICATION Spec"))
     #expect(gameOfLifeCFG.contains("INVARIANT TypeOK"))

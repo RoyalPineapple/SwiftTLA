@@ -78,7 +78,7 @@ struct SymmetricCollectionReportTests {
       }
     }
 
-    let result = try ModelChecker(spec: spec, maxStates: 1).check()
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).check()
     assertBounded(result) { if case .depthExceeded = $0 { true } else { false } }
   }
 

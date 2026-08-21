@@ -37,7 +37,7 @@ private func value(
   @Test func constantsAndAssume() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
-      Extends("Naturals")
+      Extends(.naturals)
       Constant("N", 10)
       Assume(StateExpr.greaterOrEqual(.variable("N"), .value(.int(1))))
       Variable(x, 0)
@@ -98,18 +98,18 @@ private func value(
   @Test func definitionsOutput() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
-      Definition("Min(m,n) == IF m < n THEN m ELSE n")
+      FormalDefinition("Min", parameters: [.value("m"), .value("n")], body: .ifThenElse(.lessThan(.variable("m"), .variable("n")), .variable("m"), .variable("n")))
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("Min(m,n) =="))
+    #expect(tla.contains("Min(m, n) =="))
   }
 
   @Test func extendsNaturals() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
-      Extends("Naturals")
+      Extends(.naturals)
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
@@ -131,8 +131,8 @@ private func value(
       }
       Invariant("HCini") { hr >= 1 && hr <= 12 }
     }
-    #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 12)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    #expect(try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 12)
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -157,8 +157,8 @@ private func value(
           || (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
       }
     }
-    #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 16)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    #expect(try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 16)
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -173,21 +173,21 @@ private func value(
       Action("Deallocate") { a.becomes(a + 1).when(b > 0) && b.becomes(b - 1) }
       Invariant("ResourceCount") { a + b == 3 }
     }
-    #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 4)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    #expect(try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 4)
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
   @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
   func coffeeCanMax5() throws {
-    let count = try ModelChecker(spec: Example.coffeeCanMax5.spec, maxStates: 500)
+    let count = try ModelChecker(spec: Example.coffeeCanMax5.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
       .exploreGraph().states.count
     #expect(count == 20)
   }
 
   @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
   func movingCatEven() throws {
-    let count = try ModelChecker(spec: Example.catEvenBoxes.spec, maxStates: 500)
+    let count = try ModelChecker(spec: Example.catEvenBoxes.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
       .exploreGraph().states.count
     #expect(count == 48)
   }
@@ -200,7 +200,7 @@ private func value(
       Action("once") { x.becomes(1).when(x == 0) }
       DeadlockCheck()
     }
-    let r = try ModelChecker(spec: spec, maxStates: 100).check()
+    let r = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     if case .deadlocked(let state) = r {
       let token = try #require(TLAStateProjection.Token(validating: "x"))
       #expect(state.value(for: token) == .int(1))
@@ -228,9 +228,9 @@ private func value(
             || cnt != 0 && cand != i && cnt.becomes(cnt - 1))
       }
     }
-    let count = try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count
+    let count = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count
     #expect(count >= 1)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -433,7 +433,7 @@ private func value(
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 4) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 5)  // 0,1,2,3,4
     let values = try Set(graph.states.values.compactMap { try value("x", in: $0) })
     #expect(values == Set([.int(0), .int(1), .int(2), .int(3), .int(4)]))
@@ -449,7 +449,7 @@ private func value(
       Action("incA") { a.becomes(a + 1).when(a < 3) }
       Action("incB") { b.becomes(b + 1).when(b < 3) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     for (_, ts) in graph.transitions {
       for t in ts {
         #expect(graph.states[t.target] != nil)
@@ -464,7 +464,7 @@ private func value(
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1) }
     }
-    let g = try ModelChecker(spec: spec, maxStates: 5).exploreGraph()
+    let g = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 5)).exploreGraph()
     // maxStates limits processed, last state may discover one extra
     #expect(g.states.count <= 5 + 1)
   }
@@ -477,7 +477,7 @@ private func value(
       Action("inc") { x.becomes(x + 1).when(x < 5) }
       Invariant("nonNeg") { x >= 0 }
     }
-    if case .ok(let c) = try ModelChecker(spec: spec, maxStates: 100).check() {
+    if case .ok(let c) = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check() {
       #expect(c == 6)
     } else {
       #expect(Bool(false))
@@ -509,7 +509,7 @@ private func value(
       Action("a") { x.becomes(2).when(x == 1) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     var dead = false
     if case .deadlocked = result { dead = true } else { dead = false }
     #expect(dead)
@@ -523,7 +523,7 @@ private func value(
       Action("a") { x.becomes(x + 1).when(x < 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     var val: TLAValue = .int(-1)
     if case .deadlocked(let s) = result { val = s["x"] ?? .int(-1) }
     #expect(val == .int(2))
@@ -537,7 +537,7 @@ private func value(
       Action("a") { x.becomes((x + 1) % 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     var ok = false
     if case .ok = result { ok = true }
     #expect(ok)
@@ -550,7 +550,7 @@ private func value(
       Variable(x, 0)
       Action("a") { x.becomes(x + 1) }
     }
-    let g = try ModelChecker(spec: spec, maxStates: 1).exploreGraph()
+    let g = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).exploreGraph()
     #expect(g.states.count <= 2)
   }
 }
@@ -700,7 +700,7 @@ private func value(
           )
       }
     }
-    if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 50).check() {
+    if case .ok(let count) = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50)).check() {
       #expect(count >= 2)
     } else {
       #expect(Bool(false))

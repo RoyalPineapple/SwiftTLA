@@ -3,36 +3,24 @@ import Testing
 
 @Suite("byzpaxos Consensus formal module")
 struct ByzPaxosConsensusModuleTests {
-  @Test("default instance resolves VoteProof's Value and chosen substitutions")
-  func defaultInstanceRetainsRefinementParameters() throws {
-    let consumer = TLASpec("VoteProofConsumer") {
-      Parameter("Value")
-      Definition("chosen == {}")
-      Definition("Mention == \"C!Spec\"")
-      Instance("C", of: ByzPaxosConsensus.module)
-      Definition("Refines == C!Spec", named: "Refines", dependsOn: ["C"])
-    }
+  @Test("typed declarations render the abstract consensus transition system")
+  func typedAbstractConsensusModel() throws {
+    let module = try ByzPaxosConsensus.module.compile().renderedTLAModuleBundle().tla
 
-    let consumerModule = try consumer.compile().renderedTLAModuleBundle().tla
-    #expect(consumerModule.contains("C == INSTANCE Consensus"))
-    let chosenRange = try #require(consumerModule.range(of: "chosen == {}"))
-    let mentionRange = try #require(consumerModule.range(of: "Mention == \"C!Spec\""))
-    let instanceRange = try #require(consumerModule.range(of: "C == INSTANCE Consensus"))
-    let refinesRange = try #require(consumerModule.range(of: "Refines == C!Spec"))
-    #expect(chosenRange.lowerBound < instanceRange.lowerBound)
-    #expect(mentionRange.lowerBound < instanceRange.lowerBound)
-    #expect(instanceRange.lowerBound < refinesRange.lowerBound)
-    #expect(try consumer.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Consensus"])
-    #expect(try ByzPaxosConsensus.module.compile().renderedTLAModuleBundle().tla.contains("CONSTANTS Value"))
-    #expect(try ByzPaxosConsensus.module.compile().renderedTLAModuleBundle().tla.contains("VARIABLES chosen"))
-    #expect(try ByzPaxosConsensus.module.compile().renderedTLAModuleBundle().tla.contains("vars == <<chosen>>"))
-    #expect(try ByzPaxosConsensus.module.compile().renderedTLAModuleBundle().tla.contains("LiveSpecEquals == LiveSpec"))
+    #expect(ByzPaxosConsensus.module.formalOperatorDefinitions.isEmpty)
+    #expect(module.contains("CONSTANTS Value"))
+    #expect(module.contains("VARIABLES chosen"))
+    #expect(module.contains("Init == chosen = {}"))
+    #expect(module.contains("Next =="))
+    #expect(module.contains("chosen' = {"))
+    #expect(module.contains("Spec =="))
+    #expect(module.contains("Success == <>"))
   }
 
   @Test("direct module dependencies must name a local declaration")
   func rejectsUnknownDirectModuleDependency() {
     let consumer = TLASpec("UnknownDependency") {
-      Definition("Refines == Missing!Spec", named: "Refines", dependsOn: ["Missing"])
+      FormalDefinition("Refines", parameters: [], body: true, dependsOn: ["Missing"])
     }
 
     #expect(throws: CompilationDiagnostic.self) {
@@ -44,7 +32,12 @@ struct ByzPaxosConsensusModuleTests {
   func rendersFormalOperatorDependencyBeforeItsUse() throws {
     let consumer = TLASpec("FormalDependency") {
       FormalDefinition("SafeAt", taking: Int.self) { _ in true }
-      Definition("TypeOK == SafeAt(1)", named: "TypeOK", dependsOn: ["SafeAt"])
+      FormalDefinition(
+        "TypeOK",
+        parameters: [],
+        body: FormalCall(as: Bool.self, "SafeAt", 1),
+        dependsOn: ["SafeAt"]
+      )
     }
 
     let source = try consumer.compile().renderedTLAModuleBundle().tla
@@ -56,8 +49,8 @@ struct ByzPaxosConsensusModuleTests {
   @Test("direct module declaration cycles fail before rendering")
   func rejectsCyclicDirectModuleDependencies() {
     let consumer = TLASpec("CyclicDependencies") {
-      Definition("First == Second", named: "First", dependsOn: ["Second"])
-      Definition("Second == First", named: "Second", dependsOn: ["First"])
+      FormalDefinition("First", parameters: [], body: true, dependsOn: ["Second"])
+      FormalDefinition("Second", parameters: [], body: true, dependsOn: ["First"])
     }
 
     #expect(throws: CompilationDiagnostic.self) {

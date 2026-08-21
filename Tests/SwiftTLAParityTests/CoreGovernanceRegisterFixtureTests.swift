@@ -108,7 +108,7 @@ struct CoreGovernanceRegisterFixtureTests {
         latestComparison: record.latestComparison)
     })
 
-    #expect(throws: CoreGovernanceError.invalidField(
+    #expect(throws: ConformanceGovernanceError.invalidField(
       record: alteredRecord.id, field: "TLC reference pin")) {
       try manifest.validate(ledger: alteredLedger)
     }

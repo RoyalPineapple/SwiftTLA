@@ -1,9 +1,9 @@
 import Foundation
 
-/// A generated, tool-facing description of a machine.
+/// A generated description of a machine for tools.
 ///
-/// `MachineSchema` is emitted from the same macro plan as a machine's typed
-/// `State` and `ActionLabel`; it is not runtime reflection or a second model.
+/// The macro emits `MachineSchema` from `MachineSurfacePlan` with the typed
+/// `State` and `ActionLabel` declarations.
 public struct MachineSchema: Sendable, Equatable, Codable {
     public struct Display: Sendable, Equatable, Codable {
         public let name: String
@@ -68,25 +68,15 @@ public struct MachineSchema: Sendable, Equatable, Codable {
         }
     }
 
-    /// Increment only for incompatible changes to this schema wire format.
-    public static let formatVersion = 1
-
-    public let formatVersion: Int
-    /// Identifies the exact generated schema for reconnect and replay checks.
-    public let identifier: String
     public let model: Display
     public let state: [Field]
     public let actions: [Action]
 
     public init(
-        formatVersion: Int = MachineSchema.formatVersion,
-        identifier: String,
         model: Display,
         state: [Field],
         actions: [Action]
     ) {
-        self.formatVersion = formatVersion
-        self.identifier = identifier
         self.model = model
         self.state = state
         self.actions = actions

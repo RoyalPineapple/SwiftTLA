@@ -13,6 +13,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
         case two = "rm2"
         case three = "rm3"
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.two-phase-with-backup.resource-manager"
@@ -24,6 +25,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
     public enum TransactionManager: String, CaseIterable, FiniteDomainKey {
         case primary = "tm"
 
+        public static var defaultValue: Self { .primary }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.two-phase-with-backup.transaction-manager"
@@ -35,6 +37,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
     public enum BackupTransactionManager: String, CaseIterable, FiniteDomainKey {
         case backup = "btm"
 
+        public static var defaultValue: Self { .backup }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.two-phase-with-backup.backup-transaction-manager"
@@ -49,6 +52,8 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
         case committed
         case aborted
         case failed
+
+        public static var defaultValue: Self { .working }
     }
 
     public enum TransactionManagerState: String, TLAValueType {
@@ -56,9 +61,11 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
         case commit
         case abort
         case hidden
+
+        public static var defaultValue: Self { .initial }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case resourceManager = "RS"
         case transactionStart = "TS"
         case transactionCommit = "TC"
@@ -72,14 +79,14 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("TwoPhaseWithBackupManager") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("TransactionCommit") {
-                let resourceManagerState = SharedVar(initial: Function<ResourceManager, ResourceManagerState>.literal(
+                let resourceManagerState = SharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
                     (.one, .working),
                     (.two, .working),
                     (.three, .working)
                 ))
-                let transactionManagerState = SharedVar(initial: TransactionManagerState.initial)
+                let transactionManagerState = SharedVar("transactionManagerState", initial: TransactionManagerState.initial)
 
                 let prepare = Macro { (manager: MacroParameter<ResourceManager>) in
                     Await(resourceManagerState[manager] == .working)
@@ -238,7 +245,7 @@ extension Example {
         upstreamModule: "specifications/transaction_commit/2PCwithBTM.tla",
         upstreamCfg: "specifications/transaction_commit/2PCwithBTM.cfg",
         expectedDistinct: 1_245,
-        verificationStateLimit: 200_000,
+        maximumStateLimit: 200_000,
         spec: TwoPhaseWithBackupManagerModel.spec,
         notes: "Published PlusCal two-phase commit with a backup transaction manager. TLC = 1,245."
     )

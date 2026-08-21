@@ -11,7 +11,9 @@ struct DiningPhilosophersCorpusStateGraphTests {
         let entry = Example.diningPhilosophersNP5
         let graph = try ModelChecker(
             spec: entry.spec,
-            maxStates: entry.verificationStateLimit
+            configuration: try FiniteExplorationConfiguration(
+                maximumStateLimit: entry.maximumStateLimit
+            )
         ).exploreGraph()
 
         #expect(graph.states.count == entry.expectedDistinct)

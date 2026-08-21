@@ -14,7 +14,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("complete current exact temporal evidence admits only declared bounds")
   func admitsCurrentExactTemporalEvidence() throws {
     let fixture = try Fixture()
-    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input())
+    let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input())
 
     #expect(report.finalExitClass == .success)
     #expect(report.entries.map(\.decision) == [.admitted])
@@ -39,7 +39,7 @@ struct TemporalSymmetrySupportGateTests {
             reason: .manifestDigestMismatch)
     ]
     for failure in failures {
-      let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
+      let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input(
         gateRunID: failure.gateRunID,
         evidence: failure.evidence.map { [$0] } ?? [],
         manifestSHA256: failure.manifest,
@@ -52,7 +52,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("a violated property without attributable lassos is unavailable")
   func missingTemporalWitnessIsUnavailable() throws {
     let fixture = try Fixture()
-    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
+    let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input(
       evidence: [try fixture.evidence(comparison: try fixture.comparison(violatedWithoutLasso: true))]))
 
     #expect(report.finalExitClass == .unavailable)
@@ -62,7 +62,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("a current difference without a matching permanent fingerprint is unexplained")
   func unledgeredDifferenceBlocksTheClaim() throws {
     let fixture = try Fixture(expectedOutcome: .difference)
-    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
+    let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input(
       evidence: [try fixture.evidence(comparison: try fixture.comparison(difference: true), fingerprint: "new-difference")]))
 
     #expect(report.finalExitClass == .blocked)
@@ -74,7 +74,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("linked divergences must be resolved with exact current evidence")
   func unresolvedLinkedDivergenceBlocksTheClaim() throws {
     let fixture = try Fixture(includeOpenDivergence: true)
-    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input())
+    let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input())
 
     #expect(report.finalExitClass == .blocked)
     #expect(report.entries[0].reasonCodes.contains(.unresolvedDivergence))
@@ -83,7 +83,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("one unexplained case in a two-case entry is counted once and blocks admission")
   func twoCasesOneEntryCountsUnexplainedDifferenceOnce() throws {
     let fixture = try Fixture(caseIDs: ["first", "second"], supportCases: [["first", "second"]])
-    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
+    let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
       try fixture.evidence(caseID: "first"),
       try fixture.evidence(caseID: "second", comparison: try fixture.comparison(caseID: "second", difference: true), fingerprint: "new-difference")
     ]))
@@ -98,7 +98,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("one unexplained mandatory case is counted once even when entries share it")
   func sharedUnexplainedCaseIsCountedOnce() throws {
     let fixture = try Fixture(caseIDs: ["shared"], supportCases: [["shared"], ["shared"]])
-    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
+    let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
       try fixture.evidence(caseID: "shared", comparison: try fixture.comparison(caseID: "shared", difference: true), fingerprint: "new-difference")
     ]))
 
@@ -110,7 +110,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("an unledgered difference outside a requested entry blocks the whole requested surface")
   func unrelatedUnexplainedCaseBlocksAdmission() throws {
     let fixture = try Fixture(caseIDs: ["requested", "outside"], supportCases: [["requested"]])
-    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
+    let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
       try fixture.evidence(caseID: "requested"),
       try fixture.evidence(caseID: "outside", comparison: try fixture.comparison(caseID: "outside", difference: true), fingerprint: "new-difference")
     ]))
@@ -139,7 +139,7 @@ struct TemporalSymmetrySupportGateTests {
       (foreign, .foreignRun),
       (digestMismatch, .manifestDigestMismatch)
     ] {
-      let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
+      let report = try TemporalSymmetrySupportGate().evaluate(try fixture.input(
         coreAdmission: core, coreAdmissionContext: context))
       #expect(report.finalExitClass == .unavailable)
       #expect(report.entries[0].reasonCodes.contains(reason))

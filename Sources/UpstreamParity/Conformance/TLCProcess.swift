@@ -3,23 +3,37 @@ import Foundation
 import os
 import SwiftTLA
 
-public enum TLCTraceMode: Equatable, Sendable {
+package enum TLCTraceMode: Equatable, Sendable {
   case none
   case dumpJSON
   case loadJSON
 }
 
-public enum TLCReplayPolicy: Equatable, Sendable {
+package enum TLCReplayPolicy: Equatable, Sendable {
   case none
   case required
 }
 
-public struct TLCProcessExecutionFailure: Equatable, Sendable {
-  public let message: String
-  public let partialStdout: String?
-  public let partialStderr: String?
+enum TLCInvocationPhase: String, Hashable {
+  case primary
+  case trace
+  case replay
 
-  public init(_ error: Error) {
+  var stdoutLog: String {
+    self == .primary ? "tlc.stdout.log" : "tlc.\(rawValue).stdout.log"
+  }
+
+  var stderrLog: String {
+    self == .primary ? "tlc.stderr.log" : "tlc.\(rawValue).stderr.log"
+  }
+}
+
+package struct TLCProcessExecutionFailure: Equatable, Sendable {
+  package let message: String
+  package let partialStdout: String?
+  package let partialStderr: String?
+
+  package init(_ error: Error) {
     if case TLCProcessError.timedOut(let stdout, let stderr) = error {
       message = String(describing: error)
       partialStdout = stdout
@@ -36,7 +50,7 @@ public struct TLCProcessExecutionFailure: Equatable, Sendable {
 ///
 /// TLA+ reports this only after TLC starts. SwiftTLA validates it before launch
 /// so a user sees the importing source line and the missing file directly.
-public enum TLCModuleBundleError: Error, Equatable, Sendable {
+package enum TLCModuleBundleError: Error, Equatable, Sendable {
   case unreadableModule(path: String, reason: String)
   case missingImportedModule(
     module: String,
@@ -46,7 +60,7 @@ public enum TLCModuleBundleError: Error, Equatable, Sendable {
   )
 }
 
-public indirect enum TLCProcessError: Error, Equatable, Sendable {
+package indirect enum TLCProcessError: Error, Equatable, Sendable {
   case timedOut(partialStdout: String, partialStderr: String)
   case failedToStart(String)
   case invalidModuleBundle(TLCModuleBundleError)
@@ -56,25 +70,25 @@ public indirect enum TLCProcessError: Error, Equatable, Sendable {
   case traceCaptureExecutionFailed(completed: TLCProcessRun, error: TLCProcessExecutionFailure)
 }
 
-public struct TLCProcessRequest: Equatable, Sendable {
-  public let javaExecutable: URL
-  public let jar: URL
-  public let bridgeClasses: URL
+package struct TLCProcessRequest: Equatable, Sendable {
+  package let javaExecutable: URL
+  package let jar: URL
+  package let bridgeClasses: URL
   /// The only TLA+ sources that this TLC invocation may receive.
-  public let bundle: TLAModuleBundle
-  public let graphEvents: URL
-  public let traceOutput: URL
-  public let replayInput: URL
-  public let workingDirectory: URL
-  public let arguments: [String]
-  public let expectedCase: CoreConformanceCase
-  public let runID: UUID
-  public let timeout: TimeInterval
-  public let traceMode: TLCTraceMode
-  public let referencePin: TLCReferencePin?
-  public let referenceArtifacts: TLCReferenceArtifacts?
+  package let bundle: TLAModuleBundle
+  package let graphEvents: URL
+  package let traceOutput: URL
+  package let replayInput: URL
+  package let workingDirectory: URL
+  package let arguments: [String]
+  package let expectedCase: CoreConformanceCase
+  package let runID: UUID
+  package let timeout: TimeInterval
+  package let traceMode: TLCTraceMode
+  package let referencePin: TLCReferencePin?
+  package let referenceArtifacts: TLCReferenceArtifacts?
 
-  public init(
+  package init(
     javaExecutable: URL,
     jar: URL,
     bridgeClasses: URL,
@@ -108,13 +122,13 @@ public struct TLCProcessRequest: Equatable, Sendable {
     self.referenceArtifacts = referenceArtifacts
   }
 
-  public var caseID: String { expectedCase.id }
+  package var caseID: String { expectedCase.id }
 
-  public var effectiveEnvironment: [String: String] { expectedCase.environment }
-  public var moduleFileName: String { "\(bundle.root.name).tla" }
-  public var configurationFileName: String { "\(bundle.root.name).cfg" }
+  package var effectiveEnvironment: [String: String] { expectedCase.environment }
+  package var moduleFileName: String { "\(bundle.root.name).tla" }
+  package var configurationFileName: String { "\(bundle.root.name).cfg" }
 
-  public func commandArguments(
+  package func commandArguments(
     module: URL,
     configuration: URL,
     traceMode: TLCTraceMode? = nil
@@ -130,20 +144,20 @@ public struct TLCProcessRequest: Equatable, Sendable {
     ] + traceArguments(mode) + arguments + ["-config", configuration.path, module.path]
   }
 
-  public func validateLaunchBinding(module: URL, configuration: URL) throws {
+  package func validateLaunchBinding(module: URL, configuration: URL) throws {
     try expectedCase.validateLaunch(
       module: module, configuration: configuration, arguments: arguments, caseID: caseID
     )
   }
 
-  /// Checks post-render bundle integrity before TLC launch.
-  ///
-  /// This protects the external boundary from incomplete staged files. It does
-  /// not resolve imports or provide compiler-linking diagnostics.
-  public func validateRenderedBundleIntegrity() throws {
+  /// Validates the declared module closure before TLC launch.
+  package func validateDeclaredBundle() throws {
     do {
-      try bundle.validateRenderedBundleIntegrity(standardModules: referencePin?.availableStandardModules)
+      try bundle.validateDeclaredClosure()
     } catch {
+      if let error = error as? TLCModuleBundleError {
+        throw TLCProcessError.invalidModuleBundle(error)
+      }
       if case TLAModuleBundleIntegrityError.missingModule(let dependency, let importedBy, let line) = error {
         throw TLCProcessError.invalidModuleBundle(.missingImportedModule(
           module: dependency,
@@ -160,13 +174,13 @@ public struct TLCProcessRequest: Equatable, Sendable {
 
   /// Writes exactly the declared bundle to a fresh directory for one TLC invocation.
   /// Nothing else in the source checkout can become an accidental TLC import.
-  public func stageDeclaredBundle() throws -> (module: URL, configuration: URL) {
+  package func stageDeclaredBundle() throws -> (module: URL, configuration: URL) {
     guard let cfg = bundle.root.cfg else {
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
         path: bundle.root.name + ".cfg", reason: "the declared root has no TLC configuration"
       ))
     }
-    try validateRenderedBundleIntegrity()
+    try validateDeclaredBundle()
     let input = workingDirectory.appendingPathComponent(
       "input-\(runID.uuidString.lowercased())-\(traceMode)", isDirectory: true)
     guard !FileManager.default.fileExists(atPath: input.path) else {
@@ -196,7 +210,7 @@ public struct TLCProcessRequest: Equatable, Sendable {
 
   /// Reads an explicitly declared root, configuration, and import list.
   /// This is the only URL-to-bundle boundary; it never enumerates a directory.
-  public static func declaredBundle(
+  package static func declaredBundle(
     root: URL,
     configuration: URL,
     imports: [URL] = []
@@ -213,7 +227,7 @@ public struct TLCProcessRequest: Equatable, Sendable {
           tla: try String(contentsOf: url, encoding: .utf8)
         )
       }
-      return TLAModuleBundle.untrusted(root: rootFile, imports: importedFiles)
+      return TLAModuleBundle.external(root: rootFile, imports: importedFiles)
     } catch {
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
         path: root.path, reason: sanitized(error.localizedDescription)
@@ -221,7 +235,7 @@ public struct TLCProcessRequest: Equatable, Sendable {
     }
   }
 
-  public func validateReferenceBinding(pin: TLCReferencePin, artifacts: TLCReferenceArtifacts)
+  package func validateReferenceBinding(pin: TLCReferencePin, artifacts: TLCReferenceArtifacts)
     throws {
     guard expectedCase.pin == pin else {
       throw CoreConformanceCaseError.pinMismatch("declared case reference pin")
@@ -268,63 +282,65 @@ public struct TLCProcessRequest: Equatable, Sendable {
       == rhs.resolvingSymlinksInPath().standardizedFileURL
   }
 
-  public static let fixture = Self(
-    javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
-    jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
-    bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
-    bundle: .untrusted(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
-    graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
-    traceOutput: URL(fileURLWithPath: "/tmp/counterexample.json"),
-    replayInput: URL(fileURLWithPath: "/tmp/counterexample.json"),
-    workingDirectory: URL(fileURLWithPath: "/tmp"),
-    arguments: ["-workers", "1", "-fp", "1"],
-    expectedCase: try! CoreConformanceCase(
-      id: "fixture", moduleSHA256: String(repeating: "c", count: 64),
-      cfgSHA256: String(repeating: "d", count: 64),
+  package static func fixture() throws -> Self {
+    try Self(
+      javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
+      jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
+      bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
+      bundle: .external(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
+      graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
+      traceOutput: URL(fileURLWithPath: "/tmp/counterexample.json"),
+      replayInput: URL(fileURLWithPath: "/tmp/counterexample.json"),
+      workingDirectory: URL(fileURLWithPath: "/tmp"),
       arguments: ["-workers", "1", "-fp", "1"],
-      argumentsSHA256: CoreConformanceCase.argumentsDigest(["-workers", "1", "-fp", "1"]),
-      workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
-      architecture: "arm64", environment: [:], pin: .fixture
-    ),
-    runID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
-  )
+      expectedCase: CoreConformanceCase(
+        id: "fixture", moduleSHA256: String(repeating: "c", count: 64),
+        cfgSHA256: String(repeating: "d", count: 64),
+        arguments: ["-workers", "1", "-fp", "1"],
+        argumentsSHA256: try CoreConformanceCase.argumentsDigest(["-workers", "1", "-fp", "1"]),
+        workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
+        architecture: "arm64", environment: [:], pin: .fixture
+      ),
+      runID: UUID(uuid: (0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 1))
+    )
+  }
 }
 
-public struct TLCProcessResult: Equatable, Sendable {
-  public let status: Int32
-  public let stdout: String
-  public let stderr: String
+package struct TLCProcessResult: Equatable, Sendable {
+  package let status: Int32
+  package let stdout: String
+  package let stderr: String
 
-  public init(status: Int32, stdout: String, stderr: String) {
+  package init(status: Int32, stdout: String, stderr: String) {
     self.status = status
     self.stdout = stdout
     self.stderr = stderr
   }
 
-  public var isViolation: Bool {
+  package var isViolation: Bool {
     let output = stdout + "\n" + stderr
     return output.localizedCaseInsensitiveContains("error:")
       || output.localizedCaseInsensitiveContains("violation")
   }
 
-  public var reportedExhaustiveCompletion: Bool {
+  package var reportedExhaustiveCompletion: Bool {
     status == 0
       && (stdout + "\n" + stderr).contains("Model checking completed. No error has been found.")
   }
 }
 
-public protocol TLCProcessExecuting: Sendable {
+package protocol TLCProcessExecuting: Sendable {
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult
 }
 
-public struct SystemTLCProcessExecutor: TLCProcessExecuting {
+package struct SystemTLCProcessExecutor: TLCProcessExecuting {
   private let validatesReferences: Bool
 
-  public init(validatesReferences: Bool = true) {
+  package init(validatesReferences: Bool = true) {
     self.validatesReferences = validatesReferences
   }
 
-  public func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
+  package func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     let input = try request.stageDeclaredBundle()
     try request.validateLaunchBinding(module: input.module, configuration: input.configuration)
     if validatesReferences {
@@ -350,20 +366,26 @@ public struct SystemTLCProcessExecutor: TLCProcessExecuting {
   }
 }
 
-public struct TLCProcessRun: Equatable, Sendable {
-  public let primary: TLCProcessResult
-  public let trace: TLCProcessResult?
-  public let replay: TLCProcessResult?
+package struct TLCProcessRun: Equatable, Sendable {
+  package let primary: TLCProcessResult
+  package let trace: TLCProcessResult?
+  package let replay: TLCProcessResult?
 }
 
-public struct TLCProcessAdapter: Sendable {
+package struct TLCProcessCapture: Sendable {
+  package let run: TLCProcessRun
+  package let graphEvents: Data
+  package let graph: CanonicalRun
+}
+
+package struct TLCProcessAdapter: Sendable {
   private let executor: any TLCProcessExecuting
 
-  public init(executor: any TLCProcessExecuting = SystemTLCProcessExecutor()) {
+  package init(executor: any TLCProcessExecuting = SystemTLCProcessExecutor()) {
     self.executor = executor
   }
 
-  public func run(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
+  package func run(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
     -> TLCProcessRun {
     let primary = try executor.execute(request)
     guard primary.isViolation else {
@@ -402,6 +424,86 @@ public struct TLCProcessAdapter: Sendable {
     return TLCProcessRun(primary: primary, trace: trace, replay: replayResult)
   }
 
+  package func capture(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
+    -> TLCProcessCapture {
+    let run = try run(request, replay: replay)
+    let graphEvents = try Data(contentsOf: request.graphEvents)
+    let parser = TLCGraphEventParser(expectedCase: request.expectedCase)
+    let stream = try parser.parse(graphEvents)
+    guard stream.runID == request.runID else {
+      throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
+    }
+    return TLCProcessCapture(
+      run: run,
+      graphEvents: graphEvents,
+      graph: try parser.canonicalRun(stream, result: run.primary)
+    )
+  }
+
+  package func retainRawOutput(
+    _ run: TLCProcessRun,
+    request: TLCProcessRequest,
+    in directory: URL
+  ) throws {
+    let logs = try ConformanceEvidence.createDirectory(
+      directory.appendingPathComponent("logs"), beneath: directory)
+    try retain(run.primary, phase: .primary, in: logs)
+    if let trace = run.trace { try retain(trace, phase: .trace, in: logs) }
+    if let replay = run.replay { try retain(replay, phase: .replay, in: logs) }
+    try retainRawArtifacts(from: request, in: directory)
+  }
+
+  package func retainRawOutput(
+    from error: Error,
+    request: TLCProcessRequest,
+    in directory: URL
+  ) throws {
+    let logs = try ConformanceEvidence.createDirectory(
+      directory.appendingPathComponent("logs"), beneath: directory)
+    switch error {
+    case TLCProcessError.traceCaptureFailed(let completed, let failed):
+      try retain(completed.primary, phase: .primary, in: logs)
+      try retain(failed, phase: .trace, in: logs)
+    case TLCProcessError.requiredReplayFailed(let completed, let failed):
+      try retain(completed.primary, phase: .primary, in: logs)
+      if let trace = completed.trace { try retain(trace, phase: .trace, in: logs) }
+      try retain(failed, phase: .replay, in: logs)
+    case TLCProcessError.traceCaptureExecutionFailed(let completed, let failure):
+      try retain(completed.primary, phase: .primary, in: logs)
+      try retain(failure, phase: .trace, in: logs)
+    case TLCProcessError.requiredReplayExecutionFailed(let completed, let failure):
+      try retain(completed.primary, phase: .primary, in: logs)
+      if let trace = completed.trace { try retain(trace, phase: .trace, in: logs) }
+      try retain(failure, phase: .replay, in: logs)
+    default:
+      try retain(TLCProcessExecutionFailure(error), phase: .primary, in: logs)
+    }
+    try retainRawArtifacts(from: request, in: directory)
+  }
+
+  package func retainRawArtifacts(from request: TLCProcessRequest, in directory: URL) throws {
+    let artifacts = [
+      (request.graphEvents, "graph-events.jsonl"),
+      (graphEvents(for: request.graphEvents, mode: .dumpJSON), "graph-events.trace.jsonl"),
+      (graphEvents(for: request.graphEvents, mode: .loadJSON), "graph-events.replay.jsonl"),
+      (request.traceOutput, "counterexample.json"),
+      (request.replayInput, "replay.json")
+    ]
+    var availability: [String: Bool] = [:]
+    for (source, name) in artifacts {
+      let destination = directory.appendingPathComponent(name)
+      let exists = FileManager.default.fileExists(atPath: source.path)
+      availability[name] = exists
+      if exists {
+        if FileManager.default.fileExists(atPath: destination.path) {
+          try FileManager.default.removeItem(at: destination)
+        }
+        try ConformanceEvidence.copy(source, to: destination)
+      }
+    }
+    try ConformanceEvidence.writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
+  }
+
   private func updating(_ request: TLCProcessRequest, traceMode: TLCTraceMode)
     -> TLCProcessRequest {
     TLCProcessRequest(
@@ -417,11 +519,40 @@ public struct TLCProcessAdapter: Sendable {
     )
   }
 
+  private func retain(_ result: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
+    try ConformanceEvidence.writeText(sanitized(result.stdout), to: directory.appendingPathComponent(phase.stdoutLog))
+    try ConformanceEvidence.writeText(sanitized(result.stderr), to: directory.appendingPathComponent(phase.stderrLog))
+  }
+
+  private func retain(
+    _ failure: TLCProcessExecutionFailure,
+    phase: TLCInvocationPhase,
+    in directory: URL
+  ) throws {
+    if let stdout = failure.partialStdout, let stderr = failure.partialStderr {
+      try ConformanceEvidence.writeText(sanitized(stdout), to: directory.appendingPathComponent(phase.stdoutLog))
+      try ConformanceEvidence.writeText(sanitized(stderr), to: directory.appendingPathComponent(phase.stderrLog))
+    } else {
+      try ConformanceEvidence.writeText(
+        sanitized(failure.message),
+        to: directory.appendingPathComponent("tlc.\(phase.rawValue).failure.log")
+      )
+    }
+  }
+
   private func graphEvents(for primary: URL, mode: TLCTraceMode) -> URL {
     guard mode != .none else { return primary }
     let suffix = mode == .dumpJSON ? "trace" : "replay"
     return primary.deletingPathExtension().appendingPathExtension("\(suffix).jsonl")
   }
+}
+
+func processJSON(_ result: TLCProcessResult) -> [String: Any] {
+  [
+    "status": result.status,
+    "isViolation": result.isViolation,
+    "reportedExhaustiveCompletion": result.reportedExhaustiveCompletion
+  ]
 }
 
 extension TLCProcessResult {
@@ -430,8 +561,8 @@ extension TLCProcessResult {
   }
 }
 
-public enum TLCReferenceInspector {
-  public static func inspect(
+package enum TLCReferenceInspector {
+  package static func inspect(
     artifacts: TLCReferenceArtifacts,
     javaExecutable: URL,
     directory: URL

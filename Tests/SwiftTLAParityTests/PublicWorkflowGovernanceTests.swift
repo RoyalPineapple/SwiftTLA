@@ -28,7 +28,8 @@ struct PublicWorkflowGovernanceTests {
   func unsafeEvidenceFailsClosed() throws {
     let fixture = Fixture()
     let record = try fixture.caseRecord()
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.invalidField(
+      record: "decode", field: "unknown field invented")) {
       _ = try PublicWorkflowAdmissionEntry(
         supportID: "annotation", decision: .admitted, reasonCodes: [], mandatoryCaseIDs: [record.id],
         divergenceIDs: [], evidence: [try fixture.evidence(caseID: record.id, gateRunID: fixture.gateRunID, status: .partial)],
@@ -40,7 +41,7 @@ struct PublicWorkflowGovernanceTests {
       platformEvidence: [try fixture.platform()])
     let foreignReport = try PublicWorkflowAdmission(
       gateRunID: fixture.gateRunID, entries: [foreignEntry], admittedBounds: ["annotation": record.finiteBounds])
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try foreignReport.validate(
         supportSurface: try PublicWorkflowSupportSurface(entries: [try fixture.support(caseID: record.id)]),
         cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
@@ -58,7 +59,7 @@ struct PublicWorkflowGovernanceTests {
     let record = try fixture.caseRecord()
     var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
     object["invented"] = true
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       _ = try JSONDecoder().decode(PublicWorkflowConformanceCase.self, from: JSONSerialization.data(withJSONObject: object))
     }
     let unavailable = try PublicWorkflowPlatformEvidence(
@@ -70,7 +71,7 @@ struct PublicWorkflowGovernanceTests {
         stdoutBinding: try fixture.binding(caseID: record.id, evidence: fixture.reference("stdout"), runID: fixture.platformRunID),
         stderrBinding: try fixture.binding(caseID: record.id, evidence: fixture.reference("stderr"), runID: fixture.platformRunID),
         execution: try fixture.candidateExecution())
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       _ = try PublicWorkflowAdmissionEntry(
         supportID: "annotation", decision: .admitted, reasonCodes: [], mandatoryCaseIDs: [record.id],
         divergenceIDs: [], evidence: [try fixture.evidence(caseID: record.id, gateRunID: fixture.gateRunID)],
@@ -90,24 +91,24 @@ struct PublicWorkflowGovernanceTests {
     let unsupported = try fixture.support(caseID: record.id, requestedStatus: .unsupported, reason: "not evaluated")
     let report = try PublicWorkflowAdmission(
       gateRunID: fixture.gateRunID, entries: [admitted], admittedBounds: ["annotation": record.finiteBounds])
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try report.validate(supportSurface: try PublicWorkflowSupportSurface(entries: [unsupported]),
                           cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     }
     let wrongCategory = try fixture.support(caseID: record.id, category: .parserBuilder)
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try PublicWorkflowSupportSurface(entries: [wrongCategory]).validate(
         cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     }
     let wrongBounds = try fixture.support(caseID: record.id, bounds: try CoreFiniteBounds(summary: "two", limits: ["states": 2]))
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try PublicWorkflowSupportSurface(entries: [wrongBounds]).validate(
         cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     }
     let unavailable = try PublicWorkflowAdmissionEntry(
       supportID: "annotation", decision: .unavailable, reasonCodes: [.foreignRun], mandatoryCaseIDs: [record.id], divergenceIDs: [])
     let unavailableReport = try PublicWorkflowAdmission(gateRunID: fixture.gateRunID, entries: [unavailable])
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try unavailableReport.validate(supportSurface: try PublicWorkflowSupportSurface(entries: [try fixture.support(caseID: record.id)]),
                                     cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     }
@@ -122,7 +123,7 @@ struct PublicWorkflowGovernanceTests {
       supportID: "annotation", decision: .admitted, reasonCodes: [], mandatoryCaseIDs: [record.id],
       divergenceIDs: [], evidence: [malformedEvidence], platformEvidence: [try fixture.platform(caseID: record.id)])
     let report = try PublicWorkflowAdmission(gateRunID: fixture.gateRunID, entries: [entry], admittedBounds: ["annotation": record.finiteBounds])
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try report.validate(supportSurface: try PublicWorkflowSupportSurface(entries: [try fixture.support(caseID: record.id)]),
                           cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     }
@@ -133,7 +134,7 @@ struct PublicWorkflowGovernanceTests {
     let ledgerReport = try PublicWorkflowAdmission(
       gateRunID: fixture.gateRunID, entries: [validEntry], admittedBounds: ["annotation": record.finiteBounds],
       unexplainedDivergenceCount: 0)
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try ledgerReport.validate(supportSurface: try PublicWorkflowSupportSurface(entries: [try fixture.support(caseID: record.id, requestedStatus: .requested)]),
                                 cases: try PublicWorkflowCases(cases: [record]), ledger: try fixture.openLedger(caseID: record.id))
     }
@@ -148,14 +149,14 @@ struct PublicWorkflowGovernanceTests {
     let evidence = try fixture.evidence(caseID: record.id, gateRunID: fixture.gateRunID)
     let nonmandatory = try fixture.platform(caseID: other.id, record: other)
     let nonmandatoryReport = try fixture.admittedReport(record: record, evidence: evidence, platform: nonmandatory)
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try nonmandatoryReport.validate(supportSurface: try PublicWorkflowSupportSurface(entries: [support]),
                                      cases: try PublicWorkflowCases(cases: [record, other]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     }
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       _ = try fixture.platform(caseID: record.id, bindingRunID: UUID())
     }
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       _ = try fixture.platform(caseID: record.id, stdoutBindingEvidence: fixture.reference("stderr"))
     }
     let localDiagnostic = try fixture.platform(caseID: record.id, ci: false)
@@ -175,7 +176,7 @@ struct PublicWorkflowGovernanceTests {
     try candidateReport.validate(supportSurface: try PublicWorkflowSupportSurface(entries: [support]),
                                  cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     let diagnosticReport = try fixture.admittedReport(record: record, evidence: localEvidence, platform: try fixture.platform(caseID: record.id, ci: false))
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       try diagnosticReport.validate(supportSurface: try PublicWorkflowSupportSurface(entries: [support]),
                                     cases: try PublicWorkflowCases(cases: [record]), ledger: try PublicWorkflowDivergenceLedger(records: []))
     }

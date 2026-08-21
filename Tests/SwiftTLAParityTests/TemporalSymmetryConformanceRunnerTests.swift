@@ -45,8 +45,8 @@ struct TemporalSymmetryConformanceRunnerTests {
       "temporal-strong-fairness-boundary": false
     ]
     for declaredCase in cases.cases where declaredCase.kind == .temporal {
-      let model = try #require(TemporalSymmetryModelCatalog.model(for: declaredCase))
-      let result = try ModelChecker(spec: model.spec, maxStates: model.maxStates).checkLiveness()
+      let model = try #require(try TemporalSymmetryModelCatalog.model(for: declaredCase))
+      let result = try ModelChecker(spec: model.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)).checkLiveness()
       let isSatisfied: Bool
       if case .ok = result.underlyingOutcome { isSatisfied = true } else { isSatisfied = false }
       #expect(isSatisfied == expected[declaredCase.id])
@@ -71,7 +71,7 @@ struct TemporalSymmetryConformanceRunnerTests {
       atPath: output.appendingPathComponent(records[0].caseID).appendingPathComponent("case-run.json").path))
 
     let outside = URL(fileURLWithPath: "/private/tmp/\(UUID().uuidString)/evidence", isDirectory: true)
-    #expect(throws: TemporalSymmetryConformanceRunnerError.sourceOutsideProject(outside.path)) {
+    #expect(throws: ConformanceGovernanceError.invalidField(record: outside.path, field: "path outside project root")) {
       try TemporalSymmetryConformanceRunner().run(
         TemporalSymmetryConformanceRunnerInput(
           cases: cases, gateRunID: UUID(), projectRoot: projectRoot, outputDirectory: outside))

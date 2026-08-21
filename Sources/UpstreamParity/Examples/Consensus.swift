@@ -14,6 +14,7 @@ public struct ConsensusModel: Sendable {
         case two = "v2"
         case three = "v3"
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.byzpaxos.consensus.value"
@@ -22,16 +23,16 @@ public struct ConsensusModel: Sendable {
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case choose = "lbl"
     }
 
     public static var spec: TLASpec {
         #spec("Consensus") {
-            Extends("FiniteSets")
-            Extends("Integers")
+            Extends(.finiteSets)
+            Extends(.integers)
             Algorithm("Consensus") {
-                let chosen = SharedVar(initial: SetExpr<Value>())
+                let chosen = SharedVar("chosen", initial: SetExpr<Value>())
 
                 let choose = Macro {
                     When(chosen.isEmpty)

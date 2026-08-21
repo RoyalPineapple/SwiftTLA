@@ -18,6 +18,10 @@ struct OperatorID: Hashable, Sendable {
     let ordinal: Int
 }
 
+struct ModuleInstanceID: Hashable, Sendable {
+    let ordinal: Int
+}
+
 struct FieldID: Hashable, Sendable {
     let ordinal: Int
 }
@@ -91,11 +95,11 @@ enum ControlOwner: Hashable, Sendable {
 
 public struct ControlLocationReference: Hashable, Sendable {
     let owner: ControlOwner?
-    public let sourceName: String
+    let sourceName: String
 
-    public static let done = Self("Done")
+    static let done = Self(CompilerControlSymbol.done.rawValue)
 
-    public init(_ sourceName: String) {
+    init(_ sourceName: String) {
         self.owner = nil
         self.sourceName = sourceName
     }
@@ -132,12 +136,18 @@ struct CompiledControlLocation: Hashable, Sendable {
     let renderedName: String
 }
 
+struct CompiledModuleInstanceLayout: Hashable, Sendable {
+    let id: ModuleInstanceID
+    let namespace: String
+}
+
 struct CompiledLayout: Hashable, Sendable {
     let variables: [CompiledVariableLayout]
     let actions: [CompiledActionLayout]
     let fields: [CompiledFieldLayout]
     let procedures: [CompiledProcedureLayout]
     let controlLocations: [CompiledControlLocation]
+    let moduleInstances: [CompiledModuleInstanceLayout]
     let declarations: [CompiledDeclaration]
 
     init(source spec: TLASpec) {
@@ -177,8 +187,11 @@ struct CompiledLayout: Hashable, Sendable {
         controlLocations = Self.controlLocations(
             in: spec.sourceAlgorithms,
             actions: spec.actions,
-            hasProgramCounter: spec.variables.contains { $0.name == "pc" }
+            hasProgramCounter: spec.variables.contains { $0.name == CompilerControlSymbol.programCounter.rawValue }
         )
+        moduleInstances = spec.moduleInstances.enumerated().map {
+            .init(id: .init(ordinal: $0.offset), namespace: $0.element.name)
+        }
         declarations = variables.map(\.declaration)
             + actions.map(\.declaration)
             + spec.invariants.map { .init(kind: .invariant, name: $0.name, sourceOffset: nil) }
@@ -193,12 +206,16 @@ struct CompiledLayout: Hashable, Sendable {
 
     func programCounterID() -> VariableID? {
         variables.first {
-            $0.declaration.origin == .compiler && $0.declaration.name == "pc"
+            $0.declaration.origin == .programCounter
         }?.id
     }
 
     func actionID(named name: String) -> ActionID? {
         actions.first { $0.declaration.name == name }?.id
+    }
+
+    func moduleInstanceID(named namespace: String) -> ModuleInstanceID? {
+        moduleInstances.first { $0.namespace == namespace }?.id
     }
 
     func fieldID(named name: String) -> FieldID? {
@@ -236,6 +253,7 @@ struct CompiledLayout: Hashable, Sendable {
             switch declaration.origin {
             case .source: origin = "source"
             case .compiler: origin = "compiler"
+            case .programCounter: origin = "programCounter"
             }
             return "\(ordinal):\(kind.utf8.count):\(kind)\(name.utf8.count):\(name)\(origin.utf8.count):\(origin)"
         }.joined(separator: "|")
@@ -249,7 +267,8 @@ struct CompiledLayout: Hashable, Sendable {
         let fieldEncoding = fields.map { field in
             "\(field.id.ordinal):\(field.renderedName.utf8.count):\(field.renderedName)"
         }.joined(separator: "|")
-        return "declarations[\(declarationEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]"
+        let instanceEncoding = moduleInstances.map { "\($0.id.ordinal):\($0.namespace)" }.joined(separator: "|")
+        return "declarations[\(declarationEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]instances[\(instanceEncoding)]"
     }
 
     private static func fields(in modules: [TLASpec]) -> [String] {
@@ -284,6 +303,8 @@ struct CompiledLayout: Hashable, Sendable {
 
         func visit(_ expression: StateExpr) {
             switch expression {
+            case .sourceIssue:
+                return
             case .value(let value):
                 visit(value)
             case .variable, .programCounter, .controlLocation, .enabledAction:
@@ -478,15 +499,15 @@ struct CompiledLayout: Hashable, Sendable {
                 labels.append(
                     .init(
                         id: .init(ordinal: labels.count),
-                        owner: .generated(algorithm: model.name, purpose: "Done"),
-                        sourceName: "Done",
-                        renderedName: "Done"
+                        owner: .generated(algorithm: model.name, purpose: CompilerControlSymbol.done.rawValue),
+                        sourceName: CompilerControlSymbol.done.rawValue,
+                        renderedName: CompilerControlSymbol.done.rawValue
                     )
                 )
             }
         }
         let knownActionNames = Set(labels.flatMap { [$0.sourceName, $0.renderedName] })
-        for action in actions where action.name != "Terminating" && knownActionNames.contains(action.name) == false {
+        for action in actions where action.name != CompilerControlSymbol.terminatingAction.rawValue && knownActionNames.contains(action.name) == false {
             labels.append(
                 .init(
                     id: .init(ordinal: labels.count),
@@ -496,13 +517,13 @@ struct CompiledLayout: Hashable, Sendable {
                 )
             )
         }
-        if hasProgramCounter, labels.contains(where: { $0.sourceName == "Done" }) == false {
+        if hasProgramCounter, labels.contains(where: { $0.sourceName == CompilerControlSymbol.done.rawValue }) == false {
             labels.append(
                 .init(
                     id: .init(ordinal: labels.count),
-                    owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: "Done"),
-                    sourceName: "Done",
-                    renderedName: "Done"
+                    owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: CompilerControlSymbol.done.rawValue),
+                    sourceName: CompilerControlSymbol.done.rawValue,
+                    renderedName: CompilerControlSymbol.done.rawValue
                 )
             )
         }
@@ -554,6 +575,7 @@ struct BindingValidator {
     private let layout: CompiledLayout
     private let closure: FormalModuleClosure
     private let constants: [ConstantDecl]
+    private let formalConstants: Set<String>
     private var operators: [String: OperatorID]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal = 0
@@ -565,6 +587,9 @@ struct BindingValidator {
         self.layout = layout
         self.closure = closure
         constants = spec.constants
+        formalConstants = Set(spec.formalParameters.compactMap { parameter in
+            parameter.kind == .constant ? parameter.name : nil
+        })
         let names = spec.formalOperatorDefinitions.map(\.name)
             + spec.recursiveFuncs.map(\.name)
             + closure.resolvedFormalOperatorDefinitions.map(\.name)
@@ -599,6 +624,9 @@ struct BindingValidator {
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
         for definition in spec.formalOperatorDefinitions {
+            if let issue = definition.sourceIssue {
+                throw issue.compilationDiagnostic(stage: .binding, path: "formalOperators.\(definition.name)")
+            }
             guard let id = operators[definition.name] else {
                 throw diagnostic(code: .unknownReference, path: "formalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
             }
@@ -644,6 +672,27 @@ struct BindingValidator {
         )
     }
 
+    mutating func validateRefinementMappings(_ refinements: [RefinementDecl]) throws {
+        for refinement in refinements {
+            for mapping in refinement.mappings {
+                try validateExpression(
+                    mapping.source,
+                    at: "refinements.\(refinement.name).mappings.\(mapping.target)",
+                    scope: [:]
+                )
+            }
+        }
+    }
+
+    func bindingTable() -> CompiledBindingTable {
+        CompiledBindingTable(
+            layout: layout,
+            operators: operators,
+            binders: binders,
+            references: references
+        )
+    }
+
     private mutating func validate(_ expression: TemporalExpr, at path: String) throws {
         switch expression {
         case .always(let predicate), .eventually(let predicate), .alwaysEventually(let predicate), .eventuallyAlways(let predicate):
@@ -665,6 +714,8 @@ struct BindingValidator {
 
     private mutating func validateExpression(_ expression: StateExpr, at path: String, scope: [String: BinderID]) throws {
         switch expression {
+        case .sourceIssue(let issue):
+            throw issue.compilationDiagnostic(stage: .validation, path: path)
         case .value:
             return
         case .programCounter:
@@ -807,6 +858,9 @@ struct BindingValidator {
             }
             references[path] = .operator(id)
         case .lambda(let lambda):
+            if let issue = lambda.sourceIssue {
+                throw issue.compilationDiagnostic(stage: .binding, path: path)
+            }
             let bodyScope = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
             try validateExpression(lambda.body, at: "\(path).body", scope: bodyScope)
         }
@@ -818,6 +872,11 @@ struct BindingValidator {
         at path: String,
         scope: [String: BinderID]
     ) throws {
+        for operation in operators {
+            if let issue = operation.sourceIssue {
+                throw issue.compilationDiagnostic(stage: .binding, path: "\(path).\(operation.name)")
+            }
+        }
         try duplicate(operators.map(\.name), at: "\(path).operators")
         let outerOperators = self.operators
         let localOperators = operators.map { operation in
@@ -884,6 +943,10 @@ struct BindingValidator {
         }
         if let value = constants.value(named: name) {
             references[path] = .constant(value)
+            return
+        }
+        if formalConstants.contains(name) {
+            references[path] = .constant(.constant(name))
             return
         }
         if let id = operators[name] {

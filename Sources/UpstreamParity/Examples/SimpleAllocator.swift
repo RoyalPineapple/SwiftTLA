@@ -30,7 +30,7 @@ public struct SimpleAllocatorModel: Sendable {
         )
 
         return #spec("SimpleAllocator") {
-            Extends("Integers, FiniteSets")
+            Extends(.integers, .finiteSets)
             let unsat = Var<TLAValue>("unsat")
             let alloc = Var<TLAValue>("alloc")
             Variable(unsat, emptyFun)

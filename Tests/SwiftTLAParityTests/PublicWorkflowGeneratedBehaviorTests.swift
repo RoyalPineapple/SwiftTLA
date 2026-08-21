@@ -99,7 +99,7 @@ struct PublicWorkflowGeneratedBehaviorTests {
     }
     defer { try? FileManager.default.removeItem(at: manifestURL) }
 
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       _ = try PublicWorkflowGeneratedBehaviorAdapter().run(
         manifestURL: manifestURL,
         projectRoot: fixture.repository,

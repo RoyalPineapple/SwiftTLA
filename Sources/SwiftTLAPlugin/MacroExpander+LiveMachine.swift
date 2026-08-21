@@ -5,10 +5,9 @@ extension MacroExpander {
     static func generateLiveMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
         let hasActions = model.machineSurface.actions.isEmpty == false
-        let actionType = hasActions ? "ActionLabel" : "Never"
+        let actionType = "ActionLabel"
 
-        let typedExecute: [String] = hasActions ? [
-            """
+        let typedExecute = """
                 public func execute(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
                     switch await _handle.execute(action, requestID: requestID) {
                     case .committed(let commit):
@@ -24,29 +23,21 @@ extension MacroExpander {
                     }
                 }
             """
-        ] : []
 
-        let outcomeType: [String] = hasActions ? [
-            """
+        let outcomeType = """
                 public enum Outcome: Sendable, Equatable {
                     case committed(TransitionResult)
                     case rejected(TLALiveActionRejection<ActionLabel>)
                     case failed(TLALiveActionFailure<ActionLabel>)
                 }
             """
-        ] : []
 
         let liveDriver = hasActions ? """
             private static func _liveDriver() throws -> TLALiveMachineTransitionDriver<ActionLabel> {
-                let executor = CompiledActionExecutor(
-                    compilation: try Self.compiledSpecification(),
-                    actionOrdinal: { Self._actionOrdinal(for: $0) },
-                    arguments: { Self._actionArguments(for: $0) },
-                    label: { Self._actionLabel(actionAt: $0, arguments: $1) }
-                )
+                let machine = try Self.makeMachine()
                 return TLALiveMachineTransitionDriver(
                     successors: { state, action in
-                        try executor.successors(for: action, from: state)
+                        try machine._machine.successors(for: action, from: state)
                     },
                     validateAction: { action in
                         Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: action))
@@ -59,7 +50,7 @@ extension MacroExpander {
                 )
             }
             """ : """
-            private static func _liveDriver() throws -> TLALiveMachineTransitionDriver<Never> {
+            private static func _liveDriver() throws -> TLALiveMachineTransitionDriver<ActionLabel> {
                 .init(
                     successors: { _, action in switch action {} },
                     validateAction: { action in switch action {} },
@@ -104,8 +95,7 @@ extension MacroExpander {
                     }
                 }
             """
-        ] + typedExecute + [
-            """
+        ] + [typedExecute, """
                 public enum CurrentResult: Sendable, Equatable {
                     case snapshot(Snapshot)
                     case unavailable(TLALiveMachineUnavailableReason)
@@ -126,8 +116,7 @@ extension MacroExpander {
                         }
                     }
                 }
-            """
-        ] + outcomeType).joined(separator: "\n\n")
+            """, outcomeType]).joined(separator: "\n\n")
 
         return [
             DeclSyntax(stringLiteral: liveDriver),

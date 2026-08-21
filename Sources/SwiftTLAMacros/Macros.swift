@@ -27,7 +27,7 @@ public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAAct
 /// Requires a nested type and generates a main-actor observable adapter for
 /// its enclosing `@TLAModel`.
 ///
-/// A nested adapter calls its typed `on<Action>` callback after a successful
+/// A nested adapter calls its typed `onTransition` callback after a successful
 /// transition commits.
 @attached(member, names: arbitrary)
 @attached(extension, conformances: Sendable, TLAMachineSchemaProviding, names: arbitrary)

@@ -46,24 +46,20 @@ public struct TLALiveMachinePosition: Comparable, Codable, Sendable, CustomStrin
 
 /// One complete committed observation of a live runtime.
 ///
-/// The snapshot binds the runtime identity, schema identifier, ordering
-/// position, and the validated state projection that was current at that
+/// The snapshot binds the runtime identity, ordering position, and the validated state projection that was current at that
 /// position. Consumers read one complete committed state; they never see a
 /// mixture of fields from different states or a raw formal-state map.
 public struct TLALiveMachineSnapshot: Sendable, Equatable {
     public let identity: TLALiveMachineIdentity
-    public let schemaIdentifier: String
     public let position: TLALiveMachinePosition
     public let state: TLAStateProjection
 
     public init(
         identity: TLALiveMachineIdentity,
-        schemaIdentifier: String,
         position: TLALiveMachinePosition,
         state: TLAStateProjection
     ) {
         self.identity = identity
-        self.schemaIdentifier = schemaIdentifier
         self.position = position
         self.state = state
     }
@@ -251,8 +247,6 @@ public struct TLALiveMachine<Action: Sendable & Equatable>: Sendable {
         self.schema = schema
         self.storage = storage
     }
-
-    public var schemaIdentifier: String { schema.identifier }
 
     /// The current committed snapshot, or the reason none is available.
     public func current() async -> TLALiveMachineCurrentResult {
@@ -540,7 +534,6 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
     private func makeSnapshot() -> TLALiveMachineSnapshot {
         return .init(
             identity: identity,
-            schemaIdentifier: schema.identifier,
             position: position,
             state: state
         )
@@ -580,10 +573,9 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
 
     private func log(_ outcome: String, requestID: UUID? = nil, detail: String = "") {
         let identityValue = identity.value.uuidString
-        let schemaIdentifier = schema.identifier
         let requestID = requestID?.uuidString ?? "-"
         let positionValue = position.value
-        logger.notice("outcome=\(outcome, privacy: .public) identity=\(identityValue, privacy: .public) schema=\(schemaIdentifier, privacy: .public) request=\(requestID, privacy: .public) position=\(positionValue, privacy: .public) detail=\(detail, privacy: .public)")
+        logger.notice("outcome=\(outcome, privacy: .public) identity=\(identityValue, privacy: .public) request=\(requestID, privacy: .public) position=\(positionValue, privacy: .public) detail=\(detail, privacy: .public)")
     }
 }
 

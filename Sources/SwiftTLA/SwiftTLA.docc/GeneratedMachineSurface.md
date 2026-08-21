@@ -50,6 +50,9 @@ Nested `@TLAActor` and `@TLAObservable` types accept the enclosing model's typed
 
 ## Verification helpers
 
-Generated models provide `verifySpec()`, `verifyTransitions()`, and `verifyInvariants()` for their declared finite model. They return the verified state, transition, and invariant-check counts. These helpers use the bounded checker and the model's `verificationStateLimit` (default: `100_000`).
+Generated models provide `verifySpec(configuration:)`,
+`verifyTransitions(configuration:)`, and `verifyInvariants(configuration:)`
+for a declared finite exploration. They return the verified state,
+transition, and invariant-check counts.
 
 For a narrative guide and limits, read `Documentation/GeneratedMachines.md` and `Documentation/LiveMachines.md` in the repository.

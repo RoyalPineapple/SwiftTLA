@@ -14,11 +14,14 @@ public struct EchoModel: Sendable {
 
         public static let formalDomain: [Self] = [.a, .b, .c]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.echo.node")
+        public static var defaultValue: Self { .a }
     }
 
     public enum MessageKind: String, TLAValueType {
         case message = "m"
         case acknowledgement = "c"
+
+        public static var defaultValue: Self { .message }
     }
 
     public struct MessageFields {
@@ -46,15 +49,15 @@ public struct EchoModel: Sendable {
         public static let sender = field(\MessageFields.sender)
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case n0, n1, n2
     }
 
     public static var spec: TLASpec {
         #spec("Echo") {
-            Extends("FiniteSets")
+            Extends(.finiteSets)
             Algorithm("Echo") {
-                let inbox = SharedVar(initial: Function<Node, SetExpr<Record<MessageSchema>>>.literal(
+                let inbox = SharedVar("inbox", initial: Function<Node, SetExpr<Record<MessageSchema>>>.literal(
                     (.a, SetExpr<Record<MessageSchema>>()),
                     (.b, SetExpr<Record<MessageSchema>>()),
                     (.c, SetExpr<Record<MessageSchema>>())
@@ -63,9 +66,9 @@ public struct EchoModel: Sendable {
                 Each(Node.all) { selfID in
                     // The root never reads `parent`; its concrete default keeps
                     // the Swift value type finite while matching the algorithm.
-                    let parent: LocalVariable<Node> = LocalVar(initial: .a)
-                    let children: LocalVariable<SetExpr<Node>> = LocalVar(initial: SetExpr<Node>())
-                    let received: LocalVariable<Int> = LocalVar(initial: 0)
+                    let parent: LocalVariable<Node> = LocalVar("parent", initial: .a)
+                    let children: LocalVariable<SetExpr<Node>> = LocalVar("children", initial: SetExpr<Node>())
+                    let received: LocalVariable<Int> = LocalVar("received", initial: 0)
 
                     Do(Step.n0) {
                         If(selfID == .a) {

@@ -33,16 +33,16 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct ClockModel: Sendable {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case tick
     }
 
     public static var spec: TLASpec {
         #spec("Clock") {
             Algorithm("Clock") {
-                let hour = SharedVar(in: 0...23)
-                let minute = SharedVar(in: 0...59)
-                let second = SharedVar(in: 0...59)
+                let hour = SharedVar("hour", in: 0...23)
+                let minute = SharedVar("minute", in: 0...59)
+                let second = SharedVar("second", in: 0...59)
 
                 While(Step.tick, true) {
                     Either {

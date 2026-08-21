@@ -8,25 +8,17 @@ public struct VoteProofModel: Sendable {
         id: "voteproof-upstream-port",
         specification: { VoteProofModel.spec },
         swiftConfiguration: configuration,
-        plusCalConfiguration: configuration,
-        externalInputs: [
-            .init(name: "NaturalsInduction", source: .init(repository: "tlaplus/tlapm", commit: "4600b24c6d95a25ff081ad37b63b2a01c29d43a5", path: "library/NaturalsInduction.tla"), sha256: "08f52420cdaaf11292ed366782b5ce5b596bb7cbe789526a1cfd8806dbf98624"),
-            .init(name: "WellFoundedInduction", source: .init(repository: "tlaplus/tlapm", commit: "4600b24c6d95a25ff081ad37b63b2a01c29d43a5", path: "library/WellFoundedInduction.tla"), sha256: "6f2f274c2e987d1edcf004d8e37b053f1f82b912e66d6a51bae0af8012ddcbec"),
-            .init(name: "FiniteSetTheorems", source: .init(repository: "tlaplus/tlapm", commit: "4600b24c6d95a25ff081ad37b63b2a01c29d43a5", path: "library/FiniteSetTheorems.tla"), sha256: "484bf0f9ab6a69ef45f7282f7f92dcf1e6ae139e44117b0d5a4427635818e773"),
-            .init(name: "TLAPS", source: .init(repository: "tlaplus/tlapm", commit: "4600b24c6d95a25ff081ad37b63b2a01c29d43a5", path: "library/TLAPS.tla"), sha256: "9afe54984062748a0568966434cc0945d682f8cd89fdbc38f73b5579751b0c55"),
-            .init(name: "Functions", source: .init(repository: "tlaplus/CommunityModules", commit: "a8068a4c21ed76b339b9a2aa6de69d78f64f6422", path: "modules/Functions.tla"), sha256: "b54ff63b7c76c327525c17c188d5f9f5e53d92f3fd701f5e2ba54f0f54391063"),
-            .init(name: "Folds", source: .init(repository: "tlaplus/CommunityModules", commit: "a8068a4c21ed76b339b9a2aa6de69d78f64f6422", path: "modules/Folds.tla"), sha256: "aa59063fd600bb640b2ae24dc85ef770277ef5bf7955092b76b8b471790086da")
-        ]
+        plusCalConfiguration: configuration
     )
 
     private static let configuration = CanonicalCorpusConfiguration(
         checks: [
-            .init("TypeOK", kind: .invariant, support: .externalOnly(reason: externalReason)),
-            .init("VInv1", kind: .invariant, support: .externalOnly(reason: externalReason)),
-            .init("VInv2", kind: .invariant, support: .externalOnly(reason: externalReason)),
-            .init("VInv3", kind: .invariant, support: .externalOnly(reason: externalReason)),
-            .init("VInv4", kind: .invariant, support: .externalOnly(reason: externalReason)),
-            .init("Refines", kind: .property, support: .externalOnly(reason: externalReason))
+            .init("TypeOK", kind: .invariant),
+            .init("VInv1", kind: .invariant),
+            .init("VInv2", kind: .invariant),
+            .init("VInv3", kind: .invariant),
+            .init("VInv4", kind: .invariant),
+            .init("Refines", kind: .property)
         ],
         constants: [
             .init("Value", "{\"v1\", \"v2\"}"),
@@ -36,8 +28,6 @@ public struct VoteProofModel: Sendable {
         ],
         checkDeadlock: false
     )
-
-    private static let externalReason = "The upstream VoteProof claims use TLA+ constructs outside SwiftTLA's supported property DSL."
 
     public enum Value: String, FiniteDomainKey {
         case v1, v2
@@ -67,13 +57,12 @@ public struct VoteProofModel: Sendable {
         }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case acc
     }
 
     public static var spec: TLASpec {
         #spec("VoteProof") {
-            Extends("Integers, NaturalsInduction, FiniteSets, FiniteSetTheorems, WellFoundedInduction, TLC, TLAPS")
             Constant("Value", SetExpr<Value>(.v1, .v2))
             Constant("Acceptor", SetExpr<Acceptor>(.a1, .a2, .a3))
             Constant("Quorum", SetExpr<SetExpr<Acceptor>>(
@@ -83,11 +72,27 @@ public struct VoteProofModel: Sendable {
                 SetExpr<Acceptor>(.a1, .a2, .a3)
             ))
             Constant("Ballot", SetExpr<Int>(0, 1, 2))
-            Instance("C", of: ByzPaxosConsensus.module, plusCalPhase: .define, dependsOn: ["chosen"])
+            let consensusValue = SetExpr<Value>.literal(.v1, .v2)
+            let consensusChosen = FormalCall(as: SetExpr<Value>.self, "chosen")
+            let consensus = Instance(
+                "C",
+                of: ByzPaxosConsensus.module,
+                plusCalPhase: .define,
+                dependsOn: ["chosen"]
+            )
+            consensus
+            Refinement(
+                name: "Refines",
+                instance: consensus,
+                mappings: [
+                    .init(ByzPaxosConsensus.Value, from: consensusValue),
+                    .init(ByzPaxosConsensus.chosen, from: consensusChosen)
+                ]
+            )
 
             Algorithm("Voting") {
-                let votes = SharedVar(initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
-                let maxBal = SharedVar(initial: Function<Acceptor, Int>.mapping { _ in -1 })
+                let votes = SharedVar("votes", initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
+                let maxBal = SharedVar("maxBal", initial: Function<Acceptor, Int>.mapping { _ in -1 })
                 let values = SetExpr<Value>.literal(.v1, .v2)
                 let acceptors = SetExpr<Acceptor>.literal(.a1, .a2, .a3)
                 let quorums = SetExpr<SetExpr<Acceptor>>.literal(
@@ -124,6 +129,84 @@ public struct VoteProofModel: Sendable {
                     }, in: { recursion in
                         recursion(ballot)
                     })
+                }
+
+                FormalDefinition("ChosenIn", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value in
+                    Exists(in: quorums) { quorum in
+                        ForAll(in: quorum.expr) { acceptor in
+                            votes[acceptor].contains(Pair.literal(ballot.expr, value.expr))
+                        }
+                    }
+                }
+
+                FormalDefinition(
+                    "chosen",
+                    parameters: [],
+                    body: values.filtering { value in
+                        Exists(in: ballots) { ballot in
+                            FormalCall(as: Bool.self, "ChosenIn", ballot.expr, value.expr)
+                        }
+                    },
+                    plusCalPhase: .define,
+                    dependsOn: ["ChosenIn"]
+                )
+
+                Invariant("TypeOK") {
+                    ForAll(in: acceptors) { acceptor in
+                        ForAll(in: votes[acceptor]) { vote in
+                            ballots.contains(vote.first()) && values.contains(vote.second())
+                        } && ballots.union(SetExpr<Int>.literal(-1)).contains(maxBal[acceptor])
+                    }
+                }
+
+                Invariant("VInv1") {
+                    ForAll(in: acceptors) { acceptor in
+                        ForAll(in: ballots) { ballot in
+                            ForAll(in: values) { value in
+                                ForAll(in: values) { otherValue in
+                                    (!votes[acceptor].contains(Pair.literal(ballot.expr, value.expr))
+                                        || !votes[acceptor].contains(Pair.literal(ballot.expr, otherValue.expr)))
+                                        || value == otherValue
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Invariant("VInv2") {
+                    ForAll(in: acceptors) { acceptor in
+                        ForAll(in: ballots) { ballot in
+                            ForAll(in: values) { value in
+                                !votes[acceptor].contains(Pair.literal(ballot.expr, value.expr))
+                                    || FormalCall(as: Bool.self, "SafeAt", ballot.expr, value.expr)
+                            }
+                        }
+                    }
+                }
+
+                Invariant("VInv3") {
+                    ForAll(in: acceptors) { firstAcceptor in
+                        ForAll(in: acceptors) { secondAcceptor in
+                            ForAll(in: ballots) { ballot in
+                                ForAll(in: values) { firstValue in
+                                    ForAll(in: values) { secondValue in
+                                        (!votes[firstAcceptor].contains(Pair.literal(ballot.expr, firstValue.expr))
+                                            || !votes[secondAcceptor].contains(Pair.literal(ballot.expr, secondValue.expr)))
+                                            || firstValue == secondValue
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Invariant("VInv4") {
+                    let chosenValues = FormalCall(as: SetExpr<Value>.self, "chosen")
+                    return ForAll(in: chosenValues) { value in
+                        ForAll(in: chosenValues) { otherValue in
+                            value == otherValue
+                        }
+                    }
                 }
 
                 let increaseMaxBal = Macro { (ballot: MacroParameter<Int>, acceptor: MacroParameter<Acceptor>) in
@@ -166,14 +249,6 @@ public struct VoteProofModel: Sendable {
                 }
             }
 
-            Definition("ChosenIn(b, v) == \\E Q \\in Quorum : \\A a \\in Q : <<b, v>> \\in votes[a]", named: "ChosenIn", plusCalPhase: .define)
-            Definition("chosen == {v \\in Value : \\E b \\in Ballot : ChosenIn(b, v)}", named: "chosen", plusCalPhase: .define, dependsOn: ["ChosenIn"])
-            Definition("TypeOK == /\\ votes \\in [Acceptor -> SUBSET (Ballot \\X Value)] /\\ maxBal \\in [Acceptor -> Ballot \\cup {-1}]", named: "TypeOK", plusCalPhase: .define)
-            Definition("VInv1 == \\A a \\in Acceptor, b \\in Ballot, v, w \\in Value : <<b, v>> \\in votes[a] /\\ <<b, w>> \\in votes[a] => v = w", named: "VInv1", plusCalPhase: .define)
-            Definition("VInv2 == \\A a \\in Acceptor, b \\in Ballot, v \\in Value : <<b, v>> \\in votes[a] => SafeAt(b, v)", named: "VInv2", plusCalPhase: .define, dependsOn: ["SafeAt"])
-            Definition("VInv3 == \\A a1, a2 \\in Acceptor, b \\in Ballot, v1, v2 \\in Value : <<b, v1>> \\in votes[a1] /\\ <<b, v2>> \\in votes[a2] => v1 = v2", named: "VInv3", plusCalPhase: .define)
-            Definition("VInv4 == \\A v, w \\in Value : v \\in chosen /\\ w \\in chosen => v = w", named: "VInv4", plusCalPhase: .define, dependsOn: ["chosen"])
-            Definition("Refines == C!Spec", named: "Refines", plusCalPhase: .define, dependsOn: ["C"])
         }
     }
 }

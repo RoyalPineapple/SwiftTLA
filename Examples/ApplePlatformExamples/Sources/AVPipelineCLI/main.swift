@@ -5,11 +5,11 @@ import AVPipeline
 @main
 struct AVPipelineCLI {
     static func main() async throws {
-        try CaptureModel.verifySpec()
-        try WriterModel.verifySpec()
-        try PlayerModel.verifySpec()
-        try DiskStoreModel.verifySpec()
-        try MediaPipelineModel.verifySpec()
+        try CaptureModel.verifySpec(configuration: .standard)
+        try WriterModel.verifySpec(configuration: .standard)
+        try PlayerModel.verifySpec(configuration: .standard)
+        try DiskStoreModel.verifySpec(configuration: .standard)
+        try MediaPipelineModel.verifySpec(configuration: .standard)
 
         let capture = CaptureModel.Machine()
         let pipeline = MediaPipelineModel.Machine()

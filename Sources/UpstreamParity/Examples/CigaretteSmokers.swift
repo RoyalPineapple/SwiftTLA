@@ -5,11 +5,11 @@ import SwiftTLAMacros
 public struct CigaretteSmokersModel: Sendable {
     public static var spec: TLASpec {
         #spec("CigaretteSmokers") {
-            Extends("Integers")
-            let smokingM = SharedVar(initial: false)
-            let smokingP = SharedVar(initial: false)
-            let smokingT = SharedVar(initial: false)
-            let dealer = SharedVar(in: 1...3)
+            Extends(.integers)
+            let smokingM = SharedVar("smokingM", initial: false)
+            let smokingP = SharedVar("smokingP", initial: false)
+            let smokingT = SharedVar("smokingT", initial: false)
+            let dealer = SharedVar("dealer", in: 1...3)
             Action("start_1") {
                 dealer == 1 && smokingT.becomes(true) && dealer.becomes(0) && smokingM.stays && smokingP.stays
             }

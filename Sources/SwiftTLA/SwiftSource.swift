@@ -41,6 +41,8 @@ extension ActionExpr {
 extension StateExpr {
   public var swiftSource: String {
     switch self {
+    case .sourceIssue(let issue):
+      return "StateExpr.sourceIssue(\(issue.swiftSource))"
     case .value(let v): return v.swiftLiteral
     case .variable(let n): return n
     case .programCounter: return "StateExpr.programCounter"
@@ -146,6 +148,35 @@ extension StateExpr {
         return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)]\(domain), body: \(operation.body.swiftSource))"
       }.joined(separator: ", ")
       return "StateExpr.letIn([\(definitions)], \(body.swiftSource))"
+    }
+  }
+}
+
+private extension SourceModelIssue {
+  var swiftSource: String {
+    func strings(_ values: [String]) -> String {
+      "[\(values.map { String(reflecting: $0) }.joined(separator: ", "))]"
+    }
+
+    switch self {
+    case .recordField(let schema):
+      return ".recordField(schema: \(String(reflecting: schema)))"
+    case .recordLiteral(let schema, let duplicates, let missing):
+      return ".recordLiteral(schema: \(String(reflecting: schema)), duplicateFields: \(strings(duplicates)), missingFields: \(strings(missing)))"
+    case .invalidRecordDefault(let schema):
+      return ".invalidRecordDefault(schema: \(String(reflecting: schema)))"
+    case .functionLiteral(let domain, let duplicates, let missing):
+      return ".functionLiteral(domain: \(String(reflecting: domain)), duplicateValues: \(strings(duplicates)), missingValues: \(strings(missing)))"
+    case .staticSelection(let reason):
+      return ".staticSelection(\(String(reflecting: reason)))"
+    case .sequenceElementDomain(let operation):
+      return ".sequenceElementDomain(operation: \(String(reflecting: operation)))"
+    case .negativeSequenceLength(let operation, let lowerBound):
+      return ".negativeSequenceLength(operation: \(String(reflecting: operation)), lowerBound: \(lowerBound))"
+    case .finiteDomain(let type, let problem):
+      return ".finiteDomain(type: \(String(reflecting: type)), problem: \(String(reflecting: problem)))"
+    case .finiteDomainValue(let type, let value):
+      return ".finiteDomainValue(type: \(String(reflecting: type)), value: \(String(reflecting: value)))"
     }
   }
 }

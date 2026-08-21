@@ -13,6 +13,7 @@ public struct TeachingSimpleN2Model: Sendable {
         case p0
         case p1
 
+        public static var defaultValue: Self { .p0 }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.teaching-concurrency.simple.n2.process"
@@ -20,19 +21,19 @@ public struct TeachingSimpleN2Model: Sendable {
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a
         case b
     }
 
     public static var spec: TLASpec {
         #spec("Simple") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Simple") {
-                let x = SharedVar(initial: Function<Process, Int>.literal(
+                let x = SharedVar("x", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0)
                 ))
-                let y = SharedVar(initial: Function<Process, Int>.literal(
+                let y = SharedVar("y", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0)
                 ))
 
@@ -69,6 +70,7 @@ public struct TeachingSimpleN3Model: Sendable {
         case p1
         case p2
 
+        public static var defaultValue: Self { .p0 }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.teaching-concurrency.simple.n3.process"
@@ -76,19 +78,19 @@ public struct TeachingSimpleN3Model: Sendable {
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a
         case b
     }
 
     public static var spec: TLASpec {
         #spec("Simple") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Simple") {
-                let x = SharedVar(initial: Function<Process, Int>.literal(
+                let x = SharedVar("x", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0)
                 ))
-                let y = SharedVar(initial: Function<Process, Int>.literal(
+                let y = SharedVar("y", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0)
                 ))
 

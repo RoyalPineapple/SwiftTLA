@@ -30,16 +30,13 @@ public final class TLALiveMachineObservableReducer<State: Sendable & Equatable, 
     public private(set) var current: TLALiveMachineAdapterSnapshot<State>?
 
     private let identity: TLALiveMachineIdentity
-    private let schemaIdentifier: String
     private let decode: @Sendable (TLAStateProjection) throws -> State
 
     public init(
         identity: TLALiveMachineIdentity,
-        schemaIdentifier: String,
         decode: @escaping @Sendable (TLAStateProjection) throws -> State
     ) {
         self.identity = identity
-        self.schemaIdentifier = schemaIdentifier
         self.decode = decode
     }
 
@@ -98,11 +95,6 @@ public final class TLALiveMachineObservableReducer<State: Sendable & Equatable, 
         guard snapshot.identity == identity else {
             current = nil
             status = .invalidEvent("The observation belongs to a different runtime identity.")
-            return false
-        }
-        guard snapshot.schemaIdentifier == schemaIdentifier else {
-            current = nil
-            status = .invalidEvent("The observation has an incompatible schema identifier.")
             return false
         }
         return true

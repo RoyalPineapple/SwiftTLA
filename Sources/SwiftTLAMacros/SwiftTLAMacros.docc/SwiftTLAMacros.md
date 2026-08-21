@@ -30,7 +30,7 @@ struct Counter {
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "docs.counter.process")
     }
 
-    enum Step: String, PlusCalLabel {
+    enum Step: String, PlusCalLabel, CaseIterable {
         case advance
     }
 

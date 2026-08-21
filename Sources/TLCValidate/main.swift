@@ -294,7 +294,9 @@ private func runCoreConformance(arguments: [String]) -> Never {
                         caseID: caseDefinition.id,
                         exploration: try ModelChecker(
                             compilation: compilation,
-                            maxStates: coreConformanceMaximumStateLimit
+                            configuration: try FiniteExplorationConfiguration(
+                                maximumStateLimit: coreConformanceMaximumStateLimit
+                            )
                         ).explore(),
                         compiledModelIdentity: compilation.identity.value,
                         maximumStateLimit: coreConformanceMaximumStateLimit
@@ -368,7 +370,7 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
                 directory: evidenceRoot.appendingPathComponent($0.id, isDirectory: true),
                 relativeDirectory: $0.id)
         }
-        report = CoreSupportGate().evaluate(CoreSupportGateInput(
+        report = try CoreSupportGate().evaluate(CoreSupportGateInput(
             gateRunID: options.gateRunID,
             manifest: manifest,
             ledger: ledger,
@@ -384,13 +386,17 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
             report.entries.first(where: { $0.supportID == entry.id })?.decision == .admitted
         }
     } catch {
-        report = invalidRegisterReport(gateRunID: options.gateRunID)
+        do {
+            report = try invalidRegisterReport(gateRunID: options.gateRunID)
+        } catch {
+            failCoreConformance(error)
+        }
         registersLoaded = false
         requestedSupportIsAdmitted = false
         fputs("core-support-gate: register loading failed: \(error)\n", stderr)
     }
     do {
-        try writeAdmissionReport(report, to: reportURL)
+        try writeJSONReport(report, to: reportURL)
     } catch {
         failCoreConformance(CoreConformanceCLIError.unableToWriteReport(reportURL.path))
     }
@@ -453,20 +459,20 @@ private func governanceURL(_ configuredPath: String?, projectRoot: URL, defaultP
     }
     return projectRoot.appendingPathComponent(defaultPath)
 }
-private func invalidRegisterReport(gateRunID: UUID) -> CoreSupportAdmission {
-    let entry = try! CoreSupportAdmissionEntry(
+private func invalidRegisterReport(gateRunID: UUID) throws -> CoreSupportAdmission {
+    let entry = try CoreSupportAdmissionEntry(
         supportID: "governance-register",
         decision: .blocked,
         reasonCodes: [.invalidRegister],
         mandatoryCaseIDs: ["governance-register"],
         divergenceIDs: [])
-    return try! CoreSupportAdmission(gateRunID: gateRunID, entries: [entry])
+    return try CoreSupportAdmission(gateRunID: gateRunID, entries: [entry])
 }
-private func writeAdmissionReport(_ report: CoreSupportAdmission, to url: URL) throws {
+private func writeJSONReport<Record: Encodable>(_ record: Record, to url: URL) throws {
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    var data = try encoder.encode(report)
+    var data = try encoder.encode(record)
     data.append(0x0A)
     try data.write(to: url, options: .atomic)
 }
@@ -540,10 +546,14 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
         report = try temporalSymmetryAdmissionReport(options: options, projectRoot: projectRoot)
     } catch {
         fputs("temporal-symmetry: gate input unavailable: \(error)\n", stderr)
-        report = unavailableTemporalSymmetryReport(gateRunID: options.gateRunID)
+        do {
+            report = try unavailableTemporalSymmetryReport(gateRunID: options.gateRunID)
+        } catch {
+            failTemporalSymmetry(error)
+        }
     }
     do {
-        try writeTemporalSymmetryAdmissionReport(report, to: reportURL)
+        try writeJSONReport(report, to: reportURL)
     } catch {
         failTemporalSymmetry(TemporalSymmetryCLIError.unableToWriteReport(reportURL.path))
     }
@@ -642,7 +652,7 @@ private func temporalSymmetryAdmissionReport(
         projectRoot: projectRoot,
         manifestSHA256: manifestSHA256,
         toolchainSHA256: toolchainSHA256)
-    return TemporalSymmetrySupportGate().evaluate(TemporalSymmetryGateInput(
+    return try TemporalSymmetrySupportGate().evaluate(TemporalSymmetryGateInput(
         gateRunID: options.gateRunID,
         coreAdmission: coreReference,
         coreAdmissionContext: coreContext,
@@ -739,12 +749,13 @@ private func validateCompleteGraphEvidence(
     }
     let graphURL = try requiredCompleteGraphURL(evidence.graphEvents, urls: urls)
     let parser = TLCGraphEventParser(expectedCase: graphCase)
-    let stream = try parser.parse(Data(contentsOf: graphURL))
+    let graphData = try Data(contentsOf: graphURL)
+    let stream = try parser.parse(graphData)
     guard stream.runID == evidence.graphRunID else {
         throw TemporalSymmetryCLIError.invalidEvidence("foreign complete graph run")
     }
-    let canonical = try parser.parseCanonicalRun(
-        Data(contentsOf: graphURL),
+    let canonical = try parser.canonicalRun(
+        stream,
         result: TLCProcessResult(status: 0, stdout: "Model checking completed. No error has been found.", stderr: ""))
     guard canonical.isPassEligible,
           TLCTemporalAdapter.graphID(canonical) == comparison.tlcResult.graphID,
@@ -764,18 +775,18 @@ private func requiredJSONObject(_ url: URL) throws -> [String: Any] {
     }
     return object
 }
-private func unavailableTemporalSymmetryReport(gateRunID: UUID) -> TemporalSymmetryAdmission {
-    let unavailableReference = try! CoreEvidenceReference(
+private func unavailableTemporalSymmetryReport(gateRunID: UUID) throws -> TemporalSymmetryAdmission {
+    let unavailableReference = try CoreEvidenceReference(
         path: "unavailable/core-admission.json", sha256: String(repeating: "0", count: 64))
-    let coreAdmission = try! TemporalSymmetryCoreAdmissionReference(
+    let coreAdmission = try TemporalSymmetryCoreAdmissionReference(
         reportID: UUID(), gateRunID: UUID(), report: unavailableReference)
-    let entry = try! TemporalSymmetryAdmissionEntry(
+    let entry = try TemporalSymmetryAdmissionEntry(
         supportID: "governance-register",
         decision: .blocked,
         reasonCodes: [.missingPrerequisite, .invalidRegister],
         mandatoryCaseIDs: ["governance-register"],
         divergenceIDs: [])
-    return try! TemporalSymmetryAdmission(
+    return try TemporalSymmetryAdmission(
         reportID: UUID(),
         gateRunID: gateRunID,
         coreAdmission: coreAdmission,
@@ -841,14 +852,6 @@ private func parseTemporalSymmetryGateOptions(_ arguments: [String]) throws -> T
         coreAdmission: coreAdmission,
         coreReportID: coreReportID,
         prerequisiteAvailable: prerequisiteAvailable)
-}
-private func writeTemporalSymmetryAdmissionReport(_ report: TemporalSymmetryAdmission, to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    var data = try encoder.encode(report)
-    data.append(0x0A)
-    try data.write(to: url, options: .atomic)
 }
 private func temporalSymmetryExitCode(_ exitClass: TemporalSymmetryAdmissionExitClass) -> Int32 {
     switch exitClass {

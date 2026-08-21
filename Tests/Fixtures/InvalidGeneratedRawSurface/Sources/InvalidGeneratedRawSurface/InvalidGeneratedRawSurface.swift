@@ -13,6 +13,6 @@ struct InvalidGeneratedRawSurface {
 }
 
 let machine = InvalidGeneratedRawSurface()
-let rawState: [String: TLAValue] = machine.tlaSnapshot()
-let legacyResult = InvalidGeneratedRawSurface.TransitionEvidence.self
-_ = (rawState, legacyResult)
+let rawState = machine.tlaSnapshot()
+let transitionEvidence = InvalidGeneratedRawSurface.TransitionEvidence.self
+_ = (rawState, transitionEvidence)

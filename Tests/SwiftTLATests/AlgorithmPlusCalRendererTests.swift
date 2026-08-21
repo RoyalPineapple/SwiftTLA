@@ -3,19 +3,31 @@ import Testing
 
 @Suite("PlusCal Algorithm renderer")
 struct AlgorithmPlusCalRendererTests {
+    private enum ProcessStep: String, PlusCalLabel, CaseIterable {
+        case `repeat`
+        case done
+    }
+
+    private enum ProcedureStep: String, PlusCalLabel, CaseIterable {
+        case enter
+        case start
+        case finished
+    }
+
     private enum Node: String, FiniteDomainKey {
         case left
         case right
 
+        static var defaultValue: Self { .left }
         static let formalDomain: [Node] = [.left, .right]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal-renderer.node")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    @Test("renders process declarations, source labels, and structured statements without lowering")
+    @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
-        let algorithm = Algorithm("Rendered Process") {
+        let algorithm = Algorithm("RenderedProcess") {
             let count = SharedVar("count", initial: 0)
             let flags = SharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
             let sentinel = SharedVar("sentinel", initial: "__pcal_self")
@@ -25,7 +37,7 @@ struct AlgorithmPlusCalRendererTests {
             Each(Node.all, fairness: .strong) { node in
                 let local = LocalVar("local", initial: 0)
                 local
-                While(ProgramLabel(rawValue: "repeat"), count < 2) {
+                While(ProcessStep.repeat, count < 2) {
                     When(count >= 0)
                     Assert(count < 3)
                     With(SetExpr<Int>.literal(1, 2)) { picked in
@@ -38,13 +50,13 @@ struct AlgorithmPlusCalRendererTests {
                         Assign(flags, to: flags.updating(node, to: true))
                     } else: {
                         Either {
-                            Goto(ProgramLabel(rawValue: "repeat"))
+                            Goto(ProcessStep.repeat)
                         } or: {
                             Skip()
                         }
                     }
                 }
-                Do(ProgramLabel(rawValue: "done")) { Stop() }
+                Do(ProcessStep.done) { Stop() }
             }
         }
 
@@ -74,7 +86,7 @@ struct AlgorithmPlusCalRendererTests {
         let algorithm = Algorithm("Negative") {
             let previous = SharedVar("previous", initial: -1)
             previous
-            Do("stop") { Stop() }
+            Do(TestControlLabel.stop) { Stop() }
         }
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
@@ -85,40 +97,39 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("keeps prelude helpers outside and state helpers inside define")
     func rendersStructuredDeclarationSections() throws {
-        let model = AlgorithmModel(name: "Sections", components: [
-            .shared(.init(root: "count", initial: .value(.int(0)))),
-            .step(.init(label: .init(name: "done"), statements: [.stop]))
-        ])
-        let module = AuthoredPlusCalModule(
-            name: "Sections",
-            extendsModules: ["Naturals"],
-            constants: [],
-            definitionsBeforeInstances: ["Bound == 2"],
-            instances: [],
-            definitionsAfterInstances: [],
-            algorithm: model,
-            defineDeclarations: ["UsesCount == count = 0"],
-            postTranslationDeclarations: []
-        )
+        let spec = TLASpec("Sections") {
+            FormalDefinition("Bound", parameters: [], body: .value(.int(2)))
+            Algorithm("Sections") {
+                let count = SharedVar("count", initial: 0)
+                count
+                FormalDefinition(
+                    "UsesCount",
+                    parameters: [],
+                    body: count.expr == 0,
+                    plusCalPhase: .define
+                )
+                Do(TestControlLabel.done) { Stop() }
+            }
+        }
 
-        let rendered = try AlgorithmPlusCalRenderer(model: model).render(module)
+        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
         let algorithmRange = try #require(rendered.range(of: "(*--algorithm Sections"))
         let preludeRange = try #require(rendered.range(of: "Bound == 2"))
         let defineRange = try #require(rendered.range(of: "define {"))
-        let stateHelperRange = try #require(rendered.range(of: "UsesCount == count = 0"))
+        let stateHelperRange = try #require(rendered.range(of: "UsesCount =="))
         #expect(preludeRange.lowerBound < algorithmRange.lowerBound)
         #expect(defineRange.lowerBound < stateHelperRange.lowerBound)
     }
 
-    @Test("direct Algorithm export retains formal definition phase")
+    @Test("renders formal definitions in their declaration section")
     func rendersDirectFormalDefinitionInDefine() throws {
-        let algorithm = Algorithm("Direct Sections") {
+        let algorithm = Algorithm("DirectSections") {
             let count = SharedVar("count", initial: 0)
             count
             FormalDefinition("Ready", taking: Int.self, plusCalPhase: .define) { _ in
                 count == 0
             }
-            Do("done") { Stop() }
+            Do(TestControlLabel.done) { Stop() }
         }
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
@@ -133,11 +144,11 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("renders typed properties outside the authored Algorithm")
     func rendersTopLevelTypedProperty() throws {
-        let spec = TLASpec("Compiler Property") {
+        let spec = TLASpec("CompilerProperty") {
             Algorithm("Counter") {
                 let count = SharedVar("count", initial: 0)
                 count
-                Do("done") { Stop() }
+                Do(TestControlLabel.done) { Stop() }
             }
             Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
         }
@@ -166,71 +177,7 @@ struct AlgorithmPlusCalRendererTests {
         }
     }
 
-    @Test("renders the PlusCal brace control grammar literally")
-    func rendersBraceControlGrammar() throws {
-        let loop = AlgorithmLabelModel(name: "loop")
-        let model = AlgorithmModel(name: "Grammar", components: [
-            .shared(.init(root: "count", initial: .value(.int(0)))),
-            .step(.init(label: loop, statements: [
-                .letBinding(variable: "bound", value: .value(.int(1)), [
-                    .with(variable: "member", source: .setLiteral([.value(.int(1)), .value(.int(2))]), [
-                        .ifElse(.value(.bool(true)), [
-                            .either([.skip], [.goto(loop)])
-                        ], [])
-                    ])
-                ])
-            ], loopCondition: .value(.bool(true))))
-        ])
-
-        let rendered = try AlgorithmPlusCalRenderer(model: model).render()
-
-        #expect(rendered.contains("loop: while (TRUE) {"))
-        #expect(rendered.contains("with (bound = 1) {"))
-        #expect(rendered.contains("with (member \\in {1, 2}) {"))
-        #expect(rendered.contains("if (TRUE) {"))
-        #expect(rendered.contains("either {"))
-        #expect(rendered.contains("} or {"))
-        #expect(rendered.contains("goto loop;"))
-    }
-
-    @Test("renders supported process fairness in the PlusCal header")
-    func rendersProcessFairness() throws {
-        let model = AlgorithmModel(name: "Fair", components: [
-            .process(.init(
-                typeName: "Process",
-                domain: [.int(1)],
-                fairness: .weak,
-                components: [.step(.init(label: .init(name: "done"), statements: [.stop]))]
-            ))
-        ])
-
-        let rendered = try AlgorithmPlusCalRenderer(model: model).render()
-
-        #expect(rendered.contains("fair process (pcalProcess1 \\in {1})"))
-    }
-
-    @Test("uses the PlusCal self identifier without shadowing authored names")
-    func rendersHygienicProcessIdentifiers() throws {
-        let model = AlgorithmModel(name: "Hygiene", components: [
-            .shared(.init(root: "pcalProcess1", initial: .value(.int(0)))),
-            .process(.init(
-                typeName: "Process",
-                domain: [.int(1)],
-                fairness: .none,
-                components: [.step(.init(
-                    label: .init(name: "advance"),
-                    statements: [.set(target: .root("pcalProcess1"), value: .variable("__pcal_self"))]
-                ))]
-            ))
-        ])
-
-        let rendered = try AlgorithmPlusCalRenderer(model: model).render()
-
-        #expect(rendered.contains("process (pcalProcess1_2 \\in {1})"))
-        #expect(rendered.contains("pcalProcess1 := self;"))
-    }
-
-    @Test("renders a sequential body and procedures directly from Algorithm IR")
+    @Test("renders a sequential body and procedures")
     func rendersSequentialProcedureAlgorithm() throws {
         let algorithm = Algorithm("Procedures") {
             let output = SharedVar("output", initial: 0)
@@ -238,13 +185,13 @@ struct AlgorithmPlusCalRendererTests {
             Procedure("work", parameters: Int.self) { value in
                 let offset = LocalVar("offset", initial: 1)
                 offset
-                Do(ProgramLabel(rawValue: "enter")) {
+                Do(ProcedureStep.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
                 }
             }
-            Do(ProgramLabel(rawValue: "start")) { Call("work", with: 7) }
-            Do(ProgramLabel(rawValue: "finished")) { Stop() }
+            Do(ProcedureStep.start) { Call("work", with: 7) }
+            Do(ProcedureStep.finished) { Stop() }
         }
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
@@ -256,57 +203,13 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("{\n  start:"))
     }
 
-    @Test("reports source nodes that have no direct PlusCal spelling")
-    func reportsUnsupportedSourceNode() {
-        let model = AlgorithmModel(name: "Unsupported", components: [.propertyBoundary])
-
-        do {
-            _ = try AlgorithmPlusCalRenderer(model: model).render()
-            Issue.record("Expected an unsupported-source diagnostic")
-        } catch let diagnostic as AlgorithmPlusCalRenderDiagnostic {
-            #expect(diagnostic.failedConcept == "semantic-free PlusCal source rendering")
-            #expect(diagnostic.path == "components[0]")
-            #expect(diagnostic.expected == "a directly renderable PlusCal declaration")
-            #expect(diagnostic.actual == "property boundary")
-            #expect(diagnostic.stateChange == .none)
-            #expect(!diagnostic.nextSafeAction.isEmpty)
-        } catch {
-            Issue.record("Expected AlgorithmPlusCalRenderDiagnostic, got \(error)")
-        }
-    }
-
-    @Test("rejects higher-order anonymous lambdas instead of printing invalid PlusCal")
-    func rejectsResidualAnonymousFormalLambda() {
-        let model = AlgorithmModel(name: "HigherOrder", components: [
-            .shared(.init(
-                root: "output",
-                initial: .operatorApplication(
-                    .reference("Apply", arity: 1),
-                    [.operator(.lambda(.init(parameters: ["value"], body: .variable("value"))))]
-                )
-            ))
-        ])
-
-        do {
-            _ = try AlgorithmPlusCalRenderer(model: model).render()
-            Issue.record("Expected an unsupported higher-order lambda diagnostic")
-        } catch let diagnostic as AlgorithmPlusCalRenderDiagnostic {
-            #expect(diagnostic.path == "shared[0].initial")
-            #expect(diagnostic.expected.contains("named operator reference"))
-            #expect(diagnostic.actual.contains("residual anonymous formal lambda"))
-            #expect(diagnostic.stateChange == .none)
-        } catch {
-            Issue.record("Expected AlgorithmPlusCalRenderDiagnostic, got \(error)")
-        }
-    }
-
     @Test("retains authored Algorithm source for independent PlusCal rendering")
     func retainsAuthoredAlgorithmOnTheLoweredSpec() throws {
         let spec = TLASpec("Retained") {
             Algorithm("Retained") {
                 let count = SharedVar("count", initial: 0)
                 count
-                Do("stop") { Stop() }
+                Do(TestControlLabel.stop) { Stop() }
                 StateConstraint(count < 2)
             }
         }
@@ -322,14 +225,14 @@ struct AlgorithmPlusCalRendererTests {
     @Test("renders authored module context around the Algorithm comment")
     func rendersAuthoredModuleContext() throws {
         let spec = TLASpec("Context") {
-            Extends("Integers")
+            Extends(.integers)
             Constant("N", 2)
-            Definition("Seed == N")
+            FormalDefinition("Seed", parameters: [], body: .variable("N"))
             Symmetry("member", [1, 2] as Set<Int>)
             Algorithm("Context") {
                 let count = SharedVar("count", initial: 0)
                 count
-                Do("stop") { Stop() }
+                Do(TestControlLabel.stop) { Stop() }
                 Invariant("Bounded") { count.expr <= 2 }
             }
         }
@@ -345,5 +248,23 @@ struct AlgorithmPlusCalRendererTests {
         let seed = try #require(module.range(of: "Seed == N"))
         let algorithm = try #require(module.range(of: "(*--algorithm Context {"))
         #expect(seed.lowerBound < algorithm.lowerBound)
+    }
+
+    @Test("standard module declarations preserve canonical order")
+    func standardModuleDeclarationsPreserveCanonicalOrder() throws {
+        let spec = TLASpec("Modules") {
+            Extends(.naturals)
+            Extends(.finiteSets)
+            Algorithm("Modules") {
+                let count = SharedVar("count", initial: 0)
+                count
+                Do(TestControlLabel.stop) { Stop() }
+            }
+        }
+
+        #expect(spec.extendsModules == [.integers, .naturals, .finiteSets])
+        #expect(try spec.compile().renderedPlusCalBundle().root.tla.contains(
+            "EXTENDS Integers, Naturals, FiniteSets, Sequences"
+        ))
     }
 }

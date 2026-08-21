@@ -4,6 +4,10 @@ import SwiftSyntax
 import SwiftTLAMacros
 import Testing
 
+private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
+  try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+}
+
 public struct MacroDevice: Identifiable, Sendable {
   public let id: Int
 
@@ -154,7 +158,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   }
 
   @Test("Parsed symmetric declarations retain type, scope, action, and source provenance")
-  func parserRetainsCollectionProvenance() {
+  func parserRetainsCollectionProvenance() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
@@ -164,8 +168,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let statements = Parser.parse(source: source).statements
-    let closure = statements[statements.startIndex].item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
 
     let parsed = SpecParser.parseSpecClosure(closure)
 
@@ -174,6 +177,24 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(parsed.symmetricCollections[0].valueType == "Int")
     #expect(parsed.symmetricCollections[0].verificationScope == 2)
     #expect(parsed.collectionActions.map(\.name) == ["begin"])
+    #expect(parsed.diagnostics.isEmpty)
+  }
+
+  @Test("Symmetric collection type arguments retain their syntax until generated Swift is emitted")
+  func parserRetainsQualifiedCollectionTypeArguments() throws {
+    let source = """
+    {
+      let devices = SwiftTLA.SymmetricCollectionVar<Model.Device, Swift.Int>("devices")
+      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+    }
+    """
+    let statements = Parser.parse(source: source).statements
+    let closure = try #require(statements.first?.item.as(ClosureExprSyntax.self))
+
+    let parsed = SpecParser.parseSpecClosure(closure)
+
+    #expect(parsed.symmetricCollections.map(\.elementType) == ["Model.Device"])
+    #expect(parsed.symmetricCollections.map(\.valueType) == ["Swift.Int"])
     #expect(parsed.diagnostics.isEmpty)
   }
 
@@ -188,7 +209,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
     let initial = parsed.variables.map { ($0.name, $0.initial) }
     let advanced: [(String, TLAValue)] = [
@@ -215,8 +236,37 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(try compiledSuccessors(of: parsedSpec, from: projection(advanced)).isEmpty)
   }
 
+  @Test("Parser preserves collection action precedence from syntax nodes")
+  func parserPreservesCollectionActionPrecedence() throws {
+    let source = """
+    {
+      let devices = SymmetricCollectionVar<Device, Int>("devices")
+      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      CollectionAction("advance", on: devices) { member in
+        (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
+          || (devices[member] == 2 && devices.update(member, to: devices[member] + 20))
+      }
+    }
+    """
+    let closure = try #require(
+      Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
+    )
+    let parsed = SpecParser.parseSpecClosure(closure)
+    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let authored = TLASpec("AuthoredCollectionAction") {
+      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      CollectionAction("advance", on: devices) { member in
+        (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
+          || (devices[member] == 2 && devices.update(member, to: devices[member] + 20))
+      }
+    }
+
+    #expect(parsed.diagnostics.isEmpty)
+    #expect(parsed.actions.map(\.body) == authored.actions.map(\.body))
+  }
+
   @Test("Parser rejects observable, escaping, and cross-collection member identities")
-  func parserRejectsIdentityObservations() {
+  func parserRejectsIdentityObservations() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
@@ -228,8 +278,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let statements = Parser.parse(source: source).statements
-    let closure = statements[statements.startIndex].item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
 
     let parsed = SpecParser.parseSpecClosure(closure)
 
@@ -239,7 +288,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   }
 
   @Test("Parser rejects every unsupported member-token observation family")
-  func parserRejectsOpaqueTokenMisuseMatrix() {
+  func parserRejectsOpaqueTokenMisuseMatrix() throws {
     let cases = [
       "member == member",
       "StateExpr.tuple([member])",
@@ -258,15 +307,14 @@ struct SymmetricCollectionMacroRuntimeTests {
         }
       }
       """
-      let statements = Parser.parse(source: source).statements
-      let closure = statements[statements.startIndex].item.as(ClosureExprSyntax.self)!
+      let closure = try parseClosure(source)
 
       #expect(!SpecParser.parseSpecClosure(closure).diagnostics.isEmpty)
     }
   }
 
   @Test("Token diagnostics use syntax roles rather than trivia-sensitive text")
-  func parserRejectsTriviaVariedRawDomainAccess() {
+  func parserRejectsTriviaVariedRawDomainAccess() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>("devices")
@@ -276,14 +324,14 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
 
     #expect(!SpecParser.parseSpecClosure(closure).diagnostics.isEmpty)
   }
 
   @Test("Identified runtime storage retains concrete IDs beyond verification scope")
   func runtimeStorageUsesConcreteIDsWithoutCappingPopulation() throws {
-    var devices = IdentifiedModelCollection<Device, Int>(
+    var devices = try IdentifiedModelCollection<Device, Int>(
       name: "devices", verificationScope: 1, initial: 0
     )
     let first = Device(id: 1)
@@ -291,14 +339,23 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     devices.insert(first)
     devices.insert(second, value: 3)
-    try devices.update(id: second.id, to: 4, action: "begin")
+    try devices.update(id: second.id, to: 4)
 
     #expect(devices.verificationScope == 1)
     #expect(devices.count == 2)
     #expect(devices[first.id] == 0)
     #expect(devices[second.id] == 4)
     #expect(throws: SymmetricCollectionRuntimeError.self) {
-      try devices.update(id: 99, to: 1, action: "begin")
+      try devices.update(id: 99, to: 1)
+    }
+  }
+
+  @Test("Identified runtime storage rejects an invalid verification scope")
+  func runtimeStorageRejectsInvalidVerificationScope() {
+    #expect(throws: SymmetricCollectionRuntimeError.self) {
+      _ = try IdentifiedModelCollection<Device, Int>(
+        name: "devices", verificationScope: 0, initial: 0
+      )
     }
   }
 

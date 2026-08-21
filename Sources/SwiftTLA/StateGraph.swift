@@ -58,6 +58,7 @@ public struct ModelExplorationResult {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
     public let result: CheckResult
+    let compiledStates: [StateGraph.StateID: CompiledState]
 
     public var isComplete: Bool {
         if case .ok = result.underlyingOutcome { return true }
@@ -72,5 +73,18 @@ public struct ModelExplorationResult {
         self.graph = graph
         self.initialStateIDs = initialStateIDs
         self.result = result
+        compiledStates = [:]
+    }
+
+    init(
+        graph: StateGraph,
+        initialStateIDs: [StateGraph.StateID],
+        result: CheckResult,
+        compiledStates: [StateGraph.StateID: CompiledState]
+    ) {
+        self.graph = graph
+        self.initialStateIDs = initialStateIDs
+        self.result = result
+        self.compiledStates = compiledStates
     }
 }

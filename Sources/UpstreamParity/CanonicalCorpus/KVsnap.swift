@@ -121,7 +121,7 @@ public struct KVsnapModel: Sendable {
         public static let value = field(\OperationFields.value)
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case start = "START"
         case read = "READ"
         case update = "UPDATE"
@@ -130,7 +130,7 @@ public struct KVsnapModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("KVsnap") {
-            Extends("Integers, Sequences, FiniteSets")
+            Extends(.integers, .sequences, .finiteSets)
             Import(KeyValueStoreUtil.module)
 
             // These are the upstream model values. Declaring them explicitly
@@ -156,17 +156,16 @@ public struct KVsnapModel: Sendable {
                 body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
             Algorithm("KVsnap") {
-                let store: SharedVariable<Function<Key, Value>> = SharedVar(initial: FormalCall("InitialState"))
-                let tx = SharedVar(initial: SetExpr<Transaction>())
-                let missed = SharedVar(initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
+                let store: SharedVariable<Function<Key, Value>> = SharedVar("store", initial: FormalCall("InitialState"))
+                let tx = SharedVar("tx", initial: SetExpr<Transaction>())
+                let missed = SharedVar("missed", initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
 
                 Each(Transaction.all, fairness: .weak) { selfID in
-                    let snapshotStore: LocalVariable<Function<Key, Value>> = LocalVar(
-                        initial: FormalCall("InitialState")
+                    let snapshotStore: LocalVariable<Function<Key, Value>> = LocalVar("snapshotStore", initial: FormalCall("InitialState")
                     )
-                    let readKeys: LocalVariable<SetExpr<Key>> = LocalVar(initial: SetExpr<Key>())
-                    let writeKeys: LocalVariable<SetExpr<Key>> = LocalVar(initial: SetExpr<Key>())
-                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = LocalVar(initial: TupleExpr<Record<OperationSchema>>())
+                    let readKeys: LocalVariable<SetExpr<Key>> = LocalVar("readKeys", initial: SetExpr<Key>())
+                    let writeKeys: LocalVariable<SetExpr<Key>> = LocalVar("writeKeys", initial: SetExpr<Key>())
+                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = LocalVar("ops", initial: TupleExpr<Record<OperationSchema>>())
 
                     Do(Step.start) {
                         Assign(tx, to: tx.inserting(selfID))

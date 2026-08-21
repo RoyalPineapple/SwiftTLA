@@ -6,14 +6,16 @@ public struct CatEvenBoxesModel: Sendable {
     public enum Direction: String, TLAValueType {
         case left
         case right
+
+        public static var defaultValue: Self { .left }
     }
 
     public static var spec: TLASpec {
         #spec("Cat") {
-            Extends("Naturals")
-            let catBox = SharedVar(in: 1...6)
-            let observedBox = SharedVar(in: 2...5)
-            let direction = SharedVar(in: SetExpr<Direction>.literal(.left, .right))
+            Extends(.naturals)
+            let catBox = SharedVar("catBox", in: 1...6)
+            let observedBox = SharedVar("observedBox", in: 2...5)
+            let direction = SharedVar("direction", in: SetExpr<Direction>.literal(.left, .right))
 
             Invariant("TypeOK") {
                 catBox >= 1 && catBox <= 6
@@ -37,14 +39,16 @@ public struct CatOddBoxesModel: Sendable {
     public enum Direction: String, TLAValueType {
         case left
         case right
+
+        public static var defaultValue: Self { .left }
     }
 
     public static var spec: TLASpec {
         #spec("Cat") {
-            Extends("Naturals")
-            let catBox = SharedVar(in: 1...5)
-            let observedBox = SharedVar(in: 2...4)
-            let direction = SharedVar(in: SetExpr<Direction>.literal(.left, .right))
+            Extends(.naturals)
+            let catBox = SharedVar("catBox", in: 1...5)
+            let observedBox = SharedVar("observedBox", in: 2...4)
+            let direction = SharedVar("direction", in: SetExpr<Direction>.literal(.left, .right))
 
             Invariant("TypeOK") {
                 catBox >= 1 && catBox <= 5

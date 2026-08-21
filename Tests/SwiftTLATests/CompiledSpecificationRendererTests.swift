@@ -4,6 +4,31 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("compilation rejects a module name that requires renderer rewriting")
+    func compilationRejectsInvalidModuleName() {
+        let specification = TLASpec(name: "Invalid Root", variables: [], actions: [], invariants: [])
+
+        do {
+            _ = try specification.compile()
+            Issue.record("Expected an invalid module name diagnostic.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidSpecificationName)
+            #expect(diagnostic.stage == .validation)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error).")
+        }
+    }
+
+    @Test("the compiled declaration plan owns direct module text")
+    func compiledPlanOwnsDirectModuleText() throws {
+        let compilation = try compiledBundle()
+        let plan = try #require(compilation.moduleSectionPlans["Root"])
+        let bundle = try compilation.renderedTLAModuleBundle()
+
+        #expect(bundle.root.tla == plan.renderedModuleSource)
+        #expect(bundle.root.cfg == plan.renderedConfiguration)
+    }
+
     @Test("an invalid closure cannot render or materialize a bundle")
     func invalidClosureHasNoRenderedOutcome() throws {
         let invalid = TLASpec(
@@ -36,39 +61,16 @@ struct CompiledSpecificationRendererTests {
 
         #expect(bundle.files.map(\.name) == ["Support", "Left", "Right", "Root"])
         #expect(Set(bundle.files.map(\.name)).count == bundle.files.count)
-        guard case let .compiled(_, ownership) = bundle.provenance else {
-            Issue.record("A compiled renderer produced an untrusted bundle.")
+        guard case let .compiled(_, ownership, dependencies) = bundle.provenance else {
+            Issue.record("A compiled renderer produced an external bundle.")
             return
         }
         #expect(ownership.map(\.structuralPath) == [
             ["Root", "Left", "Support"], ["Root", "Left"], ["Root", "Right"], ["Root"]
         ])
-    }
-
-    @Test("externally supplied imports complete validation without claiming compiler ownership")
-    func renderingValidatesAdditionalImportsAsUntrusted() throws {
-        let support = TLASpec(
-            name: "Support",
-            variables: [],
-            actions: [],
-            invariants: [],
-            extendsModules: "External"
-        )
-        let root = TLASpec(name: "Root", variables: [], actions: [], invariants: [], imports: [support])
-        let compilation = try root.compile()
-
-        #expect(throws: TLAModuleBundleIntegrityError.self) {
-            try compilation.renderedTLAModuleBundle()
-        }
-
-        let bundle = try compilation.renderedTLAModuleBundle(
-            additionalImports: [.init(name: "External", tla: "---- MODULE External ----\n====")]
-        )
-        #expect(bundle.files.map(\.name) == ["Support", "External", "Root"])
-        guard case .untrusted = bundle.provenance else {
-            Issue.record("An augmented bundle claimed compiler ownership.")
-            return
-        }
+        #expect(dependencies.map { ($0.importingModule, $0.importedModule) } == [
+            ("Root", "Left"), ("Left", "Support"), ("Root", "Right"), ("Right", "Support")
+        ])
     }
 
     @Test("rendering rejects a bundle whose identity no longer matches its source")
@@ -78,9 +80,11 @@ struct CompiledSpecificationRendererTests {
             spec: compilation.spec,
             formalModuleClosure: compilation.formalModuleClosure,
             identity: .init(value: "stale"),
+            layout: compilation.layout,
             bindings: compilation.bindings,
             semantics: compilation.semantics,
-            directModuleSections: compilation.directModuleSections
+            refinements: compilation.refinements,
+            moduleSectionPlans: compilation.moduleSectionPlans
         )
 
         do {
@@ -98,8 +102,8 @@ struct CompiledSpecificationRendererTests {
         let specification = TLASpec("Authored") {
             Import(support)
             Algorithm("Authored") {
-                let value = SharedVar(initial: 0)
-                Do("stay") { Assign(value, to: value.expr) }
+                let value = SharedVar("value", initial: 0)
+                Do(TestControlLabel.stay) { Assign(value, to: value.expr) }
             }
         }
         let compilation = try specification.compile()
@@ -117,9 +121,11 @@ struct CompiledSpecificationRendererTests {
             spec: compilation.spec,
             formalModuleClosure: compilation.formalModuleClosure,
             identity: .init(value: "stale"),
+            layout: compilation.layout,
             bindings: compilation.bindings,
             semantics: compilation.semantics,
-            directModuleSections: compilation.directModuleSections
+            refinements: compilation.refinements,
+            moduleSectionPlans: compilation.moduleSectionPlans
         )
         #expect(throws: CompilationDiagnostic.self) {
             try stale.renderedPlusCalBundle()
@@ -134,28 +140,6 @@ struct CompiledSpecificationRendererTests {
 
         #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
             try compilation.renderedPlusCalBundle()
-        }
-    }
-
-    @Test("rendering refuses a closure whose ownership omits a referenced dependency")
-    func renderingRejectsInvalidClosureOwnership() throws {
-        let compilation = try compiledBundle()
-        let incompleteClosure = FormalModuleClosure(
-            root: compilation.formalModuleClosure.root,
-            entries: [compilation.formalModuleClosure.root],
-            edges: []
-        )
-        let invalid = CompiledSpecification(
-            spec: compilation.spec,
-            formalModuleClosure: incompleteClosure,
-            identity: compilation.identity,
-            bindings: compilation.bindings,
-            semantics: compilation.semantics,
-            directModuleSections: compilation.directModuleSections
-        )
-
-        #expect(throws: TLAModuleBundleIntegrityError.self) {
-            try invalid.renderedTLAModuleBundle()
         }
     }
 

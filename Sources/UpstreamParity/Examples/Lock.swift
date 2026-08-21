@@ -9,6 +9,7 @@ public struct LockModel: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.locks-auxiliary-vars.lock.process"
@@ -17,7 +18,7 @@ public struct LockModel: Sendable {
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case l0
         case l1
         case cs
@@ -26,9 +27,9 @@ public struct LockModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Lock") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("Lock") {
-                let lock = SharedVar(initial: 1)
+                let lock = SharedVar("lock", initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     Await(value == 1)
                     Assign(value, to: 0)

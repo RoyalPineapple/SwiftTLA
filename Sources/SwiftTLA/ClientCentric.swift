@@ -13,23 +13,10 @@ public enum ClientCentric {
   }
 
   public static let module = TLASpec("ClientCentric") {
-    Extends("Naturals, TLC")
+    Extends(.naturals, .tlc)
     Parameter("Keys", kind: .variable)
     Parameter("Values", kind: .variable)
     Import(KeyValueStoreUtil.module)
-
-    // These are source-level type aliases. They are not evaluated by the
-    // isolation predicate, but retaining them makes the module source match
-    // the published ClientCentric interface.
-    Definition("State == [Keys -> Values]")
-    Definition("Operation == [op: {\"read\", \"write\"}, key: Keys, value: Values]")
-    Definition("Transaction == Seq(Operation)")
-    Definition("TimeStamp == Nat")
-    Definition("TransactionTimes == [t \\in Transaction |-> [start: TimeStamp, commit: TimeStamp]]")
-    Definition("ExecutionElem == [parentState: State, transaction: Transaction]")
-    Definition("Execution == Seq(ExecutionElem)")
-    Definition("TypeOKT(transactions) == transactions \\subseteq Transaction")
-    Definition("TypeOK(transactions, execution) == /\\ TypeOKT(transactions) /\\ execution \\in Execution")
 
     FormalDefinition("r", parameters: [.value("k"), .value("v")], body: StateExpr.record([
       "op": .value(.string("read")), "key": .variable("k"), "value": .variable("v")
@@ -276,10 +263,5 @@ public enum ClientCentric {
         .value(.variable("initialState")), .value(.variable("transactions")), .operator(op("CT_RU", arity: 2))
       ]
     ))
-    // TLC's Print is intentionally source-only: diagnostics are not state
-    // semantics and are outside the executable formal evaluator boundary.
-    // It follows the formal definitions it names because TLA+ declarations
-    // are resolved in source order.
-    Definition("SerializabilityDebug(initialState, transactions) == ~ Serializability(initialState, transactions) => Print(<<\"Executions not Serializable:\", executions(initialState, transactions)>>, FALSE)")
   }
 }

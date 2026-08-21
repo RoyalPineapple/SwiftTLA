@@ -4,16 +4,16 @@ import XCTest
 
 final class GeneratedAppleModelTests: XCTestCase {
     func testBluetoothModelsVerify() throws {
-        try BluetoothModel.verifySpec()
-        try PeripheralModel.verifySpec()
+        try BluetoothModel.verifySpec(configuration: .standard)
+        try PeripheralModel.verifySpec(configuration: .standard)
     }
 
     func testAVPipelineModelsVerify() throws {
-        try CaptureModel.verifySpec()
-        try WriterModel.verifySpec()
-        try PlayerModel.verifySpec()
-        try DiskStoreModel.verifySpec()
-        try MediaPipelineModel.verifySpec()
+        try CaptureModel.verifySpec(configuration: .standard)
+        try WriterModel.verifySpec(configuration: .standard)
+        try PlayerModel.verifySpec(configuration: .standard)
+        try DiskStoreModel.verifySpec(configuration: .standard)
+        try MediaPipelineModel.verifySpec(configuration: .standard)
     }
 
     func testCaptureGeneratedLifecycle() async throws {

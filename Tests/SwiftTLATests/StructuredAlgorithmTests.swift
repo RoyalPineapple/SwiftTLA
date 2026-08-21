@@ -10,6 +10,7 @@ private struct StructuredCarModel {
         case north
         case south
 
+        static var defaultValue: Self { .north }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.structured-car")
 
@@ -20,6 +21,7 @@ private struct StructuredCarModel {
         case closed
         case open
 
+        static var defaultValue: Self { .closed }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.structured-door")
 
@@ -54,13 +56,13 @@ private struct StructuredCarModel {
     static var spec: TLASpec {
         #spec("StructuredCar") {
             Algorithm("StructuredCar") {
-                let cars = SharedVar(initial: Function<Car, Record<CarRecord>>.literal(
+                let cars = SharedVar("cars", initial: Function<Car, Record<CarRecord>>.literal(
                     (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, .closed))),
                     (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, .closed)))
                 ))
 
                 Each(Car.all) { car in
-                    Do("open") {
+                    Do(TestControlLabel.open) {
                         When(cars[car][CarRecord.door] == .closed)
                         Assign(cars, to: cars.updating(car) { vehicle in
                             vehicle.updating(CarRecord.door, to: .open)
@@ -100,7 +102,7 @@ struct StructuredAlgorithmTests {
                 }
             )
             cars
-            Do("hold") { Assign(cars, to: cars.expr) }
+            Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
         }
 
         let spec = try compiledSourceSpecification(algorithm)

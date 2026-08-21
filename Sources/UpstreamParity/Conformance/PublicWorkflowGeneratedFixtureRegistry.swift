@@ -62,7 +62,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
           },
           propertyOutcomes: compilation.propertyOutcomes(in:)))
     default:
-      throw PublicWorkflowGovernanceError.invalidField(
+      throw ConformanceGovernanceError.invalidField(
         record: id, field: "compiled generated fixture registry")
     }
   }
@@ -73,7 +73,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
   ) throws -> [PublicWorkflowGeneratedAction] {
     try names.map { name in
       guard let id = compilation.actionID(named: name) else {
-        throw PublicWorkflowGovernanceError.invalidField(
+        throw ConformanceGovernanceError.invalidField(
           record: compilation.identity.value,
           field: "compiled fixture action \(name)"
         )

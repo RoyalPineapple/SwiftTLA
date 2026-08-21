@@ -16,7 +16,7 @@ struct CoreConformanceFixtureContractTests {
     #expect(elevator.invocationMappings.first?.arguments == ["\"alice\"", "0", "\"up\""])
     #expect(elevator.invocationMappings.last?.wrapper == "completeRide__1_1_2")
     #expect(Set(elevator.invocationMappings.map(\.wrapper)).count == 80)
-    #expect(Set(elevator.invocationMappings.map(\.runtimeValue.swiftLabel)).count == 80)
+    #expect(Set(try elevator.invocationMappings.map { try $0.runtimeValue().swiftLabel }).count == 80)
     #expect(elevator.valueNormalizations.count == 1)
     #expect(elevator.valueNormalizations.first?.binding == "cars")
     #expect(elevator.valueNormalizations.first?.functionKeys == ["\"carA\"": "carA", "\"carB\"": "carB"])
@@ -25,7 +25,7 @@ struct CoreConformanceFixtureContractTests {
 
   @Test("retained adversarial fixture preserves the complete labeled graph relation")
   func preservesAdversarialGraphContract() throws {
-    let expectedCase = adversarialFixtureCase()
+    let expectedCase = try adversarialFixtureCase()
     let data = try fixtureData("spike/run-1/events.jsonl")
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let stream = try parser.parse(data)
@@ -87,7 +87,7 @@ struct CoreConformanceFixtureContractTests {
 
   @Test("retained corrupt graph fixtures fail closed")
   func rejectsRetainedCorruptFixtures() throws {
-    let parser = TLCGraphEventParser(expectedCase: adversarialFixtureCase())
+    let parser = TLCGraphEventParser(expectedCase: try adversarialFixtureCase())
     let corruptFixtures = [
       "altered-payload",
       "altered-provenance",
@@ -121,7 +121,7 @@ struct CoreConformanceFixtureContractTests {
 
   @Test("DOT, traces, and graph streams cannot substitute for each other")
   func rejectsCrossFormatEvidence() throws {
-    let graphParser = TLCGraphEventParser(expectedCase: adversarialFixtureCase())
+    let graphParser = TLCGraphEventParser(expectedCase: try adversarialFixtureCase())
     let traceParser = TLCTraceParser()
     let graph = try fixtureData("spike/run-1/events.jsonl")
     let dot = try fixtureData("spike/run-1/graph.dot")
@@ -137,16 +137,16 @@ struct CoreConformanceFixtureContractTests {
     state.bindings.first { $0.name == "x" }?.tla
   }
 
-  private func adversarialFixtureCase() -> CoreConformanceCase {
+  private func adversarialFixtureCase() throws -> CoreConformanceCase {
     let module = fixtureURL("Tools/TLCGraphBridge/spike/BridgeGraph.tla")
     let configuration = fixtureURL("Tools/TLCGraphBridge/spike/BridgeGraph.cfg")
     let arguments = ["-workers", "1", "-fp", "1", "-seed", "1", "-deadlock"]
-    return try! CoreConformanceCase(
+    return try CoreConformanceCase(
       id: "adversarial-core-graph-v1",
-      moduleSHA256: SHA256.hex(try! Data(contentsOf: module)),
-      cfgSHA256: SHA256.hex(try! Data(contentsOf: configuration)),
+      moduleSHA256: SHA256.hex(try Data(contentsOf: module)),
+      cfgSHA256: SHA256.hex(try Data(contentsOf: configuration)),
       arguments: arguments,
-      argumentsSHA256: CoreConformanceCase.argumentsDigest(arguments),
+      argumentsSHA256: try CoreConformanceCase.argumentsDigest(arguments),
       workers: 1,
       fingerprintPolynomial: 1,
       deadlock: false,

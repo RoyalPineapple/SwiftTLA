@@ -11,6 +11,7 @@ public struct TeachingSimpleRegularN8Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case p0, p1, p2, p3, p4, p5, p6, p7
 
+        public static var defaultValue: Self { .p0 }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(
             rawValue: "upstream.teaching-concurrency.simple-regular.n8.process"
@@ -18,25 +19,23 @@ public struct TeachingSimpleRegularN8Model: Sendable {
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a1
         case a2
         case b
     }
 
-    public static let verificationStateLimit = 300_000
-
     public static var spec: TLASpec {
         #spec("SimpleRegular") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("SimpleRegular") {
-                let x = SharedVar(initial: Function<Process, SetExpr<Int>>.literal(
+                let x = SharedVar("x", initial: Function<Process, SetExpr<Int>>.literal(
                     (.p0, SetExpr<Int>.literal(0)), (.p1, SetExpr<Int>.literal(0)),
                     (.p2, SetExpr<Int>.literal(0)), (.p3, SetExpr<Int>.literal(0)),
                     (.p4, SetExpr<Int>.literal(0)), (.p5, SetExpr<Int>.literal(0)),
                     (.p6, SetExpr<Int>.literal(0)), (.p7, SetExpr<Int>.literal(0))
                 ))
-                let y = SharedVar(initial: Function<Process, Int>.literal(
+                let y = SharedVar("y", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0), (.p3, 0),
                     (.p4, 0), (.p5, 0), (.p6, 0), (.p7, 0)
                 ))
@@ -78,7 +77,7 @@ extension Example {
         upstreamModule: "specifications/TeachingConcurrency/SimpleRegular.tla",
         upstreamCfg: "specifications/TeachingConcurrency/SimpleRegular.cfg",
         expectedDistinct: 277_726,
-        verificationStateLimit: TeachingSimpleRegularN8Model.verificationStateLimit,
+        maximumStateLimit: 300_000,
         spec: TeachingSimpleRegularN8Model.spec,
         notes: "N=8 regular-register process family. TLC = 277,726."
     )

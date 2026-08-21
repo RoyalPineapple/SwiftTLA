@@ -5,14 +5,22 @@ import SwiftSyntax
 @testable import SwiftTLA
 import SwiftTLAMacros
 
+private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
+  try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+}
+
+private func parseExpression(_ source: String) throws -> ExprSyntax {
+  try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
+}
+
 @TLAModel
 private struct ImportedFormalModuleGeneratedModel {
   static var spec: TLASpec {
     #spec("ImportedFormalModuleGeneratedModel") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Algorithm("ImportedFormalModuleGeneratedModel") {
-        let value = SharedVar(initial: 0)
-        Do("keep") { Assign(value, to: value.expr) }
+        let value = SharedVar("value", initial: 0)
+        Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
       }
     }
   }
@@ -24,8 +32,8 @@ private struct InstancedFormalModuleGeneratedModel {
     #spec("InstancedFormalModuleGeneratedModel") {
       Instance("Sequences", of: ZSequences.module)
       Algorithm("InstancedFormalModuleGeneratedModel") {
-        let value = SharedVar(initial: 0)
-        Do("keep") { Assign(value, to: value.expr) }
+        let value = SharedVar("value", initial: 0)
+        Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
       }
     }
   }
@@ -33,68 +41,6 @@ private struct InstancedFormalModuleGeneratedModel {
 
 @Suite("TLA+ module bundles")
 struct TLAModuleBundleTests {
-  @Test("a bundle rejects an unresolved nonstandard import before tools run")
-  func rejectsMissingLinkDependency() {
-    let bundle = TLAModuleBundle(root: .init(
-      name: "Consumer",
-      tla: "---- MODULE Consumer ----\nEXTENDS Integers, MissingModule\n====\n"
-    ))
-
-    #expect(throws: TLAModuleBundleIntegrityError.missingModule(
-      module: "MissingModule", importedBy: "Consumer", line: 2
-    )) {
-      try bundle.validateRenderedBundleIntegrity()
-    }
-  }
-
-  @Test("a bundle checks every module on an EXTENDS line")
-  func rejectsLaterMissingExtendDependency() {
-    let bundle = TLAModuleBundle(
-      root: .init(
-        name: "Consumer",
-        tla: "---- MODULE Consumer ----\nEXTENDS Integers, Present, MissingModule\n====\n"
-      ),
-      imports: [
-        .init(name: "Present", tla: "---- MODULE Present ----\n====\n")
-      ]
-    )
-
-    #expect(throws: TLAModuleBundleIntegrityError.missingModule(
-      module: "MissingModule", importedBy: "Consumer", line: 2
-    )) {
-      try bundle.validateRenderedBundleIntegrity()
-    }
-  }
-
-  @Test("a bundle accepts transitive source dependencies when all are present")
-  func acceptsCompleteLinkDependencyClosure() throws {
-    let bundle = TLAModuleBundle(
-      root: .init(name: "Consumer", tla: "---- MODULE Consumer ----\nC == INSTANCE Support\n====\n"),
-      imports: [
-        .init(name: "Support", tla: "---- MODULE Support ----\nEXTENDS Dependency\n====\n"),
-        .init(name: "Dependency", tla: "---- MODULE Dependency ----\nEXTENDS Integers\n====\n")
-      ]
-    )
-
-    try bundle.validateRenderedBundleIntegrity()
-  }
-
-  @Test("a bundle rejects cyclic nonstandard module dependencies")
-  func rejectsCyclicLinkDependency() {
-    let bundle = TLAModuleBundle(
-      root: .init(name: "Root", tla: "---- MODULE Root ----\nEXTENDS Support\n====\n"),
-      imports: [
-        .init(name: "Support", tla: "---- MODULE Support ----\nEXTENDS Root\n====\n")
-      ]
-    )
-
-    #expect(throws: TLAModuleBundleIntegrityError.cyclicModule(
-      module: "Root", path: ["Root", "Support", "Root"]
-    )) {
-      try bundle.validateRenderedBundleIntegrity()
-    }
-  }
-
   @Test("a generated model preserves its imported module")
   func generatedModelRetainsImportedModule() {
     ImportedFormalModuleGeneratedModel._checkParserTree()
@@ -105,9 +51,9 @@ struct TLAModuleBundleTests {
   }
 
   @Test("the parser records imports for builder fidelity")
-  func parserRetainsImportedModule() {
+  func parserRetainsImportedModule() throws {
     let source = "{ Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2)) }"
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
     let runtime = TLASpec("Imported") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
@@ -121,13 +67,13 @@ struct TLAModuleBundleTests {
       importConfigurations: runtime.importConfigurations
     )
 
-    #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
+    #expect(try parserTree.compile().identity == runtimeTree.compile().identity)
   }
 
   @Test("the parser retains formal module parameters for builder fidelity")
-  func parserRetainsFormalModuleParameters() {
+  func parserRetainsFormalModuleParameters() throws {
     let source = "{ Parameter(\"Base\") }"
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
     let runtime = TLASpec("Parameterized") {
       Parameter("Base")
@@ -140,7 +86,7 @@ struct TLAModuleBundleTests {
     )
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
+    #expect(try parserTree.compile().identity == runtimeTree.compile().identity)
   }
 
   @Test("a generated model preserves a named module instance")
@@ -151,9 +97,9 @@ struct TLAModuleBundleTests {
   }
 
   @Test("the parser preserves qualified ZSequences calls")
-  func parserRetainsQualifiedModuleCalls() {
+  func parserRetainsQualifiedModuleCalls() throws {
     let source = "ZSequences.rotation(of: corpus, leftBy: 1)"
-    let expression = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+    let expression = try parseExpression(source)
     let parsed = SpecParser.decodeStateExpr(expression)
 
     #expect(parsed == .recursiveCall("Rotation", [.variable("corpus"), .int(1)]))

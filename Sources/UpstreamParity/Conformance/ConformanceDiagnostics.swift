@@ -63,7 +63,7 @@ extension ConformanceDifference {
   /// A concrete explanation of this exact graph difference.
   ///
   /// In core conformance, `expected` is TLC and `actual` is SwiftTLA. The
-  /// complete graph remains in `tlc.json` and `swift.json`; this report points
+  /// complete graph remains in `tlc-run.json` and `swift-run.json`; this report points
   /// to the first stable witness instead of flattening the difference into
   /// "graph differs".
   public var failureReport: ConformanceFailureReport {
@@ -90,7 +90,7 @@ extension ConformanceDifference {
         where: "canonical initial states",
         expected: expected,
         actual: actual,
-        next: "Inspect the first differing state in tlc.json and swift.json, then compare the Init predicates."
+        next: "Inspect the first differing state in tlc-run.json and swift-run.json, then compare the Init predicates."
       )
     case .states(let expected, let actual):
       return setDifferenceReport(
@@ -98,7 +98,7 @@ extension ConformanceDifference {
         where: "canonical state space",
         expected: expected,
         actual: actual,
-        next: "Inspect the first differing state in tlc.json and swift.json, then compare the action guards and assignments that can reach it."
+        next: "Inspect the first differing state in tlc-run.json and swift-run.json, then compare the action guards and assignments that can reach it."
       )
     case .edges(let expected, let actual):
       return edgeDifferenceReport(expected: expected, actual: actual)
@@ -110,7 +110,7 @@ extension ConformanceDifference {
         whereItFailed: "finite conformance outcome",
         expected: "TLC outcome: \(describe(expected))",
         actual: "SwiftTLA outcome: \(describe(actual))",
-        nextSafeAction: "Inspect tlc.json and swift.json outcomes and their retained traces before changing the model."
+        nextSafeAction: "Inspect tlc-run.json and swift-run.json outcomes and their retained traces before changing the model."
       )
     case .errors(let expected, let actual):
       return .init(
@@ -126,7 +126,7 @@ extension ConformanceDifference {
         whereItFailed: "canonical trace evidence",
         expected: describe(expected),
         actual: describe(actual),
-        nextSafeAction: "Inspect the first differing trace step in tlc.json and swift.json before changing the model."
+        nextSafeAction: "Inspect the first differing trace step in tlc-run.json and swift-run.json before changing the model."
       )
     }
   }
@@ -242,7 +242,7 @@ private func edgeDifferenceReport(
       whatFailed: "The labeled transition multisets differ.", whereItFailed: "canonical transition relation",
       expected: "TLC and SwiftTLA retain the same transition occurrences.",
       actual: "The occurrence counts differ, but no stable witness was available.",
-      nextSafeAction: "Inspect the retained edges in tlc.json and swift.json."
+      nextSafeAction: "Inspect the retained edges in tlc-run.json and swift-run.json."
     )
   }
   return .init(
@@ -250,7 +250,7 @@ private func edgeDifferenceReport(
     whereItFailed: "action \(witness.action) from \(witness.source.canonicalEncoding) to \(witness.target.canonicalEncoding)",
     expected: "TLC permits this transition \(expected[witness, default: 0]) time(s).",
     actual: "SwiftTLA permits this transition \(actual[witness, default: 0]) time(s).",
-    nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc.json and swift.json."
+    nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc-run.json and swift-run.json."
   )
 }
 
@@ -266,7 +266,7 @@ private func observationDifferenceReport(
     whereItFailed: witness.map { "canonical state \($0.canonicalEncoding)" } ?? "canonical state observations",
     expected: describe(expectedObservation),
     actual: describe(actualObservation),
-    nextSafeAction: "Compare the enabled action guards at the named state in tlc.json and swift.json."
+    nextSafeAction: "Compare the enabled action guards at the named state in tlc-run.json and swift-run.json."
   )
 }
 

@@ -11,6 +11,7 @@ public struct ParallelReachableModel: Sendable {
     public enum Node: Int, FiniteDomainKey {
         case one = 1, two = 2, three = 3, four = 4
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain: [Self] = [.one, .two, .three, .four]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.parallel-reachable.node")
         public var tlaValue: TLAValue { .int(rawValue) }
@@ -19,18 +20,19 @@ public struct ParallelReachableModel: Sendable {
     public enum Worker: Int, FiniteDomainKey {
         case one = 1, two = 2
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain: [Self] = [.one, .two]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.parallel-reachable.worker")
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a, b, c
     }
 
     public static var spec: TLASpec {
         #spec("ParallelReachability") {
-            Extends("FiniteSets")
+            Extends(.finiteSets)
             Algorithm("ParallelReachability") {
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
@@ -39,12 +41,12 @@ public struct ParallelReachableModel: Sendable {
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )
-                let marked = SharedVar(initial: SetExpr<Node>())
-                let frontier = SharedVar(initial: SetExpr<Node>.literal(.one))
+                let marked = SharedVar("marked", initial: SetExpr<Node>())
+                let frontier = SharedVar("frontier", initial: SetExpr<Node>.literal(.one))
 
                 Each(Worker.all, fairness: .weak) { _ in
-                    let current: LocalVariable<Node> = LocalVar(initial: .one)
-                    let pending: LocalVariable<SetExpr<Node>> = LocalVar(initial: SetExpr<Node>())
+                    let current: LocalVariable<Node> = LocalVar("current", initial: .one)
+                    let pending: LocalVariable<SetExpr<Node>> = LocalVar("pending", initial: SetExpr<Node>())
 
                     Do(Step.a) {
                         Either {

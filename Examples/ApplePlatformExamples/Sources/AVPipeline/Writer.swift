@@ -6,21 +6,22 @@ import SwiftTLAMacros
 public struct WriterModel {
     public enum Phase: String, CaseIterable, FiniteDomainKey {
         case configured, writing, paused, finished, cancelled
+        public static var defaultValue: Self { .configured }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer-phase")
         public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum StartProcess: String, FiniteDomainKey { case startEvent; static let formalDomain: [Self] = [.startEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.start"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum WriteProcess: String, FiniteDomainKey { case writeEvent; static let formalDomain: [Self] = [.writeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.write"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum PauseProcess: String, FiniteDomainKey { case pauseEvent; static let formalDomain: [Self] = [.pauseEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.pause"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum ResumeProcess: String, FiniteDomainKey { case resumeEvent; static let formalDomain: [Self] = [.resumeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.resume"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum FinishProcess: String, FiniteDomainKey { case finishEvent; static let formalDomain: [Self] = [.finishEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.finish"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum CancelProcess: String, FiniteDomainKey { case cancelEvent; static let formalDomain: [Self] = [.cancelEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.cancel"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum Step: String, PlusCalLabel { case start, write, pause, resume, finish, cancel }
+    private enum StartProcess: String, FiniteDomainKey { case startEvent; static var defaultValue: Self { .startEvent }; static let formalDomain: [Self] = [.startEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.start"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum WriteProcess: String, FiniteDomainKey { case writeEvent; static var defaultValue: Self { .writeEvent }; static let formalDomain: [Self] = [.writeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.write"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum PauseProcess: String, FiniteDomainKey { case pauseEvent; static var defaultValue: Self { .pauseEvent }; static let formalDomain: [Self] = [.pauseEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.pause"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum ResumeProcess: String, FiniteDomainKey { case resumeEvent; static var defaultValue: Self { .resumeEvent }; static let formalDomain: [Self] = [.resumeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.resume"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum FinishProcess: String, FiniteDomainKey { case finishEvent; static var defaultValue: Self { .finishEvent }; static let formalDomain: [Self] = [.finishEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.finish"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum CancelProcess: String, FiniteDomainKey { case cancelEvent; static var defaultValue: Self { .cancelEvent }; static let formalDomain: [Self] = [.cancelEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.writer.cancel"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum Step: String, PlusCalLabel, CaseIterable { case start, write, pause, resume, finish, cancel }
     public static var spec: TLASpec {
         #spec("WriterModel") {
             Algorithm("WriterModel") {
-                let phase = SharedVar(initial: Phase.configured)
+                let phase = SharedVar("phase", initial: Phase.configured)
                 Each(StartProcess.all) { _ in Do(Step.start) { When(phase == .configured); Assign(phase, to: Phase.writing); Goto(Step.start) } }
                 Each(WriteProcess.all) { _ in Do(Step.write) { When(phase == .writing); Assign(phase, to: Phase.writing); Goto(Step.write) } }
                 Each(PauseProcess.all) { _ in Do(Step.pause) { When(phase == .writing); Assign(phase, to: Phase.paused); Goto(Step.pause) } }
@@ -39,8 +40,8 @@ extension Media {
         private let machine = WriterModel.Machine()
         public let writer: AVAssetWriter
         public let input: AVAssetWriterInput
-        public init(url: URL, fileType: AVFileType, outputSettings: [String: Any]) {
-            writer = try! AVAssetWriter(url: url, fileType: fileType)
+        public init(url: URL, fileType: AVFileType, outputSettings: [String: Any]) throws {
+            writer = try AVAssetWriter(url: url, fileType: fileType)
             input = AVAssetWriterInput(mediaType: .video, outputSettings: outputSettings)
             writer.add(input)
         }

@@ -18,7 +18,7 @@ public struct LamportMutexModel: Sendable {
             .int(2): TLAValue.function([.int(1): 0, .int(2): 0])]
 
         return #spec("LamportMutex") {
-            Extends("Integers")
+            Extends(.integers)
             let clock = Var<TLAValue>("clock")
             let req = Var<TLAValue>("req")
             let ack = Var<TLAValue>("ack")

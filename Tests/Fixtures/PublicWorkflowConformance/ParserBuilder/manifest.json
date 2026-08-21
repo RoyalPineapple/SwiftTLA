@@ -18,7 +18,7 @@
       "javaVersion": "not-applicable-parser-builder",
       "javaArchiveSHA256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e",
       "bridgeClass": "SwiftTLA.PublicWorkflowParserBuilderAdapter",
-      "bridgeSourceSHA256": "0d78df1a490150176110482fd2fa28478b712318ce32caef782030697cbdfce7",
+      "bridgeSourceSHA256": "8b191df81173b4dc4fb88e84203e48f8976237591db8f337fba963477d517803",
       "bridgeBinarySHA256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e"
     },
     "sourceInput": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/fixture.swift", "sha256": "903c5ff1b0fd5751795310860054fbf781e311e04a37a6cefc808b2cfe576bb9" },
@@ -35,7 +35,8 @@
     "dependencies": [
       { "id": "swiftSyntaxResolution", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
       { "id": "swiftTLAPackage", "evidence": { "path": "Package.swift", "sha256": "b0b438a2d9202d9dd84ab6b9b4c25411690ae4018753802ea148cd481df4beec" } },
-      { "id": "adapterSource", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift", "sha256": "0d78df1a490150176110482fd2fa28478b712318ce32caef782030697cbdfce7" } }
+      { "id": "adapterSource", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift", "sha256": "3ec7c1d9986f085203936f25a8b3f52e917d13cb68e1bade02dde68117b4a0af" } },
+      { "id": "evidenceSource", "evidence": { "path": "Sources/UpstreamParity/Conformance/ConformanceEvidence.swift", "sha256": "b42d0f7d5385737381b0f51e88225bcf84a49e562f3685619de7f72aa172d9b5" } }
     ],
     "notApplicable": [
       { "id": "tlc", "reason": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json", "sha256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e" } },

@@ -72,29 +72,32 @@ extension ActionExpr {
     }
 }
 
+extension ActionExpr {
+    func substitutingVariable(_ name: String, with replacement: StateExpr) -> ActionExpr {
+        func state(_ expression: StateExpr) -> StateExpr {
+            StateExpr.substituteVariable(name, with: replacement, in: expression)
+        }
+        func action(_ expression: ActionExpr) -> ActionExpr {
+            switch expression {
+            case .assign(let target, let value): return .assign(target, state(value))
+            case .unchanged: return expression
+            case .guard_(let condition): return .guard_(state(condition))
+            case .chooseAction(let target, let values): return .chooseAction(target, state(values))
+            case .existsAction(let binder, let values, let body): return .existsAction(binder, state(values), binder == name ? body : action(body))
+            case .ifElse(let condition, let then, let otherwise): return .ifElse(state(condition), action(then), action(otherwise))
+            case .define(let binder, let value, let body): return .define(binder, state(value), binder == name ? body : action(body))
+            case .and(let lhs, let rhs): return .and(action(lhs), action(rhs))
+            case .or(let lhs, let rhs): return .or(action(lhs), action(rhs))
+            }
+        }
+        return action(self)
+    }
+}
+
 /// Substitute a free variable reference with a concrete value in an ActionExpr.
 /// A nested TLA binder can shadow the name. Its body stays unchanged.
 public func substituteVar(_ param: String, with value: TLAValue, in action: ActionExpr) -> ActionExpr {
-    func state(_ expression: StateExpr) -> StateExpr {
-        StateExpr.substituteVariable(param, value, in: expression)
-    }
-    func recurse(_ expression: ActionExpr) -> ActionExpr {
-        switch expression {
-        case .assign(let name, let expression): return .assign(name, state(expression))
-        case .unchanged: return expression
-        case .guard_(let condition): return .guard_(state(condition))
-        case .chooseAction(let name, let set): return .chooseAction(name, state(set))
-        case .existsAction(let name, let set, let body):
-            return .existsAction(name, state(set), name == param ? body : recurse(body))
-        case .ifElse(let condition, let then, let otherwise):
-            return .ifElse(state(condition), recurse(then), recurse(otherwise))
-        case .define(let name, let definition, let body):
-            return .define(name, state(definition), name == param ? body : recurse(body))
-        case .and(let lhs, let rhs): return .and(recurse(lhs), recurse(rhs))
-        case .or(let lhs, let rhs): return .or(recurse(lhs), recurse(rhs))
-        }
-    }
-    return recurse(action)
+    action.substitutingVariable(param, with: .value(value))
 }
 
 extension ActionExpr {

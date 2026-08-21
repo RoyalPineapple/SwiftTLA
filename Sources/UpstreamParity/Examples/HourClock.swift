@@ -5,7 +5,7 @@ import SwiftTLAMacros
 public struct HourClockModel: Sendable {
     public static var spec: TLASpec {
         #spec("HourClock") {
-            let hr = SharedVar(in: 1...12)
+            let hr = SharedVar("hr", in: 1...12)
             Action("HCnxt") {
                 (hr != 12 && hr.becomes(hr + 1)) ||
                 (hr == 12 && hr.becomes(1))

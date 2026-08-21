@@ -33,8 +33,8 @@ private struct CompilerPipelineAlgorithmModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineAlgorithmModel") {
             Algorithm("CompilerPipelineAlgorithmModel") {
-                let count = SharedVar(initial: 0)
-                Do("increment") {
+                let count = SharedVar("count", initial: 0)
+                Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                 }
             }
@@ -85,6 +85,8 @@ struct CompilerPipelineCanonicalizationTests {
         let second = try sourceModel().compile()
 
         #expect(first.identity == second.identity)
+        #expect(first.identity.value.count == 64)
+        #expect(first.identity.value.allSatisfy { $0.isHexDigit })
         #expect(try first.renderedTLAModuleBundle().root.tla == second.renderedTLAModuleBundle().root.tla)
     }
 
@@ -129,7 +131,7 @@ struct CompilerPipelineCanonicalizationTests {
         }
 
         let compilation = try spec.compile()
-        let checker = ModelChecker(compilation: compilation, maxStates: 3)
+        let checker = ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3))
 
         #expect(checker.compilation.identity == compilation.identity)
         let counter = try #require(TLAStateProjection.Token(validating: "counter"))
@@ -171,17 +173,17 @@ struct CompilerPipelineCanonicalizationTests {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
-                Do("start") {
+                Do(TestControlLabel.start) {
                     Assign(value, to: value + 1)
                 }
             }
             Procedure("first") {
-                Do("start") {
+                Do(TestControlLabel.start) {
                     Return()
                 }
             }
             Procedure("second") {
-                Do("start") {
+                Do(TestControlLabel.start) {
                     Return()
                 }
             }
@@ -213,17 +215,17 @@ struct CompilerPipelineCanonicalizationTests {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
-                Do("changed") {
+                Do(TestControlLabel.changed) {
                     Assign(value, to: value + 1)
                 }
             }
             Procedure("first") {
-                Do("start") {
+                Do(TestControlLabel.start) {
                     Return()
                 }
             }
             Procedure("second") {
-                Do("start") {
+                Do(TestControlLabel.start) {
                     Return()
                 }
             }
@@ -237,11 +239,11 @@ struct CompilerPipelineCanonicalizationTests {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
-                Do("start") {
+                Do(TestControlLabel.start) {
                     Assign(value, to: value + 1)
-                    Goto("finish")
+                    Goto(TestControlLabel.finish)
                 }
-                Do("finish") {
+                Do(TestControlLabel.finish) {
                     Stop()
                 }
             }
@@ -501,7 +503,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstSuccessor.count == 1)
         #expect(try runtime.invariantHolds(compilation.semantics.invariants[0], in: firstSuccessor[0].state))
 
-        let exploration = try ModelChecker(compilation: compilation, maxStates: 10).explore()
+        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).explore()
         #expect(exploration.graph.states.count == 5)
         #expect(exploration.isComplete)
     }
@@ -815,7 +817,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try CompilerPipelineAlgorithmModel.compiledSpecification()
 
         #expect(try CompilerPipelineAlgorithmModel.compiledSpecification().identity == compilation.identity)
-        #expect(try CompilerPipelineAlgorithmModel.verifySpec() > 0)
+        #expect(try CompilerPipelineAlgorithmModel.verifySpec(configuration: .standard) > 0)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineAlgorithmModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 
@@ -957,7 +959,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try CompilerPipelineGeneratedModel.compiledSpecification()
 
         #expect(try CompilerPipelineGeneratedModel.compiledSpecification().identity == compilation.identity)
-        #expect(try CompilerPipelineGeneratedModel.verifySpec() > 0)
+        #expect(try CompilerPipelineGeneratedModel.verifySpec(configuration: .standard) > 0)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineGeneratedModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 
@@ -996,11 +998,10 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let variants = [
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], checkDeadlock: true),
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], theorems: ["Safety == TRUE"]),
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveDefs: ["CountDown(_)"]),
+            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], theorems: [Theorem(name: "Safety", always: .value(.bool(true)))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], symmetricCollections: [.init(name: "members", verificationScope: 1, initial: .int(0))]),
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], extendsModules: "Naturals")
+            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], extendsModules: [.naturals])
         ]
 
         let identity = try base.compile().identity
@@ -1072,5 +1073,54 @@ struct CompilerPipelineCanonicalizationTests {
         )
 
         #expect(try splitValues.compile().identity != embeddedSeparator.compile().identity)
+    }
+
+    @Test("invalid action parameter declarations fail during compilation")
+    func invalidActionParameterDeclarationsFailDuringCompilation() {
+        let specification = TLASpec(
+            name: "InvalidActionParameters",
+            variables: [NamedVar(name: "value", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "advance",
+                    body: .assign("value", .int(1)),
+                    bindings: [.init(name: "", values: [.int(1)])]
+                )
+            ],
+            invariants: []
+        )
+
+        do {
+            _ = try specification.compile()
+            Issue.record("Expected invalid action parameters to fail compilation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidActionBinding)
+            #expect(diagnostic.stage == .lowering)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("invalid formal declarations fail during compilation")
+    func invalidFormalDeclarationsFailDuringCompilation() {
+        let specification = TLASpec(
+            name: "InvalidFormalDeclaration",
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(name: "", parameters: [], body: .value(.bool(true)))
+            ]
+        )
+
+        do {
+            _ = try specification.compile()
+            Issue.record("Expected invalid formal declaration to fail compilation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidFormalDeclaration)
+            #expect(diagnostic.stage == .binding)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
     }
 }

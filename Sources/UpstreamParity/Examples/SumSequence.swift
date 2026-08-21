@@ -8,20 +8,20 @@ import SwiftTLAMacros
 /// preserving the algorithm's state and one-element-at-a-time loop.
 @TLAModel
 public struct SumSequenceModel: Sendable {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a
     }
 
     public static var spec: TLASpec {
         #spec("SumSequence") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("SumSequence") {
-                let sequence = SharedVar(in: Sequences(
+                let sequence = SharedVar("sequence", in: Sequences(
                     of: SetExpr<Int>.literal(-1, 0, 1),
                     lengths: 0...3
                 ))
-                let sum = SharedVar(initial: 0)
-                let index = SharedVar(initial: 1)
+                let sum = SharedVar("sum", initial: 0)
+                let index = SharedVar("index", initial: 1)
 
                 While(Step.a, index <= sequence.count) {
                     Assign(sum, to: sum + sequence[index])

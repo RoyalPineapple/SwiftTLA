@@ -1,0 +1,34 @@
+{
+  "correlation": {
+    "caseID": "hour-clock-edge-mismatch",
+    "engine": "tlc",
+    "runID": "f7414e6a-6096-4ed3-9322-e9fa9e8a7465"
+  },
+  "errors": [],
+  "format": "canonical-run-evidence",
+  "observableActions": [
+    "HCnxt"
+  ],
+  "outcome": {
+    "kind": "exhaustiveSuccess"
+  },
+  "receiptContext": {
+    "compiledModelIdentity": "retained-baseline",
+    "configurationIdentity": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
+    "maximumStateLimit": 100000,
+    "observableNameMappingIdentity": null,
+    "symmetrySchemaIdentity": "none"
+  },
+  "schema": "exactFiniteTLCGraph",
+  "traces": [],
+  "graph": {
+    "digest": "a816e85ee1e4bce17219f90f85cb36f16a0f6aee4a1ff47b321db5b50121edb9",
+    "chunks": [
+      {
+        "file": "000000.jsonl",
+        "digest": "e1e925597fb2cb5ee1354036e06718fd6e6415c7fb727bc1076f27738a54b97b",
+        "recordCount": 36
+      }
+    ]
+  }
+}

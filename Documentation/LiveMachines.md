@@ -2,7 +2,7 @@
 
 A generated `Live` value owns one runtime identity, one mutable state, and one commit order.
 
-A generated model value uses `Simulation` for local value work.
+A generated model value provides local value-based machine execution.
 
 ## Create a typed runtime
 

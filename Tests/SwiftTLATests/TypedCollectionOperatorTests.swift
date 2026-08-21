@@ -5,11 +5,83 @@ import SwiftSyntax
 import Testing
 import Foundation
 
+private func parseExpression(_ source: String) throws -> ExprSyntax {
+    try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
+}
+
+private enum InvalidLiteralDomain: String, CaseIterable, FiniteTLAValueDomain {
+    case first
+    case second
+
+    static var defaultValue: Self { .first }
+    static let finiteValues = allCases
+}
+
+private enum EmptyFiniteDomain: String, FiniteTLAValueDomain {
+    case placeholder
+
+    static var defaultValue: Self { .placeholder }
+    static let finiteValues: [Self] = []
+}
+
+private enum DuplicateFiniteDomain: String, FiniteTLAValueDomain {
+    case first
+
+    static var defaultValue: Self { .first }
+    static let finiteValues: [Self] = [.first, .first]
+}
+
+private enum PartialFiniteDomain: String, FiniteTLAValueDomain {
+    case first
+    case second
+
+    static var defaultValue: Self { .first }
+    static let finiteValues: [Self] = [.first]
+}
+
+private struct InvalidLiteralFields {
+    let count: Int
+    let enabled: Bool
+    let unlisted: Int
+}
+
+private enum InvalidLiteralSchema: TLARecordSchema {
+    typealias Fields = InvalidLiteralFields
+
+    static let fieldNames: Set<String> = ["count", "enabled"]
+    static let defaultRecord: TLAValue = .record(["count": .int(0), "enabled": .bool(false)])
+
+    static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
+        let key = field as AnyKeyPath
+        if key == \InvalidLiteralFields.count { return "count" }
+        if key == \InvalidLiteralFields.enabled { return "enabled" }
+        return nil
+    }
+
+    static let count = field(\InvalidLiteralFields.count)
+    static let enabled = field(\InvalidLiteralFields.enabled)
+    static let unlisted = field(\InvalidLiteralFields.unlisted)
+}
+
+private enum InvalidDefaultRecordSchema: TLARecordSchema {
+    typealias Fields = InvalidLiteralFields
+
+    static let fieldNames: Set<String> = ["count", "enabled"]
+    static let defaultRecord: TLAValue = .record(["count": .int(0)])
+
+    static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
+        let key = field as AnyKeyPath
+        if key == \InvalidLiteralFields.count { return "count" }
+        if key == \InvalidLiteralFields.enabled { return "enabled" }
+        return nil
+    }
+}
+
 @TLAModel
 private struct TypedCollectionGeneratedModel {
     static var spec: TLASpec {
         #spec("TypedCollectionGeneratedModel") {
-            let values = SharedVar(initial: IntRange(1, through: 4))
+            let values = SharedVar("values", initial: IntRange(1, through: 4))
             Action("keepEvenSquares") {
                 values.becomes(
                     values.expr
@@ -25,7 +97,7 @@ private struct TypedCollectionGeneratedModel {
 private struct TypedQuantifierGeneratedModel {
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") {
-            let result = SharedVar(initial: false)
+            let result = SharedVar("result", initial: false)
             Action("findEven") {
                 result.becomes(Exists(in: IntRange(1, through: 4)) { value in
                     value.expr % 2 == 0
@@ -40,10 +112,10 @@ private struct NonEmptySubsetGeneratedModel {
     static var spec: TLASpec {
         #spec("NonEmptySubsetGeneratedModel") {
             Algorithm("NonEmptySubsetGeneratedModel") {
-                let selectedKeys = SharedVar(in: NonEmptySubsets(
+                let selectedKeys = SharedVar("selectedKeys", in: NonEmptySubsets(
                     of: SetExpr<Int>.literal(1, 2)
                 ))
-                Do("keep") { Assign(selectedKeys, to: selectedKeys.expr) }
+                Do(TestControlLabel.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
             }
         }
     }
@@ -54,16 +126,16 @@ private struct ZeroBasedSequenceGeneratedModel {
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
             Algorithm("ZeroBasedSequenceGeneratedModel") {
-                let input = SharedVar(in: ZeroBasedSequences(
+                let input = SharedVar("input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
                 ))
-                let table = SharedVar(initial: ZeroBasedSequence<Int>.filled(
+                let table = SharedVar("table", initial: ZeroBasedSequence<Int>.filled(
                     length: input.count * 2 + 1,
                     with: -1
                 ))
 
-                Do("writeFirst") {
+                Do(TestControlLabel.writeFirst) {
                     Assign(table, to: table.updating(0, to: input[0]))
                 }
             }
@@ -77,9 +149,9 @@ private struct FoldGeneratedModel {
         #spec("FoldGeneratedModel") {
             Import(FunctionsModule.module)
             Algorithm("FoldGeneratedModel") {
-                let values = SharedVar(initial: TupleExpr<Int>.literal(1, 2, 3))
-                let total = SharedVar(initial: 0)
-                Do("sum") {
+                let values = SharedVar("values", initial: TupleExpr<Int>.literal(1, 2, 3))
+                let total = SharedVar("total", initial: 0)
+                Do(TestControlLabel.sum) {
                     Assign(total, to: Fold(values.expr, startingWith: 0) { element, accumulated in
                         element + accumulated
                     })
@@ -90,6 +162,72 @@ private struct FoldGeneratedModel {
 }
 
 @Suite(.serialized) struct TypedCollectionOperatorTests {
+    @Test("invalid typed literals and bounded sequences fail during compilation")
+    func invalidTypedValuesFailDuringCompilation() throws {
+        let invalidExpressions: [(StateExpr, CompilationDiagnostic.Code)] = [
+            (
+                Expr<Record<InvalidLiteralSchema>>(.variable("record"))[InvalidLiteralSchema.unlisted].raw,
+                .invalidTypedRecordField
+            ),
+            (
+                Record<InvalidLiteralSchema>.literal(
+                    .init(InvalidLiteralSchema.count, 0),
+                    .init(InvalidLiteralSchema.count, 1)
+                ).raw,
+                .invalidTypedRecordLiteral
+            ),
+            (
+                Expr<Record<InvalidDefaultRecordSchema>>(Record()).raw,
+                .invalidTypedRecordLiteral
+            ),
+            (
+                Function<InvalidLiteralDomain, Int>.literal((.first, 0), (.first, 1)).raw,
+                .invalidTypedFunctionLiteral
+            ),
+            (
+                Select(from: SetExpr<Int>.literal(1), matching: { _ in .value(.bool(false)) }).raw,
+                .invalidStaticSelection
+            ),
+            (
+                Sequences(of: Expr<SetExpr<Int>>(.variable("values")), lengths: 0...1).raw,
+                .invalidSequenceElementDomain
+            ),
+            (
+                ZeroBasedSequences(of: SetExpr<Int>.literal(1), lengths: -1...1).raw,
+                .invalidSequenceLength
+            ),
+            (
+                Function<EmptyFiniteDomain, Int>.literal((.placeholder, Expr<Int>(.value(.int(0))))).raw,
+                .invalidFiniteDomain
+            ),
+            (
+                Function<DuplicateFiniteDomain, Int>.literal((.first, 0)).raw,
+                .invalidFiniteDomain
+            ),
+            (
+                Expr<Function<PartialFiniteDomain, Int>>(.variable("lookup"))[.second].raw,
+                .invalidFiniteDomainValue
+            )
+        ]
+
+        for (expression, expectedCode) in invalidExpressions {
+            let specification = TLASpec(
+                name: "InvalidTypedValue",
+                variables: [],
+                actions: [],
+                invariants: [.init(name: "TypeOK", body: expression)]
+            )
+            do {
+                _ = try specification.compile()
+                Issue.record("Expected typed source validation to fail")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == expectedCode)
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, got \(error)")
+            }
+        }
+    }
+
     @Test("typed interval, filter, map, and dynamic tuple access evaluate")
     func typedOperatorsEvaluate() throws {
         let values = IntRange(1, through: 4)
@@ -106,9 +244,9 @@ private struct FoldGeneratedModel {
     }
 
     @Test("source parser preserves typed collection operators")
-    func parserPreservesTypedOperators() {
+    func parserPreservesTypedOperators() throws {
         let source = "IntRange(1, through: 4).filtering { value in value.expr % 2 == 0 }.mapping { value in value.expr * value.expr }.union(SetExpr<Int>.literal(25))"
-        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let syntax = try parseExpression(source)
         let parsed = SpecParser.decodeStateExpr(syntax)
 
         let values = IntRange(1, through: 4)
@@ -131,7 +269,7 @@ private struct FoldGeneratedModel {
             actions: [("evaluate", .guard_(runtime.raw), [])],
             invariants: []
         )
-        #expect(_tlaAlphaEquivalent(parsedModel, runtimeModel))
+        #expect(try parsedModel.compile().identity == runtimeModel.compile().identity)
     }
 
     @Test("typed collection operators execute in a generated model")
@@ -147,9 +285,9 @@ private struct FoldGeneratedModel {
     }
 
     @Test("typed conditional values parse without losing their result type")
-    func typedConditionalValueParses() {
+    func typedConditionalValueParses() throws {
         let source = "If(true, then: 1, else: 2)"
-        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let syntax = try parseExpression(source)
 
         #expect(
             SpecParser.decodeStateExpr(syntax)
@@ -164,15 +302,16 @@ private struct FoldGeneratedModel {
             element + accumulated
         }
         let source = "Fold(TupleExpr<Int>.literal(1, 2, 3), startingWith: 0) { element, accumulated in element + accumulated }"
-        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
 
         #expect(try compiledValue(runtime.raw) == .int(6))
         #expect(runtime.raw.description.contains("FoldFunction(LAMBDA"))
-        #expect(_tlaAlphaEquivalent(
-            canonicalTestSpec(variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []),
-            canonicalTestSpec(variables: [], actions: [("fold", .guard_(parsed), [])], invariants: [])
-        ))
+        #expect(try canonicalTestSpec(
+            variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []
+        ).compile().identity == canonicalTestSpec(
+            variables: [], actions: [("fold", .guard_(parsed), [])], invariants: []
+        ).compile().identity)
 
         let ordered = StateExpr.foldFunction(
             FormalLambda(
@@ -274,11 +413,11 @@ private struct FoldGeneratedModel {
     @Test("bounded sequence domains and terminal predicates parse as formal expressions")
     func boundedSequencesAndFinishedParse() throws {
         let sequenceSource = "Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)"
-        let sequenceSyntax = Parser.parse(source: sequenceSource).statements.first!.item.as(ExprSyntax.self)!
+        let sequenceSyntax = try parseExpression(sequenceSource)
         let sortedSource = "SortedSequences(of: SetExpr<Int>.literal(0, 1, 2), lengths: 0...2)"
-        let sortedSyntax = Parser.parse(source: sortedSource).statements.first!.item.as(ExprSyntax.self)!
+        let sortedSyntax = try parseExpression(sortedSource)
         let terminalSource = "(!Finished()) || i == f.count + 1"
-        let terminalSyntax = Parser.parse(source: terminalSource).statements.first!.item.as(ExprSyntax.self)!
+        let terminalSyntax = try parseExpression(terminalSource)
 
         let runtime = Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
         let sortedRuntime = SortedSequences(of: SetExpr<Int>.literal(0, 1, 2), lengths: 0...2)
@@ -304,7 +443,7 @@ private struct FoldGeneratedModel {
     @Test("zero-based sequence domains and indexed updates survive both paths")
     func zeroBasedSequencesSurviveThePipeline() throws {
         let source = "ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 1...2)"
-        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
         let runtime = ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 1...2)
 
@@ -338,7 +477,7 @@ private struct FoldGeneratedModel {
     @Test("non-empty subset domains parse and exclude the empty formal set")
     func nonEmptySubsetDomainsSurviveThePipeline() throws {
         let source = "NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))"
-        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
         let runtime = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
 

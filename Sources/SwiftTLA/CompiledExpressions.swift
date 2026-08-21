@@ -81,6 +81,39 @@ indirect enum CompiledStateExpr: Sendable {
     case letIn([CompiledLocalOperator], CompiledStateExpr)
 }
 
+extension CompiledStateExpr {
+    var isStateIndependent: Bool {
+        switch self {
+        case .value, .controlLocation, .operatorReference:
+            return true
+        case .stateVariable, .boundValue, .enabledAction:
+            return false
+        case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
+             .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
+             .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
+             .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
+             .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
+             .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
+             .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
+             .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
+             .except(let lhs, let rhs, _), .setSum(let lhs, let rhs), .functionSet(let lhs, let rhs):
+            return lhs.isStateIndependent && rhs.isStateIndependent
+        case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
+             .unionAll(let value), .tupleAccess(let value, _), .tupleLength(let value),
+             .tupleHead(let value), .tupleTail(let value), .domain(let value), .sequenceFromSet(let value):
+            return value.isStateIndependent
+        case .ifThenElse(let condition, let then, let otherwise):
+            return condition.isStateIndependent && then.isStateIndependent && otherwise.isStateIndependent
+        case .setLiteral(let values), .tupleLiteral(let values):
+            return values.allSatisfy(\.isStateIndependent)
+        case .setFilter, .setMap, .integerRange, .recordLiteral, .functionLiteral, .caseExpr,
+             .forAll, .exists, .choose, .foldFunction, .operatorApplication, .recursiveCall,
+             .letValue, .letIn:
+            return false
+        }
+    }
+}
+
 struct CompiledFormalLambda: Sendable {
     let parameters: [BinderID]
     let body: CompiledStateExpr

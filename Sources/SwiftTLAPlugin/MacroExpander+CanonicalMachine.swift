@@ -43,16 +43,16 @@ extension MacroExpander {
                 _machine.snapshot
             }
             """),
+            DeclSyntax(stringLiteral: """
+            public struct TransitionResult: Sendable, Equatable {
+                public let action: ActionLabel
+                public let before: State
+                public let after: State
+            }
+            """),
         ]
         if hasActions {
             members += [
-                DeclSyntax(stringLiteral: """
-                public struct TransitionResult: Sendable, Equatable {
-                    public let action: ActionLabel
-                    public let before: State
-                    public let after: State
-                }
-                """),
                 DeclSyntax(stringLiteral: """
                 public struct MachineObservation: Sendable, Equatable {
                     public let state: State
@@ -67,7 +67,7 @@ extension MacroExpander {
                 """),
                 DeclSyntax(stringLiteral: """
                 public func availableActions() throws -> [ActionLabel] {
-                    try _actionExecutor().availableLabels(in: _stateWithLiveCollections()).filter {
+                    try _machine.availableActions(in: _stateWithLiveCollections()).filter {
                         !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: $0))
                     }
                 }
@@ -82,7 +82,6 @@ extension MacroExpander {
                 \(identityRoutedGuard)
                 let evidence = try _machine.apply(
                     action,
-                    using: _actionExecutor(),
                     from: _stateWithLiveCollections()
                 ) { _ in true }
                 return TransitionResult(

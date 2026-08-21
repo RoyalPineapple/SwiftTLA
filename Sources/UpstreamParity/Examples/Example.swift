@@ -7,16 +7,16 @@ public enum Example {
         public let upstreamModule: String
         public let upstreamCfg: String?
         public let expectedDistinct: Int
-        public let verificationStateLimit: Int
+        public let maximumStateLimit: Int
         public let spec: TLASpec
         public let notes: String
 
         public init(id: String, upstreamSpec: String, upstreamModule: String, upstreamCfg: String?,
-                    expectedDistinct: Int, verificationStateLimit: Int = 50_000,
+                    expectedDistinct: Int, maximumStateLimit: Int = 50_000,
                     spec: TLASpec, notes: String) {
             self.id = id; self.upstreamSpec = upstreamSpec; self.upstreamModule = upstreamModule
             self.upstreamCfg = upstreamCfg; self.expectedDistinct = expectedDistinct
-            self.verificationStateLimit = verificationStateLimit
+            self.maximumStateLimit = maximumStateLimit
             self.spec = spec; self.notes = notes
         }
     }

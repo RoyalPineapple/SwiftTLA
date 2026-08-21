@@ -16,13 +16,6 @@ private struct Manifest: Codable {
         struct File: Codable {
         let path: String
         let sha256: String
-        let source: Source?
-
-        struct Source: Codable {
-            let repository: String
-            let commit: String
-            let path: String
-        }
         }
     }
 }
@@ -30,8 +23,7 @@ private struct Manifest: Codable {
 private enum ExportError: Error, CustomStringConvertible {
     case usage
     case outputExists(String)
-    case moduleFetch(name: String, url: String)
-    case moduleDigest(name: String, expected: String, actual: String)
+    case undeclaredModuleInputs(entryID: String, modules: [String])
 
     var description: String {
         switch self {
@@ -39,10 +31,8 @@ private enum ExportError: Error, CustomStringConvertible {
             return "Usage: canonical-corpus-export --output <directory> --swift-tla-sha <sha>"
         case .outputExists(let path):
             return "Output directory already exists: \(path)"
-        case .moduleFetch(let name, let url):
-            return "Canonical corpus module \(name) could not be fetched from \(url)."
-        case .moduleDigest(let name, let expected, let actual):
-            return "Canonical corpus module \(name) digest differs: expected \(expected); got \(actual)."
+        case let .undeclaredModuleInputs(entryID, modules):
+            return "Canonical corpus entry '\(entryID)' declares \(modules.joined(separator: ", ")), but its compiled module closure does not contain those modules. Declare them in the source model before export."
         }
     }
 }
@@ -51,43 +41,18 @@ private func sha256(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
-private func write(
-    _ data: Data,
-    relativePath: String,
-    source: Manifest.Case.File.Source? = nil,
-    under root: URL
-) throws -> Manifest.Case.File {
+private func write(_ data: Data, relativePath: String, under root: URL) throws -> Manifest.Case.File {
     let destination = root.appendingPathComponent(relativePath)
     try FileManager.default.createDirectory(
         at: destination.deletingLastPathComponent(),
         withIntermediateDirectories: true
     )
     try data.write(to: destination, options: Data.WritingOptions.atomic)
-    return .init(path: relativePath, sha256: sha256(data), source: source)
+    return .init(path: relativePath, sha256: sha256(data))
 }
 
 private func write(_ text: String, relativePath: String, under root: URL) throws -> Manifest.Case.File {
     try write(Data(text.utf8), relativePath: relativePath, under: root)
-}
-
-private func fetchPinnedModule(_ input: CanonicalCorpusModuleInput) throws -> Data {
-    let urlString = "https://raw.githubusercontent.com/\(input.source.repository)/\(input.source.commit)/\(input.source.path)"
-    guard let url = URL(string: urlString) else {
-        throw ExportError.moduleFetch(name: input.name, url: urlString)
-    }
-    var lastDigest: String?
-    for attempt in 0..<3 {
-        if let data = try? Data(contentsOf: url) {
-            let actual = sha256(data)
-            if actual == input.sha256 { return data }
-            lastDigest = actual
-        }
-        if attempt < 2 { Thread.sleep(forTimeInterval: 1) }
-    }
-    if let lastDigest {
-        throw ExportError.moduleDigest(name: input.name, expected: input.sha256, actual: lastDigest)
-    }
-    throw ExportError.moduleFetch(name: input.name, url: urlString)
 }
 
 private func parseArguments(_ arguments: [String]) throws -> (output: URL, sha: String) {
@@ -123,37 +88,17 @@ do {
         let specification = item.specification()
         let compilation = try specification.compile()
         try item.validateConfigurationReferences(in: compilation)
-        let externalInputs = try item.externalInputs.map { input in
-            (input, try fetchPinnedModule(input))
-        }
-        let externalImports = externalInputs.map { input, data in
-            TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
-        }
-        let bundle = try compilation.renderedTLAModuleBundle(additionalImports: externalImports)
-        let plusCalBundle = try compilation.renderedPlusCalBundle(additionalImports: externalImports)
+        let bundle = try compilation.renderedTLAModuleBundle()
+        let plusCalBundle = try compilation.renderedPlusCalBundle()
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
         files.append(try write(item.swiftConfiguration.tlaText, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
-        let externalNames = Set(externalImports.map(\.name))
-        for imported in bundle.imports where !externalNames.contains(imported.name) {
+        for imported in bundle.imports {
             files.append(try write(imported.tla, relativePath: "\(item.id)/imports/\(imported.name).tla", under: options.output))
         }
         files.append(try write(plusCalBundle.root.tla, relativePath: "\(item.id)/pluscal/\(plusCalBundle.root.name).tla", under: options.output))
         files.append(try write(item.plusCalConfiguration.tlaText, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
-        for (input, data) in externalInputs {
-            let source = Manifest.Case.File.Source(
-                repository: input.source.repository,
-                commit: input.source.commit,
-                path: input.source.path
-            )
-            files.append(try write(
-                data,
-                relativePath: "\(item.id)/imports/\(input.name).tla",
-                source: source,
-                under: options.output
-            ))
-        }
         return .init(id: item.id, module: bundle.root.name, files: files.sorted { $0.path < $1.path })
     }
 

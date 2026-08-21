@@ -3,12 +3,14 @@ import SwiftTLA
 enum CarID: String, FiniteTLAValueDomain {
   case car
 
+  static var defaultValue: Self { .car }
   static let finiteValues = [CarID.car]
 }
 
 enum PersonID: String, FiniteTLAValueDomain {
   case person
 
+  static var defaultValue: Self { .person }
   static let finiteValues = [PersonID.person]
 }
 

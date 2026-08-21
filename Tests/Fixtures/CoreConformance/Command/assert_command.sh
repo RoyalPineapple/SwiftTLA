@@ -226,7 +226,7 @@ for case_id, declared in manifest.items():
         "correlation": runner,
         "exitCode": 0 if governance["expectedRegressionOutcome"] == "exact" else 1,
     })
-    for name, engine in (("swift.json", "swift"), ("tlc.json", "tlc"), ("comparison.json", "runner"), ("tlc-process.json", "tlc")):
+    for name, engine in (("swift-run.json", "swift"), ("tlc-run.json", "tlc"), ("comparison.json", "runner"), ("tlc-process.json", "tlc")):
         path = directory / name
         value = json.load(open(path, encoding="utf-8"))
         value["correlation"] = {"caseID": case_id, "engine": engine, "runID": run_id}

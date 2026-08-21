@@ -9,52 +9,60 @@ public struct BluetoothModel {
     public enum Phase: String, CaseIterable, FiniteDomainKey {
         case unknown, resetting, unsupported, unauthorized, poweredOff, poweredOn, scanning
 
+        public static var defaultValue: Self { .unknown }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.central-phase")
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     private enum PoweredOnProcess: String, FiniteDomainKey { case poweredOnEvent
+        static var defaultValue: Self { .poweredOnEvent }
         static let formalDomain: [Self] = [.poweredOnEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.powered-on")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum PoweredOffProcess: String, FiniteDomainKey { case poweredOffEvent
+        static var defaultValue: Self { .poweredOffEvent }
         static let formalDomain: [Self] = [.poweredOffEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.powered-off")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum StartScanProcess: String, FiniteDomainKey { case startScanEvent
+        static var defaultValue: Self { .startScanEvent }
         static let formalDomain: [Self] = [.startScanEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.start-scan")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum StopScanProcess: String, FiniteDomainKey { case stopScanEvent
+        static var defaultValue: Self { .stopScanEvent }
         static let formalDomain: [Self] = [.stopScanEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.stop-scan")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum ResettingProcess: String, FiniteDomainKey { case resettingEvent
+        static var defaultValue: Self { .resettingEvent }
         static let formalDomain: [Self] = [.resettingEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.resetting")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum UnsupportedProcess: String, FiniteDomainKey { case unsupportedEvent
+        static var defaultValue: Self { .unsupportedEvent }
         static let formalDomain: [Self] = [.unsupportedEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.unsupported")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum UnauthorizedProcess: String, FiniteDomainKey { case unauthorizedEvent
+        static var defaultValue: Self { .unauthorizedEvent }
         static let formalDomain: [Self] = [.unauthorizedEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.unauthorized")
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, PlusCalLabel { case poweredOn, poweredOff, resetting, unsupported, unauthorized, startScan, stopScan }
+    private enum Step: String, PlusCalLabel, CaseIterable { case poweredOn, poweredOff, resetting, unsupported, unauthorized, startScan, stopScan }
 
     public static var spec: TLASpec {
         #spec("BluetoothModel") {
             Algorithm("BluetoothModel") {
-                let phase = SharedVar(initial: Phase.unknown)
+                let phase = SharedVar("phase", initial: Phase.unknown)
                 Each(PoweredOnProcess.all) { _ in
                     Do(Step.poweredOn) {
                         When(phase == .unknown || phase == .resetting || phase == .poweredOff)

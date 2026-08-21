@@ -46,7 +46,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("CompileAtGate") {
             let count = SharedVar("count", initial: 0)
             count
-            Do("advance") { Assign(count, to: count + 1) }
+            Do(TestControlLabel.advance) { Assign(count, to: count + 1) }
         }
         let source = TLASpec("CompileAtGate") { algorithm }
 
@@ -70,8 +70,8 @@ struct AlgorithmBuilderTests {
             }
 
             Each(Node.all) { _ in
-                Do("acquire") { acquire(lock) }
-                Do("release") { release(lock) }
+                Do(TestControlLabel.acquire) { acquire(lock) }
+                Do(TestControlLabel.release) { release(lock) }
             }
         }
 
@@ -93,7 +93,7 @@ struct AlgorithmBuilderTests {
                 Assign(target, to: value.expr)
             }
 
-            Do("copy") { copy(destination, source) }
+            Do(TestControlLabel.copy) { copy(destination, source) }
         }
 
         #expect(algorithm.validate().isEmpty)
@@ -115,7 +115,7 @@ struct AlgorithmBuilderTests {
                 Assign(target, to: value.expr)
             }
 
-            Do("copy") { copy(destination, source.expr + 1) }
+            Do(TestControlLabel.copy) { copy(destination, source.expr + 1) }
         }
 
         #expect(algorithm.validate().isEmpty)
@@ -134,7 +134,7 @@ struct AlgorithmBuilderTests {
                 Assign(target, to: 0)
             }
 
-            Do("write") { write(destination.expr + 1) }
+            Do(TestControlLabel.write) { write(destination.expr + 1) }
         }
 
         #expect(algorithm.validate().map(\.code).contains(.statementMacroAssignmentTarget))
@@ -142,6 +142,57 @@ struct AlgorithmBuilderTests {
         #expect(throws: AlgorithmValidationError.self) {
             try spec.compile()
         }
+    }
+
+    @Test("algorithm substitution preserves lexical scope and writable targets")
+    func substitutesAlgorithmStatementsStructurally() {
+        let capture = AlgorithmStatementModel.letBinding(
+            variable: "source",
+            value: .value(.int(0)),
+            [
+                .set(target: .root("parameter"), value: .variable("parameter"))
+            ]
+        )
+        let substituted = capture.substitutingVariable(
+            "parameter",
+            with: .variable("source"),
+            assignmentTargets: .replaceWhenVariable
+        )
+
+        guard case .letBinding(let binder, _, let body) = substituted,
+              case .set(let target, let value) = body.first,
+              case .root(let root) = target
+        else {
+            Issue.record("Expected a capture-safe bound assignment.")
+            return
+        }
+        #expect(binder == "source_1")
+        #expect(root == "source")
+        #expect(value == .variable("source"))
+
+        let shadowed = AlgorithmStatementModel.letBinding(
+            variable: "parameter",
+            value: .variable("parameter"),
+            [
+                .set(target: .root("parameter"), value: .variable("parameter"))
+            ]
+        ).substitutingVariable(
+            "parameter",
+            with: .variable("source"),
+            assignmentTargets: .replaceWhenVariable
+        )
+
+        guard case .letBinding(let shadowBinder, let definition, let shadowBody) = shadowed,
+              case .set(let shadowTarget, let shadowValue) = shadowBody.first,
+              case .root(let shadowRoot) = shadowTarget
+        else {
+            Issue.record("Expected a shadowed assignment.")
+            return
+        }
+        #expect(shadowBinder == "parameter")
+        #expect(definition == .variable("source"))
+        #expect(shadowRoot == "parameter")
+        #expect(shadowValue == .variable("parameter"))
     }
 
     @Test("typed procedure builders use deterministic formal parameter slots")
@@ -152,13 +203,13 @@ struct AlgorithmBuilderTests {
             Procedure("work", parameters: Int.self) { value in
                 let offset = LocalVar("offset", initial: 1)
                 offset
-                Do("enter") {
+                Do(TestControlLabel.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
                 }
             }
-            Do("start") { Call("work", with: 7) }
-            Do("finished") { Stop() }
+            Do(TestControlLabel.start) { Call("work", with: 7) }
+            Do(TestControlLabel.finished) { Stop() }
         }
 
         #expect(algorithm.validate().isEmpty)
@@ -169,7 +220,7 @@ struct AlgorithmBuilderTests {
         #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("enter"))
 
         let rendered = try TLASpec("ProcedureBuilderExport") {
-            Definition("Marker == \"procedure.work.enter\"")
+            FormalDefinition("Marker", parameters: [], body: .value(.string("procedure.work.enter")))
             algorithm
         }.compile().renderedTLAModuleBundle().tla
         #expect(rendered.contains("Marker == \"procedure.work.enter\""))
@@ -191,7 +242,7 @@ struct AlgorithmBuilderTests {
                 Assign(count, to: count + 1)
             }
 
-            Do("increment") { increment() }
+            Do(TestControlLabel.increment) { increment() }
         }
 
         #expect(algorithm.validate().isEmpty)
@@ -214,7 +265,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("ReachableGraph") {
             let successors = SharedVar("successors", in: choices)
             successors
-            Do("done") { Stop() }
+            Do(TestControlLabel.done) { Stop() }
         }
 
         let spec = try compiledSourceSpecification(algorithm)
@@ -282,8 +333,8 @@ struct AlgorithmBuilderTests {
             }
 
             Each(Node.all) { node in
-                Do("mark") { mark(node) }
-                Do("done") { Stop() }
+                Do(TestControlLabel.mark) { mark(node) }
+                Do(TestControlLabel.done) { Stop() }
             }
         }
 
@@ -304,10 +355,10 @@ struct AlgorithmBuilderTests {
     func initializesControlAcrossProcessDomains() throws {
         let algorithm = Algorithm("MixedProcesses") {
             Each(Node.all) { _ in
-                Do("stringProcess") { Stop() }
+                Do(TestControlLabel.stringProcess) { Stop() }
             }
             Each(OtherNode.all) { _ in
-                Do("otherProcess") { Stop() }
+                Do(TestControlLabel.otherProcess) { Stop() }
             }
         }
 
@@ -327,12 +378,12 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("SequentialCounter") {
             let value = SharedVar("value", initial: 0)
             value
-            Do("increment") {
+            Do(TestControlLabel.increment) {
                 Let(value + 1) { nextValue in
                     Assign(value, to: nextValue.expr)
                 }
             }
-            Do("finish") {
+            Do(TestControlLabel.finish) {
                 Stop()
             }
         }
@@ -345,6 +396,7 @@ struct AlgorithmBuilderTests {
 
         let (compilation, initial) = try initialState(of: spec)
         let programCounter = try #require(compilation.layout.programCounterID())
+        #expect(compilation.layout.variables.first { $0.id == programCounter }?.declaration.origin == .programCounter)
         guard case .controlLocation(let initialLocation) = try initial.value(for: programCounter) else {
             Issue.record("Expected the compiled program counter to store a control location")
             return
@@ -544,7 +596,7 @@ struct AlgorithmBuilderTests {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
-                While("advance", true) {
+                While(TestControlLabel.advance, true) {
                     Assign(value, to: value + 1)
                 }
             }
@@ -647,29 +699,22 @@ struct AlgorithmBuilderTests {
         ]))
     }
 
-    @Test("string labels are contained by ProgramLabel and validated before lowering")
-    func validatesStringLabels() throws {
-        let algorithm = Algorithm("StringLabels") {
+    @Test("closed labels compile into process control locations")
+    func compilesClosedLabels() throws {
+        let algorithm = Algorithm("ClosedLabels") {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
-                Do("move") {
+                Do(AlgorithmLabel.forward) {
                     Assign(value, to: value + 1)
-                    Goto("done")
+                    Goto(AlgorithmLabel.done)
                 }
-                Do("done") { Stop() }
+                Do(AlgorithmLabel.done) { Stop() }
             }
         }
 
         #expect(algorithm.validate().isEmpty)
-        #expect(try compiledSourceSpecification(algorithm).actions.map(\.name).contains("move"))
-
-        let invalid = Algorithm("InvalidStringLabel") {
-            Each(Node.all) { _ in
-                Do("bad label") { Stop() }
-            }
-        }
-        #expect(invalid.validate().contains { $0.code == .invalidName })
+        #expect(try compiledSourceSpecification(algorithm).actions.map(\.name).contains("forward"))
     }
 
     @Test("the end of an Each machine reaches its builder-owned Done state")
@@ -678,7 +723,7 @@ struct AlgorithmBuilderTests {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
-                Do("finish") {
+                Do(TestControlLabel.finish) {
                     Assign(value, to: value + 1)
                 }
             }
@@ -699,10 +744,10 @@ struct AlgorithmBuilderTests {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
-                Do("prepare") {
+                Do(TestControlLabel.prepare) {
                     Assign(value, to: value + 1)
                 }
-                Do("finish") {
+                Do(TestControlLabel.finish) {
                     Assign(value, to: value + 1)
                 }
             }
@@ -723,7 +768,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("Composed") {
             value
             Each(Node.all) { _ in
-                Do("finish") { Assign(value, to: value + 1) }
+                Do(TestControlLabel.finish) { Assign(value, to: value + 1) }
             }
         }
 
@@ -738,13 +783,13 @@ struct AlgorithmBuilderTests {
 
     @Test("algorithm formal definitions lower and export exactly once")
     func algorithmFormalDefinitionsRemainTopLevelFormalOperators() throws {
-        let algorithm = Algorithm("Formal Operators") {
+        let algorithm = Algorithm("FormalOperators") {
             FormalDefinition("same", taking: Int.self, Int.self) { left, right in
                 left == right
             }
             let value = SharedVar("value", initial: 0)
             value
-            Do("stop") { Stop() }
+            Do(TestControlLabel.stop) { Stop() }
         }
 
         let lowered = try compiledSourceSpecification(algorithm)
@@ -755,12 +800,10 @@ struct AlgorithmBuilderTests {
                 body: .equal(.variable("value0"), .variable("value1"))
             )
         ])
-        #expect(lowered.definitions.map(\.text) == ["same(value0, value1) == (value0 = value1)"])
         #expect(try renderedSourceAlgorithmPlusCal(algorithm).contains("same(value0, value1) == (value0 = value1)"))
 
-        let spec = TLASpec("Formal Operators") { algorithm }
+        let spec = TLASpec("FormalOperators") { algorithm }
         #expect(spec.formalOperatorDefinitions == lowered.formalOperatorDefinitions)
-        #expect(spec.definitions.filter { $0.text.hasPrefix("same(") }.count == 1)
         #expect(try spec.compile().renderedTLAModuleBundle().tla.components(separatedBy: "same(value0, value1)").count == 2)
     }
 
@@ -772,7 +815,7 @@ struct AlgorithmBuilderTests {
             count
             selected
             Each(Node.all, fairness: .weak) { node in
-                Do("choose") {
+                Do(TestControlLabel.choose) {
                     When(count == 0)
                     With(SetExpr<Int>.literal(1, 2)) { choice in
                         Assert(choice > 0)
@@ -805,10 +848,10 @@ struct AlgorithmBuilderTests {
             let count = SharedVar("count", initial: 0)
             count
             Each(Node.all) { _ in
-                While("repeat", count < 2) {
+                While(TestControlLabel.`repeat`, count < 2) {
                     Assign(count, to: count + 1)
                 }
-                Do("finish") { Stop() }
+                Do(TestControlLabel.finish) { Stop() }
             }
         }
 
@@ -861,7 +904,7 @@ struct AlgorithmBuilderTests {
             let count = SharedVar("count", initial: 0)
             count
             Each(Node.all) { _ in
-                Do("check") {
+                Do(TestControlLabel.check) {
                     If(count == 0) {
                         Assert(count == 0)
                     } else: {
@@ -889,7 +932,7 @@ struct AlgorithmBuilderTests {
             let count = SharedVar("count", initial: 0)
             count
             Each(Node.all) { _ in
-                Do("check") {
+                Do(TestControlLabel.check) {
                     Assert(count == 1)
                     Stop()
                 }
@@ -910,7 +953,7 @@ struct AlgorithmBuilderTests {
             let hour = SharedVar("hour", in: 1...3)
             hour
             Each(Node.all) { _ in
-                Do("tick") {
+                Do(TestControlLabel.tick) {
                     When(hour < 3)
                     Assign(hour, to: hour + 1)
                     Stop()
@@ -939,7 +982,7 @@ struct AlgorithmBuilderTests {
                 in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
             )
             candidate
-            Do("stop") { Stop() }
+            Do(TestControlLabel.stop) { Stop() }
         }
 
         let spec = try compiledSourceSpecification(algorithm)
@@ -957,7 +1000,7 @@ struct AlgorithmBuilderTests {
             let selected = SharedVar("selected", initial: 0)
             selected
             Each(Node.all) { _ in
-                Do("choose") {
+                Do(TestControlLabel.choose) {
                     With(SetExpr<Int>.literal(1, 2), SetExpr<Int>.literal(10, 20)) { outer, inner in
                         Assign(selected, to: outer.expr + inner.expr)
                     }
@@ -977,7 +1020,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("ThreeWith") {
             let selected = SharedVar("selected", initial: 0)
             selected
-            Do("choose") {
+            Do(TestControlLabel.choose) {
                 With(
                     SetExpr<Int>.literal(1, 2),
                     SetExpr<Int>.literal(10),
@@ -1000,7 +1043,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("PairPattern") {
             let selected = SharedVar("selected", initial: 0)
             selected
-            Do("choose") {
+            Do(TestControlLabel.choose) {
                 With(SetExpr<Pair<Int, Bool>>.literal(
                     Pair(first: 1, second: true),
                     Pair(first: 2, second: false)
@@ -1024,7 +1067,7 @@ struct AlgorithmBuilderTests {
             let selected = SharedVar("selected", initial: 0)
             selected
             Each(Node.all) { _ in
-                Do("choose") {
+                Do(TestControlLabel.choose) {
                     Choose(1...3) { choice in
                         Assign(selected, to: choice.expr)
                     }
@@ -1046,7 +1089,7 @@ struct AlgorithmBuilderTests {
             let mirrors = SharedVar("mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
             mirrors
             Each(Node.all) { _ in
-                Do("stop") { Stop() }
+                Do(TestControlLabel.stop) { Stop() }
             }
         }
 
@@ -1064,10 +1107,11 @@ struct AlgorithmBuilderTests {
     }
 }
 
-private enum Node: String, FiniteDomainKey, PlusCalLabel {
+private enum Node: String, FiniteDomainKey, PlusCalLabel, CaseIterable {
     case first
     case second
 
+    static var defaultValue: Self { .first }
     static let formalDomain: [Node] = [.first, .second]
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.node")
 
@@ -1077,6 +1121,7 @@ private enum Node: String, FiniteDomainKey, PlusCalLabel {
 private enum EmptyNode: String, FiniteDomainKey {
     case none
 
+    static var defaultValue: Self { .none }
     static let formalDomain: [EmptyNode] = []
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.empty-node")
 
@@ -1086,19 +1131,20 @@ private enum EmptyNode: String, FiniteDomainKey {
 private enum OtherNode: String, FiniteDomainKey {
     case one = "other"
 
+    static var defaultValue: Self { .one }
     static let formalDomain: [OtherNode] = [.one]
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.other-node")
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
-private enum AlgorithmLabel: String, PlusCalLabel {
+private enum AlgorithmLabel: String, PlusCalLabel, CaseIterable {
     case receive
     case forward
     case done
 }
 
-private enum MissingAlgorithmLabel: String, PlusCalLabel {
+private enum MissingAlgorithmLabel: String, PlusCalLabel, CaseIterable {
     case missing
 }
 
@@ -1107,17 +1153,17 @@ private struct ProcedureGeneratedModel {
     static var spec: TLASpec {
         #spec("ProcedureGenerated") {
             Algorithm("ProcedureGenerated") {
-                let output = SharedVar(initial: 0)
+                let output = SharedVar("output", initial: 0)
                 Procedure("work", parameters: Int.self) { value in
-                    let offset = LocalVar(initial: 1)
-                    Do("enter") {
+                    let offset = LocalVar("offset", initial: 1)
+                    Do(TestControlLabel.enter) {
                         Await(value.expr >= 0)
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
                 }
-                Do("start") { Call("work", with: 7) }
-                Do("finished") { Stop() }
+                Do(TestControlLabel.start) { Call("work", with: 7) }
+                Do(TestControlLabel.finished) { Stop() }
             }
         }
     }
@@ -1129,6 +1175,7 @@ private struct MacroProcessGeneratedModel {
         case first
         case second
 
+        static var defaultValue: Self { .first }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.macro-process-node")
 
@@ -1138,14 +1185,14 @@ private struct MacroProcessGeneratedModel {
     static var spec: TLASpec {
         #spec("MacroProcessGenerated") {
             Algorithm("MacroProcessGenerated") {
-                let marked = SharedVar(initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
+                let marked = SharedVar("marked", initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
                 let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
                 }
 
                 Each(Node.all) { node in
-                    Do("mark") { mark(node) }
-                    Do("done") { Stop() }
+                    Do(TestControlLabel.mark) { mark(node) }
+                    Do(TestControlLabel.done) { Stop() }
                 }
             }
         }
@@ -1158,6 +1205,7 @@ private struct FunctionDomainGeneratedModel {
         case first
         case second
 
+        static var defaultValue: Self { .first }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.function-domain-node")
 
@@ -1167,7 +1215,7 @@ private struct FunctionDomainGeneratedModel {
     static var spec: TLASpec {
         #spec("FunctionDomainGenerated") {
             Algorithm("FunctionDomainGenerated") {
-                let successors = SharedVar(in: Where(
+                let successors = SharedVar("successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
                     All(Node.all) { node in
@@ -1175,7 +1223,7 @@ private struct FunctionDomainGeneratedModel {
                     }
                 })
 
-                Do("done") { Stop() }
+                Do(TestControlLabel.done) { Stop() }
                 Invariant("OneSuccessorPerNode") {
                     All(Node.all) { node in
                         successors[node].cardinality == 1
@@ -1195,9 +1243,9 @@ private struct StaticFormalSelectionModel {
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
                 )
-                let current = SharedVar(initial: selected)
+                let current = SharedVar("current", initial: selected)
 
-                Do("done") { Stop() }
+                Do(TestControlLabel.done) { Stop() }
                 Invariant("SelectedEven") { current == 2 }
             }
         }
@@ -1212,6 +1260,7 @@ private struct StaticFilteredFunctionSelectionModel {
         case third
         case fourth
 
+        static var defaultValue: Self { .first }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.static-function-selection-node")
 
@@ -1230,9 +1279,9 @@ private struct StaticFilteredFunctionSelectionModel {
                     },
                     matching: { successor in successor.expr == successor.expr }
                 )
-                let current = SharedVar(initial: successors)
+                let current = SharedVar("current", initial: successors)
 
-                Do("done") { Stop() }
+                Do(TestControlLabel.done) { Stop() }
                 Invariant("CurrentIsDefined") { current == current.expr }
             }
         }

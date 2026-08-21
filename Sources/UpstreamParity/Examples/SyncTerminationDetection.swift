@@ -9,6 +9,7 @@ public struct SyncTerminationDetectionModel: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .zero }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.sync-termination.node")
         public var tlaValue: TLAValue { .int(rawValue) }
@@ -16,8 +17,8 @@ public struct SyncTerminationDetectionModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("SyncTerminationDetection") {
-            Extends("Integers")
-            let active = SharedVar(in: SetExpr<Function<Node, Bool>>.literal(
+            Extends(.integers)
+            let active = SharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
@@ -27,7 +28,7 @@ public struct SyncTerminationDetectionModel: Sendable {
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
             ))
-            let terminationDetected = SharedVar(initial: false)
+            let terminationDetected = SharedVar("terminationDetected", initial: false)
 
             Action("Terminate_0") {
                 active[.zero] == true && active.becomes(active.updating(.zero, to: false)) && terminationDetected.stays

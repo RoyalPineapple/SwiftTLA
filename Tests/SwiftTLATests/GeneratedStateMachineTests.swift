@@ -18,6 +18,17 @@ private struct SanitizedActionLabelModel {
     }
 }
 
+@TLAModel
+private struct InvocationNamedActionModel {
+    static var spec: TLASpec {
+        #spec("InvocationNamedActionModel") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            Action("toInvocation") { value.becomes(1) }
+        }
+    }
+}
+
 // MARK: - Minimal spec: counter with no invariants
 
 @TLAModel
@@ -38,6 +49,7 @@ struct GeneratedAlgorithmCounter {
         case left
         case right
 
+        static var defaultValue: Self { .left }
         static let formalDomain: [Node] = [.left, .right]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-algorithm-node")
 
@@ -47,9 +59,9 @@ struct GeneratedAlgorithmCounter {
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmCounter") {
             Algorithm("GeneratedAlgorithmCounter") {
-                let count = SharedVar(initial: 0)
+                let count = SharedVar("count", initial: 0)
                 Each(Node.all, fairness: .weak) { _ in
-                    While("increment", count < 2) {
+                    While(TestControlLabel.increment, count < 2) {
                         When(count < 2)
                         Assert(count >= 0)
                         Assign(count, to: count + 1)
@@ -65,9 +77,9 @@ private struct SeededCounterMachine {
     static var spec: TLASpec {
         #spec("SeededCounterMachine") {
             Algorithm("SeededCounterMachine") {
-                let value = SharedVar(in: 0...2)
+                let value = SharedVar("value", in: 0...2)
 
-                While("advance", true) {
+                While(TestControlLabel.advance, true) {
                     Either {
                         When(value < 2)
                         Assign(value, to: value + 1)
@@ -90,6 +102,12 @@ struct GeneratedAlgorithmMachineTests {
         #expect((dotted == underscored) == false)
         #expect((underscored == dashed) == false)
         #expect((dashed == dotted) == false)
+    }
+
+    @Test("generated action labels do not reserve deleted formal-invocation names")
+    func permitsCurrentActionNames() {
+        let action = InvocationNamedActionModel.ActionLabel.toInvocation
+        #expect(action == .toInvocation)
     }
 
     @Test("a bounded Algorithm generates the ordinary typed state machine")
@@ -149,6 +167,7 @@ struct GeneratedRestrictedProcessDomain {
         /// domain. This is the usual shape for an optional parent pointer.
         case none = 0
 
+        static var defaultValue: Self { .worker }
         static let formalDomain: [Member] = [.worker]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.restricted-process-member")
 
@@ -158,9 +177,9 @@ struct GeneratedRestrictedProcessDomain {
     static var spec: TLASpec {
         #spec("GeneratedRestrictedProcessDomain") {
             Algorithm("GeneratedRestrictedProcessDomain") {
-                let count = SharedVar(initial: 0)
+                let count = SharedVar("count", initial: 0)
                 Each(Member.all) { _ in
-                    Do("increment") {
+                    Do(TestControlLabel.increment) {
                         Assign(count, to: count + 1)
                     }
                 }
@@ -184,13 +203,13 @@ struct GeneratedSequentialCounter {
     static var spec: TLASpec {
         #spec("GeneratedSequentialCounter") {
             Algorithm("GeneratedSequentialCounter") {
-                let count = SharedVar(initial: 0)
-                Do("increment") {
+                let count = SharedVar("count", initial: 0)
+                Do(TestControlLabel.increment) {
                     Let(count + 1) { nextCount in
                         Assign(count, to: nextCount.expr)
                     }
                 }
-                Do("finish") {
+                Do(TestControlLabel.finish) {
                     Stop()
                 }
             }
@@ -214,9 +233,9 @@ struct GeneratedSimultaneousSwap {
     static var spec: TLASpec {
         #spec("GeneratedSimultaneousSwap") {
             Algorithm("GeneratedSimultaneousSwap") {
-                let left = SharedVar(initial: 1)
-                let right = SharedVar(initial: 2)
-                Do("swap") {
+                let left = SharedVar("left", initial: 1)
+                let right = SharedVar("right", initial: 2)
+                Do(TestControlLabel.swap) {
                     Assign(left, to: right)
                     Assign(right, to: left)
                 }
@@ -246,8 +265,8 @@ struct GeneratedPairPattern {
     static var spec: TLASpec {
         #spec("GeneratedPairPattern") {
             Algorithm("GeneratedPairPattern") {
-                let selected = SharedVar(initial: 0)
-                Do("choose") {
+                let selected = SharedVar("selected", initial: 0)
+                Do(TestControlLabel.choose) {
                     With(SetExpr<Pair<Int, Bool>>.literal(
                         Pair(first: 1, second: true),
                         Pair(first: 2, second: false)
@@ -278,6 +297,7 @@ struct GeneratedRangeInitializedAlgorithm {
     enum Node: String, FiniteDomainKey {
         case clock
 
+        static var defaultValue: Self { .clock }
         static let formalDomain: [Node] = [.clock]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.range-initialized-node")
 
@@ -287,9 +307,9 @@ struct GeneratedRangeInitializedAlgorithm {
     static var spec: TLASpec {
         #spec("GeneratedRangeInitializedAlgorithm") {
             Algorithm("GeneratedRangeInitializedAlgorithm") {
-                let hour = SharedVar(in: 1...3)
+                let hour = SharedVar("hour", in: 1...3)
                 Each(Node.all) { _ in
-                    Do("advance") {
+                    Do(TestControlLabel.advance) {
                         When(hour < 3)
                         Assign(hour, to: hour + 1)
                     }
@@ -319,6 +339,7 @@ struct GeneratedIntegerChoiceAlgorithm {
     enum Node: String, FiniteDomainKey {
         case only
 
+        static var defaultValue: Self { .only }
         static let formalDomain: [Node] = [.only]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-integer-choice-node")
 
@@ -328,9 +349,9 @@ struct GeneratedIntegerChoiceAlgorithm {
     static var spec: TLASpec {
         #spec("GeneratedIntegerChoice") {
             Algorithm("GeneratedIntegerChoice") {
-                let selected = SharedVar(initial: 0)
+                let selected = SharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
-                    Do("choose") {
+                    Do(TestControlLabel.choose) {
                         Choose(1...3) { choice in
                             Assign(selected, to: choice.expr)
                         }
@@ -356,8 +377,8 @@ struct GeneratedAlgorithmStateConstraint {
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmStateConstraint") {
             Algorithm("GeneratedAlgorithmStateConstraint") {
-                let count = SharedVar(initial: 0)
-                Do("advance") {
+                let count = SharedVar("count", initial: 0)
+                Do(TestControlLabel.advance) {
                     Assign(count, to: count + 1)
                 }
                 StateConstraint(count < 2)
@@ -383,13 +404,14 @@ struct GeneratedProcessLocalInvariant {
         case left
         case right
 
+        static var defaultValue: Self { .left }
         static let formalDomain: [Node] = [.left, .right]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.process-local-invariant-node")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    enum Label: String, PlusCalLabel {
+    enum Label: String, PlusCalLabel, CaseIterable {
         case receive
     }
 
@@ -397,7 +419,7 @@ struct GeneratedProcessLocalInvariant {
         #spec("GeneratedProcessLocalInvariant") {
             Algorithm("GeneratedProcessLocalInvariant") {
                 Each(Node.all) { selfID in
-                    let count = LocalVar(initial: 0)
+                    let count = LocalVar("count", initial: 0)
                     Do(Label.receive) {
                         Skip()
                     }
@@ -433,6 +455,7 @@ struct GeneratedDependentInitialAlgorithm {
         case left
         case right
 
+        static var defaultValue: Self { .left }
         static let formalDomain: [Node] = [.left, .right]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.dependent-initial-node")
 
@@ -442,17 +465,19 @@ struct GeneratedDependentInitialAlgorithm {
     enum Phase: String, TLAValueType {
         case active
         case inactive
+
+        static var defaultValue: Self { .active }
     }
 
     static var spec: TLASpec {
         #spec("GeneratedDependentInitialAlgorithm") {
             Algorithm("GeneratedDependentInitialAlgorithm") {
-                let seed = SharedVar(in: SetExpr<Bool>.literal(false, true))
-                let mirrors = SharedVar(initial: Function<Node, Phase>.mapping { node in
+                let seed = SharedVar("seed", in: SetExpr<Bool>.literal(false, true))
+                let mirrors = SharedVar("mirrors", initial: Function<Node, Phase>.mapping { node in
                     If(node == .left && seed == true, then: .active, else: .inactive)
                 })
                 Each(Node.all) { _ in
-                    Do("stop") {
+                    Do(TestControlLabel.stop) {
                         Assign(mirrors, to: mirrors)
                         Stop()
                     }
@@ -489,7 +514,7 @@ struct NestedAdapterConcurrencyTests {
         let observable = try await NestedComposedCounter.Observable(live: live)
         let actor = NestedComposedCounter.Actor(live: live)
         let callbackRecorder = NestedCallbackRecorder()
-        observable.onAdvance = { before, after in
+        observable.onTransition = { _, before, after in
             await callbackRecorder.record(before: before, after: after)
         }
 
@@ -529,7 +554,7 @@ struct NestedAdapterConcurrencyTests {
     func nestedObservableSuppressesCallbackAfterFailedExecution() async throws {
         let observable = try await NestedComposedCounter.Observable(live: try NestedComposedCounter.makeLive())
         let recorder = NestedCallbackRecorder()
-        observable.onAdvance = { before, after in
+        observable.onTransition = { _, before, after in
             await recorder.record(before: before, after: after)
         }
 
@@ -748,7 +773,10 @@ struct GeneratedStateMachineTests {
     func observableParameterizedAction() async throws {
         let elevator = try await TwoCarElevatorMachine.Observable(live: try TwoCarElevatorMachine.makeLive())
         let callbackID = LockedValue<Int?>(nil)
-        elevator.onMoveElevator = { id, _, _ in callbackID.value = id }
+        elevator.onTransition = { action, _, _ in
+            guard case .moveElevator(let id) = action else { return }
+            callbackID.value = id
+        }
         _ = try await elevator._moveElevator(id: 2)
         #expect(elevator.state.floor == 1)
         #expect(callbackID.value == 2)
@@ -910,8 +938,8 @@ struct GeneratedStateMachineTests {
 
     @Test("Generated verification retains every constrained nondeterministic successor")
     func generatedVerificationRetainsNondeterministicSuccessors() throws {
-        #expect(try NondeterministicConstrainedMachine.verifyTransitions() > 0)
-        #expect(try NondeterministicConstrainedMachine.verifyInvariants() > 0)
+        #expect(try NondeterministicConstrainedMachine.verifyTransitions(configuration: .standard) > 0)
+        #expect(try NondeterministicConstrainedMachine.verifyInvariants(configuration: .standard) > 0)
     }
 
     @Test("Observable and actor adapters return the canonical three-argument transition evidence")
@@ -922,7 +950,8 @@ struct GeneratedStateMachineTests {
 
         let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
         let callback = LockedValue<BoardCallback?>(nil)
-        observable.onBoard = { person, elevator, direction, before, after in
+        observable.onTransition = { action, before, after in
+            guard case .board(let person, let elevator, let direction) = action else { return }
             callback.value = .init(
                 person: person,
                 elevator: elevator,
@@ -964,7 +993,7 @@ struct GeneratedStateMachineTests {
 
         let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
         let callbackCount = LockedValue(0)
-        observable.onBoard = { _, _, _, _, _ in callbackCount.value += 1 }
+        observable.onTransition = { _, _, _ in callbackCount.value += 1 }
         let observableBefore = observable.state
         do {
             _ = try await observable.apply(.board(person: 2, elevator: 30, direction: 200))
@@ -995,15 +1024,15 @@ struct GeneratedStateMachineTests {
     }
 
     @Test("Removed fixed-arity action syntax does not type check")
-    func legacyParameterizedActionSyntaxIsUnavailable() throws {
+    func unsupportedActionParameterSyntaxDoesNotCompile() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidActionParameterAPI")
         let result = try runSwift(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
-        #expect(result.output.contains("Parameterized action 'legacyParameter' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'legacyTwoParameters' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'legacyID' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'legacyPair' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'singleParameter' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'multipleParameters' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'idParameter' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'namedParameters' requires a parameters list"))
         #expect(result.output.contains("value of type 'NamedAction' has no member 'binding'"))
         #expect(result.output.contains("value of type 'ActionDecl' has no member 'binding'"))
         #expect(result.output.contains("incorrect argument label in call (have 'name:body:binding:', expected 'name:body:bindings:')"))
@@ -1020,7 +1049,7 @@ struct GeneratedStateMachineTests {
         #expect(spec.variables.count == 1)
         #expect(spec.variables[0].name == "hr")
         #expect(spec.variables[0].initial == .int(1))
-        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
         if case .ok(let count) = result { #expect(count == 12) } else {
             #expect(Bool(false), "Expected 12 states")
         }
@@ -1028,7 +1057,7 @@ struct GeneratedStateMachineTests {
 
     @Test("verifySpec passes for CounterNoInvs")
     func counterNoInvsVerifySpec() throws {
-        try CounterNoInvs.verifySpec()
+        try CounterNoInvs.verifySpec(configuration: .standard)
     }
 
     private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {

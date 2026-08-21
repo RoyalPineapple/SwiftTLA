@@ -108,11 +108,11 @@ public struct TemporalSymmetryCaseEvidence: Sendable {
   ) throws {
     try comparisonEvidence.validate()
     guard TLCReferencePin.isSHA256(manifestSHA256), TLCReferencePin.isSHA256(toolchainSHA256) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: comparison.caseID, field: "evidence digests")
+      throw ConformanceGovernanceError.invalidField(record: comparison.caseID, field: "evidence digests")
     }
     let requiresFingerprint = comparison.outcome == .difference
     guard requiresFingerprint == (normalizedDifferenceFingerprint?.isEmpty == false) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: comparison.caseID, field: "normalizedDifferenceFingerprint")
+      throw ConformanceGovernanceError.invalidField(record: comparison.caseID, field: "normalizedDifferenceFingerprint")
     }
     self.comparison = comparison
     self.comparisonEvidence = comparisonEvidence
@@ -165,7 +165,7 @@ public struct TemporalSymmetryGateInput: Sendable {
 /// stale, partial, or unaccounted result into an admitted support claim.
 public struct TemporalSymmetrySupportGate: Sendable {
   public init() {}
-  public func evaluate(_ input: TemporalSymmetryGateInput) -> TemporalSymmetryAdmission {
+  public func evaluate(_ input: TemporalSymmetryGateInput) throws -> TemporalSymmetryAdmission {
     let casesByID = Dictionary(uniqueKeysWithValues: input.cases.cases.map { ($0.id, $0) })
     let evidenceGroups = Dictionary(grouping: input.evidence, by: { $0.comparison.caseID })
     let evidenceByCaseID = evidenceGroups.compactMapValues { $0.count == 1 ? $0[0] : nil }
@@ -180,15 +180,15 @@ public struct TemporalSymmetrySupportGate: Sendable {
       registerIsValid = false
     }
     guard registerIsValid, !input.surface.entries.isEmpty else {
-      return invalidRegisterReport(input)
+      return try invalidRegisterReport(input)
     }
     let observations = casesByID.mapValues {
       inspect($0, evidence: evidenceByCaseID[$0.id], input: input)
     }
     let unexplainedCaseIDs = unexplainedDifferenceCaseIDs(observations: observations, ledger: input.ledger)
     let coreAdmissionReasons = coreAdmissionReasons(input)
-    let entries = input.surface.entries.map {
-      decision(
+    let entries = try input.surface.entries.map {
+      try decision(
         for: $0,
         observations: observations,
         ledger: input.ledger,
@@ -196,7 +196,7 @@ public struct TemporalSymmetrySupportGate: Sendable {
         coreAdmissionReasons: coreAdmissionReasons,
         gateRunID: input.gateRunID)
     }
-    let report = try! TemporalSymmetryAdmission(
+    let report = try TemporalSymmetryAdmission(
       reportID: input.reportID,
       gateRunID: input.gateRunID,
       coreAdmission: input.coreAdmission,
@@ -209,17 +209,17 @@ public struct TemporalSymmetrySupportGate: Sendable {
       unexplainedDivergenceCount: unexplainedCaseIDs.count,
       unexplainedDivergenceCaseIDs: unexplainedCaseIDs.sorted(),
       finalExitClass: exitClass(for: entries))
-    try! report.validate(supportSurface: input.surface, cases: input.cases, ledger: input.ledger)
+    try report.validate(supportSurface: input.surface, cases: input.cases, ledger: input.ledger)
     return report
   }
-  private func invalidRegisterReport(_ input: TemporalSymmetryGateInput) -> TemporalSymmetryAdmission {
-    let entry = try! TemporalSymmetryAdmissionEntry(
+  private func invalidRegisterReport(_ input: TemporalSymmetryGateInput) throws -> TemporalSymmetryAdmission {
+    let entry = try TemporalSymmetryAdmissionEntry(
       supportID: "governance-register",
       decision: .blocked,
       reasonCodes: [.invalidRegister],
       mandatoryCaseIDs: ["governance-register"],
       divergenceIDs: [])
-    return try! TemporalSymmetryAdmission(
+    return try TemporalSymmetryAdmission(
       reportID: input.reportID,
       gateRunID: input.gateRunID,
       coreAdmission: input.coreAdmission,
@@ -277,9 +277,9 @@ public struct TemporalSymmetrySupportGate: Sendable {
     unexplainedCaseIDs: Set<String>,
     coreAdmissionReasons: Set<TemporalSymmetryReasonCode>,
     gateRunID: UUID
-  ) -> TemporalSymmetryAdmissionEntry {
+  ) throws -> TemporalSymmetryAdmissionEntry {
     if entry.requestedStatus == .unsupported {
-      return try! TemporalSymmetryAdmissionEntry(
+      return try TemporalSymmetryAdmissionEntry(
         supportID: entry.id, decision: .unsupported, reasonCodes: [.explicitlyUnsupported],
         mandatoryCaseIDs: entry.mandatoryCaseIDs, divergenceIDs: entry.linkedDivergenceIDs)
     }
@@ -307,7 +307,7 @@ public struct TemporalSymmetrySupportGate: Sendable {
     }
     if entry.requestedStatus == .blocked { reasons.insert(.declaredBlocked) }
     let decision: TemporalSymmetrySupportDecision = reasons.isEmpty ? .admitted : .blocked
-    return try! TemporalSymmetryAdmissionEntry(
+    return try TemporalSymmetryAdmissionEntry(
       supportID: entry.id,
       decision: decision,
       reasonCodes: reasons.sorted { $0.rawValue < $1.rawValue },
@@ -419,19 +419,19 @@ public struct TemporalSymmetrySupportSurfaceEntry: Equatable, Codable, Sendable 
     guard !id.isEmpty, !behavior.isEmpty, !mandatoryCaseIDs.isEmpty,
           Set(mandatoryCaseIDs).count == mandatoryCaseIDs.count,
           Set(linkedDivergenceIDs).count == linkedDivergenceIDs.count else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: id, field: "support entry")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "support entry")
     }
     if requestedStatus != .requested, reason == nil {
-      throw TemporalSymmetryGovernanceError.invalidField(record: id, field: "reason")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "reason")
     }
     switch kind {
     case .temporal:
       guard configuration.property != nil, !configuration.symmetryEnabled else {
-        throw TemporalSymmetryGovernanceError.inconsistentReference(record: id, field: "temporal support")
+        throw ConformanceGovernanceError.inconsistentReference(record: id, field: "temporal support")
       }
     case .symmetry:
       guard configuration.property == nil, configuration.symmetryEnabled else {
-        throw TemporalSymmetryGovernanceError.inconsistentReference(record: id, field: "symmetry support")
+        throw ConformanceGovernanceError.inconsistentReference(record: id, field: "symmetry support")
       }
     }
   }
@@ -439,7 +439,7 @@ public struct TemporalSymmetrySupportSurfaceEntry: Equatable, Codable, Sendable 
     case id, behavior, kind, finiteBounds, configuration, mandatoryCaseIDs, requestedStatus, linkedDivergenceIDs, reason
   }
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: container.decode(String.self, forKey: .id),
       behavior: container.decode(String.self, forKey: .behavior),
@@ -460,12 +460,12 @@ public struct TemporalSymmetrySupportSurface: Equatable, Codable, Sendable {
     try self.init(schema: Self.schema, entries: entries)
   }
   public init(schema: String, entries: [TemporalSymmetrySupportSurfaceEntry]) throws {
-    guard schema == Self.schema else { throw TemporalSymmetryGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var ids = Set<String>()
     for entry in entries {
       try entry.validate()
       guard ids.insert(entry.id).inserted else {
-        throw TemporalSymmetryGovernanceError.duplicateID(kind: "support", id: entry.id)
+        throw ConformanceGovernanceError.duplicateID(kind: "support", id: entry.id)
       }
     }
     self.schema = schema
@@ -473,7 +473,7 @@ public struct TemporalSymmetrySupportSurface: Equatable, Codable, Sendable {
   }
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, entries }
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: container.decode(String.self, forKey: .schema),
       entries: container.decode([TemporalSymmetrySupportSurfaceEntry].self, forKey: .entries))
@@ -484,26 +484,26 @@ public struct TemporalSymmetrySupportSurface: Equatable, Codable, Sendable {
     let divergenceIDs = Set(ledger.records.map(\.id))
     for entry in entries {
       for caseID in entry.mandatoryCaseIDs {
-        guard let item = casesByID[caseID] else { throw TemporalSymmetryGovernanceError.unknownCaseID(caseID) }
+        guard let item = casesByID[caseID] else { throw ConformanceGovernanceError.unknownCaseID(caseID) }
         guard item.kind == entry.kind, item.configuration == entry.configuration,
               item.finiteBounds == entry.finiteBounds else {
-          throw TemporalSymmetryGovernanceError.inconsistentReference(record: entry.id, field: "mandatory case \(caseID)")
+          throw ConformanceGovernanceError.inconsistentReference(record: entry.id, field: "mandatory case \(caseID)")
         }
       }
       for divergenceID in entry.linkedDivergenceIDs {
         guard let divergence = ledger.records.first(where: { $0.id == divergenceID }) else {
-          throw TemporalSymmetryGovernanceError.unknownDivergenceID(divergenceID)
+          throw ConformanceGovernanceError.unknownDivergenceID(divergenceID)
         }
         guard divergence.kind == entry.kind,
               entry.mandatoryCaseIDs.contains(divergence.provenance.caseID) else {
-          throw TemporalSymmetryGovernanceError.inconsistentReference(
+          throw ConformanceGovernanceError.inconsistentReference(
             record: entry.id, field: "linked divergence \(divergenceID)")
         }
       }
     }
     let linked = Set(entries.flatMap(\.linkedDivergenceIDs))
     guard divergenceIDs.isSubset(of: linked) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "support surface", field: "unlinked divergence")
+      throw ConformanceGovernanceError.invalidField(record: "support surface", field: "unlinked divergence")
     }
   }
 }
@@ -519,7 +519,7 @@ public struct TemporalSymmetryCoreAdmissionReference: Equatable, Codable, Sendab
   }
   private enum CodingKeys: String, CodingKey, CaseIterable { case reportID, gateRunID, report }
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       reportID: container.decode(UUID.self, forKey: .reportID),
       gateRunID: container.decode(UUID.self, forKey: .gateRunID),
@@ -543,7 +543,7 @@ public struct TemporalSymmetryCoreAdmissionContext: Equatable, Sendable {
     reportSHA256: String
   ) throws {
     guard !reportPath.isEmpty, !reportPath.hasPrefix("/"), TLCReferencePin.isSHA256(reportSHA256) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "core admission", field: "current context")
+      throw ConformanceGovernanceError.invalidField(record: "core admission", field: "current context")
     }
     self.temporalSymmetryGateRunID = temporalSymmetryGateRunID
     self.reportID = reportID
@@ -584,15 +584,15 @@ public struct TemporalSymmetryAdmissionEntry: Equatable, Codable, Sendable {
           Set(mandatoryCaseIDs).count == mandatoryCaseIDs.count,
           Set(divergenceIDs).count == divergenceIDs.count,
           Set(caseRunCorrelations.map(\.caseID)).count == caseRunCorrelations.count else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: supportID, field: "admission entry")
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "admission entry")
     }
     if decision == .admitted {
       guard reasonCodes.isEmpty, !evidence.isEmpty,
             Set(caseRunCorrelations.map(\.caseID)) == Set(mandatoryCaseIDs) else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: supportID, field: "admitted evidence")
+        throw ConformanceGovernanceError.invalidField(record: supportID, field: "admitted evidence")
       }
     } else if reasonCodes.isEmpty {
-      throw TemporalSymmetryGovernanceError.invalidField(record: supportID, field: "reasonCodes")
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "reasonCodes")
     }
     try evidence.forEach { try $0.validate() }
   }
@@ -600,7 +600,7 @@ public struct TemporalSymmetryAdmissionEntry: Equatable, Codable, Sendable {
     case supportID, decision, reasonCodes, mandatoryCaseIDs, divergenceIDs, evidence, caseRunCorrelations
   }
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       supportID: container.decode(String.self, forKey: .supportID),
       decision: container.decode(TemporalSymmetrySupportDecision.self, forKey: .decision),
@@ -669,28 +669,28 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
     finalExitClass: TemporalSymmetryAdmissionExitClass
   ) throws {
     guard schema == Self.schema, authority == Self.authorityBoundary else {
-      throw TemporalSymmetryGovernanceError.invalidSchema(schema)
+      throw ConformanceGovernanceError.invalidSchema(schema)
     }
     guard TLCReferencePin.isSHA256(manifestSHA256), TLCReferencePin.isSHA256(toolchainSHA256),
           unexplainedDivergenceCount >= 0,
           unexplainedDivergenceCaseIDs.count == unexplainedDivergenceCount,
           Set(unexplainedDivergenceCaseIDs).count == unexplainedDivergenceCaseIDs.count,
           unexplainedDivergenceCaseIDs.allSatisfy({ !$0.isEmpty }) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "report identity, digests, or divergence count")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "report identity, digests, or divergence count")
     }
     guard !entries.isEmpty else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "entries")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "entries")
     }
     var ids = Set<String>()
     for entry in entries {
       try entry.validate()
       guard entry.caseRunCorrelations.allSatisfy({ $0.gateRunID == gateRunID }), ids.insert(entry.supportID).inserted else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: entry.supportID, field: "correlations or duplicate support ID")
+        throw ConformanceGovernanceError.invalidField(record: entry.supportID, field: "correlations or duplicate support ID")
       }
     }
     let admittedSupportIDs = Set(entries.filter { $0.decision == .admitted }.map(\.supportID))
     guard Set(admittedBounds.keys) == admittedSupportIDs else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "admitted bounds")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "admitted bounds")
     }
     try admittedBounds.values.forEach { try $0.validate() }
     let expected: TemporalSymmetryAdmissionExitClass
@@ -702,7 +702,7 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
       expected = .success
     }
     guard finalExitClass == expected else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "finalExitClass")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "finalExitClass")
     }
     self.schema = schema
     self.reportID = reportID
@@ -726,42 +726,42 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
     let reportsByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.supportID, $0) })
     let supportIDs = Set(supportSurface.entries.map(\.id))
     guard Set(reportsByID.keys) == supportIDs else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "support entry coverage")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "support entry coverage")
     }
     let casesByID = Dictionary(uniqueKeysWithValues: cases.cases.map { ($0.id, $0) })
     guard Set(unexplainedDivergenceCaseIDs).isSubset(of: Set(casesByID.keys)) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "admission", field: "unexplained divergence cases")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "unexplained divergence cases")
     }
     for support in supportSurface.entries {
       guard let entry = reportsByID[support.id],
             Set(entry.mandatoryCaseIDs) == Set(support.mandatoryCaseIDs),
             Set(entry.divergenceIDs) == Set(support.linkedDivergenceIDs),
             entry.caseRunCorrelations.allSatisfy({ support.mandatoryCaseIDs.contains($0.caseID) && $0.gateRunID == gateRunID }) else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: support.id, field: "registered entry coverage")
+        throw ConformanceGovernanceError.invalidField(record: support.id, field: "registered entry coverage")
       }
       switch support.requestedStatus {
       case .requested:
         guard entry.decision != .unsupported else {
-          throw TemporalSymmetryGovernanceError.invalidField(record: support.id, field: "requested entry downgraded")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "requested entry downgraded")
         }
       case .unsupported:
         guard entry.decision == .unsupported else {
-          throw TemporalSymmetryGovernanceError.invalidField(record: support.id, field: "unsupported entry decision")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "unsupported entry decision")
         }
       case .blocked:
         guard entry.decision == .blocked else {
-          throw TemporalSymmetryGovernanceError.invalidField(record: support.id, field: "blocked entry decision")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "blocked entry decision")
         }
       }
       if entry.decision == .admitted {
         guard unexplainedDivergenceCaseIDs.isEmpty || support.requestedStatus != .requested else {
-          throw TemporalSymmetryGovernanceError.invalidField(record: support.id, field: "global unexplained divergence")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "global unexplained divergence")
         }
         guard admittedBounds[support.id] == support.finiteBounds,
               entry.evidence.count == support.mandatoryCaseIDs.count,
               Set(entry.caseRunCorrelations.map(\.caseID)) == Set(support.mandatoryCaseIDs),
               entry.mandatoryCaseIDs.allSatisfy({ casesByID[$0]?.kind == support.kind }) else {
-          throw TemporalSymmetryGovernanceError.invalidField(record: support.id, field: "current admitted evidence")
+          throw ConformanceGovernanceError.invalidField(record: support.id, field: "current admitted evidence")
         }
       }
     }
@@ -771,7 +771,7 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
     case admittedBounds, unexplainedDivergenceCount, unexplainedDivergenceCaseIDs, finalExitClass
   }
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: container.decode(String.self, forKey: .schema),
       reportID: container.decode(UUID.self, forKey: .reportID),

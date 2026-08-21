@@ -9,6 +9,7 @@ public struct EWD840Model: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .zero }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.ewd840.node")
         public var tlaValue: TLAValue { .int(rawValue) }
@@ -17,12 +18,14 @@ public struct EWD840Model: Sendable {
     public enum Color: String, TLAValueType {
         case white
         case black
+
+        public static var defaultValue: Self { .white }
     }
 
     public static var spec: TLASpec {
         #spec("EWD840") {
-            Extends("Integers")
-            let active = SharedVar(in: SetExpr<Function<Node, Bool>>.literal(
+            Extends(.integers)
+            let active = SharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
@@ -32,7 +35,7 @@ public struct EWD840Model: Sendable {
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
             ))
-            let color = SharedVar(in: SetExpr<Function<Node, Color>>.literal(
+            let color = SharedVar("color", in: SetExpr<Function<Node, Color>>.literal(
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .white)),
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .black)),
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .black), (Node.two, .white)),
@@ -42,8 +45,8 @@ public struct EWD840Model: Sendable {
                 Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .white)),
                 Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .black))
             ))
-            let tpos = SharedVar(in: 0...2)
-            let tcolor = SharedVar(initial: Color.black)
+            let tpos = SharedVar("tpos", in: 0...2)
+            let tcolor = SharedVar("tcolor", initial: Color.black)
 
             Action("InitiateProbe") {
                 tpos == 0 && (tcolor == Color.black || color[.zero] == Color.black)

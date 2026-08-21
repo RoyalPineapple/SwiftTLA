@@ -31,7 +31,7 @@ private func chameneosSpec() -> TLASpec {
     let allFuncs = TLAValue.functionSet(domain: ids, range: colorRange)
 
     return #spec("Chameneos") {
-        Extends("Integers")
+        Extends(.integers)
 
         DefineRecursive("Sum", params: ["f", "S"]) {
             let s = StateExpr.variable("S")

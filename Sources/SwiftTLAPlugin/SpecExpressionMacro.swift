@@ -1,6 +1,5 @@
 import Foundation
 import SwiftDiagnostics
-import SwiftParser
 import SwiftSyntax
 import SwiftSyntaxMacros
 
@@ -21,65 +20,58 @@ public struct SpecExpressionMacro: ExpressionMacro {
                     actual: node.description.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
             ))
-            return "TLASpec(\"InvalidSpec\") {}"
+            return specCall(
+                named: StringLiteralExprSyntax(content: "InvalidSpec"),
+                body: ClosureExprSyntax(statements: [])
+            )
         }
 
-        let runtimeClosure = DeclarationRegistrationRewriter().rewrite(Syntax(closure))
+        let runtimeClosure = SpecDeclarationRegistration().rewrite(Syntax(closure))
             .as(ClosureExprSyntax.self) ?? closure
-        return ExprSyntax(stringLiteral: "TLASpec(\(name.description)) \(runtimeClosure.description)")
+        return specCall(named: name, body: runtimeClosure)
+    }
+
+    private static func specCall(
+        named name: some ExprSyntaxProtocol,
+        body: ClosureExprSyntax
+    ) -> ExprSyntax {
+        ExprSyntax(FunctionCallExprSyntax(
+            calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+            leftParen: .leftParenToken(),
+            arguments: LabeledExprListSyntax([
+                LabeledExprSyntax(expression: name)
+            ]),
+            rightParen: .rightParenToken(),
+            trailingClosure: body
+        ))
     }
 }
 
-/// Result builders intentionally do not receive a `let` declaration as an
-/// element. `#spec` adds the declaration handle as the immediately following
-/// builder expression. The parser sees the source declaration directly, so
-/// the parser and runtime-builder constructions remain independent.
-private final class DeclarationRegistrationRewriter: SyntaxRewriter {
+private final class SpecDeclarationRegistration: SyntaxRewriter {
     override func visit(_ node: CodeBlockItemListSyntax) -> CodeBlockItemListSyntax {
         let rewritten = super.visit(node)
         var items: [CodeBlockItemSyntax] = []
         for item in rewritten {
-            let declaration = rewriteAlgorithmVariableDeclaration(in: item)
-            items.append(declaration.item)
-            guard let name = declaration.name else { continue }
-            let parsed = Parser.parse(source: name)
-            items.append(contentsOf: parsed.statements)
+            items.append(item)
+            guard let reference = declaredVariableReference(in: item) else { continue }
+            items.append(
+                .init(item: .expr(ExprSyntax(reference)))
+            )
         }
-        return CodeBlockItemListSyntax(items)
+        return .init(items)
     }
 
-    private func rewriteAlgorithmVariableDeclaration(
-        in item: CodeBlockItemSyntax
-    ) -> (item: CodeBlockItemSyntax, name: String?) {
+    private func declaredVariableReference(in item: CodeBlockItemSyntax) -> DeclReferenceExprSyntax? {
         guard case .decl(let declaration) = item.item,
               let variable = declaration.as(VariableDeclSyntax.self),
               variable.bindings.count == 1,
               let binding = variable.bindings.first,
-              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-              let initializerClause = binding.initializer,
-              let initializer = initializerClause.value.as(FunctionCallExprSyntax.self),
-              let called = initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              called == "SharedVar" || called == "LocalVar"
-        else { return (item, nil) }
-
-        let hasExplicitName = initializer.arguments.contains {
-            $0.label == nil && $0.expression.is(StringLiteralExprSyntax.self)
-        }
-        guard !hasExplicitName else { return (item, name) }
-
-        var arguments = initializer.arguments
-        arguments.insert(
-            LabeledExprSyntax(
-                expression: StringLiteralExprSyntax(content: name),
-                trailingComma: .commaToken()
-            ),
-            at: arguments.startIndex
-        )
-        let rewrittenCall = initializer.with(\.arguments, arguments)
-        let rewrittenInitializer = initializerClause.with(\.value, ExprSyntax(rewrittenCall))
-        let rewrittenBinding = binding.with(\.initializer, rewrittenInitializer)
-        let rewrittenVariable = variable.with(\.bindings, PatternBindingListSyntax([rewrittenBinding]))
-        return (item.with(\.item, .decl(DeclSyntax(rewrittenVariable))), name)
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
+              let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+              let constructor = initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              constructor == "SharedVar" || constructor == "LocalVar"
+        else { return nil }
+        return .init(baseName: name)
     }
 }
 
@@ -91,7 +83,7 @@ private struct SpecExpressionDiagnostic: DiagnosticMessage {
     var message: String {
         "What failed: #spec invocation could not be parsed. Where: this #spec expression. "
             + "Expected: a string literal specification name followed by a builder closure. "
-            + "Actual: \(actual). Change status: no formal specification was built. "
+            + "Actual: \(actual). "
             + "Next safe action: write #spec(\"Name\") { ... } and compile again."
     }
 }

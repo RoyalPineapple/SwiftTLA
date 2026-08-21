@@ -62,8 +62,6 @@ through `TLAStateProjection`.
 | `@TLAModel` | Release-facing fixture pair exists; current local evidence is diagnostic and hosted evidence is a candidate for the exact fixture only. |
 | `@TLAActor` | Same bounded fixture disposition; the actor runtime proof is also diagnostic. |
 | `@TLAObservable` | Same bounded fixture disposition. |
-| `@TypedVar` | Removed. It was an undocumented implementation surface with no fixture-backed release claim. |
-| `@TLAValidated` | Removed. It had no plugin implementation and has no public contract. |
 
 There are currently no report-derived, generally admitted P4 entries to list in
 public claims. Public material may describe the exact validation cases above,
@@ -107,7 +105,7 @@ preparation, but is not relabeled as hosted evidence.
 The command writes a report for safe setup and execution failures. It does not
 translate exit `1` or `2` into success.
 
-## Limits and future corpus work
+## Limits
 
 This runner does not claim arbitrary bounds, arbitrary generated machines,
 all macro inputs, semantic equivalence to TLC, every Xcode version, simulator
@@ -117,11 +115,4 @@ the pinned nested package tree.
 
 P1 core graph support and P3 temporal/symmetry support keep separate registers,
 reports, and authority boundaries. See [core support](CoreSupport.md) and
-[temporal and symmetry conformance](TemporalSymmetryConformance.md). A P4 result
-does not widen either surface.
-
-A future validation-corpus split may move the project-relative manifests and
-fixtures into a separately versioned portable corpus. That split is not part
-of the current claim. It must preserve the existing byte digests, bounded case
-identities, expected negative controls, command metadata, and report/evidence
-links before any result can be compared with this repository's records.
+[temporal and symmetry conformance](TemporalSymmetryConformance.md).

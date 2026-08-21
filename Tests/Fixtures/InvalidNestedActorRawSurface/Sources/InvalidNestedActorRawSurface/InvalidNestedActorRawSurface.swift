@@ -15,6 +15,6 @@ struct NestedActorSurface {
 }
 
 func rejectRawState(_ machine: NestedActorSurface.Actor) async {
-  let _: [String: TLAValue] = await machine.tlaSnapshot()
+  _ = await machine.tlaSnapshot()
   _ = NestedActorSurface.Actor.TransitionEvidence.self
 }

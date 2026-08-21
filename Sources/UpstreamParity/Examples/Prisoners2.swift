@@ -12,6 +12,7 @@ public struct PrisonersModel: Sendable {
         case three = "p3"
         case four = "p4"
 
+        public static var defaultValue: Self { .two }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.non-counter-prisoner")
 
@@ -21,26 +22,27 @@ public struct PrisonersModel: Sendable {
     private enum Scheduler: String, CaseIterable, FiniteDomainKey {
         case warden
 
+        static var defaultValue: Self { .warden }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.scheduler")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case chooseVisitor
     }
 
     public static var spec: TLASpec {
         #spec("Prisoners") {
-            Extends("Naturals")
+            Extends(.naturals)
             Algorithm("Prisoners") {
-                let switchAUp = SharedVar(in: SetExpr<Bool>.literal(true, false))
-                let switchBUp = SharedVar(in: SetExpr<Bool>.literal(true, false))
-                let timesSwitched = SharedVar(initial: Function<NonCounterPrisoner, Int>.literal(
+                let switchAUp = SharedVar("switchAUp", in: SetExpr<Bool>.literal(true, false))
+                let switchBUp = SharedVar("switchBUp", in: SetExpr<Bool>.literal(true, false))
+                let timesSwitched = SharedVar("timesSwitched", initial: Function<NonCounterPrisoner, Int>.literal(
                     (.two, 0), (.three, 0), (.four, 0)
                 ))
-                let count = SharedVar(initial: 0)
+                let count = SharedVar("count", initial: 0)
 
                 Each(Scheduler.all) { _ in
                     Do(Step.chooseVisitor) {

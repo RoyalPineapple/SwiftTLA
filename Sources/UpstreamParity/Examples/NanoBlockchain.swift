@@ -17,7 +17,7 @@ public struct NanoBlockchainModel: Sendable {
         let initRecv: TLAValue = .function([.string("n1"): .set([]), .string("n2"): .set([])])
 
         return #spec("NanoBlockchain") {
-            Extends("Integers")
+            Extends(.integers)
 
             let lastHash = Var<String>("lastHash")
             let distributedLedger = Var<TLAValue>("distributedLedger")
@@ -65,8 +65,7 @@ public struct NanoBlockchainModel: Sendable {
                 }
             }
 
-            for n in nodes {
-                let priv = ["n1": "prv1", "n2": "prv2"][n]!
+            for (n, priv) in zip(nodes, privKeys) {
                 Action("CreateSend_\(n)") {
                     lastHash != "NoHash"
                         && ActionExpr.exists("prev", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { prev in

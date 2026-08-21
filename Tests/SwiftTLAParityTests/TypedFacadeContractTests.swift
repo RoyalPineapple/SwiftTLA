@@ -10,6 +10,7 @@ struct TypedFacadeContractTests {
     case carA
     case carB
 
+    static var defaultValue: Self { .carA }
     static let finiteValues = allCases
   }
 
@@ -17,6 +18,7 @@ struct TypedFacadeContractTests {
     case alice
     case bob
 
+    static var defaultValue: Self { .alice }
     static let finiteValues = allCases
   }
 
@@ -205,7 +207,7 @@ struct TypedFacadeContractTests {
 
   @Test("bounded elevator source model checks successfully")
   func boundedElevatorSourceModelChecksSuccessfully() throws {
-    let checker = try ModelChecker(spec: MultiCarElevator.spec, maxStates: 30_000)
+    let checker = try ModelChecker(spec: MultiCarElevator.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 30_000))
     guard case .ok(let stateCount) = try checker.check() else {
       Issue.record("Bounded MultiCarElevator safety model did not complete successfully")
       return

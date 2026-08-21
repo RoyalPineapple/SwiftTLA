@@ -52,6 +52,7 @@ extension StateExpr {
         }
 
         switch expr {
+        case .sourceIssue: return expr
         case .variable(let n) where n == name: return replacement
         case .variable, .programCounter: return expr
         case .value, .controlLocation, .enabledAction: return expr
@@ -184,7 +185,7 @@ extension StateExpr {
         }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
-            case .value, .variable, .programCounter, .controlLocation, .enabledAction: return expression
+            case .sourceIssue, .value, .variable, .programCounter, .controlLocation, .enabledAction: return expression
             case .add(let a, let b): return .add(visit(a), visit(b))
             case .subtract(let a, let b): return .subtract(visit(a), visit(b))
             case .multiply(let a, let b): return .multiply(visit(a), visit(b))

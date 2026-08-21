@@ -13,6 +13,7 @@ public struct TwoPhaseModel: Sendable {
         case two = "r2"
         case three = "r3"
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.twoPhase.resourceManager")
 
@@ -22,6 +23,7 @@ public struct TwoPhaseModel: Sendable {
     public enum Coordinator: String, CaseIterable, FiniteDomainKey {
         case transactionManager
 
+        public static var defaultValue: Self { .transactionManager }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.twoPhase.coordinator")
 
@@ -33,18 +35,24 @@ public struct TwoPhaseModel: Sendable {
         case prepared
         case committed
         case aborted
+
+        public static var defaultValue: Self { .working }
     }
 
     public enum TransactionManagerState: String, TLAValueType {
         case initial = "init"
         case committed
         case aborted
+
+        public static var defaultValue: Self { .initial }
     }
 
     public enum MessageKind: String, TLAValueType {
         case prepared
         case commit
         case abort
+
+        public static var defaultValue: Self { .prepared }
     }
 
     public struct MessageFields {
@@ -72,24 +80,24 @@ public struct TwoPhaseModel: Sendable {
         public static let resourceManager = field(\MessageFields.resourceManager)
     }
 
-    private enum ResourceManagerStep: String, PlusCalLabel {
+    private enum ResourceManagerStep: String, PlusCalLabel, CaseIterable {
         case resourceManagerOperate
     }
 
-    private enum CoordinatorStep: String, PlusCalLabel {
+    private enum CoordinatorStep: String, PlusCalLabel, CaseIterable {
         case coordinatorOperate
     }
 
     public static var spec: TLASpec {
         #spec("TwoPhase") {
-            Extends("Integers")
+            Extends(.integers)
             Algorithm("TwoPhase") {
-                let resourceManagerState = SharedVar(initial: Function<ResourceManager, ResourceManagerState>.literal(
+                let resourceManagerState = SharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
                     (.one, .working), (.two, .working), (.three, .working)
                 ))
-                let transactionManagerState = SharedVar(initial: TransactionManagerState.initial)
-                let prepared = SharedVar(initial: SetExpr<ResourceManager>())
-                let messages = SharedVar(initial: SetExpr<Record<MessageSchema>>())
+                let transactionManagerState = SharedVar("transactionManagerState", initial: TransactionManagerState.initial)
+                let prepared = SharedVar("prepared", initial: SetExpr<ResourceManager>())
+                let messages = SharedVar("messages", initial: SetExpr<Record<MessageSchema>>())
 
                 Each(ResourceManager.all) { resourceManager in
                     Do(ResourceManagerStep.resourceManagerOperate) {

@@ -64,7 +64,8 @@ struct PublicWorkflowPlatformMatrixTests {
       bridgeClass: "org.swifttla.conformance.LosslessStateWriter", bridgeSourceSHA256: digest,
       bridgeBinarySHA256: digest)
     let context = BindingContext(
-      caseID: "public-library-macos", gateRunID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+      caseID: "public-library-macos",
+      gateRunID: try #require(UUID(uuidString: "11111111-1111-4111-8111-111111111111")),
       sourceInput: source, configuration: configuration, provenance: provenance)
     try JSONEncoder().encode(context).write(to: url)
     return url
