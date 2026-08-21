@@ -40,9 +40,9 @@ public struct ClockModel: Sendable {
     public static var spec: TLASpec {
         #spec("Clock") {
             Algorithm("Clock") {
-                let hour = SharedVar(initial: 0)
-                let minute = SharedVar(initial: 0)
-                let second = SharedVar(initial: 0)
+                let hour = SharedVar(in: 0...23)
+                let minute = SharedVar(in: 0...59)
+                let second = SharedVar(in: 0...59)
 
                 While(Step.tick, true) {
                     Either {
@@ -86,9 +86,12 @@ public struct ClockModel: Sendable {
 The generated API gives your application typed state and action cases.
 
 ```swift
-var clock = try ClockModel.makeMachine()
+var clock = try ClockModel.makeMachine(
+    .init(hour: 16, minute: 19, second: 59)
+)
 let result = try clock.apply(.tick)
-print(result.after.hour)
+print(result.after)
+// State(hour: 16, minute: 20, second: 0)
 ```
 
 ## Validate the same specification
@@ -99,6 +102,8 @@ initial state. It validates the invariants and properties that you define.
 ```swift
 let compilation = try ClockModel.spec.compile()
 let result = try ModelChecker(compilation: compilation).check()
+print(result)
+// OK — explored 86,400 state(s)
 ```
 
 The same compilation renders the TLA+ and PlusCal bundle. Core Conformance

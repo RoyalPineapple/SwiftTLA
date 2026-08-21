@@ -347,7 +347,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
       initialSet: v.initialSet.map { substituteInState($0, constants: constants) },
       initExpr: v.initExpr.map { substituteInState($0, constants: constants) },
       lazySet: v.lazySet.map { substituteInState($0, constants: constants) },
-      collectionType: v.collectionType
+      collectionType: v.collectionType,
+      origin: v.origin
     )
   }
   let acts = spec.actions.map { a in

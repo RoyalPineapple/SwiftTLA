@@ -60,6 +60,27 @@ struct GeneratedAlgorithmCounter {
     }
 }
 
+@TLAModel
+private struct SeededCounterMachine {
+    static var spec: TLASpec {
+        #spec("SeededCounterMachine") {
+            Algorithm("SeededCounterMachine") {
+                let value = SharedVar(in: 0...2)
+
+                While("advance", true) {
+                    Either {
+                        When(value < 2)
+                        Assign(value, to: value + 1)
+                    } or: {
+                        When(value == 2)
+                        Assign(value, to: 0)
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct GeneratedAlgorithmMachineTests {
     @Test("generated action labels retain collision-safe Swift cases")
     func sanitizesGeneratedActionLabels() {
@@ -80,10 +101,43 @@ struct GeneratedAlgorithmMachineTests {
         #expect(result.before.count == 0)
         #expect(result.after.count == 1)
         #expect(model.state.count == 1)
-        #expect(result.after.pc == .function([
-            .string("left"): .string("increment"),
-            .string("right"): .string("increment")
-        ]))
+    }
+
+    @Test("a generated machine accepts one declared initial state")
+    func generatedMachineAcceptsDeclaredInitialState() throws {
+        #expect(
+            SeededCounterMachine.generatedMachineMetadata.variables.contains { $0.formalName == "pc" } == false
+        )
+        var machine = try SeededCounterMachine.makeMachine(
+            .init(value: 2)
+        )
+
+        #expect(machine.state.value == 2)
+
+        let advance = try machine.apply(.advance)
+        #expect(advance.after.value == 0)
+    }
+
+    @Test("a generated machine rejects an initial state outside Init")
+    func generatedMachineRejectsUndeclaredInitialState() {
+        do {
+            _ = try SeededCounterMachine.makeMachine(.init(value: 3))
+            Issue.record("Expected an invalid initial state error")
+        } catch GeneratedMachineError.invalidInitialState {
+        } catch {
+            Issue.record("Expected an invalid initial state error, got \(error)")
+        }
+    }
+
+    @Test("a generated machine does not select an arbitrary initial state")
+    func generatedMachineRequiresAnInitialStateWhenInitIsPlural() {
+        do {
+            _ = try SeededCounterMachine.makeMachine()
+            Issue.record("Expected an ambiguous initial state error")
+        } catch GeneratedMachineError.ambiguousInitialState {
+        } catch {
+            Issue.record("Expected an ambiguous initial state error, got \(error)")
+        }
     }
 }
 
@@ -145,14 +199,13 @@ struct GeneratedSequentialCounter {
 }
 
 struct GeneratedSequentialMachineTests {
-    @Test("a begin-style Algorithm generates scalar control state")
-    func generatedSequentialAlgorithmPreservesScalarPC() throws {
+    @Test("a sequential Algorithm advances its typed state")
+    func generatedSequentialAlgorithmAdvancesTypedState() throws {
         GeneratedSequentialCounter._checkParserTree()
 
         var model = try GeneratedSequentialCounter.makeMachine()
         let result = try model.apply(.increment)
         #expect(result.after.count == 1)
-        #expect(result.after.pc == "finish")
     }
 }
 

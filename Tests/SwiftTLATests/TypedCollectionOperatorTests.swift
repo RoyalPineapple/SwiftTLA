@@ -319,7 +319,17 @@ private struct FoldGeneratedModel {
         ]))
 
         ZeroBasedSequenceGeneratedModel._checkParserTree()
-        var model = try ZeroBasedSequenceGeneratedModel.makeMachine()
+        let input = try #require(ZeroBasedSequence<Int>(formalValue: .function([
+            .int(0): .int(0)
+        ])))
+        let table = try #require(ZeroBasedSequence<Int>(formalValue: .function([
+            .int(0): .int(-1),
+            .int(1): .int(-1),
+            .int(2): .int(-1)
+        ])))
+        var model = try ZeroBasedSequenceGeneratedModel.makeMachine(
+            .init(input: input, table: table)
+        )
         let result = try model.apply(.writeFirst)
         #expect(result.after.table[0] == result.after.input[0])
         #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("0.."))

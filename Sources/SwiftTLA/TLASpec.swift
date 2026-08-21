@@ -4,6 +4,12 @@ public enum CollectionVarType: Sendable, Equatable {
   case array(Int)
   case dictionary(Int)
 }
+
+enum VariableOrigin: Sendable, Equatable {
+  case source
+  case compiler
+}
+
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let initial: TLAValue
@@ -11,9 +17,27 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let initExpr: StateExpr?
   public let lazySet: StateExpr?  // expression-backed nondeterministic init
   public let collectionType: CollectionVarType
+  let origin: VariableOrigin
+
   public init(
     name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil,
     lazySet: StateExpr? = nil, collectionType: CollectionVarType = .scalar
+  ) {
+    self.init(
+      name: name,
+      initial: initial,
+      initialSet: initialSet,
+      initExpr: initExpr,
+      lazySet: lazySet,
+      collectionType: collectionType,
+      origin: .source
+    )
+  }
+
+  init(
+    name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil,
+    lazySet: StateExpr? = nil, collectionType: CollectionVarType = .scalar,
+    origin: VariableOrigin
   ) {
     self.name = name
     self.initial = initial
@@ -21,6 +45,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     self.initExpr = initExpr
     self.lazySet = lazySet
     self.collectionType = collectionType
+    self.origin = origin
   }
   public var description: String {
     if let s = lazySet { return "\(name) \\in \(s)" }
