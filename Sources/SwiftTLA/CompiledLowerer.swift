@@ -217,6 +217,8 @@ struct CompiledLowerer {
         case .programCounter, .procedureStack: return try valueReference(at: path)
         case .controlLocation: return .controlLocation(try controlLocation(at: path))
         case .variable: return try valueReference(at: path)
+        case .processLocalFamily:
+            throw diagnostic(path: path)
         case .enabledAction: return .enabledAction(try action(at: path))
         case .negate(let value): return .negate(try lower(value, at: path))
         case .not(let value): return .not(try lower(value, at: path))

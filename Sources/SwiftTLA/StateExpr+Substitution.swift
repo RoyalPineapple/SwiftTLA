@@ -1,6 +1,7 @@
 extension StateExpr {
     private enum ReplacementTarget: Equatable {
         case variable(String)
+        case processLocalFamily(String)
         case currentProcess
 
         var variableName: String? {
@@ -23,6 +24,10 @@ extension StateExpr {
 
     package func replacingCurrentProcess(with replacement: StateExpr) -> StateExpr {
         Self.replace(in: self, target: .currentProcess, with: replacement)
+    }
+
+    func replacingProcessLocalFamily(named name: String, with replacement: StateExpr) -> StateExpr {
+        Self.replace(in: self, target: .processLocalFamily(name), with: replacement)
     }
 
     private static func replace(
@@ -77,8 +82,9 @@ extension StateExpr {
         switch expr {
         case .sourceIssue: return expr
         case .variable(let name) where name == target.variableName: return replacement
+        case .processLocalFamily(let name) where target == .processLocalFamily(name): return replacement
         case .currentProcess where target == .currentProcess: return replacement
-        case .variable, .currentProcess, .programCounter, .procedureStack: return expr
+        case .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack: return expr
         case .value, .controlLocation, .enabledAction: return expr
         case .add(let l, let r): return .add(sub(l), sub(r))
         case .subtract(let l, let r): return .subtract(sub(l), sub(r))
@@ -240,7 +246,7 @@ extension StateExpr {
         }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .variable, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
+            case .sourceIssue, .value, .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
             case .add(let a, let b): return .add(visit(a), visit(b))
             case .subtract(let a, let b): return .subtract(visit(a), visit(b))
             case .multiply(let a, let b): return .multiply(visit(a), visit(b))

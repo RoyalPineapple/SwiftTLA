@@ -1114,14 +1114,12 @@ enum AlgorithmLowerer {
             case .currentProcess:
                 return .variable(processBinding)
             case .variable(let name):
-                if name.hasPrefix(algorithmLocalFamilyPrefix) {
-                    let root = String(name.dropFirst(algorithmLocalFamilyPrefix.count))
-                    return localRoots.contains(root) ? .variable(root) : expression
-                }
                 if localRoots.contains(name) {
                     return .functionApply(.variable(name), .variable(processBinding))
                 }
                 return expression
+            case .processLocalFamily(let root):
+                return localRoots.contains(root) ? .variable(root) : expression
             case .add(let lhs, let rhs): return .add(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
             case .subtract(let lhs, let rhs): return .subtract(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
             case .multiply(let lhs, let rhs): return .multiply(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))

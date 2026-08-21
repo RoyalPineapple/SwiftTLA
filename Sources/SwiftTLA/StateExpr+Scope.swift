@@ -10,6 +10,8 @@ extension StateExpr {
             []
         case .variable(let name):
             [name]
+        case .processLocalFamily(let name):
+            [name]
         case .add(let lhs, let rhs), .subtract(let lhs, let rhs),
              .multiply(let lhs, let rhs), .divide(let lhs, let rhs),
              .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),

@@ -261,6 +261,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case sourceIssue(SourceModelIssue)
     case value(TLAValue)
     case variable(String)
+    case processLocalFamily(String)
     case currentProcess
     case programCounter
     case procedureStack
@@ -340,6 +341,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .sourceIssue(let issue): return issue.description
         case .value(let v): return v.description
         case .variable(let n): return n
+        case .processLocalFamily(let name): return "processLocalFamily(\(name))"
         case .currentProcess: return "currentProcess"
         case .programCounter: return CompilerControlSymbol.programCounter.rawValue
         case .procedureStack: return CompilerControlSymbol.stack.rawValue
@@ -488,7 +490,7 @@ private extension FormalCallArgument {
 
 private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
     switch expression {
-    case .sourceIssue, .value, .variable, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
+    case .sourceIssue, .value, .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
         return []
     case .recursiveCall(let name, let arguments):
         return Set([name]).union(

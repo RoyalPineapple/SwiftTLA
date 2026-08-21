@@ -5,10 +5,24 @@ enum AlgorithmAssignmentTargetPolicy {
 }
 
 extension AlgorithmStatementModel {
-    func replacingCurrentProcess(with replacement: StateExpr) -> AlgorithmStatementModel {
-        func expression(_ value: StateExpr) -> StateExpr {
-            value.replacingCurrentProcess(with: replacement)
+    func replacingProcessLocalFamily(
+        named name: String,
+        with replacement: StateExpr
+    ) -> AlgorithmStatementModel {
+        replacingExpressions(with: replacement) {
+            $0.replacingProcessLocalFamily(named: name, with: replacement)
         }
+    }
+
+    func replacingCurrentProcess(with replacement: StateExpr) -> AlgorithmStatementModel {
+        replacingExpressions(with: replacement) { $0.replacingCurrentProcess(with: replacement) }
+    }
+
+    private func replacingExpressions(
+        with replacement: StateExpr,
+        _ transform: (StateExpr) -> StateExpr
+    ) -> AlgorithmStatementModel {
+        func expression(_ value: StateExpr) -> StateExpr { transform(value) }
 
         func target(_ value: AlgorithmLValueModel) -> AlgorithmLValueModel {
             switch value {
@@ -24,7 +38,7 @@ extension AlgorithmStatementModel {
             body: [AlgorithmStatementModel]
         ) -> (variable: String, body: [AlgorithmStatementModel]) {
             guard replacement.freeVariableNames.contains(variable) else {
-                return (variable, body.map { $0.replacingCurrentProcess(with: replacement) })
+                return (variable, body.map { $0.replacingExpressions(with: replacement, transform) })
             }
             let fresh = StateExpr.freshBoundName(
                 variable,
@@ -39,7 +53,7 @@ extension AlgorithmStatementModel {
                     assignmentTargets: .replaceWhenVariable
                 )
             }
-            return (fresh, renamed.map { $0.replacingCurrentProcess(with: replacement) })
+            return (fresh, renamed.map { $0.replacingExpressions(with: replacement, transform) })
         }
 
         return switch self {
@@ -60,17 +74,17 @@ extension AlgorithmStatementModel {
         case .ifElse(let condition, let then, let otherwise):
             .ifElse(
                 expression(condition),
-                then.map { $0.replacingCurrentProcess(with: replacement) },
-                otherwise.map { $0.replacingCurrentProcess(with: replacement) }
+                then.map { $0.replacingExpressions(with: replacement, transform) },
+                otherwise.map { $0.replacingExpressions(with: replacement, transform) }
             )
         case .either(let first, let second):
             .either(
-                first.map { $0.replacingCurrentProcess(with: replacement) },
-                second.map { $0.replacingCurrentProcess(with: replacement) }
+                first.map { $0.replacingExpressions(with: replacement, transform) },
+                second.map { $0.replacingExpressions(with: replacement, transform) }
             )
         case .choose(let variable, let domain, let body):
             let scoped = scopedBody(variable: variable, body: body)
-            .choose(variable: scoped.variable, domain: domain, scoped.body)
+            .choose(variable: scoped.variable, domain: expression(domain), scoped.body)
         case .call(let target, let arguments):
             .call(target: target, arguments: arguments.map(expression))
         }

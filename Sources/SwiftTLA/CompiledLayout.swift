@@ -314,7 +314,7 @@ struct CompiledLayout: Hashable, Sendable {
                 return
             case .value(let value):
                 visit(value)
-            case .variable, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
+            case .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
                 return
             case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
                  .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
@@ -764,6 +764,13 @@ struct BindingValidator {
             references[path] = .controlLocation(id)
         case .variable(let name):
             try resolveValue(name, at: path, scope: scope)
+        case .processLocalFamily(let name):
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a process-local declaration lowered from an algorithm",
+                actual: "process-local family '\(name)' outside algorithm lowering"
+            )
         case .enabledAction(let name):
             guard let id = layout.actionID(named: name) else {
                 try unresolved(name, at: path, expected: "a declared action")

@@ -1361,7 +1361,7 @@ public final class ParserSession {
            args.count == 1,
            args[0].label?.text == "for",
            let local = base?.as(DeclReferenceExprSyntax.self)?.baseName.text {
-            return .variable("\(algorithmLocalFamilyPrefix)\(local)")
+            return .processLocalFamily(local)
         }
         if base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences" {
             switch methodName {

@@ -100,6 +100,34 @@ struct AlgorithmBuilderTests {
         ))
     }
 
+    @Test("process-local family references preserve lexical bindings")
+    func processLocalFamilyReplacementPreservesLexicalBindings() {
+        let local = LocalVar("count", initial: 0)
+        #expect(local.family(for: Node.self).raw == .processLocalFamily("count"))
+
+        let expression = StateExpr.forAll(
+            .setLiteral([.int(1)]),
+            "count",
+            .equal(.processLocalFamily("count"), .variable("count"))
+        )
+        #expect(expression.replacingProcessLocalFamily(named: "count", with: .variable("count")) == .forAll(
+            .setLiteral([.int(1)]),
+            "count_1",
+            .equal(.variable("count"), .variable("count_1"))
+        ))
+
+        let statement = AlgorithmStatementModel.letBinding(
+            "count",
+            .int(1),
+            [.assert(.equal(.processLocalFamily("count"), .variable("count")))]
+        )
+        #expect(statement.replacingProcessLocalFamily(named: "count", with: .variable("count")) == .letBinding(
+            "count_1",
+            .int(1),
+            [.assert(.equal(.variable("count"), .variable("count_1")))]
+        ))
+    }
+
     @Test("statement macros expand into their surrounding atomic block")
     func expandsTypedStatementMacro() throws {
         let algorithm = Algorithm("MacroLock") {
