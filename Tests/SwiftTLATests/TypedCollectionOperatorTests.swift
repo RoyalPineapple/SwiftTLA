@@ -467,7 +467,10 @@ private struct FoldGeneratedModel {
             .init(input: input, table: table)
         )
         let result = try model.apply(.writeFirst)
-        #expect(result.after.table[0] == result.after.input[0])
+        #expect(
+            try #require(result.after.table.element(at: 0))
+                == try #require(result.after.input.element(at: 0))
+        )
         #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("0.."))
     }
 

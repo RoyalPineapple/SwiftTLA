@@ -466,6 +466,11 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   public var tlaValue: TLAValue { .function(values) }
   public static var defaultValue: Self { Self() }
 
+  public func element(at index: Int) -> Element? {
+    guard index >= 0, let value = values[.int(index)] else { return nil }
+    return Element(formalValue: value)
+  }
+
   /// Creates a zero-based formal sequence from values in formal order.
   public static func literal(_ elements: Element...) -> Expr<Self> {
     literal(elements.map { .value($0.tlaValue) })
