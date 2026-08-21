@@ -339,6 +339,10 @@ extension ParserSession {
                       let instance = result.moduleInstances.last
                 else { continue }
                 result.instanceBindings[sourceName] = instance
+            } else if typedFacadeType(call.calledExpression)?.name == "SymmetricCollectionVar" {
+                // `SymmetricCollection` owns the declaration; this handle only
+                // gives that declaration its authored source name and types.
+                continue
             } else if resolveVarCall(call) != nil {
                 containsVariableConstructor = true
             } else if let value = decodeTypedFacadeValue(

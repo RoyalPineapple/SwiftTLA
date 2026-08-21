@@ -1103,6 +1103,9 @@ public final class ParserSession {
            let value = enumDefinition(named: type)?.value(named: member.declName.baseName.text) {
             return .value(value)
         }
+        if let value = decodeUniqueUnqualifiedEnumCase(expression) {
+            return value
+        }
         if let decoded = decodeTypedFacadeExpr(expression, scope: scope) {
             return decoded
         }
