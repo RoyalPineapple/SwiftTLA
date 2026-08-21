@@ -572,6 +572,16 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(result == .boolean(true))
     }
 
+    @Test("compiled record expressions have canonical field order")
+    func compiledRecordExpressionsHaveCanonicalFieldOrder() {
+        let record = CompiledRecordExpression([
+            .init(name: "z", value: .value(.int(1))),
+            .init(name: "a", value: .value(.int(2)))
+        ])
+
+        #expect(record.fields.map(\.name) == ["a", "z"])
+    }
+
     @Test("compiled evaluator executes local operators through bound values")
     func compiledEvaluatorExecutesLocalOperators() throws {
         let expression = StateExpr.letIn(

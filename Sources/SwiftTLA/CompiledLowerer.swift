@@ -170,9 +170,9 @@ struct CompiledLowerer {
         case .tupleLiteral(let values): return try .tupleLiteral(lower(values, at: path))
         case .tupleAccess(let value, let index): return try .tupleAccess(lower(value, at: path), index)
         case .recordLiteral(let fields):
-            return .recordLiteral(try fields.reduce(into: [String: CompiledStateExpr]()) { result, item in
-                result[item.key] = try lower(item.value, at: "\(path).\(item.key)")
-            })
+            return try .recordLiteral(.init(fields.map { item in
+                .init(name: item.key, value: try lower(item.value, at: "\(path).\(item.key)"))
+            }))
         case .recordAccess(let value, let field): return try .recordAccess(lower(value, at: path), field)
         case .except(let function, let key, let value):
             return try .except(
@@ -380,25 +380,27 @@ struct CompiledLowerer {
                 )
             })
         case .recordLiteral(let fields):
-            return .recordLiteral(try fields.reduce(into: [:]) { result, field in
+            return try .recordLiteral(.init(fields.map { field in
+                let value: CompiledStateExpr
                 if stackFrame, field.key == "pc" {
-                    result[field.key] = try lowerControlValue(
+                    value = try lowerControlValue(
                         field.value,
                         at: "\(path).\(field.key)",
                         owner: owner,
                         algorithm: algorithm
                     )
                 } else if stackFrame {
-                    result[field.key] = try lower(field.value, at: "\(path).\(field.key)")
+                    value = try lower(field.value, at: "\(path).\(field.key)")
                 } else {
-                    result[field.key] = try lowerControlValue(
+                    value = try lowerControlValue(
                         field.value,
                         at: "\(path).\(field.key)",
                         owner: owner,
                         algorithm: algorithm
                     )
                 }
-            })
+                return .init(name: field.key, value: value)
+            }))
         case .functionLiteral(let domain, let binder, let body):
             return .functionLiteral(
                 try lower(domain, at: "\(path).domain"),

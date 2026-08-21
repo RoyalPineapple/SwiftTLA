@@ -233,8 +233,8 @@ struct CompiledEvaluator {
             }
             return .tuple(left + right)
         case .recordLiteral(let fields):
-            return .record(CompiledRecord(try fields.map {
-                .init(name: $0.key, value: try value($0.value))
+            return .record(CompiledRecord(try fields.fields.map {
+                .init(name: $0.name, value: try value($0.value))
             }))
         case .recordAccess(let record, let field):
             guard case .record(let values) = try value(record), let result = values.value(named: field) else {
