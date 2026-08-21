@@ -50,6 +50,26 @@ struct CompiledTLARenderer {
         )
     }
 
+    func fairness(
+        _ condition: CompiledFairnessCondition,
+        vars: String,
+        actionNames: [ActionID: String],
+        actionCalls: [CompiledActionCall: String]
+    ) throws -> String {
+        let action: String
+        switch condition.scope {
+        case .next:
+            action = "Next"
+        case .action(let id):
+            guard let name = actionNames[id] else { throw missing("action", id.ordinal) }
+            action = name
+        case .actionCall(let call):
+            guard let name = actionCalls[call] else { throw missing("action", call.action.ordinal) }
+            action = name
+        }
+        return "\(condition.isStrong ? "SF" : "WF")_\(vars)(\(action))"
+    }
+
     func state(_ expression: CompiledStateExpr) throws -> String {
         switch expression {
         case .value(let value): return value.description

@@ -684,6 +684,34 @@ public extension TLASpec {
         }
         let renderedControlNames = layout.directActionNames(actions: actions)
         let emittedActionNames = tlaActionNames(actions, preferredNames: renderedControlNames)
+        let emittedActionNamesByID = try semantics.actions.reduce(into: [ActionID: String]()) { names, action in
+            guard layout.actions.indices.contains(action.id.ordinal) else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "actions[\(action.id.ordinal)]",
+                    expected: "an action in the compiled layout",
+                    actual: "the action identity is outside the compiled layout",
+                    nextSafeAction: "Compile the model again from its current source."
+                )
+            }
+            let sourceName = layout.actions[action.id.ordinal].declaration.name
+            guard let emittedName = emittedActionNames[sourceName] else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "actions.\(sourceName)",
+                    expected: "a rendered action name",
+                    actual: "no rendered name",
+                    nextSafeAction: "Compile the model again from its current source."
+                )
+            }
+            names[action.id] = emittedName
+        }
+        let emittedActionCallNames = try directActionCallNames(
+            semantics.actions,
+            emittedActionNames: emittedActionNamesByID
+        )
         let orderedDefinitionsBeforeInstances = try orderDirectDefinitions(
             definitionsBeforeInstances,
             declared: []
@@ -704,6 +732,8 @@ public extension TLASpec {
                 definitionsAfterInstances: orderedDefinitionsAfterInstances,
                 renderedActions: renderedActions,
                 emittedActionNames: emittedActionNames,
+                emittedActionNamesByID: emittedActionNamesByID,
+                emittedActionCallNames: emittedActionCallNames,
                 renderer: renderer,
                 semantics: semantics
             ),
@@ -730,6 +760,8 @@ public extension TLASpec {
         definitionsAfterInstances: [RenderedModuleDefinition],
         renderedActions: [DirectModuleAction],
         emittedActionNames: [String: String],
+        emittedActionNamesByID: [ActionID: String],
+        emittedActionCallNames: [CompiledActionCall: String],
         renderer: CompiledTLARenderer,
         semantics: CompiledSemantics
     ) throws -> String {
@@ -908,8 +940,8 @@ public extension TLASpec {
         lines.append("Spec ==")
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
-        for condition in fairness {
-            lines.append("  /\\ \(renderedFairnessForm(condition, vars: varsTuple, actions: renderedActionsByName, emittedActionNames: emittedActionNames))")
+        for condition in semantics.fairness {
+            lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionNames: emittedActionNamesByID, actionCalls: emittedActionCallNames))")
         }
         lines.append("")
         for temporal in semantics.temporalProperties {
@@ -932,28 +964,6 @@ public extension TLASpec {
             return "\(theorem.name) == Spec => []\(state.tlaModuleSource)"
         }
         return theorem.name
-    }
-
-    private func renderedFairnessForm(
-        _ condition: FairnessCondition,
-        vars: String,
-        actions: [NamedAction],
-        emittedActionNames: [String: String]
-    ) -> String {
-        switch condition {
-        case .weakFairness, .strongFairness, .weakFairnessNext, .strongFairnessNext:
-            return condition.tlaForm(vars: vars)
-        case .weakFairnessActionCall(let invocation), .strongFairnessActionCall(let invocation):
-            let operatorName = actions.lazy
-                .flatMap { action in actionVariants(action).map { (action, $0) } }
-                .first(where: { $0.0.name == invocation.name && $0.1.arguments == invocation.arguments })
-                .map { pair in
-                    let emittedName = emittedActionNames[invocation.name] ?? invocation.name
-                    guard !pair.1.indices.isEmpty else { return emittedName }
-                    return "\(emittedName)__\(pair.1.indices.map(String.init).joined(separator: "_"))"
-                } ?? (emittedActionNames[invocation.name] ?? invocation.name)
-            return condition.isStrong ? "SF_\(vars)(\(operatorName))" : "WF_\(vars)(\(operatorName))"
-        }
     }
 
     private func renderedTLCConfiguration() -> String {
@@ -1276,6 +1286,37 @@ private func tlaActionNames(
         used.insert(candidate)
     }
     return emitted
+}
+
+private func directActionCallNames(
+    _ actions: [CompiledAction],
+    emittedActionNames: [ActionID: String]
+) throws -> [CompiledActionCall: String] {
+    var names: [CompiledActionCall: String] = [:]
+    for action in actions {
+        guard let emittedName = emittedActionNames[action.id] else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "actions[\(action.id.ordinal)]",
+                expected: "a rendered action name",
+                actual: "no rendered name",
+                nextSafeAction: "Compile the model again from its current source."
+            )
+        }
+        func addCalls(_ position: Int, arguments: [TLAValue], indices: [Int]) {
+            guard position < action.bindings.count else {
+                let suffix = indices.isEmpty ? "" : "__\(indices.map(String.init).joined(separator: "_"))"
+                names[.init(action: action.id, arguments: arguments)] = "\(emittedName)\(suffix)"
+                return
+            }
+            for (index, value) in action.bindings[position].values.enumerated() {
+                addCalls(position + 1, arguments: arguments + [value], indices: indices + [index])
+            }
+        }
+        addCalls(0, arguments: [], indices: [])
+    }
+    return names
 }
 
 private extension CompiledLayout {
