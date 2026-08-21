@@ -22,7 +22,7 @@ extension MacroExpander {
                 guard !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: action)) else {
                     throw GeneratedMachineError.identityRoutedActionRequiresID
                 }
-            """
+            return """
         let liveProjection = symmetricCollections.compactMap { collection in
             guard let ordinal = variables.firstIndex(where: { $0.formalName == collection.formalName }) else {
                 return nil
