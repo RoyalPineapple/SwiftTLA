@@ -88,6 +88,27 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try first.renderedTLAModuleBundle().root.tla == second.renderedTLAModuleBundle().root.tla)
     }
 
+    @Test("compiled binders have distinct rendered names")
+    func compiledBindersHaveDistinctRenderedNames() throws {
+        let spec = TLASpec("DistinctBinders") {
+            Invariant("Safe") {
+                .forAll(
+                    .setLiteral([.value(.int(1))]),
+                    "value",
+                    .forAll(.setLiteral([.value(.int(1))]), "value", .value(.bool(true)))
+                )
+            }
+        }
+
+        let compilation = try spec.compile()
+        let first = try #require(compilation.bindings.binderName(.init(ordinal: 0)))
+        let second = try #require(compilation.bindings.binderName(.init(ordinal: 1)))
+
+        #expect(first != second)
+        #expect(try compilation.renderedTLAModuleBundle().root.tla.contains(first))
+        #expect(try compilation.renderedTLAModuleBundle().root.tla.contains(second))
+    }
+
     @Test("macro compilation uses the explicit formal module name")
     func macroUsesExplicitFormalModuleName() throws {
         let compilation = try CompilerPipelineExplicitFormalNameModel.compiledSpecification()

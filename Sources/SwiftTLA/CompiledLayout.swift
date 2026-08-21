@@ -877,7 +877,7 @@ struct BindingValidator {
             nextBinderOrdinal += 1
             knownBinderNames.insert(name)
             nested[name] = id
-            binders[id] = name
+            binders[id] = "__swift_tla_binder_\(id.ordinal)"
             references["\(path).\(name)"] = .binder(id)
         }
         return nested
@@ -897,7 +897,7 @@ struct BindingValidator {
                 nextBinderOrdinal += 1
                 knownBinderNames.insert(name)
                 nested[name] = id
-                binders[id] = name
+                binders[id] = "__swift_tla_binder_\(id.ordinal)"
                 references["\(path).\(name)"] = .binder(id)
             case .operator(let name, _):
                 let id = OperatorID(ordinal: nextOperatorOrdinal)
