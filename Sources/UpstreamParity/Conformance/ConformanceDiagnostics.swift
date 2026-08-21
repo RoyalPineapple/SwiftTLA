@@ -2,9 +2,7 @@ import Foundation
 
 /// A retained input or output that explains a conformance decision.
 ///
-/// `location` is intentionally a path, not an opaque string embedded in a
-/// summary. Callers can open the recorded module, configuration, graph, or log
-/// without having to reconstruct the invocation.
+/// `location` identifies the recorded module, configuration, graph, or log.
 public struct ConformanceEvidenceLocation: Equatable, Sendable {
   public let role: String
   public let location: String
@@ -28,9 +26,7 @@ public struct ConformanceToolOutput: Equatable, Sendable {
 
 /// A diagnostic that answers the next useful investigation question.
 ///
-/// The fields are deliberately separate: a UI can present them independently,
-/// and automation can retain the tool output and input locations without
-/// scraping a prose error message.
+/// The fields let a UI present the diagnostic and retained evidence directly.
 public struct ConformanceFailureReport: Equatable, Sendable {
   public let whatFailed: String
   public let whereItFailed: String
@@ -62,10 +58,8 @@ public struct ConformanceFailureReport: Equatable, Sendable {
 extension ConformanceDifference {
   /// A concrete explanation of this exact graph difference.
   ///
-  /// In core conformance, `expected` is TLC and `actual` is SwiftTLA. The
-  /// complete graph remains in `tlc-run.json` and `swift-run.json`; this report points
-  /// to the first stable witness instead of flattening the difference into
-  /// "graph differs".
+  /// In core conformance, `expected` is TLC and `actual` is SwiftTLA.
+  /// `tlc-run.json` and `swift-run.json` contain the complete graph records.
   public var failureReport: ConformanceFailureReport {
     switch self {
     case .receipt(let expectedDigest, let actualDigest):

@@ -445,8 +445,7 @@ private func invalidRegisterReport(gateRunID: UUID) throws -> CoreSupportAdmissi
         supportID: "governance-register",
         decision: .blocked,
         reasonCodes: [.invalidRegister],
-        mandatoryCaseIDs: ["governance-register"],
-        divergenceIDs: [])
+        mandatoryCaseIDs: ["governance-register"])
     return try CoreSupportAdmission(gateRunID: gateRunID, entries: [entry])
 }
 private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
@@ -565,9 +564,6 @@ private func validateTemporalSymmetryReportDestination(
             environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
             defaultPath: "Verification/TemporalSymmetryConformance/cases.json"),
         governanceURL(
-            environment["TEMPORAL_SYMMETRY_DIVERGENCES"], projectRoot: projectRoot,
-            defaultPath: "Verification/TemporalSymmetryConformance/divergences.json"),
-        governanceURL(
             environment["TEMPORAL_SYMMETRY_SUPPORT_SURFACE"], projectRoot: projectRoot,
             defaultPath: "Verification/TemporalSymmetryConformance/support-surface.json"),
         governanceURL(
@@ -589,9 +585,6 @@ private func temporalSymmetryAdmissionReport(
     let casesURL = governanceURL(
         environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
         defaultPath: "Verification/TemporalSymmetryConformance/cases.json")
-    let ledgerURL = governanceURL(
-        environment["TEMPORAL_SYMMETRY_DIVERGENCES"], projectRoot: projectRoot,
-        defaultPath: "Verification/TemporalSymmetryConformance/divergences.json")
     let surfaceURL = governanceURL(
         environment["TEMPORAL_SYMMETRY_SUPPORT_SURFACE"], projectRoot: projectRoot,
         defaultPath: "Verification/TemporalSymmetryConformance/support-surface.json")
@@ -599,7 +592,6 @@ private func temporalSymmetryAdmissionReport(
         environment["TEMPORAL_SYMMETRY_TOOLCHAIN"], projectRoot: projectRoot,
         defaultPath: "Verification/CoreConformance/toolchain.json")
     let cases = try decode(TemporalSymmetryCases.self, at: casesURL)
-    let ledger = try decode(TemporalSymmetryDivergenceLedger.self, at: ledgerURL)
     let surface = try decode(TemporalSymmetrySupportSurface.self, at: surfaceURL)
     let manifestSHA256 = try fileSHA256(casesURL)
     let toolchainSHA256 = try fileSHA256(toolchainURL)
@@ -630,7 +622,6 @@ private func temporalSymmetryAdmissionReport(
         coreAdmission: coreReference,
         coreAdmissionContext: coreContext,
         cases: cases,
-        ledger: ledger,
         surface: surface,
         evidence: evidence,
         manifestSHA256: manifestSHA256,
@@ -669,8 +660,7 @@ private func temporalSymmetryEvidence(
             comparisonEvidence: reference,
             manifestSHA256: manifestSHA256,
             toolchainSHA256: toolchainSHA256,
-            status: .complete,
-            normalizedDifferenceDigest: comparison.outcome == .difference ? SHA256.hex(data) : nil)
+            status: .complete)
     }
 }
 private func validateCompleteGraphEvidence(
@@ -757,8 +747,7 @@ private func unavailableTemporalSymmetryReport(gateRunID: UUID) throws -> Tempor
         supportID: "governance-register",
         decision: .blocked,
         reasonCodes: [.missingPrerequisite, .invalidRegister],
-        mandatoryCaseIDs: ["governance-register"],
-        divergenceIDs: [])
+        mandatoryCaseIDs: ["governance-register"])
     return try TemporalSymmetryAdmission(
         reportID: UUID(),
         gateRunID: gateRunID,
@@ -767,7 +756,6 @@ private func unavailableTemporalSymmetryReport(gateRunID: UUID) throws -> Tempor
         toolchainSHA256: String(repeating: "0", count: 64),
         entries: [entry],
         admittedBounds: [:],
-        unexplainedDivergenceCount: 0,
         finalExitClass: .unavailable)
 }
 private func parseTemporalSymmetryGateOptions(_ arguments: [String]) throws -> TemporalSymmetryGateOptions {

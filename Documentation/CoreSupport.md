@@ -1,9 +1,8 @@
 # Core support
 
 Core support is a bounded claim. The [support register](../Verification/CoreConformance/support-surface.json)
-names each behavior, its
-finite bounds, required cases, graph relation, requested status, and any
-linked divergence. Behavior outside that register is not admitted.
+names each behavior, its finite bounds, required cases, graph relation, and
+requested status.
 
 Parser, macro, generated-machine, and public-library macOS checks
 use a separate [public workflow conformance](PublicWorkflowConformance.md)
@@ -45,11 +44,9 @@ The current requested entries are limited to these exact finite cases:
 The graph relation is `exactFiniteTLCGraph`: initial states, state bindings,
 labeled transitions, and outcome must all agree for the declared case.
 
-The altered HourClock edge and failing DieHard `NotSolved` invariant are
-permanent negative controls. They are intentionally unsupported. All other
-finite core behavior outside the two declared exact graphs is also explicitly
-unsupported. This does not claim temporal, liveness, fairness, symmetry,
-parser, annotation, generated-behavior, platform, or arbitrary-bound support.
+The declared graph cases define the current core support surface. Temporal,
+liveness, fairness, symmetry, parser, annotation, generated-behavior,
+platform, and arbitrary-bound claims use their own declared evidence.
 
 ## Read the gate
 
@@ -69,14 +66,10 @@ The immutable report, invocation record, and case evidence are retained at:
 .build/core-support-gate/runs/<gate-run-id>/
 ```
 
-Do not use an older retained run as current support evidence. The gate binds
-all case evidence to its one gate run ID and rejects missing, partial,
-foreign, or digest-mismatched evidence.
+Each gate run binds its case evidence to one gate run ID.
 
-Each report entry links its required case IDs, linked divergence IDs, retained
-evidence references, and case-run correlations. Use those links to trace an
-admission or block back to the declared support entry and evidence from the
-same gate run.
+Each report entry links its required case IDs, retained evidence references,
+and case-run correlations.
 
 ## Read a report
 
@@ -84,44 +77,19 @@ same gate run.
 
 - The gate run ID and the fixed authority statement.
 - One decision for each support entry: `admitted`, `blocked`, or `unsupported`.
-- Stable reason codes, required case IDs, linked divergence IDs, evidence
-  references, and case-run correlations.
+- Stable reason codes, required case IDs, evidence references, and case-run
+  correlations.
 - Counts for admitted, blocked, unsupported, missing, stale, failing, and
-  unexplained entries.
+  non-exact entries.
 - The computed final exit class.
 
 `admitted` means every required case was produced in this run, used the
-declared inputs and toolchain, completed, and matched exactly with no
-unresolved linked divergence. `unsupported` is visible scope, not a pass for
-that behavior. `blocked` means a requested entry did not meet the admission
-contract.
+declared inputs and toolchain, completed, and matched exactly. `unsupported`
+marks a declared support boundary. `blocked` means a requested entry did not
+meet the admission contract.
 
-For a blocked entry, start with `reasonCodes`. Restore a missing prerequisite;
-rerun incomplete or foreign evidence; correct an input or toolchain digest;
-or investigate a non-exact or unexplained divergence. Then run the gate again.
-Do not relabel a failure as admitted.
-
-## Divergence records
-
-The divergence ledger uses these classifications:
-
-- `swiftTLADefect`: SwiftTLA disagrees with cited published TLA+ semantics.
-- `harnessOrConfigurationDefect`: an input, mapping, bridge, tool setup, or
-  run configuration caused the disagreement.
-- `unsupportedConstruct`: the construct is outside the current support
-  surface.
-- `publishedSemanticsAmbiguity`: the cited published material does not give
-  one clear result.
-- `suspectedTLCDefect`: the pinned TLC executable may disagree with the cited
-  published semantics.
-
-The current disposition is `open`, `resolved`, `unsupported`,
-`awaitingSemanticsReview`, or `suspectedReferenceDefect`. Only `resolved`
-allows a linked divergence to stop blocking support, and it requires an exact
-latest comparison. An `unsupported` record remains in the ledger as a
-regression: its retained difference digest must still match. See [core
-graph conformance](CoreGraphConformance.md#divergences-and-support-admission)
-for the complete retention checklist.
+For a blocked entry, start with `reasonCodes`, then inspect the referenced
+case evidence and exact comparison report.
 
 ## Exit status
 

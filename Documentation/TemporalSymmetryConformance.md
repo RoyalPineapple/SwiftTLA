@@ -34,22 +34,21 @@ The report has one entry for every support-surface entry. An entry is
 | Exit | Meaning | Action |
 |---:|---|---|
 | `0` | Every requested entry is admitted. | Retain the report with the change evidence. |
-| `1` | A complete evaluation blocks a requested entry. | Read `reasonCodes` and resolve the reported mismatch or divergence. |
+| `1` | A complete evaluation blocks a requested entry. | Read `reasonCodes` and resolve the reported mismatch. |
 | `2` | The evaluation is unavailable or unsafe. | Restore the missing, stale, partial, foreign, or invalid evidence. |
 
 The hosted workflow preserves all three exit values.
 An unavailable result never becomes a passing result.
 
 The report can admit only a requested entry with current, complete, exact
-evidence and zero unexplained differences. A visible `unsupported` entry does
-not establish support for that behavior.
+evidence. A visible `unsupported` entry does not establish support for that
+behavior.
 
 ## Declared boundaries
 
 The source of truth is the following register set:
 
 - `Verification/TemporalSymmetryConformance/cases.json`
-- `Verification/TemporalSymmetryConformance/divergences.json`
 - `Verification/TemporalSymmetryConformance/support-surface.json`
 - `Verification/TemporalSymmetryConformance/baselines/manifest.json`
 
@@ -132,10 +131,8 @@ unavailable.
    graph events, and diagnostics.
 5. For symmetry cases, inspect raw and reduced graphs, orbit evidence,
    quotient evidence, and configuration records.
-6. If evidence differs, retain or update a divergence record with a minimized
-   reproducer and stable normalized difference digest.
-7. Run the release check again after the correction.
+6. Correct the model, compiler, or declared formal bundle, then run the
+   release check again.
 
-Never delete a divergence or downgrade a requested entry to obtain exit `0`.
-If published semantics and the pinned TLC result differ, retain that difference
-and resolve the claim against the published semantics.
+A mismatch blocks the claim. Its retained canonical graphs and first exact
+difference identify the correction.

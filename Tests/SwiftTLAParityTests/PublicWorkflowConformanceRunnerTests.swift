@@ -149,7 +149,7 @@ struct PublicWorkflowConformanceRunnerTests {
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
     let xcodebuild = try fakeXcodebuild(at: temporary)
 
-    for (mode, expectedExit, expectedClass) in [("matched", 0, PublicWorkflowAdmissionExitClass.success), ("platform-failure", 1, .blocked), ("unavailable", 2, .unavailable)] {
+    for (mode, expectedExit, expectedClass) in [("matched", 0, PublicWorkflowDiagnosticExit.success), ("platform-failure", 1, .blocked), ("unavailable", 2, .unavailable)] {
       let output = temporary.appending(path: mode)
       let exit = try run(URL(fileURLWithPath: "/bin/bash"), from: root,
         arguments: ["scripts/run_public_workflow_support_gate.sh", "--output", output.path],

@@ -5,7 +5,6 @@ public enum ConformanceGovernanceError: Error, Equatable, Sendable {
   case duplicateID(kind: String, id: String)
   case invalidField(record: String, field: String)
   case unknownCaseID(String)
-  case unknownDivergenceID(String)
   case inconsistentReference(record: String, field: String)
   case unsupportedCategory(String)
 }
@@ -39,20 +38,4 @@ enum ConformanceDecoding {
     }
     return try decoder.container(keyedBy: keyType)
   }
-}
-
-public enum ConformanceDivergenceClassification: String, CaseIterable, Codable, Sendable {
-  case swiftTLADefect
-  case harnessOrConfigurationDefect
-  case unsupportedConstruct
-  case publishedSemanticsAmbiguity
-  case suspectedTLCDefect
-}
-
-public enum ConformanceDivergenceDisposition: String, CaseIterable, Codable, Sendable {
-  case open
-  case resolved
-  case unsupported
-  case awaitingSemanticsReview
-  case suspectedReferenceDefect
 }

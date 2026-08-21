@@ -47,91 +47,34 @@ other checker failure and may be replayed, but they are not proof that the
 complete graph was explored. Complete-graph evidence comes from a successful,
 exhaustive declared run and its bridge stream.
 
-## Divergences and support admission
+## Exact admission
 
-`Verification/CoreConformance/divergences.json` is a permanent ledger. Record
-every observed core disagreement with its original evidence, semantic
-citation, pinned tool and runtime identity, bounded reproducer,
-classification, disposition, regression case, normalized difference
-digest, and latest comparison. Keep the record when a defect is
-fixed: preserve the regression and change its latest comparison to exact.
+`Verification/CoreConformance/support-surface.json` defines the finite
+support claims evaluated by the gate. Each requested entry names its declared
+cases. Admission requires complete current evidence and exact canonical graph
+agreement for every named case.
 
-Choose one classification for each record:
+A comparison mismatch retains its canonical graphs, receipts, command record,
+and first difference. The gate reports `.nonExactComparison` and blocks the
+requested entry.
 
-| Classification | Use it when |
-|---|---|
-| `swiftTLADefect` | SwiftTLA behavior disagrees with the cited published TLA+ semantics. |
-| `harnessOrConfigurationDefect` | The declared input, mapping, bridge, tool setup, or run configuration caused the disagreement. |
-| `unsupportedConstruct` | The disagreement concerns a construct outside the current bounded support surface. |
-| `publishedSemanticsAmbiguity` | The cited published material does not determine one clear result. |
-| `suspectedTLCDefect` | The evidence indicates that the pinned TLC executable may disagree with the cited published semantics. |
-
-Choose one disposition for the current state of that record:
-
-| Disposition | Meaning |
-|---|---|
-| `open` | The disagreement is still being investigated. |
-| `resolved` | The record stays in the ledger, and its latest comparison is exact. |
-| `unsupported` | The behavior is outside the support claim, including a retained negative control. Its recorded difference and digest must still reproduce. |
-| `awaitingSemanticsReview` | A published-semantics decision is required before the record can be resolved. |
-| `suspectedReferenceDefect` | The pinned TLC reference is suspected, but the record is not resolved. |
-
-Only `resolved` is resolved to the gate. A linked record with any other
-disposition prevents a requested support entry from being admitted. The gate
-also requires each retained regression to have current evidence: an exact latest result for `resolved`, or
-the recorded difference digest for every other disposition. A
-published-semantics ambiguity or suspected TLC defect must state the
-published-semantics result separately from TLC output.
-
-### Minimize and retain a divergence
-
-Use this checklist when a declared core comparison differs:
-
-1. Reduce it to the smallest practical finite case and record its explicit
-   bounds and semantic citations.
-2. Keep the original evidence, complete pinned input and toolchain identity,
-   and the normalized difference digest in `divergences.json`.
-3. Add or keep a permanent regression case in `cases.json`. Its expected
-   result must be the retained exact result or the retained difference.
-4. Link the record from `support-surface.json`. Do not enlarge requested
-   support merely because a related case runs.
-5. Inspect the hosted support-gate report and the evidence stored under its
-   matching gate-run ID; do not use evidence from another run.
-6. When a defect is fixed, keep the ledger record and regression. Update its
-   latest comparison to the new exact evidence, then set its disposition to
-   `resolved`.
-
-Do not delete a record to make a report pass. Do not change a difference
-digest without retaining evidence for the new difference.
-
-`Verification/CoreConformance/support-surface.json` defines the only support
-claims the gate can evaluate. The admission report is written to
+The admission report is written to
 `.build/core-support-gate/support-admission.json`; the immutable report and
 case evidence for that invocation are retained at
-`.build/core-support-gate/runs/<gate-run-id>/`. The report lists each support
-entry, its decision, stable reason codes, mandatory cases, divergence IDs,
-evidence references, run correlations, aggregate counts, and final exit
-class.
+`.build/core-support-gate/runs/<gate-run-id>/`. The report lists each entry,
+its decision, reason codes, mandatory cases, evidence references, run
+correlations, aggregate counts, and final exit class.
 
-For a report that blocks support, read the entry reason codes first. Then
-inspect the referenced evidence and the case `comparison.json`. `missing`,
-`stale`, `failing`, or `unexplained` counts mean the run is not admission
-evidence. Fix the named prerequisite or evidence problem and rerun the gate;
-do not reuse a report from another gate run.
+For a blocked entry, start with its reason codes and then inspect the retained
+`comparison.json` and graph records for the named case.
 
 ## Controls and limits
-
-The manifest includes expected negative controls: a same-count edge mismatch
-and an invariant-violation/replay case. Their declared nonzero result is a
-successful control outcome: it proves the gate rejects a false match. Any
-unexpected mismatch, missing evidence, invalid stream, incomplete run, or
-tool/input identity mismatch fails the gate.
 
 The gate has three shell outcomes. Exit `0` admits every requested support
 entry. Exit `1` means a complete current evaluation blocked requested support.
 Exit `2` means setup, execution, register, or evidence validation failed.
-Both nonzero outcomes are failures for a required support claim; neither is a
-skip.
+
+Required support claims use exit `0`.
 
 This claim applies only to the finite cases named in `cases.json` and only to
 the compared safety graph relation. It does not establish arbitrary bounds,

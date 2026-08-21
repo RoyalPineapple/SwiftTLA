@@ -6,6 +6,12 @@ public enum PublicWorkflowDiagnosticCheckStatus: String, Codable, Sendable, Equa
   case unavailable
 }
 
+public enum PublicWorkflowDiagnosticExit: String, Codable, Sendable {
+  case success
+  case blocked
+  case unavailable
+}
+
 public struct PublicWorkflowDiagnosticCheck: Codable, Sendable {
   public let id: String
   public let command: String
@@ -41,7 +47,7 @@ public struct PublicWorkflowDiagnosticReport: Codable, Sendable {
   public let authority: PublicWorkflowEvidenceAuthority
   public let claimStatus: String
   public let checks: [PublicWorkflowDiagnosticCheck]
-  public let finalExitClass: PublicWorkflowAdmissionExitClass
+  public let finalExitClass: PublicWorkflowDiagnosticExit
 
   public init(runID: UUID, authority: PublicWorkflowEvidenceAuthority, checks: [PublicWorkflowDiagnosticCheck]) {
     self.schema = Self.schema

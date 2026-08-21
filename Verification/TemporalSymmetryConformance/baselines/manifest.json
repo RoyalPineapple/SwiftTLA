@@ -3,7 +3,6 @@
   "role": "declared-input-baseline",
   "currentEvidenceRequired": true,
   "cases": "Verification/TemporalSymmetryConformance/cases.json",
-  "divergences": "Verification/TemporalSymmetryConformance/divergences.json",
   "supportSurface": "Verification/TemporalSymmetryConformance/support-surface.json",
   "temporalFairnessBoundary": {
     "property": "AlwaysEventuallyP",
