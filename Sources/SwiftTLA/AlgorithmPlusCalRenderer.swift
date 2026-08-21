@@ -79,7 +79,7 @@ internal struct AlgorithmPlusCalRenderer {
     /// the retained Algorithm model rather than the lowered specification.
     func sourcePropertyDefinitions() throws -> [(name: String, definition: String)] {
         let model = module.algorithm
-        try properties(in: model.components, path: "components")
+        return try properties(in: model.components, path: "components")
     }
 
     /// PlusCal's translator defines this temporal operator for a single
@@ -87,7 +87,7 @@ internal struct AlgorithmPlusCalRenderer {
     /// comment would redeclare the translator-owned name.
     func translatorOwnedPropertyNames() -> Set<String> {
         let model = module.algorithm
-        Set(temporals(in: model.components).compactMap { temporal in
+        return Set(temporals(in: model.components).compactMap { temporal in
             isTranslatorTermination(temporal) ? temporal.name : nil
         })
     }

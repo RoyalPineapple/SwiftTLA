@@ -289,7 +289,7 @@ enum AlgorithmLowerer {
                 return .and(condition, processDone)
             }
             let unchanged = variableNames
-                .map(ActionExpr.unchanged)
+                .map { .unchanged(.named($0)) }
                 .reduce(.guard_(allDone), ActionExpr.and)
             actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: unchanged))
         }
@@ -506,7 +506,7 @@ enum AlgorithmLowerer {
         }
 
         let terminate = variableNames
-            .map(ActionExpr.unchanged)
+            .map { .unchanged(.named($0)) }
             .reduce(
                 .guard_(.equal(
                     .programCounter,
