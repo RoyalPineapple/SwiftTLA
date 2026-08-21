@@ -39,7 +39,25 @@ enum MacroExpander {
         binding: ActionBinding,
         facts: MachineSurfaceSwiftFacts
     ) -> String {
-        facts.actionBindingTypes[action.name]?[binding.name] ?? swiftType(for: binding.values[0])
+        facts.actionBindingTypes[action.name]?[binding.name] ?? swiftType(forTLAValue: binding.values[0])
+    }
+
+    static func swiftType(forTLAValue value: TLAValue) -> String {
+        switch value {
+        case .int: "Int"
+        case .bool: "Bool"
+        case .string: "String"
+        case .set, .tuple, .record, .function, .constant: "TLAValue"
+        }
+    }
+
+    static func literalExpr(for value: TLAValue) -> String {
+        switch value {
+        case .int(let value): "\(value)"
+        case .bool(let value): "\(value)"
+        case .string(let value): "\"\(value)\""
+        case .set, .tuple, .record, .function, .constant: codegenTLAValue(value)
+        }
     }
 
     /// A finite binding with one possible value is a scheduler detail, not a
@@ -312,6 +330,13 @@ enum MacroExpander {
 }
 
 extension MacroExpander {
+    static func stateType(
+        for variable: MachineSurfacePlan.Variable,
+        enumInfos _: [ParsedEnumInfo]
+    ) -> String {
+        variable.swiftType
+    }
+
     static func generateStateStruct(
         variables: [MachineSurfacePlan.Variable],
         enumInfos: [ParsedEnumInfo] = []
