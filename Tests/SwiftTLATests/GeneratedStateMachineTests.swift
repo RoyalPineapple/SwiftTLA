@@ -974,10 +974,20 @@ struct GeneratedStateMachineTests {
                 after: after
             ))
         }
-        let observed = try await observable.apply(.board(person: 2, elevator: 20, direction: 200))
+        guard case .committed(let observed) = try await observable.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ) else {
+            Issue.record("Expected observable action to commit")
+            return
+        }
 
         let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
-        let acted = try await actor.apply(.board(person: 2, elevator: 20, direction: 200))
+        guard case .committed(let acted) = try await actor.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ) else {
+            Issue.record("Expected actor action to commit")
+            return
+        }
 
         #expect(observed.action == expected.action)
         #expect(observed.before.floor == expected.before.floor)

@@ -24,14 +24,18 @@ requireSendable(ObservableHost.Observable.TransitionResult.self)
 
 let live = try ObservableHost.makeLive()
 let observable = try await ObservableHost.Observable(live: live)
-let result = try await observable.apply(.advance)
+guard case .committed(let result) = try await observable.apply(.advance) else {
+  throw FixtureError.invalidTransition
+}
 
 guard result.action == .advance,
       result.before.count == 0,
       result.after.count == 1 else {
   throw FixtureError.invalidTransition
 }
-let stateCount = observable.state.count
+guard let stateCount = observable.state?.count else {
+  throw FixtureError.invalidState
+}
 guard stateCount == 1 else {
   throw FixtureError.invalidState
 }

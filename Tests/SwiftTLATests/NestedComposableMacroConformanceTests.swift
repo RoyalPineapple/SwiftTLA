@@ -50,14 +50,22 @@ struct NestedComposableMacroConformanceTests {
         let modelBefore = try await model.machineObservation()
         _ = try model.apply(.advance)
         let modelAfter = try await model.machineObservation()
-        _ = try await observable.apply(.advance)
-        _ = try await actor.apply(.advance)
+        guard case .committed = try await observable.apply(.advance),
+              case .committed = try await actor.apply(.advance)
+        else {
+            Issue.record("Expected nested adapter actions to commit")
+            return
+        }
         #expect(modelBefore.state.count == 0)
         #expect(modelAfter.state.count == 1)
         #expect(modelBefore.availableActions == [.advance])
         #expect(modelAfter.availableActions == [.advance])
-        #expect(observable.state.count == 1)
-        #expect(await actor.state.count == 1)
+        #expect(try #require(observable.state).count == 1)
+        guard case .snapshot(let actorSnapshot) = try await actor.current() else {
+            Issue.record("Expected actor snapshot")
+            return
+        }
+        #expect(actorSnapshot.state.count == 1)
     }
 
     @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
@@ -77,8 +85,16 @@ struct NestedComposableMacroConformanceTests {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let result = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(result.after.floor == 222)
-        #expect((try await observable.apply(.board(person: 2, elevator: 20, direction: 200))).action == .board(person: 2, elevator: 20, direction: 200))
-        #expect((try await actor.apply(.board(person: 2, elevator: 20, direction: 200)).action) == .board(person: 2, elevator: 20, direction: 200))
+        guard case .committed(let observed) = try await observable.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ), case .committed(let acted) = try await actor.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ) else {
+            Issue.record("Expected nested adapter actions to commit")
+            return
+        }
+        #expect(observed.action == .board(person: 2, elevator: 20, direction: 200))
+        #expect(acted.action == .board(person: 2, elevator: 20, direction: 200))
     }
 
     @Test("Invalid nested macro composition emits enclosure diagnostics")

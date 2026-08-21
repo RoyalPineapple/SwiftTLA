@@ -36,7 +36,8 @@ struct LiveMachineAdapterTests {
         for _ in 0..<20 where observable.current?.position != .init(value: 1) {
             await Task.yield()
         }
-        #expect(actor.identity == live.identity)
+        let actorIdentity = await actor.identity
+        #expect(actorIdentity == live.identity)
         #expect(observable.identity == live.identity)
         #expect(observable.state == .init(count: 1))
     }
