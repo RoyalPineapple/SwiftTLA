@@ -49,7 +49,7 @@ struct TypedFiniteConstantTests {
             Variable(count, 0)
         }
 
-        #expect(spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)])])
+        #expect(spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
         #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
@@ -64,11 +64,11 @@ struct TypedFiniteConstantTests {
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.constants == [ConstantDecl("Value", .set([.int(1), .int(2)])])
+        #expect(parsed.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
     }
 
     @Test func generatedModelRetainsTheTypedFiniteSet() throws {
-        #expect(TypedFiniteConstantGeneratedModel.spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)])])
+        #expect(TypedFiniteConstantGeneratedModel.spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
         #expect(try TypedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
