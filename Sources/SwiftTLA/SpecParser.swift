@@ -870,8 +870,7 @@ public final class ParserSession {
         }
         if let member = expression.as(MemberAccessExprSyntax.self),
            let baseSyntax = member.base,
-           let base = decodeTypedFacadeValue(baseSyntax, scope: scope)
-                ?? decodeStateExpr(baseSyntax) {
+           let base = decodeTypedFacadeValue(baseSyntax, scope: scope) {
             switch member.declName.baseName.text {
             case "raw", "stateExpr", "expr": return base
             case "cardinality": return .cardinality(base)
@@ -879,6 +878,13 @@ public final class ParserSession {
                 return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
             case "isEmpty": return .equal(.cardinality(base), .value(.int(0)))
             case "subsets": return .powerSet(base)
+            default: break
+            }
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let base = member.base.flatMap(decodeStateExpr) {
+            switch member.declName.baseName.text {
+            case "raw", "stateExpr", "expr": return base
             default: break
             }
         }
