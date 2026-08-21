@@ -88,6 +88,20 @@ public struct CoreEvidenceProvenance: Equatable, Codable, Sendable {
     }
   }
 
+  package func tlcReferencePin() throws -> TLCReferencePin {
+    try .init(
+      tag: tlcTag,
+      commit: tlcCommit,
+      jarSHA256: tlcJarSHA256,
+      javaDistribution: javaDistribution,
+      javaVersion: javaVersion,
+      javaArchiveSHA256: javaArchiveSHA256,
+      bridgeClass: bridgeClass,
+      bridgeSourceSHA256: bridgeSourceSHA256,
+      bridgeBinarySHA256: bridgeBinarySHA256
+    )
+  }
+
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case caseID, moduleSHA256, cfgSHA256, argumentsSHA256, tlcTag, tlcCommit, tlcJarSHA256
     case javaDistribution, javaVersion, javaArchiveSHA256, bridgeClass, bridgeSourceSHA256

@@ -173,7 +173,7 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       for: inputs.appendingPathComponent("enabledness.json"), beneath: projectRoot)
     let casesURL = projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")
     let toolchainURL = projectRoot.appendingPathComponent("Verification/CoreConformance/toolchain.json")
-    let pin = try pin(from: declaredCase.provenance)
+    let pin = try declaredCase.provenance.tlcReferencePin()
     let context = try TLCContext(toolRoot: toolRoot, projectRoot: projectRoot, pin: pin)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(declaredCase.id)
     try ConformanceEvidence.createDirectory(work, beneath: projectRoot)
@@ -245,7 +245,7 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
     guard let scope = declaredCase.configuration.symmetryScope else {
       throw ConformanceGovernanceError.invalidField(record: declaredCase.id, field: "symmetry scope")
     }
-    let pin = try pin(from: declaredCase.provenance)
+    let pin = try declaredCase.provenance.tlcReferencePin()
     let context = try TLCContext(toolRoot: toolRoot, projectRoot: projectRoot, pin: pin)
     let correlation = try TemporalSymmetryCaseRunCorrelation(
       caseID: declaredCase.id, gateRunID: gateRunID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
@@ -505,14 +505,6 @@ extension TemporalSymmetryConformanceRunner {
       throw ConformanceGovernanceError.invalidField(record: declaredCase.id, field: "TLC configuration")
     }
     return projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/fixtures/temporal/\(name)")
-  }
-
-  private func pin(from provenance: CoreEvidenceProvenance) throws -> TLCReferencePin {
-    try TLCReferencePin(
-      tag: provenance.tlcTag, commit: provenance.tlcCommit, jarSHA256: provenance.tlcJarSHA256,
-      javaDistribution: provenance.javaDistribution, javaVersion: provenance.javaVersion,
-      javaArchiveSHA256: provenance.javaArchiveSHA256, bridgeClass: provenance.bridgeClass,
-      bridgeSourceSHA256: provenance.bridgeSourceSHA256, bridgeBinarySHA256: provenance.bridgeBinarySHA256)
   }
 
 }

@@ -691,11 +691,7 @@ private func validateCompleteGraphEvidence(
         urls[reference.path] = url
     }
     let provenance = declaredCase.provenance
-    let pin = try TLCReferencePin(
-        tag: provenance.tlcTag, commit: provenance.tlcCommit, jarSHA256: provenance.tlcJarSHA256,
-        javaDistribution: provenance.javaDistribution, javaVersion: provenance.javaVersion,
-        javaArchiveSHA256: provenance.javaArchiveSHA256, bridgeClass: provenance.bridgeClass,
-        bridgeSourceSHA256: provenance.bridgeSourceSHA256, bridgeBinarySHA256: provenance.bridgeBinarySHA256)
+    let pin = try provenance.tlcReferencePin()
     let graphCase = try CoreConformanceCase(
         id: declaredCase.id, moduleSHA256: declaredCase.sourceInput.sha256,
         cfgSHA256: declaration.configuration.sha256, arguments: evidence.arguments,
