@@ -172,11 +172,18 @@ extension TLASpec {
     return lowered
   }
 
-  func authoredPlusCalModule(renderedRefinements: [String]) throws -> AuthoredPlusCalModule? {
+  func authoredPlusCalModule(
+    semantics: CompiledSemantics,
+    renderer: CompiledTLARenderer,
+    renderedRefinements: [String]
+  ) throws -> AuthoredPlusCalModule? {
     guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
       return nil
     }
-    let declarationSections = try authoredPlusCalDeclarationSections()
+    let declarationSections = try authoredPlusCalDeclarationSections(
+      semantics: semantics,
+      renderer: renderer
+    )
     let declarationPlan = AuthoredPlusCalModule(
       name: name,
       extendsModules: authoredPlusCalExtends,
@@ -253,11 +260,24 @@ extension TLASpec {
     return lines
   }
 
-  private func authoredPlusCalDeclarationSections() throws -> AuthoredPlusCalDeclarationSections {
-    let definitions = formalOperatorDefinitions.map { definition in
+  private func authoredPlusCalDeclarationSections(
+    semantics: CompiledSemantics,
+    renderer: CompiledTLARenderer
+  ) throws -> AuthoredPlusCalDeclarationSections {
+    guard formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count else {
+      throw CompilationDiagnostic(
+        code: .compilationIdentityMismatch,
+        stage: .rendering,
+        path: "authoredPlusCal.definitions",
+        expected: "compiled definitions aligned with this source model",
+        actual: "\(semantics.formalOperatorDefinitions.count) compiled definitions for \(formalOperatorDefinitions.count) declared definitions",
+        nextSafeAction: "Compile the model again from its current source."
+      )
+    }
+    let definitions = try formalOperatorDefinitions.enumerated().map { index, definition in
       AuthoredPlusCalDeclaration(
         name: definition.name,
-        text: FormalOperatorDecl(definition).tlaText,
+        text: try renderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
         phase: definition.plusCalPhase,
         dependencies: definition.plusCalDependencies
       )

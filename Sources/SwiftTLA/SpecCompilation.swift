@@ -619,7 +619,11 @@ public extension TLASpec {
         }
         let formalRenderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
-        let authoredPlusCalModule = try authoredPlusCalModule(renderedRefinements: renderedRefinements)
+        let authoredPlusCalModule = try authoredPlusCalModule(
+            semantics: semantics,
+            renderer: formalRenderer,
+            renderedRefinements: renderedRefinements
+        )
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
