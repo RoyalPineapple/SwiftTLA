@@ -206,7 +206,7 @@ public enum StandardModule: String, Sendable, Hashable, CaseIterable {
   case tlc = "TLC"
 }
 
-private func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
+func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
   modules.reduce(into: []) { result, module in
     if !result.contains(module) { result.append(module) }
   }

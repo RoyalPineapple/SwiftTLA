@@ -237,13 +237,15 @@ extension TLASpec {
   private var authoredPlusCalExtends: [String] {
     let requested = extendsModules.map(\.rawValue)
     let symmetryModule: [StandardModule] = symmetrySets.isEmpty ? [] : [.tlc]
-    return (requested
+    let candidates = requested
       + [.naturals, .integers, .sequences, .finiteSets].map(\.rawValue)
       + symmetryModule.map(\.rawValue)
-      + imports.map(\.name))
-      .reduce(into: [String]()) { modules, module in
-        if !modules.contains(module) { modules.append(module) }
-      }
+      + imports.map(\.name)
+    var modules: [String] = []
+    for module in candidates where !modules.contains(module) {
+      modules.append(module)
+    }
+    return modules
   }
 
   private var authoredPlusCalPrelude: [String] {
