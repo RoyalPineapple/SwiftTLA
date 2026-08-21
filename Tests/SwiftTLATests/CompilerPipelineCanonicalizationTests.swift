@@ -454,7 +454,7 @@ struct CompilerPipelineCanonicalizationTests {
                         && .assign("counter", .add(.variable("counter"), .int(1)))
                 )
             ],
-            invariants: [.init(name: "Bounded", body: .lessOrEqual(.variable("counter"), .variable("choice"))]
+            invariants: [.init(name: "Bounded", body: .lessOrEqual(.variable("counter"), .variable("choice")))]
         )
         let compilation = try spec.compile()
         let runtime = CompiledRuntime(compilation: compilation)
@@ -501,7 +501,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "CompiledRange",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "step", body: .guard_(.in(.int(1), .integerRange(.variable("counter"), .int(2))))],
+            actions: [.init(name: "step", body: .guard_(.in(.int(1), .integerRange(.variable("counter"), .int(2)))))],
             invariants: []
         )
 
@@ -601,7 +601,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try TLASpec(
             name: "RecordFields",
             variables: [],
-            actions: [.init(name: "step", body: .guard_(.equal(.recordLiteral(record), .recordLiteral(record)))],
+            actions: [.init(name: "step", body: .guard_(.equal(.recordLiteral(record), .recordLiteral(record))))],
             invariants: []
         ).compile()
 
@@ -627,7 +627,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "DuplicateRecordField",
             variables: [],
-            actions: [.init(name: "step", body: .guard_(.equal(.recordLiteral(record), .recordLiteral(record)))],
+            actions: [.init(name: "step", body: .guard_(.equal(.recordLiteral(record), .recordLiteral(record))))],
             invariants: []
         )
 
@@ -689,7 +689,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "CompiledRecordAccess",
             variables: [.init(name: "state", initial: .record(["count": .int(1)]))],
-            actions: [.init(name: "step", body: .guard_(.equal(.recordAccess(.variable("state"), "count"), .int(1)))],
+            actions: [.init(name: "step", body: .guard_(.equal(.recordAccess(.variable("state"), "count"), .int(1))))],
             invariants: []
         )
         let compilation = try spec.compile()
