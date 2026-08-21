@@ -94,7 +94,9 @@ enum TLASpecVerifier {
         if let diagnostic = parsed.diagnostics.first {
             throw diagnostic
         }
-        if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
+        if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty {
+            throw SimpleError("No variables in spec")
+        }
 
         let varBindings = scanVarBindings(in: rewritten)
         for i in parsed.variables.indices {
@@ -107,12 +109,11 @@ enum TLASpecVerifier {
         }
 
         var allInvariants = parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) }
-        for variable in parsed.variables {
-            if let swiftTypeName = variable.swiftTypeName,
-               let enumInfo = enumInfos.first(where: { $0.typeName == swiftTypeName }) {
+        for (variableName, swiftTypeName) in parsed.swiftVariableTypes().sorted(by: { $0.key < $1.key }) {
+            if let enumInfo = enumInfos.first(where: { $0.typeName == swiftTypeName }) {
                 let domainValues = TLAValue.sorted(enumInfo.domain)
-                let invariantName = "\(variable.name)InDomain"
-                let body = StateExpr.in(.variable(variable.name),
+                let invariantName = "\(variableName)InDomain"
+                let body = StateExpr.in(.variable(variableName),
                                          .setLiteral(domainValues.map { .value($0) }))
                 allInvariants.append(NamedInvariant(name: invariantName, body: body))
             }
@@ -122,8 +123,10 @@ enum TLASpecVerifier {
             specificationName: source.name,
             additionalInvariants: allInvariants.dropFirst(parsed.invariants.count).map { $0 }
         )
-        let hasComplexType = parsed.symmetricCollections.isEmpty && parsed.variables.contains { v in
-            let typeName = v.swiftTypeName ?? MacroExpander.swiftType(for: v.initial)
+        let swiftFacts = parsed.machineSurfaceSwiftFacts(for: compilation)
+        let hasComplexType = parsed.symmetricCollections.isEmpty && compilation.spec.variables.contains { variable in
+            let typeName = swiftFacts.variableTypes[variable.name]
+                ?? MacroExpander.swiftType(for: variable.initial)
             return !["Int", "Bool", "String"].contains(typeName)
                 && !enumInfos.contains(where: { $0.typeName == typeName })
         }
@@ -145,24 +148,6 @@ enum TLASpecVerifier {
             }
         }
 
-        let swiftFacts = MachineSurfaceSwiftFacts(
-            variableTypes: Dictionary(
-                uniqueKeysWithValues: parsed.variables.compactMap { variable in
-                    variable.swiftTypeName.map { (variable.name, $0) }
-                }
-            ),
-            actionBindingTypes: Dictionary(
-                uniqueKeysWithValues: parsed.actions.map { ($0.name, $0.bindingSwiftTypes) }
-            ),
-            symmetricCollections: Dictionary(
-                uniqueKeysWithValues: parsed.symmetricCollections.map {
-                    ($0.name, .init(elementType: $0.elementType, valueType: $0.valueType))
-                }
-            ),
-            collectionActions: Dictionary(
-                uniqueKeysWithValues: parsed.collectionActions.map { ($0.name, $0.collectionName) }
-            )
-        )
         return MacroCompilation(
             typeName: typeName,
             compilation: compilation,

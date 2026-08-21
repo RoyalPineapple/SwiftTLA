@@ -6,10 +6,7 @@ private struct AlgorithmMacroDefinition: Sendable {
 }
 
 extension ParserSession {
-    /// Parses the bounded PlusCal-shaped authoring layer into the same TLA+ AST
-    /// used by the ordinary builder parser. This path deliberately constructs an
-    /// `AlgorithmModel` and uses `AlgorithmLowerer`; it does not maintain a
-    /// second lowering implementation in the macro.
+    /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
@@ -98,77 +95,10 @@ extension ParserSession {
         }
 
         // Keep the source-level IR before the one and only parser lowering.
-        // It is source fidelity evidence, not a second formal model.
+        // Retain the authored Algorithm in the source model.
         result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: model))
 
-        let lowered: TLASpec
-        do {
-            lowered = try AlgorithmLowerer.lower(
-                model,
-                formalOperatorDefinitions: result.formalOperatorDefinitions
-            )
-        } catch {
-            result.diagnostics.append(.init(
-                message: "Unable to lower Algorithm '\(name)': \(error)",
-                source: call
-            ))
-            return
-        }
-        let stateTypes = Dictionary(uniqueKeysWithValues: algorithmStateDeclarations(in: model).compactMap { state in
-            state.swiftTypeName.map { (state.root, $0) }
-        })
-        let localRoots: Set<String> = Set(model.processes.flatMap { process in
-            process.components.compactMap {
-                guard case .local(let state) = $0 else { return nil }
-                return state.root
-            }
-        })
-        for variable in lowered.variables {
-            if let index = result.variables.firstIndex(where: { $0.name == variable.name }) {
-                result.variables[index] = .init(
-                    formal: variable,
-                    swiftTypeName: result.variables[index].swiftTypeName
-                )
-            } else {
-                let inferredType = stateTypes[variable.name]
-                let projectedType: String?
-                if localRoots.contains(variable.name) {
-                    projectedType = "TLAValue"
-                } else {
-                    projectedType = inferredType
-                }
-                result.variables.append(.init(formal: variable, swiftTypeName: projectedType))
-            }
-        }
-        let processTypes = Dictionary(uniqueKeysWithValues: model.processes.map { process in
-            (process.domain, process.typeName)
-        })
-        result.actions += lowered.actions.map { action in
-            let bindingTypes = action.bindings.reduce(into: [String: String]()) { types, binding in
-                if let type = processTypes[binding.values] { types[binding.name] = type }
-            }
-            return .init(
-                name: action.name,
-                body: action.body,
-                bindings: action.bindings,
-                bindingSwiftTypes: bindingTypes
-            )
-        }
-        result.invariants += lowered.invariants.map { ($0.name, $0.body) }
-        result.temporal += lowered.temporalProperties.map { ($0.name, $0.expr) }
-        result.fairness += lowered.fairness
-        result.formalOperatorDefinitions += model.formalOperatorDefinitions
-        result.authoredPlusCalDeclarations += model.formalOperatorDefinitions.map { definition in
-            AuthoredPlusCalDeclaration(
-                name: definition.name,
-                text: FormalOperatorDecl(definition).tlaText,
-                phase: definition.plusCalPhase,
-                dependencies: definition.plusCalDependencies
-            )
-        }
-        if let constraint = lowered.constraint {
-            result.constraint = result.constraint.map { .and($0, constraint) } ?? constraint
-        }
+        result.sourceAlgorithms.append(Algorithm(model: model))
     }
 
     private func parseAlgorithmFormalDefinition(
@@ -184,28 +114,6 @@ extension ParserSession {
             return nil
         }
         return definition
-    }
-
-    private func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
-        model.components.flatMap { component in
-            switch component {
-            case .shared(let state): return [state]
-            case .process(let process):
-                return process.components.compactMap {
-                    guard case .local(let state) = $0 else { return nil }
-                    return state
-                }
-            case .procedure(let procedure):
-                return procedure.parameters.map {
-                    .init(
-                        root: $0.root,
-                        initial: $0.initial,
-                        swiftTypeName: $0.swiftTypeName
-                    )
-                } + procedure.locals
-            default: return []
-            }
-        }
     }
 
     private func parseAlgorithmComponent(

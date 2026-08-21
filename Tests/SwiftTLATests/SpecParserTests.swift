@@ -24,8 +24,15 @@ private func parserEnum(
 }
 
 @Suite(.serialized) struct AlgorithmBuilderParsingTests {
+    private func compile(
+        _ parsed: SpecParser.ParsedSpecComponents,
+        named name: String
+    ) throws -> CompiledSpecification {
+        try parsed.compile(specificationName: name)
+    }
+
     @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
-    func parsesBoundedAlgorithm() {
+    func parsesBoundedAlgorithm() throws {
         let source = """
         {
             Algorithm("Counter") {
@@ -46,12 +53,15 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.variables.map(\.name) == ["count", "pc"])
-        #expect(parsed.actions.map(\.name) == ["increment", "Terminating"])
-        #expect(parsed.actions.first?.bindings == [
+        let compilation = try compile(parsed, named: "Counter")
+        let specification = compilation.spec
+        #expect(specification.variables.map(\.name) == ["pc", "count"])
+        #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(specification.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.string("left"), .string("right")])
         ])
-        #expect(parsed.actions.first?.bindingSwiftTypes == ["process": "Node"])
+        let facts = parsed.machineSurfaceSwiftFacts(for: compilation)
+        #expect(facts.actionBindingTypes["increment"] == ["process": "Node"])
     }
 
     @Test("Algorithm parser rejects declarations it does not lower")
@@ -76,7 +86,7 @@ private func parserEnum(
     }
 
     @Test("parser lowers the mechanical PlusCal statements through the shared IR")
-    func parsesMechanicalPlusCalStatements() {
+    func parsesMechanicalPlusCalStatements() throws {
         let source = """
         {
             Algorithm("Counter") {
@@ -100,15 +110,16 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
-        #expect(parsed.fairness == [
+        let specification = try compile(parsed, named: "Counter").spec
+        #expect(specification.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
+        #expect(specification.fairness == [
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")]))
         ])
     }
 
     @Test("Algorithm parser preserves a process-bound formal lambda application")
-    func parsesProcessScopedFormalLambdaApplication() {
+    func parsesProcessScopedFormalLambdaApplication() throws {
         let source = """
         {
             Algorithm("ScopedFormalLambda") {
@@ -139,8 +150,9 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.actions.map(\.name) == ["advance", "Terminating"])
-        #expect(parsed.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
+        let specification = try compile(parsed, named: "ScopedFormalLambda").spec
+        #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
+        #expect(specification.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
     }
 
     @Test("formal operator parsing failure retains all six diagnostic fields")
@@ -174,7 +186,7 @@ private func parserEnum(
     }
 
     @Test("parser lowers ordered multi-source With bindings")
-    func parsesThreeIndependentWithBindings() {
+    func parsesThreeIndependentWithBindings() throws {
         let source = """
         {
             Algorithm("ThreeWith") {
@@ -195,12 +207,13 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.actions.first?.body.description.contains("__pcal_with_0") == true)
-        #expect(parsed.actions.first?.body.description.contains("__pcal_with_2") == true)
+        let specification = try compile(parsed, named: "ThreeWith").spec
+        #expect(specification.actions.first?.body.description.contains("__pcal_with_0") == true)
+        #expect(specification.actions.first?.body.description.contains("__pcal_with_2") == true)
     }
 
-    @Test("parser expands a bounded statement macro in its caller's atomic step")
-    func parsesStatementMacro() {
+    @Test("parser preserves a bounded statement macro through compilation")
+    func parsesStatementMacro() throws {
         let source = """
         {
             Algorithm("MacroLock") {
@@ -222,12 +235,13 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.actions.map(\.name) == ["acquire", "Terminating"])
-        #expect(parsed.actions.first?.body.description.contains("lock") == true)
+        let specification = try compile(parsed, named: "MacroLock").spec
+        #expect(specification.actions.map(\.name) == ["acquire", "Terminating"])
+        #expect(specification.actions.first?.body.description.contains("lock") == true)
     }
 
     @Test("parser expands every statement macro parameter in caller scope")
-    func parsesTwoParameterStatementMacro() {
+    func parsesTwoParameterStatementMacro() throws {
         let source = """
         {
             Algorithm("CopyValue") {
@@ -244,12 +258,13 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.actions.first?.body.description.contains("destination' = source") == true)
-        #expect(parsed.actions.first?.body.description.contains("__pcal_macro_parameter") == false)
+        let specification = try compile(parsed, named: "CopyValue").spec
+        #expect(specification.actions.first?.body.description.contains("destination' = source") == true)
+        #expect(specification.actions.first?.body.description.contains("__pcal_macro_parameter") == false)
     }
 
     @Test("parser retains formal expression macro arguments")
-    func parsesExpressionStatementMacroArguments() {
+    func parsesExpressionStatementMacroArguments() throws {
         let source = """
         {
             Algorithm("OffsetValue") {
@@ -266,11 +281,12 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.actions.first?.body.description.contains("destination' = (source + 1)") == true)
+        let specification = try compile(parsed, named: "OffsetValue").spec
+        #expect(specification.actions.first?.body.description.contains("destination' = (source + 1)") == true)
     }
 
     @Test("parser retains typed pair projections and formal calls in a statement macro")
-    func parsesTypedPairStatementMacro() {
+    func parsesTypedPairStatementMacro() throws {
         let source = """
         {
             Algorithm("PairVote") {
@@ -291,7 +307,8 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.actions.first?.body.description.contains("SafeAt(1, 2)") == true)
+        let specification = try compile(parsed, named: "PairVote").spec
+        #expect(specification.actions.first?.body.description.contains("SafeAt(1, 2)") == true)
     }
 
     @Test("parser rejects an expression used for a macro assignment target")
@@ -318,8 +335,8 @@ private func parserEnum(
         #expect(diagnostic.contains("Next safe action"))
     }
 
-    @Test("parser lowers readable procedure bindings to deterministic formal slots")
-    func parsesTypedProcedureBindings() {
+    @Test("source model compiles procedure bindings to deterministic formal slots")
+    func parsesTypedProcedureBindings() throws {
         let source = """
         {
             Algorithm("ProcedureSource") {
@@ -341,8 +358,9 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.variables.contains { $0.name == "parameter0" })
-        #expect(parsed.actions.contains { $0.name == "procedure.work.enter" })
+        let specification = try compile(parsed, named: "ProcedureSource").spec
+        #expect(specification.variables.contains { $0.name == "parameter0" })
+        #expect(specification.actions.contains { $0.name == "procedure.work.enter" })
     }
 
     @Test("statement macro arity diagnostics identify the declaration and safe repair")
@@ -367,7 +385,7 @@ private func parserEnum(
     }
 
     @Test("parser expands a parameterless statement macro")
-    func parsesParameterlessStatementMacro() {
+    func parsesParameterlessStatementMacro() throws {
         let source = """
         {
             Algorithm("ParameterlessMacro") {
@@ -383,11 +401,12 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.actions.first?.body.description.contains("count' = (count + 1)") == true)
+        let specification = try compile(parsed, named: "ParameterlessMacro").spec
+        #expect(specification.actions.first?.body.description.contains("count' = (count + 1)") == true)
     }
 
     @Test("parser retains a filtered formal function initial domain")
-    func parsesFilteredFunctionInitialDomain() {
+    func parsesFilteredFunctionInitialDomain() throws {
         let source = """
         {
             Algorithm("FunctionDomain") {
@@ -412,12 +431,14 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.variables.first?.swiftTypeName == "Function<Node, SetExpr<Node>>")
-        #expect(parsed.variables.first?.initialSet?.description.contains("Cardinality") == true)
+        let compilation = try compile(parsed, named: "FunctionDomain")
+        let successors = try #require(compilation.spec.variables.first { $0.name == "successors" })
+        #expect(parsed.machineSurfaceSwiftFacts(for: compilation).variableTypes["successors"] == "Function<Node, SetExpr<Node>>")
+        #expect(successors.initialSet?.description.contains("Cardinality") == true)
     }
 
     @Test("parser retains a typed record-valued function comprehension")
-    func parsesRecordFunctionComprehension() {
+    func parsesRecordFunctionComprehension() throws {
         let source = """
         {
             Algorithm("RecordFunction") {
@@ -441,8 +462,9 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.variables.first?.name == "cars")
-        guard case .function(let cars) = parsed.variables.first?.initial else {
+        let specification = try compile(parsed, named: "RecordFunction").spec
+        let carsDeclaration = try #require(specification.variables.first { $0.name == "cars" })
+        guard case .function(let cars) = carsDeclaration.initial else {
             Issue.record("Expected cars to retain a formal finite function")
             return
         }
@@ -454,7 +476,7 @@ private func parserEnum(
     }
 
     @Test("parser retains an empty typed set in a function comprehension")
-    func parsesEmptySetFunctionComprehension() {
+    func parsesEmptySetFunctionComprehension() throws {
         let source = """
         {
             Algorithm("Votes") {
@@ -470,7 +492,9 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        guard case .function(let votes) = parsed.variables.first?.initial else {
+        let specification = try compile(parsed, named: "Votes").spec
+        let votesDeclaration = try #require(specification.variables.first { $0.name == "votes" })
+        guard case .function(let votes) = votesDeclaration.initial else {
             Issue.record("Expected votes to retain a formal finite function")
             return
         }
@@ -478,7 +502,7 @@ private func parserEnum(
     }
 
     @Test("parser retains a typed finite function literal with its bound key")
-    func parsesTypedFunctionLiteral() {
+    func parsesTypedFunctionLiteral() throws {
         let source = """
         {
             Algorithm("FiniteFunction") {
@@ -504,12 +528,13 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.actions.first?.body.description.contains("CASE") == true)
-        #expect(parsed.actions.first?.body.description.contains("_typedFunctionEntry") == true)
+        let specification = try compile(parsed, named: "FiniteFunction").spec
+        #expect(specification.actions.first?.body.description.contains("CASE") == true)
+        #expect(specification.actions.first?.body.description.contains("_typedFunctionEntry") == true)
     }
 
-    @Test("parser resolves a static formal selection before algorithm lowering")
-    func parsesStaticFormalSelection() {
+    @Test("source model compiles a static formal selection")
+    func parsesStaticFormalSelection() throws {
         let source = """
         {
             Algorithm("StaticChoice") {
@@ -526,11 +551,12 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.variables.first?.initial == .int(2))
+        let specification = try compile(parsed, named: "StaticChoice").spec
+        #expect(specification.variables.first { $0.name == "current" }?.initial == .int(2))
     }
 
     @Test("parser expands a statement macro with the current process identifier")
-    func parsesStatementMacroWithProcessIdentifier() {
+    func parsesStatementMacroWithProcessIdentifier() throws {
         let source = """
         {
             Algorithm("MacroProcess") {
@@ -554,13 +580,14 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        let body = try? #require(parsed.actions.first?.body)
+        let specification = try compile(parsed, named: "MacroProcess").spec
+        let body = try? #require(specification.actions.first?.body)
         #expect(body?.description.contains("process") == true)
         #expect(body?.description.contains("__pcal_macro_parameter") == false)
     }
 
     @Test("parser uses a PlusCal label enum's declared raw value")
-    func parsesDeclaredRawAlgorithmLabel() {
+    func parsesDeclaredRawAlgorithmLabel() throws {
         let source = """
         {
             Algorithm("RawLabel") {
@@ -580,11 +607,12 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.actions.map(\.name) == ["RS", "Terminating"])
+        let specification = try compile(parsed, named: "RawLabel").spec
+        #expect(specification.actions.map(\.name) == ["RS", "Terminating"])
     }
 
-    @Test("parsed Algorithm actions match runtime-builder normalization")
-    func parserTreeMatchesRuntimeAlgorithm() {
+    @Test("parsed and result-builder algorithms compile to the same declarations")
+    func parserTreeMatchesRuntimeAlgorithm() throws {
         let source = """
         {
             Algorithm("Counter") {
@@ -615,15 +643,17 @@ private func parserEnum(
                 }
             }
         }
+        let runtimeSpecification = try runtime.compile().spec
         let runtimeTree = canonicalTestSpec(
-            variables: runtime.variables.map { ($0.name, $0.initial, $0.initialSet) },
-            actions: runtime.actions.map { ($0.name, $0.body, $0.bindings) },
-            invariants: runtime.invariants.map { ($0.name, $0.body) }
+            variables: runtimeSpecification.variables.map { ($0.name, $0.initial, $0.initialSet) },
+            actions: runtimeSpecification.actions.map { ($0.name, $0.body, $0.bindings) },
+            invariants: runtimeSpecification.invariants.map { ($0.name, $0.body) }
         )
+        let parserSpecification = try compile(parsed, named: "Counter").spec
         let parserTree = canonicalTestSpec(
-            variables: parsed.variables.map { ($0.name, $0.initial, $0.initialSet) },
-            actions: parsed.actions.map { ($0.name, $0.body, $0.bindings) },
-            invariants: parsed.invariants
+            variables: parserSpecification.variables.map { ($0.name, $0.initial, $0.initialSet) },
+            actions: parserSpecification.actions.map { ($0.name, $0.body, $0.bindings) },
+            invariants: parserSpecification.invariants.map { ($0.name, $0.body) }
         )
         #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
     }
