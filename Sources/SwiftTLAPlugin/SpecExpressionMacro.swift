@@ -23,7 +23,9 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         }
 
-        return specCall(named: name, body: closure)
+        let rewriter = BinderLocationRewriter(context: context)
+        let rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
+        return specCall(named: name, body: rewritten)
     }
 
     private static func specCall(
@@ -59,6 +61,55 @@ public struct SpecExpressionMacro: ExpressionMacro {
         ))
     }
 
+}
+
+private final class BinderLocationRewriter: SyntaxRewriter {
+    private let context: any MacroExpansionContext
+    private static let helperNames: Set<String> = [
+        "All", "Choose", "Exists", "ForAll", "Let", "LetRec", "With"
+    ]
+
+    init(context: some MacroExpansionContext) {
+        self.context = context
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
+        let visited = super.visit(node).as(FunctionCallExprSyntax.self) ?? node
+        guard let location = context.location(of: node),
+              let name = helperName(in: visited),
+              Self.helperNames.contains(name),
+              visited.arguments.contains(where: { $0.label?.text == "file" }) == false
+        else {
+            return ExprSyntax(visited)
+        }
+
+        var arguments = Array(visited.arguments)
+        let insertionIndex = name == "LetRec"
+            ? arguments.firstIndex(where: { $0.label?.text == "in" }) ?? arguments.endIndex
+            : arguments.endIndex
+        arguments.insert(argument("file", location.file), at: insertionIndex)
+        arguments.insert(argument("line", location.line), at: insertionIndex + 1)
+        arguments.insert(argument("column", location.column), at: insertionIndex + 2)
+        for index in arguments.indices {
+            arguments[index].trailingComma = index == arguments.indices.last ? nil : .commaToken()
+        }
+
+        return ExprSyntax(visited.with(\.arguments, LabeledExprListSyntax(arguments)))
+    }
+
+    private func helperName(in call: FunctionCallExprSyntax) -> String? {
+        call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
+            ?? call.calledExpression.as(GenericSpecializationExprSyntax.self)?
+                .expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+    }
+
+    private func argument(_ label: String, _ expression: ExprSyntax) -> LabeledExprSyntax {
+        LabeledExprSyntax(
+            label: .identifier(label),
+            colon: .colonToken(),
+            expression: expression
+        )
+    }
 }
 
 private struct SpecExpressionDiagnostic: DiagnosticMessage {

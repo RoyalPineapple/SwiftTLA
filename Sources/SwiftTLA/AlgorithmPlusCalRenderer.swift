@@ -61,9 +61,9 @@ internal struct AlgorithmPlusCalRenderer {
         self.module = module
     }
 
-    func sourcePropertyDefinitions() throws -> [(name: String, definition: String)] {
+    func sourcePropertyNames() throws -> [String] {
         let model = module.algorithm
-        return try properties(in: model.components, path: "components")
+        return try propertyNames(in: model.components, path: "components")
     }
 
     func translatorOwnedPropertyNames() -> Set<String> {
@@ -154,13 +154,6 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("}")
         }
         lines.append("} *)")
-        let constraints = try model.components.enumerated().compactMap { index, component -> String? in
-            guard case .stateConstraint(let constraint) = component else { return nil }
-            return try expression(constraint, path: "components[\(index)].stateConstraint")
-        }
-        if !constraints.isEmpty {
-            lines.append("StateConstraint == \(constraints.map { "(\($0))" }.joined(separator: " /\\ "))")
-        }
         lines += module.postTranslationDeclarations
         lines += module.refinements
         lines.append("====")
@@ -355,18 +348,15 @@ internal struct AlgorithmPlusCalRenderer {
         return renderedExpression.description
     }
 
-    private func properties(
+    private func propertyNames(
         in components: [AlgorithmComponentModel],
         path: String
-    ) throws -> [(name: String, definition: String)] {
+    ) throws -> [String] {
         try components.enumerated().flatMap { index, component in
             let componentPath = "\(path)[\(index)]"
             switch component {
             case .invariant(let invariant):
-                return [(
-                    invariant.name,
-                    "\(invariant.name) == \(try expression(invariant.body, path: "\(componentPath).invariant"))"
-                )]
+                return [invariant.name]
             case .temporal(let temporal):
                 if isTranslatorTermination(temporal) {
                     return []
@@ -380,9 +370,9 @@ internal struct AlgorithmPlusCalRenderer {
                         nextSafeAction: "Rename the custom property, or use Eventually(All(domain) { Finished($0) }) so the official translator owns Termination."
                     )
                 }
-                return [(temporal.name, "\(temporal.name) == \(try self.temporal(temporal.expr, path: "\(componentPath).temporal"))")]
+                return [temporal.name]
             case .process(let process):
-                return try properties(in: process.components, path: "\(componentPath).components")
+                return try propertyNames(in: process.components, path: "\(componentPath).components")
             case .shared, .procedure, .fairness, .formalOperator, .stateConstraint, .local, .step, .propertyBoundary:
                 return []
             }
