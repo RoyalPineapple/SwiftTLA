@@ -5,7 +5,8 @@ import Testing
 struct ByzPaxosConsensusModuleTests {
   @Test("typed declarations render the abstract consensus transition system")
   func typedAbstractConsensusModel() throws {
-    let module = try ByzPaxosConsensus.module.compile().renderedTLAModuleBundle().tla
+    let compilation = try ByzPaxosConsensus.module.compile()
+    let module = try compilation.renderedTLAModuleBundle().tla
 
     #expect(ByzPaxosConsensus.module.formalOperatorDefinitions.isEmpty)
     #expect(module.contains("CONSTANTS Value"))
@@ -35,12 +36,13 @@ struct ByzPaxosConsensusModuleTests {
       FormalDefinition(
         "TypeOK",
         parameters: [],
-        body: FormalCall(as: Bool.self, "SafeAt", 1),
+        body: FormalCall<Bool>("SafeAt", 1),
         dependsOn: ["SafeAt"]
       )
     }
 
-    let source = try consumer.compile().renderedTLAModuleBundle().tla
+    let compilation = try consumer.compile()
+    let source = try compilation.renderedTLAModuleBundle().tla
     let operatorRange = try #require(source.range(of: "SafeAt(value0) == TRUE"))
     let useRange = try #require(source.range(of: "TypeOK == SafeAt(1)"))
     #expect(operatorRange.lowerBound < useRange.lowerBound)
