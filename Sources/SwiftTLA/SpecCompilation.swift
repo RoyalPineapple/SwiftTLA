@@ -77,6 +77,7 @@ struct DirectModuleSectionPlan: Sendable, Equatable {
 
 struct DirectModuleAction: Sendable, Equatable {
     let declaration: NamedAction
+    let renderedName: String
     let renderedParameters: [String]
     let renderedBody: String
 }
@@ -693,33 +694,9 @@ public extension TLASpec {
         let definitionsAfterInstances = allDefinitions.filter {
             !instanceNames.isDisjoint(with: $0.dependencies)
         }
-        let emittedActionNames = Dictionary(
-            uniqueKeysWithValues: layout.actions.map { ($0.declaration.name, $0.renderedName) }
+        let emittedActionNamesByID = Dictionary(
+            uniqueKeysWithValues: layout.actions.map { ($0.id, $0.renderedName) }
         )
-        let emittedActionNamesByID = try semantics.actions.reduce(into: [ActionID: String]()) { names, action in
-            guard layout.actions.indices.contains(action.id.ordinal) else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .rendering,
-                    path: "actions[\(action.id.ordinal)]",
-                    expected: "an action in the compiled layout",
-                    actual: "the action identity is outside the compiled layout",
-                    nextSafeAction: "Compile the model again from its current source."
-                )
-            }
-            let sourceName = layout.actions[action.id.ordinal].declaration.name
-            guard let emittedName = emittedActionNames[sourceName] else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .rendering,
-                    path: "actions.\(sourceName)",
-                    expected: "a rendered action name",
-                    actual: "no rendered name",
-                    nextSafeAction: "Compile the model again from its current source."
-                )
-            }
-            names[action.id] = emittedName
-        }
         let emittedActionCallNames = try directActionCallNames(
             semantics.actions,
             emittedActionNames: emittedActionNamesByID
@@ -734,8 +711,19 @@ public extension TLASpec {
         )
         let renderedActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
             let compiled = semantics.actions[index]
+            guard let renderedName = emittedActionNamesByID[compiled.id] else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "actions[\(compiled.id.ordinal)]",
+                    expected: "a rendered action name",
+                    actual: "the compiled action identity is outside the compiled layout",
+                    nextSafeAction: "Compile the model again from its current source."
+                )
+            }
             return DirectModuleAction(
                 declaration: declaration,
+                renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
                 renderedBody: try renderer.action(compiled.body)
             )
@@ -745,7 +733,6 @@ public extension TLASpec {
                 definitionsBeforeInstances: orderedDefinitionsBeforeInstances,
                 definitionsAfterInstances: orderedDefinitionsAfterInstances,
                 renderedActions: renderedActions,
-                emittedActionNames: emittedActionNames,
                 emittedActionNamesByID: emittedActionNamesByID,
                 emittedActionCallNames: emittedActionCallNames,
                 renderedRefinements: renderedRefinements,
@@ -814,7 +801,6 @@ public extension TLASpec {
         definitionsBeforeInstances: [RenderedModuleDefinition],
         definitionsAfterInstances: [RenderedModuleDefinition],
         renderedActions: [DirectModuleAction],
-        emittedActionNames: [String: String],
         emittedActionNamesByID: [ActionID: String],
         emittedActionCallNames: [CompiledActionCall: String],
         renderedRefinements: [String],
@@ -825,9 +811,9 @@ public extension TLASpec {
         semantics: CompiledSemantics
     ) throws -> String {
         let varNames = variables.map(\.name)
-        let renderedActionsByName = renderedActions.map(\.declaration)
+        let renderedActionDeclarations = renderedActions.map(\.declaration)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
-        let isLibraryModule = variables.isEmpty && renderedActionsByName.isEmpty
+        let isLibraryModule = variables.isEmpty && renderedActionDeclarations.isEmpty
         var lines: [String] = []
 
         lines.append("---- MODULE \(name) ----")
@@ -967,7 +953,7 @@ public extension TLASpec {
         for renderedAction in renderedActions where !renderedAction.declaration.name.isEmpty {
             let action = renderedAction.declaration
             let parameters = renderedAction.renderedParameters.joined(separator: ", ")
-            let emittedName = emittedActionNames[action.name] ?? action.name
+            let emittedName = renderedAction.renderedName
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
             lines.append("\(header) == \(renderedAction.renderedBody)")
             for variant in actionVariants(action) where !variant.indices.isEmpty {
@@ -977,9 +963,9 @@ public extension TLASpec {
         }
         lines.append("")
 
-        let invocations = renderedActionsByName.filter { !$0.name.isEmpty }.flatMap { action in
-            actionVariants(action).map { variant -> String in
-                let emittedName = emittedActionNames[action.name] ?? action.name
+        let invocations = renderedActions.filter { !$0.declaration.name.isEmpty }.flatMap { renderedAction in
+            actionVariants(renderedAction.declaration).map { variant -> String in
+                let emittedName = renderedAction.renderedName
                 guard !variant.indices.isEmpty else { return emittedName }
                 return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
             }
