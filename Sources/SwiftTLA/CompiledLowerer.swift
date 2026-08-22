@@ -7,16 +7,18 @@ struct CompiledLowerer {
         var initialValues: [VariableID: CompiledValue] = [:]
         var initializers: [VariableID: CompiledVariableInitializer] = [:]
         for variable in spec.variables {
-            guard let id = bindings.variables[variable.name] else {
-                throw diagnostic(path: "variables.\(variable.name)")
-            }
+            let path = "variables.\(variable.name)"
+            let id = try variable(at: "\(path).declaration")
             initialValues[id] = try initialValue(for: variable)
             initializers[id] = .init(
-                initialSet: try lowerOptional(variable.initialSet, at: "variables.\(variable.name).initialSet"),
+                initialSet: try lowerOptional(variable.initialSet, at: "\(path).initialSet"),
                 initExpr: try initialExpression(for: variable),
-                lazySet: try lowerOptional(variable.lazySet, at: "variables.\(variable.name).lazySet")
+                lazySet: try lowerOptional(variable.lazySet, at: "\(path).lazySet")
             )
         }
+        let actionDeclarations = try Dictionary(uniqueKeysWithValues: spec.actions.map { action in
+            (try self.action(at: "actions.\(action.name).declaration"), action)
+        })
         let actions: [CompiledAction] = try spec.actions.map {
             try lower($0)
         }
@@ -52,7 +54,7 @@ struct CompiledLowerer {
             )
         }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
-            try lower(condition, actions: spec.actions, at: "fairness[\(offset)]")
+            try lower(condition, actionDeclarations: actionDeclarations, at: "fairness[\(offset)]")
         }
         let formalOperators: [CompiledFormalOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             CompiledFormalOperatorDefinition(
@@ -133,43 +135,34 @@ struct CompiledLowerer {
 
     private func lower(
         _ condition: FairnessCondition,
-        actions: [NamedAction],
+        actionDeclarations: [ActionID: NamedAction],
         at path: String
     ) throws -> CompiledFairnessCondition {
-        let name: String
+        let action: ActionID
         let arguments: [TLAValue]?
         switch condition {
         case .weakFairnessNext:
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:
             return .init(scope: .next, isStrong: true)
-        case .weakFairness(let value):
-            name = value
+        case .weakFairness:
+            action = try self.action(at: "\(path).action")
             arguments = nil
-        case .strongFairness(let value):
-            name = value
+        case .strongFairness:
+            action = try self.action(at: "\(path).action")
             arguments = nil
         case .weakFairnessActionCall(let value), .strongFairnessActionCall(let value):
-            name = value.name
+            action = try self.action(at: "\(path).action")
             arguments = value.arguments
         }
-        guard let action = bindings.actions[name], let declaration = actions.first(where: { $0.name == name }) else {
-            throw CompilationDiagnostic(
-                code: .unknownReference,
-                stage: .lowering,
-                path: path,
-                expected: "a declared action",
-                actual: "fairness references '\(name)'",
-                nextSafeAction: "Declare the action in the source model or correct the fairness condition."
-            )
-        }
+        guard let declaration = actionDeclarations[action] else { throw diagnostic(path: path) }
         if let arguments, actionVariants(declaration).contains(where: { $0.arguments == arguments }) == false {
             throw CompilationDiagnostic(
                 code: .unknownReference,
                 stage: .lowering,
                 path: path,
                 expected: "a declared finite action call",
-                actual: "fairness references '\(formalActionCall(named: name, arguments: arguments))'",
+                actual: "fairness references '\(formalActionCall(named: declaration.name, arguments: arguments))'",
                 nextSafeAction: "Use an action call declared by the source model."
             )
         }
@@ -186,9 +179,7 @@ struct CompiledLowerer {
         if let issue = action.sourceIssue {
             throw issue.compilationDiagnostic(stage: .lowering, path: "actions.\(action.name).bindings")
         }
-        guard let id = bindings.actions[action.name] else {
-            throw diagnostic(path: "actions.\(action.name)")
-        }
+        let id = try self.action(at: "actions.\(action.name).declaration")
         return CompiledAction(
             id: id,
             bindings: try action.bindings.map {

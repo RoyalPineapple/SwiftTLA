@@ -674,8 +674,20 @@ struct BindingValidator {
             }
         }
         for action in spec.actions {
+            guard let id = layout.actionID(named: action.name) else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: "actions.\(action.name).declaration",
+                    expected: "a declared action",
+                    actual: "no action identity"
+                )
+            }
+            references["actions.\(action.name).declaration"] = .action(id)
             let scope = try bind(action.bindings.map(\.name), at: "actions.\(action.name).bindings", scope: [:])
             try actionExpression(action.body, at: "actions.\(action.name).body", scope: scope)
+        }
+        for (offset, condition) in spec.fairness.enumerated() {
+            try validate(condition, at: "fairness[\(offset)]")
         }
         for invariant in spec.invariants {
             try validateExpression(invariant.body, at: "invariants.\(invariant.name).body", scope: [:])
@@ -765,6 +777,27 @@ struct BindingValidator {
             try validateExpression(from, at: "\(path).from", scope: [:])
             try validateExpression(to, at: "\(path).to", scope: [:])
         }
+    }
+
+    private mutating func validate(_ condition: FairnessCondition, at path: String) throws {
+        let name: String
+        switch condition {
+        case .weakFairnessNext, .strongFairnessNext:
+            return
+        case .weakFairness(let value), .strongFairness(let value):
+            name = value
+        case .weakFairnessActionCall(let value), .strongFairnessActionCall(let value):
+            name = value.name
+        }
+        guard let id = layout.actionID(named: name) else {
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a declared action",
+                actual: "fairness references '\(name)'"
+            )
+        }
+        references["\(path).action"] = .action(id)
     }
 
     private mutating func validateExpression(
