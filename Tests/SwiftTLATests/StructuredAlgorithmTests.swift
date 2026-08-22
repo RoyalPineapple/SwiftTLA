@@ -55,8 +55,8 @@ private struct StructuredCarModel {
 
     static var spec: TLASpec {
         #spec("StructuredCar") {
-            Algorithm("StructuredCar") {
-                let cars = SharedVar("cars", initial: Function<Car, Record<CarRecord>>.literal(
+            Algorithm("StructuredCar") { scope in
+                let cars = scope.sharedVar("cars", initial: Function<Car, Record<CarRecord>>.literal(
                     (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, .closed))),
                     (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, .closed)))
                 ))
@@ -89,8 +89,8 @@ struct StructuredAlgorithmTests {
 
     @Test("function comprehensions retain typed record values through lowering and evaluation")
     func loweredFunctionComprehensionRetainsRecords() throws {
-        let algorithm = Algorithm("StructuredComprehension") {
-            let cars = SharedVar(
+        let algorithm = Algorithm("StructuredComprehension") { scope in
+            let cars = scope.sharedVar(
                 "cars",
                 initial: Function<StructuredCarModel.Car, Record<StructuredCarModel.CarRecord>>.mapping { _ in
                     Record.literal(
@@ -99,7 +99,6 @@ struct StructuredAlgorithmTests {
                     )
                 }
             )
-            cars
             Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
         }
 

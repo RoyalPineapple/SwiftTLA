@@ -23,8 +23,8 @@ private struct GeneratedTypedLocalRecursionModel {
           If(number == 0, then: 0, else: recursion(number.expr - 1))
         }, in: { recursion in recursion(4) })
       )
-      Algorithm("GeneratedTypedLocalRecursionModel") {
-        let counter = SharedVar("counter", initial: 0)
+      Algorithm("GeneratedTypedLocalRecursionModel") { scope in
+        let counter = scope.sharedVar("counter", initial: 0)
         Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }
@@ -37,13 +37,13 @@ private struct GeneratedTypedLocalRecursionModel {
 private struct GeneratedTypedFormalDefinitionAlgorithm {
   static var spec: TLASpec {
     #spec("GeneratedTypedFormalDefinitionAlgorithm") {
-      Algorithm("GeneratedTypedFormalDefinitionAlgorithm") {
+      Algorithm("GeneratedTypedFormalDefinitionAlgorithm") { scope in
         FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
           LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
             If(current == 0, then: true, else: recursion(current.expr - 1))
           }, in: { recursion in recursion(ballot) })
         }
-        let counter = SharedVar("counter", initial: 0)
+        let counter = scope.sharedVar("counter", initial: 0)
         Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }
@@ -55,9 +55,9 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
 @TLAModel
 private struct GeneratedTopLevelTypedFormalDefinitionModel {
   static var spec: TLASpec {
-    #spec("GeneratedTopLevelTypedFormalDefinitionModel") {
-      let bound = SharedVar("bound", initial: 2)
-      let counter = SharedVar("counter", initial: 0)
+    #spec("GeneratedTopLevelTypedFormalDefinitionModel") { scope in
+      let bound = scope.sharedVar("bound", initial: 2)
+      let counter = scope.sharedVar("counter", initial: 0)
       FormalDefinition("SafeAt", taking: Int.self) { ballot in
         LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
           If(current == 0, then: true, else: recursion(current.expr - 1))
