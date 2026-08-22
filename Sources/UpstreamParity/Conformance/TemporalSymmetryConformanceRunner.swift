@@ -249,9 +249,7 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
     let context = try TLCContext(toolRoot: toolRoot, projectRoot: projectRoot, pin: pin)
     let correlation = try TemporalSymmetryCaseRunCorrelation(
       caseID: declaredCase.id, gateRunID: gateRunID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
-    let pair = try PinnedSymmetryTLCCorrelation(
-      caseID: declaredCase.id, gateRunID: gateRunID, comparisonRunID: correlation.comparisonRunID,
-      rawRunID: correlation.tlcRunID, reducedRunID: UUID())
+    let reducedRunID = UUID()
     let source = try ConformanceEvidence.resolve(
       projectRoot.appendingPathComponent(declaredCase.sourceInput.path), beneath: projectRoot)
     let rawConfig = projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-\(scope)-raw.cfg")
@@ -264,12 +262,18 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       id: declaredCase.id, module: source, configuration: reducedConfig, pin: pin, architecture: context.architecture)
     let rawRequest = try request(
       context: context, module: source, configuration: rawConfig, work: work.appendingPathComponent("raw"),
-      declared: rawCase, runID: pair.rawRunID)
+      declared: rawCase, runID: correlation.tlcRunID)
     let reducedRequest = try request(
       context: context, module: source, configuration: reducedConfig, work: work.appendingPathComponent("reduced"),
-      declared: reducedCase, runID: pair.reducedRunID)
-    let tlc = try PinnedSymmetryTLCAdapter().run(
-      correlation: pair, raw: rawRequest, reduced: reducedRequest, replay: .none)
+      declared: reducedCase, runID: reducedRunID)
+    try validateSymmetryRequests(raw: rawRequest, reduced: reducedRequest)
+    let processAdapter = TLCProcessAdapter()
+    let rawTLC = try processAdapter.capture(
+      rawRequest, replay: .none,
+      retainingIn: outputDirectory.appendingPathComponent("tlc-raw", isDirectory: true)).graph
+    let reducedTLC = try processAdapter.capture(
+      reducedRequest, replay: .none,
+      retainingIn: outputDirectory.appendingPathComponent("tlc-reduced", isDirectory: true)).graph
     let swiftRaw = try SwiftGraphAdapter().adapt(exploration)
     let permutations = try symmetryPermutations(scope: scope)
     let swiftReduced = try reducedRun(swiftRaw, permutations: permutations)
@@ -308,22 +312,22 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       receiptContext: receiptContext,
       to: reducedSwiftURL)
     try CanonicalRunEvidence.write(
-      tlc.raw,
+      rawTLC,
       correlation: .init(caseID: declaredCase.id, runID: correlation.tlcRunID, engine: .tlc),
       receiptContext: receiptContext,
       to: rawTLCURL)
     try CanonicalRunEvidence.write(
-      tlc.reduced,
-      correlation: .init(caseID: declaredCase.id, runID: pair.reducedRunID, engine: .tlc),
+      reducedTLC,
+      correlation: .init(caseID: declaredCase.id, runID: reducedRunID, engine: .tlc),
       receiptContext: receiptContext,
       to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
       caseID: declaredCase.id, configuration: declaredCase.configuration, correlation: correlation,
       swiftRaw: try symmetryExploration(.swift, false, correlation.swiftRunID, swiftRaw, configurationDigest, rawSwiftURL, projectRoot),
       swiftReduced: try symmetryExploration(.swift, true, swiftReducedRunID, swiftReduced, configurationDigest, reducedSwiftURL, projectRoot),
-      tlcRaw: try symmetryExploration(.tlc, false, correlation.tlcRunID, tlc.raw, configurationDigest, rawTLCURL, projectRoot),
-      tlcReduced: try symmetryExploration(.tlc, true, pair.reducedRunID, tlc.reduced, configurationDigest, reducedTLCURL, projectRoot),
-      swiftRawRun: swiftRaw, swiftReducedRun: swiftReduced, tlcRawRun: tlc.raw, tlcReducedRun: tlc.reduced,
+      tlcRaw: try symmetryExploration(.tlc, false, correlation.tlcRunID, rawTLC, configurationDigest, rawTLCURL, projectRoot),
+      tlcReduced: try symmetryExploration(.tlc, true, reducedRunID, reducedTLC, configurationDigest, reducedTLCURL, projectRoot),
+      swiftRawRun: swiftRaw, swiftReducedRun: swiftReduced, tlcRawRun: rawTLC, tlcReducedRun: reducedTLC,
       configurationEvidence: try ConformanceEvidence.reference(for: configurationURL, beneath: projectRoot),
       quotientEvidence: try ConformanceEvidence.reference(for: reducedSwiftURL, beneath: projectRoot), permutations: permutations)
     guard case .exact(let comparison) = try SymmetryOrbitComparator().compare(input) else { return false }
@@ -334,6 +338,20 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
 }
 
 extension TemporalSymmetryConformanceRunner {
+  private func validateSymmetryRequests(raw: TLCProcessRequest, reduced: TLCProcessRequest) throws {
+    guard raw.caseID == reduced.caseID,
+          raw.runID != reduced.runID,
+          raw.expectedCase.moduleSHA256 == reduced.expectedCase.moduleSHA256,
+          raw.expectedCase.pin == reduced.expectedCase.pin,
+          raw.bundle.root.name == reduced.bundle.root.name,
+          raw.bundle.root.tla == reduced.bundle.root.tla,
+          raw.bundle.imports == reduced.bundle.imports,
+          raw.bundle.root.cfg != reduced.bundle.root.cfg else {
+      throw ConformanceGovernanceError.inconsistentReference(
+        record: raw.caseID, field: "pinned TLC raw/reduced pair")
+    }
+  }
+
   private func launchCase(id: String, module: URL, configuration: URL, pin: TLCReferencePin, architecture: String) throws -> CoreConformanceCase {
     let arguments = ["-workers", "1", "-fp", "1"]
     return try CoreConformanceCase(

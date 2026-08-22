@@ -430,6 +430,23 @@ package struct TLCProcessAdapter: Sendable {
     return try capture(run, request: request)
   }
 
+  package func capture(
+    _ request: TLCProcessRequest,
+    replay: TLCReplayPolicy,
+    retainingIn directory: URL
+  ) throws -> TLCProcessCapture {
+    try ConformanceEvidence.createDirectory(directory, beneath: directory.deletingLastPathComponent())
+    let run: TLCProcessRun
+    do {
+      run = try run(request, replay: replay)
+    } catch {
+      try retain(error, request: request, in: directory)
+      throw error
+    }
+    try retain(run, request: request, in: directory)
+    return try capture(run, request: request)
+  }
+
   package func capture(_ run: TLCProcessRun, request: TLCProcessRequest) throws
     -> TLCProcessCapture {
     let graphEvents = try Data(contentsOf: request.graphEvents)

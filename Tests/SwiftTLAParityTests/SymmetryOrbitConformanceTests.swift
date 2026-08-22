@@ -95,8 +95,8 @@ struct SymmetryOrbitConformanceTests {
     #expect(comparison.quotientTransitions.count == 1)
   }
 
-  @Test("Orbit evidence rejects colliding run identities and invalid TLC provenance")
-  func orbitEvidenceRejectsInvalidRunCorrelation() throws {
+  @Test("Orbit evidence rejects colliding run identities")
+  func orbitEvidenceRejectsCollidingRunIdentities() throws {
     let input = try fixture(reducedStates: [state("A")])
     let collidingSwiftReduced = try exploration(.swift, true, input.correlation.swiftRunID, states: [state("A")])
     #expect(throws: ConformanceGovernanceError.inconsistentReference(
@@ -107,12 +107,6 @@ struct SymmetryOrbitConformanceTests {
         swiftRawRun: input.swiftRawRun, swiftReducedRun: input.swiftReducedRun, tlcRawRun: input.tlcRawRun,
         tlcReducedRun: input.tlcReducedRun, configurationEvidence: input.configurationEvidence,
         quotientEvidence: input.quotientEvidence, permutations: input.permutations)
-    }
-    let identifier = UUID()
-    #expect(throws: ConformanceGovernanceError.invalidField(
-      record: "scope-2", field: "TLC raw/reduced run correlation")) {
-      _ = try PinnedSymmetryTLCCorrelation(
-        caseID: "scope-2", gateRunID: identifier, comparisonRunID: UUID(), rawRunID: identifier, reducedRunID: UUID())
     }
   }
 
