@@ -3,8 +3,6 @@ public enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
 }
 
 public struct FiniteExplorationConfiguration: Sendable, Equatable, Hashable {
-    public static let standard = Self(validatedMaximumStateLimit: 100_000)
-
     public let maximumStateLimit: Int
 
     public init(maximumStateLimit: Int) throws {

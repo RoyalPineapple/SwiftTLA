@@ -15,8 +15,8 @@ struct SymmetricCollectionTLCOracleTests {
   func scopesRetainModelValueOrbitCounts() throws {
     for scope in 2...4 {
       let spec = oracleSpec(scope: scope)
-      let graph = try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph()
-      let result = try ModelChecker(compilation: try spec.compile(), configuration: .standard).check()
+      let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+      let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
 
       #expect(graph.states.count == scope + 1)
       #expect(result.boundedScopes == [
@@ -34,7 +34,7 @@ struct SymmetricCollectionTLCOracleTests {
         actions: spec.actions,
         invariants: spec.invariants
       )
-      #expect(try ModelChecker(compilation: try unreduced.compile(), configuration: .standard).exploreGraph().states.count == 1 << scope)
+      #expect(try ModelChecker(compilation: try unreduced.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 1 << scope)
     }
   }
 
@@ -68,7 +68,7 @@ struct SymmetricCollectionTLCOracleTests {
     #expect(normalizedActions(parsed.actions.map { NamedAction(name: $0.name, body: $0.body) })
       == normalizedActions(runtime.actions))
     #expect(try parsedSpec.compile().initialStateProjections() == runtime.compile().initialStateProjections())
-    #expect(try ModelChecker(compilation: try parsedSpec.compile(), configuration: .standard).check().description == ModelChecker(compilation: try runtime.compile(), configuration: .standard).check().description)
+    #expect(try ModelChecker(compilation: try parsedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description == ModelChecker(compilation: try runtime.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description)
   }
 
   @Test("Every opaque member identity misuse family produces symmetry guidance")
@@ -99,13 +99,13 @@ struct SymmetricCollectionTLCOracleTests {
 
   @Test("Bounded claims, ordinary results, lazy initial states, and Game of Life remain stable")
   func boundedAndOrdinaryBehaviorRemainStable() throws {
-    let bounded = try ModelChecker(compilation: try oracleSpec(scope: 2).compile(), configuration: .standard).check()
+    let bounded = try ModelChecker(compilation: try oracleSpec(scope: 2).compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     #expect(bounded.description.contains("devices: 2 exchangeable members"))
     #expect(bounded.description.contains("does not prove larger populations"))
 
     let counter = Var<Int>("counter")
     let ordinary = TLASpec("Ordinary") { Variable(counter, 0) }
-    let ordinaryResult = try ModelChecker(compilation: try ordinary.compile(), configuration: .standard).check()
+    let ordinaryResult = try ModelChecker(compilation: try ordinary.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     #expect({ if case .ok = ordinaryResult { true } else { false } }())
     #expect(ordinaryResult.description == "OK — explored 1 state(s)")
     #expect(!(try ordinary.compile().renderedTLAModuleBundle().tla.contains("TLC")))
@@ -115,7 +115,7 @@ struct SymmetricCollectionTLCOracleTests {
     let lazySpec = TLASpec("LazyInit") {
       Variable(from: lazy.name, StateExpr.set([1, 2, 3]))
     }
-    #expect(try ModelChecker(compilation: try lazySpec.compile(), configuration: .standard).exploreGraph().states.count == 3)
+    #expect(try ModelChecker(compilation: try lazySpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 3)
     #expect(try lazySpec.compile().renderedTLAModuleBundle().tla.contains("Init == lazy \\in {1, 2, 3}"))
 
     #expect(try ModelChecker(compilation: try Example.gameOfLife.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).exploreGraph().states.count == 2)

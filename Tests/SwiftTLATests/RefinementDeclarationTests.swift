@@ -138,7 +138,7 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    guard case .ok = try ModelChecker(compilation: try concrete.compile(), configuration: .standard).check().underlyingOutcome else {
+    guard case .ok = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome else {
       Issue.record("Expected the mapped concrete model to refine the abstract model.")
       return
     }
@@ -164,7 +164,7 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    let result = try ModelChecker(compilation: try concrete.compile(), configuration: .standard).check()
+    let result = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .refinementViolated(let refinement, .transition) = result else {
       Issue.record("Expected a refinement transition violation, got \(result).")
       return

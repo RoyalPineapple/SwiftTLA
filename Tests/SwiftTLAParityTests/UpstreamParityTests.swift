@@ -129,7 +129,7 @@ struct UpstreamParityTests {
 
     @Test("FindHighest PlusCal port matches its bounded TLC configuration")
     func findHighestParity() throws {
-        let checker = try ModelChecker(compilation: try FindHighestModel.spec.compile(), configuration: .standard)
+        let checker = try ModelChecker(compilation: try FindHighestModel.spec.compile(), configuration: try .init(maximumStateLimit: 100_000))
         #expect(try checker.exploreGraph().states.count == Example.findHighest.expectedDistinct)
     }
 
@@ -148,7 +148,7 @@ struct UpstreamParityTests {
 
     @Test("BinarySearch PlusCal port matches its bounded TLC configuration")
     func binarySearchParity() throws {
-        let checker = try ModelChecker(compilation: try BinarySearchModel.spec.compile(), configuration: .standard)
+        let checker = try ModelChecker(compilation: try BinarySearchModel.spec.compile(), configuration: try .init(maximumStateLimit: 100_000))
         #expect(try checker.exploreGraph().states.count == Example.binarySearch.expectedDistinct)
         #expect(try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla.contains("WF_"))
         #expect(try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla.contains("(Next)"))
@@ -156,31 +156,31 @@ struct UpstreamParityTests {
 
     @Test("Consensus PlusCal port matches its bounded TLC configuration")
     func consensusParity() throws {
-        let checker = try ModelChecker(compilation: try ConsensusModel.spec.compile(), configuration: .standard)
+        let checker = try ModelChecker(compilation: try ConsensusModel.spec.compile(), configuration: try .init(maximumStateLimit: 100_000))
         #expect(try checker.exploreGraph().states.count == Example.consensus.expectedDistinct)
     }
 
     @Test("SumSequence bounded source port verifies")
     func sumSequenceBoundedPort() throws {
-        let checker = try ModelChecker(compilation: try SumSequenceModel.spec.compile(), configuration: .standard)
+        let checker = try ModelChecker(compilation: try SumSequenceModel.spec.compile(), configuration: try .init(maximumStateLimit: 100_000))
         #expect(try checker.exploreGraph().states.count == Example.sumSequence.expectedDistinct)
     }
 
     @Test("Reachable bounded source port compiles its formal graph choice")
     func reachableBoundedPort() throws {
-        let checker = try ModelChecker(compilation: try ReachableModel.spec.compile(), configuration: .standard)
+        let checker = try ModelChecker(compilation: try ReachableModel.spec.compile(), configuration: try .init(maximumStateLimit: 100_000))
         #expect(try checker.exploreGraph().states.count == Example.reachable.expectedDistinct)
     }
 
     @Test("Parallel Reachable bounded source port verifies")
     func parallelReachableBoundedPort() throws {
-        let checker = try ModelChecker(compilation: try ParallelReachableModel.spec.compile(), configuration: .standard)
+        let checker = try ModelChecker(compilation: try ParallelReachableModel.spec.compile(), configuration: try .init(maximumStateLimit: 100_000))
         #expect(try checker.exploreGraph().states.count == Example.parallelReachable.expectedDistinct)
     }
 
     @Test("Echo PlusCal port matches its three-node TLC configuration")
     func echoParity() throws {
-        let checker = try ModelChecker(compilation: try EchoModel.spec.compile(), configuration: .standard)
+        let checker = try ModelChecker(compilation: try EchoModel.spec.compile(), configuration: try .init(maximumStateLimit: 100_000))
         #expect(try checker.exploreGraph().states.count == Example.echo.expectedDistinct)
     }
 

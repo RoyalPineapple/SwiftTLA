@@ -309,7 +309,7 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
 
   private func observe(spec: TLASpec, diagnostics: [String]) throws -> PublicWorkflowCanonicalObservation {
     do {
-      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile(), configuration: .standard).explore()), diagnostics: diagnostics)
+      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).explore()), diagnostics: diagnostics)
     } catch {
       return try unavailableObservation("evaluation:\(String(describing: error))", diagnostics: diagnostics)
     }

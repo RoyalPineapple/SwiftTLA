@@ -415,7 +415,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     }
 
     #expect(spec.actions[0].bindings.map(\.name) == ["person", "elevator", "direction"])
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
     let labels = try #require(graph.transitions[.init(0)]).map(\.label)
     let expectedArguments: [[TLAValue]] = [
       [.int(1), .int(10), .int(100)], [.int(1), .int(10), .int(200)],
@@ -457,7 +457,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
     #expect(spec.actions[0].bindings.map(\.name) == ["id"])
     #expect(spec.actions[0].bindings[0].values == [.int(1), .int(2)])
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
     let labels = transitions.map(\.label)
     #expect(
@@ -481,7 +481,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       }
     }
 
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
 
     #expect(transitions.map(\.action) == ["openDoor(0)", "openDoor(1)"])
@@ -635,7 +635,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       try $0.value(for: x).rendered(using: compilation.layout)
     }
     #expect(Set(initialValues) == Set([.int(1), .int(2), .int(3)]))
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph().states.count == 3)
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 3)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
 
