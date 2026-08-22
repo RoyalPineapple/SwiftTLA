@@ -236,11 +236,14 @@ func inputPath(_ relativePath: String, within root: String) throws -> URL {
         throw CoreConformanceCLIError.invalidManifest("input paths must be relative")
     }
     let rootURL = URL(fileURLWithPath: root).standardizedFileURL
-    let path = rootURL.appendingPathComponent(relativePath).standardizedFileURL
-    guard path.path.hasPrefix(rootURL.path + "/") else {
+    do {
+        return try ConformanceEvidence.resolve(
+            rootURL.appendingPathComponent(relativePath),
+            beneath: rootURL
+        )
+    } catch {
         throw CoreConformanceCLIError.invalidManifest("input path escapes the pinned checkout")
     }
-    return path
 }
 
 func swiftSpec(_ identifier: String) throws -> TLASpec {
