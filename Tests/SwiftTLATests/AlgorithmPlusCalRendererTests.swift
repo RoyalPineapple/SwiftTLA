@@ -126,7 +126,7 @@ struct AlgorithmPlusCalRendererTests {
         let spec = TLASpec("Sections") {
             FormalDefinition("Bound", parameters: [], body: .value(.int(2)))
             Algorithm("Sections", scoped: { scope in
-                let _ = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar("count", initial: 0)
                 FormalDefinition(
                     "UsesCount",
                     parameters: [],

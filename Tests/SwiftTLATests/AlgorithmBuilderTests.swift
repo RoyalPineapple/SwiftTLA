@@ -476,7 +476,10 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
 
         let (compilation, initial) = try initialState(of: spec)
-        let programCounter = compilation.layout.programCounterID()
+        guard let programCounter = compilation.layout.programCounterID() else {
+            Issue.record("Expected the compiled layout to declare a program counter")
+            return
+        }
         let programCounterVariable = compilation.layout.variables.first { $0.id == programCounter }
         #expect(programCounterVariable?.declaration.origin == .programCounter)
         guard case .controlLocation(let initialLocation) = try initial.value(for: programCounter) else {
