@@ -1523,10 +1523,10 @@ public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType, D: TLAV
 /// atomic block. An empty set disables that block, as PlusCal `with (x \in S)`.
 public func With<Value: TLAValueType>(
     _ source: Expr<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
     let variable = generatedBinderName(file: file, line: line, column: column)
     let value = WithValue<Value>(expression: .variable(variable))
@@ -1541,16 +1541,16 @@ public func With<Value: TLAValueType>(
 public func With<First: TLAValueType, Second: TLAValueType>(
     _ first: Expr<SetExpr<First>>,
     _ second: Expr<SetExpr<Second>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
 ) -> StepStatement {
-    With(first, { firstValue in
-        With(second, { secondValue in
+    With(first, file: file, line: line, column: column) { firstValue in
+        With(second, file: file, line: line, column: column + 1) { secondValue in
             body(firstValue, secondValue)
-        }, file: file, line: line, column: column + 1)
-    }, file: file, line: line, column: column)
+        }
+    }
 }
 
 /// Binds three independent members in formal left-to-right scope order.
@@ -1558,18 +1558,18 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>
     _ first: Expr<SetExpr<First>>,
     _ second: Expr<SetExpr<Second>>,
     _ third: Expr<SetExpr<Third>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>) -> [StepStatement]
 ) -> StepStatement {
-    With(first, { firstValue in
-        With(second, { secondValue in
-            With(third, { thirdValue in
+    With(first, file: file, line: line, column: column) { firstValue in
+        With(second, file: file, line: line, column: column + 1) { secondValue in
+            With(third, file: file, line: line, column: column + 2) { thirdValue in
                 body(firstValue, secondValue, thirdValue)
-            }, file: file, line: line, column: column + 2)
-        }, file: file, line: line, column: column + 1)
-    }, file: file, line: line, column: column)
+            }
+        }
+    }
 }
 
 /// Binds four independent members in formal left-to-right scope order.
@@ -1578,16 +1578,16 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
     _ second: Expr<SetExpr<Second>>,
     _ third: Expr<SetExpr<Third>>,
     _ fourth: Expr<SetExpr<Fourth>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>, WithValue<Fourth>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>, WithValue<Fourth>) -> [StepStatement]
 ) -> StepStatement {
-    With(first, second, third, { firstValue, secondValue, thirdValue in
-        With(fourth, { fourthValue in
+    With(first, second, third, file: file, line: line, column: column) { firstValue, secondValue, thirdValue in
+        With(fourth, file: file, line: line, column: column + 3) { fourthValue in
             body(firstValue, secondValue, thirdValue, fourthValue)
-        }, file: file, line: line, column: column + 3)
-    }, file: file, line: line, column: column)
+        }
+    }
 }
 
 /// Destructures a selected two-member formal tuple for one atomic block.
@@ -1597,18 +1597,18 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
 /// formal expressions and never become host-language tuple values.
 public func With<First: TLAValueType, Second: TLAValueType>(
     _ pairs: Expr<SetExpr<Pair<First, Second>>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
 ) -> StepStatement {
-    With(pairs, { pair in
-        Let(pair.first(), { first in
-            Let(pair.second(), { second in
+    With(pairs, file: file, line: line, column: column) { pair in
+        Let(pair.first(), file: file, line: line, column: column + 1) { first in
+            Let(pair.second(), file: file, line: line, column: column + 2) { second in
                 body(first, second)
-            }, file: file, line: line, column: column + 2)
-        }, file: file, line: line, column: column + 1)
-    }, file: file, line: line, column: column)
+            }
+        }
+    }
 }
 
 /// Binds a deterministic formal value for one atomic block.
@@ -1617,10 +1617,10 @@ public func With<First: TLAValueType, Second: TLAValueType>(
 /// It lowers to a scoped TLA+ `LET name == expression IN ...` expression.
 public func Let<Value: TLAValueType>(
     _ value: Expr<Value>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
     let variable = generatedBinderName(file: file, line: line, column: column)
     let bound = WithValue<Value>(expression: .variable(variable))
@@ -1629,12 +1629,12 @@ public func Let<Value: TLAValueType>(
 
 public func Let<Value: TLAValueType>(
     _ value: Value,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    Let(Expr<Value>(.value(value.tlaValue)), body, file: file, line: line, column: column)
+    Let(Expr<Value>(.value(value.tlaValue)), file: file, line: line, column: column) { body($0) }
 }
 
 /// Tests whether a bounded formal set has a member that satisfies `predicate`.
@@ -1643,10 +1643,10 @@ public func Let<Value: TLAValueType>(
 /// The bound value is formal data, not a Swift collection element.
 public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> Predicate,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
     let variable = generatedBinderName(file: file, line: line, column: column)
     return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
@@ -1660,16 +1660,16 @@ public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
 public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
     in first: Expr<SetExpr<First>>,
     and second: Expr<SetExpr<Second>>,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
 ) -> Expr<Bool> {
-    Exists(in: first, where: { firstValue in
-        Exists(in: second, where: { secondValue in
+    Exists(in: first, file: file, line: line, column: column) { firstValue in
+        Exists(in: second, file: file, line: line, column: column + 1) { secondValue in
             predicate(firstValue, secondValue)
-        }, file: file, line: line, column: column + 1)
-    }, file: file, line: line, column: column)
+        }
+    }
 }
 
 /// Tests whether every bounded formal set member satisfies `predicate`.
@@ -1677,10 +1677,10 @@ public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
 /// This is the typed Swift spelling of TLA+ `\\A value \\in domain : predicate`.
 public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> Predicate,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
     let variable = generatedBinderName(file: file, line: line, column: column)
     return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
@@ -1690,16 +1690,16 @@ public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
 public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
     in first: Expr<SetExpr<First>>,
     and second: Expr<SetExpr<Second>>,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
 ) -> Expr<Bool> {
-    ForAll(in: first, where: { firstValue in
-        ForAll(in: second, where: { secondValue in
+    ForAll(in: first, file: file, line: line, column: column) { firstValue in
+        ForAll(in: second, file: file, line: line, column: column + 1) { secondValue in
             predicate(firstValue, secondValue)
-        }, file: file, line: line, column: column + 1)
-    }, file: file, line: line, column: column)
+        }
+    }
 }
 
 /// States that every member of a bounded formal set satisfies `predicate`.
@@ -1708,10 +1708,10 @@ public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
 /// natural inside `Invariant` and `When` blocks.
 public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> Predicate,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    where predicate: (WithValue<Value>) -> Predicate
 ) -> StateExpr {
     let variable = generatedBinderName(file: file, line: line, column: column)
     return .forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr)
@@ -1725,16 +1725,16 @@ public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
 public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
     in first: Expr<SetExpr<First>>,
     and second: Expr<SetExpr<Second>>,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
 ) -> StateExpr {
-    All(in: first, where: { firstValue in
-        All(in: second, where: { secondValue in
+    All(in: first, file: file, line: line, column: column) { firstValue in
+        All(in: second, file: file, line: line, column: column + 1) { secondValue in
             predicate(firstValue, secondValue)
-        }, file: file, line: line, column: column + 1)
-    }, file: file, line: line, column: column)
+        }
+    }
 }
 
 /// Tests a predicate for every member of a declared finite domain.
@@ -1743,10 +1743,10 @@ public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprC
 /// predicate. It is useful for properties over a PlusCal process family.
 public func All<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
-    where predicate: (WithValue<Value>) -> StateExpr,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    where predicate: (WithValue<Value>) -> StateExpr
 ) -> StateExpr {
     let variable = generatedBinderName(file: file, line: line, column: column)
     return .forAll(
@@ -1808,43 +1808,43 @@ public func At<Label: PlusCalLabel, Value: FiniteDomainKey>(
 
 public func With<Value: TLAValueType>(
     _ source: Var<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    With(Expr<SetExpr<Value>>(source.stateExpr), body, file: file, line: line, column: column)
+    With(Expr<SetExpr<Value>>(source.stateExpr), file: file, line: line, column: column) { body($0) }
 }
 
 public func With<Value: TLAValueType>(
     _ source: SharedVariable<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    With(Expr<SetExpr<Value>>(source.stateExpr), body, file: file, line: line, column: column)
+    With(Expr<SetExpr<Value>>(source.stateExpr), file: file, line: line, column: column) { body($0) }
 }
 
 /// Binds one member of a process-local formal set.
 public func With<Value: TLAValueType>(
     _ source: LocalVariable<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    With(source.expr, body, file: file, line: line, column: column)
+    With(source.expr, file: file, line: line, column: column) { body($0) }
 }
 
 /// Binds one member of a finite Swift domain. This is the most direct Swift
 /// spelling of PlusCal `with (value \in Type)`.
 public func With<Value: FiniteDomainKey>(
     _ source: FiniteDomain<Value>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
     let variable = generatedBinderName(file: file, line: line, column: column)
     let value = WithValue<Value>(expression: .variable(variable))
@@ -1953,10 +1953,10 @@ public func Either(
 
 public func Choose<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
-    @DoBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement]
 ) -> StepStatement {
     let name = generatedBinderName(file: file, line: line, column: column)
     let value = ProcessIdentifier<Value>(expression: .variable(name))
@@ -1968,10 +1968,10 @@ public func Choose<Value: FiniteDomainKey>(
 public func Choose<First: FiniteDomainKey, Second: FiniteDomainKey>(
     _ firstDomain: FiniteDomain<First>,
     _ secondDomain: FiniteDomain<Second>,
-    @DoBuilder _ body: (ProcessIdentifier<First>, ProcessIdentifier<Second>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (ProcessIdentifier<First>, ProcessIdentifier<Second>) -> [StepStatement]
 ) -> StepStatement {
     let firstName = generatedBinderName(file: file, line: line, column: column)
     let secondName = generatedBinderName(file: file, line: line, column: column + 1)
@@ -1991,10 +1991,10 @@ public func Choose<First: FiniteDomainKey, Second: FiniteDomainKey>(
 /// data: the closure describes one choice branch, not a Swift loop.
 public func Choose(
     _ domain: ClosedRange<Int>,
-    @DoBuilder _ body: (WithValue<Int>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Int>) -> [StepStatement]
 ) -> StepStatement {
     let name = generatedBinderName(file: file, line: line, column: column)
     let value = WithValue<Int>(expression: .variable(name))
@@ -2009,10 +2009,10 @@ public func Choose(
 public func Choose(
     _ firstDomain: ClosedRange<Int>,
     _ secondDomain: ClosedRange<Int>,
-    @DoBuilder _ body: (WithValue<Int>, WithValue<Int>) -> [StepStatement],
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    @DoBuilder _ body: (WithValue<Int>, WithValue<Int>) -> [StepStatement]
 ) -> StepStatement {
     let firstName = generatedBinderName(file: file, line: line, column: column)
     let secondName = generatedBinderName(file: file, line: line, column: column + 1)

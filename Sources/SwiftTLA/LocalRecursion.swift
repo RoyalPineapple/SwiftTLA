@@ -22,10 +22,10 @@ public func LetRec<
     over domain: Expr<SetExpr<Input>>,
     taking _: Input.Type,
     _ definition: (LocalRecursion<Input, Output>, WithValue<Input>) -> Definition,
-    in body: (LocalRecursion<Input, Output>) -> Result,
     file: StaticString = #fileID,
     line: UInt = #line,
-    column: UInt = #column
+    column: UInt = #column,
+    in body: (LocalRecursion<Input, Output>) -> Result
 ) -> Expr<Output> {
     let inputName = generatedBinderName(file: file, line: line, column: column)
     let recursion = LocalRecursion<Input, Output>(name: name)
