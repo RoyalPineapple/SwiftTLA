@@ -58,6 +58,22 @@ struct AlgorithmBuilderTests {
         #expect(compilation.spec.actions.map(\.name).contains("advance"))
     }
 
+    @Test("action completion preserves assigned compiler control state")
+    func actionCompletionPreservesAssignedCompilerControlState() {
+        let programCounter = NamedVar(
+            name: CompilerControlSymbol.programCounter.rawValue,
+            initial: .string("start"),
+            origin: .programCounter
+        )
+        let action = ActionNormalization.complete(
+            .assign(.programCounter, .controlLocation(.done)),
+            variables: [programCounter]
+        )
+
+        #expect(assignedVars(action).contains(.programCounter))
+        #expect(!explicitUnchanged(action).contains(.programCounter))
+    }
+
     @Test("algorithm builder preserves the order of many elements")
     func algorithmBuilderPreservesManyElementOrder() {
         let algorithm = Algorithm("OrderedElements") {

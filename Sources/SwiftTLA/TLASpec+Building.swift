@@ -147,11 +147,10 @@ extension TLASpec {
       }
     }
 
-    let variableNames = variables.map(\.name)
     actions = actions.map { action in
       NamedAction(
         name: action.name,
-        body: ActionNormalization.complete(action.body, variables: variableNames),
+        body: ActionNormalization.complete(action.body, variables: variables),
         bindings: action.bindings,
         controlOwner: action.controlOwner,
         generatedBindingSwiftTypes: action.generatedBindingSwiftTypes

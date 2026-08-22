@@ -216,7 +216,7 @@ enum AlgorithmLowerer {
                                 body
                             )
                             : body,
-                        variables: variableNames
+                        variables: variables
                     ),
                     bindings: [ActionBinding(name: processBinding.rawValue, values: process.domain)],
                     controlOwner: controlOwner,
@@ -268,7 +268,7 @@ enum AlgorithmLowerer {
                 let body = completingControl(loweredStatements, fallthrough: nextLabel)
                 return NamedAction(
                     name: label,
-                    body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variableNames),
+                    body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variables),
                     bindings: [ActionBinding(name: processBinding.rawValue, values: controlDomainValues(processes))],
                     controlOwner: .procedure(algorithm: algorithm.name, name: procedure.name)
                 )
@@ -488,7 +488,7 @@ enum AlgorithmLowerer {
                 name: label,
                 body: ActionNormalization.complete(
                     .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body),
-                    variables: variableNames
+                    variables: variables
                 ),
                 controlOwner: owner.map {
                     .procedure(algorithm: algorithm.name, name: $0.name)
