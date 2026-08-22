@@ -213,8 +213,23 @@ extension TLASpec {
       refinements: renderedRefinements
     )
     let renderer = AlgorithmPlusCalRenderer(module: declarationPlan)
-    let sourceProperties = try renderer.sourcePropertyDefinitions()
-    let sourcePropertyNames = sourceProperties.map(\.name)
+    let sourcePropertyNames = try renderer.sourcePropertyNames()
+    let sourceProperties = try sourcePropertyNames.map { name -> (name: String, definition: String) in
+      if let invariant = semantics.invariants.first(where: { $0.name == name }) {
+        return (name, "\(name) == \(try formalRenderer.state(invariant.body))")
+      }
+      if let temporal = semantics.temporalProperties.first(where: { $0.name == name }) {
+        return (name, "\(name) == \(try formalRenderer.temporal(temporal.expression))")
+      }
+      throw CompilationDiagnostic(
+        code: .compilationIdentityMismatch,
+        stage: .rendering,
+        path: "authoredPlusCal.properties.\(name)",
+        expected: "a compiled property",
+        actual: "no compiled property",
+        nextSafeAction: "Compile the model again from its current source."
+      )
+    }
     let topLevelProperties = try invariants
       .filter { sourcePropertyNames.contains($0.name) == false }
       .map { invariant -> (name: String, definition: String) in
@@ -246,6 +261,7 @@ extension TLASpec {
           nextSafeAction: "Give each property a unique name and use a supported typed property expression."
         )
     }
+    let constraint = try semantics.constraint.map { "StateConstraint == \(try formalRenderer.state($0))" }
     let module = AuthoredPlusCalModule(
       name: name,
       extendsModules: authoredPlusCalExtends,
@@ -256,7 +272,8 @@ extension TLASpec {
       definitionsAfterInstances: [],
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
-      postTranslationDeclarations: (sourceProperties + topLevelProperties).map(\.definition)
+      postTranslationDeclarations: (constraint.map { [$0] } ?? [])
+        + (sourceProperties + topLevelProperties).map(\.definition)
         + authoredPlusCalSymmetry,
       refinements: renderedRefinements
     )
