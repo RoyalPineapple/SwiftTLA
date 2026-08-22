@@ -134,7 +134,7 @@ public struct VoteProofModel: Sendable {
                 FormalDefinition("ChosenIn", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
                     Exists(in: quorums) { quorum in
                         ForAll(in: quorum.expr) { acceptor in
-                            votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, value.expr))
+                            votes[acceptor].contains(Pair<Int, Value>.literal(ballot, value))
                         }
                     }
                 }
