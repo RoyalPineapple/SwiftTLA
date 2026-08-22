@@ -586,31 +586,23 @@ enum CompiledReference: Hashable, Sendable {
     case binder(BinderID)
     case action(ActionID)
     case controlLocation(ControlLocationID)
+    case field(FieldID)
     case constant(TLAValue)
     case `operator`(OperatorID)
 }
 
 struct CompiledBindingTable: Sendable {
-    let variables: [String: VariableID]
-    let actions: [String: ActionID]
     let operators: [String: OperatorID]
     let binders: [BinderID: String]
     let operatorNames: [OperatorID: String]
     let references: [String: CompiledReference]
 
     init(
-        layout: CompiledLayout,
         operators: [String: OperatorID] = [:],
         operatorNames: [OperatorID: String]? = nil,
         binders: [BinderID: String] = [:],
         references: [String: CompiledReference] = [:]
     ) {
-        variables = Dictionary(
-            uniqueKeysWithValues: layout.variables.map { ($0.declaration.name, $0.id) }
-        )
-        actions = Dictionary(
-            uniqueKeysWithValues: layout.actions.map { ($0.declaration.name, $0.id) }
-        )
         self.operators = operators
         self.binders = binders
         self.operatorNames = operatorNames ?? Dictionary(
@@ -739,7 +731,6 @@ struct BindingValidator {
             try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
         }
         return CompiledBindingTable(
-            layout: layout,
             operators: operators,
             operatorNames: operatorNames,
             binders: binders,
@@ -761,7 +752,6 @@ struct BindingValidator {
 
     func bindingTable() -> CompiledBindingTable {
         CompiledBindingTable(
-            layout: layout,
             operators: operators,
             operatorNames: operatorNames,
             binders: binders,
@@ -890,11 +880,14 @@ struct BindingValidator {
             for (index, value) in values.enumerated() {
                 try validateExpression(value, at: "\(path)[\(index)]", scope: scope)
             }
-        case .tupleAccess(let value, _), .recordAccess(let value, _):
+        case .tupleAccess(let value, _):
             try validateExpression(value, at: path, scope: scope)
+        case .recordAccess(let value, let field):
+            try validateExpression(value, at: "\(path).value", scope: scope)
+            try bindField(field, at: "\(path).field")
         case .recordLiteral(let values):
             var names = Set<String>()
-            for field in values.fields {
+            for (index, field) in values.fields.enumerated() {
                 guard names.insert(field.name).inserted else {
                     throw CompilationDiagnostic(
                         code: .duplicateRecordField,
@@ -905,7 +898,9 @@ struct BindingValidator {
                         nextSafeAction: "Give each record field a distinct name."
                     )
                 }
-                try validateExpression(field.value, at: "\(path).\(field.name)", scope: scope)
+                let fieldPath = "\(path).fields[\(index)]"
+                try bindField(field.name, at: "\(fieldPath).declaration")
+                try validateExpression(field.value, at: "\(fieldPath).value", scope: scope)
             }
         case .except(let function, let key, let value):
             try validateExpression(function, at: "\(path).function", scope: scope)
@@ -1052,6 +1047,18 @@ struct BindingValidator {
             try actionExpression(lhs, at: "\(path).left", scope: scope)
             try actionExpression(rhs, at: "\(path).right", scope: scope)
         }
+    }
+
+    private mutating func bindField(_ name: String, at path: String) throws {
+        guard let id = layout.fieldID(named: name) else {
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a field declared by the compiled layout",
+                actual: "unresolved field '\(name)'"
+            )
+        }
+        references[path] = .field(id)
     }
 
     private mutating func resolveValue(_ name: String, at path: String, scope: [String: BinderID]) throws {

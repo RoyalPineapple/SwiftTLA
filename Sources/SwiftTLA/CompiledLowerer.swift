@@ -256,17 +256,18 @@ struct CompiledLowerer {
         case .tupleLiteral(let values): return try .tupleLiteral(lower(values, at: path))
         case .tupleAccess(let value, let index): return try .tupleAccess(lower(value, at: path), index)
         case .recordLiteral(let fields):
-            return try .recordLiteral(.init(fields.fields.map { item in
+            return try .recordLiteral(.init(fields.fields.enumerated().map { index, item in
+                let fieldPath = "\(path).fields[\(index)]"
                 .init(
-                    id: try field(named: item.name, at: "\(path).\(item.name)"),
+                    id: try field(at: "\(fieldPath).declaration"),
                     key: .string(item.name),
-                    value: try lower(item.value, at: "\(path).\(item.name)")
+                    value: try lower(item.value, at: "\(fieldPath).value")
                 )
             }))
         case .recordAccess(let value, let field):
             return try .recordAccess(
-                lower(value, at: path),
-                self.field(named: field, at: "\(path).\(field)"),
+                lower(value, at: "\(path).value"),
+                self.field(at: "\(path).field"),
                 .string(field)
             )
         case .except(let function, let key, let value):
@@ -504,7 +505,7 @@ struct CompiledLowerer {
         case .controlLocation(let id): return .controlLocation(id)
         case .constant(let value): return .value(value)
         case .operator(let id): return .operatorReference(id)
-        case .action: throw diagnostic(path: path)
+        case .action, .field: throw diagnostic(path: path)
         }
     }
 
@@ -528,18 +529,9 @@ struct CompiledLowerer {
         return id
     }
 
-    private func field(named name: String, at path: String) throws -> FieldID {
-        guard let field = layout.fieldID(named: name) else {
-            throw CompilationDiagnostic(
-                code: .unknownReference,
-                stage: .lowering,
-                path: path,
-                expected: "a field declared by the compiled layout",
-                actual: "unresolved field '\(name)'",
-                nextSafeAction: "Compile the source model with the field declaration, then lower it."
-            )
-        }
-        return field
+    private func field(at path: String) throws -> FieldID {
+        guard case .field(let id) = try reference(at: path) else { throw diagnostic(path: path) }
+        return id
     }
 
     private func operatorID(at path: String) throws -> OperatorID {
