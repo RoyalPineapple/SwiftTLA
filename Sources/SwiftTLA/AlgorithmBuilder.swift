@@ -1170,6 +1170,17 @@ public enum AlgorithmBuilder {
         components.flatMap { $0 }
     }
 
+    public static func buildPartialBlock(first component: [AlgorithmElement]) -> [AlgorithmElement] {
+        component
+    }
+
+    public static func buildPartialBlock(
+        accumulated: [AlgorithmElement],
+        next component: [AlgorithmElement]
+    ) -> [AlgorithmElement] {
+        accumulated + component
+    }
+
     public static func buildOptional(_ component: [AlgorithmElement]?) -> [AlgorithmElement] {
         component ?? []
     }

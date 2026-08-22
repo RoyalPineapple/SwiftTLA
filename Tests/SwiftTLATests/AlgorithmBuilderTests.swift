@@ -58,6 +58,29 @@ struct AlgorithmBuilderTests {
         #expect(compilation.spec.actions.map(\.name).contains("advance"))
     }
 
+    @Test("algorithm builder preserves the order of many elements")
+    func algorithmBuilderPreservesManyElementOrder() {
+        let algorithm = Algorithm("OrderedElements") {
+            Do(TestControlLabel.acquire) { Stop() }
+            Do(TestControlLabel.advance) { Stop() }
+            Do(TestControlLabel.check) { Stop() }
+            Do(TestControlLabel.choose) { Stop() }
+            Do(TestControlLabel.copy) { Stop() }
+            Do(TestControlLabel.done) { Stop() }
+            Do(TestControlLabel.enter) { Stop() }
+            Do(TestControlLabel.finish) { Stop() }
+            Do(TestControlLabel.hold) { Stop() }
+            Do(TestControlLabel.increment) { Stop() }
+            Do(TestControlLabel.mark) { Stop() }
+            Do(TestControlLabel.open) { Stop() }
+        }
+
+        #expect(algorithm.model.sequentialSteps.map(\.label.name) == [
+            "acquire", "advance", "check", "choose", "copy", "done",
+            "enter", "finish", "hold", "increment", "mark", "open"
+        ])
+    }
+
     @Test("Each records its process identity structurally")
     func eachRecordsCurrentProcess() {
         let algorithm = Algorithm("CurrentProcess") {
