@@ -218,10 +218,7 @@ enum MacroExpander {
     static func generateActionLabel(actions: [MachineSurfacePlan.Action]) -> [DeclSyntax] {
         guard actions.isEmpty == false else {
             return [
-                DeclSyntax(stringLiteral: "public enum ActionLabel: Hashable, Sendable {}"),
-                DeclSyntax(stringLiteral: "private static func _actionOrdinal(for action: ActionLabel) -> Int { switch action {} }"),
-                DeclSyntax(stringLiteral: "private static func _actionArguments(for action: ActionLabel) -> [any TLAValueConvertible] { switch action {} }"),
-                DeclSyntax(stringLiteral: "private static func _actionLabel(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> ActionLabel? { nil }")
+                DeclSyntax(stringLiteral: "public enum ActionLabel: Hashable, Sendable {}")
             ]
         }
         func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
