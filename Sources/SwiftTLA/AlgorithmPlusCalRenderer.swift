@@ -174,7 +174,7 @@ internal struct AlgorithmPlusCalRenderer {
         process: AlgorithmProcessModel,
         processName: String,
         path: String
-    ) throws -> [AuthoredPlusCalPropertyReference] {
+    ) throws -> [String] {
         let fairness: String
         switch process.fairness {
         case .none: fairness = ""
@@ -352,7 +352,7 @@ internal struct AlgorithmPlusCalRenderer {
             let componentPath = "\(path)[\(index)]"
             switch component {
             case .invariant(let invariant):
-                return [.init(name: invariant.name, kind: .invariant)]
+                return [AuthoredPlusCalPropertyReference(name: invariant.name, kind: .invariant)]
             case .temporal(let temporal):
                 if isTranslatorTermination(temporal) {
                     return []
@@ -366,7 +366,7 @@ internal struct AlgorithmPlusCalRenderer {
                         nextSafeAction: "Rename the custom property, or use Eventually(All(domain) { Finished($0) }) so the official translator owns Termination."
                     )
                 }
-                return [.init(name: temporal.name, kind: .temporal)]
+                return [AuthoredPlusCalPropertyReference(name: temporal.name, kind: .temporal)]
             case .process(let process):
                 return try propertyNames(in: process.components, path: "\(componentPath).components")
             case .shared, .procedure, .fairness, .formalOperator, .stateConstraint, .local, .step, .propertyBoundary:
