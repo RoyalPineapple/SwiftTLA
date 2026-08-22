@@ -181,6 +181,31 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("CountIsZero =="))
     }
 
+    @Test("renders nested finite-domain property binders distinctly")
+    func rendersNestedFiniteDomainPropertyBindersDistinctly() throws {
+        let spec = TLASpec("DistinctPropertyBinders") {
+            Algorithm("DistinctPropertyBinders") {
+                Do(ProcessStep.done) { Stop() }
+                Invariant("Distinct") {
+                    All(Node.all) { first in
+                        All(Node.all) { second in
+                            first == second
+                        }
+                    }
+                }
+            }
+        }
+
+        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("Distinct ==") })
+        let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
+            clause.split(separator: " ").first.map(String.init)
+        }
+
+        #expect(binders.count == 2)
+        #expect(Set(binders).count == 2)
+    }
+
     @Test("rejects unresolved authored declaration dependencies")
     func rejectsMissingDeclarationDependency() {
         #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
