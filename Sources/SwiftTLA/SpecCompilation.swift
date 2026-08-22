@@ -39,6 +39,7 @@ public struct VariableDescription: Sendable, Equatable {
 
 public struct ActionDescription: Sendable, Equatable {
     public let name: String
+    public let renderedName: String
     public let sourceOffset: Int?
 }
 
@@ -110,7 +111,11 @@ public struct CompiledSpecification: Sendable {
                 .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
             },
             actions: layout.actions.map {
-                .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
+                .init(
+                    name: $0.declaration.name,
+                    renderedName: $0.renderedName,
+                    sourceOffset: $0.declaration.sourceOffset
+                )
             },
             procedures: layout.procedures.map {
                 .init(
@@ -685,8 +690,9 @@ public extension TLASpec {
         let definitionsAfterInstances = allDefinitions.filter {
             !instanceNames.isDisjoint(with: $0.dependencies)
         }
-        let renderedControlNames = layout.directActionNames(actions: actions)
-        let emittedActionNames = tlaActionNames(actions, preferredNames: renderedControlNames)
+        let emittedActionNames = Dictionary(
+            uniqueKeysWithValues: layout.actions.map { ($0.declaration.name, $0.renderedName) }
+        )
         let emittedActionNamesByID = try semantics.actions.reduce(into: [ActionID: String]()) { names, action in
             guard layout.actions.indices.contains(action.id.ordinal) else {
                 throw CompilationDiagnostic(
@@ -1297,32 +1303,6 @@ public extension TLASpec {
     }
 }
 
-private func tlaActionNames(
-    _ actions: [NamedAction],
-    preferredNames: [String: String] = [:]
-) -> [String: String] {
-    var emitted: [String: String] = [:]
-    var used: Set<String> = []
-    for action in actions where emitted[action.name] == nil {
-        let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
-            switch scalar.value {
-            case 48...57, 65...90, 97...122, 95: String(scalar)
-            default: "_"
-            }
-        }.joined()
-        let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
-        var candidate = stem.isEmpty ? "Action" : stem
-        var suffix = 2
-        while used.contains(candidate) {
-            candidate = "\(stem)__\(suffix)"
-            suffix += 1
-        }
-        emitted[action.name] = candidate
-        used.insert(candidate)
-    }
-    return emitted
-}
-
 private func directActionCallNames(
     _ actions: [CompiledAction],
     emittedActionNames: [ActionID: String]
@@ -1352,25 +1332,6 @@ private func directActionCallNames(
         addCalls(0, arguments: [], indices: [])
     }
     return names
-}
-
-private extension CompiledLayout {
-    func directActionNames(actions: [NamedAction]) -> [String: String] {
-    let actionNames = Set(actions.map(\.name))
-    let candidates = controlLocations.compactMap { label -> (qualified: String, label: String)? in
-        guard case .procedure = label.owner else { return nil }
-        return (qualified: label.renderedName, label: label.sourceName)
-    }
-
-    let labelCounts = Dictionary(grouping: candidates, by: { $0.label }).mapValues { $0.count }
-    let unqualifiedActions = Set(actions.map(\.name)).subtracting(Set(candidates.map { $0.qualified }))
-    let usable = candidates.filter {
-        actionNames.contains($0.qualified)
-            && labelCounts[$0.label] == 1
-            && !unqualifiedActions.contains($0.label)
-    }
-    return Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
-    }
 }
 
 /// Encodes the complete source model with unambiguous field boundaries.

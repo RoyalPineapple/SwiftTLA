@@ -60,6 +60,7 @@ struct CompiledVariableLayout: Hashable, Sendable {
 struct CompiledActionLayout: Hashable, Sendable {
     let id: ActionID
     let declaration: CompiledDeclaration
+    let renderedName: String
 }
 
 struct CompiledFieldLayout: Hashable, Sendable {
@@ -170,12 +171,12 @@ struct CompiledLayout: Hashable, Sendable {
                 )
             )
         }
-        actions = spec.actions.enumerated().map { ordinal, action in
-            CompiledActionLayout(
-                id: ActionID(ordinal: ordinal),
-                declaration: .init(kind: .action, name: action.name, sourceOffset: nil)
-            )
-        }
+        let controlLocations = Self.controlLocations(
+            in: spec.sourceAlgorithms,
+            actions: spec.actions,
+            hasProgramCounter: spec.variables.contains { $0.name == CompilerControlSymbol.programCounter.rawValue }
+        )
+        actions = Self.actions(spec.actions, controlLocations: controlLocations)
         fields = Self.fields(in: modules).enumerated().map { ordinal, name in
             .init(id: .init(ordinal: ordinal), renderedName: name)
         }
@@ -184,11 +185,7 @@ struct CompiledLayout: Hashable, Sendable {
                 .init(algorithm: algorithm.model.name, name: procedure.name, sourceOffset: nil)
             }
         }
-        controlLocations = Self.controlLocations(
-            in: spec.sourceAlgorithms,
-            actions: spec.actions,
-            hasProgramCounter: spec.variables.contains { $0.name == CompilerControlSymbol.programCounter.rawValue }
-        )
+        self.controlLocations = controlLocations
         moduleInstances = spec.moduleInstances.enumerated().map {
             .init(id: .init(ordinal: $0.offset), namespace: $0.element.name)
         }
@@ -268,6 +265,9 @@ struct CompiledLayout: Hashable, Sendable {
             let owner = label.owner.canonicalEncoding
             return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
         }.joined(separator: "|")
+        let actionEncoding = actions.map { action in
+            "\(action.id.ordinal):\(action.renderedName.utf8.count):\(action.renderedName)"
+        }.joined(separator: "|")
         let procedureEncoding = procedures.map { procedure in
             "\(procedure.algorithm.utf8.count):\(procedure.algorithm)\(procedure.name.utf8.count):\(procedure.name)"
         }.joined(separator: "|")
@@ -275,7 +275,7 @@ struct CompiledLayout: Hashable, Sendable {
             "\(field.id.ordinal):\(field.renderedName.utf8.count):\(field.renderedName)"
         }.joined(separator: "|")
         let instanceEncoding = moduleInstances.map { "\($0.id.ordinal):\($0.namespace)" }.joined(separator: "|")
-        return "declarations[\(declarationEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]instances[\(instanceEncoding)]"
+        return "declarations[\(declarationEncoding)]actions[\(actionEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]instances[\(instanceEncoding)]"
     }
 
     private static func fields(in modules: [TLASpec]) -> [String] {
@@ -535,6 +535,49 @@ struct CompiledLayout: Hashable, Sendable {
             )
         }
         return labels
+    }
+
+    private static func actions(
+        _ declarations: [NamedAction],
+        controlLocations: [CompiledControlLocation]
+    ) -> [CompiledActionLayout] {
+        let actionNames = Set(declarations.map(\.name))
+        let procedureControls = controlLocations.compactMap { label -> (qualified: String, label: String)? in
+            guard case .procedure = label.owner else { return nil }
+            return (qualified: label.renderedName, label: label.sourceName)
+        }
+        let labelCounts = Dictionary(grouping: procedureControls, by: \.label).mapValues(\.count)
+        let unqualifiedActions = actionNames.subtracting(Set(procedureControls.map(\.qualified)))
+        let preferredNames: [String: String] = Dictionary(uniqueKeysWithValues: procedureControls.compactMap { candidate -> (String, String)? in
+            guard actionNames.contains(candidate.qualified),
+                  labelCounts[candidate.label] == 1,
+                  !unqualifiedActions.contains(candidate.label) else {
+                return nil
+            }
+            return (candidate.qualified, candidate.label)
+        })
+
+        var used: Set<String> = []
+        return declarations.enumerated().map { ordinal, action in
+            let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122, 95: String(scalar)
+                default: "_"
+                }
+            }.joined()
+            let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
+            var renderedName = stem.isEmpty ? "Action" : stem
+            var suffix = 2
+            while !used.insert(renderedName).inserted {
+                renderedName = "\(stem)__\(suffix)"
+                suffix += 1
+            }
+            return .init(
+                id: .init(ordinal: ordinal),
+                declaration: .init(kind: .action, name: action.name, sourceOffset: nil),
+                renderedName: renderedName
+            )
+        }
     }
 }
 

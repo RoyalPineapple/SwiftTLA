@@ -1060,6 +1060,27 @@ struct CompilerPipelineCanonicalizationTests {
         }
     }
 
+    @Test("compiled layout owns direct action rendered names")
+    func compiledLayoutOwnsDirectActionRenderedNames() throws {
+        let compilation = try TLASpec(
+            name: "DirectActionNames",
+            variables: [NamedVar(name: "value", initial: .int(0))],
+            actions: [
+                .init(name: "procedure.work.enter", body: .assign(.named("value"), .int(1))),
+                .init(name: "procedure_work_enter", body: .assign(.named("value"), .int(2)))
+            ],
+            invariants: []
+        ).compile()
+
+        #expect(compilation.description.actions.map(\.renderedName) == [
+            "procedure_work_enter",
+            "procedure_work_enter__2"
+        ])
+        let source = try compilation.renderedTLAModuleBundle().tla
+        #expect(source.contains("procedure_work_enter =="))
+        #expect(source.contains("procedure_work_enter__2 =="))
+    }
+
     @Test("identity includes action domains, all initialisation forms, and imported semantics")
     func structuralFieldsContributeToIdentity() throws {
         let base = TLASpec(
