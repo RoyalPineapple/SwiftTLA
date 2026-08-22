@@ -232,7 +232,7 @@ enum AlgorithmLowerer {
                         pathCondition: .value(.bool(true)),
                         quantifiedBindings: []
                     )
-                    generatedAssertionInvariants += uniquelyNamed(actionAssertions)
+                    generatedAssertionInvariants += actionAssertions
                 }
                 fairness += fairnessConditions(for: generatedAction, policy: process.fairness)
                 return generatedAction
@@ -302,7 +302,8 @@ enum AlgorithmLowerer {
             name: algorithm.name,
             variables: variables,
             actions: actions,
-            invariants: declaredInvariants + processInvariants + generatedAssertionInvariants,
+            invariants: declaredInvariants + processInvariants
+                + compilerOwnedAssertionInvariants(generatedAssertionInvariants),
             temporalProperties: declaredTemporal,
             fairness: declaredFairness + fairness,
             constraint: declaredConstraint,
@@ -521,7 +522,7 @@ enum AlgorithmLowerer {
             name: algorithm.name,
             variables: variables,
             actions: actions,
-            invariants: declaredInvariants + generatedAssertionInvariants,
+            invariants: declaredInvariants + compilerOwnedAssertionInvariants(generatedAssertionInvariants),
             temporalProperties: declaredTemporal,
             fairness: declaredFairness,
             constraint: declaredConstraint,
@@ -783,13 +784,13 @@ enum AlgorithmLowerer {
     ) -> [NamedInvariant] {
         let atLabel = StateExpr.equal(.programCounter, label)
         let executed = StateExpr.and(executionCondition.map { .and(atLabel, $0) } ?? atLabel, pathCondition)
-        return statements.enumerated().flatMap { index, statement in
+        return statements.flatMap { statement in
             switch statement {
             case .rejected:
                 return [NamedInvariant]()
             case .assert(let condition):
                 return [NamedInvariant(
-                    name: "__pcal_assert_\(label)_\(index)",
+                    name: "__pcal_assert",
                     body: .or(.not(executed), condition)
                 )]
             case .ifElse(let condition, let then, let otherwise):
@@ -984,22 +985,16 @@ enum AlgorithmLowerer {
             .functionApply(.programCounter, .variable(processBinding.rawValue)),
             label
         )
-        let labelName: String
-        if case .controlLocation(let reference) = label {
-            labelName = reference.sourceName
-        } else {
-            labelName = label.description
-        }
         let executedAtLabel = StateExpr.and(
             executionCondition.map { .and(pcAtLabel, $0) } ?? pcAtLabel,
             pathCondition
         )
-        return statements.enumerated().flatMap { statementIndex, statement in
+        return statements.flatMap { statement in
             switch statement {
             case .rejected:
                 return [NamedInvariant]()
             case .assert(let condition):
-                return process.domain.enumerated().map { offset, identifier in
+                return process.domain.map { identifier in
                     let assertion = quantifiedBindings.reversed().reduce(
                         rewrite(condition, localRoots: localRoots)
                     ) { predicate, binding in
@@ -1015,7 +1010,7 @@ enum AlgorithmLowerer {
                         in: .or(.not(executedAtLabel), assertion)
                     )
                     return NamedInvariant(
-                        name: "__pcal_assert_\(labelName)_\(statementIndex)_\(offset)",
+                        name: "__pcal_assert",
                         body: predicate
                     )
                 }
@@ -1101,13 +1096,11 @@ enum AlgorithmLowerer {
         }
     }
 
-    private static func uniquelyNamed(_ invariants: [NamedInvariant]) -> [NamedInvariant] {
-        var occurrences: [String: Int] = [:]
-        return invariants.map { invariant in
-            let occurrence = occurrences[invariant.name, default: 0]
-            occurrences[invariant.name] = occurrence + 1
-            guard occurrence > 0 else { return invariant }
-            return NamedInvariant(name: "\(invariant.name)_\(occurrence)", body: invariant.body)
+    private static func compilerOwnedAssertionInvariants(
+        _ invariants: [NamedInvariant]
+    ) -> [NamedInvariant] {
+        invariants.enumerated().map { ordinal, invariant in
+            NamedInvariant(name: "__pcal_assert_\(ordinal)", body: invariant.body)
         }
     }
 
