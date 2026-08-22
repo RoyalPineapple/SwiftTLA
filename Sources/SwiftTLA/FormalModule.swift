@@ -201,6 +201,10 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 /// retained edge records its declared relationship instead of flattening
 /// imports and named instances into a name-only module list.
 package struct FormalModuleClosure: Sendable {
+  struct ModuleID: Hashable, Sendable {
+    let ordinal: Int
+  }
+
   struct ModulePlanContext: Sendable {
     let closure: FormalModuleClosure
     let incomingModuleParameters: [FormalModuleReplacement]
@@ -212,6 +216,7 @@ package struct FormalModuleClosure: Sendable {
   }
 
   struct Entry: Sendable {
+    let id: ModuleID
     let module: TLASpec
     let owningRoot: String
     let structuralPath: [String]
@@ -548,7 +553,14 @@ package struct FormalModuleClosure: Sendable {
         try visit(instance.module, path: edgePath)
       }
 
-      entries.append(Entry(module: module, owningRoot: root.name, structuralPath: path))
+      entries.append(
+        Entry(
+          id: .init(ordinal: entries.count),
+          module: module,
+          owningRoot: root.name,
+          structuralPath: path
+        )
+      )
     }
 
     try visit(root, path: [root.name])

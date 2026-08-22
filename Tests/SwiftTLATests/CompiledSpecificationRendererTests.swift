@@ -22,7 +22,7 @@ struct CompiledSpecificationRendererTests {
     @Test("the compiled declaration plan owns direct module text")
     func compiledPlanOwnsDirectModuleText() throws {
         let compilation = try compiledBundle()
-        let plan = try #require(compilation.moduleSectionPlans["Root"])
+        let plan = try #require(compilation.moduleSectionPlans[compilation.formalModuleClosure.root.id])
         let bundle = try compilation.renderedTLAModuleBundle()
 
         #expect(bundle.root.tla == plan.renderedModuleSource)

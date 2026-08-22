@@ -342,7 +342,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try compile(parsed, named: "Counter").spec
-        #expect(specification.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
+        #expect(specification.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
         #expect(specification.fairness == [
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")])),

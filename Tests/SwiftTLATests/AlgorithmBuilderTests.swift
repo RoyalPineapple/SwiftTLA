@@ -641,6 +641,25 @@ struct AlgorithmBuilderTests {
         }
     }
 
+    @Test("duplicate authored invariants fail at compilation")
+    func rejectsDuplicateAuthoredInvariants() {
+        let algorithm = Algorithm("DuplicateInvariant", scoped: { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Invariant("TypeOK") { value >= 0 }
+            Invariant("TypeOK") { value <= 1 }
+            Do(AlgorithmLabel.receive) { Stop() }
+        })
+
+        do {
+            _ = try TLASpec("DuplicateInvariant") { algorithm }.compile()
+            Issue.record("Expected duplicate invariant diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .duplicateInvariant)
+        } catch {
+            Issue.record("Expected compilation diagnostic, got \(error)")
+        }
+    }
+
     @Test("validation fails closed for invalid bounded algorithms")
     func rejectsInvalidAlgorithms() {
         let invalid = Algorithm("__pcal_invalid", scoped: { scope in
@@ -927,7 +946,7 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
-        #expect(spec.invariants.map(\.name) == ["__pcal_assert_choose_0_0", "__pcal_assert_choose_0_1"])
+        #expect(spec.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
         #expect(spec.fairness == [FairnessCondition.weakFairnessActionCall(.init(name: "choose", arguments: [.string("first")])),
             .weakFairnessActionCall(.init(name: "choose", arguments: [.string("second")]))
         ])
@@ -1040,7 +1059,7 @@ struct AlgorithmBuilderTests {
             Issue.record("Expected Assert to produce an invariant violation, got \(result)")
             return
         }
-        #expect(name == "__pcal_assert_check_0_0")
+        #expect(name == "__pcal_assert_0")
     }
 
     @Test("SharedVar range expands to the declared finite initial states")

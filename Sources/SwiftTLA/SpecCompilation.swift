@@ -103,7 +103,7 @@ public struct CompiledSpecification: Sendable {
     let bindings: CompiledBindingTable
     let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
-    let moduleSectionPlans: [String: DirectModuleSectionPlan]
+    let moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan]
     let authoredPlusCalModule: AuthoredPlusCalModule?
 
     public var description: CompilationDescription {
@@ -254,7 +254,7 @@ public struct CompiledSpecification: Sendable {
         bindings: CompiledBindingTable,
         semantics: CompiledSemantics,
         refinements: [CompiledRefinement],
-        moduleSectionPlans: [String: DirectModuleSectionPlan],
+        moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan],
         authoredPlusCalModule: AuthoredPlusCalModule? = nil
     ) {
         self.spec = spec
@@ -272,7 +272,7 @@ public struct CompiledSpecification: Sendable {
     public func renderedTLAModuleBundle() throws -> TLAModuleBundle {
         let entries = formalModuleClosure.entries
         let files = try entries.map { entry in
-            guard let sectionPlan = moduleSectionPlans[entry.module.name] else {
+            guard let sectionPlan = moduleSectionPlans[entry.id] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .rendering,
@@ -285,7 +285,7 @@ public struct CompiledSpecification: Sendable {
             return TLAModuleFile(
                 name: entry.module.name,
                 tla: sectionPlan.renderedModuleSource,
-                cfg: entry.module.name == spec.name
+                cfg: entry.id == formalModuleClosure.root.id
                     ? sectionPlan.renderedConfiguration
                     : nil
             )
@@ -605,13 +605,13 @@ public extension TLASpec {
             semantics: semantics,
             refinements: compiledRefinements
         )
-        var moduleSectionPlans: [String: DirectModuleSectionPlan] = [:]
+        var moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan] = [:]
         for entry in closure.entries {
-            if entry.module.name == name {
-                moduleSectionPlans[entry.module.name] = directModuleSections
+            if entry.id == closure.root.id {
+                moduleSectionPlans[entry.id] = directModuleSections
                 continue
             }
-            moduleSectionPlans[entry.module.name] = try entry.module.directModuleSectionPlan(
+            moduleSectionPlans[entry.id] = try entry.module.directModuleSectionPlan(
                 in: closure.planContext(for: entry)
             )
         }
