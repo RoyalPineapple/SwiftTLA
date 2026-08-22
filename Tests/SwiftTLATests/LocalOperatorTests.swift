@@ -284,7 +284,26 @@ struct LocalOperatorTests {
     }
 
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Answer == LET AddOne(number) == (number + 1)"))
+    #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("RECURSIVE AddOne")))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("IN AddOne(41)"))
+  }
+
+  @Test("compiled rendering declares recursive LET operators")
+  func rendersRecursiveLetOperatorDeclaration() throws {
+    let sumTo = LocalOperator(
+      "SumTo",
+      parameters: ["number"],
+      body: .ifThenElse(
+        .equal(.variable("number"), .int(0)),
+        .int(0),
+        .add(.variable("number"), .recursiveCall("SumTo", [.subtract(.variable("number"), .int(1))]))
+      )
+    )
+    let spec = TLASpec("RecursiveLocalOperatorSource") {
+      FormalDefinition("Answer", parameters: [], body: .letIn([sumTo], .recursiveCall("SumTo", [.int(4)])))
+    }
+
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("LET RECURSIVE SumTo(_)"))
   }
 
   @Test("the macro parser retains LET operator definitions")

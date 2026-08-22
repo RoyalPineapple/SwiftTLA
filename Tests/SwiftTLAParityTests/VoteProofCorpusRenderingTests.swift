@@ -1,7 +1,18 @@
 import Testing
+import SwiftTLA
 @testable import UpstreamParity
 
 struct VoteProofCorpusRenderingTests {
+    @Test("VoteProof retains nested typed binder identities during execution")
+    func nestedTypedBindersExecute() throws {
+        let graph = try ModelChecker(
+            compilation: try VoteProofModel.spec.compile(),
+            configuration: try .init(maximumStateLimit: 1)
+        ).exploreGraph()
+
+        #expect(graph.states.count == 1)
+    }
+
     @Test("VoteProof #spec macro compiles and preserves typed local recursion and formal module composition")
     func specMacroCompilationPreservesFormalStructure() throws {
         let compilation = try VoteProofModel.spec.compile()

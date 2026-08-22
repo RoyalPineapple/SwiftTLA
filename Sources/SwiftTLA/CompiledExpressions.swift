@@ -143,6 +143,7 @@ struct CompiledLocalOperator: Sendable {
     let parameters: [BinderID]
     let domain: CompiledStateExpr?
     let body: CompiledStateExpr
+    let isRecursive: Bool
 }
 
 indirect enum CompiledActionExpr: Sendable {

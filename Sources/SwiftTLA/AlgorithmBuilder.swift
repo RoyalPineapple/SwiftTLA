@@ -1523,9 +1523,12 @@ public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType, D: TLAV
 /// atomic block. An empty set disables that block, as PlusCal `with (x \in S)`.
 public func With<Value: TLAValueType>(
     _ source: Expr<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    let variable = generatedBinderName()
+    let variable = generatedBinderName(file: file, line: line, column: column)
     let value = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .with(variable: variable, source: source.raw, body(value).map(\.model)))
 }
@@ -1622,9 +1625,12 @@ public func Let<Value: TLAValueType>(
 /// The bound value is formal data, not a Swift collection element.
 public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> Predicate
+    where predicate: (WithValue<Value>) -> Predicate,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> Expr<Bool> {
-    let variable = generatedBinderName()
+    let variable = generatedBinderName(file: file, line: line, column: column)
     return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
@@ -1650,9 +1656,12 @@ public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
 /// This is the typed Swift spelling of TLA+ `\\A value \\in domain : predicate`.
 public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> Predicate
+    where predicate: (WithValue<Value>) -> Predicate,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> Expr<Bool> {
-    let variable = generatedBinderName()
+    let variable = generatedBinderName(file: file, line: line, column: column)
     return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
@@ -1675,9 +1684,12 @@ public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
 /// natural inside `Invariant` and `When` blocks.
 public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> Predicate
+    where predicate: (WithValue<Value>) -> Predicate,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StateExpr {
-    let variable = generatedBinderName()
+    let variable = generatedBinderName(file: file, line: line, column: column)
     return .forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr)
 }
 
@@ -1704,9 +1716,12 @@ public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprC
 /// predicate. It is useful for properties over a PlusCal process family.
 public func All<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
-    where predicate: (WithValue<Value>) -> StateExpr
+    where predicate: (WithValue<Value>) -> StateExpr,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StateExpr {
-    let variable = generatedBinderName()
+    let variable = generatedBinderName(file: file, line: line, column: column)
     return .forAll(
         .setLiteral(domain.values.map { .value($0.tlaValue) }),
         variable,
