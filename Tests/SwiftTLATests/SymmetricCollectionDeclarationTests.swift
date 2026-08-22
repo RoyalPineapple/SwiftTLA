@@ -41,7 +41,7 @@ struct SymmetricCollectionDeclarationTests {
     let successors = try compilation.successors(for: begin, arguments: [], from: initialState)
     #expect(successors.count == 2)
     for successor in successors {
-      let phaseValue = try #require(value("phases", in: successor))
+      let phaseValue = try #require(try value("phases", in: successor))
       guard case .function(let values) = phaseValue else {
         Issue.record("Expected the symmetric collection state to be a function")
         return
