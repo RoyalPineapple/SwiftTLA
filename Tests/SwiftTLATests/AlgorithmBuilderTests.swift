@@ -74,6 +74,23 @@ struct AlgorithmBuilderTests {
         #expect(!explicitUnchanged(action).contains(.programCounter))
     }
 
+    @Test("direct TLA action headers use compiled process bindings")
+    func directTLAActionHeadersUseCompiledProcessBindings() throws {
+        let algorithm = Algorithm("BoundProcessHeader", scoped: { scope in
+            let count = scope.sharedVar("count", initial: 0)
+            Each(Node.all) { _ in
+                Do(TestControlLabel.advance) { Assign(count, to: count + 1) }
+            }
+        })
+
+        let module = try TLASpec("BoundProcessHeader") { algorithm }
+            .compile()
+            .renderedTLAModuleBundle()
+            .tla
+        #expect(module.contains("advance(__swift_tla_binder_"))
+        #expect(!module.contains("advance(process)"))
+    }
+
     @Test("algorithm builder preserves the order of many elements")
     func algorithmBuilderPreservesManyElementOrder() {
         let algorithm = Algorithm("OrderedElements") {
