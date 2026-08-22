@@ -1019,12 +1019,12 @@ private struct SharedVariableDeclaration: Sendable {
     }
 }
 
-public struct SpecificationScope: Sendable {
+public final class SpecificationScope {
     var declarations: [VarDecl] = []
 
     public init() {}
 
-    public mutating func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Value: TLAValueType>(
         _ name: String,
         initial: Value
     ) -> SharedVariable<Value> {
@@ -1033,13 +1033,13 @@ public struct SpecificationScope: Sendable {
         return variable
     }
 
-    public mutating func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVar(name, in: range)
         declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
         return variable
     }
 
-    public mutating func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Value: TLAValueType>(
         _ name: String,
         in values: Expr<SetExpr<Value>>
     ) -> SharedVariable<Value> {
@@ -1048,7 +1048,7 @@ public struct SpecificationScope: Sendable {
         return variable
     }
 
-    public mutating func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Value: TLAValueType>(
         _ name: String,
         initial: Expr<Value>
     ) -> SharedVariable<Value> {
@@ -1058,12 +1058,12 @@ public struct SpecificationScope: Sendable {
     }
 }
 
-public struct AlgorithmScope: Sendable {
+public final class AlgorithmScope {
     fileprivate var declarations: [AlgorithmElement] = []
 
     public init() {}
 
-    public mutating func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Value: TLAValueType>(
         _ name: String,
         initial: Value
     ) -> SharedVariable<Value> {
@@ -1072,13 +1072,13 @@ public struct AlgorithmScope: Sendable {
         return variable
     }
 
-    public mutating func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVar(name, in: range)
         declarations.append(SharedVariableDeclaration(variable).algorithmElement)
         return variable
     }
 
-    public mutating func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Value: TLAValueType>(
         _ name: String,
         in values: Expr<SetExpr<Value>>
     ) -> SharedVariable<Value> {
@@ -1087,7 +1087,7 @@ public struct AlgorithmScope: Sendable {
         return variable
     }
 
-    public mutating func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Value: TLAValueType>(
         _ name: String,
         initial: Expr<Value>
     ) -> SharedVariable<Value> {
@@ -1097,12 +1097,12 @@ public struct AlgorithmScope: Sendable {
     }
 }
 
-public struct ProcessScope: Sendable {
+public final class ProcessScope {
     fileprivate var declarations: [AlgorithmElement] = []
 
     public init() {}
 
-    public mutating func localVar<Value: TLAValueType>(
+    public func localVar<Value: TLAValueType>(
         _ name: String,
         initial: Value
     ) -> LocalVariable<Value> {
@@ -1111,25 +1111,25 @@ public struct ProcessScope: Sendable {
         return variable
     }
 
-    public mutating func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
+    public func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
         let variable = LocalVar(name, initial: initial)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
-    public mutating func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
+    public func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
         let variable = LocalVar(name, initial: initial)
         declarations.append(localDeclaration(variable))
         return variable
     }
 }
 
-public struct ProcedureScope: Sendable {
+public final class ProcedureScope {
     fileprivate var declarations: [AlgorithmElement] = []
 
     public init() {}
 
-    public mutating func localVar<Value: TLAValueType>(
+    public func localVar<Value: TLAValueType>(
         _ name: String,
         initial: Value
     ) -> LocalVariable<Value> {
@@ -1138,13 +1138,13 @@ public struct ProcedureScope: Sendable {
         return variable
     }
 
-    public mutating func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
+    public func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
         let variable = LocalVar(name, initial: initial)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
-    public mutating func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
+    public func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
         let variable = LocalVar(name, initial: initial)
         declarations.append(localDeclaration(variable))
         return variable
@@ -1297,10 +1297,10 @@ public struct Algorithm: Sendable, SpecComponent {
 
     public init(
         _ name: String,
-        @AlgorithmBuilder scoped body: (inout AlgorithmScope) -> [AlgorithmElement]
+        @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
     ) {
-        var scope = AlgorithmScope()
-        model = AlgorithmModel(name: name, components: scope.declarations.map(\.model) + body(&scope).map(\.model))
+        let scope = AlgorithmScope()
+        model = AlgorithmModel(name: name, components: scope.declarations.map(\.model) + body(scope).map(\.model))
     }
 
     internal init(model: AlgorithmModel) {
@@ -1335,15 +1335,15 @@ public func Each<Value: FiniteDomainKey>(
 public func Each<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
     fairness: ProcessFairness = .none,
-    @AlgorithmBuilder scoped body: (ProcessIdentifier<Value>, inout ProcessScope) -> [AlgorithmElement]
+    @AlgorithmBuilder scoped body: (ProcessIdentifier<Value>, ProcessScope) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    var scope = ProcessScope()
+    let scope = ProcessScope()
     let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
     return AlgorithmElement(model: .process(.init(
         typeName: String(describing: Value.self),
         domain: domain.values.map(\.tlaValue),
         fairness: fairness.model,
-        components: scope.declarations.map(\.model) + body(identifier, &scope).map(\.model)
+        components: scope.declarations.map(\.model) + body(identifier, scope).map(\.model)
     )))
 }
 
@@ -1449,11 +1449,11 @@ public func Procedure<Value: TLAValueType>(
 public func Procedure<Value: TLAValueType>(
     _ name: String,
     parameters: Value.Type,
-    @AlgorithmBuilder scoped body: (ProcedureParameter<Value>, inout ProcedureScope) -> [AlgorithmElement]
+    @AlgorithmBuilder scoped body: (ProcedureParameter<Value>, ProcedureScope) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     let parameterName = "parameter0"
-    var scope = ProcedureScope()
-    let body = body(ProcedureParameter(name: parameterName), &scope)
+    let scope = ProcedureScope()
+    let body = body(ProcedureParameter(name: parameterName), scope)
     return procedure(
         name: name,
         parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: String(reflecting: Value.self))],
