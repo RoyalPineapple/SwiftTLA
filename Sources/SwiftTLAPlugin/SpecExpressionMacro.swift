@@ -49,7 +49,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
                 expression: ExprSyntax(body)
             )
         ]
-        ExprSyntax(FunctionCallExprSyntax(
+        return ExprSyntax(FunctionCallExprSyntax(
             calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
             leftParen: .leftParenToken(),
             arguments: arguments,
