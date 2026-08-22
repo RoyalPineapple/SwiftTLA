@@ -20,8 +20,8 @@ public struct PlayerModel {
     private enum Step: String, PlusCalLabel, CaseIterable { case beginLoad, ready, play, pause, seek, finish }
     public static var spec: TLASpec {
         #spec("PlayerModel") {
-            Algorithm("PlayerModel") {
-                let phase = SharedVar("phase", initial: Phase.unloaded)
+            Algorithm("PlayerModel") { scope in
+                let phase = scope.sharedVar("phase", initial: Phase.unloaded)
                 Each(BeginLoadProcess.all) { _ in Do(Step.beginLoad) { When(phase == .unloaded); Assign(phase, to: Phase.loading); Goto(Step.beginLoad) } }
                 Each(ReadyProcess.all) { _ in Do(Step.ready) { When(phase == .loading); Assign(phase, to: Phase.ready); Goto(Step.ready) } }
                 Each(PlayProcess.all) { _ in Do(Step.play) { When(phase == .ready || phase == .paused); Assign(phase, to: Phase.playing); Goto(Step.play) } }

@@ -40,8 +40,8 @@ public struct PeripheralModel {
 
     public static var spec: TLASpec {
         #spec("PeripheralModel") {
-            Algorithm("PeripheralModel") {
-                let phase = SharedVar("phase", initial: Phase.disconnected)
+            Algorithm("PeripheralModel") { scope in
+                let phase = scope.sharedVar("phase", initial: Phase.disconnected)
                 Each(ConnectProcess.all) { _ in
                     Do(Step.connected) {
                         When(phase == .disconnected)

@@ -21,8 +21,8 @@ public struct CaptureModel {
 
     public static var spec: TLASpec {
         #spec("CaptureModel") {
-            Algorithm("CaptureModel") {
-                let phase = SharedVar("phase", initial: Phase.idle)
+            Algorithm("CaptureModel") { scope in
+                let phase = scope.sharedVar("phase", initial: Phase.idle)
                 Each(ConfigureProcess.all) { _ in Do(Step.configure) { When(phase == .idle); Assign(phase, to: Phase.configured); Goto(Step.configure) } }
                 Each(StartProcess.all) { _ in Do(Step.start) { When(phase == .configured); Assign(phase, to: Phase.running); Goto(Step.start) } }
                 Each(StopProcess.all) { _ in Do(Step.stop) { When(phase == .running || phase == .interrupted); Assign(phase, to: Phase.idle); Goto(Step.stop) } }

@@ -21,8 +21,8 @@ public struct MediaPipelineModel {
     private enum Step: String, PlusCalLabel, CaseIterable { case beginCapture, beginWriting, finishWriting, play, stop }
     public static var spec: TLASpec {
         #spec("MediaPipelineModel") {
-            Algorithm("MediaPipelineModel") {
-                let stage = SharedVar("stage", initial: Stage.idle)
+            Algorithm("MediaPipelineModel") { scope in
+                let stage = scope.sharedVar("stage", initial: Stage.idle)
                 Each(BeginCaptureProcess.all) { _ in Do(Step.beginCapture) { When(stage == .idle); Assign(stage, to: Stage.capturing); Goto(Step.beginCapture) } }
                 Each(BeginWritingProcess.all) { _ in Do(Step.beginWriting) { When(stage == .capturing); Assign(stage, to: Stage.writing); Goto(Step.beginWriting) } }
                 Each(FinishWritingProcess.all) { _ in Do(Step.finishWriting) { When(stage == .writing); Assign(stage, to: Stage.readyToPlay); Goto(Step.finishWriting) } }
