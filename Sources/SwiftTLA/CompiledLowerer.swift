@@ -6,14 +6,14 @@ struct CompiledLowerer {
     func lower(spec: TLASpec) throws -> CompiledSemantics {
         var initialValues: [VariableID: CompiledValue] = [:]
         var initializers: [VariableID: CompiledVariableInitializer] = [:]
-        for variable in spec.variables {
-            let path = "variables.\(variable.name)"
+        for declaration in spec.variables {
+            let path = "variables.\(declaration.name)"
             let id = try variable(at: "\(path).declaration")
-            initialValues[id] = try initialValue(for: variable)
+            initialValues[id] = try initialValue(for: declaration)
             initializers[id] = .init(
-                initialSet: try lowerOptional(variable.initialSet, at: "\(path).initialSet"),
-                initExpr: try initialExpression(for: variable),
-                lazySet: try lowerOptional(variable.lazySet, at: "\(path).lazySet")
+                initialSet: try lowerOptional(declaration.initialSet, at: "\(path).initialSet"),
+                initExpr: try initialExpression(for: declaration),
+                lazySet: try lowerOptional(declaration.lazySet, at: "\(path).lazySet")
             )
         }
         let actionDeclarations = try Dictionary(uniqueKeysWithValues: spec.actions.map { action in
@@ -258,7 +258,7 @@ struct CompiledLowerer {
         case .recordLiteral(let fields):
             return try .recordLiteral(.init(fields.fields.enumerated().map { index, item in
                 let fieldPath = "\(path).fields[\(index)]"
-                .init(
+                return .init(
                     id: try field(at: "\(fieldPath).declaration"),
                     key: .string(item.name),
                     value: try lower(item.value, at: "\(fieldPath).value")
