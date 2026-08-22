@@ -74,7 +74,7 @@ private final class BinderLocationRewriter: SyntaxRewriter {
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
-        let visited = super.visit(node)
+        let visited = super.visit(node).as(FunctionCallExprSyntax.self) ?? node
         guard let location = context.location(of: node),
               let name = helperName(in: visited),
               Self.helperNames.contains(name),
