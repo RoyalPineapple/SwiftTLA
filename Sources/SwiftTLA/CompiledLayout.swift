@@ -592,22 +592,17 @@ enum CompiledReference: Hashable, Sendable {
 }
 
 struct CompiledBindingTable: Sendable {
-    let operators: [String: OperatorID]
     let binders: [BinderID: String]
     let operatorNames: [OperatorID: String]
     let references: [String: CompiledReference]
 
     init(
-        operators: [String: OperatorID] = [:],
-        operatorNames: [OperatorID: String]? = nil,
+        operatorNames: [OperatorID: String] = [:],
         binders: [BinderID: String] = [:],
         references: [String: CompiledReference] = [:]
     ) {
-        self.operators = operators
         self.binders = binders
-        self.operatorNames = operatorNames ?? Dictionary(
-            uniqueKeysWithValues: operators.map { ($0.value, $0.key) }
-        )
+        self.operatorNames = operatorNames
         self.references = references
     }
 
@@ -731,7 +726,6 @@ struct BindingValidator {
             try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
         }
         return CompiledBindingTable(
-            operators: operators,
             operatorNames: operatorNames,
             binders: binders,
             references: references
@@ -752,7 +746,6 @@ struct BindingValidator {
 
     func bindingTable() -> CompiledBindingTable {
         CompiledBindingTable(
-            operators: operators,
             operatorNames: operatorNames,
             binders: binders,
             references: references
