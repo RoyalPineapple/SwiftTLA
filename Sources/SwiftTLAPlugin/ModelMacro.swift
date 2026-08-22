@@ -495,7 +495,6 @@ private func parserDiagnostic(
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     let finder = ParserDiagnosticNodeFinder(
-        source: diagnostic.source,
         location: diagnostic.sourceSpan.location
     )
     finder.walk(Syntax(declaration))
@@ -521,16 +520,12 @@ private func modelCompilationDiagnostic(
 }
 
 private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
-    let source: String
     let location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
     var node: Syntax?
-    private var sourceMatch: Syntax?
 
     init(
-        source: String,
         location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
     ) {
-        self.source = source.trimmingCharacters(in: .whitespacesAndNewlines)
         self.location = location
         super.init(viewMode: .sourceAccurate)
     }
@@ -544,11 +539,7 @@ private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
         case .unavailable:
             matchesOffset = false
         }
-        let matchesSource = candidate.description.trimmingCharacters(in: .whitespacesAndNewlines) == source
-        if matchesSource, sourceMatch == nil {
-            sourceMatch = candidate
-        }
-        if matchesOffset && matchesSource {
+        if matchesOffset {
             node = candidate
             return .skipChildren
         }
@@ -556,6 +547,6 @@ private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
     }
 
     func resolvedNode() -> Syntax? {
-        node ?? sourceMatch
+        node
     }
 }
