@@ -122,7 +122,10 @@ public struct PublicWorkflowConformanceRunner: Sendable {
     let report = PublicWorkflowDiagnosticReport(runID: runID, authority: authority, checks: checks)
     let reportURL = runDirectory.appendingPathComponent("support-admission.json")
     try ConformanceEvidence.writeCanonical(report, to: reportURL, trailingNewline: true)
-    try ConformanceEvidence.writeCanonical(report, to: outputRoot.appendingPathComponent("support-admission.json"), trailingNewline: true)
+    try ConformanceEvidence.writeCanonical(
+      try ConformanceEvidence.reference(for: reportURL, beneath: outputRoot),
+      to: outputRoot.appendingPathComponent("current-support-admission.json"),
+      trailingNewline: true)
     return (report, reportURL)
   }
 
