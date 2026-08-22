@@ -16,7 +16,8 @@ struct ClientCentricModuleTests {
       ])
     }
 
-    let snapshot = ModuleCall<Bool>(
+    let snapshot = ModuleCall(
+      as: Bool.self,
       "CC", "SnapshotIsolation", Expr<Function<TestKey, TestValue>>(initial),
       Expr<SetExpr<TupleExpr<Int>>>(.setLiteral([]))
     )
