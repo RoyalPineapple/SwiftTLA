@@ -80,8 +80,8 @@ private enum InvalidDefaultRecordSchema: TLARecordSchema {
 @TLAModel
 private struct TypedCollectionGeneratedModel {
     static var spec: TLASpec {
-        #spec("TypedCollectionGeneratedModel") {
-            let values = SharedVar("values", initial: IntRange(1, through: 4))
+        #spec("TypedCollectionGeneratedModel") { scope in
+            let values = scope.sharedVar("values", initial: IntRange(1, through: 4))
             Action("keepEvenSquares") {
                 values.becomes(
                     values.expr
@@ -96,8 +96,8 @@ private struct TypedCollectionGeneratedModel {
 @TLAModel
 private struct TypedQuantifierGeneratedModel {
     static var spec: TLASpec {
-        #spec("TypedQuantifierGeneratedModel") {
-            let result = SharedVar("result", initial: false)
+        #spec("TypedQuantifierGeneratedModel") { scope in
+            let result = scope.sharedVar("result", initial: false)
             Action("findEven") {
                 result.becomes(Exists(in: IntRange(1, through: 4)) { value in
                     value.expr % 2 == 0
@@ -111,8 +111,8 @@ private struct TypedQuantifierGeneratedModel {
 private struct NonEmptySubsetGeneratedModel {
     static var spec: TLASpec {
         #spec("NonEmptySubsetGeneratedModel") {
-            Algorithm("NonEmptySubsetGeneratedModel") {
-                let selectedKeys = SharedVar("selectedKeys", in: NonEmptySubsets(
+            Algorithm("NonEmptySubsetGeneratedModel") { scope in
+                let selectedKeys = scope.sharedVar("selectedKeys", in: NonEmptySubsets(
                     of: SetExpr<Int>.literal(1, 2)
                 ))
                 Do(TestControlLabel.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
@@ -125,12 +125,12 @@ private struct NonEmptySubsetGeneratedModel {
 private struct ZeroBasedSequenceGeneratedModel {
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
-            Algorithm("ZeroBasedSequenceGeneratedModel") {
-                let input = SharedVar("input", in: ZeroBasedSequences(
+            Algorithm("ZeroBasedSequenceGeneratedModel") { scope in
+                let input = scope.sharedVar("input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
                 ))
-                let table = SharedVar("table", initial: ZeroBasedSequence<Int>.filled(
+                let table = scope.sharedVar("table", initial: ZeroBasedSequence<Int>.filled(
                     length: input.count * 2 + 1,
                     with: -1
                 ))
@@ -148,9 +148,9 @@ private struct FoldGeneratedModel {
     static var spec: TLASpec {
         #spec("FoldGeneratedModel") {
             Import(FunctionsModule.module)
-            Algorithm("FoldGeneratedModel") {
-                let values = SharedVar("values", initial: TupleExpr<Int>.literal(1, 2, 3))
-                let total = SharedVar("total", initial: 0)
+            Algorithm("FoldGeneratedModel") { scope in
+                let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2, 3))
+                let total = scope.sharedVar("total", initial: 0)
                 Do(TestControlLabel.sum) {
                     Assign(total, to: Fold(values.expr, startingWith: 0) { element, accumulated in
                         element + accumulated
