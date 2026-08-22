@@ -40,3 +40,6 @@ public macro TLAObservable() = #externalMacro(module: "SwiftTLAPlugin", type: "T
 /// canonical `TLASpec` expression consumed by `@TLAModel`.
 @freestanding(expression)
 public macro spec(_ name: StaticString, @SpecBuilder _ body: () -> [SpecComponent]) -> TLASpec = #externalMacro(module: "SwiftTLAPlugin", type: "SpecExpressionMacro")
+
+@freestanding(expression)
+public macro spec(_ name: StaticString, @SpecBuilder scoped body: (SpecificationScope) -> [SpecComponent]) -> TLASpec = #externalMacro(module: "SwiftTLAPlugin", type: "SpecExpressionMacro")
