@@ -1126,9 +1126,6 @@ public final class ParserSession {
            let value = enumDefinition(named: type)?.value(named: member.declName.baseName.text) {
             return .value(value)
         }
-        if let value = decodeUniqueUnqualifiedEnumCase(expression) {
-            return value
-        }
         if let decoded = decodeTypedFacadeExpr(expression, scope: scope) {
             return decoded
         }
@@ -1303,22 +1300,11 @@ public final class ParserSession {
                   fields[field] == nil,
                   let value = entry.arguments.dropFirst().first.flatMap({
                       decodeTypedFacadeValue($0.expression, scope: scope)
-                          ?? decodeUniqueUnqualifiedEnumCase($0.expression)
                   })
             else { return nil }
             fields[field] = value
         }
         return StateExpr.record(fields)
-    }
-
-    /// A record literal can omit an enum type when the field's Swift context
-    /// supplies it. The syntax parser has no type checker, so accept that
-    /// spelling only when its formal enum value is globally unambiguous.
-    func decodeUniqueUnqualifiedEnumCase(_ expression: ExprSyntax) -> StateExpr? {
-        guard let member = expression.as(MemberAccessExprSyntax.self), member.base == nil else { return nil }
-        let matches = enumDefinitions.compactMap { $0.value(named: member.declName.baseName.text) }
-        guard matches.count == 1, let value = matches.first else { return nil }
-        return .value(value)
     }
 
     func decodeTypedSetLiteral(

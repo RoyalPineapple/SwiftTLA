@@ -2166,21 +2166,6 @@ private let cameraModeDefinition = parserEnum(
         #expect(parsed.variables[0].swiftTypeName == "CameraMode")
     }
 
-    @Test("unqualified enum case binds through the parser scope")
-    func parsesUnqualifiedEnumCase() throws {
-        let source = """
-        {
-            Invariant("ready") {
-                mode == .idle
-            }
-        }
-        """
-        let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
-
-        #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.invariants.first?.body == .equal(.variable("mode"), .value(.string("idle"))))
-    }
 }
 
 private enum TestPersonID: String, FiniteTLAValueDomain {
