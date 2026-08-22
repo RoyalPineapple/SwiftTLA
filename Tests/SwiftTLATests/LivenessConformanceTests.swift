@@ -18,7 +18,7 @@ struct LivenessConformanceTests {
     private func graph(
         transitions: [StateGraph.StateID: [StateGraph.Transition]],
         values: [StateGraph.StateID: Int]
-    ) -> StateGraph {
+    ) throws -> StateGraph {
         StateGraph(
             specName: "liveness-conformance",
             variableNames: ["x"],
@@ -127,7 +127,7 @@ struct LivenessConformanceTests {
 
     @Test("the temporal form matrix returns fair-lasso violations")
     func temporalFormMatrix() throws {
-        let graph = graph(transitions: [:], values: [initial: 0])
+        let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
         let cases: [(String, TemporalExpr)] = [
@@ -151,7 +151,7 @@ struct LivenessConformanceTests {
         let trigger = StateGraph.StateID(2)
         let safe = StateGraph.StateID(3)
         let cycle = StateGraph.StateID(4)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "trigger")), target: trigger)],
                 trigger: [.init(label: .init(.init(name: "A")), target: qState), .init(label: .init(.init(name: "B")), target: safe)],
@@ -191,7 +191,7 @@ struct LivenessConformanceTests {
         let far = StateGraph.StateID(1)
         let near = StateGraph.StateID(2)
         let bridge = StateGraph.StateID(3)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "bridge")), target: bridge), .init(label: .init(.init(name: "near")), target: near)],
                 bridge: [.init(label: .init(.init(name: "far")), target: far)],
@@ -215,7 +215,7 @@ struct LivenessConformanceTests {
     @Test("eventually is satisfied when P holds in the initial state")
     func eventuallyDoesNotTreatPostSatisfactionLoopAsAViolation() throws {
         let avoiding = StateGraph.StateID(1)
-        let graph = graph(
+        let graph = try graph(
             transitions: [initial: [.init(label: .init(.init(name: "leave")), target: avoiding)]],
             values: [initial: 1, avoiding: 0]
         )
@@ -239,7 +239,7 @@ struct LivenessConformanceTests {
         let longC = StateGraph.StateID(3)
         let shortA = StateGraph.StateID(10)
         let shortB = StateGraph.StateID(11)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "long")), target: longA), .init(label: .init(.init(name: "short")), target: shortA)],
                 longA: [.init(label: .init(.init(name: "A")), target: longB)],
@@ -270,7 +270,7 @@ struct LivenessConformanceTests {
         let longB = StateGraph.StateID(2)
         let longC = StateGraph.StateID(3)
         let short = StateGraph.StateID(4)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "A")), target: longA), .init(label: .init(.init(name: "A")), target: short)],
                 longA: [.init(label: .init(.init(name: "loop")), target: longB)],
@@ -297,7 +297,7 @@ struct LivenessConformanceTests {
     @Test("disabled fairness alternative wins inside an SCC that also contains A")
     func disabledFairnessAlternativeWinsInsideMixedSCC() throws {
         let enabled = StateGraph.StateID(1)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "B")), target: enabled)],
                 enabled: [.init(label: .init(.init(name: "A")), target: initial)]
@@ -324,7 +324,7 @@ struct LivenessConformanceTests {
     @Test("enabledness and fairness are reported for changing action availability")
     func changingEnablednessFairnessMatrix() throws {
         let disabled = StateGraph.StateID(1)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "A")), target: terminal), .init(label: .init(.init(name: "B")), target: disabled)],
                 disabled: [.init(label: .init(.init(name: "C")), target: initial)],
@@ -373,7 +373,7 @@ struct LivenessConformanceTests {
 
     @Test("unavailable evidence is explicit for unknown actions, evaluation errors, and incomplete exploration")
     func unavailableEvidenceMatrix() throws {
-        let unknownActionGraph = graph(
+        let unknownActionGraph = try graph(
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
@@ -409,7 +409,7 @@ struct LivenessConformanceTests {
 
     @Test("liveness requires compiled action identities")
     func livenessRequiresCompiledActionIdentity() throws {
-        let sourceGraph = graph(
+        let sourceGraph = try graph(
             transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
             values: [initial: 0]
         )

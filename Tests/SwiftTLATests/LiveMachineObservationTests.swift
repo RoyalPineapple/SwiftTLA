@@ -19,7 +19,10 @@ struct LiveMachineObservationTests {
 
     private static func makeFixture(capacity: Int = 64) throws -> Fixture {
         let storage = _GeneratedMachineStorage(compilation: try counterSpecification().compile())
-        let initial = try storage.initialState { try storage.value(at: 0, in: $0) == 0 }
+        let initial = try storage.initialState {
+            let count: Int = try storage.value(at: 0, in: $0)
+            return count == 0
+        }
         let driver = TLALiveMachineTransitionDriver(
             successors: { state, action in
                 guard action == .advance else { return [] }

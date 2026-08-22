@@ -67,7 +67,8 @@ struct LiveMachineRuntimeTests {
     ) throws -> Fixture {
         let storage = _GeneratedMachineStorage(compilation: try counterSpec().compile())
         let initial = try storage.initialState {
-            try storage.value(at: 0, in: $0) == initialCount
+            let count: Int = try storage.value(at: 0, in: $0)
+            return count == initialCount
         }
         let resolvedDriver = try driver?(storage) ?? transitionDriver(storage: storage)
         return .init(
@@ -304,7 +305,9 @@ struct LiveMachineRuntimeTests {
 
         #expect(commit.after.identity == second.identity)
         #expect(await second.current() == .snapshot(commit.after))
-        #expect(await second.current() == await first.current())
+        let secondCurrent = await second.current()
+        let firstCurrent = await first.current()
+        #expect(secondCurrent == firstCurrent)
     }
 
     @Test("Releasing one of several handles never ends an otherwise live runtime")
