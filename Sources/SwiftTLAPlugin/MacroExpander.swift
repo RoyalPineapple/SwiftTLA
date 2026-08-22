@@ -469,44 +469,31 @@ extension MacroExpander {
                 @discardableResult
                 \(isActor ? "fileprivate" : "public mutating") func \(action.swiftIdentifier)(id: \(collection.elementType).ID) throws -> TransitionResult {
                     _ = try \(collection.formalName).entry(for: id)
-                    let targetKey = id.tlaValue
                     let storageState = try _stateWithLiveCollections()
-                    guard case .function(let originalValues) = try _storage.value(
-                        at: \(variableOrdinal),
-                        as: TLAValue.self,
-                        in: storageState
-                    ) else {
-                        throw GeneratedMachineStateDiagnostic.missingRequiredValue(
-                            path: \(String(reflecting: collection.formalName)),
-                            expected: "a formal collection function"
-                        )
-                    }
                     let before = _state
                     let afterStorageState = try _storage.apply(
                         actionOrdinal: Self._actionOrdinal(for: .\(action.swiftIdentifier)),
                         arguments: Self._actionArguments(for: .\(action.swiftIdentifier)),
                         from: storageState
                     ) { candidate in
-                        let candidate = try State(storage: _storage, storageState: candidate)
-                        guard case .function(let candidateValues) = candidate.\(collection.formalName),
-                              candidateValues[targetKey] != nil else { return false }
-                        return candidateValues.allSatisfy { key, value in
-                            key == targetKey || originalValues[key] == value
-                        }
+                        try _storage.collectionChangesOnly(
+                            at: \(variableOrdinal),
+                            selected: id,
+                            from: storageState,
+                            to: candidate
+                        )
                     }
                     let after = try State(storage: _storage, storageState: afterStorageState)
-                    let afterValue = try _storage.value(
+                    guard let nextValue: \(collection.valueType) = try _storage.collectionValue(
                         at: \(variableOrdinal),
-                        as: TLAValue.self,
+                        for: id,
+                        as: \(collection.valueType).self,
                         in: afterStorageState
-                    )
-                    guard case .function(let nextValues) = afterValue,
-                          let nextFormalValue = nextValues[targetKey],
-                          let nextValue = \(collection.valueType)(formalValue: nextFormalValue) else {
+                    ) else {
                         throw GeneratedMachineStateDiagnostic.typeMismatch(
                             path: \(String(reflecting: collection.formalName)),
                             expected: "\(collection.valueType)",
-                            actual: String(describing: afterValue)
+                            actual: "no matching collection member"
                         )
                     }
                     try \(collection.formalName).update(id: id, to: nextValue)

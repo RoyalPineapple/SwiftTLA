@@ -361,7 +361,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("TLAModel generates ID-routed collection storage and its checked scope")
   func macroGeneratesIdentifiedRuntime() throws {
-    var model = GeneratedSymmetricRuntime()
+    var model = try GeneratedSymmetricRuntime.makeMachine()
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device)
@@ -380,7 +380,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated ID routing evaluates expression-backed updates against live storage")
   func macroUpdatesLiveStorageForExpressionBackedActions() throws {
-    var model = GeneratedExpressionSymmetricRuntime()
+    var model = try GeneratedExpressionSymmetricRuntime.makeMachine()
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device, value: 4)
@@ -391,7 +391,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing rejects a wrong-phase selected entry and preserves peers")
   func macroRoutesGuardToTheSelectedLiveEntry() throws {
-    var model = GeneratedScopedSymmetricRuntime()
+    var model = try GeneratedScopedSymmetricRuntime.makeMachine()
     let eligible = StringMacroDevice(id: "eligible")
     let wrongPhase = StringMacroDevice(id: "wrong-phase")
     let peer = StringMacroDevice(id: "peer")
@@ -414,7 +414,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing supports live populations beyond the verification scope")
   func macroDoesNotConsumeBoundedVerifierMembersForLiveRouting() throws {
-    var model = GeneratedScopedSymmetricRuntime()
+    var model = try GeneratedScopedSymmetricRuntime.makeMachine()
     let devices = ["first", "second", "third"].map(StringMacroDevice.init)
 
     for device in devices {
@@ -434,7 +434,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing evaluates shared authored guards before its update")
   func macroEvaluatesTheCompleteAuthoredGuard() throws {
-    var model = GeneratedSharedGuardSymmetricRuntime()
+    var model = try GeneratedSharedGuardSymmetricRuntime.makeMachine()
     let device = StringMacroDevice(id: "shared-guard")
     model.devices.insert(device)
 
@@ -464,7 +464,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ])
     ])
 
-    var model = GeneratedMultiStatementSymmetricRuntime()
+    var model = try GeneratedMultiStatementSymmetricRuntime.makeMachine()
     let rejected = StringMacroDevice(id: "rejected")
     let selected = StringMacroDevice(id: "selected")
     let peer = StringMacroDevice(id: "peer")
@@ -503,7 +503,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ])
     ])
 
-    var model = GeneratedDisjunctiveSymmetricRuntime()
+    var model = try GeneratedDisjunctiveSymmetricRuntime.makeMachine()
     let selected = StringMacroDevice(id: "selected")
     let rejected = StringMacroDevice(id: "rejected")
     let peer = StringMacroDevice(id: "peer")
@@ -524,7 +524,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Ordinary allSatisfy actions use every live collection value")
   func macroProjectsLiveCollectionsForAllSatisfyGuards() throws {
-    var allowed = GeneratedAllSatisfyPredicateRuntime()
+    var allowed = try GeneratedAllSatisfyPredicateRuntime.makeMachine()
     let allowedDevices = ["one", "two", "three"].map(StringMacroDevice.init)
     for device in allowedDevices {
       allowed.devices.insert(device)
@@ -535,7 +535,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(allowedEvidence.before.phase == 0)
     #expect(allowedEvidence.after.phase == 1)
 
-    var rejected = GeneratedAllSatisfyPredicateRuntime()
+    var rejected = try GeneratedAllSatisfyPredicateRuntime.makeMachine()
     let peers = ["one", "two", "three"].map(StringMacroDevice.init)
     let violating = StringMacroDevice(id: "violating")
     for device in peers {
@@ -558,7 +558,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Ordinary contains actions use live values above verification scope")
   func macroProjectsLiveCollectionsForContainsGuards() throws {
-    var model = GeneratedContainsPredicateRuntime()
+    var model = try GeneratedContainsPredicateRuntime.makeMachine()
     let devices = ["one", "two", "three"].map(StringMacroDevice.init)
     for device in devices {
       model.devices.insert(device)

@@ -100,6 +100,34 @@ public struct _GeneratedMachineStorage: Sendable {
         return try Self.decode(formalValue, at: variable.declaration.name)
     }
 
+    public func collectionValue<Value: TLAValueType, Member: TLAValueConvertible>(
+        at variableOrdinal: Int,
+        for member: Member,
+        as _: Value.Type = Value.self,
+        in state: State
+    ) throws -> Value? {
+        guard let value = try collectionValues(at: variableOrdinal, in: state)?[member.tlaValue] else {
+            return nil
+        }
+        return try Self.decode(value, at: "collection member")
+    }
+
+    public func collectionChangesOnly<Member: TLAValueConvertible>(
+        at variableOrdinal: Int,
+        selected member: Member,
+        from state: State,
+        to candidate: State
+    ) throws -> Bool {
+        guard let original = try collectionValues(at: variableOrdinal, in: state),
+              let values = try collectionValues(at: variableOrdinal, in: candidate),
+              values[member.tlaValue] != nil else {
+            return false
+        }
+        return values.allSatisfy { key, value in
+            key == member.tlaValue || original[key] == value
+        }
+    }
+
     /// Returns every successor for one generated action call.
     public func successors(
         actionOrdinal: Int,
@@ -163,6 +191,20 @@ public struct _GeneratedMachineStorage: Sendable {
             ordinal: actionOrdinal,
             formalArguments: arguments.map(\.tlaValue)
         )
+    }
+
+    private func collectionValues(
+        at variableOrdinal: Int,
+        in state: State
+    ) throws -> [TLAValue: TLAValue]? {
+        guard case .function(let values) = try value(
+            at: variableOrdinal,
+            as: TLAValue.self,
+            in: state
+        ) else {
+            return nil
+        }
+        return values
     }
 
     private static func decode<Value: TLAValueType>(
