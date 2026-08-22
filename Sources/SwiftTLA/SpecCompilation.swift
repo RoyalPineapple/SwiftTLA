@@ -732,7 +732,7 @@ public extension TLASpec {
         )
         let renderedActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
             let compiled = semantics.actions[index]
-            DirectModuleAction(
+            return DirectModuleAction(
                 declaration: declaration,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
                 renderedBody: try renderer.action(compiled.body)
