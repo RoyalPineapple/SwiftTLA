@@ -184,7 +184,7 @@ struct CompiledTLARenderer {
             return "LET \(try binderName(binder)) == \(try state(value)) IN \(try state(body))"
         case .letIn(let operations, let body):
             let recursiveDeclarations = try operations
-                .filter(\.isRecursive)
+                .filter { $0.isRecursive && $0.domain == nil }
                 .map { operation in
                     let name = try operatorName(operation.id)
                     let slots = Array(repeating: "_", count: operation.parameters.count).joined(separator: ", ")

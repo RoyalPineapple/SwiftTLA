@@ -170,6 +170,7 @@ struct CompiledActionBinding: Sendable {
 }
 
 struct CompiledInvariant: Sendable {
+    let id: PropertyID
     let name: String
     let body: CompiledStateExpr
 }
@@ -183,6 +184,7 @@ indirect enum CompiledTemporalExpr: Sendable {
 }
 
 struct CompiledTemporal: Sendable {
+    let id: PropertyID
     let name: String
     let expression: CompiledTemporalExpr
 }

@@ -188,6 +188,8 @@ extension TLASpec {
 
   func authoredPlusCalModule(
     semantics: CompiledSemantics,
+    layout: CompiledLayout,
+    bindings: CompiledBindingTable,
     formalRenderer: CompiledTLARenderer,
     renderedRefinements: [String]
   ) throws -> AuthoredPlusCalModule? {
@@ -210,39 +212,43 @@ extension TLASpec {
       refinements: renderedRefinements
     )
     let renderer = AlgorithmPlusCalRenderer(module: declarationPlan)
-    let sourcePropertyNames = try renderer.sourcePropertyNames()
-    let sourceProperties = try sourcePropertyNames.map { name -> (name: String, definition: String) in
-      if let invariant = semantics.invariants.first(where: { $0.name == name }) {
-        return (name, "\(name) == \(try formalRenderer.state(invariant.body))")
-      }
-      if let temporal = semantics.temporalProperties.first(where: { $0.name == name }) {
-        return (name, "\(name) == \(try formalRenderer.temporal(temporal.expression))")
-      }
-      throw CompilationDiagnostic(
-        code: .compilationIdentityMismatch,
-        stage: .rendering,
-        path: "authoredPlusCal.properties.\(name)",
-        expected: "a compiled property",
-        actual: "no compiled property",
-        nextSafeAction: "Compile the model again from its current source."
-      )
+    let sourceProperties = try renderer.sourceProperties()
+    let invariantsByID = Dictionary(uniqueKeysWithValues: semantics.invariants.map { ($0.id, $0) })
+    let temporalPropertiesByID = Dictionary(uniqueKeysWithValues: semantics.temporalProperties.map { ($0.id, $0) })
+    func propertyMissing(_ id: PropertyID) -> CompilationDiagnostic {
+      .init(code: .compilationIdentityMismatch, stage: .rendering, path: "authoredPlusCal.properties", expected: "a compiled property for identity \(id.ordinal)", actual: "no compiled property", nextSafeAction: "Compile the model again from its current source.")
     }
-    let topLevelProperties = try invariants
-      .filter { sourcePropertyNames.contains($0.name) == false }
-      .map { invariant -> (name: String, definition: String) in
-        guard let compiled = semantics.invariants.first(where: { $0.name == invariant.name }) else {
-          throw CompilationDiagnostic(
-            code: .compilationIdentityMismatch,
-            stage: .rendering,
-            path: "authoredPlusCal.invariants.\(invariant.name)",
-            expected: "a compiled invariant",
-            actual: "no compiled invariant",
-            nextSafeAction: "Compile the model again from its current source."
-          )
-        }
-        return (name: invariant.name, definition: "\(invariant.name) == \(try formalRenderer.state(compiled.body))")
+    func propertyID(_ property: AuthoredPlusCalPropertyReference) throws -> PropertyID {
+      let path: String
+      switch property.kind {
+      case .invariant: path = "invariants.\(property.name).declaration"
+      case .temporal: path = "temporalProperties.\(property.name).declaration"
+      }
+      guard case .property(let id) = bindings.references[path] else {
+        throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering, path: path, expected: "a bound property identity", actual: "no property identity", nextSafeAction: "Compile the model again from its current source.")
+      }
+      return id
+    }
+    let sourcePropertyIDs = try Set(sourceProperties.map(propertyID))
+    let renderedSourceProperties = try sourceProperties.map { property -> (name: String, definition: String) in
+      let id = try propertyID(property)
+      switch property.kind {
+      case .invariant:
+        guard let invariant = invariantsByID[id] else { throw propertyMissing(id) }
+        return (property.name, "\(property.name) == \(try formalRenderer.state(invariant.body))")
+      case .temporal:
+        guard let temporal = temporalPropertiesByID[id] else { throw propertyMissing(id) }
+        return (property.name, "\(property.name) == \(try formalRenderer.temporal(temporal.expression))")
+      }
+    }
+    let topLevelProperties = try layout.stateProperties
+      .filter { !sourcePropertyIDs.contains($0.id) }
+      .map { property -> (name: String, definition: String) in
+        guard let invariant = invariantsByID[property.id] else { throw propertyMissing(property.id) }
+        return (property.declaration.name, "\(property.declaration.name) == \(try formalRenderer.state(invariant.body))")
       }
     let topLevelPropertyNames = topLevelProperties.map(\.name)
+    let sourcePropertyNames = sourceProperties.map(\.name)
     let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
     guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
           Set(topLevelPropertyNames).count == topLevelPropertyNames.count,
@@ -259,6 +265,11 @@ extension TLASpec {
         )
     }
     let constraint = try semantics.constraint.map { "StateConstraint == \(try formalRenderer.state($0))" }
+    let renderedProperties = (renderedSourceProperties + topLevelProperties).map(\.definition)
+    let postTranslationDeclarations = declarationSections.postTranslation
+      + (constraint.map { [$0] } ?? [])
+      + renderedProperties
+      + authoredPlusCalSymmetry
     let module = AuthoredPlusCalModule(
       name: name,
       extendsModules: authoredPlusCalExtends,
@@ -266,10 +277,7 @@ extension TLASpec {
       preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
-      postTranslationDeclarations: declarationSections.postTranslation
-        + (constraint.map { [$0] } ?? [])
-        + (sourceProperties + topLevelProperties).map(\.definition)
-        + authoredPlusCalSymmetry,
+      postTranslationDeclarations: postTranslationDeclarations,
       refinements: renderedRefinements
     )
     return module
