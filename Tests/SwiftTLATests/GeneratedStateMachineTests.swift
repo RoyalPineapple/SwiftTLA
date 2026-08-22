@@ -502,7 +502,7 @@ struct GeneratedDependentInitialAlgorithm {
 
 struct GeneratedDependentInitialAlgorithmTests {
     @Test("#spec independently preserves a dependent typed function initializer")
-    func generatedModelPreservesDependentInitialStates() {
+    func generatedModelPreservesDependentInitialStates() throws {
         let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
         let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
         let states = try CompiledRuntime(compilation: compilation).initialStates().map {
@@ -797,8 +797,11 @@ struct GeneratedStateMachineTests {
             guard case .moveElevator(let id) = action else { return }
             await callbackID.set(id)
         }
-        _ = try await elevator._moveElevator(id: 2)
-        #expect(elevator.state.floor == 1)
+        guard case .committed = try await elevator.apply(.moveElevator(id: 2)) else {
+            Issue.record("Expected moveElevator to commit")
+            return
+        }
+        #expect(try #require(elevator.state).floor == 1)
         let capturedID = await callbackID.value()
         #expect(capturedID == 2)
     }
@@ -899,29 +902,29 @@ struct GeneratedStateMachineTests {
         let compilation = try builder.compile()
         let action = try #require(compilation.layout.actionID(named: "board"))
         let initial = try #require(try compilation.initialStateProjections().first)
-        let floor = try #require(TLAStateProjection.Token(validating: "floor"))
+        let formalFloor = try #require(TLAStateProjection.Token(validating: "floor"))
         let successor = try #require(try compilation.successors(
             for: action,
             arguments: [.int(2), .int(20), .int(200)],
             from: initial
         ).first)
-        #expect(successor.value(for: floor) == .int(222))
+        #expect(successor.value(for: formalFloor) == .int(222))
         #expect(try compilation.successors(
             for: action,
             arguments: [.int(2), .int(30), .int(200)],
             from: initial
         ).isEmpty)
-        #expect(initial.value(for: floor) == .int(0))
+        #expect(initial.value(for: formalFloor) == .int(0))
 
-        var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let before = machine.state
-        let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
+        var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
+        let before = generatedMachine.state
+        let evidence = try generatedMachine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.after.floor == 222)
         #expect(throws: GeneratedMachineError.self) {
-            try machine.apply(.board(person: 2, elevator: 30, direction: 200))
+            try generatedMachine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
-        #expect(machine.state.floor == 222)
+        #expect(generatedMachine.state.floor == 222)
         #expect(before.floor == 0)
     }
 
