@@ -163,7 +163,7 @@ struct AlgorithmBuilderTests {
             }
 
             Do(TestControlLabel.copy) { copy(destination, source) }
-        }))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -183,7 +183,7 @@ struct AlgorithmBuilderTests {
             }
 
             Do(TestControlLabel.copy) { copy(destination, source.expr + 1) }
-        }))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -201,7 +201,7 @@ struct AlgorithmBuilderTests {
             }
 
             Do(TestControlLabel.write) { write(destination.expr + 1) }
-        })))
+        })
 
         #expect(algorithm.validate().map(\.code).contains(.statementMacroAssignmentTarget))
         let spec = TLASpec("RejectedMacroTarget") { algorithm }
@@ -271,10 +271,10 @@ struct AlgorithmBuilderTests {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
                 }
-            })))
+            })
             Do(TestControlLabel.start) { Call("work", with: 7) }
             Do(TestControlLabel.finished) { Stop() }
-        })))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -305,7 +305,7 @@ struct AlgorithmBuilderTests {
             }
 
             Do(TestControlLabel.increment) { increment() }
-        }))))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -327,7 +327,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("ReachableGraph", scoped: { scope in
             let successors = scope.sharedVar("successors", in: choices)
             Do(TestControlLabel.done) { Stop() }
-        }))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -393,7 +393,7 @@ struct AlgorithmBuilderTests {
                 Do(TestControlLabel.mark) { mark(node) }
                 Do(TestControlLabel.done) { Stop() }
             }
-        })))))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -441,7 +441,7 @@ struct AlgorithmBuilderTests {
             Do(TestControlLabel.finish) {
                 Stop()
             }
-        })))))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -491,8 +491,8 @@ struct AlgorithmBuilderTests {
                 Do(AlgorithmLabel.done) {
                     Stop()
                 }
-            }))))))
-        }))))))
+            })
+        })
 
         #expect(algorithm.validate().isEmpty)
         #expect(algorithm.model.components.count == 2)
@@ -514,7 +514,7 @@ struct AlgorithmBuilderTests {
             LeadsTo("EventuallyPositive", value == 0, value > 0)
             WeakFairness("receive")
             StateConstraint(value < 3)
-        }))))))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -534,7 +534,7 @@ struct AlgorithmBuilderTests {
                 Invariant("ControlLocation") {
                     At(AlgorithmLabel.receive, selfID) || Finished(selfID)
                 }
-            }))))))
+            })
         }
 
         #expect(algorithm.validate().isEmpty)
@@ -593,7 +593,7 @@ struct AlgorithmBuilderTests {
                 }
             }
             Invariant("outside") { value >= 0 }
-        }))))))
+        })
 
         let codes = Set(invalid.validate().map(\.code))
         #expect(codes.contains(.reservedName))
@@ -620,7 +620,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
 
@@ -646,7 +646,7 @@ struct AlgorithmBuilderTests {
                     Assign(value, to: value + 1)
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["value"])
@@ -671,7 +671,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -708,7 +708,7 @@ struct AlgorithmBuilderTests {
                 Do(AlgorithmLabel.done) {
                     Stop()
                 }
-            }))))))
+            })
         }
 
         let spec = try compiledSourceSpecification(algorithm)
@@ -731,7 +731,7 @@ struct AlgorithmBuilderTests {
             Each(Node.all, scoped: { selfID, scope in
                 let leader = scope.localVar("leader", initial: selfID == .first)
                 Do(AlgorithmLabel.done) { Stop() }
-            }))))))
+            })
         }
 
         let spec = try compiledSourceSpecification(algorithm)
@@ -753,7 +753,7 @@ struct AlgorithmBuilderTests {
                 }
                 Do(AlgorithmLabel.done) { Stop() }
             }
-        }))))))
+        })
 
         #expect(algorithm.validate().isEmpty)
         #expect(try compiledSourceSpecification(algorithm).actions.map(\.name).contains("forward"))
@@ -768,7 +768,7 @@ struct AlgorithmBuilderTests {
                     Assign(value, to: value + 1)
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -791,7 +791,7 @@ struct AlgorithmBuilderTests {
                     Assign(value, to: value + 1)
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -810,7 +810,7 @@ struct AlgorithmBuilderTests {
                 Do(TestControlLabel.finish) { Assign(value, to: value + 1) }
             }
             Invariant("nonNegative") { value >= 0 }
-        }))))))
+        })
 
         let spec = TLASpec("Composed") {
             algorithm
@@ -828,7 +828,7 @@ struct AlgorithmBuilderTests {
             }
             let value = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.stop) { Stop() }
-        }))))))
+        })
 
         let lowered = try compiledSourceSpecification(algorithm)
         #expect(lowered.formalOperatorDefinitions == [
@@ -860,7 +860,7 @@ struct AlgorithmBuilderTests {
                     Assign(count, to: count + 1)
                 }
             }
-        }))))))
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -888,7 +888,7 @@ struct AlgorithmBuilderTests {
                 }
                 Do(TestControlLabel.finish) { Stop() }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -946,7 +946,7 @@ struct AlgorithmBuilderTests {
                     }
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -970,7 +970,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }))))))
+        })
 
         let result = try ModelChecker(compilation: try compiledSourceSpecification(algorithm).compile(), configuration: .standard).check().underlyingOutcome
         guard case .invariantViolated(let name, _, _) = result else {
@@ -991,7 +991,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -1013,7 +1013,7 @@ struct AlgorithmBuilderTests {
                 in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
             )
             Do(TestControlLabel.stop) { Stop() }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -1035,7 +1035,7 @@ struct AlgorithmBuilderTests {
                     }
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1057,7 +1057,7 @@ struct AlgorithmBuilderTests {
                     Assign(selected, to: first.expr + second.expr + third.expr)
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1079,7 +1079,7 @@ struct AlgorithmBuilderTests {
                     Assign(selected, to: number.expr)
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1099,7 +1099,7 @@ struct AlgorithmBuilderTests {
                     }
                 }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1115,7 +1115,7 @@ struct AlgorithmBuilderTests {
             Each(Node.all) { _ in
                 Do(TestControlLabel.stop) { Stop() }
             }
-        }))))))
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -1185,10 +1185,10 @@ private struct ProcedureGeneratedModel {
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
-                }))))))
+                })
                 Do(TestControlLabel.start) { Call("work", with: 7) }
                 Do(TestControlLabel.finished) { Stop() }
-            }))))))
+            })
         }
     }
 }
@@ -1218,7 +1218,7 @@ private struct MacroProcessGeneratedModel {
                     Do(TestControlLabel.mark) { mark(node) }
                     Do(TestControlLabel.done) { Stop() }
                 }
-            }))))))
+            })
         }
     }
 }
@@ -1253,7 +1253,7 @@ private struct FunctionDomainGeneratedModel {
                         successors[node].cardinality == 1
                     }
                 }
-            }))))))
+            })
         }
     }
 }
@@ -1271,7 +1271,7 @@ private struct StaticFormalSelectionModel {
 
                 Do(TestControlLabel.done) { Stop() }
                 Invariant("SelectedEven") { current == 2 }
-            }))))))
+            })
         }
     }
 }
@@ -1307,7 +1307,7 @@ private struct StaticFilteredFunctionSelectionModel {
 
                 Do(TestControlLabel.done) { Stop() }
                 Invariant("CurrentIsDefined") { current == current.expr }
-            }))))))
+            })
         }
     }
 }

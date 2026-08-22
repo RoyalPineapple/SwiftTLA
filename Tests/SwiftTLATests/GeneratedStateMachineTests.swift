@@ -202,7 +202,7 @@ struct GeneratedRestrictedProcessDomain {
                         Assign(count, to: count + 1)
                     }
                 }
-            }))
+            })
         }
     }
 }
@@ -230,7 +230,7 @@ struct GeneratedSequentialCounter {
                 Do(TestControlLabel.finish) {
                     Stop()
                 }
-            }))
+            })
         }
     }
 }
@@ -256,7 +256,7 @@ struct GeneratedSimultaneousSwap {
                     Assign(left, to: right)
                     Assign(right, to: left)
                 }
-            })))
+            })
         }
     }
 }
@@ -292,7 +292,7 @@ struct GeneratedPairPattern {
                         Assign(selected, to: number.expr)
                     }
                 }
-            })))
+            })
         }
     }
 }
@@ -330,7 +330,7 @@ struct GeneratedRangeInitializedAlgorithm {
                         Assign(hour, to: hour + 1)
                     }
                 }
-            }))))
+            })
         }
     }
 }
@@ -373,7 +373,7 @@ struct GeneratedIntegerChoiceAlgorithm {
                         }
                     }
                 }
-            }))))
+            })
         }
     }
 }
@@ -397,7 +397,7 @@ struct GeneratedAlgorithmStateConstraint {
                     Assign(count, to: count + 1)
                 }
                 StateConstraint(count < 2)
-            })))))
+            })
         }
     }
 }
@@ -441,8 +441,8 @@ struct GeneratedProcessLocalInvariant {
                     Invariant("ControlLocation") {
                         At(Label.receive, selfID) || Finished(selfID)
                     }
-                })))))
-            })))))
+                })
+            })
         }
     }
 }
@@ -495,7 +495,7 @@ struct GeneratedDependentInitialAlgorithm {
                         Stop()
                     }
                 }
-            }))))))
+            })
         }
     }
 }
@@ -665,7 +665,7 @@ struct BuilderOnlyClock {
                     }
                 }
                 Invariant("valid") { hr >= 1 && hr <= 12 }
-            }))))))
+            })
         }
     }
 }

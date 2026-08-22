@@ -101,7 +101,7 @@ struct AlgorithmPlusCalRendererTests {
                     Stop()
                 }
             }
-        }))
+        })
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
@@ -113,7 +113,7 @@ struct AlgorithmPlusCalRendererTests {
         let algorithm = Algorithm("Negative", scoped: { scope in
             let previous = scope.sharedVar("previous", initial: -1)
             Do(TestControlLabel.stop) { Stop() }
-        }))
+        })
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
@@ -134,7 +134,7 @@ struct AlgorithmPlusCalRendererTests {
                     plusCalPhase: .define
                 )
                 Do(TestControlLabel.done) { Stop() }
-            })))
+            })
         }
 
         let rendered = try spec.compile().renderedPlusCalBundle().root.tla
@@ -154,7 +154,7 @@ struct AlgorithmPlusCalRendererTests {
                 count == 0
             }
             Do(TestControlLabel.done) { Stop() }
-        })))
+        })
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
         let variableRange = try #require(rendered.range(of: "count = 0"))
@@ -172,7 +172,7 @@ struct AlgorithmPlusCalRendererTests {
             Algorithm("Counter", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.done) { Stop() }
-            }))))
+            })
             Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
         }
 
@@ -210,10 +210,10 @@ struct AlgorithmPlusCalRendererTests {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
                 }
-            }))))
+            })
             Do(ProcedureStep.start) { Call("work", with: 7) }
             Do(ProcedureStep.finished) { Stop() }
-        }))))
+        })
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
@@ -231,7 +231,7 @@ struct AlgorithmPlusCalRendererTests {
                 let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
                 StateConstraint(count < 2)
-            })))))
+            })
         }
 
         let module = try spec.compile().renderedPlusCalBundle().root.tla
@@ -253,7 +253,7 @@ struct AlgorithmPlusCalRendererTests {
                 let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
                 Invariant("Bounded") { count.expr <= 2 }
-            })))))
+            })
         }
 
         let module = try spec.compile().renderedPlusCalBundle().root.tla
@@ -277,7 +277,7 @@ struct AlgorithmPlusCalRendererTests {
             Algorithm("Modules", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
-            }))))))
+            })
         }
 
         #expect(spec.extendsModules == [.integers, .naturals, .finiteSets])

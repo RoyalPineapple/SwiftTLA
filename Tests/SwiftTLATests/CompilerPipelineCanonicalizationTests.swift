@@ -224,7 +224,7 @@ struct CompilerPipelineCanonicalizationTests {
                     Return()
                 }
             }
-        }))
+        })
         #expect(compilation.identity != try compiledSourceSpecification(changed).compile().identity)
     }
 
@@ -241,7 +241,7 @@ struct CompilerPipelineCanonicalizationTests {
                     Stop()
                 }
             }
-        }))
+        })
         let compilation = try compiledSourceSpecification(algorithm).compile()
         let runtime = CompiledRuntime(compilation: compilation)
         let pc = try #require(compilation.layout.variableID(named: "pc"))

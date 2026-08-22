@@ -156,7 +156,7 @@ private struct FoldGeneratedModel {
                         element + accumulated
                     })
                 }
-            }))
+            })
         }
     }
 }
