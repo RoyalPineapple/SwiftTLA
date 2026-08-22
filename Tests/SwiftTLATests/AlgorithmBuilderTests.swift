@@ -91,14 +91,14 @@ struct AlgorithmBuilderTests {
         ))
 
         let statement = AlgorithmStatementModel.letBinding(
-            "self",
-            .int(1),
-            [.assert(.equal(.currentProcess, .variable("self")))]
+            variable: "self",
+            value: .int(1),
+            body: [.assert(.equal(.currentProcess, .variable("self")))]
         )
         #expect(statement.replacingCurrentProcess(with: .variable("self")) == .letBinding(
-            "self_1",
-            .int(1),
-            [.assert(.equal(.variable("self"), .variable("self_1")))]
+            variable: "self_1",
+            value: .int(1),
+            body: [.assert(.equal(.variable("self"), .variable("self_1")))]
         ))
     }
 
@@ -120,14 +120,14 @@ struct AlgorithmBuilderTests {
         ))
 
         let statement = AlgorithmStatementModel.letBinding(
-            "count",
-            .int(1),
-            [.assert(.equal(.processLocalFamily("count"), .variable("count")))]
+            variable: "count",
+            value: .int(1),
+            body: [.assert(.equal(.processLocalFamily("count"), .variable("count")))]
         )
         #expect(statement.replacingProcessLocalFamily(named: "count", with: .variable("count")) == .letBinding(
-            "count_1",
-            .int(1),
-            [.assert(.equal(.variable("count"), .variable("count_1")))]
+            variable: "count_1",
+            value: .int(1),
+            body: [.assert(.equal(.variable("count"), .variable("count_1")))]
         ))
     }
 
@@ -218,7 +218,7 @@ struct AlgorithmBuilderTests {
         let capture = AlgorithmStatementModel.letBinding(
             variable: "source",
             value: .value(.int(0)),
-            [
+            body: [
                 .set(target: .root("parameter"), value: .variable("parameter"))
             ]
         )
@@ -242,7 +242,7 @@ struct AlgorithmBuilderTests {
         let shadowed = AlgorithmStatementModel.letBinding(
             variable: "parameter",
             value: .variable("parameter"),
-            [
+            body: [
                 .set(target: .root("parameter"), value: .variable("parameter"))
             ]
         ).substitutingVariable(
@@ -328,7 +328,7 @@ struct AlgorithmBuilderTests {
             }
         }
         let algorithm = Algorithm("ReachableGraph", scoped: { scope in
-            let successors = scope.sharedVar("successors", in: choices)
+            _ = scope.sharedVar("successors", in: choices)
             Do(TestControlLabel.done) { Stop() }
         })
 
@@ -357,7 +357,7 @@ struct AlgorithmBuilderTests {
             matching: { successor in successor.expr == successor.expr }
         )
 
-        guard case .value(.function(let _)) = selected.raw else {
+        guard case .value(.function) = selected.raw else {
             Issue.record("A static filtered selection must produce a formal function value.")
             return
         }
@@ -370,13 +370,13 @@ struct AlgorithmBuilderTests {
     }
 
     @Test("generated models retain static formal selections")
-    func generatedModelRetainsStaticFormalSelection() {
+    func generatedModelRetainsStaticFormalSelection() throws {
         let (compilation, state) = try initialState(of: StaticFormalSelectionModel.spec)
         #expect(try value(named: "current", in: state, compilation: compilation) == .int(2))
     }
 
     @Test("generated models retain static filtered function selections")
-    func generatedModelRetainsStaticFilteredFunctionSelection() {
+    func generatedModelRetainsStaticFilteredFunctionSelection() throws {
         let compilation = try StaticFilteredFunctionSelectionModel.spec.compile()
         #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 1)
     }

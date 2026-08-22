@@ -44,7 +44,7 @@ struct AlgorithmPlusCalRendererTests {
         let algorithm = Algorithm("RenderedProcess", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             let flags = scope.sharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
-            let sentinel = scope.sharedVar("sentinel", initial: "author text")
+            _ = scope.sharedVar("sentinel", initial: "author text")
             Each(Node.all, fairness: .strong, scoped: { node, scope in
                 let local = scope.localVar("local", initial: 0)
                 While(ProcessStep.repeat, count < 2) {
@@ -111,7 +111,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("imports Integers when rendering a negative formal value")
     func rendersNegativeFormalValue() throws {
         let algorithm = Algorithm("Negative", scoped: { scope in
-            let previous = scope.sharedVar("previous", initial: -1)
+            _ = scope.sharedVar("previous", initial: -1)
             Do(TestControlLabel.stop) { Stop() }
         })
 
@@ -170,7 +170,7 @@ struct AlgorithmPlusCalRendererTests {
     func rendersTopLevelTypedProperty() throws {
         let spec = TLASpec("CompilerProperty") {
             Algorithm("Counter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                _ = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.done) { Stop() }
             })
             Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
@@ -275,7 +275,7 @@ struct AlgorithmPlusCalRendererTests {
             Extends(.naturals)
             Extends(.finiteSets)
             Algorithm("Modules", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                _ = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
             })
         }
