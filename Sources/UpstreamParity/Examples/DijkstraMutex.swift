@@ -52,17 +52,17 @@ public struct DijkstraMutexModel: Sendable {
     public static var spec: TLASpec {
         #spec("DijkstraMutex") {
             Extends(.integers)
-            Algorithm("Mutex") {
-                let b = SharedVar("b", initial: Function<Process, Bool>.literal(
+            Algorithm("Mutex") { scope in
+                let b = scope.sharedVar("b", initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let c = SharedVar("c", initial: Function<Process, Bool>.literal(
+                let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let k = SharedVar("k", in: SetExpr<Process>.literal(.one, .two, .three))
+                let k = scope.sharedVar("k", in: SetExpr<Process>.literal(.one, .two, .three))
 
-                Each(Process.all, fairness: .weak) { selfID in
-                    let temporary = LocalVar("temporary", initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
+                Each(Process.all, fairness: .weak) { selfID, scope in
+                    let temporary = scope.localVar("temporary", initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {

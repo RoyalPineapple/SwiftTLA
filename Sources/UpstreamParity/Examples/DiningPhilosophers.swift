@@ -52,8 +52,8 @@ public struct DiningPhilosophersModel: Sendable {
         #spec("DiningPhilosophers") {
             Extends(.integers)
 
-            Algorithm("DiningPhilosophers") {
-                let forks = SharedVar("forks", initial: Function<Philosopher, Record<Fork>>.literal(
+            Algorithm("DiningPhilosophers") { scope in
+                let forks = scope.sharedVar("forks", initial: Function<Philosopher, Record<Fork>>.literal(
                     (Philosopher.one, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
                     (Philosopher.two, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
                     (Philosopher.three, Record.literal(.init(Fork.holder, Philosopher.three), .init(Fork.clean, false))),
@@ -61,8 +61,8 @@ public struct DiningPhilosophersModel: Sendable {
                     (Philosopher.five, Record.literal(.init(Fork.holder, Philosopher.five), .init(Fork.clean, false)))
                 ))
 
-                Each(Philosopher.all) { philosopher in
-                    let hungry = LocalVar("hungry", initial: true)
+                Each(Philosopher.all) { philosopher, scope in
+                    let hungry = scope.localVar("hungry", initial: true)
 
                     Do(Step.loop) {
                         let right = If(philosopher == Philosopher.one, then: Philosopher.two, else:
