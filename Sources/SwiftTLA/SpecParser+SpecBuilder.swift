@@ -110,7 +110,7 @@ extension ParserSession {
                     ? actionBindingTypesByName[layout.declaration.name, default: [:]]
                     : action.generatedBindingSwiftTypes
                 let bindings = action.bindings.map { types[$0.name] }
-                if bindings.compactMap(\.self).isEmpty == false {
+                if bindings.contains(where: { $0 != nil }) {
                     facts[layout.id] = bindings
                 }
             }
