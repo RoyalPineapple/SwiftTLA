@@ -555,7 +555,7 @@ private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
 }
 
 extension StateExpr {
-    var localOperatorReferences: Set<String> {
+    var localOperatorCalls: Set<String> {
         localOperatorCalls(in: self)
     }
 
