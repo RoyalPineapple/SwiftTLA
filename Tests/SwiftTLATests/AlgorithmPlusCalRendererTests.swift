@@ -204,6 +204,7 @@ struct AlgorithmPlusCalRendererTests {
 
         #expect(binders.count == 2)
         #expect(Set(binders).count == 2)
+        #expect(definition.contains("\(binders[0]) = \(binders[1])"))
     }
 
     @Test("renders nested finite-domain constraint binders distinctly")
@@ -229,6 +230,32 @@ struct AlgorithmPlusCalRendererTests {
 
         #expect(binders.count == 2)
         #expect(Set(binders).count == 2)
+    }
+
+    @Test("#spec preserves distinct authored binder locations")
+    func macroPreservesDistinctAuthoredBinderLocations() throws {
+        let spec = #spec("MacroBinderLocations") {
+            Algorithm("MacroBinderLocations") {
+                Do(ProcessStep.done) { Stop() }
+                Invariant("Distinct") {
+                    All(Node.all) { first in
+                        All(Node.all) { second in
+                            first == second
+                        }
+                    }
+                }
+            }
+        }
+
+        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("Distinct ==") })
+        let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
+            clause.split(separator: " ").first.map(String.init)
+        }
+
+        #expect(binders.count == 2)
+        #expect(Set(binders).count == 2)
+        #expect(definition.contains("\(binders[0]) = \(binders[1])"))
     }
 
     @Test("rejects unresolved authored declaration dependencies")
