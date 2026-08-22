@@ -29,7 +29,6 @@ struct MacroCompilation {
     let typeName: String
     let compilation: CompiledSpecification
     let machineSurface: MachineSurfacePlan
-    let swiftFacts: MachineSurfaceSwiftFacts
     let enumInfos: [ParsedEnumInfo]
     let hasNestedLiveAdapter: Bool
 
@@ -89,7 +88,6 @@ enum TLASpecVerifier {
             typeName: typeName,
             compilation: compilation,
             machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
-            swiftFacts: swiftFacts,
             enumInfos: enumInfos,
             hasNestedLiveAdapter: hasNestedLiveAdapter(in: memberList)
         )
