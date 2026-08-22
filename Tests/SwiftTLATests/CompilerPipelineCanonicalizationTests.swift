@@ -95,7 +95,7 @@ struct CompilerPipelineCanonicalizationTests {
         func sourceModel() -> TLASpec {
             TLASpec("StableBinders") {
                 Invariant("allPositive") {
-                    SetExpr<Int>.literal(1, 2).allSatisfy { value in value >= 1 }
+                    All(in: SetExpr<Int>.literal(1, 2)) { value in value >= 1 }
                 }
             }
         }
@@ -156,12 +156,14 @@ struct CompilerPipelineCanonicalizationTests {
         let checker = ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3))
 
         #expect(checker.compilation.identity == compilation.identity)
-        let counter = try #require(TLAStateProjection.Token(validating: "counter"))
-        let initial = try TLAStateProjection(validating: [.init(token: counter, value: .int(0))])
-        let action = try #require(compilation.layout.actionID(named: "increment"))
-        let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
+        let counterToken = try #require(TLAStateProjection.Token(validating: "counter"))
+        let initial = try TLAStateProjection(validating: [.init(token: counterToken, value: .int(0))])
+        let action = try #require(compilation.actionID(named: "increment"))
+        let successor = try #require(
+            try compilation.successors(for: action, arguments: [], from: initial).first
+        )
         let graph = try checker.exploreGraph()
-        #expect(successor.value(for: counter) == .int(1))
+        #expect(successor.value(for: counterToken) == .int(1))
         #expect(compilation.propertyOutcomes(in: initial) == [.satisfied(name: "NonNegative")])
         #expect(graph.states.count == 3)
     }
@@ -228,7 +230,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(description.controlLocations.map(\.sourceName) == ["start", "start", "start", "Done"])
         #expect(description.controlLocations.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start", "Done"])
         #expect(description.controlLocations.map(\.owner) == [
-            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode"),
+            .process(algorithm: "ControlLayout", declarationOrder: 0, typeName: "CompilerPipelineNode"),
             .procedure(algorithm: "ControlLayout", name: "first"),
             .procedure(algorithm: "ControlLayout", name: "second"),
             .generated(algorithm: "ControlLayout", purpose: "Done")
@@ -508,7 +510,7 @@ struct CompilerPipelineCanonicalizationTests {
             name: "CompiledRuntime",
             variables: [
                 .init(name: "counter", initial: .int(0)),
-                .init(name: "choice", initialSet: .setLiteral([StateExpr.int(1), .int(2)]))
+                .init(name: "choice", initialSet: .setLiteral([.value(.int(1)), .value(.int(2))]))
             ],
             actions: [
                 .init(
@@ -803,10 +805,10 @@ struct CompilerPipelineCanonicalizationTests {
         let projection = try #require(
             try compilation.successors(for: action, arguments: [], from: initial).first
         )
-        let stateToken = try TLAStateProjection.Token(validating: "state")
+        let stateToken = try #require(TLAStateProjection.Token(validating: "state"))
         let state = try #require(projection.value(for: stateToken))
 
-        #expect(state == .record(["count": .int(2)]))
+        #expect(state == TLAValue.record(["count": .int(2)]))
     }
 
     @Test("declaration order changes the compilation identity")
