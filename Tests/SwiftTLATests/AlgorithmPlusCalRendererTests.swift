@@ -45,9 +45,8 @@ struct AlgorithmPlusCalRendererTests {
             let count = scope.sharedVar("count", initial: 0)
             let flags = scope.sharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
             let sentinel = scope.sharedVar("sentinel", initial: "author text")
-            Each(Node.all, fairness: .strong) { node in
-                let local = LocalVar("local", initial: 0)
-                local
+            Each(Node.all, fairness: .strong) { node, scope in
+                let local = scope.localVar("local", initial: 0)
                 While(ProcessStep.repeat, count < 2) {
                     When(count >= 0)
                     Assert(count < 3)
