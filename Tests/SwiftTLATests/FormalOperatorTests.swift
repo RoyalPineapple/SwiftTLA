@@ -17,8 +17,8 @@ private struct GeneratedHigherOrderFormalModel {
           ))]
         )
       )
-      Algorithm("GeneratedHigherOrderFormalModel") {
-        let counter = SharedVar("counter", initial: 0)
+      Algorithm("GeneratedHigherOrderFormalModel") { scope in
+        let counter = scope.sharedVar("counter", initial: 0)
         Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }

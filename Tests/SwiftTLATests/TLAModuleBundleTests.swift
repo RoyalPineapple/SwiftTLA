@@ -18,8 +18,8 @@ private struct ImportedFormalModuleGeneratedModel {
   static var spec: TLASpec {
     #spec("ImportedFormalModuleGeneratedModel") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
-      Algorithm("ImportedFormalModuleGeneratedModel") {
-        let value = SharedVar("value", initial: 0)
+      Algorithm("ImportedFormalModuleGeneratedModel") { scope in
+        let value = scope.sharedVar("value", initial: 0)
         Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
       }
     }
@@ -31,8 +31,8 @@ private struct InstancedFormalModuleGeneratedModel {
   static var spec: TLASpec {
     #spec("InstancedFormalModuleGeneratedModel") {
       Instance("Folding", of: Folds.module)
-      Algorithm("InstancedFormalModuleGeneratedModel") {
-        let value = SharedVar("value", initial: 0)
+      Algorithm("InstancedFormalModuleGeneratedModel") { scope in
+        let value = scope.sharedVar("value", initial: 0)
         Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
       }
     }

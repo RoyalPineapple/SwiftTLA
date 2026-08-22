@@ -101,8 +101,8 @@ struct CompiledSpecificationRendererTests {
         let support = TLASpec(name: "Support", variables: [], actions: [], invariants: [])
         let specification = TLASpec("Authored") {
             Import(support)
-            Algorithm("Authored") {
-                let value = SharedVar("value", initial: 0)
+            Algorithm("Authored") { scope in
+                let value = scope.sharedVar("value", initial: 0)
                 Do(TestControlLabel.stay) { Assign(value, to: value.expr) }
             }
         }

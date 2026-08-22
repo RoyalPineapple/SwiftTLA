@@ -54,8 +54,8 @@ private struct GeneratedSymmetryModel {
     }
 
     static var spec: TLASpec {
-        #spec("GeneratedSymmetry") {
-            let value = SharedVar("value", initial: 0)
+        #spec("GeneratedSymmetry") { scope in
+            let value = scope.sharedVar("value", initial: 0)
             Symmetry("TxId", Set(Transaction.all))
             Invariant("TypeOK") { value >= 0 }
         }
