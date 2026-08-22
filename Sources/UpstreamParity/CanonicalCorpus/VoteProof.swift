@@ -145,7 +145,7 @@ public struct VoteProofModel: Sendable {
                     body: values.filtering { value in
                         Exists(in: ballots) { ballot in
                             FormalCall(as: Bool.self, "ChosenIn", ballot.expr, value.expr)
-                        }
+                        }.expr
                     },
                     plusCalPhase: .define,
                     dependsOn: ["ChosenIn"]
