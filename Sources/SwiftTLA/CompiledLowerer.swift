@@ -23,10 +23,15 @@ struct CompiledLowerer {
             try lower($0)
         }
         let invariants: [CompiledInvariant] = try spec.invariants.map {
-            CompiledInvariant(name: $0.name, body: try lower($0.body, at: "invariants.\($0.name).body"))
+            CompiledInvariant(
+                id: try property(at: "invariants.\($0.name).declaration"),
+                name: $0.name,
+                body: try lower($0.body, at: "invariants.\($0.name).body")
+            )
         }
         let temporalProperties = try spec.temporalProperties.map {
             CompiledTemporal(
+                id: try property(at: "temporalProperties.\($0.name).declaration"),
                 name: $0.name,
                 expression: try lower($0.expr, at: "temporalProperties.\($0.name)")
             )
@@ -503,7 +508,7 @@ struct CompiledLowerer {
         case .controlLocation(let id): return .controlLocation(id)
         case .constant(let value): return .value(value)
         case .operator(let id): return .operatorReference(id)
-        case .action, .field: throw diagnostic(path: path)
+        case .action, .property, .field: throw diagnostic(path: path)
         }
     }
 
@@ -519,6 +524,11 @@ struct CompiledLowerer {
 
     private func action(at path: String) throws -> ActionID {
         guard case .action(let id) = try reference(at: path) else { throw diagnostic(path: path) }
+        return id
+    }
+
+    private func property(at path: String) throws -> PropertyID {
+        guard case .property(let id) = try reference(at: path) else { throw diagnostic(path: path) }
         return id
     }
 

@@ -618,6 +618,8 @@ public extension TLASpec {
         let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
         let authoredPlusCalModule = try authoredPlusCalModule(
             semantics: semantics,
+            layout: layout,
+            bindings: bindings,
             formalRenderer: formalRenderer,
             renderedRefinements: renderedRefinements
         )

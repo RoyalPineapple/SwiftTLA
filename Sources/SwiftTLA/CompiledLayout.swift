@@ -10,6 +10,10 @@ package struct ActionID: Hashable, Sendable {
     let ordinal: Int
 }
 
+struct PropertyID: Hashable, Sendable {
+    let ordinal: Int
+}
+
 struct ControlLocationID: Hashable, Sendable {
     let ordinal: Int
 }
@@ -61,6 +65,11 @@ struct CompiledActionLayout: Hashable, Sendable {
     let id: ActionID
     let declaration: CompiledDeclaration
     let renderedName: String
+}
+
+struct CompiledPropertyLayout: Hashable, Sendable {
+    let id: PropertyID
+    let declaration: CompiledDeclaration
 }
 
 struct CompiledFieldLayout: Hashable, Sendable {
@@ -145,6 +154,8 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
 struct CompiledLayout: Hashable, Sendable {
     let variables: [CompiledVariableLayout]
     let actions: [CompiledActionLayout]
+    let stateProperties: [CompiledPropertyLayout]
+    let temporalProperties: [CompiledPropertyLayout]
     let fields: [CompiledFieldLayout]
     let procedures: [CompiledProcedureLayout]
     let controlLocations: [CompiledControlLocation]
@@ -177,6 +188,18 @@ struct CompiledLayout: Hashable, Sendable {
             hasProgramCounter: spec.variables.contains { $0.name == CompilerControlSymbol.programCounter.rawValue }
         )
         actions = Self.actions(spec.actions, controlLocations: controlLocations)
+        stateProperties = spec.invariants.enumerated().map { ordinal, invariant in
+            .init(
+                id: .init(ordinal: ordinal),
+                declaration: .init(kind: .invariant, name: invariant.name, sourceOffset: nil)
+            )
+        }
+        temporalProperties = spec.temporalProperties.enumerated().map { ordinal, temporal in
+            .init(
+                id: .init(ordinal: stateProperties.count + ordinal),
+                declaration: .init(kind: .temporalProperty, name: temporal.name, sourceOffset: nil)
+            )
+        }
         fields = Self.fields(in: modules).enumerated().map { ordinal, name in
             .init(id: .init(ordinal: ordinal), renderedName: name)
         }
@@ -191,10 +214,8 @@ struct CompiledLayout: Hashable, Sendable {
         }
         declarations = variables.map(\.declaration)
             + actions.map(\.declaration)
-            + spec.invariants.map { .init(kind: .invariant, name: $0.name, sourceOffset: nil) }
-            + spec.temporalProperties.map {
-                .init(kind: .temporalProperty, name: $0.name, sourceOffset: nil)
-            }
+            + stateProperties.map(\.declaration)
+            + temporalProperties.map(\.declaration)
     }
 
     func variableID(named name: String) -> VariableID? {
@@ -215,6 +236,11 @@ struct CompiledLayout: Hashable, Sendable {
 
     func actionID(named name: String) -> ActionID? {
         actions.first { $0.declaration.name == name }?.id
+    }
+
+    func propertyID(kind: CompiledDeclaration.Kind, named name: String) -> PropertyID? {
+        let properties = kind == .invariant ? stateProperties : temporalProperties
+        return properties.first { $0.declaration.name == name }?.id
     }
 
     func moduleInstanceID(named namespace: String) -> ModuleInstanceID? {
@@ -585,6 +611,7 @@ enum CompiledReference: Hashable, Sendable {
     case variable(VariableID)
     case binder(BinderID)
     case action(ActionID)
+    case property(PropertyID)
     case controlLocation(ControlLocationID)
     case field(FieldID)
     case constant(TLAValue)
@@ -681,10 +708,20 @@ struct BindingValidator {
             try validate(condition, at: "fairness[\(offset)]")
         }
         for invariant in spec.invariants {
-            try validateExpression(invariant.body, at: "invariants.\(invariant.name).body", scope: [:])
+            let path = "invariants.\(invariant.name)"
+            guard let id = layout.propertyID(kind: .invariant, named: invariant.name) else {
+                throw diagnostic(code: .unknownReference, path: "\(path).declaration", expected: "a declared invariant", actual: "no property identity")
+            }
+            references["\(path).declaration"] = .property(id)
+            try validateExpression(invariant.body, at: "\(path).body", scope: [:])
         }
         for temporal in spec.temporalProperties {
-            try validate(temporal.expr, at: "temporalProperties.\(temporal.name)")
+            let path = "temporalProperties.\(temporal.name)"
+            guard let id = layout.propertyID(kind: .temporalProperty, named: temporal.name) else {
+                throw diagnostic(code: .unknownReference, path: "\(path).declaration", expected: "a declared temporal property", actual: "no property identity")
+            }
+            references["\(path).declaration"] = .property(id)
+            try validate(temporal.expr, at: path)
         }
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])

@@ -40,6 +40,16 @@ internal struct AuthoredPlusCalModule: Sendable {
     }
 }
 
+enum AuthoredPlusCalPropertyKind: Sendable {
+    case invariant
+    case temporal
+}
+
+struct AuthoredPlusCalPropertyReference: Sendable {
+    let name: String
+    let kind: AuthoredPlusCalPropertyKind
+}
+
 internal struct AlgorithmPlusCalRenderer {
     let module: AuthoredPlusCalModule
 
@@ -47,7 +57,7 @@ internal struct AlgorithmPlusCalRenderer {
         self.module = module
     }
 
-    func sourcePropertyNames() throws -> [String] {
+    func sourceProperties() throws -> [AuthoredPlusCalPropertyReference] {
         let model = module.algorithm
         return try propertyNames(in: model.components, path: "components")
     }
@@ -164,7 +174,7 @@ internal struct AlgorithmPlusCalRenderer {
         process: AlgorithmProcessModel,
         processName: String,
         path: String
-    ) throws -> [String] {
+    ) throws -> [AuthoredPlusCalPropertyReference] {
         let fairness: String
         switch process.fairness {
         case .none: fairness = ""
@@ -342,7 +352,7 @@ internal struct AlgorithmPlusCalRenderer {
             let componentPath = "\(path)[\(index)]"
             switch component {
             case .invariant(let invariant):
-                return [invariant.name]
+                return [.init(name: invariant.name, kind: .invariant)]
             case .temporal(let temporal):
                 if isTranslatorTermination(temporal) {
                     return []
@@ -356,7 +366,7 @@ internal struct AlgorithmPlusCalRenderer {
                         nextSafeAction: "Rename the custom property, or use Eventually(All(domain) { Finished($0) }) so the official translator owns Termination."
                     )
                 }
-                return [temporal.name]
+                return [.init(name: temporal.name, kind: .temporal)]
             case .process(let process):
                 return try propertyNames(in: process.components, path: "\(componentPath).components")
             case .shared, .procedure, .fairness, .formalOperator, .stateConstraint, .local, .step, .propertyBoundary:
