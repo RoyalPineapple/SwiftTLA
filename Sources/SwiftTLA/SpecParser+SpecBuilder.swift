@@ -60,7 +60,6 @@ extension ParserSession {
         public var sourceContext = BoundSourceContext()
         var instanceBindings: [String: FormalModuleInstance] = [:]
         var algorithmBindings: [String: Algorithm] = [:]
-        var sourceValues: [String: StateExpr] = [:]
 
         public func swiftVariableTypes() -> [String: String] {
             var types = sourceContext.swiftVariableTypes
@@ -342,9 +341,7 @@ extension ParserSession {
                 parseFormalModuleInstance(
                     call,
                     into: &result,
-                    scope: typedFacadeScope(.empty, bindings: result.sourceValues.keys.sorted().compactMap { name in
-                        result.sourceValues[name].map { (name, $0) }
-                    })
+                    scope: sourceScope
                 )
                 guard result.moduleInstances.count == count + 1,
                       let instance = result.moduleInstances.last
@@ -370,11 +367,9 @@ extension ParserSession {
                 containsVariableConstructor = true
             } else if let value = decodeTypedFacadeValue(
                 ExprSyntax(call),
-                scope: typedFacadeScope(.empty, bindings: result.sourceValues.keys.sorted().compactMap { name in
-                    result.sourceValues[name].map { (name, $0) }
-                })
+                scope: sourceScope
             ) {
-                result.sourceValues[sourceName] = value
+                sourceScope = typedFacadeScope(sourceScope, binding: sourceName, to: value)
             } else {
                 result.diagnostics.append(.init(
                     message: "Specification body contains an unsupported local declaration.",
@@ -436,7 +431,11 @@ extension ParserSession {
             defer {
                 if result.variables.count > existingVariableCount,
                    let variable = result.variables.last {
-                    sourceStateBindings[patternName] = .variable(variable.name)
+                    sourceScope = typedFacadeScope(
+                        sourceScope,
+                        binding: patternName,
+                        to: .variable(variable.name)
+                    )
                 }
             }
 
@@ -992,12 +991,7 @@ extension ParserSession {
                 return
             }
             var parsed: [RefinementMapping] = []
-            let scope = typedFacadeScope(
-                .empty,
-                bindings: result.sourceValues.keys.sorted().compactMap { name in
-                    result.sourceValues[name].map { (name, $0) }
-                }
-            )
+            let scope = sourceScope
             for element in array.elements {
                 guard let mapping = element.expression.as(FunctionCallExprSyntax.self),
                       (mapping.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "RefinementMapping"

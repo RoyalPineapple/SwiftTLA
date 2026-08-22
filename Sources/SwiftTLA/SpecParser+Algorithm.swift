@@ -144,13 +144,13 @@ extension ParserSession {
         var macros: [String: AlgorithmMacroDefinition] = [:]
         let outerConstants = constants
         let outerTupleVariables = algorithmTupleVariables
-        let outerStateBindings = sourceStateBindings
+        let outerSourceScope = sourceScope
         algorithmTupleVariables = []
-        sourceStateBindings = [:]
+        sourceScope = .empty
         let declarationScope = closureParameterNames(in: closure).first
         defer {
             algorithmTupleVariables = outerTupleVariables
-            sourceStateBindings = outerStateBindings
+            sourceScope = outerSourceScope
             constants = outerConstants
         }
         for statement in closure.statements {
@@ -178,7 +178,11 @@ extension ParserSession {
                     algorithmTupleVariables.insert(state.root)
                 }
                 if case .shared(let state) = component {
-                    sourceStateBindings[state.root] = .variable(state.root)
+                    sourceScope = typedFacadeScope(
+                        sourceScope,
+                        binding: state.root,
+                        to: .variable(state.root)
+                    )
                 }
                 continue
             }
@@ -338,7 +342,6 @@ extension ParserSession {
                ),
                case .local(let local) = component {
                 locals.append(local)
-                sourceStateBindings[local.root] = .variable(local.root)
                 procedureScope = typedFacadeScope(
                     procedureScope,
                     binding: local.root,
@@ -508,7 +511,6 @@ extension ParserSession {
                     initialSet: state.initialSet,
                     swiftTypeName: state.swiftTypeName
                 )))
-                sourceStateBindings[state.root] = .variable(state.root)
                 processScope = typedFacadeScope(
                     processScope,
                     binding: state.root,

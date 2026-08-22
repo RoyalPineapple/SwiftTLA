@@ -134,6 +134,37 @@ private func parserEnum(
         #expect(parsed.diagnostics[0].message.contains("Unsupported Algorithm declaration"))
     }
 
+    @Test("Algorithm parser keeps process locals inside their process")
+    func rejectsProcessLocalInSiblingProcess() throws {
+        let source = """
+        {
+            Algorithm("SiblingScopes") {
+                Each(Node.all) { node in
+                    let local = LocalVar("local", initial: 0)
+                    Do(TestControlLabel.increment) {
+                        Await(local == 0)
+                        Stop()
+                    }
+                }
+                Each(Node.all) { node in
+                    Do(TestControlLabel.done) {
+                        Await(local == 0)
+                        Stop()
+                    }
+                }
+            }
+        }
+        """
+
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.count == 1)
+        #expect(parsed.diagnostics[0].message.contains("Process component 1 could not be decoded"))
+    }
+
     @Test("Specification parser binds root scoped shared declarations")
     func parsesRootScopedSharedDeclaration() throws {
         let source = """
