@@ -265,9 +265,8 @@ struct AlgorithmBuilderTests {
     func buildsTypedProcedure() throws {
         let algorithm = Algorithm("ProcedureBuilder") { scope in
             let output = scope.sharedVar("output", initial: 0)
-            Procedure("work", parameters: Int.self) { value in
-                let offset = LocalVar("offset", initial: 1)
-                offset
+            Procedure("work", parameters: Int.self) { value, scope in
+                let offset = scope.localVar("offset", initial: 1)
                 Do(TestControlLabel.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
@@ -1179,8 +1178,8 @@ private struct ProcedureGeneratedModel {
         #spec("ProcedureGenerated") {
             Algorithm("ProcedureGenerated") { scope in
                 let output = scope.sharedVar("output", initial: 0)
-                Procedure("work", parameters: Int.self) { value in
-                    let offset = LocalVar("offset", initial: 1)
+                Procedure("work", parameters: Int.self) { value, scope in
+                    let offset = scope.localVar("offset", initial: 1)
                     Do(TestControlLabel.enter) {
                         Await(value.expr >= 0)
                         Assign(output, to: value.expr + offset.expr)
