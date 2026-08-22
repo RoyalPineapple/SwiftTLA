@@ -322,8 +322,37 @@ struct CompiledLowerer {
                 lower(body, at: "\(path).body")
             )
         case .letIn(let operators, let body):
+            let localOperators = try operators.map { operation in
+                (operation, try operatorID(at: "\(path).\(operation.name).declaration"))
+            }
+            let localOperatorIDs = Set(localOperators.map(\.1))
+            let operatorIDsByName = Dictionary(uniqueKeysWithValues: localOperators.map { ($0.0.name, $0.1) })
+            let calls = Dictionary(uniqueKeysWithValues: localOperators.map { operation, id in
+                let targets = Set(operation.body.localOperatorCalls.compactMap { operatorIDsByName[$0] })
+                return (id, targets)
+            })
+            func isRecursive(_ start: OperatorID, from current: OperatorID, visited: Set<OperatorID>) -> Bool {
+                for target in calls[current, default: []] {
+                    if target == start { return true }
+                    if !visited.contains(target), isRecursive(start, from: target, visited: visited.union([target])) {
+                        return true
+                    }
+                }
+                return false
+            }
+            let recursiveOperatorIDs = Set(localOperatorIDs.filter {
+                isRecursive($0, from: $0, visited: [$0])
+            })
             return try .letIn(
-                operators.map { try lower($0, at: "\(path).\($0.name)") },
+                operators.map {
+                    try lower(
+                        $0,
+                        at: "\(path).\($0.name)",
+                        isRecursive: recursiveOperatorIDs.contains(
+                            try operatorID(at: "\(path).\($0.name).declaration")
+                        )
+                    )
+                },
                 lower(body, at: "\(path).body")
             )
         }
@@ -401,12 +430,17 @@ struct CompiledLowerer {
         return try lower(expression, at: "variables.\(variable.name).initExpr")
     }
 
-    private func lower(_ operation: LocalOperator, at path: String) throws -> CompiledLocalOperator {
+    private func lower(
+        _ operation: LocalOperator,
+        at path: String,
+        isRecursive: Bool
+    ) throws -> CompiledLocalOperator {
         .init(
             id: try operatorID(at: "\(path).declaration"),
             parameters: try operation.parameters.map { try binder(at: "\(path).parameters.\($0)") },
             domain: try lowerOptional(operation.domain, at: "\(path).domain"),
-            body: try lower(operation.body, at: "\(path).body")
+            body: try lower(operation.body, at: "\(path).body"),
+            isRecursive: isRecursive
         )
     }
 

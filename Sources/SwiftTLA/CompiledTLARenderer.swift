@@ -183,8 +183,17 @@ struct CompiledTLARenderer {
         case .letValue(let binder, let value, let body):
             return "LET \(try binderName(binder)) == \(try state(value)) IN \(try state(body))"
         case .letIn(let operations, let body):
+            let recursiveDeclarations = try operations
+                .filter(\.isRecursive)
+                .map { operation in
+                    let name = try operatorName(operation.id)
+                    let slots = Array(repeating: "_", count: operation.parameters.count).joined(separator: ", ")
+                    return operation.parameters.isEmpty ? name : "\(name)(\(slots))"
+                }
+                .joined(separator: ", ")
             let declarations = try operations.map(localOperator).joined(separator: "\n    ")
-            return "LET \(declarations)\nIN \(try state(body))"
+            let recursive = recursiveDeclarations.isEmpty ? "" : "RECURSIVE \(recursiveDeclarations)\n    "
+            return "LET \(recursive)\(declarations)\nIN \(try state(body))"
         }
     }
 

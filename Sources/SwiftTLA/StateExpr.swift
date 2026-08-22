@@ -555,6 +555,10 @@ private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
 }
 
 extension StateExpr {
+    var localOperatorCalls: Set<String> {
+        localOperatorCalls(in: self)
+    }
+
     public static func int(_ value: Int) -> StateExpr { .value(.int(value)) }
     public static func bool(_ value: Bool) -> StateExpr { .value(.bool(value)) }
 }
