@@ -123,6 +123,7 @@ extension ParserSession {
         let outerStateBindings = sourceStateBindings
         algorithmTupleVariables = []
         sourceStateBindings = [:]
+        let declarationScope = closureParameterNames(in: closure).first
         defer {
             algorithmTupleVariables = outerTupleVariables
             sourceStateBindings = outerStateBindings
@@ -142,7 +143,11 @@ extension ParserSession {
             }
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let component = parseAlgorithmVariableDeclaration(variable, kind: .shared) {
+               let component = parseAlgorithmVariableDeclaration(
+                    variable,
+                    kind: .shared,
+                    declarationScope: declarationScope
+               ) {
                 components.append(component)
                 if case .shared(let state) = component,
                    state.isTuple {
@@ -522,13 +527,14 @@ extension ParserSession {
     private func parseAlgorithmVariableDeclaration(
         _ declaration: VariableDeclSyntax,
         kind: AlgorithmStateDeclarationKind,
-        scope: TypedFacadeScope = .empty
+        scope: TypedFacadeScope = .empty,
+        declarationScope: String? = nil
     ) -> AlgorithmComponentModel? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
               let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-              AlgorithmSourceConstruct(initializer.calledExpression) == .state(kind)
+              isStateConstructor(initializer.calledExpression, kind: kind, scope: declarationScope)
         else { return nil }
 
         if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
@@ -591,6 +597,27 @@ extension ParserSession {
             return nil
         }
         return kind == .shared ? .shared(state) : .local(state)
+    }
+
+    private func isStateConstructor(
+        _ expression: ExprSyntax,
+        kind: AlgorithmStateDeclarationKind,
+        scope: String?
+    ) -> Bool {
+        if AlgorithmSourceConstruct(expression) == .state(kind) {
+            return true
+        }
+        guard let scope,
+              let member = expression.as(MemberAccessExprSyntax.self),
+              let base = member.base?.as(DeclReferenceExprSyntax.self),
+              base.baseName.text == scope
+        else { return false }
+        switch (kind, member.declName.baseName.text) {
+        case (.shared, "sharedVar"), (.local, "localVar"):
+            return true
+        default:
+            return false
+        }
     }
 
     private func parseAlgorithmMacroDeclaration(

@@ -90,9 +90,9 @@ public struct VoteProofModel: Sendable {
                 ]
             )
 
-            Algorithm("Voting") {
-                let votes = SharedVar("votes", initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
-                let maxBal = SharedVar("maxBal", initial: Function<Acceptor, Int>.mapping { _ in -1 })
+            Algorithm("Voting") { scope in
+                let votes = scope.sharedVar("votes", initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
+                let maxBal = scope.sharedVar("maxBal", initial: Function<Acceptor, Int>.mapping { _ in -1 })
                 let values = SetExpr<Value>.literal(.v1, .v2)
                 let acceptors = SetExpr<Acceptor>.literal(.a1, .a2, .a3)
                 let quorums = SetExpr<SetExpr<Acceptor>>.literal(

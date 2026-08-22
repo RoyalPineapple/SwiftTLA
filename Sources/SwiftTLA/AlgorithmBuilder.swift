@@ -990,6 +990,117 @@ public struct AlgorithmElement: Sendable {
     fileprivate let model: AlgorithmComponentModel
 }
 
+public struct AlgorithmScope: Sendable {
+    fileprivate var declarations: [AlgorithmElement] = []
+
+    public init() {}
+
+    public mutating func sharedVar<Value: TLAValueType>(
+        _ name: String,
+        initial: Value
+    ) -> SharedVariable<Value> {
+        let variable = SharedVar(name, initial: initial)
+        declarations.append(sharedDeclaration(variable))
+        return variable
+    }
+
+    public mutating func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+        let variable = SharedVar(name, in: range)
+        declarations.append(sharedDeclaration(variable))
+        return variable
+    }
+
+    public mutating func sharedVar<Value: TLAValueType>(
+        _ name: String,
+        in values: Expr<SetExpr<Value>>
+    ) -> SharedVariable<Value> {
+        let variable = SharedVar(name, in: values)
+        declarations.append(sharedDeclaration(variable))
+        return variable
+    }
+
+    public mutating func sharedVar<Value: TLAValueType>(
+        _ name: String,
+        initial: Expr<Value>
+    ) -> SharedVariable<Value> {
+        let variable = SharedVar(name, initial: initial)
+        declarations.append(sharedDeclaration(variable))
+        return variable
+    }
+}
+
+public struct ProcessScope: Sendable {
+    fileprivate var declarations: [AlgorithmElement] = []
+
+    public init() {}
+
+    public mutating func localVar<Value: TLAValueType>(
+        _ name: String,
+        initial: Value
+    ) -> LocalVariable<Value> {
+        let variable = LocalVar(name, initial: initial)
+        declarations.append(localDeclaration(variable))
+        return variable
+    }
+
+    public mutating func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
+        let variable = LocalVar(name, initial: initial)
+        declarations.append(localDeclaration(variable))
+        return variable
+    }
+
+    public mutating func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
+        let variable = LocalVar(name, initial: initial)
+        declarations.append(localDeclaration(variable))
+        return variable
+    }
+}
+
+public struct ProcedureScope: Sendable {
+    fileprivate var declarations: [AlgorithmElement] = []
+
+    public init() {}
+
+    public mutating func localVar<Value: TLAValueType>(
+        _ name: String,
+        initial: Value
+    ) -> LocalVariable<Value> {
+        let variable = LocalVar(name, initial: initial)
+        declarations.append(localDeclaration(variable))
+        return variable
+    }
+
+    public mutating func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
+        let variable = LocalVar(name, initial: initial)
+        declarations.append(localDeclaration(variable))
+        return variable
+    }
+
+    public mutating func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
+        let variable = LocalVar(name, initial: initial)
+        declarations.append(localDeclaration(variable))
+        return variable
+    }
+}
+
+private func sharedDeclaration<Value>(_ variable: SharedVariable<Value>) -> AlgorithmElement {
+    AlgorithmElement(model: .shared(.init(
+        root: variable.name,
+        initial: variable.initial,
+        initialSet: variable.initialSet,
+        swiftTypeName: variable.swiftTypeName
+    )))
+}
+
+private func localDeclaration<Value>(_ variable: LocalVariable<Value>) -> AlgorithmElement {
+    AlgorithmElement(model: .local(.init(
+        root: variable.name,
+        initial: variable.initial,
+        initialSet: variable.initialSet,
+        swiftTypeName: variable.swiftTypeName
+    )))
+}
+
 public struct StepStatement: Sendable {
     fileprivate let model: AlgorithmStatementModel
 }
@@ -1123,6 +1234,14 @@ public struct Algorithm: Sendable, SpecComponent {
 
     public init(_ name: String, @AlgorithmBuilder _ body: () -> [AlgorithmElement]) {
         model = AlgorithmModel(name: name, components: body().map(\.model))
+    }
+
+    public init(
+        _ name: String,
+        @AlgorithmBuilder _ body: (inout AlgorithmScope) -> [AlgorithmElement]
+    ) {
+        var scope = AlgorithmScope()
+        model = AlgorithmModel(name: name, components: scope.declarations.map(\.model) + body(&scope).map(\.model))
     }
 
     internal init(model: AlgorithmModel) {
