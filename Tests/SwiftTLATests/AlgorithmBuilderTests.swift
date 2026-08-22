@@ -458,7 +458,7 @@ struct AlgorithmBuilderTests {
     @Test("a begin-style algorithm keeps a scalar program counter")
     func lowersSequentialAlgorithmWithoutInventingAProcess() throws {
         let algorithm = Algorithm("SequentialCounter", scoped: { scope in
-            let _ = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.increment) {
                 Let(value + 1) { nextValue in
                     Assign(value, to: nextValue.expr)
@@ -476,8 +476,9 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
 
         let (compilation, initial) = try initialState(of: spec)
-        let programCounter = try #require(compilation.layout.programCounterID())
-        #expect(compilation.layout.variables.first { $0.id == programCounter }?.declaration.origin == .programCounter)
+        let programCounter = compilation.layout.programCounterID()
+        let programCounterVariable = compilation.layout.variables.first { $0.id == programCounter }
+        #expect(programCounterVariable?.declaration.origin == .programCounter)
         guard case .controlLocation(let initialLocation) = try initial.value(for: programCounter) else {
             Issue.record("Expected the compiled program counter to store a control location")
             return
