@@ -337,7 +337,7 @@ struct GeneratedRangeInitializedAlgorithm {
 
 struct GeneratedRangeInitializedAlgorithmTests {
     @Test("#spec independently parses a finite SharedVar initial range")
-    func generatedRangePreservesEveryInitialHour() {
+    func generatedRangePreservesEveryInitialHour() throws {
         let compilation = try GeneratedRangeInitializedAlgorithm.spec.compile()
         let hour = try #require(compilation.layout.variableID(named: "hour"))
         let initialHours = try CompiledRuntime(compilation: compilation).initialStates().map {
