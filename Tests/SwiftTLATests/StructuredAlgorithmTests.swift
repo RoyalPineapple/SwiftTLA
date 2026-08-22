@@ -106,7 +106,7 @@ struct StructuredAlgorithmTests {
         let compilation = try spec.compile()
         let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let cars = try #require(compilation.layout.variableID(named: "cars"))
-        guard case .function(let values) = initial.value(for: cars).rendered(using: compilation.layout) else {
+        guard case .function(let values) = try initial.value(for: cars).rendered(using: compilation.layout) else {
             Issue.record("Expected a formal function for cars.")
             return
         }
