@@ -487,7 +487,7 @@ struct GeneratedDependentInitialAlgorithm {
             Algorithm("GeneratedDependentInitialAlgorithm", scoped: { scope in
                 let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
                 let mirrors = scope.sharedVar("mirrors", initial: Function<Node, Phase>.mapping { node in
-                    If(node == .left && seed == true, then: .active, else: .inactive)
+                    If(node == Node.left && seed == true, then: Phase.active, else: Phase.inactive)
                 })
                 Each(Node.all) { _ in
                     Do(TestControlLabel.stop) {

@@ -41,7 +41,7 @@ private struct GeneratedFormalUnionAlgorithm {
 
                     Do(Label.inspect) {
                         let member = temporary.expr.assumingFirst(Node.self)
-                        Assert(member == .first)
+                        Assert(member == Node.first)
                     }
                     Do(Label.collect) {
                         Assign(

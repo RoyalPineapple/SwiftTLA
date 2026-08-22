@@ -57,15 +57,15 @@ private struct StructuredCarModel {
         #spec("StructuredCar") {
             Algorithm("StructuredCar", scoped: { scope in
                 let cars = scope.sharedVar("cars", initial: Function<Car, Record<CarRecord>>.literal(
-                    (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, .closed))),
-                    (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, .closed)))
+                    (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, Door.closed))),
+                    (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, Door.closed)))
                 ))
 
                 Each(Car.all) { car in
                     Do(TestControlLabel.open) {
-                        When(cars[car][CarRecord.door] == .closed)
+                        When(cars[car][CarRecord.door] == Door.closed)
                         Assign(cars, to: cars.updating(car) { vehicle in
-                            vehicle.updating(CarRecord.door, to: .open)
+                            vehicle.updating(CarRecord.door, to: Door.open)
                         })
                     }
                 }
