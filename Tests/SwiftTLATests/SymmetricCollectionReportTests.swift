@@ -1,5 +1,5 @@
-import SwiftTLA
 import Testing
+@testable import SwiftTLA
 
 @Suite(.serialized)
 struct SymmetricCollectionReportTests {
