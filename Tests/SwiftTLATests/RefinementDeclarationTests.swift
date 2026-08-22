@@ -193,7 +193,7 @@ struct RefinementDeclarationTests {
     }
 
     let result = try ModelChecker(
-      spec: concrete,
+      compilation: try concrete.compile(),
       configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)
     ).check()
     guard case .refinementUnproven(let refinement, .depthExceeded) = result else {
