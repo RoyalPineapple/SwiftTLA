@@ -7,7 +7,7 @@ struct GeneratedMachineSurfacePlanTests {
     func rejectsRawFormalState() throws {
         let value = Var<TLAValue>("value")
         let compilation = try TLASpec("RawGeneratedState") {
-            Variable(value, .int(0))
+            Variable(value, TLAValue.int(0))
         }.compile()
 
         #expect(throws: GeneratedMachineSurfaceDiagnostic.self) {
@@ -22,7 +22,7 @@ struct GeneratedMachineSurfacePlanTests {
     func rejectsUntypedStructuredState() throws {
         let value = Var<TLAValue>("value")
         let compilation = try TLASpec("StructuredGeneratedState") {
-            Variable(value, .tuple([.int(0)]))
+            Variable(value, TLAValue.tuple([.int(0)]))
         }.compile()
 
         #expect(throws: GeneratedMachineSurfaceDiagnostic.self) {

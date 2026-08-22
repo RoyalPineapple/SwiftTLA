@@ -109,10 +109,6 @@ struct GeneratedMachineDocumentationTests {
     @Test("Live-machine guide describes typed live factories")
     func liveMachineGuideDescribesOneOwner() throws {
         let root = packageRoot()
-        let guide = try String(
-            contentsOf: root.appendingPathComponent("Documentation/GeneratedMachines.md"),
-            encoding: .utf8
-        )
         let live = try String(
             contentsOf: root.appendingPathComponent("Documentation/LiveMachines.md"),
             encoding: .utf8
