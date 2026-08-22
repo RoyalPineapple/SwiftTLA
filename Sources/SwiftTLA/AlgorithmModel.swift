@@ -418,7 +418,7 @@ internal struct AlgorithmLabelModel: Sendable, Hashable {
     let name: String
 }
 
-internal enum AlgorithmLValueModel: Sendable {
+internal enum AlgorithmLValueModel: Sendable, Equatable {
     case root(String)
     case function(root: String, key: StateExpr)
 
@@ -430,7 +430,7 @@ internal enum AlgorithmLValueModel: Sendable {
     }
 }
 
-internal indirect enum AlgorithmStatementModel: Sendable {
+internal indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case rejected(AlgorithmDiagnosticCode)
     case await(StateExpr)
     case assert(StateExpr)

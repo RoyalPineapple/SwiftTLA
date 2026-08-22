@@ -755,7 +755,7 @@ struct AlgorithmBuilderTests {
     func lowersProcessDependentLocalState() throws {
         let algorithm = Algorithm("ProcessDependentInitialState") {
             Each(Node.all, scoped: { selfID, scope in
-                let leader = scope.localVar("leader", initial: selfID == .first)
+                let _ = scope.localVar("leader", initial: selfID == .first)
                 Do(AlgorithmLabel.done) { Stop() }
             })
         }
@@ -1034,7 +1034,7 @@ struct AlgorithmBuilderTests {
     func lowersDependentNondeterministicSharedInitialization() throws {
         let algorithm = Algorithm("DependentInitialDomain", scoped: { scope in
             let maximum = scope.sharedVar("maximum", initial: 2)
-            let candidate = scope.sharedVar(
+            let _ = scope.sharedVar(
                 "candidate",
                 in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
             )
@@ -1137,7 +1137,7 @@ struct AlgorithmBuilderTests {
     func lowersDependentFunctionInitialization() throws {
         let algorithm = Algorithm("DependentInitial", scoped: { scope in
             let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
-            let mirrors = scope.sharedVar("mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
+            let _ = scope.sharedVar("mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
             Each(Node.all) { _ in
                 Do(TestControlLabel.stop) { Stop() }
             }
