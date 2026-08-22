@@ -935,26 +935,26 @@ public extension TLASpec {
         let symmetricMetadataByName = Dictionary(
             uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0.metadata) }
         )
-        let initialPredicates = try variables.map { variable -> String in
-            guard let id = layout.variableID(named: variable.name),
-                  let initializer = semantics.variableInitializers[id],
-                  let initialValue = semantics.initialValues[id] else {
+        let initialPredicates = try layout.variables.map { variable -> String in
+            let name = variable.declaration.name
+            guard let initializer = semantics.variableInitializers[variable.id],
+                  let initialValue = semantics.initialValues[variable.id] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .rendering,
-                    path: "variables.\(variable.name).initialization",
+                    path: "variables.\(name).initialization",
                     expected: "a compiled initializer for this declared variable",
                     actual: "the compiled layout has no matching initializer",
                     nextSafeAction: "Compile the model again from its current source."
                 )
             }
-            if let metadata = symmetricMetadataByName[variable.name] {
-                return "\(variable.name) = [member \\in \(metadata.domainSymbol) |-> \(metadata.initial)]"
+            if let metadata = symmetricMetadataByName[name] {
+                return "\(name) = [member \\in \(metadata.domainSymbol) |-> \(metadata.initial)]"
             }
-            if let set = initializer.lazySet { return "\(variable.name) \\in \(try renderer.state(set))" }
-            if let set = initializer.initialSet { return "\(variable.name) \\in \(try renderer.state(set))" }
-            if let expression = initializer.initExpr { return "\(variable.name) = \(try renderer.state(expression))" }
-            return "\(variable.name) = \(try renderer.state(.value(initialValue.rendered(using: layout))))"
+            if let set = initializer.lazySet { return "\(name) \\in \(try renderer.state(set))" }
+            if let set = initializer.initialSet { return "\(name) \\in \(try renderer.state(set))" }
+            if let expression = initializer.initExpr { return "\(name) = \(try renderer.state(expression))" }
+            return "\(name) = \(try renderer.state(.value(initialValue.rendered(using: layout))))"
         }
         if initialPredicates.count == 1 {
             lines.append("Init == \(initialPredicates[0])")
