@@ -25,7 +25,7 @@ struct LivenessConformanceTests {
             transitions: transitions,
             states: Dictionary(
                 uniqueKeysWithValues: values.map { identifier, value in
-                    (identifier, try fixtureProjection([("x", .int(value))]))
+                    (identifier, try projection([("x", .int(value))]))
                 }
             )
         )
@@ -94,10 +94,10 @@ struct LivenessConformanceTests {
                 terminal: [.init(label: .init(.init(name: "done")), target: terminal)]
             ],
             states: [
-                initial: try fixtureProjection([("x", .int(0))]),
-                left: try fixtureProjection([("x", .int(1))]),
-                right: try fixtureProjection([("x", .int(2))]),
-                terminal: try fixtureProjection([("x", .int(3))])
+                initial: try projection([("x", .int(0))]),
+                left: try projection([("x", .int(1))]),
+                right: try projection([("x", .int(2))]),
+                terminal: try projection([("x", .int(3))])
             ]
         )
         let property: StateExpr = .or(
@@ -381,7 +381,7 @@ struct LivenessConformanceTests {
             specName: "liveness-conformance",
             variableNames: ["x"],
             transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
-            states: [initial: try fixtureProjection([("other", .int(0))])]
+            states: [initial: try projection([("other", .int(0))])]
         )
         let unavailable: [(String, TemporalAnalysisResult, TemporalDiagnosticReason)] = [
             (
@@ -475,8 +475,4 @@ struct LivenessConformanceTests {
             Issue.record("Expected depth-exceeded result, got \(incomplete)")
         }
     }
-}
-
-private func fixtureProjection(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
-    try projection(entries)
 }

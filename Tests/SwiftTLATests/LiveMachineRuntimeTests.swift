@@ -4,7 +4,6 @@ import Testing
 
 private enum LiveMachineTestError: Error {
     case evaluationUnavailable
-    case invalidToken
 }
 
 private enum CounterAction: Hashable, Sendable {
@@ -14,11 +13,13 @@ private enum CounterAction: Hashable, Sendable {
 
 @Suite("Live machine runtime")
 struct LiveMachineRuntimeTests {
-    private static func countToken() throws -> TLAStateProjection.Token {
-        guard let token = TLAStateProjection.Token(validating: "count") else {
-            throw LiveMachineTestError.invalidToken
+    private struct Fixture {
+        let storage: _GeneratedMachineStorage
+        let owner: TLALiveMachineOwner<CounterAction>
+
+        func count(in state: _GeneratedMachineStorage.State) throws -> Int {
+            try storage.value(at: 0, in: state)
         }
-        return token
     }
 
     private static func counterSpec() -> TLASpec {
@@ -33,50 +34,48 @@ struct LiveMachineRuntimeTests {
     }
 
     private static func transitionDriver(
-        compilation: CompiledSpecification,
-        successors: (@Sendable (TLAStateProjection, CounterAction) throws -> [TLAStateProjection])? = nil,
-        decodeState: @escaping @Sendable (TLAStateProjection) throws -> Void = { _ in }
+        storage: _GeneratedMachineStorage,
+        successors: (@Sendable (_GeneratedMachineStorage.State, CounterAction) throws -> [_GeneratedMachineStorage.State])? = nil,
+        decodeState: @escaping @Sendable (_GeneratedMachineStorage.State) throws -> Void = { _ in }
     ) -> TLALiveMachineTransitionDriver<CounterAction> {
         return TLALiveMachineTransitionDriver(
-            successors: successors ?? realSuccessors(compilation),
+            successors: successors ?? realSuccessors(storage),
             validateAction: { _ in nil },
             decodeState: decodeState
         )
     }
 
     private static func realSuccessors(
-        _ compilation: CompiledSpecification
-    ) -> @Sendable (TLAStateProjection, CounterAction) throws -> [TLAStateProjection] {
-        return { projection, action in
-            let formalState = try CompiledState(projection: projection, compilation: compilation)
+        _ storage: _GeneratedMachineStorage
+    ) -> @Sendable (_GeneratedMachineStorage.State, CounterAction) throws -> [_GeneratedMachineStorage.State] {
+        return { state, action in
             let (ordinal, arguments): (Int, [TLAValue]) = switch action {
             case .advance: (0, [])
             case .step(let delta): (1, [.int(delta)])
             }
-            let action = compilation.layout.actions[ordinal].id
-            return try CompiledRuntime(compilation: compilation)
-                .successors(for: action, from: formalState)
-                .filter { try $0.arguments.map { try $0.rendered(using: compilation.layout) } == arguments }
-                .map { try $0.state.projection(using: compilation.layout) }
+            return try storage.successors(
+                actionOrdinal: ordinal,
+                arguments: arguments,
+                from: state
+            )
         }
     }
 
-    private static func makeOwner(
+    private static func makeFixture(
         initialCount: Int = 0,
-        driver: TLALiveMachineTransitionDriver<CounterAction>? = nil
-    ) throws -> TLALiveMachineOwner<CounterAction> {
-        let resolvedDriver: TLALiveMachineTransitionDriver<CounterAction>
-        if let driver {
-            resolvedDriver = driver
-        } else {
-            resolvedDriver = transitionDriver(compilation: try counterSpec().compile())
+        driver: ((_GeneratedMachineStorage) throws -> TLALiveMachineTransitionDriver<CounterAction>)? = nil
+    ) throws -> Fixture {
+        let storage = _GeneratedMachineStorage(compilation: try counterSpec().compile())
+        let initial = try storage.initialState {
+            try storage.value(at: 0, in: $0) == initialCount
         }
-        let initial = try TLAStateProjection(validating: [
-            .init(token: try countToken(), value: .int(initialCount))
-        ])
-        return TLALiveMachineOwner.create(
-            initial: initial,
-            driver: resolvedDriver
+        let resolvedDriver = try driver?(storage) ?? transitionDriver(storage: storage)
+        return .init(
+            storage: storage,
+            owner: TLALiveMachineOwner.create(
+                initial: initial,
+                driver: resolvedDriver
+            )
         )
     }
 
@@ -89,7 +88,8 @@ struct LiveMachineRuntimeTests {
 
     @Test("Requests after owner termination are rejected without commit")
     func terminatedRuntimeRejectsWithoutCommit() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
         let before = try #require(await Self.requireCurrentSnapshot(from: machine))
         await owner.end()
@@ -112,11 +112,12 @@ struct LiveMachineRuntimeTests {
 
     @Test("A disabled action is rejected before acceptance and commits nothing")
     func disabledActionRejectsWithoutCommit() async throws {
-        let owner = try Self.makeOwner(initialCount: 2)
+        let fixture = try Self.makeFixture(initialCount: 2)
+        let owner = fixture.owner
         let machine = owner.handle
         _ = await machine.execute(.advance, requestID: UUID())
         let before = try #require(await Self.requireCurrentSnapshot(from: machine))
-        #expect(before.state.value(for: try Self.countToken()) == .int(3))
+        #expect(try fixture.count(in: before.state) == 3)
         #expect(before.position == .init(value: 1))
         let requestID = UUID()
 
@@ -133,11 +134,13 @@ struct LiveMachineRuntimeTests {
 
     @Test("An accepted evaluation failure leaves state and position unchanged")
     func evaluationFailureKeepsStateAndPosition() async throws {
-        let compilation = try Self.counterSpec().compile()
-        let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            compilation: compilation,
-            successors: { _, _ in throw LiveMachineTestError.evaluationUnavailable }
-        ))
+        let fixture = try Self.makeFixture { storage in
+            Self.transitionDriver(
+                storage: storage,
+                successors: { _, _ in throw LiveMachineTestError.evaluationUnavailable }
+            )
+        }
+        let owner = fixture.owner
         let machine = owner.handle
         let before = try #require(await Self.requireCurrentSnapshot(from: machine))
         let requestID = UUID()
@@ -156,16 +159,14 @@ struct LiveMachineRuntimeTests {
 
     @Test("An accepted decode failure leaves state and position unchanged")
     func decodeFailureKeepsStateAndPosition() async throws {
-        let compilation = try Self.counterSpec().compile()
-        let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            compilation: compilation,
-            successors: Self.realSuccessors(compilation),
-            decodeState: { _ in throw TLAStateProjectionDiagnostic.typeMismatch(
-                path: "count",
-                expected: "Int",
-                actual: .int(0)
-            ) }
-        ))
+        let fixture = try Self.makeFixture { storage in
+            Self.transitionDriver(
+                storage: storage,
+                successors: Self.realSuccessors(storage),
+                decodeState: { _ in throw LiveMachineTestError.evaluationUnavailable }
+            )
+        }
+        let owner = fixture.owner
         let machine = owner.handle
         let before = try #require(await Self.requireCurrentSnapshot(from: machine))
         let requestID = UUID()
@@ -184,22 +185,20 @@ struct LiveMachineRuntimeTests {
 
     @Test("Multiple formal successors fail without commit while a deterministic successor still commits")
     func ambiguousSuccessorsFailWithoutCommitAndDeterministicSuccessorCommits() async throws {
-        let compilation = try Self.counterSpec().compile()
-        let firstCandidate = try TLAStateProjection(validating: [
-            .init(token: try Self.countToken(), value: .int(1))
-        ])
-        let secondCandidate = try TLAStateProjection(validating: [
-            .init(token: try Self.countToken(), value: .int(2))
-        ])
-        let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            compilation: compilation,
-            successors: { projection, action in
+        let fixture = try Self.makeFixture { storage in
+            let firstCandidate = try storage.initialState { try storage.value(at: 0, in: $0) == 1 }
+            let secondCandidate = try storage.initialState { try storage.value(at: 0, in: $0) == 2 }
+            return Self.transitionDriver(
+                storage: storage,
+                successors: { state, action in
                 if case .step(_) = action {
                     return [firstCandidate, secondCandidate]
                 }
-                return try Self.realSuccessors(compilation)(projection, action)
-            }
-        ))
+                    return try Self.realSuccessors(storage)(state, action)
+                }
+            )
+        }
+        let owner = fixture.owner
         let machine = owner.handle
         let before = try #require(await Self.requireCurrentSnapshot(from: machine))
 
@@ -225,7 +224,7 @@ struct LiveMachineRuntimeTests {
         }
         #expect(commit.requestID == commitRequestID)
         #expect(commit.before == before)
-        #expect(commit.after.state.value(for: try Self.countToken()) == .int(1))
+        #expect(try fixture.count(in: commit.after.state) == 1)
         #expect(commit.after.position == .init(value: 1))
         #expect(commit.after.position == commit.before.position.next)
         #expect(await machine.current() == .snapshot(commit.after))
@@ -233,7 +232,8 @@ struct LiveMachineRuntimeTests {
 
     @Test("A committed transition advances state and position together and binds identity and schema")
     func committedTransitionAdvancesStateAndPositionAtomically() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
         let before = try #require(await Self.requireCurrentSnapshot(from: machine))
         let requestID = UUID()
@@ -249,17 +249,18 @@ struct LiveMachineRuntimeTests {
         #expect(commit.before == before)
         #expect(commit.before.identity == owner.identity)
         #expect(commit.before.position == .init(value: 0))
-        #expect(commit.before.state.value(for: try Self.countToken()) == .int(0))
+        #expect(try fixture.count(in: commit.before.state) == 0)
         #expect(commit.after.identity == owner.identity)
         #expect(commit.after.position == .init(value: 1))
         #expect(commit.after.position == commit.before.position.next)
-        #expect(commit.after.state.value(for: try Self.countToken()) == .int(1))
+        #expect(try fixture.count(in: commit.after.state) == 1)
         #expect(await machine.current() == .snapshot(commit.after))
     }
 
     @Test("Parameterized actions commit exactly once per accepted request")
     func parameterizedActionsCommitExactlyOncePerRequest() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
 
         let first = await machine.execute(.step(2), requestID: UUID())
@@ -267,9 +268,9 @@ struct LiveMachineRuntimeTests {
             Issue.record("Expected a committed transition, found \(first)")
             return
         }
-        #expect(firstCommit.before.state.value(for: try Self.countToken()) == .int(0))
+        #expect(try fixture.count(in: firstCommit.before.state) == 0)
         #expect(firstCommit.before.position == .init(value: 0))
-        #expect(firstCommit.after.state.value(for: try Self.countToken()) == .int(2))
+        #expect(try fixture.count(in: firstCommit.after.state) == 2)
         #expect(firstCommit.after.position == .init(value: 1))
         #expect(firstCommit.after.position == firstCommit.before.position.next)
 
@@ -279,7 +280,7 @@ struct LiveMachineRuntimeTests {
             return
         }
         #expect(secondCommit.before == firstCommit.after)
-        #expect(secondCommit.after.state.value(for: try Self.countToken()) == .int(3))
+        #expect(try fixture.count(in: secondCommit.after.state) == 3)
         #expect(secondCommit.after.position == .init(value: 2))
         #expect(secondCommit.after.position == secondCommit.before.position.next)
         #expect(await machine.current() == .snapshot(secondCommit.after))
@@ -287,7 +288,8 @@ struct LiveMachineRuntimeTests {
 
     @Test("Shared handles converge on one runtime state without reattachment")
     func sharedHandlesConvergeOnOneRuntimeState() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let first = owner.handle
         let second = owner.handle
 
@@ -307,7 +309,8 @@ struct LiveMachineRuntimeTests {
 
     @Test("Releasing one of several handles never ends an otherwise live runtime")
     func releasingASecondHandleKeepsRuntimeAvailable() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let primary = owner.handle
 
         var secondary: TLALiveMachine<CounterAction>? = owner.handle
@@ -317,7 +320,7 @@ struct LiveMachineRuntimeTests {
 
         let current = try #require(await Self.requireCurrentSnapshot(from: primary))
         #expect(current.identity == owner.identity)
-        #expect(current.state.value(for: try Self.countToken()) == .int(1))
+        #expect(try fixture.count(in: current.state) == 1)
         #expect(current.position == .init(value: 1))
 
         let outcome = await primary.execute(.advance, requestID: UUID())
@@ -325,7 +328,7 @@ struct LiveMachineRuntimeTests {
             Issue.record("Expected a committed transition, found \(outcome)")
             return
         }
-        #expect(commit.after.state.value(for: try Self.countToken()) == .int(2))
+        #expect(try fixture.count(in: commit.after.state) == 2)
         #expect(commit.after.position == .init(value: 2))
         #expect(commit.after.position == commit.before.position.next)
         #expect(await primary.current() == .snapshot(commit.after))
@@ -333,8 +336,10 @@ struct LiveMachineRuntimeTests {
 
     @Test("Distinct runtime identities isolate state and position")
     func distinctRuntimesIsolateStateAndPosition() async throws {
-        let ownerA = try Self.makeOwner()
-        let ownerB = try Self.makeOwner()
+        let fixtureA = try Self.makeFixture()
+        let fixtureB = try Self.makeFixture()
+        let ownerA = fixtureA.owner
+        let ownerB = fixtureB.owner
         let machineA = ownerA.handle
         let machineB = ownerB.handle
 
@@ -345,25 +350,27 @@ struct LiveMachineRuntimeTests {
 
         let currentA = try #require(await Self.requireCurrentSnapshot(from: machineA))
         let currentB = try #require(await Self.requireCurrentSnapshot(from: machineB))
-        #expect(currentA.state.value(for: try Self.countToken()) == .int(2))
+        #expect(try fixtureA.count(in: currentA.state) == 2)
         #expect(currentA.position == .init(value: 2))
         #expect(currentA.identity == ownerA.identity)
-        #expect(currentB.state.value(for: try Self.countToken()) == .int(0))
+        #expect(try fixtureB.count(in: currentB.state) == 0)
         #expect(currentB.position == .init(value: 0))
         #expect(currentB.identity == ownerB.identity)
     }
 
     @Test("Caller cancellation after acceptance still commits exactly once")
     func cancellationAfterAcceptanceStillCommits() async throws {
-        let compilation = try Self.counterSpec().compile()
         let (accepted, signal) = AsyncStream<Void>.makeStream()
-        let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            compilation: compilation,
-            successors: { projection, action in
-                signal.yield(())
-                return try Self.realSuccessors(compilation)(projection, action)
-            }
-        ))
+        let fixture = try Self.makeFixture { storage in
+            Self.transitionDriver(
+                storage: storage,
+                successors: { state, action in
+                    signal.yield(())
+                    return try Self.realSuccessors(storage)(state, action)
+                }
+            )
+        }
+        let owner = fixture.owner
         let machine = owner.handle
         let requestID = UUID()
         var iterator = accepted.makeAsyncIterator()
@@ -378,9 +385,9 @@ struct LiveMachineRuntimeTests {
             return
         }
         #expect(commit.requestID == requestID)
-        #expect(commit.before.state.value(for: try Self.countToken()) == .int(0))
+        #expect(try fixture.count(in: commit.before.state) == 0)
         #expect(commit.before.position == .init(value: 0))
-        #expect(commit.after.state.value(for: try Self.countToken()) == .int(1))
+        #expect(try fixture.count(in: commit.after.state) == 1)
         #expect(commit.after.position == .init(value: 1))
         #expect(commit.after.position == commit.before.position.next)
         #expect(await machine.current() == .snapshot(commit.after))
@@ -388,15 +395,17 @@ struct LiveMachineRuntimeTests {
 
     @Test("Caller cancellation after acceptance still resolves to the accepted normal failure")
     func cancellationAfterAcceptanceStillFailsNormally() async throws {
-        let compilation = try Self.counterSpec().compile()
         let (accepted, signal) = AsyncStream<Void>.makeStream()
-        let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            compilation: compilation,
-            successors: { _, _ in
-                signal.yield(())
-                throw LiveMachineTestError.evaluationUnavailable
-            }
-        ))
+        let fixture = try Self.makeFixture { storage in
+            Self.transitionDriver(
+                storage: storage,
+                successors: { _, _ in
+                    signal.yield(())
+                    throw LiveMachineTestError.evaluationUnavailable
+                }
+            )
+        }
+        let owner = fixture.owner
         let machine = owner.handle
         let requestID = UUID()
         var iterator = accepted.makeAsyncIterator()
@@ -412,14 +421,15 @@ struct LiveMachineRuntimeTests {
         }
         #expect(failure.requestID == requestID)
         #expect(failure.code == .evaluationFailed)
-        #expect(failure.current.state.value(for: try Self.countToken()) == .int(0))
+        #expect(try fixture.count(in: failure.current.state) == 0)
         #expect(failure.current.position == .init(value: 0))
         #expect(await machine.current() == .snapshot(failure.current))
     }
 
     @Test("Cancellation before the caller awaits cannot erase the accepted outcome")
     func cancellationBeforeAwaitStillCommits() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
         let requestID = UUID()
 
@@ -432,7 +442,7 @@ struct LiveMachineRuntimeTests {
             return
         }
         #expect(commit.requestID == requestID)
-        #expect(commit.after.state.value(for: try Self.countToken()) == .int(1))
+        #expect(try fixture.count(in: commit.after.state) == 1)
         #expect(commit.after.position == .init(value: 1))
         #expect(await machine.current() == .snapshot(commit.after))
     }
