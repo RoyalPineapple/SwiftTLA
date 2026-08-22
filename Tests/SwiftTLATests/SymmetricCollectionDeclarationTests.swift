@@ -1,5 +1,5 @@
-import SwiftTLA
 import Testing
+@testable import SwiftTLA
 
 @Suite(.serialized)
 struct SymmetricCollectionDeclarationTests {
@@ -28,18 +28,24 @@ struct SymmetricCollectionDeclarationTests {
     #expect(spec.symmetricCollections[0].verificationScope == 2)
     #expect(spec.variables.map(\.name) == ["phases"])
 
-    let initial = spec.variables[0].initial.functionValue
+    guard case .function(let initial) = spec.variables[0].initial else {
+      Issue.record("Expected the symmetric collection initializer to be a function")
+      return
+    }
     #expect(initial.count == 2)
     #expect(Set(initial.values) == Set([TLAValue.int(0)]))
 
     let compilation = try spec.compile()
-    let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    let begin = try #require(compilation.layout.actionID(named: "begin"))
-    let successors = try CompiledRuntime(compilation: compilation).successors(for: begin, from: initialState).map(\.state)
-    let phases = try #require(compilation.layout.variableID(named: "phases"))
+    let initialState = try #require(try compilation.initialStateProjections().first)
+    let begin = try #require(compilation.actionID(named: "begin"))
+    let successors = try compilation.successors(for: begin, arguments: [], from: initialState)
     #expect(successors.count == 2)
     for successor in successors {
-      let values = try successor.value(for: phases).rendered(using: compilation.layout).functionValue
+      let phaseValue = try #require(value("phases", in: successor))
+      guard case .function(let values) = phaseValue else {
+        Issue.record("Expected the symmetric collection state to be a function")
+        return
+      }
       #expect(values.values.filter { $0 == .int(1) }.count == 1)
       #expect(values.values.filter { $0 == .int(0) }.count == 1)
     }
