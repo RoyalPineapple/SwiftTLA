@@ -20,7 +20,7 @@ public struct WriterModel {
     private enum Step: String, PlusCalLabel, CaseIterable { case start, write, pause, resume, finish, cancel }
     public static var spec: TLASpec {
         #spec("WriterModel") {
-            Algorithm("WriterModel") { scope in
+            Algorithm("WriterModel", scoped: { scope in
                 let phase = scope.sharedVar("phase", initial: Phase.configured)
                 Each(StartProcess.all) { _ in Do(Step.start) { When(phase == .configured); Assign(phase, to: Phase.writing); Goto(Step.start) } }
                 Each(WriteProcess.all) { _ in Do(Step.write) { When(phase == .writing); Assign(phase, to: Phase.writing); Goto(Step.write) } }
@@ -29,7 +29,7 @@ public struct WriterModel {
                 Each(FinishProcess.all) { _ in Do(Step.finish) { When(phase == .configured || phase == .writing || phase == .paused); Assign(phase, to: Phase.finished); Goto(Step.finish) } }
                 Each(CancelProcess.all) { _ in Do(Step.cancel) { When(phase == .writing || phase == .paused); Assign(phase, to: Phase.cancelled); Goto(Step.cancel) } }
                 Invariant("knownWriterPhase") { phase == .configured || phase == .writing || phase == .paused || phase == .finished || phase == .cancelled }
-            }
+            })
         }
     }
     @TLAActor public actor Machine {}

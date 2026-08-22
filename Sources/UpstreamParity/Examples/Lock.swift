@@ -28,7 +28,7 @@ public struct LockModel: Sendable {
     public static var spec: TLASpec {
         #spec("Lock") {
             Extends(.integers)
-            Algorithm("Lock") { scope in
+            Algorithm("Lock", scoped: { scope in
                 let lock = scope.sharedVar("lock", initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     Await(value == 1)
@@ -57,7 +57,7 @@ public struct LockModel: Sendable {
                 Invariant("TypeOK") {
                     lock >= 0 && lock <= 1
                 }
-            }
+            })
         }
     }
 }

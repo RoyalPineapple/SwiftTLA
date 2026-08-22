@@ -80,7 +80,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
     public static var spec: TLASpec {
         #spec("TwoPhaseWithBackupManager") {
             Extends(.integers)
-            Algorithm("TransactionCommit") { scope in
+            Algorithm("TransactionCommit", scoped: { scope in
                 let resourceManagerState = scope.sharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
                     (.one, .working),
                     (.two, .working),
@@ -233,7 +233,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

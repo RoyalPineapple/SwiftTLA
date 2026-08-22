@@ -1297,7 +1297,7 @@ public struct Algorithm: Sendable, SpecComponent {
 
     public init(
         _ name: String,
-        @AlgorithmBuilder _ body: (inout AlgorithmScope) -> [AlgorithmElement]
+        @AlgorithmBuilder scoped body: (inout AlgorithmScope) -> [AlgorithmElement]
     ) {
         var scope = AlgorithmScope()
         model = AlgorithmModel(name: name, components: scope.declarations.map(\.model) + body(&scope).map(\.model))
@@ -1335,7 +1335,7 @@ public func Each<Value: FiniteDomainKey>(
 public func Each<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
     fairness: ProcessFairness = .none,
-    @AlgorithmBuilder _ body: (ProcessIdentifier<Value>, inout ProcessScope) -> [AlgorithmElement]
+    @AlgorithmBuilder scoped body: (ProcessIdentifier<Value>, inout ProcessScope) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     var scope = ProcessScope()
     let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
@@ -1449,7 +1449,7 @@ public func Procedure<Value: TLAValueType>(
 public func Procedure<Value: TLAValueType>(
     _ name: String,
     parameters: Value.Type,
-    @AlgorithmBuilder _ body: (ProcedureParameter<Value>, inout ProcedureScope) -> [AlgorithmElement]
+    @AlgorithmBuilder scoped body: (ProcedureParameter<Value>, inout ProcedureScope) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     let parameterName = "parameter0"
     var scope = ProcedureScope()

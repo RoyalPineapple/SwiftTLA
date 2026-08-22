@@ -52,7 +52,7 @@ public struct ChangRoberts {
 
     public static var spec: TLASpec {
         #spec("ChangRoberts") {
-            Algorithm("ChangRoberts") { scope in
+            Algorithm("ChangRoberts", scoped: { scope in
                 let identifiers = scope.sharedVar("identifiers", initial: Function<Node, Int>.literal(
                     (.one, 8), (.two, 2), (.three, 11), (.four, 9),
                     (.five, 12), (.six, 3), (.seven, 1), (.eight, 5),
@@ -110,7 +110,7 @@ public struct ChangRoberts {
                 Invariant("LeaderDomain") {
                     leader >= 0 && leader <= 12
                 }
-            }
+            })
         }
     }
 

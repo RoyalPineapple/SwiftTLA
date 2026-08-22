@@ -91,7 +91,7 @@ public struct TwoPhaseModel: Sendable {
     public static var spec: TLASpec {
         #spec("TwoPhase") {
             Extends(.integers)
-            Algorithm("TwoPhase") { scope in
+            Algorithm("TwoPhase", scoped: { scope in
                 let resourceManagerState = scope.sharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
                     (.one, .working), (.two, .working), (.three, .working)
                 ))
@@ -164,7 +164,7 @@ public struct TwoPhaseModel: Sendable {
                         Goto(CoordinatorStep.coordinatorOperate)
                     }
                 }
-            }
+            })
 
         }
     }

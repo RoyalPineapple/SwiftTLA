@@ -20,7 +20,7 @@ public struct PlayerModel {
     private enum Step: String, PlusCalLabel, CaseIterable { case beginLoad, ready, play, pause, seek, finish }
     public static var spec: TLASpec {
         #spec("PlayerModel") {
-            Algorithm("PlayerModel") { scope in
+            Algorithm("PlayerModel", scoped: { scope in
                 let phase = scope.sharedVar("phase", initial: Phase.unloaded)
                 Each(BeginLoadProcess.all) { _ in Do(Step.beginLoad) { When(phase == .unloaded); Assign(phase, to: Phase.loading); Goto(Step.beginLoad) } }
                 Each(ReadyProcess.all) { _ in Do(Step.ready) { When(phase == .loading); Assign(phase, to: Phase.ready); Goto(Step.ready) } }
@@ -29,7 +29,7 @@ public struct PlayerModel {
                 Each(SeekProcess.all) { _ in Do(Step.seek) { When(phase == .ready || phase == .playing || phase == .paused); Assign(phase, to: phase); Goto(Step.seek) } }
                 Each(FinishProcess.all) { _ in Do(Step.finish) { When(phase == .playing); Assign(phase, to: Phase.finished); Goto(Step.finish) } }
                 Invariant("knownPlayerPhase") { phase == .unloaded || phase == .loading || phase == .ready || phase == .playing || phase == .paused || phase == .finished }
-            }
+            })
         }
     }
     @TLAActor public actor Machine {}

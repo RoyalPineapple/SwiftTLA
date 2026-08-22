@@ -111,12 +111,12 @@ private struct TypedQuantifierGeneratedModel {
 private struct NonEmptySubsetGeneratedModel {
     static var spec: TLASpec {
         #spec("NonEmptySubsetGeneratedModel") {
-            Algorithm("NonEmptySubsetGeneratedModel") { scope in
+            Algorithm("NonEmptySubsetGeneratedModel", scoped: { scope in
                 let selectedKeys = scope.sharedVar("selectedKeys", in: NonEmptySubsets(
                     of: SetExpr<Int>.literal(1, 2)
                 ))
                 Do(TestControlLabel.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
-            }
+            })
         }
     }
 }
@@ -125,7 +125,7 @@ private struct NonEmptySubsetGeneratedModel {
 private struct ZeroBasedSequenceGeneratedModel {
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
-            Algorithm("ZeroBasedSequenceGeneratedModel") { scope in
+            Algorithm("ZeroBasedSequenceGeneratedModel", scoped: { scope in
                 let input = scope.sharedVar("input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
@@ -138,7 +138,7 @@ private struct ZeroBasedSequenceGeneratedModel {
                 Do(TestControlLabel.writeFirst) {
                     Assign(table, to: table.updating(0, to: input[0]))
                 }
-            }
+            })
         }
     }
 }
@@ -148,7 +148,7 @@ private struct FoldGeneratedModel {
     static var spec: TLASpec {
         #spec("FoldGeneratedModel") {
             Import(FunctionsModule.module)
-            Algorithm("FoldGeneratedModel") { scope in
+            Algorithm("FoldGeneratedModel", scoped: { scope in
                 let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2, 3))
                 let total = scope.sharedVar("total", initial: 0)
                 Do(TestControlLabel.sum) {
@@ -156,7 +156,7 @@ private struct FoldGeneratedModel {
                         element + accumulated
                     })
                 }
-            }
+            }))
         }
     }
 }

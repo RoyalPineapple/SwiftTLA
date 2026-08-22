@@ -61,7 +61,7 @@ public struct BluetoothModel {
 
     public static var spec: TLASpec {
         #spec("BluetoothModel") {
-            Algorithm("BluetoothModel") { scope in
+            Algorithm("BluetoothModel", scoped: { scope in
                 let phase = scope.sharedVar("phase", initial: Phase.unknown)
                 Each(PoweredOnProcess.all) { _ in
                     Do(Step.poweredOn) {
@@ -105,7 +105,7 @@ public struct BluetoothModel {
                     Do(Step.stopScan) { When(phase == .scanning); Assign(phase, to: Phase.poweredOn); Goto(Step.stopScan) }
                 }
                 Invariant("knownCentralPhase") { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
-            }
+            })
         }
     }
 

@@ -32,12 +32,12 @@ private struct CompilerPipelineExplicitFormalNameModel {
 private struct CompilerPipelineAlgorithmModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineAlgorithmModel") {
-            Algorithm("CompilerPipelineAlgorithmModel") { scope in
+            Algorithm("CompilerPipelineAlgorithmModel", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                 }
-            }
+            })
         }
     }
 }
@@ -166,7 +166,7 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("compiled layout assigns scoped control-location identities")
     func compiledLayoutAssignsScopedControlLocationIDs() throws {
-        let algorithm = Algorithm("ControlLayout") { scope in
+        let algorithm = Algorithm("ControlLayout", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.start) {
@@ -183,7 +183,7 @@ struct CompilerPipelineCanonicalizationTests {
                     Return()
                 }
             }
-        }
+        })
 
         let source = try compiledSourceSpecification(algorithm)
         #expect(source.actions.map(\.controlOwner) == [
@@ -207,7 +207,7 @@ struct CompilerPipelineCanonicalizationTests {
             .procedure(algorithm: "ControlLayout", name: "second"),
             .generated(algorithm: "ControlLayout", purpose: "Done")
         ])
-        let changed = Algorithm("ControlLayout") { scope in
+        let changed = Algorithm("ControlLayout", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.changed) {
@@ -224,13 +224,13 @@ struct CompilerPipelineCanonicalizationTests {
                     Return()
                 }
             }
-        }
+        }))
         #expect(compilation.identity != try compiledSourceSpecification(changed).compile().identity)
     }
 
     @Test("compiled algorithm control state uses control-location identities")
     func compiledAlgorithmUsesControlLocationIdentities() throws {
-        let algorithm = Algorithm("ControlRuntime") { scope in
+        let algorithm = Algorithm("ControlRuntime", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.start) {
@@ -241,7 +241,7 @@ struct CompilerPipelineCanonicalizationTests {
                     Stop()
                 }
             }
-        }
+        }))
         let compilation = try compiledSourceSpecification(algorithm).compile()
         let runtime = CompiledRuntime(compilation: compilation)
         let pc = try #require(compilation.layout.variableID(named: "pc"))

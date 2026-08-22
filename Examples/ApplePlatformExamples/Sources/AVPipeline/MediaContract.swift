@@ -21,7 +21,7 @@ public struct MediaPipelineModel {
     private enum Step: String, PlusCalLabel, CaseIterable { case beginCapture, beginWriting, finishWriting, play, stop }
     public static var spec: TLASpec {
         #spec("MediaPipelineModel") {
-            Algorithm("MediaPipelineModel") { scope in
+            Algorithm("MediaPipelineModel", scoped: { scope in
                 let stage = scope.sharedVar("stage", initial: Stage.idle)
                 Each(BeginCaptureProcess.all) { _ in Do(Step.beginCapture) { When(stage == .idle); Assign(stage, to: Stage.capturing); Goto(Step.beginCapture) } }
                 Each(BeginWritingProcess.all) { _ in Do(Step.beginWriting) { When(stage == .capturing); Assign(stage, to: Stage.writing); Goto(Step.beginWriting) } }
@@ -29,7 +29,7 @@ public struct MediaPipelineModel {
                 Each(PlayProcess.all) { _ in Do(Step.play) { When(stage == .readyToPlay); Assign(stage, to: Stage.playing); Goto(Step.play) } }
                 Each(StopProcess.all) { _ in Do(Step.stop) { When(stage == .capturing || stage == .writing || stage == .playing); Assign(stage, to: Stage.idle); Goto(Step.stop) } }
                 Invariant("knownPipelineStage") { stage == .idle || stage == .capturing || stage == .writing || stage == .readyToPlay || stage == .playing }
-            }
+            })
         }
     }
     @TLAActor public actor Machine {}

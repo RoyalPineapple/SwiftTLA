@@ -302,7 +302,7 @@ struct CameraWorkflow {
 
     static var spec: TLASpec {
         #spec("CameraWorkflow") {
-            Algorithm("CameraWorkflow") { scope in
+            Algorithm("CameraWorkflow", scoped: { scope in
                 let phase = scope.sharedVar("phase", initial: 0)
                 Each(ReadyProcess.all) { _ in
                     Do(Step.ready) { When(phase == 0); Assign(phase, to: 1); Goto(Step.ready) }
@@ -320,7 +320,7 @@ struct CameraWorkflow {
                     Do(Step.live) { When(phase == 3); Assign(phase, to: 1); Goto(Step.live) }
                 }
                 Invariant("validPhase") { phase >= 0 && phase <= 3 }
-            }
+            })
         }
     }
 

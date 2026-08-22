@@ -43,10 +43,10 @@ struct AlgorithmBuilderTests {
 
     @Test("compiler lowers an authored algorithm")
     func compilerLowersAuthoredAlgorithm() throws {
-        let algorithm = Algorithm("CompileAtGate") { scope in
+        let algorithm = Algorithm("CompileAtGate", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             Do(TestControlLabel.advance) { Assign(count, to: count + 1) }
-        }
+        })
         let source = TLASpec("CompileAtGate") { algorithm }
 
         #expect(source.variables.isEmpty)
@@ -130,7 +130,7 @@ struct AlgorithmBuilderTests {
 
     @Test("statement macros expand into their surrounding atomic block")
     func expandsTypedStatementMacro() throws {
-        let algorithm = Algorithm("MacroLock") { scope in
+        let algorithm = Algorithm("MacroLock", scoped: { scope in
             let lock = scope.sharedVar("lock", initial: 1)
             let acquire = Macro { (value: MacroParameter<Int>) in
                 Await(value == 1)
@@ -144,7 +144,7 @@ struct AlgorithmBuilderTests {
                 Do(TestControlLabel.acquire) { acquire(lock) }
                 Do(TestControlLabel.release) { release(lock) }
             }
-        }
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -155,7 +155,7 @@ struct AlgorithmBuilderTests {
 
     @Test("two-parameter statement macros bind each argument in caller scope")
     func expandsTwoParameterStatementMacro() throws {
-        let algorithm = Algorithm("CopyValue") { scope in
+        let algorithm = Algorithm("CopyValue", scoped: { scope in
             let destination = scope.sharedVar("destination", initial: 0)
             let source = scope.sharedVar("source", initial: 7)
             let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
@@ -163,7 +163,7 @@ struct AlgorithmBuilderTests {
             }
 
             Do(TestControlLabel.copy) { copy(destination, source) }
-        }
+        }))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -175,7 +175,7 @@ struct AlgorithmBuilderTests {
 
     @Test("statement macros retain formal expression arguments in read positions")
     func expandsExpressionMacroArguments() throws {
-        let algorithm = Algorithm("OffsetValue") { scope in
+        let algorithm = Algorithm("OffsetValue", scoped: { scope in
             let destination = scope.sharedVar("destination", initial: 0)
             let source = scope.sharedVar("source", initial: 7)
             let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
@@ -183,7 +183,7 @@ struct AlgorithmBuilderTests {
             }
 
             Do(TestControlLabel.copy) { copy(destination, source.expr + 1) }
-        }
+        }))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -194,14 +194,14 @@ struct AlgorithmBuilderTests {
 
     @Test("statement macros report expression assignment targets during validation")
     func rejectsExpressionMacroAssignmentTarget() {
-        let algorithm = Algorithm("RejectedMacroTarget") { scope in
+        let algorithm = Algorithm("RejectedMacroTarget", scoped: { scope in
             let destination = scope.sharedVar("destination", initial: 0)
             let write = Macro { (target: MacroParameter<Int>) in
                 Assign(target, to: 0)
             }
 
             Do(TestControlLabel.write) { write(destination.expr + 1) }
-        }
+        })))
 
         #expect(algorithm.validate().map(\.code).contains(.statementMacroAssignmentTarget))
         let spec = TLASpec("RejectedMacroTarget") { algorithm }
@@ -263,18 +263,18 @@ struct AlgorithmBuilderTests {
 
     @Test("typed procedure builders use deterministic formal parameter slots")
     func buildsTypedProcedure() throws {
-        let algorithm = Algorithm("ProcedureBuilder") { scope in
+        let algorithm = Algorithm("ProcedureBuilder", scoped: { scope in
             let output = scope.sharedVar("output", initial: 0)
-            Procedure("work", parameters: Int.self) { value, scope in
+            Procedure("work", parameters: Int.self, scoped: { value, scope in
                 let offset = scope.localVar("offset", initial: 1)
                 Do(TestControlLabel.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
                 }
-            }
+            })))
             Do(TestControlLabel.start) { Call("work", with: 7) }
             Do(TestControlLabel.finished) { Stop() }
-        }
+        })))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -298,14 +298,14 @@ struct AlgorithmBuilderTests {
 
     @Test("parameterless statement macros expand into their surrounding atomic block")
     func expandsParameterlessStatementMacro() throws {
-        let algorithm = Algorithm("ParameterlessMacro") { scope in
+        let algorithm = Algorithm("ParameterlessMacro", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             let increment = Macro {
                 Assign(count, to: count + 1)
             }
 
             Do(TestControlLabel.increment) { increment() }
-        }
+        }))))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -324,10 +324,10 @@ struct AlgorithmBuilderTests {
                 successor[node].cardinality == 1
             }
         }
-        let algorithm = Algorithm("ReachableGraph") { scope in
+        let algorithm = Algorithm("ReachableGraph", scoped: { scope in
             let successors = scope.sharedVar("successors", in: choices)
             Do(TestControlLabel.done) { Stop() }
-        }
+        }))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -380,7 +380,7 @@ struct AlgorithmBuilderTests {
 
     @Test("statement macros accept the current typed process identifier")
     func expandsMacroWithProcessIdentifier() throws {
-        let algorithm = Algorithm("MacroProcess") { scope in
+        let algorithm = Algorithm("MacroProcess", scoped: { scope in
             let marked = scope.sharedVar(
                 "marked",
                 initial: Function<Node, Bool>.literal((.first, false), (.second, false))
@@ -393,7 +393,7 @@ struct AlgorithmBuilderTests {
                 Do(TestControlLabel.mark) { mark(node) }
                 Do(TestControlLabel.done) { Stop() }
             }
-        }
+        })))))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -431,7 +431,7 @@ struct AlgorithmBuilderTests {
 
     @Test("a begin-style algorithm keeps a scalar program counter")
     func lowersSequentialAlgorithmWithoutInventingAProcess() throws {
-        let algorithm = Algorithm("SequentialCounter") { scope in
+        let algorithm = Algorithm("SequentialCounter", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.increment) {
                 Let(value + 1) { nextValue in
@@ -441,7 +441,7 @@ struct AlgorithmBuilderTests {
             Do(TestControlLabel.finish) {
                 Stop()
             }
-        }
+        })))))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -465,9 +465,9 @@ struct AlgorithmBuilderTests {
 
     @Test("typed first-slice builders preserve ordered process steps")
     func buildsBoundedAlgorithm() throws {
-        let algorithm = Algorithm("ChangRoberts") { scope in
+        let algorithm = Algorithm("ChangRoberts", scoped: { scope in
             let maximum = scope.sharedVar("maximum", initial: 0)
-            Each(Node.all) { node, scope in
+            Each(Node.all, scoped: { node, scope in
                 let inbox = scope.localVar("inbox", initial: 0)
                 Do(AlgorithmLabel.receive) {
                     Await(inbox > 0)
@@ -491,8 +491,8 @@ struct AlgorithmBuilderTests {
                 Do(AlgorithmLabel.done) {
                     Stop()
                 }
-            }
-        }
+            }))))))
+        }))))))
 
         #expect(algorithm.validate().isEmpty)
         #expect(algorithm.model.components.count == 2)
@@ -502,7 +502,7 @@ struct AlgorithmBuilderTests {
 
     @Test("algorithm-level properties lower with the executable process")
     func lowersAlgorithmProperties() throws {
-        let algorithm = Algorithm("Properties") { scope in
+        let algorithm = Algorithm("Properties", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
@@ -514,7 +514,7 @@ struct AlgorithmBuilderTests {
             LeadsTo("EventuallyPositive", value == 0, value > 0)
             WeakFairness("receive")
             StateConstraint(value < 3)
-        }
+        }))))))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -527,14 +527,14 @@ struct AlgorithmBuilderTests {
     @Test("a process-local invariant lowers over its process family")
     func lowersProcessLocalInvariant() throws {
         let algorithm = Algorithm("LocalProperty") {
-            Each(Node.all) { selfID, scope in
+            Each(Node.all, scoped: { selfID, scope in
                 let count = scope.localVar("count", initial: 0)
                 Do(AlgorithmLabel.receive) { Skip() }
                 Invariant("LocalCount") { count == 0 }
                 Invariant("ControlLocation") {
                     At(AlgorithmLabel.receive, selfID) || Finished(selfID)
                 }
-            }
+            }))))))
         }
 
         #expect(algorithm.validate().isEmpty)
@@ -580,7 +580,7 @@ struct AlgorithmBuilderTests {
 
     @Test("validation fails closed for invalid bounded algorithms")
     func rejectsInvalidAlgorithms() {
-        let invalid = Algorithm("__pcal_invalid") { scope in
+        let invalid = Algorithm("__pcal_invalid", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(EmptyNode.all) { _ in
                 Do(AlgorithmLabel.receive) {
@@ -593,7 +593,7 @@ struct AlgorithmBuilderTests {
                 }
             }
             Invariant("outside") { value >= 0 }
-        }
+        }))))))
 
         let codes = Set(invalid.validate().map(\.code))
         #expect(codes.contains(.reservedName))
@@ -609,7 +609,7 @@ struct AlgorithmBuilderTests {
 
     @Test("lowering initializes pc and binds every atomic action to a process")
     func lowersControlStateAndActionBindings() throws {
-        let algorithm = Algorithm("BoundedCounter") { scope in
+        let algorithm = Algorithm("BoundedCounter", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
@@ -620,7 +620,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
 
@@ -639,14 +639,14 @@ struct AlgorithmBuilderTests {
 
     @Test("an unconditional single-loop process does not invent a program counter")
     func elidesRedundantProgramCounter() throws {
-        let algorithm = Algorithm("SingleLoop") { scope in
+        let algorithm = Algorithm("SingleLoop", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 While(TestControlLabel.advance, true) {
                     Assign(value, to: value + 1)
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["value"])
@@ -660,7 +660,7 @@ struct AlgorithmBuilderTests {
 
     @Test("lowered atomic actions advance pc and stop before the explicit terminating self loop")
     func lowersAtomicSemantics() throws {
-        let algorithm = Algorithm("BoundedCounter") { scope in
+        let algorithm = Algorithm("BoundedCounter", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
@@ -671,7 +671,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -698,7 +698,7 @@ struct AlgorithmBuilderTests {
     @Test("lowering represents process-local state as a function of self")
     func lowersLocalState() throws {
         let algorithm = Algorithm("LocalCounter") {
-            Each(Node.all) { _, scope in
+            Each(Node.all, scoped: { _, scope in
                 let inbox = scope.localVar("inbox", initial: 0)
                 Do(AlgorithmLabel.receive) {
                     Await(inbox == 0)
@@ -708,7 +708,7 @@ struct AlgorithmBuilderTests {
                 Do(AlgorithmLabel.done) {
                     Stop()
                 }
-            }
+            }))))))
         }
 
         let spec = try compiledSourceSpecification(algorithm)
@@ -728,10 +728,10 @@ struct AlgorithmBuilderTests {
     @Test("local state can be initialized from its process identifier")
     func lowersProcessDependentLocalState() throws {
         let algorithm = Algorithm("ProcessDependentInitialState") {
-            Each(Node.all) { selfID, scope in
+            Each(Node.all, scoped: { selfID, scope in
                 let leader = scope.localVar("leader", initial: selfID == .first)
                 Do(AlgorithmLabel.done) { Stop() }
-            }
+            }))))))
         }
 
         let spec = try compiledSourceSpecification(algorithm)
@@ -744,7 +744,7 @@ struct AlgorithmBuilderTests {
 
     @Test("closed labels compile into process control locations")
     func compilesClosedLabels() throws {
-        let algorithm = Algorithm("ClosedLabels") { scope in
+        let algorithm = Algorithm("ClosedLabels", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.forward) {
@@ -753,7 +753,7 @@ struct AlgorithmBuilderTests {
                 }
                 Do(AlgorithmLabel.done) { Stop() }
             }
-        }
+        }))))))
 
         #expect(algorithm.validate().isEmpty)
         #expect(try compiledSourceSpecification(algorithm).actions.map(\.name).contains("forward"))
@@ -761,14 +761,14 @@ struct AlgorithmBuilderTests {
 
     @Test("the end of an Each machine reaches its builder-owned Done state")
     func eachMachineEndsInDone() throws {
-        let algorithm = Algorithm("ImplicitStop") { scope in
+        let algorithm = Algorithm("ImplicitStop", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.finish) {
                     Assign(value, to: value + 1)
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -781,7 +781,7 @@ struct AlgorithmBuilderTests {
 
     @Test("an unlabeled transfer falls through to the next Do block")
     func intermediateDoFallsThrough() throws {
-        let algorithm = Algorithm("Fallthrough") { scope in
+        let algorithm = Algorithm("Fallthrough", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.prepare) {
@@ -791,7 +791,7 @@ struct AlgorithmBuilderTests {
                     Assign(value, to: value + 1)
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -804,13 +804,13 @@ struct AlgorithmBuilderTests {
 
     @Test("TLASpec accepts an algorithm component and lowers it before checking")
     func algorithmComposesIntoTLASpec() throws {
-        let algorithm = Algorithm("Composed") { scope in
+        let algorithm = Algorithm("Composed", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.finish) { Assign(value, to: value + 1) }
             }
             Invariant("nonNegative") { value >= 0 }
-        }
+        }))))))
 
         let spec = TLASpec("Composed") {
             algorithm
@@ -822,13 +822,13 @@ struct AlgorithmBuilderTests {
 
     @Test("algorithm formal definitions lower and export exactly once")
     func algorithmFormalDefinitionsRemainTopLevelFormalOperators() throws {
-        let algorithm = Algorithm("FormalOperators") { scope in
+        let algorithm = Algorithm("FormalOperators", scoped: { scope in
             FormalDefinition("same", taking: Int.self, Int.self) { left, right in
                 left == right
             }
             let value = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.stop) { Stop() }
-        }
+        }))))))
 
         let lowered = try compiledSourceSpecification(algorithm)
         #expect(lowered.formalOperatorDefinitions == [
@@ -847,7 +847,7 @@ struct AlgorithmBuilderTests {
 
     @Test("When, Assert, With, and process fairness lower as formal semantics")
     func lowersMechanicalPlusCalStatements() throws {
-        let algorithm = Algorithm("Mechanical") { scope in
+        let algorithm = Algorithm("Mechanical", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             let selected = scope.sharedVar("selected", initial: 0)
             Each(Node.all, fairness: .weak) { node in
@@ -860,7 +860,7 @@ struct AlgorithmBuilderTests {
                     Assign(count, to: count + 1)
                 }
             }
-        }
+        }))))))
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -880,7 +880,7 @@ struct AlgorithmBuilderTests {
 
     @Test("a false While condition advances control and a true condition loops")
     func lowersWhileAsFormalControl() throws {
-        let algorithm = Algorithm("Loop") { scope in
+        let algorithm = Algorithm("Loop", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             Each(Node.all) { _ in
                 While(TestControlLabel.`repeat`, count < 2) {
@@ -888,7 +888,7 @@ struct AlgorithmBuilderTests {
                 }
                 Do(TestControlLabel.finish) { Stop() }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -935,7 +935,7 @@ struct AlgorithmBuilderTests {
 
     @Test("Assert is required only on the branch that reaches it")
     func scopesAssertToItsConditionalBranch() throws {
-        let algorithm = Algorithm("ConditionalAssert") { scope in
+        let algorithm = Algorithm("ConditionalAssert", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.check) {
@@ -946,7 +946,7 @@ struct AlgorithmBuilderTests {
                     }
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -962,7 +962,7 @@ struct AlgorithmBuilderTests {
 
     @Test("Assert becomes a model-checker safety obligation")
     func checksAssertAsAnInvariant() throws {
-        let algorithm = Algorithm("BrokenAssertion") { scope in
+        let algorithm = Algorithm("BrokenAssertion", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.check) {
@@ -970,7 +970,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }
+        }))))))
 
         let result = try ModelChecker(compilation: try compiledSourceSpecification(algorithm).compile(), configuration: .standard).check().underlyingOutcome
         guard case .invariantViolated(let name, _, _) = result else {
@@ -982,7 +982,7 @@ struct AlgorithmBuilderTests {
 
     @Test("SharedVar range expands to the declared finite initial states")
     func lowersNondeterministicSharedInitialization() throws {
-        let algorithm = Algorithm("HourClock") { scope in
+        let algorithm = Algorithm("HourClock", scoped: { scope in
             let hour = scope.sharedVar("hour", in: 1...3)
             Each(Node.all) { _ in
                 Do(TestControlLabel.tick) {
@@ -991,7 +991,7 @@ struct AlgorithmBuilderTests {
                     Stop()
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -1006,14 +1006,14 @@ struct AlgorithmBuilderTests {
 
     @Test("SharedVar initial domains can depend on earlier formal state")
     func lowersDependentNondeterministicSharedInitialization() throws {
-        let algorithm = Algorithm("DependentInitialDomain") { scope in
+        let algorithm = Algorithm("DependentInitialDomain", scoped: { scope in
             let maximum = scope.sharedVar("maximum", initial: 2)
             let candidate = scope.sharedVar(
                 "candidate",
                 in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
             )
             Do(TestControlLabel.stop) { Stop() }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -1026,7 +1026,7 @@ struct AlgorithmBuilderTests {
 
     @Test("nested With statements keep independent lexical bindings")
     func lowersNestedWithScopes() throws {
-        let algorithm = Algorithm("NestedWith") { scope in
+        let algorithm = Algorithm("NestedWith", scoped: { scope in
             let selected = scope.sharedVar("selected", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.choose) {
@@ -1035,7 +1035,7 @@ struct AlgorithmBuilderTests {
                     }
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1046,7 +1046,7 @@ struct AlgorithmBuilderTests {
 
     @Test("With preserves ordered three-source bindings")
     func lowersThreeIndependentWithScopes() throws {
-        let algorithm = Algorithm("ThreeWith") { scope in
+        let algorithm = Algorithm("ThreeWith", scoped: { scope in
             let selected = scope.sharedVar("selected", initial: 0)
             Do(TestControlLabel.choose) {
                 With(
@@ -1057,7 +1057,7 @@ struct AlgorithmBuilderTests {
                     Assign(selected, to: first.expr + second.expr + third.expr)
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1068,7 +1068,7 @@ struct AlgorithmBuilderTests {
 
     @Test("tuple patterns bind independently typed members")
     func lowersPairPatternBindings() throws {
-        let algorithm = Algorithm("PairPattern") { scope in
+        let algorithm = Algorithm("PairPattern", scoped: { scope in
             let selected = scope.sharedVar("selected", initial: 0)
             Do(TestControlLabel.choose) {
                 With(SetExpr<Pair<Int, Bool>>.literal(
@@ -1079,7 +1079,7 @@ struct AlgorithmBuilderTests {
                     Assign(selected, to: number.expr)
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1090,7 +1090,7 @@ struct AlgorithmBuilderTests {
 
     @Test("Choose accepts a bounded Swift integer range")
     func lowersBoundedIntegerChoice() throws {
-        let algorithm = Algorithm("BoundedChoice") { scope in
+        let algorithm = Algorithm("BoundedChoice", scoped: { scope in
             let selected = scope.sharedVar("selected", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.choose) {
@@ -1099,7 +1099,7 @@ struct AlgorithmBuilderTests {
                     }
                 }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
@@ -1109,13 +1109,13 @@ struct AlgorithmBuilderTests {
 
     @Test("dependent typed function initialization is evaluated after earlier initial state choices")
     func lowersDependentFunctionInitialization() throws {
-        let algorithm = Algorithm("DependentInitial") { scope in
+        let algorithm = Algorithm("DependentInitial", scoped: { scope in
             let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
             let mirrors = scope.sharedVar("mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
             Each(Node.all) { _ in
                 Do(TestControlLabel.stop) { Stop() }
             }
-        }
+        }))))))
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
@@ -1176,19 +1176,19 @@ private enum MissingAlgorithmLabel: String, PlusCalLabel, CaseIterable {
 private struct ProcedureGeneratedModel {
     static var spec: TLASpec {
         #spec("ProcedureGenerated") {
-            Algorithm("ProcedureGenerated") { scope in
+            Algorithm("ProcedureGenerated", scoped: { scope in
                 let output = scope.sharedVar("output", initial: 0)
-                Procedure("work", parameters: Int.self) { value, scope in
+                Procedure("work", parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar("offset", initial: 1)
                     Do(TestControlLabel.enter) {
                         Await(value.expr >= 0)
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
-                }
+                }))))))
                 Do(TestControlLabel.start) { Call("work", with: 7) }
                 Do(TestControlLabel.finished) { Stop() }
-            }
+            }))))))
         }
     }
 }
@@ -1208,7 +1208,7 @@ private struct MacroProcessGeneratedModel {
 
     static var spec: TLASpec {
         #spec("MacroProcessGenerated") {
-            Algorithm("MacroProcessGenerated") { scope in
+            Algorithm("MacroProcessGenerated", scoped: { scope in
                 let marked = scope.sharedVar("marked", initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
                 let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
@@ -1218,7 +1218,7 @@ private struct MacroProcessGeneratedModel {
                     Do(TestControlLabel.mark) { mark(node) }
                     Do(TestControlLabel.done) { Stop() }
                 }
-            }
+            }))))))
         }
     }
 }
@@ -1238,7 +1238,7 @@ private struct FunctionDomainGeneratedModel {
 
     static var spec: TLASpec {
         #spec("FunctionDomainGenerated") {
-            Algorithm("FunctionDomainGenerated") { scope in
+            Algorithm("FunctionDomainGenerated", scoped: { scope in
                 let successors = scope.sharedVar("successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
@@ -1253,7 +1253,7 @@ private struct FunctionDomainGeneratedModel {
                         successors[node].cardinality == 1
                     }
                 }
-            }
+            }))))))
         }
     }
 }
@@ -1262,7 +1262,7 @@ private struct FunctionDomainGeneratedModel {
 private struct StaticFormalSelectionModel {
     static var spec: TLASpec {
         #spec("StaticFormalSelection") {
-            Algorithm("StaticFormalSelection") { scope in
+            Algorithm("StaticFormalSelection", scoped: { scope in
                 let selected = Select(
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
@@ -1271,7 +1271,7 @@ private struct StaticFormalSelectionModel {
 
                 Do(TestControlLabel.done) { Stop() }
                 Invariant("SelectedEven") { current == 2 }
-            }
+            }))))))
         }
     }
 }
@@ -1293,7 +1293,7 @@ private struct StaticFilteredFunctionSelectionModel {
 
     static var spec: TLASpec {
         #spec("StaticFilteredFunctionSelection") {
-            Algorithm("StaticFilteredFunctionSelection") { scope in
+            Algorithm("StaticFilteredFunctionSelection", scoped: { scope in
                 let successors = Select(
                     from: Where(Functions(
                         from: Node.all,
@@ -1307,7 +1307,7 @@ private struct StaticFilteredFunctionSelectionModel {
 
                 Do(TestControlLabel.done) { Stop() }
                 Invariant("CurrentIsDefined") { current == current.expr }
-            }
+            }))))))
         }
     }
 }

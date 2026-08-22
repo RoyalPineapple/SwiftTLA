@@ -29,7 +29,7 @@ public struct BarriersN6Model: Sendable {
     public static var spec: TLASpec {
         #spec("Barriers") {
             Extends(.integers)
-            Algorithm("Barriers") { scope in
+            Algorithm("Barriers", scoped: { scope in
                 let lock = scope.sharedVar("lock", initial: 1)
                 let gate1 = scope.sharedVar("gate1", initial: 0)
                 let gate2 = scope.sharedVar("gate2", initial: 0)
@@ -87,7 +87,7 @@ public struct BarriersN6Model: Sendable {
                     gate2 >= 0 && gate2 <= 6
                     rendezvous >= 0 && rendezvous <= 6
                 }
-            }
+            })
         }
     }
 }

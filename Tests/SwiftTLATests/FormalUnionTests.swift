@@ -35,7 +35,7 @@ private struct GeneratedFormalUnionAlgorithm {
     static var spec: TLASpec {
         #spec("GeneratedFormalUnion") {
             Algorithm("GeneratedFormalUnion") {
-                Each(Node.all) { _, scope in
+                Each(Node.all, scoped: { _, scope in
                     let temporary: LocalVariable<OneOf<Node, SetExpr<Node>>> = scope.localVar("temporary", initial: OneOf<Node, SetExpr<Node>>.first(.first)
                     )
 
@@ -55,7 +55,7 @@ private struct GeneratedFormalUnionAlgorithm {
                         let remaining = temporary.expr.assumingSecond(SetExpr<Node>.self)
                         When(!remaining.isEmpty)
                     }
-                }
+                })
             }
         }
     }

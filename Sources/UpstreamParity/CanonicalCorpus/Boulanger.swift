@@ -28,11 +28,11 @@ public struct BoulangerModel: Sendable {
     public static var spec: TLASpec {
         #spec("Boulanger") {
             Extends(.integers)
-            Algorithm("Boulanger") { scope in
+            Algorithm("Boulanger", scoped: { scope in
                 let num = scope.sharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
                 let flag = scope.sharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
-                Each(Process.all, fairness: .weak) { selfID, scope in
+                Each(Process.all, fairness: .weak, scoped: { selfID, scope in
                     let unchecked = scope.localVar("unchecked", initial: SetExpr<Process>())
                     let max = scope.localVar("max", initial: 0)
                     let nxt = scope.localVar("nxt", initial: Process.one)
@@ -117,7 +117,7 @@ public struct BoulangerModel: Sendable {
                     }
 
                     Invariant("LocalTypeOK") { max >= 0 && previous >= -1 }
-                }
+                })
 
                 StateConstraint(All(Process.all) { process in num[process] < 3 })
                 Invariant("MutualExclusion") {
@@ -127,7 +127,7 @@ public struct BoulangerModel: Sendable {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

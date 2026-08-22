@@ -17,13 +17,13 @@ public struct DiskStoreModel {
     private enum Step: String, PlusCalLabel, CaseIterable { case write, delete, clear }
     public static var spec: TLASpec {
         #spec("DiskStoreModel") {
-            Algorithm("DiskStoreModel") { scope in
+            Algorithm("DiskStoreModel", scoped: { scope in
                 let phase = scope.sharedVar("phase", initial: Phase.ready)
                 Each(WriteProcess.all) { _ in Do(Step.write) { When(phase == .ready); Assign(phase, to: Phase.ready); Goto(Step.write) } }
                 Each(DeleteProcess.all) { _ in Do(Step.delete) { When(phase == .ready); Assign(phase, to: Phase.ready); Goto(Step.delete) } }
                 Each(ClearProcess.all) { _ in Do(Step.clear) { When(phase == .ready); Assign(phase, to: Phase.ready); Goto(Step.clear) } }
                 Invariant("diskStoreReady") { phase == .ready }
-            }
+            })
         }
     }
     @TLAActor public actor Machine {}

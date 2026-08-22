@@ -15,7 +15,7 @@ public struct SumSequenceModel: Sendable {
     public static var spec: TLASpec {
         #spec("SumSequence") {
             Extends(.integers)
-            Algorithm("SumSequence") { scope in
+            Algorithm("SumSequence", scoped: { scope in
                 let sequence = scope.sharedVar("sequence", in: Sequences(
                     of: SetExpr<Int>.literal(-1, 0, 1),
                     lengths: 0...3
@@ -37,7 +37,7 @@ public struct SumSequenceModel: Sendable {
                 }
                 WeakFairnessNext()
                 Eventually("EventuallyFinished", Finished())
-            }
+            })
         }
     }
 }

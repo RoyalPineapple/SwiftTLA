@@ -29,7 +29,7 @@ public struct TeachingSimpleN2Model: Sendable {
     public static var spec: TLASpec {
         #spec("Simple") {
             Extends(.integers)
-            Algorithm("Simple") { scope in
+            Algorithm("Simple", scoped: { scope in
                 let x = scope.sharedVar("x", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0)
                 ))
@@ -58,7 +58,7 @@ public struct TeachingSimpleN2Model: Sendable {
                     y[.p0] == 0 || y[.p0] == 1
                     y[.p1] == 0 || y[.p1] == 1
                 }
-            }
+            })
         }
     }
 }
@@ -86,7 +86,7 @@ public struct TeachingSimpleN3Model: Sendable {
     public static var spec: TLASpec {
         #spec("Simple") {
             Extends(.integers)
-            Algorithm("Simple") { scope in
+            Algorithm("Simple", scoped: { scope in
                 let x = scope.sharedVar("x", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0)
                 ))
@@ -121,7 +121,7 @@ public struct TeachingSimpleN3Model: Sendable {
                     y[.p1] == 0 || y[.p1] == 1
                     y[.p2] == 0 || y[.p2] == 1
                 }
-            }
+            })
         }
     }
 }

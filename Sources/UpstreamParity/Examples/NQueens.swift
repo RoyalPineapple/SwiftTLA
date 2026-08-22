@@ -13,7 +13,7 @@ public struct NQueensModel: Sendable {
     public static var spec: TLASpec {
         #spec("QueensPluscal") {
             Extends(.naturals)
-            Algorithm("Queens") { scope in
+            Algorithm("Queens", scoped: { scope in
                 let todo = scope.sharedVar("todo", initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
                 let solutions = scope.sharedVar("solutions", initial: SetExpr<TupleExpr<Int>>())
 
@@ -57,7 +57,7 @@ public struct NQueensModel: Sendable {
                         placement.expr.count == 4
                     }
                 }
-            }
+            })
         }
     }
 }

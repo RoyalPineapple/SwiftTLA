@@ -133,7 +133,7 @@ public struct ElevatorBank {
 
     public static var spec: TLASpec {
         #spec("ElevatorBank") {
-            Algorithm("ElevatorBank") { scope in
+            Algorithm("ElevatorBank", scoped: { scope in
                 let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
                     (.carA, Record.literal(.init(CarSchema.floor, .one), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none))),
                     (.carB, Record.literal(.init(CarSchema.floor, .three), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none)))
@@ -248,7 +248,7 @@ public struct ElevatorBank {
                         || cars[.carB][CarSchema.floor] == .two
                         || cars[.carB][CarSchema.floor] == .three
                 }
-            }
+            })
         }
     }
 

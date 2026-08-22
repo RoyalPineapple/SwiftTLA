@@ -52,7 +52,7 @@ public struct DijkstraMutexModel: Sendable {
     public static var spec: TLASpec {
         #spec("DijkstraMutex") {
             Extends(.integers)
-            Algorithm("Mutex") { scope in
+            Algorithm("Mutex", scoped: { scope in
                 let b = scope.sharedVar("b", initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
@@ -61,7 +61,7 @@ public struct DijkstraMutexModel: Sendable {
                 ))
                 let k = scope.sharedVar("k", in: SetExpr<Process>.literal(.one, .two, .three))
 
-                Each(Process.all, fairness: .weak) { selfID, scope in
+                Each(Process.all, fairness: .weak, scoped: { selfID, scope in
                     let temporary = scope.localVar("temporary", initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
                     )
 
@@ -146,7 +146,7 @@ public struct DijkstraMutexModel: Sendable {
                     Do(Label.li5) { Assign(c, to: c.updating(selfID, to: true)) }
                     Do(Label.li6) { Assign(b, to: b.updating(selfID, to: true)) }
                     Do(Label.nonCritical) { Goto(Label.li0) }
-                }
+                })
 
                 Invariant("MutualExclusion") {
                     All(Process.all) { first in
@@ -155,7 +155,7 @@ public struct DijkstraMutexModel: Sendable {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

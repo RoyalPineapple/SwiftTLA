@@ -33,11 +33,11 @@ public struct BakeryN2Model: Sendable {
     public static var spec: TLASpec {
         #spec("Bakery") {
             Extends(.integers)
-            Algorithm("Bakery") { scope in
+            Algorithm("Bakery", scoped: { scope in
                 let num = scope.sharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
                 let flag = scope.sharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
-                Each(Process.all, fairness: .weak) { process, scope in
+                Each(Process.all, fairness: .weak, scoped: { process, scope in
                     let unchecked: LocalVariable<SetExpr<Process>> = scope.localVar("unchecked", initial: SetExpr<Process>())
                     let maxSeen = scope.localVar("maxSeen", initial: 0)
                     let next: LocalVariable<Process> = scope.localVar("next", initial: .one)
@@ -137,8 +137,8 @@ public struct BakeryN2Model: Sendable {
                             Goto(Step.ncs)
                         }
                     }
-                }
-            }
+                })
+            })
         }
     }
 }

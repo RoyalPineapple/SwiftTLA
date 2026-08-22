@@ -15,7 +15,7 @@ public struct BinarySearchModel: Sendable {
     public static var spec: TLASpec {
         #spec("BinarySearch") {
             Extends(.integers)
-            Algorithm("BinarySearch") { scope in
+            Algorithm("BinarySearch", scoped: { scope in
                 let seq = scope.sharedVar("seq", in: SortedSequences(
                     of: SetExpr<Int>.literal(1, 2, 3, 4, 5),
                     lengths: 0...8
@@ -57,7 +57,7 @@ public struct BinarySearchModel: Sendable {
                     )
                 }
                 WeakFairnessNext()
-            }
+            })
         }
     }
 }

@@ -30,7 +30,7 @@ public struct PetersonModel: Sendable {
     public static var spec: TLASpec {
         #spec("Peterson") {
             Extends(.integers)
-            Algorithm("Peterson") { scope in
+            Algorithm("Peterson", scoped: { scope in
                 let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
                     (.one, false), (.two, false)
                 ))
@@ -72,7 +72,7 @@ public struct PetersonModel: Sendable {
                     (c[.one] == false || c[.one] == true)
                         && (c[.two] == false || c[.two] == true)
                 }
-            }
+            })
         }
     }
 }

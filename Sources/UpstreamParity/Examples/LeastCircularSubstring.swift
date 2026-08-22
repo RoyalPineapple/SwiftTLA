@@ -79,7 +79,7 @@ public enum LeastCircularSubstringModel {
     public static let spec = TLASpec("MCLeastCircularSubstring") {
         Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...6))
 
-        Algorithm("LeastCircularSubstring") { scope in
+        Algorithm("LeastCircularSubstring", scoped: { scope in
             let characterSet = SetExpr<Int>.literal(0, 1)
             let b = scope.sharedVar(
                 "b",
@@ -200,7 +200,7 @@ public enum LeastCircularSubstringModel {
             Invariant("Correctness") {
                 correctness(sequence: b, shift: k)
             }
-        }
+        })
     }
 }
 

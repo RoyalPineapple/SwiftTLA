@@ -19,7 +19,7 @@ public struct HourClock2Model: Sendable {
 
     public static var spec: TLASpec {
         #spec("HourClock2") {
-            Algorithm("HourClock2") { scope in
+            Algorithm("HourClock2", scoped: { scope in
                 let hr = scope.sharedVar("hr", in: 1...12)
 
                 Each(ClockProcess.all) { _ in
@@ -29,7 +29,7 @@ public struct HourClock2Model: Sendable {
                     }
                 }
                 Invariant("HCini") { hr >= 1 && hr <= 12 }
-            }
+            })
         }
     }
 }

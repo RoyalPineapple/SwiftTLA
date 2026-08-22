@@ -6,7 +6,7 @@ import SwiftTLAMacros
 struct MultiBindingChooseTests {
     @Test("two ordered ranges lower to nested existential choices and enumerate their product")
     func lowersAndEnumeratesOrderedRanges() throws {
-        let algorithm = Algorithm("PairChoice") { scope in
+        let algorithm = Algorithm("PairChoice", scoped: { scope in
             let selected = scope.sharedVar("selected", initial: 0)
             Each(MultiBindingChooseModel.Node.all) { _ in
                 Do(TestControlLabel.choose) {
@@ -15,7 +15,7 @@ struct MultiBindingChooseTests {
                     }
                 }
             }
-        }
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -46,7 +46,7 @@ private struct MultiBindingChooseModel {
 
     static var spec: TLASpec {
         #spec("MultiBindingChoose") {
-            Algorithm("MultiBindingChoose") { scope in
+            Algorithm("MultiBindingChoose", scoped: { scope in
                 let selected = scope.sharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
                     Do(TestControlLabel.choose) {
@@ -55,7 +55,7 @@ private struct MultiBindingChooseModel {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

@@ -23,12 +23,12 @@ private struct GeneratedTypedLocalRecursionModel {
           If(number == 0, then: 0, else: recursion(number.expr - 1))
         }, in: { recursion in recursion(4) })
       )
-      Algorithm("GeneratedTypedLocalRecursionModel") { scope in
+      Algorithm("GeneratedTypedLocalRecursionModel", scoped: { scope in
         let counter = scope.sharedVar("counter", initial: 0)
         Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }
-      }
+      })
     }
   }
 }
@@ -37,7 +37,7 @@ private struct GeneratedTypedLocalRecursionModel {
 private struct GeneratedTypedFormalDefinitionAlgorithm {
   static var spec: TLASpec {
     #spec("GeneratedTypedFormalDefinitionAlgorithm") {
-      Algorithm("GeneratedTypedFormalDefinitionAlgorithm") { scope in
+      Algorithm("GeneratedTypedFormalDefinitionAlgorithm", scoped: { scope in
         FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
           LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
             If(current == 0, then: true, else: recursion(current.expr - 1))
@@ -47,7 +47,7 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
         Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }
-      }
+      })
     }
   }
 }

@@ -56,14 +56,14 @@ public struct EchoModel: Sendable {
     public static var spec: TLASpec {
         #spec("Echo") {
             Extends(.finiteSets)
-            Algorithm("Echo") { scope in
+            Algorithm("Echo", scoped: { scope in
                 let inbox = scope.sharedVar("inbox", initial: Function<Node, SetExpr<Record<MessageSchema>>>.literal(
                     (.a, SetExpr<Record<MessageSchema>>()),
                     (.b, SetExpr<Record<MessageSchema>>()),
                     (.c, SetExpr<Record<MessageSchema>>())
                 ))
 
-                Each(Node.all) { selfID, scope in
+                Each(Node.all, scoped: { selfID, scope in
                     // The root never reads `parent`; its concrete default keeps
                     // the Swift value type finite while matching the algorithm.
                     let parent: LocalVariable<Node> = scope.localVar("parent", initial: .a)
@@ -119,8 +119,8 @@ public struct EchoModel: Sendable {
                             )))
                         }
                     }
-                }
-            }
+                })
+            })
         }
     }
 }

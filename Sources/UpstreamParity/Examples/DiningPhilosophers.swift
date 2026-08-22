@@ -52,7 +52,7 @@ public struct DiningPhilosophersModel: Sendable {
         #spec("DiningPhilosophers") {
             Extends(.integers)
 
-            Algorithm("DiningPhilosophers") { scope in
+            Algorithm("DiningPhilosophers", scoped: { scope in
                 let forks = scope.sharedVar("forks", initial: Function<Philosopher, Record<Fork>>.literal(
                     (Philosopher.one, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
                     (Philosopher.two, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
@@ -61,7 +61,7 @@ public struct DiningPhilosophersModel: Sendable {
                     (Philosopher.five, Record.literal(.init(Fork.holder, Philosopher.five), .init(Fork.clean, false)))
                 ))
 
-                Each(Philosopher.all) { philosopher, scope in
+                Each(Philosopher.all, scoped: { philosopher, scope in
                     let hungry = scope.localVar("hungry", initial: true)
 
                     Do(Step.loop) {
@@ -154,7 +154,7 @@ public struct DiningPhilosophersModel: Sendable {
                             && (hungry == true || hungry == false)
                             && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
                     }
-                }
+                })
 
                 Invariant("ExclusiveAccess") {
                     All(Philosopher.all) { first in
@@ -169,7 +169,7 @@ public struct DiningPhilosophersModel: Sendable {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

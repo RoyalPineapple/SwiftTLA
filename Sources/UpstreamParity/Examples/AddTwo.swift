@@ -17,7 +17,7 @@ public struct AddTwoModel: Sendable {
     public static var spec: TLASpec {
         #spec("AddTwo") {
             Extends(.naturals)
-            Algorithm("Increase") { scope in
+            Algorithm("Increase", scoped: { scope in
                 let x = scope.sharedVar("x", initial: 0)
 
                 Do(Label.increase) {
@@ -30,7 +30,7 @@ public struct AddTwoModel: Sendable {
                 StateConstraint(x < 10)
                 Invariant("TypeOK") { x >= 0 }
                 Invariant("Even") { x % 2 == 0 }
-            }
+            })
         }
     }
 }

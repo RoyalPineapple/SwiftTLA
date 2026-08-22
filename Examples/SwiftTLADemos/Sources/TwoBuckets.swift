@@ -79,7 +79,7 @@ public struct TwoBuckets {
 
     public static var spec: TLASpec {
         #spec("TwoBuckets") {
-            Algorithm("TwoBuckets") { scope in
+            Algorithm("TwoBuckets", scoped: { scope in
                 let three = scope.sharedVar("three", initial: 0)
                 let five = scope.sharedVar("five", initial: 0)
 
@@ -146,7 +146,7 @@ public struct TwoBuckets {
                     three >= 0 && three <= 3
                     five >= 0 && five <= 5
                 }
-            }
+            })
         }
     }
 

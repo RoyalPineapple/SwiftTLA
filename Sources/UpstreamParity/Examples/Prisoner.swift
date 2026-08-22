@@ -44,7 +44,7 @@ public struct PrisonerModel: Sendable {
     public static var spec: TLASpec {
         #spec("Prisoner") {
             Extends(.naturals)
-            Algorithm("Prisoner") { scope in
+            Algorithm("Prisoner", scoped: { scope in
                 let counter = scope.sharedVar("counter", initial: Prisoner.alice)
                 let count = scope.sharedVar("count", initial: 1)
                 let announced = scope.sharedVar("announced", initial: false)
@@ -85,7 +85,7 @@ public struct PrisonerModel: Sendable {
                         Goto(Step.chooseVisitor)
                     }
                 }
-            }
+            })
         }
     }
 }

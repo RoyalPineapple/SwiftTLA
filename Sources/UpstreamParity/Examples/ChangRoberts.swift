@@ -35,7 +35,7 @@ public struct ChangRobertsModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("ChangRoberts") {
-            Algorithm("ChangRoberts") { scope in
+            Algorithm("ChangRoberts", scoped: { scope in
                 let initiator = scope.sharedVar("initiator", in: SetExpr<Function<Node, Bool>>.literal(
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, false)),
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, true)),
@@ -140,7 +140,7 @@ public struct ChangRobertsModel: Sendable {
                         || processState[.two] == .won
                         || processState[.three] == .won
                 )
-            }
+            })
         }
     }
 }

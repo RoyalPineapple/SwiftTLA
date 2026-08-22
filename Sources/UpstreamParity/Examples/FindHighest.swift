@@ -15,7 +15,7 @@ public struct FindHighestModel: Sendable {
     public static var spec: TLASpec {
         #spec("Highest") {
             Extends(.integers)
-            Algorithm("Highest") { scope in
+            Algorithm("Highest", scoped: { scope in
                 let f = scope.sharedVar("f", in: Sequences(
                     of: SetExpr<Int>.literal(0, 1, 2, 3, 4),
                     lengths: 0...3
@@ -45,7 +45,7 @@ public struct FindHighestModel: Sendable {
                         f[index.expr] <= h
                     }
                 }
-            }
+            })
         }
     }
 }

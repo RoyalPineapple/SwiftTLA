@@ -33,7 +33,7 @@ public struct ParallelReachableModel: Sendable {
     public static var spec: TLASpec {
         #spec("ParallelReachability") {
             Extends(.finiteSets)
-            Algorithm("ParallelReachability") { scope in
+            Algorithm("ParallelReachability", scoped: { scope in
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
@@ -44,7 +44,7 @@ public struct ParallelReachableModel: Sendable {
                 let marked = scope.sharedVar("marked", initial: SetExpr<Node>())
                 let frontier = scope.sharedVar("frontier", initial: SetExpr<Node>.literal(.one))
 
-                Each(Worker.all, fairness: .weak) { _, scope in
+                Each(Worker.all, fairness: .weak, scoped: { _, scope in
                     let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
                     let pending: LocalVariable<SetExpr<Node>> = scope.localVar("pending", initial: SetExpr<Node>())
 
@@ -85,13 +85,13 @@ public struct ParallelReachableModel: Sendable {
                             Goto(Step.a)
                         }
                     }
-                }
+                })
 
                 Invariant("TypeOK") {
                     marked.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
                     frontier.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
                 }
-            }
+            })
         }
     }
 }

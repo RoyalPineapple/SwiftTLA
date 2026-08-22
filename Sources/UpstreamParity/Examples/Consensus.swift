@@ -31,7 +31,7 @@ public struct ConsensusModel: Sendable {
         #spec("Consensus") {
             Extends(.finiteSets)
             Extends(.integers)
-            Algorithm("Consensus") { scope in
+            Algorithm("Consensus", scoped: { scope in
                 let chosen = scope.sharedVar("chosen", initial: SetExpr<Value>())
 
                 let choose = Macro {
@@ -53,7 +53,7 @@ public struct ConsensusModel: Sendable {
                 }
                 Eventually("Success", !chosen.isEmpty)
                 WeakFairnessNext()
-            }
+            })
         }
     }
 }

@@ -39,7 +39,7 @@ private func parserEnum(
     func parsesBoundedAlgorithm() throws {
         let source = """
         {
-            Algorithm("Counter") { scope in
+            Algorithm("Counter", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Each(Node.all) { node in
                     Do(TestControlLabel.increment) {
@@ -47,7 +47,7 @@ private func parserEnum(
                         Assign(count, to: count + 1)
                     }
                 }
-            }
+            })
         }
         """
         let closure = try parseClosure(source)
@@ -72,10 +72,10 @@ private func parserEnum(
     func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
         let source = """
         {
-            Algorithm("Counter") { scope in
+            Algorithm("Counter", scoped: { scope in
                 let count = scope.localVar("count", initial: 0)
                 Do(TestControlLabel.increment) { Stop() }
-            }
+            })
         }
         """
         let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
