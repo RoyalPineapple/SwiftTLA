@@ -62,7 +62,7 @@ public struct VoteProofModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("VoteProof") { () -> [SpecComponent] in
+        #spec("VoteProof") {
             Constant("Value", SetExpr<Value>(.v1, .v2))
             Constant("Acceptor", SetExpr<Acceptor>(.a1, .a2, .a3))
             Constant("Quorum", SetExpr<SetExpr<Acceptor>>(

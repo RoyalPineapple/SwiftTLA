@@ -31,7 +31,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
         body: ClosureExprSyntax
     ) -> ExprSyntax {
         let arguments: LabeledExprListSyntax
-        if !hasParameters(body) {
+        if body.signature == nil {
             arguments = [
                 LabeledExprSyntax(expression: name, trailingComma: .commaToken()),
                 LabeledExprSyntax(expression: ExprSyntax(body))
@@ -59,15 +59,6 @@ public struct SpecExpressionMacro: ExpressionMacro {
         ))
     }
 
-    private static func hasParameters(_ body: ClosureExprSyntax) -> Bool {
-        guard let parameters = body.signature?.parameterClause else { return false }
-        switch parameters {
-        case .simpleInput(let list):
-            return !list.isEmpty
-        case .parameterClause(let clause):
-            return !clause.parameters.isEmpty
-        }
-    }
 }
 
 private struct SpecExpressionDiagnostic: DiagnosticMessage {
