@@ -1022,7 +1022,7 @@ private struct SharedVariableDeclaration: Sendable {
 public final class SpecificationScope {
     var declarations: [VarDecl] = []
 
-    public init() {}
+    init() {}
 
     public func sharedVar<Value: TLAValueType>(
         _ name: String,
@@ -1061,7 +1061,7 @@ public final class SpecificationScope {
 public final class AlgorithmScope {
     fileprivate var declarations: [AlgorithmElement] = []
 
-    public init() {}
+    init() {}
 
     public func sharedVar<Value: TLAValueType>(
         _ name: String,
@@ -1100,7 +1100,7 @@ public final class AlgorithmScope {
 public final class ProcessScope {
     fileprivate var declarations: [AlgorithmElement] = []
 
-    public init() {}
+    init() {}
 
     public func localVar<Value: TLAValueType>(
         _ name: String,
@@ -1127,7 +1127,7 @@ public final class ProcessScope {
 public final class ProcedureScope {
     fileprivate var declarations: [AlgorithmElement] = []
 
-    public init() {}
+    init() {}
 
     public func localVar<Value: TLAValueType>(
         _ name: String,
