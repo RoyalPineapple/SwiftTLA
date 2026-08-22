@@ -29,7 +29,7 @@ extension MacroExpander {
             }
             return """
             state = try _storage.replacing(
-                value: \(collection.formalName).projection().modelValue,
+                value: \(collection.formalName).tlaValue,
                 at: \(ordinal),
                 in: state
             )

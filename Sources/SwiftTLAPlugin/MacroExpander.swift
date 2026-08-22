@@ -468,13 +468,8 @@ extension MacroExpander {
                 let source = """
                 @discardableResult
                 \(isActor ? "fileprivate" : "public mutating") func \(action.swiftIdentifier)(id: \(collection.elementType).ID) throws -> TransitionResult {
-                    let projection = \(collection.formalName).projection()
-                    let targetKey: TLAValue
-                    do {
-                        targetKey = try projection.key(for: id, collection: "\(collection.formalName)", action: "\(action.formalName)")
-                    } catch {
-                        throw error
-                    }
+                    _ = try \(collection.formalName).entry(for: id)
+                    let targetKey = id.tlaValue
                     let storageState = try _stateWithLiveCollections()
                     guard case .function(let originalValues) = try _storage.value(
                         at: \(variableOrdinal),

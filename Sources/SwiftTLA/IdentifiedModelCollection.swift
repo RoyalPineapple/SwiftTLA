@@ -82,6 +82,14 @@ extension IdentifiedModelCollection.Entry: Sendable where Element: Sendable, Val
 
 extension IdentifiedModelCollection: Sendable where Element: Sendable, Element.ID: Sendable, Value: Sendable {}
 
+extension IdentifiedModelCollection: TLAValueConvertible where Element.ID: TLAValueType {
+  public var tlaValue: TLAValue {
+    .function(Dictionary(uniqueKeysWithValues: insertionOrder.compactMap { id in
+      entries[id].map { (id.tlaValue, $0.value.tlaValue) }
+    }))
+  }
+}
+
 public enum SymmetricCollectionRuntimeError: Error, Equatable, Sendable, CustomStringConvertible {
   case invalidVerificationScope(collection: String, scope: Int)
   case unknownMember(collection: String)
