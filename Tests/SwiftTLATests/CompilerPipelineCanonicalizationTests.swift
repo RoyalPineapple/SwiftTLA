@@ -510,7 +510,11 @@ struct CompilerPipelineCanonicalizationTests {
             name: "CompiledRuntime",
             variables: [
                 .init(name: "counter", initial: .int(0)),
-                .init(name: "choice", initialSet: .setLiteral([.value(.int(1)), .value(.int(2))]))
+                .init(
+                    name: "choice",
+                    initial: .int(0),
+                    initialSet: .setLiteral([.value(.int(1)), .value(.int(2))])
+                )
             ],
             actions: [
                 .init(
