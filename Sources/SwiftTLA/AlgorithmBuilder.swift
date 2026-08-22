@@ -1311,7 +1311,8 @@ public struct Algorithm: Sendable, SpecComponent {
         @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
     ) {
         let scope = AlgorithmScope()
-        model = AlgorithmModel(name: name, components: scope.declarations.map(\.model) + body(scope).map(\.model))
+        let components = body(scope)
+        model = AlgorithmModel(name: name, components: scope.declarations.map(\.model) + components.map(\.model))
     }
 
     internal init(model: AlgorithmModel) {
@@ -1350,11 +1351,12 @@ public func Each<Value: FiniteDomainKey>(
 ) -> AlgorithmElement {
     let scope = ProcessScope()
     let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
+    let components = body(identifier, scope)
     return AlgorithmElement(model: .process(.init(
         typeName: String(describing: Value.self),
         domain: domain.values.map(\.tlaValue),
         fairness: fairness.model,
-        components: scope.declarations.map(\.model) + body(identifier, scope).map(\.model)
+        components: scope.declarations.map(\.model) + components.map(\.model)
     )))
 }
 
