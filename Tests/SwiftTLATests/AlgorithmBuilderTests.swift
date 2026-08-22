@@ -116,12 +116,12 @@ struct AlgorithmBuilderTests {
         let statement = AlgorithmStatementModel.letBinding(
             variable: "self",
             value: .int(1),
-            body: [.assert(.equal(.currentProcess, .variable("self")))]
+            [.assert(.equal(.currentProcess, .variable("self")))]
         )
         #expect(statement.replacingCurrentProcess(with: .variable("self")) == .letBinding(
             variable: "self_1",
             value: .int(1),
-            body: [.assert(.equal(.variable("self"), .variable("self_1")))]
+            [.assert(.equal(.variable("self"), .variable("self_1")))]
         ))
     }
 
@@ -145,12 +145,12 @@ struct AlgorithmBuilderTests {
         let statement = AlgorithmStatementModel.letBinding(
             variable: "count",
             value: .int(1),
-            body: [.assert(.equal(.processLocalFamily("count"), .variable("count")))]
+            [.assert(.equal(.processLocalFamily("count"), .variable("count")))]
         )
         #expect(statement.replacingProcessLocalFamily(named: "count", with: .variable("count")) == .letBinding(
             variable: "count_1",
             value: .int(1),
-            body: [.assert(.equal(.variable("count"), .variable("count_1")))]
+            [.assert(.equal(.variable("count"), .variable("count_1")))]
         ))
     }
 
@@ -241,7 +241,7 @@ struct AlgorithmBuilderTests {
         let capture = AlgorithmStatementModel.letBinding(
             variable: "source",
             value: .value(.int(0)),
-            body: [
+            [
                 .set(target: .root("parameter"), value: .variable("parameter"))
             ]
         )
@@ -251,7 +251,7 @@ struct AlgorithmBuilderTests {
             assignmentTargets: .replaceWhenVariable
         )
 
-        guard case .letBinding(let binder, _, let body) = substituted,
+        guard case .letBinding(variable: let binder, value: _, let body) = substituted,
               case .set(let target, let value) = body.first,
               case .root(let root) = target
         else {
@@ -265,7 +265,7 @@ struct AlgorithmBuilderTests {
         let shadowed = AlgorithmStatementModel.letBinding(
             variable: "parameter",
             value: .variable("parameter"),
-            body: [
+            [
                 .set(target: .root("parameter"), value: .variable("parameter"))
             ]
         ).substitutingVariable(
@@ -274,7 +274,7 @@ struct AlgorithmBuilderTests {
             assignmentTargets: .replaceWhenVariable
         )
 
-        guard case .letBinding(let shadowBinder, let definition, let shadowBody) = shadowed,
+        guard case .letBinding(variable: let shadowBinder, value: let definition, let shadowBody) = shadowed,
               case .set(let shadowTarget, let shadowValue) = shadowBody.first,
               case .root(let shadowRoot) = shadowTarget
         else {
@@ -351,7 +351,7 @@ struct AlgorithmBuilderTests {
             }
         }
         let algorithm = Algorithm("ReachableGraph", scoped: { scope in
-            _ = scope.sharedVar("successors", in: choices)
+            let _ = scope.sharedVar("successors", in: choices)
             Do(TestControlLabel.done) { Stop() }
         })
 
