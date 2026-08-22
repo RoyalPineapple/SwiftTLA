@@ -6,7 +6,7 @@ struct ByzPaxosConsensusModuleTests {
   @Test("typed declarations render the abstract consensus transition system")
   func typedAbstractConsensusModel() throws {
     let compilation = try ByzPaxosConsensus.module.compile()
-    let module = try compilation.renderedTLAModuleBundle().tla
+    let module = compilation.renderedTLAModuleBundle().tla
 
     #expect(ByzPaxosConsensus.module.formalOperatorDefinitions.isEmpty)
     #expect(module.contains("CONSTANTS Value"))
@@ -33,18 +33,19 @@ struct ByzPaxosConsensusModuleTests {
   func rendersFormalOperatorDependencyBeforeItsUse() throws {
     let consumer = TLASpec("FormalDependency") {
       FormalDefinition("SafeAt", taking: Int.self) { _ in true }
+      let safeAt: Expr<Bool> = FormalCall("SafeAt", 1)
       FormalDefinition(
         "TypeOK",
         parameters: [],
-        body: FormalCall<Bool>("SafeAt", 1),
+        body: safeAt,
         dependsOn: ["SafeAt"]
       )
     }
 
     let compilation = try consumer.compile()
-    let source = try compilation.renderedTLAModuleBundle().tla
-    let operatorRange = try #require(source.range(of: "SafeAt(value0) == TRUE"))
-    let useRange = try #require(source.range(of: "TypeOK == SafeAt(1)"))
+    let source = compilation.renderedTLAModuleBundle().tla
+    let operatorRange = #require(source.range(of: "SafeAt(value0) == TRUE"))
+    let useRange = #require(source.range(of: "TypeOK == SafeAt(1)"))
     #expect(operatorRange.lowerBound < useRange.lowerBound)
   }
 
