@@ -47,9 +47,9 @@ public struct ChannelModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("Channel") {
+        #spec("Channel") { scope in
             Extends(.naturals)
-            let channel = SharedVar("channel", in: SetExpr<Record<ChannelSchema>>.literal(
+            let channel = scope.sharedVar("channel", in: SetExpr<Record<ChannelSchema>>.literal(
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),

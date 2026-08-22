@@ -3,7 +3,20 @@ extension TLASpec {
     _ name: String,
     @SpecBuilder _ builder: () -> [SpecComponent]
   ) {
-    let components = builder()
+    self.init(name, components: builder())
+  }
+
+  public init(
+    _ name: String,
+    @SpecBuilder _ builder: (inout SpecificationScope) -> [SpecComponent]
+  ) {
+    var scope = SpecificationScope()
+    let body = builder(&scope)
+    let components = scope.declarations + body
+    self.init(name, components: components)
+  }
+
+  private init(_ name: String, components: [SpecComponent]) {
     var variables: [NamedVar] = []
     var actions: [NamedAction] = []
     var invariants: [NamedInvariant] = []

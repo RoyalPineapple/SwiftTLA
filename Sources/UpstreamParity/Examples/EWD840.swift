@@ -23,9 +23,9 @@ public struct EWD840Model: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("EWD840") {
+        #spec("EWD840") { scope in
             Extends(.integers)
-            let active = SharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
+            let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
@@ -35,7 +35,7 @@ public struct EWD840Model: Sendable {
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
             ))
-            let color = SharedVar("color", in: SetExpr<Function<Node, Color>>.literal(
+            let color = scope.sharedVar("color", in: SetExpr<Function<Node, Color>>.literal(
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .white)),
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .black)),
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .black), (Node.two, .white)),
@@ -45,8 +45,8 @@ public struct EWD840Model: Sendable {
                 Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .white)),
                 Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .black))
             ))
-            let tpos = SharedVar("tpos", in: 0...2)
-            let tcolor = SharedVar("tcolor", initial: Color.black)
+            let tpos = scope.sharedVar("tpos", in: 0...2)
+            let tcolor = scope.sharedVar("tcolor", initial: Color.black)
 
             Action("InitiateProbe") {
                 tpos == 0 && (tcolor == Color.black || color[.zero] == Color.black)

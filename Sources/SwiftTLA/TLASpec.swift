@@ -335,7 +335,7 @@ struct AuthoredPlusCalDeclaration: Sendable, Equatable {
     self.dependencies = dependencies
   }
 }
-public struct VarDecl: SpecComponent {
+public struct VarDecl: SpecComponent, Sendable {
   public let name: String
   public let initial: TLAValue
   public let initialSet: StateExpr?

@@ -284,6 +284,7 @@ extension ParserSession {
       func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
+        let declarationScope = closureParameterNames(in: closure).first
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
@@ -296,7 +297,11 @@ extension ParserSession {
                 parseForLoop(forStmt, into: &result)
             } else if case .decl(let decl) = statement.item,
                       let varDecl = decl.as(VariableDeclSyntax.self) {
-                parseLocalDeclaration(varDecl, into: &result)
+                parseLocalDeclaration(
+                    varDecl,
+                    into: &result,
+                    declarationScope: declarationScope
+                )
             } else {
                 result.diagnostics.append(.init(
                     message: "Specification body contains an unsupported item.",
@@ -312,7 +317,8 @@ extension ParserSession {
 
     private func parseLocalDeclaration(
         _ declaration: VariableDeclSyntax,
-        into result: inout ParsedSpecComponents
+        into result: inout ParsedSpecComponents,
+        declarationScope: String? = nil
     ) {
         var containsVariableConstructor = false
         for binding in declaration.bindings {
@@ -342,7 +348,7 @@ extension ParserSession {
                 // `SymmetricCollection` owns the declaration; this handle only
                 // gives that declaration its authored source name and types.
                 continue
-            } else if resolveVarCall(call) != nil {
+            } else if resolveVarCall(call, in: declarationScope) != nil {
                 containsVariableConstructor = true
             } else if let value = decodeTypedFacadeValue(
                 ExprSyntax(call),
@@ -359,7 +365,7 @@ extension ParserSession {
             }
         }
         if containsVariableConstructor {
-            parseVarDecl(declaration, into: &result)
+            parseVarDecl(declaration, into: &result, declarationScope: declarationScope)
         }
     }
 
@@ -393,7 +399,11 @@ extension ParserSession {
     }
 
     /// Parses supported variable bindings into `ParsedSpecComponents.variables`.
-    func parseVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
+    func parseVarDecl(
+        _ varDecl: VariableDeclSyntax,
+        into result: inout ParsedSpecComponents,
+        declarationScope: String? = nil
+    ) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
@@ -408,7 +418,7 @@ extension ParserSession {
                 }
             }
 
-            let stateVarInfo = resolveVarCall(fc)
+            let stateVarInfo = resolveVarCall(fc, in: declarationScope)
             let varTypeName = swiftValueType(from: binding.typeAnnotation)
                 ?? stateVarInfo?.1
                 ?? resolveVarTypeArg(fc)
@@ -518,7 +528,10 @@ extension ParserSession {
 
     /// Resolves a supported low-level variable call expression.
     /// Returns nil if the call is not a variable constructor.
-    func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
+    func resolveVarCall(
+        _ fc: FunctionCallExprSyntax,
+        in declarationScope: String? = nil
+    ) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
             guard ["Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
             return (ref.baseName.text, nil)
@@ -529,6 +542,11 @@ extension ParserSession {
             let typeArgs = Array(generic.genericArgumentClause.arguments)
             let swiftTypeName = typeArgs.first.flatMap { Self.sourceTypeSpelling($0.argument) }
             return (name, swiftTypeName)
+        }
+        if let member = fc.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "sharedVar",
+           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == declarationScope {
+            return ("SharedVar", nil)
         }
         return nil
     }

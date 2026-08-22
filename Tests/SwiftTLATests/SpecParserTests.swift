@@ -84,6 +84,26 @@ private func parserEnum(
         #expect(parsed.diagnostics[0].message.contains("Unsupported Algorithm declaration"))
     }
 
+    @Test("Specification parser binds root scoped shared declarations")
+    func parsesRootScopedSharedDeclaration() throws {
+        let source = """
+        { scope in
+            let count = scope.sharedVar("count", initial: 0)
+            Invariant("Nonnegative") { count >= 0 }
+        }
+        """
+
+        let closure = try #require(
+            Parser.parse(source: source).statements.first?.item.as(ExpressionStmtSyntax.self)?.expression
+                .as(ClosureExprSyntax.self)
+        )
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.variables.map(\.name) == ["count"])
+        #expect(parsed.invariants.map(\.name) == ["Nonnegative"])
+    }
+
     @Test("Algorithm parser rejects declarations it does not lower")
     func rejectsUnsupportedAlgorithmDeclaration() throws {
         let source = """

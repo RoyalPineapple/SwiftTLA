@@ -46,9 +46,9 @@ public struct AsynchInterfaceModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("AsynchInterface") {
+        #spec("AsynchInterface") { scope in
             Extends(.naturals)
-            let interface = SharedVar("interface", in: SetExpr<Record<InterfaceSchema>>.literal(
+            let interface = scope.sharedVar("interface", in: SetExpr<Record<InterfaceSchema>>.literal(
                 Record.literal(.init(InterfaceSchema.value, .d1), .init(InterfaceSchema.ready, 0), .init(InterfaceSchema.acknowledgement, 0)),
                 Record.literal(.init(InterfaceSchema.value, .d1), .init(InterfaceSchema.ready, 0), .init(InterfaceSchema.acknowledgement, 1)),
                 Record.literal(.init(InterfaceSchema.value, .d1), .init(InterfaceSchema.ready, 1), .init(InterfaceSchema.acknowledgement, 0)),

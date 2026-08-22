@@ -10,14 +10,14 @@ public struct BarrierModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("Barrier") {
+        #spec("Barrier") { scope in
             Extends(.integers)
-            let pc1 = SharedVar("pc1", initial: BarrierPhase.b0)
-            let pc2 = SharedVar("pc2", initial: BarrierPhase.b0)
-            let pc3 = SharedVar("pc3", initial: BarrierPhase.b0)
-            let pc4 = SharedVar("pc4", initial: BarrierPhase.b0)
-            let pc5 = SharedVar("pc5", initial: BarrierPhase.b0)
-            let pc6 = SharedVar("pc6", initial: BarrierPhase.b0)
+            let pc1 = scope.sharedVar("pc1", initial: BarrierPhase.b0)
+            let pc2 = scope.sharedVar("pc2", initial: BarrierPhase.b0)
+            let pc3 = scope.sharedVar("pc3", initial: BarrierPhase.b0)
+            let pc4 = scope.sharedVar("pc4", initial: BarrierPhase.b0)
+            let pc5 = scope.sharedVar("pc5", initial: BarrierPhase.b0)
+            let pc6 = scope.sharedVar("pc6", initial: BarrierPhase.b0)
             Action("b0_1") { pc1 == BarrierPhase.b0 && pc1.becomes(BarrierPhase.b1) }
             Action("b0_2") { pc2 == BarrierPhase.b0 && pc2.becomes(BarrierPhase.b1) }
             Action("b0_3") { pc3 == BarrierPhase.b0 && pc3.becomes(BarrierPhase.b1) }

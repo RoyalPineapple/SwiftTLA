@@ -22,9 +22,9 @@ public struct EWD998TerminationModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("AsyncTerminationDetection") {
+        #spec("AsyncTerminationDetection") { scope in
             Extends(.naturals)
-            let active = SharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
+            let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
                 Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, false)),
                 Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, true)),
                 Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, true), (.three, false)),
@@ -42,10 +42,10 @@ public struct EWD998TerminationModel: Sendable {
                 Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, false)),
                 Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, true))
             ))
-            let pending = SharedVar("pending", initial: Function<Node, Int>.literal(
+            let pending = scope.sharedVar("pending", initial: Function<Node, Int>.literal(
                 (.zero, 0), (.one, 0), (.two, 0), (.three, 0)
             ))
-            let terminationDetected = SharedVar("terminationDetected", initial: false)
+            let terminationDetected = scope.sharedVar("terminationDetected", initial: false)
 
             Constraint(
                 pending[.zero] <= 3 && pending[.one] <= 3

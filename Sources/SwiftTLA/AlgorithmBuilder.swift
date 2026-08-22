@@ -363,11 +363,9 @@ public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
     StatementMacro(parameterNames: [], statements: body().map(\.model))
 }
 
-/// A typed shared algorithm variable.
+/// A typed shared variable declaration.
 ///
-/// Declare it with `let value = SharedVar("value", initial: 0)` inside a
-/// `#spec` algorithm. The `#spec` macro registers the declaration with the
-/// runtime builder, while the parser independently reads the same declaration.
+/// Declare it through the scope supplied by `TLASpec` or `Algorithm`.
 /// Application code never needs the engine-level `Var` type for this form.
 public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
@@ -990,6 +988,76 @@ public struct AlgorithmElement: Sendable {
     fileprivate let model: AlgorithmComponentModel
 }
 
+private struct SharedVariableDeclaration: Sendable {
+    let name: String
+    let initial: StateExpr
+    let initialSet: StateExpr?
+    let swiftTypeName: String
+
+    init<Value>(_ variable: SharedVariable<Value>) {
+        name = variable.name
+        initial = variable.initial
+        initialSet = variable.initialSet
+        swiftTypeName = variable.swiftTypeName
+    }
+
+    var algorithmElement: AlgorithmElement {
+        AlgorithmElement(model: .shared(.init(
+            root: name,
+            initial: initial,
+            initialSet: initialSet,
+            swiftTypeName: swiftTypeName
+        )))
+    }
+
+    var specificationDeclaration: VarDecl {
+        if let initialSet {
+            VarDecl(name, .int(0), initialSet: initialSet)
+        } else {
+            VarDecl(name, initExpr: initial)
+        }
+    }
+}
+
+public struct SpecificationScope: Sendable {
+    var declarations: [VarDecl] = []
+
+    public init() {}
+
+    public mutating func sharedVar<Value: TLAValueType>(
+        _ name: String,
+        initial: Value
+    ) -> SharedVariable<Value> {
+        let variable = SharedVar(name, initial: initial)
+        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        return variable
+    }
+
+    public mutating func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+        let variable = SharedVar(name, in: range)
+        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        return variable
+    }
+
+    public mutating func sharedVar<Value: TLAValueType>(
+        _ name: String,
+        in values: Expr<SetExpr<Value>>
+    ) -> SharedVariable<Value> {
+        let variable = SharedVar(name, in: values)
+        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        return variable
+    }
+
+    public mutating func sharedVar<Value: TLAValueType>(
+        _ name: String,
+        initial: Expr<Value>
+    ) -> SharedVariable<Value> {
+        let variable = SharedVar(name, initial: initial)
+        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        return variable
+    }
+}
+
 public struct AlgorithmScope: Sendable {
     fileprivate var declarations: [AlgorithmElement] = []
 
@@ -1000,13 +1068,13 @@ public struct AlgorithmScope: Sendable {
         initial: Value
     ) -> SharedVariable<Value> {
         let variable = SharedVar(name, initial: initial)
-        declarations.append(sharedDeclaration(variable))
+        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
         return variable
     }
 
     public mutating func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVar(name, in: range)
-        declarations.append(sharedDeclaration(variable))
+        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
         return variable
     }
 
@@ -1015,7 +1083,7 @@ public struct AlgorithmScope: Sendable {
         in values: Expr<SetExpr<Value>>
     ) -> SharedVariable<Value> {
         let variable = SharedVar(name, in: values)
-        declarations.append(sharedDeclaration(variable))
+        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
         return variable
     }
 
@@ -1024,7 +1092,7 @@ public struct AlgorithmScope: Sendable {
         initial: Expr<Value>
     ) -> SharedVariable<Value> {
         let variable = SharedVar(name, initial: initial)
-        declarations.append(sharedDeclaration(variable))
+        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
         return variable
     }
 }
@@ -1081,15 +1149,6 @@ public struct ProcedureScope: Sendable {
         declarations.append(localDeclaration(variable))
         return variable
     }
-}
-
-private func sharedDeclaration<Value>(_ variable: SharedVariable<Value>) -> AlgorithmElement {
-    AlgorithmElement(model: .shared(.init(
-        root: variable.name,
-        initial: variable.initial,
-        initialSet: variable.initialSet,
-        swiftTypeName: variable.swiftTypeName
-    )))
 }
 
 private func localDeclaration<Value>(_ variable: LocalVariable<Value>) -> AlgorithmElement {

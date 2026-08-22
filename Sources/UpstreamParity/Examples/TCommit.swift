@@ -34,9 +34,9 @@ public struct TCommitModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("TCommit") {
+        #spec("TCommit") { scope in
             Extends(.integers)
-            let rmState = SharedVar("rmState", initial: Function<ResourceManager, ManagerState>.literal(
+            let rmState = scope.sharedVar("rmState", initial: Function<ResourceManager, ManagerState>.literal(
                 (.one, .working), (.two, .working), (.three, .working)
             ))
 
