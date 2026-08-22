@@ -65,7 +65,8 @@ private func parserEnum(
             ActionBinding(name: "process", values: [.string("left"), .string("right")])
         ])
         let facts = parsed.machineSurfaceSwiftFacts(for: compilation)
-        #expect(facts.actionBindingTypes["increment"] == ["process": "Node"])
+        let increment = try #require(compilation.layout.actionID(named: "increment"))
+        #expect(facts.actionBindingTypes[increment] == ["Node"])
     }
 
     @Test("Function mapping declarations retain their generated Swift type")

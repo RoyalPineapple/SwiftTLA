@@ -82,20 +82,65 @@ extension ParserSession {
         package func machineSurfaceSwiftFacts(
             for compilation: CompiledSpecification
         ) -> MachineSurfaceSwiftFacts {
-            var actionBindingTypes = Dictionary(
+            let variableTypesByName = swiftVariableTypes()
+            let actionBindingTypesByName = Dictionary(
                 uniqueKeysWithValues: actions.map { ($0.name, $0.bindingSwiftTypes) }
             )
-            for action in compilation.spec.actions {
-                guard action.generatedBindingSwiftTypes.isEmpty == false else { continue }
-                actionBindingTypes[action.name] = action.generatedBindingSwiftTypes
+            let symmetricCollectionsByName = Dictionary(
+                uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0) }
+            )
+            let collectionActionsByName = Dictionary(
+                uniqueKeysWithValues: collectionActions.map { ($0.name, $0.collectionName) }
+            )
+            let variableIDsByName = Dictionary(
+                uniqueKeysWithValues: compilation.layout.variables.map {
+                    ($0.declaration.name, $0.id)
+                }
+            )
+            let variableTypes = compilation.layout.variables.reduce(into: [VariableID: String]()) {
+                facts, layout in
+                if let swiftType = variableTypesByName[layout.declaration.name] {
+                    facts[layout.id] = swiftType
+                }
+            }
+            let actionBindingTypes = compilation.layout.actions.reduce(into: [ActionID: [String?]]()) {
+                facts, layout in
+                let action = compilation.spec.actions[layout.id.ordinal]
+                let types = action.generatedBindingSwiftTypes.isEmpty
+                    ? actionBindingTypesByName[layout.declaration.name, default: [:]]
+                    : action.generatedBindingSwiftTypes
+                let bindings = action.bindings.map { types[$0.name] }
+                if bindings.compactMap(\.self).isEmpty == false {
+                    facts[layout.id] = bindings
+                }
+            }
+            let symmetricCollections = compilation.layout.variables.reduce(
+                into: [VariableID: MachineSurfaceSwiftFacts.SymmetricCollection]()
+            ) { facts, layout in
+                guard let collection = symmetricCollectionsByName[layout.declaration.name] else {
+                    return
+                }
+                facts[layout.id] = .init(
+                    elementType: collection.elementType,
+                    valueType: collection.valueType,
+                    verificationScope: collection.verificationScope,
+                    initial: collection.declaration.initial
+                )
+            }
+            let collectionActions = compilation.layout.actions.reduce(into: [ActionID: VariableID]()) {
+                facts, layout in
+                guard let collectionName = collectionActionsByName[layout.declaration.name],
+                      let variableID = variableIDsByName[collectionName]
+                else {
+                    return
+                }
+                facts[layout.id] = variableID
             }
             return .init(
-                variableTypes: swiftVariableTypes(),
+                variableTypes: variableTypes,
                 actionBindingTypes: actionBindingTypes,
-                symmetricCollections: Dictionary(uniqueKeysWithValues: symmetricCollections.map {
-                    ($0.name, .init(elementType: $0.elementType, valueType: $0.valueType))
-                }),
-                collectionActions: Dictionary(uniqueKeysWithValues: collectionActions.map { ($0.name, $0.collectionName) })
+                symmetricCollections: symmetricCollections,
+                collectionActions: collectionActions
             )
         }
     }
