@@ -250,7 +250,9 @@ struct CompiledSymmetrySet: Sendable {
 }
 
 struct CompiledSymmetricCollection: Sendable {
+    let variable: VariableID
     let members: [TLAValue]
+    let domainSymbol: String
 }
 
 struct CompiledSemantics: Sendable {

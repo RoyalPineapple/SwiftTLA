@@ -128,8 +128,12 @@ struct CompiledLowerer {
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: symmetry.values)
             },
-            symmetricCollections: spec.symmetricCollections.map {
-                .init(members: $0.metadata.members)
+            symmetricCollections: try spec.symmetricCollections.map { collection in
+                .init(
+                    variable: try variable(at: "variables.\(collection.name).declaration"),
+                    members: collection.metadata.members,
+                    domainSymbol: collection.metadata.domainSymbol
+                )
             }
         )
     }
