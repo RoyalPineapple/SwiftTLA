@@ -32,13 +32,15 @@ public struct SpecExpressionMacro: ExpressionMacro {
     ) -> ExprSyntax {
         let arguments: LabeledExprListSyntax
         if body.signature == nil {
-            arguments = [LabeledExprSyntax(expression: name)]
+            arguments = [
+                LabeledExprSyntax(expression: name, trailingComma: .commaToken()),
+                LabeledExprSyntax(expression: ExprSyntax(body))
+            ]
             return ExprSyntax(FunctionCallExprSyntax(
                 calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
                 leftParen: .leftParenToken(),
                 arguments: arguments,
-                rightParen: .rightParenToken(),
-                trailingClosure: body
+                rightParen: .rightParenToken()
             ))
         }
         arguments = [
