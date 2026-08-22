@@ -90,7 +90,7 @@ public struct VoteProofModel: Sendable {
                 ]
             )
 
-            Algorithm("Voting") { scope in
+            Algorithm("Voting", scoped: { scope in
                 let votes = scope.sharedVar("votes", initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
                 let maxBal = scope.sharedVar("maxBal", initial: Function<Acceptor, Int>.mapping { _ in -1 })
                 let values = SetExpr<Value>.literal(.v1, .v2)
@@ -113,14 +113,14 @@ public struct VoteProofModel: Sendable {
                                     recursion(priorBallot.expr)
                                         && ForAll(in: quorum.expr) { acceptor in
                                             ForAll(in: values) { candidate in
-                                                !votes[acceptor].contains(Pair.literal(priorBallot.expr, candidate.expr))
+                                                !votes[acceptor].contains(Pair<Int, Value>.literal(priorBallot.expr, candidate.expr))
                                                     || candidate == value
                                             }
                                         }
                                 )) && ForAll(in: IntRange(priorBallot.expr + 1, through: currentBallot.expr - 1)) { laterBallot in
                                     ForAll(in: quorum.expr) { acceptor in
                                         ForAll(in: values) { candidate in
-                                            !votes[acceptor].contains(Pair.literal(laterBallot.expr, candidate.expr))
+                                            !votes[acceptor].contains(Pair<Int, Value>.literal(laterBallot.expr, candidate.expr))
                                         }
                                     }
                                 }
@@ -134,7 +134,7 @@ public struct VoteProofModel: Sendable {
                 FormalDefinition("ChosenIn", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
                     Exists(in: quorums) { quorum in
                         ForAll(in: quorum.expr) { acceptor in
-                            votes[acceptor].contains(Pair.literal(ballot.expr, value.expr))
+                            votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, value.expr))
                         }
                     }
                 }
@@ -164,8 +164,8 @@ public struct VoteProofModel: Sendable {
                         ForAll(in: ballots) { ballot in
                             ForAll(in: values) { value in
                                 ForAll(in: values) { otherValue in
-                                    (!votes[acceptor].contains(Pair.literal(ballot.expr, value.expr))
-                                        || !votes[acceptor].contains(Pair.literal(ballot.expr, otherValue.expr)))
+                                    (!votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, value.expr))
+                                        || !votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, otherValue.expr)))
                                         || value == otherValue
                                 }
                             }
@@ -177,7 +177,7 @@ public struct VoteProofModel: Sendable {
                     ForAll(in: acceptors) { acceptor in
                         ForAll(in: ballots) { ballot in
                             ForAll(in: values) { value in
-                                !votes[acceptor].contains(Pair.literal(ballot.expr, value.expr))
+                                !votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, value.expr))
                                     || FormalCall(as: Bool.self, "SafeAt", ballot.expr, value.expr)
                             }
                         }
@@ -190,8 +190,8 @@ public struct VoteProofModel: Sendable {
                             ForAll(in: ballots) { ballot in
                                 ForAll(in: values) { firstValue in
                                     ForAll(in: values) { secondValue in
-                                        (!votes[firstAcceptor].contains(Pair.literal(ballot.expr, firstValue.expr))
-                                            || !votes[secondAcceptor].contains(Pair.literal(ballot.expr, secondValue.expr)))
+                                        (!votes[firstAcceptor].contains(Pair<Int, Value>.literal(ballot.expr, firstValue.expr))
+                                            || !votes[secondAcceptor].contains(Pair<Int, Value>.literal(ballot.expr, secondValue.expr)))
                                             || firstValue == secondValue
                                     }
                                 }
@@ -217,11 +217,11 @@ public struct VoteProofModel: Sendable {
                     When(
                         maxBal[acceptor] <= vote.expr.first()
                             && ForAll(in: values) { candidate in
-                                !votes[acceptor].contains(Pair.literal(vote.expr.first(), candidate.expr))
+                                !votes[acceptor].contains(Pair<Int, Value>.literal(vote.expr.first(), candidate.expr))
                             }
                             && ForAll(in: acceptors.removing(acceptor.expr)) { peer in
                                 ForAll(in: values) { candidate in
-                                    !votes[peer].contains(Pair.literal(vote.expr.first(), candidate.expr))
+                                    !votes[peer].contains(Pair<Int, Value>.literal(vote.expr.first(), candidate.expr))
                                         || candidate == vote.expr.second()
                                 }
                             }
@@ -229,7 +229,7 @@ public struct VoteProofModel: Sendable {
                     )
                     Assign(votes, to: votes.updating(
                         acceptor,
-                        to: votes[acceptor].inserting(Pair.literal(vote.expr.first(), vote.expr.second()))
+                        to: votes[acceptor].inserting(Pair<Int, Value>.literal(vote.expr.first(), vote.expr.second()))
                     ))
                     Assign(maxBal, to: maxBal.updating(acceptor, to: vote.expr.first()))
                 }
@@ -241,13 +241,13 @@ public struct VoteProofModel: Sendable {
                                 increaseMaxBal(ballot.expr, selfID.expr)
                             } or: {
                                 With(values) { value in
-                                    voteFor(Pair.literal(ballot.expr, value.expr), selfID.expr)
+                                    voteFor(Pair<Int, Value>.literal(ballot.expr, value.expr), selfID.expr)
                                 }
                             }
                         }
                     }
                 }
-            }
+            })
 
         }
     }
