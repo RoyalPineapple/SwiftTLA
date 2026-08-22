@@ -251,7 +251,8 @@ struct CompilerPipelineCanonicalizationTests {
                 }
             }
         })
-        #expect(compilation.identity != try compiledSourceSpecification(changed).compile().identity)
+        let changedCompilation = try compiledSourceSpecification(changed).compile()
+        #expect(compilation.identity != changedCompilation.identity)
     }
 
     @Test("compiled algorithm control state uses control-location identities")
@@ -507,7 +508,7 @@ struct CompilerPipelineCanonicalizationTests {
             name: "CompiledRuntime",
             variables: [
                 .init(name: "counter", initial: .int(0)),
-                .init(name: "choice", initialSet: .setLiteral([.int(1), .int(2)]))
+                .init(name: "choice", initialSet: .setLiteral([StateExpr.int(1), .int(2)]))
             ],
             actions: [
                 .init(
@@ -766,13 +767,14 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
 
-        guard case .guard_(.equal(.recordAccess(_, let field), _)) = compilation.semantics.actions[0].body else {
+        guard case .guard_(.equal(.recordAccess(_, let field, _), _)) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled record access")
             return
         }
-        #expect(compilation.layout.field(field)?.renderedName == "count")
-        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-        let successors = try CompiledRuntime(compilation: compilation).successors(from: initial)
+        #expect(field.ordinal == 0)
+        let action = try #require(compilation.actionID(named: "step"))
+        let initial = try #require(try compilation.initialStateProjections().first)
+        let successors = try compilation.successors(for: action, arguments: [], from: initial)
         #expect(successors.count == 1)
     }
 
@@ -796,10 +798,11 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let successor = try #require(try runtime.successors(from: initial).first?.state)
-        let projection = try successor.projection(using: compilation.layout)
+        let action = try #require(compilation.actionID(named: "step"))
+        let initial = try #require(try compilation.initialStateProjections().first)
+        let projection = try #require(
+            try compilation.successors(for: action, arguments: [], from: initial).first
+        )
         let stateToken = try TLAStateProjection.Token(validating: "state")
         let state = try #require(projection.value(for: stateToken))
 
