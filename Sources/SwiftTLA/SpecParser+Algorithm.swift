@@ -120,13 +120,18 @@ private enum AlgorithmSourceConstruct: Equatable {
 }
 
 extension ParserSession {
+    private func algorithmBuilderClosure(in call: FunctionCallExprSyntax) -> ClosureExprSyntax? {
+        call.trailingClosure
+            ?? call.arguments.first(where: { $0.label?.text == "scoped" })?.expression.as(ClosureExprSyntax.self)
+    }
+
     /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
         guard let name = extractStringArg(call, index: 0),
-              let closure = call.trailingClosure
+              let closure = algorithmBuilderClosure(in: call)
         else {
             result.diagnostics.append(.init(
                 message: "Algorithm requires a string literal name and a builder body.",
@@ -294,7 +299,7 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
-        guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
+        guard let name = extractStringArg(call, index: 0), let closure = algorithmBuilderClosure(in: call) else {
             algorithmParseFailure = "Procedure requires a string literal name and a builder body."
             return nil
         }
@@ -475,7 +480,7 @@ extension ParserSession {
     ) -> AlgorithmComponentModel? {
         guard let domainSyntax = call.arguments.first?.expression,
               let domain = finiteAlgorithmDomain(domainSyntax),
-              let closure = call.trailingClosure
+              let closure = algorithmBuilderClosure(in: call)
         else {
             let knownDomains = enumDefinitions.map(\.typeName).sorted()
             let known = knownDomains.isEmpty ? "none" : knownDomains.joined(separator: ", ")
