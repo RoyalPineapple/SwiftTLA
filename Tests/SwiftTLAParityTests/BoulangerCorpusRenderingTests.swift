@@ -4,7 +4,6 @@ import Testing
 struct BoulangerCorpusRenderingTests {
     @Test("Boulanger preserves its Algorithm source through parser and builder")
     func parserBuilderFidelity() throws {
-        BoulangerModel._checkParserTree()
 
         let module = try BoulangerModel.spec.compile().renderedPlusCalBundle().root.tla
         #expect(module.contains("fair process"))

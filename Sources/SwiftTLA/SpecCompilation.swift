@@ -1,13 +1,22 @@
 import Foundation
+import CryptoKit
 
-/// Identifies the canonical formal interpretation consumed by SwiftTLA tools.
-///
-/// The identifier is deterministic for one semantic `TLASpec`; it deliberately
-/// excludes Swift-only presentation facts such as generated type names.
+private func isTLAModuleIdentifier(_ name: String) -> Bool {
+    func isLetter(_ scalar: Unicode.Scalar) -> Bool {
+        (65...90).contains(scalar.value) || (97...122).contains(scalar.value)
+    }
+
+    guard let first = name.unicodeScalars.first, first == "_" || isLetter(first) else { return false }
+    return name.unicodeScalars.dropFirst().allSatisfy {
+        $0 == "_" || isLetter($0) || (48...57).contains($0.value)
+    }
+}
+
+/// Identifies one canonical compiled specification.
 public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
     public let value: String
 
-    public init(value: String) {
+    init(value: String) {
         self.value = value
     }
 
@@ -30,6 +39,7 @@ public struct VariableDescription: Sendable, Equatable {
 
 public struct ActionDescription: Sendable, Equatable {
     public let name: String
+    public let renderedName: String
     public let sourceOffset: Int?
 }
 
@@ -60,16 +70,22 @@ public struct ModuleDescription: Sendable, Equatable {
 }
 
 /// The legal direct-module declaration order, resolved before rendering.
-public struct DirectModuleSectionPlan: Sendable, Equatable {
-    let definitionsBeforeInstances: [DirectModuleDefinition]
-    let definitionsAfterInstances: [DirectModuleDefinition]
-    let actions: [DirectModuleAction]
-    let emittedActionNames: [String: String]
+struct DirectModuleSectionPlan: Sendable, Equatable {
+    let renderedModuleSource: String
+    let renderedConfiguration: String
 }
 
 struct DirectModuleAction: Sendable, Equatable {
     let declaration: NamedAction
     let renderedBody: String
+}
+
+struct CompiledRefinement: Sendable {
+    let name: String
+    let instance: ModuleInstanceID
+    let `operator`: RefinementDecl.Operator
+    let abstract: CompiledSpecification
+    let variableMappings: [CompiledStateExpr]
 }
 
 /// The point at which a formal specification becomes available to consumers.
@@ -84,7 +100,8 @@ public struct CompiledSpecification: Sendable {
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
     let semantics: CompiledSemantics
-    let directModuleSections: DirectModuleSectionPlan
+    let refinements: [CompiledRefinement]
+    let moduleSectionPlans: [String: DirectModuleSectionPlan]
     let authoredPlusCalModule: AuthoredPlusCalModule?
 
     public var description: CompilationDescription {
@@ -94,7 +111,11 @@ public struct CompiledSpecification: Sendable {
                 .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
             },
             actions: layout.actions.map {
-                .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
+                .init(
+                    name: $0.declaration.name,
+                    renderedName: $0.renderedName,
+                    sourceOffset: $0.declaration.sourceOffset
+                )
             },
             procedures: layout.procedures.map {
                 .init(
@@ -121,7 +142,7 @@ public struct CompiledSpecification: Sendable {
         )
     }
 
-    public func initialStateProjections() throws -> [TLAStateProjection] {
+    package func initialStateProjections() throws -> [TLAStateProjection] {
         try CompiledRuntime(compilation: self).initialStates().map {
             try $0.projection(using: layout)
         }
@@ -129,6 +150,48 @@ public struct CompiledSpecification: Sendable {
 
     package func actionID(named name: String) -> ActionID? {
         layout.actionID(named: name)
+    }
+
+    package func actionRequest(
+        ordinal: Int,
+        formalArguments: [TLAValue]
+    ) throws -> CompiledActionRequest {
+        guard layout.actions.indices.contains(ordinal) else {
+            throw GeneratedMachineError.noMatchingSuccessor
+        }
+        return try actionRequest(
+            action: layout.actions[ordinal].id,
+            formalArguments: formalArguments
+        )
+    }
+
+    func actionRequest(
+        action: ActionID,
+        formalArguments: [TLAValue]
+    ) throws -> CompiledActionRequest {
+        guard semantics.actions.contains(where: { $0.id == action }) else {
+            throw GeneratedMachineError.noMatchingSuccessor
+        }
+        return .init(
+            action: action,
+            arguments: try formalArguments.map { try .init(formal: $0, using: layout) }
+        )
+    }
+
+    func matches(_ arguments: [CompiledValue], request: CompiledActionRequest) -> Bool {
+        arguments == request.arguments
+    }
+
+    package func generatedActionLabelInput(
+        for request: CompiledActionRequest
+    ) throws -> (ordinal: Int, formalArguments: [TLAValue]) {
+        guard let action = layout.actions.first(where: { $0.id == request.action }) else {
+            throw GeneratedMachineError.noMatchingSuccessor
+        }
+        return (
+            ordinal: action.id.ordinal,
+            formalArguments: try request.arguments.map { try $0.rendered(using: layout) }
+        )
     }
 
     package func successors(
@@ -139,7 +202,7 @@ public struct CompiledSpecification: Sendable {
         let formalState = try CompiledState(projection: state, compilation: self)
         return try CompiledRuntime(compilation: self)
             .successors(for: action, from: formalState)
-            .filter { $0.arguments == arguments }
+            .filter { try $0.arguments.map { try $0.rendered(using: layout) } == arguments }
             .map { try $0.state.projection(using: layout) }
     }
 
@@ -188,7 +251,8 @@ public struct CompiledSpecification: Sendable {
         layout: CompiledLayout,
         bindings: CompiledBindingTable,
         semantics: CompiledSemantics,
-        directModuleSections: DirectModuleSectionPlan,
+        refinements: [CompiledRefinement],
+        moduleSectionPlans: [String: DirectModuleSectionPlan],
         authoredPlusCalModule: AuthoredPlusCalModule? = nil
     ) {
         self.spec = spec
@@ -197,69 +261,65 @@ public struct CompiledSpecification: Sendable {
         self.layout = layout
         self.bindings = bindings
         self.semantics = semantics
-        self.directModuleSections = directModuleSections
+        self.refinements = refinements
+        self.moduleSectionPlans = moduleSectionPlans
         self.authoredPlusCalModule = authoredPlusCalModule
     }
 
     /// Renders a complete TLA+/CFG bundle from the already-linked closure.
-    public func renderedTLAModuleBundle(
-        additionalImports: [TLAModuleFile] = []
-    ) throws -> TLAModuleBundle {
-        let expectedIdentity = spec.compilationFingerprint
-        guard identity.value == expectedIdentity,
-              formalModuleClosure.root.module.compilationFingerprint == expectedIdentity else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "compilation.identity",
-                expected: expectedIdentity,
-                actual: identity.value,
-                nextSafeAction: "Compile the current source model again before rendering."
-            )
-        }
-
+    public func renderedTLAModuleBundle() throws -> TLAModuleBundle {
         let entries = formalModuleClosure.entries
-        guard let root = entries.last, root.module.name == spec.name else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "formalModuleClosure.root",
-                expected: "the compiled root module '\(spec.name)'",
-                actual: entries.last?.module.name ?? "no rendered root module",
-                nextSafeAction: "Compile the current source model again before rendering."
-            )
-        }
-
         let files = try entries.map { entry in
-            let compilation = entry.module.name == spec.name ? self : try entry.module.compile()
+            guard let sectionPlan = moduleSectionPlans[entry.module.name] else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "formalModuleClosure.\(entry.module.name)",
+                    expected: "a compiled module section plan",
+                    actual: "no module section plan",
+                    nextSafeAction: "Compile the source model again."
+                )
+            }
             return TLAModuleFile(
                 name: entry.module.name,
-                tla: entry.module.renderTLAModuleSource(sectionPlan: compilation.directModuleSections),
-                cfg: entry.module.name == spec.name ? entry.module.renderTLCConfiguration() : nil
+                tla: sectionPlan.renderedModuleSource,
+                cfg: entry.module.name == spec.name
+                    ? sectionPlan.renderedConfiguration
+                    : nil
             )
         }
-        let rootFile = files[files.count - 1]
-        let imports = Array(files.dropLast()) + additionalImports
-        let bundle: TLAModuleBundle
-        if additionalImports.isEmpty {
-            bundle = TLAModuleBundle(
-                root: rootFile,
-                imports: imports,
-                provenance: .compiled(
-                    identity: identity,
-                    ownership: entries.map {
-                        .init(
-                            moduleName: $0.module.name,
-                            owningRoot: $0.owningRoot,
-                            structuralPath: $0.structuralPath
-                        )
-                    }
-                )
+        guard let rootFile = files.last else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "formalModuleClosure",
+                expected: "a root module",
+                actual: "an empty module closure",
+                nextSafeAction: "Compile the source model again."
             )
-        } else {
-            bundle = .untrusted(root: rootFile, imports: imports)
         }
-        try bundle.validateRenderedBundleIntegrity()
+        let bundle = TLAModuleBundle(
+            root: rootFile,
+            imports: Array(files.dropLast()),
+            provenance: .compiled(
+                identity: identity,
+                ownership: entries.map {
+                    .init(
+                        moduleName: $0.module.name,
+                        owningRoot: $0.owningRoot,
+                        structuralPath: $0.structuralPath
+                    )
+                },
+                dependencies: formalModuleClosure.edges.map {
+                    .init(
+                        importingModule: $0.fromModule,
+                        importedModule: $0.toModule,
+                        structuralPath: $0.structuralPath
+                    )
+                }
+            )
+        )
+        try bundle.validateDeclaredClosure()
         return bundle
     }
 
@@ -310,8 +370,9 @@ public struct CompiledSpecification: Sendable {
         struct Manifest: Encodable {
             let compilationIdentity: String
             let ownership: [TLAModuleBundle.OwnershipEntry]
+            let dependencies: [TLAModuleBundle.ModuleDependency]
         }
-        guard case let .compiled(identity, ownership) = bundle.provenance else {
+        guard case let .compiled(identity, ownership, dependencies) = bundle.provenance else {
             throw CompilationDiagnostic(
                 code: .compilationIdentityMismatch,
                 stage: .rendering,
@@ -324,7 +385,11 @@ public struct CompiledSpecification: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(
-            Manifest(compilationIdentity: identity.value, ownership: ownership)
+            Manifest(
+                compilationIdentity: identity.value,
+                ownership: ownership,
+                dependencies: dependencies
+            )
         )
         try data.write(to: directory.appendingPathComponent("bundle-manifest.json"), options: .atomic)
     }
@@ -334,9 +399,7 @@ public struct CompiledSpecification: Sendable {
     /// The bundle keeps the same linked imports and configuration as direct
     /// TLA+ export. It is the only supported PlusCal export path: callers do
     /// not reconstruct a second bundle around renderer strings.
-    public func renderedPlusCalBundle(
-        additionalImports: [TLAModuleFile] = []
-    ) throws -> TLAModuleBundle {
+    public func renderedPlusCalBundle() throws -> TLAModuleBundle {
         guard let authoredPlusCalModule else {
             throw AlgorithmPlusCalRenderDiagnostic(
                 failedConcept: "authored PlusCal module root",
@@ -346,24 +409,18 @@ public struct CompiledSpecification: Sendable {
                 nextSafeAction: "Compile one canonical Algorithm model per exported module."
             )
         }
-        let directBundle = try renderedTLAModuleBundle(additionalImports: additionalImports)
+        let directBundle = try renderedTLAModuleBundle()
         let root = TLAModuleFile(
             name: directBundle.root.name,
-            tla: try AlgorithmPlusCalRenderer(model: authoredPlusCalModule.algorithm).render(authoredPlusCalModule),
+            tla: try AlgorithmPlusCalRenderer(module: authoredPlusCalModule).render(),
             cfg: directBundle.root.cfg
         )
-        let bundle: TLAModuleBundle
-        switch directBundle.provenance {
-        case .compiled(let identity, let ownership):
-            bundle = TLAModuleBundle(
-                root: root,
-                imports: directBundle.imports,
-                provenance: .compiled(identity: identity, ownership: ownership)
-            )
-        case .untrusted:
-            bundle = .untrusted(root: root, imports: directBundle.imports)
-        }
-        try bundle.validateRenderedBundleIntegrity()
+        let bundle = TLAModuleBundle(
+            root: root,
+            imports: directBundle.imports,
+            provenance: directBundle.provenance
+        )
+        try bundle.validateDeclaredClosure()
         return bundle
     }
 }
@@ -381,12 +438,26 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
     }
 
     public enum Code: String, Sendable, Hashable {
+        case invalidTypedRecordField
+        case invalidTypedRecordLiteral
+        case invalidTypedFunctionLiteral
+        case invalidStaticSelection
+        case invalidSequenceElementDomain
+        case invalidSequenceLength
+        case invalidFiniteDomain
+        case invalidFiniteDomainValue
+        case invalidActionBinding
+        case invalidFormalDeclaration
+        case invalidSymmetricMember
         case emptySpecificationName
+        case invalidSpecificationName
         case duplicateVariable
         case duplicateAction
         case duplicateInvariant
+        case invalidSymmetricCollection
         case duplicateRecordField
         case compilationIdentityMismatch
+        case emptyFormalModuleClosure
         case cyclicFormalModule
         case conflictingFormalModuleSource
         case duplicateFormalModuleImport
@@ -398,12 +469,22 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFormalModuleArgument
         case duplicateFormalModuleArgument
         case duplicateFormalModuleSymbol
+        case invalidRefinementName
+        case duplicateRefinement
+        case unresolvedRefinementInstance
+        case unresolvedRefinementTarget
+        case duplicateRefinementMapping
+        case incompleteRefinementMapping
+        case unknownRefinementMappingTarget
+        case invalidRefinementParameterMapping
+        case unsupportedRefinementTarget
+        case stateDependentRefinementParameter
         case invalidFormalModuleParameter
         case duplicateFormalModuleParameter
         case unresolvedFormalModuleReplacement
         case unresolvedDirectModuleDependency
         case cyclicDirectModuleDependency
-        case duplicateDirectModuleDefinition
+        case duplicateRenderedModuleDefinition
         case unknownControlLocation
         case unknownReference
         case outOfScopeReference
@@ -412,16 +493,11 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case unresolvedImportedSymbol
     }
 
-    public enum ChangeStatus: String, Sendable, Hashable {
-        case noCompiledOutcome
-    }
-
     public let code: Code
     public let stage: Stage
     public let path: String
     public let expected: String
     public let actual: String
-    public let changeStatus: ChangeStatus
     public let nextSafeAction: String
 
     public init(
@@ -437,14 +513,13 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         self.path = path
         self.expected = expected
         self.actual = actual
-        self.changeStatus = .noCompiledOutcome
         self.nextSafeAction = nextSafeAction
     }
 
     public var description: String {
         "Compilation failed [\(code.rawValue)] at \(stage.rawValue) \(path). "
             + "Expected: \(expected). Actual: \(actual). "
-            + "Change status: \(changeStatus.rawValue). Next safe action: \(nextSafeAction)"
+            + "Next safe action: \(nextSafeAction)"
     }
 }
 
@@ -465,17 +540,16 @@ public extension SpecParser.ParsedSpecComponents {
             invariants: invariants.map { NamedInvariant(name: $0.name, body: $0.body) } + additionalInvariants,
             temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: fairness,
-            definitions: definitions,
             constraint: constraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
             imports: imports,
             importConfigurations: importConfigurations,
             moduleInstances: moduleInstances,
+            refinements: refinements,
             symmetrySets: symmetrySets,
             symmetricCollections: symmetricCollections.map(\.declaration),
             algorithmFidelityTokens: algorithmFidelityTokens,
-            sourceAlgorithms: sourceAlgorithms,
-            authoredPlusCalDeclarations: authoredPlusCalDeclarations
+            sourceAlgorithms: sourceAlgorithms
         )
         return try spec.compile()
     }
@@ -499,53 +573,100 @@ public extension TLASpec {
                 nextSafeAction: "Give the specification a stable name, then compile again."
             )
         }
+        guard isTLAModuleIdentifier(name) else {
+            throw CompilationDiagnostic(
+                code: .invalidSpecificationName,
+                stage: .validation,
+                path: "specification.name",
+                expected: "a TLA+ module identifier",
+                actual: name,
+                nextSafeAction: "Use letters, digits, and underscores, beginning with a letter or underscore."
+            )
+        }
 
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
+        try validateSymmetricCollectionDeclarations()
+        try validateRefinements()
         let closure = try FormalModuleClosure.resolve(root: self)
         let layout = CompiledLayout(spec: self, closure: closure)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
-        let bindings = try validator.validate(spec: self)
+        _ = try validator.validate(spec: self)
+        try validator.validateRefinementMappings(refinements)
+        let bindings = validator.bindingTable()
         let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
+        let compiledRefinements = try compiledRefinements(bindings: bindings, closure: closure, layout: layout)
         let directModuleSections = try directModuleSectionPlan(
             layout: layout,
             bindings: bindings,
-            semantics: semantics
+            semantics: semantics,
+            refinements: compiledRefinements
         )
-        let authoredPlusCalModule = try authoredPlusCalModule()
+        var moduleSectionPlans: [String: DirectModuleSectionPlan] = [:]
+        for entry in closure.entries {
+            if entry.module.name == name {
+                moduleSectionPlans[entry.module.name] = directModuleSections
+                continue
+            }
+            moduleSectionPlans[entry.module.name] = try entry.module.directModuleSectionPlan(
+                in: closure.planContext(for: entry)
+            )
+        }
+        let formalRenderer = CompiledTLARenderer(layout: layout, bindings: bindings)
+        let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
+        let authoredPlusCalModule = try authoredPlusCalModule(
+            semantics: semantics,
+            formalRenderer: formalRenderer,
+            renderedRefinements: renderedRefinements
+        )
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
-            identity: .init(value: compilationFingerprint),
+            identity: compilationIdentity,
             layout: layout,
             bindings: bindings,
             semantics: semantics,
-            directModuleSections: directModuleSections,
+            refinements: compiledRefinements,
+            moduleSectionPlans: moduleSectionPlans,
             authoredPlusCalModule: authoredPlusCalModule
         )
     }
 
-    internal func directModuleSectionPlan(
+    private func directModuleSectionPlan(
         layout: CompiledLayout,
         bindings: CompiledBindingTable,
-        semantics: CompiledSemantics
+        semantics: CompiledSemantics,
+        refinements: [CompiledRefinement]
     ) throws -> DirectModuleSectionPlan {
-        let explicitDefinitions = definitions
-        let explicitNames = Set(explicitDefinitions.compactMap(\.name))
-        let formalDefinitions = formalOperatorDefinitions
-            .filter { !explicitNames.contains($0.name) }
-            .map {
-                DirectModuleDefinition(
-                    name: $0.name,
-                    text: FormalOperatorDecl($0).tlaText,
-                    dependencies: $0.plusCalDependencies
+        guard actions.count == semantics.actions.count,
+              formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count,
+              recursiveFuncs.count <= semantics.recursiveFunctions.count else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "directModuleSectionPlan",
+                expected: "compiled declarations aligned with this source model",
+                actual: "actions \(semantics.actions.count)/\(actions.count), definitions \(semantics.formalOperatorDefinitions.count)/\(formalOperatorDefinitions.count), recursive functions \(semantics.recursiveFunctions.count)/\(recursiveFuncs.count)",
+                nextSafeAction: "Compile the model again from its current source."
+            )
+        }
+        let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
+        let renderedRefinements = try refinements.map(renderer.refinement)
+        let renderedTheorems = try semantics.theorems.map(renderer.theorem)
+        let renderedFormalModuleReplacements = try semantics.formalModuleReplacements.map(renderer.formalModuleReplacement)
+        let formalDefinitions = try formalOperatorDefinitions.enumerated()
+            .map { index, definition in
+                RenderedModuleDefinition(
+                    name: definition.name,
+                    text: try renderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
+                    dependencies: definition.plusCalDependencies
                 )
             }
-        let allDefinitions = explicitDefinitions + formalDefinitions
+        let allDefinitions = formalDefinitions
         try validateUnique(
             allDefinitions.compactMap(\.name),
-            code: .duplicateDirectModuleDefinition,
+            code: .duplicateRenderedModuleDefinition,
             path: "definitions"
         )
         let instanceNames = Set(moduleInstances.map(\.name))
@@ -569,35 +690,358 @@ public extension TLASpec {
         let definitionsAfterInstances = allDefinitions.filter {
             !instanceNames.isDisjoint(with: $0.dependencies)
         }
-        let renderedControlNames = layout.directActionNames(actions: actions)
-        let emittedActionNames = tlaActionNames(actions, preferredNames: renderedControlNames)
-        return DirectModuleSectionPlan(
-            definitionsBeforeInstances: try orderDirectDefinitions(
-                definitionsBeforeInstances,
-                declared: []
-            ),
-            definitionsAfterInstances: try orderDirectDefinitions(
-                definitionsAfterInstances,
-                declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
-            ),
-            actions: try actions.enumerated().map { index, declaration in
-                .init(
-                    declaration: declaration,
-                    renderedBody: try CompiledTLARenderer(layout: layout, bindings: bindings)
-                        .action(semantics.actions[index].body)
+        let emittedActionNames = Dictionary(
+            uniqueKeysWithValues: layout.actions.map { ($0.declaration.name, $0.renderedName) }
+        )
+        let emittedActionNamesByID = try semantics.actions.reduce(into: [ActionID: String]()) { names, action in
+            guard layout.actions.indices.contains(action.id.ordinal) else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "actions[\(action.id.ordinal)]",
+                    expected: "an action in the compiled layout",
+                    actual: "the action identity is outside the compiled layout",
+                    nextSafeAction: "Compile the model again from its current source."
                 )
-            },
-            emittedActionNames: emittedActionNames
+            }
+            let sourceName = layout.actions[action.id.ordinal].declaration.name
+            guard let emittedName = emittedActionNames[sourceName] else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "actions.\(sourceName)",
+                    expected: "a rendered action name",
+                    actual: "no rendered name",
+                    nextSafeAction: "Compile the model again from its current source."
+                )
+            }
+            names[action.id] = emittedName
+        }
+        let emittedActionCallNames = try directActionCallNames(
+            semantics.actions,
+            emittedActionNames: emittedActionNamesByID
+        )
+        let orderedDefinitionsBeforeInstances = try orderDirectDefinitions(
+            definitionsBeforeInstances,
+            declared: []
+        )
+        let orderedDefinitionsAfterInstances = try orderDirectDefinitions(
+            definitionsAfterInstances,
+            declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
+        )
+        let renderedActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
+            DirectModuleAction(
+                declaration: declaration,
+                renderedBody: try renderer.action(semantics.actions[index].body)
+            )
+        }
+        return DirectModuleSectionPlan(
+            renderedModuleSource: try renderedDirectModuleSource(
+                definitionsBeforeInstances: orderedDefinitionsBeforeInstances,
+                definitionsAfterInstances: orderedDefinitionsAfterInstances,
+                renderedActions: renderedActions,
+                emittedActionNames: emittedActionNames,
+                emittedActionNamesByID: emittedActionNamesByID,
+                emittedActionCallNames: emittedActionCallNames,
+                renderedRefinements: renderedRefinements,
+                renderedTheorems: renderedTheorems,
+                renderedFormalModuleReplacements: renderedFormalModuleReplacements,
+                renderer: renderer,
+                layout: layout,
+                semantics: semantics
+            ),
+            renderedConfiguration: renderedTLCConfiguration(semantics: semantics)
         )
     }
 
+    private func directModuleSectionPlan(
+        in context: FormalModuleClosure.ModulePlanContext
+    ) throws -> DirectModuleSectionPlan {
+        let source = try loweredSourceModel()
+        try source.validateUnique(source.variables.map(\.name), code: .duplicateVariable, path: "variables")
+        try source.validateUnique(source.actions.map(\.name), code: .duplicateAction, path: "actions")
+        try source.validateUnique(source.invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
+        try source.validateSymmetricCollectionDeclarations()
+        try source.validateRefinements()
+        let layout = CompiledLayout(spec: source, closure: context.closure)
+        var validator = BindingValidator(
+            spec: source,
+            layout: layout,
+            closure: context.closure,
+            incomingModuleParameters: context.incomingModuleParameters
+        )
+        _ = try validator.validate(spec: source)
+        try validator.validateRefinementMappings(source.refinements)
+        let bindings = validator.bindingTable()
+        let semantics = try CompiledLowerer(
+            bindings: bindings,
+            closure: context.closure,
+            layout: layout
+        ).lower(spec: source)
+        let refinements = try source.compiledRefinements(
+            bindings: bindings,
+            closure: context.closure,
+            layout: layout
+        )
+        return try source.directModuleSectionPlan(
+            layout: layout,
+            bindings: bindings,
+            semantics: semantics,
+            refinements: refinements
+        )
+    }
+
+    private func validateSymmetricCollectionDeclarations() throws {
+        guard let error = symmetricCollectionValidationError(permutationProductBudget: .max) else {
+            return
+        }
+        throw CompilationDiagnostic(
+            code: .invalidSymmetricCollection,
+            stage: .validation,
+            path: "symmetricCollections",
+            expected: "a valid symmetric collection declaration",
+            actual: error.description,
+            nextSafeAction: "Correct the symmetric collection declaration, then compile again."
+        )
+    }
+
+    private func renderedDirectModuleSource(
+        definitionsBeforeInstances: [RenderedModuleDefinition],
+        definitionsAfterInstances: [RenderedModuleDefinition],
+        renderedActions: [DirectModuleAction],
+        emittedActionNames: [String: String],
+        emittedActionNamesByID: [ActionID: String],
+        emittedActionCallNames: [CompiledActionCall: String],
+        renderedRefinements: [String],
+        renderedTheorems: [String],
+        renderedFormalModuleReplacements: [String],
+        renderer: CompiledTLARenderer,
+        layout: CompiledLayout,
+        semantics: CompiledSemantics
+    ) throws -> String {
+        let varNames = variables.map(\.name)
+        let renderedActionsByName = renderedActions.map(\.declaration)
+        let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
+        let isLibraryModule = variables.isEmpty && renderedActionsByName.isEmpty
+        var lines: [String] = []
+
+        lines.append("---- MODULE \(name) ----")
+
+        let symmetryModule: [StandardModule] = symmetrySets.isEmpty && symmetricCollections.isEmpty ? [] : [.tlc]
+        let importedNames = imports.map(\.name)
+        let modules = ((extendsModules + [.finiteSets, .sequences] + symmetryModule)
+            .map(\.rawValue)
+            + importedNames)
+            .reduce(into: [String]()) { names, module in
+                if !names.contains(module) { names.append(module) }
+            }
+        lines.append("EXTENDS \(modules.joined(separator: ", "))")
+        lines.append("")
+
+        let generatedMemberSymbols = symmetricCollections.flatMap { collection in
+            collection.metadata.generatedSymbols.filter { symbol in
+                collection.metadata.members.contains(.constant(symbol))
+            }
+        }
+        let formalConstantSymbols = formalParameters
+            .filter { $0.kind == .constant }
+            .map(\.name)
+        let formalVariableSymbols = formalParameters
+            .filter { $0.kind == .variable }
+            .map(\.name)
+        let allConstantSymbols = (constants.map(\.name) + formalConstantSymbols + generatedMemberSymbols).sorted()
+        if !allConstantSymbols.isEmpty {
+            lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
+            for constant in constants.sorted(by: { $0.name < $1.name }) {
+                lines.append("ASSUME \(constant.name) = \(constant.value)")
+            }
+            lines.append("")
+        }
+
+        for collection in symmetricCollections {
+            let metadata = collection.metadata
+            lines.append("\(metadata.domainSymbol) == {\(metadata.members.map(\.description).joined(separator: ", "))}")
+            lines.append("\(metadata.symmetrySymbol) == Permutations(\(metadata.domainSymbol))")
+        }
+        for symmetry in symmetrySets {
+            let values = Array(symmetry.values).sorted()
+            lines.append("Symm\(symmetry.variableName) == Permutations({\(values.map(\.description).joined(separator: ", "))})")
+        }
+        if !symmetricCollections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
+
+        if let assume = semantics.assume {
+            lines.append("ASSUME \(try renderer.state(assume))")
+            lines.append("")
+        }
+
+        if !isLibraryModule || !formalVariableSymbols.isEmpty {
+            lines.append("VARIABLES \((varNames + formalVariableSymbols).joined(separator: ", "))")
+            lines.append("")
+        }
+
+        for replacement in renderedFormalModuleReplacements {
+            lines.append(replacement)
+            lines.append("")
+        }
+        for definition in definitionsBeforeInstances {
+            lines.append(definition.text)
+            lines.append("")
+        }
+        for function in semantics.recursiveFunctions.prefix(recursiveFuncs.count) {
+            let rendered = try renderer.recursiveFunction(function)
+            lines.append(rendered.declaration)
+            lines.append(rendered.body)
+            lines.append("")
+        }
+        for instance in moduleInstances {
+            let arguments = instanceArguments(for: instance).map { argument in
+                "\(argument.parameter) <- \(argument.value)"
+            }.joined(separator: ", ")
+            let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+            lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
+            lines.append("")
+        }
+        for definition in definitionsAfterInstances {
+            lines.append(definition.text)
+            lines.append("")
+        }
+        for refinement in renderedRefinements {
+            lines.append(refinement)
+            lines.append("")
+        }
+
+        if !isLibraryModule, varNames.count > 1 {
+            lines.append("vars == \(varsTuple)")
+            lines.append("")
+        }
+        for invariant in semantics.invariants {
+            lines.append("\(invariant.name) == \(try renderer.state(invariant.body))")
+        }
+        if !semantics.invariants.isEmpty { lines.append("") }
+        if let constraint = semantics.constraint {
+            lines.append("StateConstraint == \(try renderer.state(constraint))")
+            lines.append("")
+        }
+        guard !isLibraryModule else {
+            lines.append("====")
+            return lines.joined(separator: "\n") + "\n"
+        }
+
+        let symmetricMetadataByName = Dictionary(
+            uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0.metadata) }
+        )
+        let initialPredicates = try variables.map { variable -> String in
+            guard let id = layout.variableID(named: variable.name),
+                  let initializer = semantics.variableInitializers[id],
+                  let initialValue = semantics.initialValues[id] else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "variables.\(variable.name).initialization",
+                    expected: "a compiled initializer for this declared variable",
+                    actual: "the compiled layout has no matching initializer",
+                    nextSafeAction: "Compile the model again from its current source."
+                )
+            }
+            if let metadata = symmetricMetadataByName[variable.name] {
+                return "\(variable.name) = [member \\in \(metadata.domainSymbol) |-> \(metadata.initial)]"
+            }
+            if let set = initializer.lazySet { return "\(variable.name) \\in \(try renderer.state(set))" }
+            if let set = initializer.initialSet { return "\(variable.name) \\in \(try renderer.state(set))" }
+            if let expression = initializer.initExpr { return "\(variable.name) = \(try renderer.state(expression))" }
+            return "\(variable.name) = \(try renderer.state(.value(initialValue.rendered(using: layout))))"
+        }
+        if initialPredicates.count == 1 {
+            lines.append("Init == \(initialPredicates[0])")
+        } else {
+            lines.append("Init ==")
+            for predicate in initialPredicates { lines.append("  /\\ \(predicate)") }
+        }
+        lines.append("")
+
+        for renderedAction in renderedActions where !renderedAction.declaration.name.isEmpty {
+            let action = renderedAction.declaration
+            let parameters = action.bindings.map(\.name).joined(separator: ", ")
+            let emittedName = emittedActionNames[action.name] ?? action.name
+            let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
+            lines.append("\(header) == \(renderedAction.renderedBody)")
+            for variant in actionVariants(action) where !variant.indices.isEmpty {
+                let suffix = variant.indices.map(String.init).joined(separator: "_")
+                lines.append("\(emittedName)__\(suffix) == \(formalActionCall(named: action.name, arguments: variant.arguments))")
+            }
+        }
+        lines.append("")
+
+        let invocations = renderedActionsByName.filter { !$0.name.isEmpty }.flatMap { action in
+            actionVariants(action).map { variant -> String in
+                let emittedName = emittedActionNames[action.name] ?? action.name
+                guard !variant.indices.isEmpty else { return emittedName }
+                return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
+            }
+        }
+        if invocations.count != 1 || invocations[0] != "Next" {
+            if invocations.count == 1 {
+                lines.append("Next == \(invocations[0])")
+            } else {
+                lines.append("Next ==")
+                for invocation in invocations { lines.append("  \\/ \(invocation)") }
+            }
+        }
+        lines.append("")
+
+        lines.append("Spec ==")
+        lines.append("  /\\ Init")
+        lines.append("  /\\ [][Next]_\(varsTuple)")
+        for condition in semantics.fairness {
+            lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionNames: emittedActionNamesByID, actionCalls: emittedActionCallNames))")
+        }
+        lines.append("")
+        for temporal in semantics.temporalProperties {
+            lines.append("\(temporal.name) == \(try renderer.temporal(temporal.expression))")
+        }
+        if !semantics.temporalProperties.isEmpty { lines.append("") }
+        for theorem in renderedTheorems {
+            lines.append("THEOREM \(theorem)")
+            lines.append("")
+        }
+        lines.append("====")
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func renderedTLCConfiguration(semantics: CompiledSemantics) -> String {
+        var lines: [String] = []
+        lines.append("SPECIFICATION Spec")
+        lines.append(checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE")
+        for constant in constants.sorted(by: { $0.name < $1.name }) {
+            lines.append("CONSTANT \(constant.name) = \(constant.value)")
+        }
+        for replacement in semantics.formalModuleReplacements {
+            lines.append(
+                "CONSTANT \(replacement.operatorName) <- [\(replacement.moduleName)]\(replacement.definitionName)"
+            )
+        }
+        for collection in symmetricCollections {
+            for member in collection.metadata.members {
+                lines.append("CONSTANT \(member) = \(member)")
+            }
+        }
+        if constraint != nil { lines.append("CONSTRAINT StateConstraint") }
+        for invariant in invariants { lines.append("INVARIANT \(invariant.name)") }
+        for temporal in temporalProperties { lines.append("PROPERTY \(temporal.name)") }
+        for symmetry in symmetrySets { lines.append("SYMMETRY Symm\(symmetry.variableName)") }
+        for collection in symmetricCollections {
+            lines.append("SYMMETRY \(collection.metadata.symmetrySymbol)")
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
     private func orderDirectDefinitions(
-        _ definitions: [DirectModuleDefinition],
+        _ definitions: [RenderedModuleDefinition],
         declared: Set<String>
-    ) throws -> [DirectModuleDefinition] {
+    ) throws -> [RenderedModuleDefinition] {
         var pending = definitions
         var emitted = declared
-        var ordered: [DirectModuleDefinition] = []
+        var ordered: [RenderedModuleDefinition] = []
         while let index = pending.firstIndex(where: { definition in
             definition.dependencies.allSatisfy(emitted.contains)
         }) {
@@ -638,68 +1082,262 @@ public extension TLASpec {
         }
     }
 
-    var compilationFingerprint: String {
+    private func validateRefinements() throws {
+        try validateUnique(refinements.map(\.name), code: .duplicateRefinement, path: "refinements")
+        var linkedInstances: Set<String> = []
+        let declarationNames = Set(formalOperatorDefinitions.map(\.name))
+            .union(invariants.map(\.name))
+            .union(temporalProperties.map(\.name))
+            .union(recursiveFuncs.map(\.name))
+        for refinement in refinements {
+            guard linkedInstances.insert(refinement.instance.namespace).inserted else {
+                throw CompilationDiagnostic(
+                    code: .duplicateRefinement,
+                    stage: .linking,
+                    path: "refinements.\(refinement.name).instance",
+                    expected: "one refinement declaration for each module instance",
+                    actual: "a second refinement for \(refinement.instance.namespace)",
+                    nextSafeAction: "Keep one refinement mapping for that instance."
+                )
+            }
+            guard !refinement.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw CompilationDiagnostic(
+                    code: .invalidRefinementName,
+                    stage: .validation,
+                    path: "refinements",
+                    expected: "a non-empty refinement name",
+                    actual: "an empty name",
+                    nextSafeAction: "Name the refinement, then compile again."
+                )
+            }
+            guard !declarationNames.contains(refinement.name) else {
+                throw CompilationDiagnostic(
+                    code: .duplicateRefinement,
+                    stage: .validation,
+                    path: "refinements.\(refinement.name)",
+                    expected: "a refinement name distinct from other module declarations",
+                    actual: "a duplicate declaration named \(refinement.name)",
+                    nextSafeAction: "Rename the refinement or the conflicting declaration, then compile again."
+                )
+            }
+            guard let instance = moduleInstances.first(where: refinement.instance.resolves) else {
+                throw CompilationDiagnostic(
+                    code: .unresolvedRefinementInstance,
+                    stage: .linking,
+                    path: "refinements.\(refinement.name).instance",
+                    expected: "a directly declared module instance",
+                    actual: "no matching instance",
+                    nextSafeAction: "Declare the referenced Instance in this specification, then compile again."
+                )
+            }
+            let target: String
+            switch refinement.operator {
+            case .spec: target = "Spec"
+            case .liveSpec, .liveSpecEquals:
+                throw CompilationDiagnostic(
+                    code: .unsupportedRefinementTarget,
+                    stage: .validation,
+                    path: "refinements.\(refinement.name).target",
+                    expected: "a locally checked refinement target",
+                    actual: "\(refinement.operator) requires temporal refinement checking",
+                    nextSafeAction: "Use .spec or implement the named temporal refinement capability."
+                )
+            }
+            let targetModel = try instance.module.loweredSourceModel()
+            let targetClosure = try FormalModuleClosure.resolve(root: targetModel)
+            let exportsTarget: Bool
+            switch refinement.operator {
+            case .spec:
+                exportsTarget = !targetModel.variables.isEmpty || !targetModel.actions.isEmpty
+                    || targetClosure.linkedOperators.formalOperatorDefinitions.contains(where: { $0.name == target })
+            case .liveSpec, .liveSpecEquals:
+                exportsTarget = false
+            }
+            guard exportsTarget else {
+                throw CompilationDiagnostic(
+                    code: .unresolvedRefinementTarget,
+                    stage: .linking,
+                    path: "refinements.\(refinement.name).target",
+                    expected: "the instance module to export \(target)",
+                    actual: "\(instance.module.name) does not export \(target)",
+                    nextSafeAction: "Declare a typed Spec target in \(instance.module.name), then compile again."
+                )
+            }
+            let targets = targetModel.formalParameters.map(\.name) + targetModel.variables.map(\.name)
+            let mapped = refinement.mappings.map(\.target)
+            var seenMappings: Set<String> = []
+            if let duplicate = mapped.first(where: { !seenMappings.insert($0).inserted }) {
+                throw CompilationDiagnostic(
+                    code: .duplicateRefinementMapping,
+                    stage: .validation,
+                    path: "refinements.\(refinement.name).mappings.\(duplicate)",
+                    expected: "one mapping for each abstract declaration",
+                    actual: "multiple mappings for \(duplicate)",
+                    nextSafeAction: "Keep one mapping for that abstract declaration, then compile again."
+                )
+            }
+            if let unknown = mapped.first(where: { !targets.contains($0) }) {
+                throw CompilationDiagnostic(
+                    code: .unknownRefinementMappingTarget,
+                    stage: .binding,
+                    path: "refinements.\(refinement.name).mappings.\(unknown)",
+                    expected: "a variable or parameter declared by \(targetModel.name)",
+                    actual: "an undeclared refinement target",
+                    nextSafeAction: "Map a declaration exported by the abstract module, then compile again."
+                )
+            }
+            if Set(mapped) != Set(targets) {
+                let missing = targets.filter { !mapped.contains($0) }
+                throw CompilationDiagnostic(
+                    code: .incompleteRefinementMapping,
+                    stage: .binding,
+                    path: "refinements.\(refinement.name).mappings",
+                    expected: "mappings for \(targets.joined(separator: ", "))",
+                    actual: missing.isEmpty ? "a non-total mapping" : "missing \(missing.joined(separator: ", "))",
+                    nextSafeAction: "Map every abstract variable and formal parameter, then compile again."
+                )
+            }
+            guard instance.arguments.isEmpty else {
+                throw CompilationDiagnostic(
+                    code: .invalidRefinementParameterMapping,
+                    stage: .linking,
+                    path: "refinements.\(refinement.name).instance",
+                    expected: "an Instance without substitutions",
+                    actual: "INSTANCE substitutions duplicate the refinement mapping",
+                    nextSafeAction: "Move every substitution into Refinement."
+                )
+            }
+        }
+    }
+
+    private func compiledRefinements(
+        bindings: CompiledBindingTable,
+        closure: FormalModuleClosure,
+        layout: CompiledLayout
+    ) throws -> [CompiledRefinement] {
+        let lowerer = CompiledLowerer(bindings: bindings, closure: closure, layout: layout)
+        return try refinements.map { refinement in
+            guard let instanceOffset = moduleInstances.firstIndex(where: refinement.instance.resolves) else {
+                throw CompilationDiagnostic(
+                    code: .unresolvedRefinementInstance,
+                    stage: .linking,
+                    path: "refinements.\(refinement.name).instance",
+                    expected: "a directly declared module instance",
+                    actual: "no matching instance",
+                    nextSafeAction: "Declare the referenced Instance in this specification, then compile again."
+                )
+            }
+            let instance = moduleInstances[instanceOffset]
+            guard let instanceID = layout.moduleInstanceID(named: instance.name) else {
+                throw CompilationDiagnostic(
+                    code: .unresolvedRefinementInstance,
+                    stage: .linking,
+                    path: "refinements.\(refinement.name).instance",
+                    expected: "the compiled instance identity",
+                    actual: "no compiled instance identity",
+                    nextSafeAction: "Compile the source model again."
+                )
+            }
+            let abstractModule = try instance.module.loweredSourceModel()
+            let mappings = Dictionary(uniqueKeysWithValues: refinement.mappings.map { ($0.target, $0.source) })
+            let parameters = Dictionary(uniqueKeysWithValues: try abstractModule.formalParameters.map { parameter in
+                guard let source = mappings[parameter.name] else {
+                    throw CompilationDiagnostic(
+                        code: .incompleteRefinementMapping,
+                        stage: .binding,
+                        path: "refinements.\(refinement.name).mappings.\(parameter.name)",
+                        expected: "an explicit mapping",
+                        actual: "no mapping",
+                        nextSafeAction: "Map every abstract declaration, then compile again."
+                    )
+                }
+                let compiled = try lowerer.refinementExpression(
+                    source,
+                    at: "refinements.\(refinement.name).mappings.\(parameter.name)"
+                )
+                guard compiled.isStateIndependent else {
+                    throw CompilationDiagnostic(
+                        code: .stateDependentRefinementParameter,
+                        stage: .binding,
+                        path: "refinements.\(refinement.name).mappings.\(parameter.name)",
+                        expected: "a state-independent module parameter",
+                        actual: "a mapping that reads concrete state",
+                        nextSafeAction: "Use a constant mapping for the abstract module parameter."
+                    )
+                }
+                return (parameter.name, source)
+            })
+            let specialized = abstractModule.specializing(parameters: parameters)
+            return .init(
+                name: refinement.name,
+                instance: instanceID,
+                operator: refinement.operator,
+                abstract: try specialized.compile(),
+                variableMappings: try abstractModule.variables.map { variable in
+                    guard let source = mappings[variable.name] else {
+                        throw CompilationDiagnostic(
+                            code: .incompleteRefinementMapping,
+                            stage: .binding,
+                            path: "refinements.\(refinement.name).mappings.\(variable.name)",
+                            expected: "an explicit mapping",
+                            actual: "no mapping",
+                            nextSafeAction: "Map every abstract declaration, then compile again."
+                        )
+                    }
+                    return try lowerer.refinementExpression(
+                        source,
+                        at: "refinements.\(refinement.name).mappings.\(variable.name)"
+                    )
+                }
+            )
+        }
+    }
+
+    var compilationIdentity: CompilationIdentity {
         var encoder = CanonicalSpecificationEncoder()
         let source = encoder.encode(self)
-        var hash: UInt64 = 0xcbf29ce484222325
-        for byte in source.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 0x100000001b3
-        }
-        return String(format: "%016llx", hash)
+        let value = SHA256.hash(data: Data(source.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return .init(value: value)
     }
 }
 
-private func tlaActionNames(
-    _ actions: [NamedAction],
-    preferredNames: [String: String] = [:]
-) -> [String: String] {
-    var emitted: [String: String] = [:]
-    var used: Set<String> = []
-    for action in actions where emitted[action.name] == nil {
-        let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
-            switch scalar.value {
-            case 48...57, 65...90, 97...122, 95: String(scalar)
-            default: "_"
+private func directActionCallNames(
+    _ actions: [CompiledAction],
+    emittedActionNames: [ActionID: String]
+) throws -> [CompiledActionCall: String] {
+    var names: [CompiledActionCall: String] = [:]
+    for action in actions {
+        guard let emittedName = emittedActionNames[action.id] else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "actions[\(action.id.ordinal)]",
+                expected: "a rendered action name",
+                actual: "no rendered name",
+                nextSafeAction: "Compile the model again from its current source."
+            )
+        }
+        func addCalls(_ position: Int, arguments: [TLAValue], indices: [Int]) {
+            guard position < action.bindings.count else {
+                let suffix = indices.isEmpty ? "" : "__\(indices.map(String.init).joined(separator: "_"))"
+                names[.init(action: action.id, arguments: arguments)] = "\(emittedName)\(suffix)"
+                return
             }
-        }.joined()
-        let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
-        var candidate = stem.isEmpty ? "Action" : stem
-        var suffix = 2
-        while used.contains(candidate) {
-            candidate = "\(stem)__\(suffix)"
-            suffix += 1
+            for (index, value) in action.bindings[position].values.enumerated() {
+                addCalls(position + 1, arguments: arguments + [value], indices: indices + [index])
+            }
         }
-        emitted[action.name] = candidate
-        used.insert(candidate)
+        addCalls(0, arguments: [], indices: [])
     }
-    return emitted
+    return names
 }
 
-private extension CompiledLayout {
-    func directActionNames(actions: [NamedAction]) -> [String: String] {
-    let actionNames = Set(actions.map(\.name))
-    let candidates = controlLocations.compactMap { label -> (qualified: String, label: String)? in
-        guard case .procedure = label.owner else { return nil }
-        return (qualified: label.renderedName, label: label.sourceName)
-    }
-
-    let labelCounts = Dictionary(grouping: candidates, by: { $0.label }).mapValues { $0.count }
-    let unqualifiedActions = Set(actions.map(\.name)).subtracting(Set(candidates.map { $0.qualified }))
-    let usable = candidates.filter {
-        actionNames.contains($0.qualified)
-            && labelCounts[$0.label] == 1
-            && !unqualifiedActions.contains($0.label)
-    }
-    return Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
-    }
-}
-
-/// Canonicalizes formal data with unambiguous field boundaries.
+/// Encodes the complete source model with unambiguous field boundaries.
 ///
-/// Do not substitute a display description here. The encoder deliberately
-/// visits fields which presentation APIs omit, including action domains,
-/// all initialisation forms, and the recursive contents of imported modules.
+/// Compilation identity includes action domains, every initialisation form,
+/// and the recursive contents of imported modules.
 private struct CanonicalSpecificationEncoder {
     private var output = ""
 
@@ -743,25 +1381,23 @@ private struct CanonicalSpecificationEncoder {
         list("fairness", spec.fairness, canonicalFairness)
         field("assume", canonicalOptional(spec.assume.map(canonicalExpression)))
         field("checkDeadlock", node("bool", [String(spec.checkDeadlock)]))
-        let definitions = spec.definitions.map {
-            node("definition", [
-                canonicalOptional($0.name),
-                $0.text,
-                canonicalList($0.dependencies)
-            ])
+        let theorems = spec.theorems.map { theorem in
+            if let temporal = theorem.temporalBody {
+                return node("temporal-theorem", [theorem.name, canonicalTemporal(temporal)])
+            }
+            if let state = theorem.stateBody {
+                return node("state-theorem", [theorem.name, canonicalExpression(state)])
+            }
+            return node("theorem", [theorem.name])
         }
-        list("definitions", definitions) { $0 }
-        list("theorems", spec.theorems) { $0 }
-        field("extendsModules", spec.extendsModules)
+        list("theorems", theorems) { $0 }
+        list("extendsModules", spec.extendsModules) { $0.rawValue }
         field("constraint", canonicalOptional(spec.constraint.map(canonicalExpression)))
-        list("recursiveDefs", spec.recursiveDefs) { $0 }
         let recursiveFunctions = spec.recursiveFuncs.map {
             node("recursive-function", [$0.name, canonicalList($0.params), canonicalExpression($0.body)])
         }
         list("recursiveFuncs", recursiveFunctions) { $0 }
-        let formalOperators = spec.formalOperatorDefinitions.map {
-            node("operator-definition", [$0.name, canonicalList($0.parameters.map(canonicalFormalParameter)), canonicalExpression($0.body)])
-        }
+        let formalOperators = spec.formalOperatorDefinitions.map(canonicalFormalOperatorDefinition)
         list("formalOperators", formalOperators) { $0 }
         list("imports", spec.imports) { imported in
             var nested = CanonicalSpecificationEncoder()
@@ -787,6 +1423,23 @@ private struct CanonicalSpecificationEncoder {
             ])
         }
         list("moduleInstances", moduleInstances) { $0 }
+        let refinements = spec.refinements.map { refinement in
+            let target: String
+            switch refinement.operator {
+            case .spec: target = "spec"
+            case .liveSpec: target = "liveSpec"
+            case .liveSpecEquals: target = "liveSpecEquals"
+            }
+            return node("refinement", [
+                refinement.name,
+                refinement.instance.namespace,
+                target,
+                canonicalList(refinement.mappings.map {
+                    node("refinement-mapping", [$0.target, canonicalExpression($0.source)])
+                })
+            ])
+        }
+        list("refinements", refinements) { $0 }
         let symmetrySets = spec.symmetrySets.map { set in
             node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
         }
@@ -868,11 +1521,24 @@ private struct CanonicalSpecificationEncoder {
         }
     }
 
-    private func canonicalFormalParameter(_ value: FormalParameter) -> String {
-        switch value {
-        case .value(let name): return node("valueParameter", [name])
-        case .operator(let name, let arity): return node("operatorParameter", [name, String(arity)])
+    private func canonicalFormalOperatorDefinition(_ definition: FormalOperatorDefinition) -> String {
+        var next = 0
+        var environment: [String: String] = [:]
+        let parameters = definition.parameters.map { parameter -> String in
+            let (canonical, extended) = fresh(parameter.name, environment: environment, next: &next)
+            environment = extended
+            switch parameter {
+            case .value:
+                return node("valueParameter", [canonical])
+            case .operator(_, let arity):
+                return node("operatorParameter", [canonical, String(arity)])
+            }
         }
+        return node("operator-definition", [
+            definition.name,
+            canonicalList(parameters),
+            node("expression", [stateKey(definition.body, environment: environment, next: &next)])
+        ])
     }
     private func canonicalActionCall(_ value: FormalActionCall) -> String { node("actionCall", [value.name, canonicalList(value.arguments.map(canonicalValue))]) }
     private func canonicalList(_ values: [String]) -> String { node("list", values) }

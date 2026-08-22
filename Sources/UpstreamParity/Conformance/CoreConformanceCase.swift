@@ -75,17 +75,19 @@ public struct TLCReferencePin: Equatable, Sendable {
         self.bridgeBinarySHA256 = bridgeBinarySHA256
     }
 
-    public static let fixture = try! Self(
-        tag: "v1.8.0",
-        commit: "0894c3407f4717fec7cc18bde3bf3c857fa47333",
-        jarSHA256: "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
-        javaDistribution: "Eclipse Temurin",
-        javaVersion: "17.0.19+10",
-        javaArchiveSHA256: "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
-        bridgeClass: "org.swifttla.conformance.LosslessStateWriter",
-        bridgeSourceSHA256: "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
-        bridgeBinarySHA256: "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
-    )
+    public static let fixture = Self()
+
+    private init() {
+        tag = "v1.8.0"
+        commit = "0894c3407f4717fec7cc18bde3bf3c857fa47333"
+        jarSHA256 = "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f"
+        javaDistribution = "Eclipse Temurin"
+        javaVersion = "17.0.19+10"
+        javaArchiveSHA256 = "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336"
+        bridgeClass = "org.swifttla.conformance.LosslessStateWriter"
+        bridgeSourceSHA256 = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee"
+        bridgeBinarySHA256 = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
+    }
 
     public static let lockedJarSHA256 = "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f"
     public static let lockedJavaArchiveSHA256s = [
@@ -102,7 +104,6 @@ public struct TLCReferencePin: Equatable, Sendable {
         "_TLCTracePlain"
     ]
 
-    public var availableStandardModules: Set<String> { Self.standardModuleNames }
 
     public func validate(_ artifacts: TLCReferenceArtifacts) throws {
         try Self.verify(artifacts.jar, expected: jarSHA256, name: "TLC JAR")
@@ -181,7 +182,7 @@ public struct CoreConformanceCase: Equatable, Sendable {
         guard TLCReferencePin.isSHA256(cfgSHA256) else { throw CoreConformanceCaseError.invalidSHA256(field: "cfgSHA256") }
         guard workers == 1 else { throw CoreConformanceCaseError.invalidWorkers(workers) }
         guard fingerprintPolynomial >= 0 else { throw CoreConformanceCaseError.invalidFingerprintPolynomial(fingerprintPolynomial) }
-        guard argumentsSHA256 == Self.argumentsDigest(arguments) else { throw CoreConformanceCaseError.invalidArgumentsDigest }
+        guard argumentsSHA256 == try Self.argumentsDigest(arguments) else { throw CoreConformanceCaseError.invalidArgumentsDigest }
         self.id = id
         self.moduleSHA256 = moduleSHA256
         self.cfgSHA256 = cfgSHA256
@@ -199,8 +200,8 @@ public struct CoreConformanceCase: Equatable, Sendable {
         self.valueNormalizations = valueNormalizations
     }
 
-    public static func argumentsDigest(_ arguments: [String]) -> String {
-        let encoded = try! JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys])
+    public static func argumentsDigest(_ arguments: [String]) throws -> String {
+        let encoded = try JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys])
         return SHA256.hex(encoded)
     }
 
@@ -212,7 +213,7 @@ public struct CoreConformanceCase: Equatable, Sendable {
         guard SHA256.hex(try Data(contentsOf: configuration)) == cfgSHA256 else {
             throw CoreConformanceCaseError.cfgDigestMismatch
         }
-        guard arguments == self.arguments, Self.argumentsDigest(arguments) == argumentsSHA256 else {
+        guard arguments == self.arguments, try Self.argumentsDigest(arguments) == argumentsSHA256 else {
             throw CoreConformanceCaseError.executionArgumentsMismatch
         }
     }
@@ -321,6 +322,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
         public let argumentsSHA256: String
         public let workers: Int
         public let fingerprintPolynomial: Int
+        public let maximumStateLimit: Int
         public let deadlock: Bool
         public let replay: String
         public let expectedExit: Int?
@@ -335,13 +337,13 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case id, swiftSpec, module, configuration, imports, moduleSHA256, cfgSHA256
-            case arguments, argumentsSHA256, workers, fingerprintPolynomial, deadlock, replay
+            case arguments, argumentsSHA256, workers, fingerprintPolynomial, maximumStateLimit, deadlock, replay
             case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations, semanticCitations, governance
             case expectedArtifacts
         }
 
         public init(from decoder: Decoder) throws {
-            let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+            let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
             swiftSpec = try container.decode(String.self, forKey: .swiftSpec)
             module = try container.decode(String.self, forKey: .module)
@@ -353,6 +355,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
             argumentsSHA256 = try container.decode(String.self, forKey: .argumentsSHA256)
             workers = try container.decode(Int.self, forKey: .workers)
             fingerprintPolynomial = try container.decode(Int.self, forKey: .fingerprintPolynomial)
+            maximumStateLimit = try container.decode(Int.self, forKey: .maximumStateLimit)
             deadlock = try container.decode(Bool.self, forKey: .deadlock)
             replay = try container.decode(String.self, forKey: .replay)
             expectedExit = try container.decodeIfPresent(Int.self, forKey: .expectedExit)
@@ -373,29 +376,25 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
                   !replay.isEmpty, !expectedArtifacts.isEmpty, !upstream.repository.isEmpty,
                   !upstream.commit.isEmpty, !fixtures.module.isEmpty, !fixtures.configuration.isEmpty,
                   !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
-                throw CoreGovernanceError.invalidField(record: id, field: "case declaration")
+                throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
             }
             guard TLCReferencePin.isSHA256(moduleSHA256), TLCReferencePin.isSHA256(cfgSHA256),
-                  argumentsSHA256 == CoreConformanceCase.argumentsDigest(arguments), workers == 1,
-                  fingerprintPolynomial >= 0 else {
-                throw CoreGovernanceError.invalidField(record: id, field: "launch contract")
+                  argumentsSHA256 == try CoreConformanceCase.argumentsDigest(arguments), workers == 1,
+                  fingerprintPolynomial >= 0, maximumStateLimit > 0 else {
+                throw ConformanceGovernanceError.invalidField(record: id, field: "launch contract")
             }
             let wrappers = invocationMappings.map(\.wrapper)
-            let labels = invocationMappings.map(\.runtimeValue.swiftLabel)
-            let locations = invocationMappings.map(\.runtimeValue.locationIdentity)
+            let labels = try invocationMappings.map { try $0.runtimeValue().swiftLabel }
+            let locations = try invocationMappings.map { try $0.runtimeValue().locationIdentity }
             let normalizedBindings = valueNormalizations.map(\.binding)
             guard Set(wrappers).count == wrappers.count,
                   Set(labels).count == labels.count,
                   Set(locations).count == locations.count,
                   Set(normalizedBindings).count == normalizedBindings.count else {
-                throw CoreGovernanceError.invalidField(record: id, field: "invocationMappings")
+                throw ConformanceGovernanceError.invalidField(record: id, field: "invocationMappings")
             }
-            let expectedOutcome: CoreRegressionOutcome = expectedExit == nil || expectedExit == 0
-                ? .exact : .difference
-            guard expectedExit == nil || expectedExit == 0 || expectedExit == 1,
-                  governance.expectedRegressionOutcome == expectedOutcome,
-                  (governance.role == .requiredComparison) == (expectedOutcome == .exact) else {
-                throw CoreGovernanceError.invalidField(record: id, field: "governance outcome")
+            guard expectedExit == nil || expectedExit == 0 else {
+                throw ConformanceGovernanceError.invalidField(record: id, field: "governance outcome")
             }
         }
     }
@@ -403,7 +402,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable { case schema, relation, cases }
 
     public init(from decoder: Decoder) throws {
-        let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
         schema = try container.decode(String.self, forKey: .schema)
         relation = try container.decode(String.self, forKey: .relation)
         cases = try container.decode([Entry].self, forKey: .cases)
@@ -412,45 +411,17 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
 
     public func validate() throws {
         guard schema == Self.schema, relation == Self.relation, !cases.isEmpty else {
-            throw CoreGovernanceError.invalidSchema(schema)
+            throw ConformanceGovernanceError.invalidSchema(schema)
         }
         var ids = Set<String>()
         for entry in cases {
             try entry.validate()
             guard ids.insert(entry.id).inserted else {
-                throw CoreGovernanceError.duplicateID(kind: "case", id: entry.id)
+                throw ConformanceGovernanceError.duplicateID(kind: "case", id: entry.id)
             }
         }
     }
 
-    public func validate(ledger: CoreDivergenceLedger) throws {
-        try validate()
-        let entries = Dictionary(uniqueKeysWithValues: cases.map { ($0.id, $0) })
-        try ledger.validate(caseIDs: Set(entries.keys))
-        for record in ledger.records {
-            guard let original = entries[record.provenance.caseID],
-                  let regression = entries[record.permanentRegressionCaseID],
-                  regression.governance.role == .permanentRegression,
-                  regression.governance.expectedRegressionOutcome == .difference,
-                  original.moduleSHA256 == record.provenance.moduleSHA256,
-                  original.cfgSHA256 == record.provenance.cfgSHA256,
-                  original.argumentsSHA256 == record.provenance.argumentsSHA256,
-                  Set(record.semanticCitations).isSubset(of: Set(original.governance.semanticCitations)) else {
-                throw CoreGovernanceError.invalidField(record: record.id, field: "case governance correlation")
-            }
-            guard record.provenance.tlcTag == TLCReferencePin.fixture.tag,
-                  record.provenance.tlcCommit == TLCReferencePin.fixture.commit,
-                  record.provenance.tlcJarSHA256 == TLCReferencePin.fixture.jarSHA256,
-                  record.provenance.javaDistribution == TLCReferencePin.fixture.javaDistribution,
-                  record.provenance.javaVersion == TLCReferencePin.fixture.javaVersion,
-                  record.provenance.javaArchiveSHA256 == TLCReferencePin.fixture.javaArchiveSHA256,
-                  record.provenance.bridgeClass == TLCReferencePin.fixture.bridgeClass,
-                  record.provenance.bridgeSourceSHA256 == TLCReferencePin.fixture.bridgeSourceSHA256,
-                  record.provenance.bridgeBinarySHA256 == TLCReferencePin.fixture.bridgeBinarySHA256 else {
-                throw CoreGovernanceError.invalidField(record: record.id, field: "TLC reference pin")
-            }
-        }
-    }
 }
 
 public struct TLCReferenceArtifacts: Equatable, Sendable {

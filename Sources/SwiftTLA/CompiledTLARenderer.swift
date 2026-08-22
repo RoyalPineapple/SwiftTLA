@@ -25,6 +25,77 @@ struct CompiledTLARenderer {
         }
     }
 
+    func temporal(_ expression: CompiledTemporalExpr) throws -> String {
+        switch expression {
+        case .always(let predicate): return "[]\(try state(predicate))"
+        case .eventually(let predicate): return "<>\(try state(predicate))"
+        case .alwaysEventually(let predicate): return "[]<>\(try state(predicate))"
+        case .eventuallyAlways(let predicate): return "<>[]\(try state(predicate))"
+        case .leadsTo(let source, let target): return "(\(try state(source)) ~> \(try state(target)))"
+        }
+    }
+
+    func formalDefinition(_ definition: CompiledFormalOperatorDefinition) throws -> String {
+        let name = try operatorName(definition.id)
+        let parameters = try definition.parameters.map(formalParameter).joined(separator: ", ")
+        return "\(name)\(parameters.isEmpty ? "" : "(\(parameters))") == \(try state(definition.body))"
+    }
+
+    func recursiveFunction(_ function: CompiledRecursiveFunction) throws -> (declaration: String, body: String) {
+        let name = try operatorName(function.id)
+        let parameters = try function.parameters.map(binderName)
+        return (
+            declaration: "RECURSIVE \(name)(\(parameters.map { _ in "_" }.joined(separator: ", ")))",
+            body: "\(name)(\(parameters.joined(separator: ", "))) == \(try state(function.body))"
+        )
+    }
+
+    func fairness(
+        _ condition: CompiledFairnessCondition,
+        vars: String,
+        actionNames: [ActionID: String],
+        actionCalls: [CompiledActionCall: String]
+    ) throws -> String {
+        let action: String
+        switch condition.scope {
+        case .next:
+            action = "Next"
+        case .action(let id):
+            guard let name = actionNames[id] else { throw missing("action", id.ordinal) }
+            action = name
+        case .actionCall(let call):
+            guard let name = actionCalls[call] else { throw missing("action", call.action.ordinal) }
+            action = name
+        }
+        return "\(condition.isStrong ? "SF" : "WF")_\(vars)(\(action))"
+    }
+
+    func refinement(_ refinement: CompiledRefinement) throws -> String {
+        guard let instance = layout.moduleInstances.first(where: { $0.id == refinement.instance }) else {
+            throw missing("module instance", refinement.instance.ordinal)
+        }
+        let target: String
+        switch refinement.operator {
+        case .spec: target = "Spec"
+        case .liveSpec: target = "LiveSpec"
+        case .liveSpecEquals: target = "LiveSpecEquals"
+        }
+        return "\(refinement.name) == \(instance.namespace)!\(target)"
+    }
+
+    func theorem(_ theorem: CompiledTheorem) throws -> String {
+        switch theorem.body {
+        case .temporal(let expression):
+            return "\(theorem.name) == Spec => \(try temporal(expression))"
+        case .state(let expression):
+            return "\(theorem.name) == Spec => []\(try state(expression))"
+        }
+    }
+
+    func formalModuleReplacement(_ replacement: CompiledFormalModuleReplacement) throws -> String {
+        "\(replacement.definitionName) == \(try state(replacement.expression))"
+    }
+
     func state(_ expression: CompiledStateExpr) throws -> String {
         switch expression {
         case .value(let value): return value.description
@@ -121,6 +192,14 @@ struct CompiledTLARenderer {
         switch argument {
         case .value(let value): return try state(value)
         case .operator(let operation): return try formalOperator(operation)
+        }
+    }
+
+    private func formalParameter(_ parameter: CompiledFormalParameter) throws -> String {
+        switch parameter {
+        case .value(let binder): return try binderName(binder)
+        case .operator(let operation, let arity):
+            return "\(try operatorName(operation))(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
         }
     }
 

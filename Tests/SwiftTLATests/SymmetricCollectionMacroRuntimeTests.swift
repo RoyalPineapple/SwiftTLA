@@ -4,6 +4,10 @@ import SwiftSyntax
 import SwiftTLAMacros
 import Testing
 
+private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
+  try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+}
+
 public struct MacroDevice: Identifiable, Sendable {
   public let id: Int
 
@@ -21,7 +25,7 @@ public struct StringMacroDevice: Identifiable, Sendable {
 }
 
 @TLAModel
-public struct GeneratedSymmetricRuntime {
+public struct GeneratedSymmetricRuntime: Sendable {
   public static var spec: TLASpec {
     TLASpec("GeneratedSymmetricRuntime") {
       let devices = SymmetricCollectionVar<MacroDevice, Int>("devices")
@@ -154,7 +158,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   }
 
   @Test("Parsed symmetric declarations retain type, scope, action, and source provenance")
-  func parserRetainsCollectionProvenance() {
+  func parserRetainsCollectionProvenance() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
@@ -164,8 +168,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let statements = Parser.parse(source: source).statements
-    let closure = statements[statements.startIndex].item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
 
     let parsed = SpecParser.parseSpecClosure(closure)
 
@@ -174,6 +177,24 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(parsed.symmetricCollections[0].valueType == "Int")
     #expect(parsed.symmetricCollections[0].verificationScope == 2)
     #expect(parsed.collectionActions.map(\.name) == ["begin"])
+    #expect(parsed.diagnostics.isEmpty)
+  }
+
+  @Test("Symmetric collection type arguments retain their syntax until generated Swift is emitted")
+  func parserRetainsQualifiedCollectionTypeArguments() throws {
+    let source = """
+    {
+      let devices = SwiftTLA.SymmetricCollectionVar<Model.Device, Swift.Int>("devices")
+      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+    }
+    """
+    let statements = Parser.parse(source: source).statements
+    let closure = try #require(statements.first?.item.as(ClosureExprSyntax.self))
+
+    let parsed = SpecParser.parseSpecClosure(closure)
+
+    #expect(parsed.symmetricCollections.map(\.elementType) == ["Model.Device"])
+    #expect(parsed.symmetricCollections.map(\.valueType) == ["Swift.Int"])
     #expect(parsed.diagnostics.isEmpty)
   }
 
@@ -188,7 +209,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
     let initial = parsed.variables.map { ($0.name, $0.initial) }
     let advanced: [(String, TLAValue)] = [
@@ -215,8 +236,37 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(try compiledSuccessors(of: parsedSpec, from: projection(advanced)).isEmpty)
   }
 
+  @Test("Parser preserves collection action precedence from syntax nodes")
+  func parserPreservesCollectionActionPrecedence() throws {
+    let source = """
+    {
+      let devices = SymmetricCollectionVar<Device, Int>("devices")
+      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      CollectionAction("advance", on: devices) { member in
+        (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
+          || (devices[member] == 2 && devices.update(member, to: devices[member] + 20))
+      }
+    }
+    """
+    let closure = try #require(
+      Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
+    )
+    let parsed = SpecParser.parseSpecClosure(closure)
+    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let authored = TLASpec("AuthoredCollectionAction") {
+      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      CollectionAction("advance", on: devices) { member in
+        (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
+          || (devices[member] == 2 && devices.update(member, to: devices[member] + 20))
+      }
+    }
+
+    #expect(parsed.diagnostics.isEmpty)
+    #expect(parsed.actions.map(\.body) == authored.actions.map(\.body))
+  }
+
   @Test("Parser rejects observable, escaping, and cross-collection member identities")
-  func parserRejectsIdentityObservations() {
+  func parserRejectsIdentityObservations() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
@@ -228,8 +278,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let statements = Parser.parse(source: source).statements
-    let closure = statements[statements.startIndex].item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
 
     let parsed = SpecParser.parseSpecClosure(closure)
 
@@ -239,7 +288,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   }
 
   @Test("Parser rejects every unsupported member-token observation family")
-  func parserRejectsOpaqueTokenMisuseMatrix() {
+  func parserRejectsOpaqueTokenMisuseMatrix() throws {
     let cases = [
       "member == member",
       "StateExpr.tuple([member])",
@@ -258,15 +307,14 @@ struct SymmetricCollectionMacroRuntimeTests {
         }
       }
       """
-      let statements = Parser.parse(source: source).statements
-      let closure = statements[statements.startIndex].item.as(ClosureExprSyntax.self)!
+      let closure = try parseClosure(source)
 
       #expect(!SpecParser.parseSpecClosure(closure).diagnostics.isEmpty)
     }
   }
 
   @Test("Token diagnostics use syntax roles rather than trivia-sensitive text")
-  func parserRejectsTriviaVariedRawDomainAccess() {
+  func parserRejectsTriviaVariedRawDomainAccess() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>("devices")
@@ -276,14 +324,14 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
     """
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
 
     #expect(!SpecParser.parseSpecClosure(closure).diagnostics.isEmpty)
   }
 
   @Test("Identified runtime storage retains concrete IDs beyond verification scope")
   func runtimeStorageUsesConcreteIDsWithoutCappingPopulation() throws {
-    var devices = IdentifiedModelCollection<Device, Int>(
+    var devices = try IdentifiedModelCollection<Device, Int>(
       name: "devices", verificationScope: 1, initial: 0
     )
     let first = Device(id: 1)
@@ -291,20 +339,29 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     devices.insert(first)
     devices.insert(second, value: 3)
-    try devices.update(id: second.id, to: 4, action: "begin")
+    try devices.update(id: second.id, to: 4)
 
     #expect(devices.verificationScope == 1)
     #expect(devices.count == 2)
     #expect(devices[first.id] == 0)
     #expect(devices[second.id] == 4)
     #expect(throws: SymmetricCollectionRuntimeError.self) {
-      try devices.update(id: 99, to: 1, action: "begin")
+      try devices.update(id: 99, to: 1)
+    }
+  }
+
+  @Test("Identified runtime storage rejects an invalid verification scope")
+  func runtimeStorageRejectsInvalidVerificationScope() {
+    #expect(throws: SymmetricCollectionRuntimeError.self) {
+      _ = try IdentifiedModelCollection<Device, Int>(
+        name: "devices", verificationScope: 0, initial: 0
+      )
     }
   }
 
   @Test("TLAModel generates ID-routed collection storage and its checked scope")
   func macroGeneratesIdentifiedRuntime() throws {
-    var model = GeneratedSymmetricRuntime()
+    var model = try GeneratedSymmetricRuntime.makeMachine()
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device)
@@ -312,8 +369,6 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     #expect(model.devices[device.id] == 1)
     #expect(result.action == .begin)
-    #expect(result.before.devices != result.after.devices)
-    #expect(result.after.devices == model.state.devices)
     #expect(GeneratedSymmetricRuntime.symmetricCollectionScopes == [
       SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
     ])
@@ -325,7 +380,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated ID routing evaluates expression-backed updates against live storage")
   func macroUpdatesLiveStorageForExpressionBackedActions() throws {
-    var model = GeneratedExpressionSymmetricRuntime()
+    var model = try GeneratedExpressionSymmetricRuntime.makeMachine()
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device, value: 4)
@@ -336,7 +391,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing rejects a wrong-phase selected entry and preserves peers")
   func macroRoutesGuardToTheSelectedLiveEntry() throws {
-    var model = GeneratedScopedSymmetricRuntime()
+    var model = try GeneratedScopedSymmetricRuntime.makeMachine()
     let eligible = StringMacroDevice(id: "eligible")
     let wrongPhase = StringMacroDevice(id: "wrong-phase")
     let peer = StringMacroDevice(id: "peer")
@@ -359,7 +414,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing supports live populations beyond the verification scope")
   func macroDoesNotConsumeBoundedVerifierMembersForLiveRouting() throws {
-    var model = GeneratedScopedSymmetricRuntime()
+    var model = try GeneratedScopedSymmetricRuntime.makeMachine()
     let devices = ["first", "second", "third"].map(StringMacroDevice.init)
 
     for device in devices {
@@ -379,7 +434,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing evaluates shared authored guards before its update")
   func macroEvaluatesTheCompleteAuthoredGuard() throws {
-    var model = GeneratedSharedGuardSymmetricRuntime()
+    var model = try GeneratedSharedGuardSymmetricRuntime.makeMachine()
     let device = StringMacroDevice(id: "shared-guard")
     model.devices.insert(device)
 
@@ -409,7 +464,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ])
     ])
 
-    var model = GeneratedMultiStatementSymmetricRuntime()
+    var model = try GeneratedMultiStatementSymmetricRuntime.makeMachine()
     let rejected = StringMacroDevice(id: "rejected")
     let selected = StringMacroDevice(id: "selected")
     let peer = StringMacroDevice(id: "peer")
@@ -448,7 +503,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ])
     ])
 
-    var model = GeneratedDisjunctiveSymmetricRuntime()
+    var model = try GeneratedDisjunctiveSymmetricRuntime.makeMachine()
     let selected = StringMacroDevice(id: "selected")
     let rejected = StringMacroDevice(id: "rejected")
     let peer = StringMacroDevice(id: "peer")
@@ -469,7 +524,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Ordinary allSatisfy actions use every live collection value")
   func macroProjectsLiveCollectionsForAllSatisfyGuards() throws {
-    var allowed = GeneratedAllSatisfyPredicateRuntime()
+    var allowed = try GeneratedAllSatisfyPredicateRuntime.makeMachine()
     let allowedDevices = ["one", "two", "three"].map(StringMacroDevice.init)
     for device in allowedDevices {
       allowed.devices.insert(device)
@@ -477,9 +532,10 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let allowedEvidence = try allowed.applyadvance()
     #expect(allowed.phase == 1)
-    #expect(allowedEvidence.before.devices == allowed.state.devices)
+    #expect(allowedEvidence.before.phase == 0)
+    #expect(allowedEvidence.after.phase == 1)
 
-    var rejected = GeneratedAllSatisfyPredicateRuntime()
+    var rejected = try GeneratedAllSatisfyPredicateRuntime.makeMachine()
     let peers = ["one", "two", "three"].map(StringMacroDevice.init)
     let violating = StringMacroDevice(id: "violating")
     for device in peers {
@@ -502,7 +558,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Ordinary contains actions use live values above verification scope")
   func macroProjectsLiveCollectionsForContainsGuards() throws {
-    var model = GeneratedContainsPredicateRuntime()
+    var model = try GeneratedContainsPredicateRuntime.makeMachine()
     let devices = ["one", "two", "three"].map(StringMacroDevice.init)
     for device in devices {
       model.devices.insert(device)
@@ -520,7 +576,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let evidence = try model.applyadvance()
 
     #expect(model.phase == 1)
-    #expect(evidence.after.devices == model.state.devices)
+    #expect(evidence.after.phase == 1)
     #expect(model.devices.count == 4)
     #expect(model.devices[matching.id] == 1)
     for device in devices {

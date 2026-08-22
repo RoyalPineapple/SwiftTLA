@@ -5,6 +5,33 @@ import SwiftBasicFormat
 extension ParserSession {
     // MARK: - Unified spec builder parser
 
+    /// Source-boundary declaration facts for one specification closure.
+    public struct BoundSourceContext: Sendable, Equatable {
+        public struct Variable: Sendable, Equatable {
+            public let sourceName: String
+            public let swiftTypeName: String?
+
+            public init(sourceName: String, swiftTypeName: String?) {
+                self.sourceName = sourceName
+                self.swiftTypeName = swiftTypeName
+            }
+        }
+
+        public let variables: [Variable]
+
+        public init(variables: [Variable] = []) {
+            self.variables = variables
+        }
+
+        public var swiftVariableTypes: [String: String] {
+            Dictionary(
+                uniqueKeysWithValues: variables.compactMap { variable in
+                    variable.swiftTypeName.map { (variable.sourceName, $0) }
+                }
+            )
+        }
+    }
+
     public struct ParsedSpecComponents {
         /// Canonical formal variables and Swift-only type facts for generated
         /// surface code.
@@ -20,22 +47,22 @@ extension ParserSession {
         public var imports: [TLASpec] = []
         public var importConfigurations: [FormalModuleConfiguration] = []
         public var moduleInstances: [FormalModuleInstance] = []
+        public var refinements: [RefinementDecl] = []
+        public var extendsModules: [StandardModule] = []
         public var sourceAlgorithms: [Algorithm] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
-        public var definitions: [DirectModuleDefinition] = []
-        public var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
         public var symmetrySets: [SymmetrySet] = []
         /// Authored algorithms in the source model.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [ConstantDecl] = []
+        /// The parser's top-level declaration facts for generated Swift.
+        public var sourceContext = BoundSourceContext()
+        var instanceBindings: [String: FormalModuleInstance] = [:]
+        var algorithmBindings: [String: Algorithm] = [:]
 
         public func swiftVariableTypes() -> [String: String] {
-            var types = Dictionary(
-                uniqueKeysWithValues: variables.compactMap { variable in
-                    variable.swiftTypeName.map { (variable.name, $0) }
-                }
-            )
+            var types = sourceContext.swiftVariableTypes
             for algorithm in sourceAlgorithms {
                 let localNames: Set<String> = Set(algorithm.model.processes.flatMap { process in
                     process.components.compactMap {
@@ -52,22 +79,15 @@ extension ParserSession {
             return types
         }
 
-        public func machineSurfaceSwiftFacts(
+        package func machineSurfaceSwiftFacts(
             for compilation: CompiledSpecification
         ) -> MachineSurfaceSwiftFacts {
-            let processDomains = sourceAlgorithms.flatMap { algorithm in
-                algorithm.model.processes.map { ($0.domain, $0.typeName) }
-            }
             var actionBindingTypes = Dictionary(
                 uniqueKeysWithValues: actions.map { ($0.name, $0.bindingSwiftTypes) }
             )
             for action in compilation.spec.actions {
-                let bindings = action.bindings.reduce(into: [String: String]()) { types, binding in
-                    if let domain = processDomains.first(where: { $0.0 == binding.values }) {
-                        types[binding.name] = domain.1
-                    }
-                }
-                if !bindings.isEmpty { actionBindingTypes[action.name] = bindings }
+                guard action.generatedBindingSwiftTypes.isEmpty == false else { continue }
+                actionBindingTypes[action.name] = action.generatedBindingSwiftTypes
             }
             return .init(
                 variableTypes: swiftVariableTypes(),
@@ -184,10 +204,6 @@ extension ParserSession {
             }
         }
 
-        public enum ChangeStatus: String, Sendable, Hashable {
-            case noFormalModelWasBuilt
-        }
-
         /// Short stable summary for clients that already display a headline.
         public let message: String
         /// The exact Swift source fragment that the parser rejected.
@@ -195,7 +211,6 @@ extension ParserSession {
         public let sourceSpan: SourceSpan
         public let expected: String
         public let actual: String
-        public let changeStatus: ChangeStatus
         public let nextSafeAction: String
 
         public init(
@@ -228,11 +243,16 @@ extension ParserSession {
             self.sourceSpan = sourceSpan
             self.expected = expected
             self.actual = actual.isEmpty ? source.trimmingCharacters(in: .whitespacesAndNewlines) : actual
-            self.changeStatus = .noFormalModelWasBuilt
             self.nextSafeAction = nextSafeAction
         }
 
-        public init<Node: SyntaxProtocol>(message: String, source: Node) {
+        public init<Node: SyntaxProtocol>(
+            message: String,
+            source: Node,
+            expected: String = "a supported SwiftTLA declaration or expression",
+            actual: String = "",
+            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
+        ) {
             let fragment = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
             self.init(
                 message: message,
@@ -240,13 +260,16 @@ extension ParserSession {
                 sourceSpan: SourceSpan(
                     location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
                     utf8Length: fragment.utf8.count
-                )
+                ),
+                expected: expected,
+                actual: actual,
+                nextSafeAction: nextSafeAction
             )
         }
 
         public var description: String {
             "What failed: \(message) Where: \(sourceSpan). Expected: \(expected). "
-                + "Actual: \(actual). Change status: \(changeStatus.rawValue). "
+                + "Actual: \(actual). "
                 + "Next safe action: \(nextSafeAction)"
         }
     }
@@ -254,60 +277,165 @@ extension ParserSession {
       func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
+        let declarationScope = closureParameterNames(in: closure).first
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
                 parseBuilderCall(fc, into: &result, collectionTypes: collectionTypes)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      result.instanceBindings[reference.baseName.text] != nil {
+                continue
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let algorithm = result.algorithmBindings[reference.baseName.text] {
+                result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
+                result.sourceAlgorithms.append(algorithm)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &result)
             } else if case .decl(let decl) = statement.item,
                       let varDecl = decl.as(VariableDeclSyntax.self) {
-                parseVarDecl(varDecl, into: &result)
+                parseLocalDeclaration(
+                    varDecl,
+                    into: &result,
+                    declarationScope: declarationScope
+                )
+            } else {
+                result.diagnostics.append(.init(
+                    message: "Specification body contains an unsupported item.",
+                    source: statement.item
+                ))
             }
         }
+        result.sourceContext = .init(variables: result.variables.map {
+            .init(sourceName: $0.name, swiftTypeName: $0.swiftTypeName)
+        })
         return result
+    }
+
+    private func parseLocalDeclaration(
+        _ declaration: VariableDeclSyntax,
+        into result: inout ParsedSpecComponents,
+        declarationScope: String? = nil
+    ) {
+        var containsVariableConstructor = false
+        for binding in declaration.bindings {
+            guard let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self)
+            else {
+                result.diagnostics.append(.init(
+                    message: "Specification body contains an unsupported local declaration.",
+                    source: binding
+                ))
+                continue
+            }
+            if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Instance" {
+                let count = result.moduleInstances.count
+                parseFormalModuleInstance(
+                    call,
+                    into: &result,
+                    scope: sourceScope
+                )
+                guard result.moduleInstances.count == count + 1,
+                      let instance = result.moduleInstances.last
+                else { continue }
+                result.instanceBindings[sourceName] = instance
+            } else if algorithmBindingType(in: binding),
+                      call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" {
+                guard result.algorithmBindings[sourceName] == nil else {
+                    result.diagnostics.append(.init(
+                        message: "Specification algorithm binding '\(sourceName)' is declared more than once.",
+                        source: binding
+                    ))
+                    continue
+                }
+                if let algorithm = parseAlgorithm(call, into: &result) {
+                    result.algorithmBindings[sourceName] = algorithm
+                }
+            } else if typedFacadeType(call.calledExpression)?.name == "SymmetricCollectionVar" {
+                // `SymmetricCollection` owns the declaration; this handle only
+                // gives that declaration its authored source name and types.
+                continue
+            } else if resolveVarCall(call, in: declarationScope) != nil {
+                containsVariableConstructor = true
+            } else if let value = decodeTypedFacadeValue(
+                ExprSyntax(call),
+                scope: sourceScope
+            ) {
+                sourceScope = typedFacadeScope(sourceScope, binding: sourceName, to: value)
+            } else {
+                result.diagnostics.append(.init(
+                    message: "Specification body contains an unsupported local declaration.",
+                    source: binding
+                ))
+            }
+        }
+        if containsVariableConstructor {
+            parseVarDecl(declaration, into: &result, declarationScope: declarationScope)
+        }
+    }
+
+    private func algorithmBindingType(in binding: PatternBindingSyntax) -> Bool {
+        binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)?.name.text == "Algorithm"
     }
 
     func parseForLoop(_ forStmt: ForStmtSyntax, into result: inout ParsedSpecComponents) {
         guard let pattern = forStmt.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-              let sequence = forStmt.sequence.as(SequenceExprSyntax.self)
-        else { return }
-
-        // Extract range: 1...N → start=1, end=N (from literal or variable)
-        let elements = Array(sequence.elements)
-        guard elements.count == 3 else { return }
-
-        // Evaluate start and end from sibling expressions
-        var start = 1, end = 3
-        if let startExpr = elements[0].as(IntegerLiteralExprSyntax.self) {
-            start = Int(startExpr.literal.text) ?? 1
-        }
-        if let endExpr = elements[2].as(IntegerLiteralExprSyntax.self) {
-            end = Int(endExpr.literal.text) ?? 3
+              let range = parseIntegerClosedRange(forStmt.sequence)
+        else {
+            result.diagnostics.append(.init(
+                message: "Specification for-loop requires a literal closed integer range.",
+                source: forStmt,
+                expected: "for item in 1...3 { Action(\"name\") { ... } }"
+            ))
+            return
         }
 
         let body = forStmt.body.statements
-        for i in start...end {
+        for i in range {
             for bodyStmt in body {
                 guard case .expr(let expr) = bodyStmt.item,
                       let fc = expr.as(FunctionCallExprSyntax.self)
-                else { continue }
+                else {
+                    result.diagnostics.append(.init(
+                        message: "Specification for-loop body contains an unsupported item.",
+                        source: bodyStmt.item
+                    ))
+                    continue
+                }
                 parseBuilderCall(fc, into: &result, loopVar: pattern, loopValue: i)
             }
         }
     }
 
-    /// Parses supported low-level `Var(...)` bindings into `ParsedSpecComponents.variables`.
-    /// Handles both raw `Var("x", 0)` and rewrites where ModelMacro injected a string name.
-    func parseVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
+    /// Parses supported variable bindings into `ParsedSpecComponents.variables`.
+    func parseVarDecl(
+        _ varDecl: VariableDeclSyntax,
+        into result: inout ParsedSpecComponents,
+        declarationScope: String? = nil
+    ) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
                   let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
 
-            let stateVarInfo = resolveVarCall(fc)
-            let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)
+            let existingVariableCount = result.variables.count
+            defer {
+                if result.variables.count > existingVariableCount,
+                   let variable = result.variables.last {
+                    sourceScope = typedFacadeScope(
+                        sourceScope,
+                        binding: patternName,
+                        to: .variable(variable.name)
+                    )
+                }
+            }
+
+            let stateVarInfo = resolveVarCall(fc, in: declarationScope)
+            let varTypeName = swiftValueType(from: binding.typeAnnotation)
+                ?? stateVarInfo?.1
+                ?? resolveVarTypeArg(fc)
             let callName = stateVarInfo?.0 ?? (resolveVarTypeArg(fc) != nil ? "Var" : nil)
 
             guard callName != nil else { continue }
@@ -315,10 +443,8 @@ extension ParserSession {
             let args = Array(fc.arguments)
 
             if callName == "Var" && args.count < 2,
-               let varTypeName,
-               ["Function<", "Record<", "SetExpr<"].contains(where: varTypeName.contains),
-               let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
-                .replacingOccurrences(of: "\"", with: "") {
+               isDefaultConstructibleVarType(fc),
+               let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
                 result.variables.append(.init(name: name, initial: .int(0), swiftTypeName: varTypeName))
                 continue
             }
@@ -327,21 +453,19 @@ extension ParserSession {
                 if callName == "SharedVar", let range = parseIntegerClosedRange(rangeExpr) {
                     result.variables.append(.init(
                         name: patternName,
-                        initial: .int(range.lowerBound),
+                        initial: .int(0),
                         initialSet: .setLiteral(range.map { .value(.int($0)) }),
-                        swiftTypeName: "Int"
+                        swiftTypeName: varTypeName ?? "Int"
                     ))
                     continue
                 }
                 if callName == "SharedVar",
                    let initialSet = decodeStateExpr(rangeExpr),
-                   case .setLiteral(let elements) = initialSet,
-                   let first = elements.first,
+                   case .setLiteral = initialSet,
                    let elementType = setExpressionElementTypeName(rangeExpr) {
-                    let initial = (try? evaluateClosed(first)) ?? .int(0)
                     result.variables.append(.init(
-                        name: patternName, initial: initial, initialSet: initialSet,
-                        swiftTypeName: elementType
+                        name: patternName, initial: .int(0), initialSet: initialSet,
+                        swiftTypeName: varTypeName ?? elementType
                     ))
                     continue
                 }
@@ -363,16 +487,51 @@ extension ParserSession {
             guard !args.isEmpty else { continue }
 
             if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
-                let varName = stringLit.segments.description.replacingOccurrences(of: "\"", with: "")
-                let initial: TLAValue = args.count >= 2
-                    ? parsedInitialValue(args[1].expression)
-                    : .int(0)
+                guard let varName = stringLit.representedLiteralValue else { continue }
+                if callName == "SharedVar" {
+                    guard args.count >= 2,
+                          let initial = decodeTypedFacadeValue(args[1].expression, scope: .empty)
+                    else {
+                        result.diagnostics.append(.init(
+                            message: "SharedVar requires a supported initial formal expression.",
+                            source: fc
+                        ))
+                        continue
+                    }
+                    let inferredType = initialValueTypeName(from: args[1].expression)
+                    result.variables.append(.init(
+                        name: varName,
+                        initial: .int(0),
+                        initExpr: initial,
+                        swiftTypeName: varTypeName ?? inferredType
+                    ))
+                    continue
+                }
+                let initial: TLAValue
+                if args.count >= 2 {
+                    guard let parsed = parsedInitialValue(args[1].expression) else {
+                        result.diagnostics.append(.init(
+                            message: "Var requires a supported initial formal value.",
+                            source: fc
+                        ))
+                        continue
+                    }
+                    initial = parsed
+                } else {
+                    initial = .int(0)
+                }
                 let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
                 result.variables.append(.init(
                     name: varName, initial: initial, swiftTypeName: varTypeName ?? inferredType
                 ))
             } else {
-                let initial: TLAValue = parsedInitialValue(args[0].expression)
+                guard let initial = parsedInitialValue(args[0].expression) else {
+                    result.diagnostics.append(.init(
+                        message: "Var requires a supported initial formal value.",
+                        source: fc
+                    ))
+                    continue
+                }
                 let inferredType = initialValueTypeName(from: args[0].expression)
                 result.variables.append(.init(
                     name: patternName, initial: initial, swiftTypeName: varTypeName ?? inferredType
@@ -383,27 +542,32 @@ extension ParserSession {
 
     /// Resolves a supported low-level variable call expression.
     /// Returns nil if the call is not a variable constructor.
-    func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
+    func resolveVarCall(
+        _ fc: FunctionCallExprSyntax,
+        in declarationScope: String? = nil
+    ) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
             guard ["Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
             return (ref.baseName.text, nil)
         }
         if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
-           let ref = generic.expression.as(DeclReferenceExprSyntax.self) {
-            guard ref.baseName.text == "Var" else { return nil }
+           let name = terminalTypeName(in: generic.expression) {
+            guard name == "Var" else { return nil }
             let typeArgs = Array(generic.genericArgumentClause.arguments)
-            let swiftTypeName = typeArgs.count >= 1
-                ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-                : nil
-            return (ref.baseName.text, swiftTypeName)
+            let swiftTypeName = typeArgs.first.flatMap { Self.sourceTypeSpelling($0.argument) }
+            return (name, swiftTypeName)
+        }
+        if let member = fc.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "sharedVar",
+           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == declarationScope {
+            return ("SharedVar", nil)
         }
         return nil
     }
 
     func resolveVarTypeArg(_ fc: FunctionCallExprSyntax) -> String? {
         guard let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
-              let ref = generic.expression.as(DeclReferenceExprSyntax.self),
-              ref.baseName.text == "Var"
+              terminalTypeName(in: generic.expression) == "Var"
         else {
             if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self),
                ref.baseName.text == "Var" {
@@ -412,9 +576,36 @@ extension ParserSession {
             return nil
         }
         let typeArgs = Array(generic.genericArgumentClause.arguments)
-        return typeArgs.count >= 1
-            ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            : nil
+        return typeArgs.first.flatMap { Self.sourceTypeSpelling($0.argument) }
+    }
+
+    /// Extracts the value type from a variable declaration annotation without
+    /// rendering or reparsing its syntax. `SharedVariable<Mode>` contributes
+    /// `Mode`; an explicit value annotation contributes itself.
+    func swiftValueType(from annotation: TypeAnnotationSyntax?) -> String? {
+        guard let type = annotation?.type else { return nil }
+        if let generic = type.as(IdentifierTypeSyntax.self),
+           ["SharedVariable", "LocalVariable"].contains(generic.name.text),
+           let argument = generic.genericArgumentClause?.arguments.first?.argument {
+            return Self.sourceTypeSpelling(argument)
+        }
+        if let generic = type.as(MemberTypeSyntax.self),
+           ["SharedVariable", "LocalVariable"].contains(generic.name.text),
+           let argument = generic.genericArgumentClause?.arguments.first?.argument {
+            return Self.sourceTypeSpelling(argument)
+        }
+        return Self.sourceTypeSpelling(type)
+    }
+
+    func isDefaultConstructibleVarType(_ call: FunctionCallExprSyntax) -> Bool {
+        guard let generic = call.calledExpression.as(GenericSpecializationExprSyntax.self),
+              terminalTypeName(in: generic.expression) == "Var",
+              let type = generic.genericArgumentClause.arguments.first?.argument
+        else { return false }
+        switch facadeTypeName(type) {
+        case "Function", "Record", "SetExpr": return true
+        default: return false
+        }
     }
 
     func parseIntegerClosedRange(_ expression: ExprSyntax) -> ClosedRange<Int>? {
@@ -468,9 +659,8 @@ extension ParserSession {
               member.declName.baseName.text == "literal",
               let base = member.base
         else { return nil }
-        let typeName = base.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard typeName.hasPrefix("SetExpr<"), typeName.hasSuffix(">") else { return nil }
-        return String(typeName.dropFirst("SetExpr<".count).dropLast())
+        guard let type = typedFacadeType(base), type.name == "SetExpr" else { return nil }
+        return type.argument(at: 0).flatMap(Self.sourceTypeSpelling)
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.
@@ -494,24 +684,24 @@ extension ParserSession {
     func parseValuesFirst(_ expression: ExprSyntax) -> String {
         if let array = expression.as(ArrayExprSyntax.self),
            let first = array.elements.first?.expression.as(StringLiteralExprSyntax.self) {
-            return first.segments.description.replacingOccurrences(of: "\"", with: "")
+            return first.representedLiteralValue ?? ""
         }
         return ""
     }
 
     /// Converts a Swift initializer expression to a TLAValue.
-    func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue {
+    func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue? {
         if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
             return value
         }
         if let intVal = expression.as(IntegerLiteralExprSyntax.self) {
-            return .int(Int(intVal.literal.text) ?? 0)
+            return Int(intVal.literal.text).map(TLAValue.int)
         }
         if let boolVal = expression.as(BooleanLiteralExprSyntax.self) {
             return .bool(boolVal.literal.text == "true")
         }
         if let stringLit = expression.as(StringLiteralExprSyntax.self) {
-            return .string(stringLit.segments.description.replacingOccurrences(of: "\"", with: ""))
+            return stringLit.representedLiteralValue.map(TLAValue.string)
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self) {
             if let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
@@ -528,9 +718,9 @@ extension ParserSession {
            let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
            base.baseName.text == "TLAValue" {
-            return parseTLAValueConstructor(name: memberAccess.declName.baseName.text, call: fc) ?? .int(0)
+            return parseTLAValueConstructor(name: memberAccess.declName.baseName.text, call: fc)
         }
-        return .int(0)
+        return nil
     }
 
     /// Returns the enum type name if `expression` is an enum case reference.
@@ -554,20 +744,22 @@ extension ParserSession {
         if expression.is(StringLiteralExprSyntax.self) { return "String" }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.arguments.isEmpty,
-           call.trailingClosure == nil {
-            let constructor = call.calledExpression.description
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if constructor.hasPrefix("SetExpr<") || constructor.hasPrefix("TupleExpr<")
-                || constructor.hasPrefix("ZeroBasedSequence<") {
-                return constructor
+           call.trailingClosure == nil,
+           let constructor = typedFacadeType(call.calledExpression) {
+            switch constructor.name {
+            case "SetExpr", "TupleExpr", "ZeroBasedSequence":
+                return constructor.renderedSourceName
+            default:
+                break
             }
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.text == "filled",
-           let base = member.base {
-            let typeName = base.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            if typeName.hasPrefix("ZeroBasedSequence<") { return typeName }
+           let base = member.base,
+           let type = typedFacadeType(base),
+           type.name == "ZeroBasedSequence" {
+            return type.renderedSourceName
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),
@@ -580,7 +772,7 @@ extension ParserSession {
     /// Evaluates a closed typed formal initializer through the same expression
     /// decoder used for actions. Literal-only parsing is insufficient for
     /// values such as `IntRange(1, through: 4)`.
-    func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue {
+    func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue? {
         if let decoded = decodeStateExpr(expression),
            let value = try? evaluateClosed(decoded) {
             return value
@@ -593,13 +785,22 @@ extension ParserSession {
         into result: inout ParsedSpecComponents,
         loopVar: String? = nil,
         loopValue: Int? = nil,
-        collectionTypes: [String: (element: String, value: String)] = [:]
+        collectionTypes: [String: SymmetricCollectionSourceTypes] = [:]
     ) {
-        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else {
+            result.diagnostics.append(.init(
+                message: "Specification body contains an unsupported call.",
+                source: call
+            ))
+            return
+        }
 
         switch name {
         case "Algorithm":
-            parseAlgorithm(call, into: &result)
+            if let algorithm = parseAlgorithm(call, into: &result) {
+                result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
+                result.sourceAlgorithms.append(algorithm)
+            }
         case "SymmetricCollection":
             parseSymmetricCollectionDecl(call, into: &result, collectionTypes: collectionTypes)
         case "CollectionAction":
@@ -619,9 +820,31 @@ extension ParserSession {
             if let argument = call.arguments.first,
                let expression = decodeStateExpr(argument.expression) {
                 result.constraint = result.constraint.map { .and($0, expression) } ?? expression
+            } else {
+                result.diagnostics.append(.init(
+                    message: "Constraint requires a supported state expression.",
+                    source: call
+                ))
             }
         case "Constant":
             parseConstantDecl(call, into: &result)
+        case "Extends":
+            let modules = call.arguments.compactMap { argument -> StandardModule? in
+                guard let member = argument.expression.as(MemberAccessExprSyntax.self) else { return nil }
+                switch member.declName.baseName.text {
+                case "integers": return .integers
+                case "naturals": return .naturals
+                case "finiteSets": return .finiteSets
+                case "sequences": return .sequences
+                case "tlc": return .tlc
+                default: return nil
+                }
+            }
+            guard modules.count == call.arguments.count else {
+                result.diagnostics.append(.init(message: "Extends requires standard modules such as .integers.", source: call))
+                return
+            }
+            result.extendsModules.append(contentsOf: modules)
         case "Parameter":
             guard let name = extractStringArg(call, index: 0), !name.isEmpty else {
                 result.diagnostics.append(.init(message: "Parameter requires a name.", source: call))
@@ -646,26 +869,35 @@ extension ParserSession {
             result.formalParameters.append(FormalModuleParameter(name, kind: kind))
         case "FormalDefinition":
             parseFormalDefinition(call, into: &result)
-        case "Definition":
-            parseDefinition(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
+            } else {
+                result.diagnostics.append(.init(
+                    message: "Temporal declaration requires a supported temporal expression.",
+                    source: call
+                ))
             }
         case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
             if let fc = decodeFairness(call) {
                 result.fairness.append(fc)
+            } else {
+                result.diagnostics.append(.init(
+                    message: "Fairness declaration requires a supported fairness expression.",
+                    source: call
+                ))
             }
         case "Import":
-            guard let argument = call.arguments.first?.expression else { return }
-            let reference = argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let moduleName = reference.split(separator: ".").first,
-                  !moduleName.isEmpty
+            guard let argument = call.arguments.first?.expression else {
+                result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
+                return
+            }
+            guard let moduleName = formalModuleName(from: argument)
             else {
                 result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
                 return
             }
-            guard let module = BuiltInFormalModules.resolve(String(moduleName)) else {
+            guard let module = BuiltInFormalModules.resolve(moduleName) else {
                 result.diagnostics.append(.init(message: "Import requires a built-in formal module.", source: call))
                 return
             }
@@ -678,10 +910,15 @@ extension ParserSession {
             }
         case "Instance":
             parseFormalModuleInstance(call, into: &result)
+        case "Refinement":
+            parseRefinement(call, into: &result)
         case "Symmetry":
             parseSymmetry(call, into: &result)
         default:
-            break
+            result.diagnostics.append(.init(
+                message: "Specification body contains an unsupported declaration '\(name)'.",
+                source: call
+            ))
         }
     }
 
@@ -701,6 +938,89 @@ extension ParserSession {
             return
         }
         result.symmetrySets.append(SymmetrySet(variableName: variableName, values: Set(values)))
+    }
+
+    private func parseRefinement(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        guard let name = extractStringArg(call, index: 0), !name.isEmpty,
+              let instanceSyntax = call.arguments.first(where: { $0.label?.text == "instance" })?.expression,
+              let sourceName = instanceSyntax.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let instance = result.instanceBindings[sourceName]
+        else {
+            result.diagnostics.append(.init(
+                message: "Refinement requires a declared Instance binding.",
+                source: call,
+                expected: "let C = Instance(\"C\", of: Module.module); C; Refinement(name: \"Refines\", instance: C, operator: .spec, mappings: mappings)",
+                nextSafeAction: "Declare the instance in this specification, then pass that binding to Refinement."
+            ))
+            return
+        }
+        let target: RefinementDecl.Operator
+        if let operatorSyntax = call.arguments.first(where: { $0.label?.text == "operator" })?.expression,
+           let operatorName = operatorSyntax.as(MemberAccessExprSyntax.self)?.declName.baseName.text,
+           let parsedTarget = RefinementDecl.Operator(sourceName: operatorName) {
+            target = parsedTarget
+        } else if call.arguments.contains(where: { $0.label?.text == "operator" }) {
+            result.diagnostics.append(.init(
+                message: "Refinement requires a supported target operator.",
+                source: call,
+                expected: "operator: .spec",
+                nextSafeAction: "Use one of RefinementDecl.Operator's declared cases."
+            ))
+            return
+        }
+        else {
+            target = .spec
+        }
+        let mappings: [RefinementMapping]
+        if let mappingExpression = call.arguments.first(where: { $0.label?.text == "mappings" })?.expression {
+            guard let array = mappingExpression.as(ArrayExprSyntax.self) else {
+                result.diagnostics.append(.init(
+                    message: "Refinement mappings require an array of RefinementMapping values.",
+                    source: mappingExpression
+                ))
+                return
+            }
+            var parsed: [RefinementMapping] = []
+            let scope = sourceScope
+            for element in array.elements {
+                guard let mapping = element.expression.as(FunctionCallExprSyntax.self),
+                      (mapping.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "RefinementMapping"
+                        || mapping.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "init"),
+                      let target = mapping.arguments.first?.expression,
+                      let mappedName = refinementTargetName(target),
+                      let source = mapping.arguments.first(where: { $0.label?.text == "from" })?.expression,
+                      let expression = decodeTypedFacadeValue(source, scope: scope) ?? decodeStateExpr(source)
+                else {
+                    result.diagnostics.append(.init(
+                        message: "Each refinement mapping must name an abstract declaration and provide a source expression.",
+                        source: element.expression
+                    ))
+                    return
+                }
+                parsed.append(.init(target: mappedName, source: expression))
+            }
+            mappings = parsed
+        } else {
+            result.diagnostics.append(.init(
+                message: "Refinement requires an explicit mapping for every abstract variable and parameter.",
+                source: call
+            ))
+            return
+        }
+        result.refinements.append(.init(name: name, instance: instance.reference, operator: target, mappings: mappings))
+    }
+
+    private func refinementTargetName(_ expression: ExprSyntax) -> String? {
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self) {
+            return member.declName.baseName.text
+        }
+        return nil
     }
 
     private func parseSymmetryValues(_ expression: ExprSyntax) -> [TLAValue]? {
@@ -743,12 +1063,6 @@ extension ParserSession {
             return
         }
         result.formalOperatorDefinitions.append(definition)
-        result.authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
-            name: definition.name,
-            text: FormalOperatorDecl(definition).tlaText,
-            phase: definition.plusCalPhase,
-            dependencies: definition.plusCalDependencies
-        ))
     }
 
     func decodeFormalDefinition(
@@ -759,7 +1073,7 @@ extension ParserSession {
         if let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
            let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
            let parameters = parseFormalParameters(parametersSyntax),
-           let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:]) ?? decodeStateExpr(bodySyntax) {
+           let body = decodeTypedFacadeValue(bodySyntax, scope: .empty) ?? decodeStateExpr(bodySyntax) {
             return FormalOperatorDefinition(name: name, parameters: parameters, body: body,
                 plusCalPhase: plusCalPhase(call), plusCalDependencies: plusCalDependencies(call))
         }
@@ -781,10 +1095,13 @@ extension ParserSession {
         let formalParameters = parameters.enumerated().map { index, _ in
             FormalParameter.value("value\(index)")
         }
-        let substitutions = Dictionary(uniqueKeysWithValues: zip(parameters, formalParameters).map {
-            ($0, StateExpr.variable($1.name))
-        })
-        guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
+        let scope = typedFacadeScope(
+            .empty,
+            bindings: zip(parameters, formalParameters).map {
+                (sourceName: $0, value: StateExpr.variable($1.name))
+            }
+        )
+        guard let body = decodeTypedFacadeValue(bodySyntax, scope: scope) else { return nil }
         return FormalOperatorDefinition(
             name: name,
             parameters: formalParameters,
@@ -792,37 +1109,6 @@ extension ParserSession {
             plusCalPhase: plusCalPhase(call),
             plusCalDependencies: plusCalDependencies(call)
         )
-    }
-
-    private func parseDefinition(
-        _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents
-    ) {
-        let arguments = Array(call.arguments)
-        guard arguments.first?.label == nil,
-              call.trailingClosure == nil,
-              let literal = arguments[0].expression.as(StringLiteralExprSyntax.self),
-              literal.segments.allSatisfy({ $0.is(StringSegmentSyntax.self) }),
-              let definition = extractStringArg(call, index: 0)
-        else {
-            result.diagnostics.append(.init(
-                message: "Definition requires a literal TLA+ declaration.",
-                source: call.description,
-                expected: "Definition(\"Name == expression\")",
-                nextSafeAction: "Pass the complete source-only TLA+ declaration as a string literal."
-            ))
-            return
-        }
-        let name = call.arguments.first(where: { $0.label?.text == "named" })?.expression
-            .as(StringLiteralExprSyntax.self)?.representedLiteralValue
-        let dependencies = plusCalDependencies(call)
-        result.definitions.append(.init(name: name, text: definition, dependencies: dependencies))
-        result.authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
-            name: name,
-            text: definition,
-            phase: plusCalPhase(call),
-            dependencies: dependencies
-        ))
     }
 
     private func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {
@@ -849,7 +1135,8 @@ extension ParserSession {
 
     private func parseFormalModuleInstance(
         _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents
+        into result: inout ParsedSpecComponents,
+        scope: TypedFacadeScope = .empty
     ) {
         guard let name = extractStringArg(call, index: 0),
               let moduleArgument = call.arguments.first(where: { $0.label?.text == "of" })?.expression
@@ -857,8 +1144,7 @@ extension ParserSession {
             result.diagnostics.append(.init(message: "Instance requires a name and a named formal module.", source: call))
             return
         }
-        let source = moduleArgument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let moduleName = source.split(separator: ".").first.map(String.init),
+        guard let moduleName = formalModuleName(from: moduleArgument),
               let module = BuiltInFormalModules.resolve(moduleName)
         else {
             result.diagnostics.append(.init(message: "Instance requires a built-in formal module.", source: call))
@@ -873,10 +1159,11 @@ extension ParserSession {
             var parsedArguments: [ModuleArgument] = []
             for element in array.elements {
                 guard let argumentCall = element.expression.as(FunctionCallExprSyntax.self),
-                      argumentCall.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleArgument",
+                      (argumentCall.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleArgument"
+                        || argumentCall.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "init"),
                       let parameter = extractStringArg(argumentCall, index: 0),
                       let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression,
-                      let value = decodeTypedFacadeValue(valueSyntax, substitutions: [:]) ?? decodeStateExpr(valueSyntax)
+                      let value = decodeTypedFacadeValue(valueSyntax, scope: scope) ?? decodeStateExpr(valueSyntax)
                 else {
                     result.diagnostics.append(.init(
                         message: "Each Instance argument must be ModuleArgument(\"parameter\", value: expression).",
@@ -894,9 +1181,9 @@ extension ParserSession {
             result.diagnostics.append(.init(message: "An Instance cannot bind the same parameter twice.", source: call))
             return
         }
-        let declaredParameters = Set(module.formalParameters.map(\.name))
-        guard Set(arguments.map(\.parameter)).isSubset(of: declaredParameters) else {
-            result.diagnostics.append(.init(message: "Instance arguments must name parameters declared by '\(module.name)'.", source: call))
+        let declaredTargets = Set(module.formalParameters.map(\.name)).union(module.variables.map(\.name))
+        guard Set(arguments.map(\.parameter)).isSubset(of: declaredTargets) else {
+            result.diagnostics.append(.init(message: "Instance arguments must name declarations exported by '\(module.name)'.", source: call))
             return
         }
         result.moduleInstances.append(FormalModuleInstance(
@@ -925,19 +1212,24 @@ extension ParserSession {
     ) -> FormalModuleConfiguration? {
         guard let argument = call.arguments.first(where: { $0.label?.text == "configuring" })?.expression
         else { return nil }
-        let source = argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard moduleName == "ZSequences", source.hasPrefix("ZSequences.boundedNaturalNumbers(") else {
-            return nil
-        }
-        let contents = source
-            .replacingOccurrences(of: "ZSequences.boundedNaturalNumbers(", with: "")
-            .dropLast()
-        let bounds = contents.components(separatedBy: "...")
-        guard bounds.count == 2,
-              let lower = Int(bounds[0].trimmingCharacters(in: .whitespacesAndNewlines)),
-              let upper = Int(bounds[1].trimmingCharacters(in: .whitespacesAndNewlines))
+        guard moduleName == "ZSequences",
+              let call = argument.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences",
+              member.declName.baseName.text == "boundedNaturalNumbers",
+              call.arguments.count == 1,
+              let bounds = call.arguments.first?.expression,
+              let range = parseIntegerClosedRange(bounds)
         else { return nil }
-        return ZSequences.boundedNaturalNumbers(lower...upper)
+        return ZSequences.boundedNaturalNumbers(range)
+    }
+
+    private func formalModuleName(from expression: ExprSyntax) -> String? {
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.text == "module",
+              let module = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+        else { return nil }
+        return module
     }
 
     func mergeVariableDeclaration(
@@ -983,17 +1275,38 @@ extension ParserSession {
     ) {
         guard let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
               let closure = call.trailingClosure
-        else { return }
+        else {
+            result.diagnostics.append(.init(
+                message: "Action requires a name and a supported action body.",
+                source: call
+            ))
+            return
+        }
         let arguments = Array(call.arguments)
         let bindingArguments = arguments.dropFirst()
         if bindingArguments.isEmpty {
+            guard closure.statements.allSatisfy({
+                if case .expr = $0.item { return true }
+                return false
+            }) else {
+                result.diagnostics.append(.init(
+                    message: "Action '\(actionName)' contains an unsupported action expression.",
+                    source: closure
+                ))
+                return
+            }
             if let body = decodeActionFromClosure(closure) {
                 result.actions.append(.init(name: actionName, body: body))
+            } else if let expression = unsupportedActionExpression(in: closure) {
+                result.diagnostics.append(.init(
+                    message: "Action '\(actionName)' contains an unsupported action expression.",
+                    source: expression
+                ))
             } else {
-                // Action body uses unsupported constructs (existsAction, etc.).
-                // Store a placeholder body; the macro will fall back to interpreter
-                // trampoline which reads the body from the runtime spec at Self.spec.
-                result.actions.append(.init(name: actionName, body: .chooseAction("_parser_skip", .value(.bool(false)))))
+                result.diagnostics.append(.init(
+                    message: "Action '\(actionName)' contains an unsupported action expression.",
+                    source: closure
+                ))
             }
             return
         }
@@ -1042,7 +1355,11 @@ extension ParserSession {
             ))
             return
         }
-        guard let body = decodeActionFromClosure(closure) else {
+        let actionScope = typedFacadeScope(
+            .empty,
+            bindings: bindings.map { (sourceName: $0.name, value: .variable($0.name)) }
+        )
+        guard let body = decodeActionFromClosure(closure, scope: actionScope) else {
             if let expression = unsupportedActionExpression(in: closure),
                let typedUpdate = typedUpdateExpression(in: expression) {
                 let message = "Parameterized action '\(actionName)' contains an unsupported typed update; "
@@ -1212,8 +1529,21 @@ extension ParserSession {
             closure,
             symmetricCollections: Set(result.symmetricCollections.map(\.name))
         ) else {
-            // Invariant uses unsupported expressions (for loops, function calls).
-            // Skip it; runtime verifyInvariants() checks the actual invariant.
+            let symmetricCollections = Set(result.symmetricCollections.map(\.name))
+            if let expression = unsupportedInvariantExpression(
+                in: closure,
+                symmetricCollections: symmetricCollections
+            ) {
+                result.diagnostics.append(.init(
+                    message: "Invariant '\(name)' contains an unsupported invariant expression.",
+                    source: expression
+                ))
+            } else {
+            result.diagnostics.append(.init(
+                message: "Invariant '\(name)' contains an unsupported invariant expression.",
+                source: closure
+            ))
+            }
             return
         }
         result.invariants.append((name, body))
@@ -1225,7 +1555,7 @@ extension ParserSession {
     ) -> StateExpr? {
         var expressions: [StateExpr] = []
         for statement in closure.statements {
-            guard case .expr(let expression) = statement.item else { continue }
+            guard case .expr(let expression) = statement.item else { return nil }
             guard let parsed = decodeInvariantExpression(expression, symmetricCollections: symmetricCollections)
             else { return nil }
             expressions.append(parsed)
@@ -1265,34 +1595,12 @@ extension ParserSession {
         _ expression: ExprSyntax,
         symmetricCollections: Set<String>
     ) -> StateExpr? {
-        guard let call = expression.as(FunctionCallExprSyntax.self),
-              let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-              let collection = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              symmetricCollections.contains(collection),
-              let kind = CollectionPredicateKind(rawValue: access.declName.baseName.text),
-              let closure = call.trailingClosure
-                ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
-              let parameter = Self.collectionPredicateParameter(in: closure)
-        else { return nil }
-
-        let member = parameter
-        let rewrittenStatements = closure.statements.map { statement in
-            PredicateValueRewriter(
-                parameter: parameter,
-                replacement: "\(collection).applying(\(member))"
-            ).visit(statement)
-        }
-        let rewrittenClosure = closure.with(\.statements, CodeBlockItemListSyntax(rewrittenStatements))
-        guard let bodyExpr = rewrittenClosure.statements.first.flatMap({ statement -> ExprSyntax? in
-            guard case .expr(let e) = statement.item else { return nil }
-            return e
-        }), let body = decodeInvariantExpression(bodyExpr, symmetricCollections: symmetricCollections)
-        else { return nil }
-
-        let domain = StateExpr.domain(.variable(collection))
-        switch kind {
-        case .allSatisfy: return .forAll(domain, member, body)
-        case .contains: return .exists(domain, member, body)
+        guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        return decodeCollectionPredicate(
+            call,
+            requiringCollectionIn: symmetricCollections
+        ) { body, scope in
+            decodeTypedFacadeValue(body, scope: scope)
         }
     }
 
@@ -1305,36 +1613,6 @@ extension ParserSession {
         case .parameterClause(let clause):
             guard clause.parameters.count == 1, let parameter = clause.parameters.first else { return nil }
             return parameter.secondName?.text ?? parameter.firstName.text
-        }
-    }
-
-    enum CollectionPredicateKind: String {
-        case allSatisfy
-        case contains
-    }
-
-    final class PredicateValueRewriter: SyntaxRewriter {
-        let parameter: String
-        let replacement: String
-        var closureDepth = 0
-
-        init(parameter: String, replacement: String) {
-            self.parameter = parameter
-            self.replacement = replacement
-        }
-
-        override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {
-            if closureDepth > 0, ParserSession.collectionPredicateParameter(in: node) == parameter {
-                return ExprSyntax(node)
-            }
-            closureDepth += 1
-            defer { closureDepth -= 1 }
-            return super.visit(node)
-        }
-
-        override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
-            guard node.baseName.text == parameter else { return super.visit(node) }
-            return ExprSyntax(stringLiteral: replacement)
         }
     }
 

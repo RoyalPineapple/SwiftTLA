@@ -10,15 +10,15 @@ import SwiftTLAMacros
 /// gate rather than added to the finite graph-count catalogue.
 @TLAModel
 public struct AddTwoModel: Sendable {
-    private enum Label: String, PlusCalLabel {
+    private enum Label: String, PlusCalLabel, CaseIterable {
         case increase
     }
 
     public static var spec: TLASpec {
         #spec("AddTwo") {
-            Extends("Naturals")
-            Algorithm("Increase") {
-                let x = SharedVar(initial: 0)
+            Extends(.naturals)
+            Algorithm("Increase", scoped: { scope in
+                let x = scope.sharedVar("x", initial: 0)
 
                 Do(Label.increase) {
                     Assign(x, to: x + 2)
@@ -30,7 +30,7 @@ public struct AddTwoModel: Sendable {
                 StateConstraint(x < 10)
                 Invariant("TypeOK") { x >= 0 }
                 Invariant("Even") { x % 2 == 0 }
-            }
+            })
         }
     }
 }

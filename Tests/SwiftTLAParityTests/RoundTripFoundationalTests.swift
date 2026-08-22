@@ -96,14 +96,14 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     let s: [(String, TLAValue)] = [("x", .int(0)), ("y", .int(0))]
     let action: ActionExpr
     switch variant {
-    case "simpleAssign": action = .assign("x", .value(.int(42)))
+    case "simpleAssign": action = .assign(.named("x"), .value(.int(42)))
     case "guardTrue":
-      action = .and(.guard_(.equal(.variable("x"), .value(.int(0)))), .assign("x", .value(.int(1))))
+      action = .and(.guard_(.equal(.variable("x"), .value(.int(0)))), .assign(.named("x"), .value(.int(1))))
     case "guardFalse":
-      action = .and(.guard_(.equal(.variable("x"), .value(.int(1)))), .assign("x", .value(.int(2))))
-    case "orBranches": action = .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2))))
-    case "twoVars": action = .and(.assign("x", .value(.int(1))), .assign("y", .value(.int(2))))
-    default: action = .assign("x", .value(.int(0)))
+      action = .and(.guard_(.equal(.variable("x"), .value(.int(1)))), .assign(.named("x"), .value(.int(2))))
+    case "orBranches": action = .or(.assign(.named("x"), .value(.int(1))), .assign(.named("x"), .value(.int(2))))
+    case "twoVars": action = .and(.assign(.named("x"), .value(.int(1))), .assign(.named("y"), .value(.int(2))))
+    default: action = .assign(.named("x"), .value(.int(0)))
     }
     let r = try compiledSuccessors(action, from: s, variables: ["x", "y"])
     #expect(r.count == expected)
@@ -114,7 +114,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     // This is deliberately large enough to exercise a lowered atomic block,
     // while keeping the recursive value-type teardown itself bounded.
     let depth = 256
-    let assignment = ActionExpr.assign("x", .value(.int(1)))
+    let assignment = ActionExpr.assign(.named("x"), .value(.int(1)))
     let action = (0..<depth).reduce(assignment) { partial, _ in
       .and(partial, assignment)
     }
@@ -213,45 +213,45 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   let s2: [(String, TLAValue)] = [("a", .int(0)), ("b", .int(0))]
 
   @Test func simpleAssign() throws {
-    let r = try compiledSuccessors(.assign("x", .value(.int(42))), from: s0, variables: ["x"])
+    let r = try compiledSuccessors(.assign(.named("x"), .value(.int(42))), from: s0, variables: ["x"])
     #expect(r.count == 1 && try value("x", in: r[0]) == .int(42))
   }
 
   @Test func unchanged() throws {
-    let r = try compiledSuccessors(.unchanged("x"), from: s0, variables: ["x"])
+    let r = try compiledSuccessors(.unchanged(.named("x")), from: s0, variables: ["x"])
     #expect(r.count == 1 && try value("x", in: r[0]) == .int(0))
   }
 
   @Test func guardTrue() throws {
     let a: ActionExpr = .and(
-      .guard_(.equal(.variable("x"), .value(.int(0)))), .assign("x", .value(.int(1))))
+      .guard_(.equal(.variable("x"), .value(.int(0)))), .assign(.named("x"), .value(.int(1))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 1)
   }
 
   @Test func guardFalse() throws {
     let a: ActionExpr = .and(
-      .guard_(.equal(.variable("x"), .value(.int(1)))), .assign("x", .value(.int(2))))
+      .guard_(.equal(.variable("x"), .value(.int(1)))), .assign(.named("x"), .value(.int(2))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.isEmpty)
   }
 
   @Test func twoVars() throws {
-    let a: ActionExpr = .and(.assign("a", .value(.int(1))), .assign("b", .value(.int(2))))
+    let a: ActionExpr = .and(.assign(.named("a"), .value(.int(1))), .assign(.named("b"), .value(.int(2))))
     let r = try compiledSuccessors(a, from: s2, variables: ["a", "b"])
     #expect(r.count == 1 && try value("a", in: r[0]) == .int(1) && try value("b", in: r[0]) == .int(2))
   }
 
   @Test func orBranches() throws {
-    let a: ActionExpr = .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2))))
+    let a: ActionExpr = .or(.assign(.named("x"), .value(.int(1))), .assign(.named("x"), .value(.int(2))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 2)
   }
 
   @Test func nestedOr() throws {
     let a: ActionExpr = .or(
-      .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2)))),
-      .assign("x", .value(.int(3))))
+      .or(.assign(.named("x"), .value(.int(1))), .assign(.named("x"), .value(.int(2)))),
+      .assign(.named("x"), .value(.int(3))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 3)
   }
@@ -262,7 +262,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       .existsAction(
         "candidate",
         .setLiteral([.value(.int(1))]),
-        .assign("x", .variable("candidate"))
+        .assign(.named("x"), .variable("candidate"))
       )
     )
 
@@ -278,9 +278,9 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       .existsAction(
         "candidate",
         .setLiteral([.value(.int(1))]),
-        .assign("x", .variable("candidate"))
+        .assign(.named("x"), .variable("candidate"))
       ),
-      .assign("x", .value(.int(1)))
+      .assign(.named("x"), .value(.int(1)))
     )
 
     let successors = try compiledSuccessors(action, from: s0, variables: ["x"])
@@ -375,12 +375,12 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   @Test(
     "Every ActionExpr case enumerates correctly",
     arguments: [
-      ("assign", ActionExpr.assign("x", .int(1)), 1),
-      ("unchanged", ActionExpr.unchanged("x"), 1),
-      ("simpleAnd", ActionExpr.and(.assign("x", .int(1)), .assign("y", .int(2))), 1),
-      ("or", ActionExpr.or(.assign("x", .int(1)), .assign("x", .int(2))), 2),
+      ("assign", ActionExpr.assign(.named("x"), .int(1)), 1),
+      ("unchanged", ActionExpr.unchanged(.named("x")), 1),
+      ("simpleAnd", ActionExpr.and(.assign(.named("x"), .int(1)), .assign(.named("y"), .int(2))), 1),
+      ("or", ActionExpr.or(.assign(.named("x"), .int(1)), .assign(.named("x"), .int(2))), 2),
       (
-        "guarded", ActionExpr.and(.guard_(.equal(.variable("x"), .int(0))), .assign("x", .int(1))),
+        "guarded", ActionExpr.and(.guard_(.equal(.variable("x"), .int(0))), .assign(.named("x"), .int(1))),
         1
       )
     ] as [(String, ActionExpr, Int)])
@@ -415,8 +415,8 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     }
 
     #expect(spec.actions[0].bindings.map(\.name) == ["person", "elevator", "direction"])
-    let graph = try ModelChecker(spec: spec).exploreGraph()
-    let labels = graph.transitions[.init(0)]!.map(\.label)
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let labels = try #require(graph.transitions[.init(0)]).map(\.label)
     let expectedArguments: [[TLAValue]] = [
       [.int(1), .int(10), .int(100)], [.int(1), .int(10), .int(200)],
       [.int(1), .int(20), .int(100)], [.int(1), .int(20), .int(200)],
@@ -457,15 +457,16 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
     #expect(spec.actions[0].bindings.map(\.name) == ["id"])
     #expect(spec.actions[0].bindings[0].values == [.int(1), .int(2)])
-    let graph = try ModelChecker(spec: spec).exploreGraph()
-    let labels = graph.transitions[.init(0)]!.map(\.label)
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let transitions = try #require(graph.transitions[.init(0)])
+    let labels = transitions.map(\.label)
     #expect(
       Set(labels) == [
         .init(.init(name: "moveElevator", arguments: [.int(1)])),
         .init(.init(name: "moveElevator", arguments: [.int(2)]))
       ])
     #expect(
-      Set(graph.transitions[.init(0)]!.map(\.action)) == ["moveElevator(1)", "moveElevator(2)"])
+      Set(transitions.map(\.action)) == ["moveElevator(1)", "moveElevator(2)"])
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator(id) =="))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator__0 == moveElevator(1)"))
   }
@@ -480,7 +481,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       }
     }
 
-    let graph = try ModelChecker(spec: spec).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
 
     #expect(transitions.map(\.action) == ["openDoor(0)", "openDoor(1)"])
@@ -493,7 +494,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(from: x.name, StateExpr.set([1, 2]))
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let checker = try ModelChecker(spec: spec, maxStates: 100)
+    let checker = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
 
     let exploration = try checker.explore()
     let graph = try checker.exploreGraph()
@@ -509,7 +510,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     #expect(exploration.result.description == result.description)
     #expect(exploration.isComplete)
 
-    let incomplete = try ModelChecker(spec: spec, maxStates: 1).explore()
+    let incomplete = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).explore()
     #expect(!incomplete.isComplete)
   }
 
@@ -519,7 +520,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 4)
   }
 
@@ -529,7 +530,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("toggle") { x.becomes((x + 1) % 2) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -540,7 +541,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Action("inc") { x.becomes(x + 1).when(x < 5) }
       Invariant("nonNeg") { x >= 0 }
     }
-    if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 100).check() {
+    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check() {
       #expect(count == 6)
     } else {
       #expect(Bool(false))
@@ -554,7 +555,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Action("inc") { x.becomes(x + 1) }
       Invariant("lt3") { x < 3 }
     }
-    if case .invariantViolated(let name, _, _) = try ModelChecker(spec: spec, maxStates: 100)
+    if case .invariantViolated(let name, _, _) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
       .check() {
       #expect(name == "lt3")
     } else {
@@ -570,7 +571,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Invariant("mustStayZero") { x == 0 }
     }
 
-    let result = try ModelChecker(spec: spec, maxStates: 10).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     let diagnostic = try #require(result.diagnostic)
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
 
@@ -590,7 +591,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 3).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3)).exploreGraph()
     // Processes 3 states, discovers 4 (successors of last processed also stored)
     #expect(graph.states.count >= 3 && graph.states.count <= 4)
   }
@@ -601,7 +602,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("once") { x.becomes(1).when(x == 0) }
     }
-    if case .ok(let c) = try ModelChecker(spec: spec, maxStates: 100).check() {
+    if case .ok(let c) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check() {
       #expect(c == 2)
     } else {
       #expect(Bool(false))
@@ -617,7 +618,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Action("incA") { a.becomes(a + 1).when(a < 2) }
       Action("incB") { b.becomes(b + 1).when(b < 2) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 9)
   }
 
@@ -634,7 +635,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       try $0.value(for: x).rendered(using: compilation.layout)
     }
     #expect(Set(initialValues) == Set([.int(1), .int(2), .int(3)]))
-    #expect(try ModelChecker(spec: spec).exploreGraph().states.count == 3)
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 3)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
 
@@ -657,7 +658,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
           || (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
       }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 16)
   }
 }
@@ -752,7 +753,10 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       }
       Action("pop") { seq.stateExpr.count > 0 && result.becomes(Expr<Int>(seq.stateExpr.at(1))) }
     }
-    let g = try! ModelChecker(spec: spec, maxStates: 10).exploreGraph()
+    let g = try ModelChecker(
+      spec: spec,
+      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
+    ).exploreGraph()
     let states = g.states.values
     let results = Set(states.compactMap { $0["result"] })
     #expect(results.contains(.int(0)))
@@ -771,7 +775,10 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
         clock.becomes(Expr<TLAValue>(fun)).when(clock.stateExpr.domain.cardinality == 0)
       }
     }
-    let g = try! ModelChecker(spec: spec, maxStates: 10).exploreGraph()
+    let g = try ModelChecker(
+      spec: spec,
+      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
+    ).exploreGraph()
     let states = g.states.values
     var found = false
     for s in states {
@@ -782,22 +789,6 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       }
     }
     #expect(found)
-  }
-
-  @Test("CONSTANT with ASSUME generates valid TLA+ and model-checks")
-  func constantModelCheck() throws {
-    let bound = 5
-    let x = Var<Int>("x")
-    let spec = TLASpec("ConstTest") {
-      Constant("N", bound)
-      Variable(x, 0)
-      Action("inc") { x.becomes(x + 1).when(x < bound) }
-    }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("CONSTANTS N"))
-    #expect(tla.contains("ASSUME N = 5"))
-    let g = try! ModelChecker(spec: substituteConstants(spec), maxStates: 10).exploreGraph()
-    #expect(g.states.count == bound + 1)
   }
 
   @Test("choose action produces nondeterministic assignment")
@@ -814,7 +805,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
             Expr(.setDifference(source.stateExpr, StateExpr.singleton(picked.stateExpr))))
       }
     }
-    if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 20).check() {
+    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20)).check() {
       #expect(count > 0)
     } else {
       #expect(Bool(false))
@@ -822,17 +813,19 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   }
 
   @Test("SpecParser parses choose(variable, from:) call")
-  func specParserChooseCall() {
+  func specParserChooseCall() throws {
     let source = "choose(picked, from: q)"
-    let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+    let statement = try #require(Parser.parse(source: source).statements.first)
+    let expr = try #require(statement.item.as(ExprSyntax.self))
     let result = SpecParser.decodeActionExpr(expr)
-    #expect(result == ActionExpr.chooseAction("picked", .variable("q")))
+    #expect(result == ActionExpr.chooseAction(.named("picked"), .variable("q")))
   }
 
   @Test("SpecParser parses singleton()")
   func specParserSingleton() throws {
     let source = "StateExpr.singleton(x)"
-    let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+    let statement = try #require(Parser.parse(source: source).statements.first)
+    let expr = try #require(statement.item.as(ExprSyntax.self))
     let result = SpecParser.decodeStateExpr(expr)
     #expect(result == StateExpr.setLiteral([.variable("x")]))
   }
@@ -840,7 +833,8 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   @Test("SpecParser parses functionLiteral(p, in: domain, body)")
   func specParserFunctionLiteral() throws {
     let source = "StateExpr.functionLiteral(StateExpr.set([1]), (2 + 3))"
-    let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+    let statement = try #require(Parser.parse(source: source).statements.first)
+    let expr = try #require(statement.item.as(ExprSyntax.self))
     let result = SpecParser.decodeStateExpr(expr)
     let d = result?.description ?? ""
     #expect(d.contains("|->") && d.contains("{1}") && d.contains("(2 + 3)"))

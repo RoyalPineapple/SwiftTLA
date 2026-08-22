@@ -14,6 +14,6 @@ final class StandaloneObservableSurface {
 
 @MainActor
 func rejectRawState(_ machine: StandaloneObservableSurface) {
-  let _: [String: TLAValue] = machine.tlaSnapshot()
+  _ = machine.tlaSnapshot()
   _ = StandaloneObservableSurface.TransitionEvidence.self
 }

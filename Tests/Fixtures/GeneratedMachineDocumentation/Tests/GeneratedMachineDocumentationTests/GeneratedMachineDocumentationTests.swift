@@ -28,9 +28,10 @@ struct GeneratedMachineDocumentationTests {
         let observableLive = try CounterScreenModel.makeLive()
         let observable = try await CounterScreenModel.Observable(live: observableLive)
 
-        #expect(actor.identity == actorLive.identity)
+        let actorIdentity = await actor.identity
+        #expect(actorIdentity == actorLive.identity)
         #expect(observable.identity == observableLive.identity)
-        #expect(actor.identity != observable.identity)
+        #expect(actorIdentity != observable.identity)
 
         let result = try await actor.apply(.advance)
         guard case .committed(let commit) = result else {

@@ -1,93 +1,57 @@
 # Upstream parity
 
-SwiftTLA has two related but different TLC checks.
+Upstream parity keeps one canonical SwiftTLA source model for each selected
+example. The canonical corpus owns its source model, module closure,
+configuration, and provenance.
 
-The parity corpus ports keep regression coverage through their in-process
-tests: each port checks its expected distinct-state count and exported module
-shape. Equal counts do not prove equal initial states, state values, action
-labels, edges, or outcomes.
+```text
+canonical Swift source model → compile → rendered module bundle
+                                      ├→ SwiftTLA exploration
+                                      └→ TLC exploration
+                                             ↓
+                                    canonical graph comparison
+```
 
-Core graph conformance is the stronger, bounded relation for the cases in
-`Verification/CoreConformance/cases.json`. It compares canonical initial
-states, state bindings, and the complete labeled transition multiset from an
-independent Swift BFS run and a pinned TLC run.
+## Canonical corpus
 
-GitHub Actions runs exact finite graph conformance, support admission, and
-release qualification. It creates fresh temporal/symmetry and public-workflow
-admission evidence below `.build/`. Local broad conformance commands require
-explicit authorization; a local result is diagnostic-only.
-Committed passing baselines are under `Verification/CoreConformance/baselines`.
-The same-count edge-mismatch and violation fixtures are deliberate negative
-controls; their expected failures show that the comparison does not accept
-count parity as graph parity. The support gate defines the small current
-admitted surface and retains a report for every run. See [Core graph
-conformance](CoreGraphConformance.md) and [core support](CoreSupport.md) for
-the pin, evidence, scope, and report rules.
+The corpus entries are in
+[`Sources/UpstreamParity/CanonicalCorpus`](../Sources/UpstreamParity/CanonicalCorpus).
+Each entry provides one typed Swift source model and its declared configuration.
+Corpus export materializes the bundle from the compiled specification.
 
-Neither command establishes temporal/liveness/fairness equivalence, symmetry
-reduction equivalence, or correctness outside the finite cases it executes.
+Upstream `.tla` and `.cfg` files are external formal input. The compiler
+links them as named modules in a module closure. The closure preserves module
+ownership, import edges, configuration, and provenance.
 
-## PlusCal porting inventory
+## Exact finite graph conformance
 
-The ports in `Sources/UpstreamParity/Examples/` use `#spec`, `Algorithm`,
-`Each`, and labeled `Do` blocks when the upstream source contains PlusCal.
-The remaining upstream PlusCal sources identify the next language work. This
-is a source-driven roadmap: a port is added only when its bounded upstream
-configuration and its required typed surface are both available.
+Core conformance runs a bounded SwiftTLA exploration and a pinned TLC run for
+each case in
+[`Verification/CoreConformance/cases.json`](../Verification/CoreConformance/cases.json).
+Both explorations use the canonical graph schema.
 
-| Upstream example | SwiftTLA can already express | Missing typed surface |
-| --- | --- | --- |
-| `KVsnap` | process families, function state, records, sequences, non-empty finite subset choice, local `LET … IN` operators, and real module instances | higher-order formal operator parameters and application; formal lambdas; standard `FoldFunction`; and a typed injective set-to-sequence choice |
-| `EWD998PCal` | fair processes, `Either`, `When`, scoped choices, records | typed finite bags and bag-domain selection |
-| `LeastCircularSubstring` | labeled loops, integer arithmetic, function updates, zero-based bounded sequences, modulo indexing, and bundled imported recursive operators | no current language dependency; it is a module-bundle conformance case |
-| `TokenRing` | finite function state, parameterized actions, modulo, weak fairness, and `<>[]` properties | macro-side typed function-space preservation and an ordered finite-domain slice for the published `UniqueToken` property |
-| `Quicksort` | finite sequences, loops, scoped choices | constrained finite function choice and multi-binding `with` |
-| `Slush` | records, unions, `Either`, loops | typed sets of record variants and filtered record comprehensions |
-| `Sailfish` | process families, nested `With`, sets and tuples | typed filtered comprehensions, tuple/record relations, and multi-binding `with` |
+The comparator evaluates canonical initial states, state bindings, labeled
+edge multiplicities, and outcomes. A graph receipt summarizes a completed
+exploration. The retained canonical records locate the first difference.
 
-`EWD687aPlusCal` uses language forms that are mostly already present
-(`Either`, `When`, nested `With`, and records), but the repository does not
-provide a matching bounded configuration for that PlusCal module. It is not a
-parity-corpus candidate until one exists.
+GitHub Actions retains the provenance, tool identity, raw TLC event stream,
+canonical runs, receipts, and comparison record for each declared case. See
+[Core graph conformance](CoreGraphConformance.md) and
+[Core support](CoreSupport.md).
 
-The dependency order is deliberate. `KVsnap` is three real modules:
-`Util` provides general operators, `ClientCentric` imports `Util`, and
-`KVsnap` creates an instance of `ClientCentric`. The next implementation
-trunk is therefore higher-order operator application and formal lambdas.
-That unlocks `FoldFunction`, then `Util`, then `ClientCentric`, and only then
-the `KVsnap` consumer. The exporter must write all three `.tla` files beside
-the root module so TLC checks those imports and the named instance instead of
-a flattened approximation.
+## Temporal and symmetry cases
 
-After that chain, the next independent trunks are typed bags, constrained
-function choice, and multi-binding scoped choice. Each addition must be used
-by a bounded source port, pass the parser/builder fidelity gate, and run TLC
-against its emitted module bundle.
+The temporal and symmetry gate uses cases in
+[`Verification/TemporalSymmetryConformance`](../Verification/TemporalSymmetryConformance).
+It retains the declared tool identity, finite configuration, graph data, and
+admission record. The gate evaluates the finite behavior named by its case
+register.
 
-## Temporal and symmetry executable reference
+See [Temporal and symmetry conformance](TemporalSymmetryConformance.md).
 
-The hosted temporal and symmetry gate is a third, separate bounded check. It
-reads the declared P3 cases, divergence ledger, and support surface from
-`Verification/TemporalSymmetryConformance/`. It requires a current core
-admission and writes a retained P3 admission report under
-`.build/temporal-symmetry-support-gate/`.
+## Evidence scope
 
-Published TLA+ temporal and symmetry semantics are authoritative. TLC v1.8.0
-at the declared commit is pinned executable-reference evidence. TLC source,
-tests, and the graph bridge are white-box diagnostic evidence. They do not
-create a hidden checker or oracle.
-
-Each P3 case pins its TLC JAR, Java runtime, bridge source and binary, module,
-configuration, arguments, and finite bound. A changed bridge requires new
-pins and a fresh run. The gate rejects stale or mixed pin evidence.
-
-The requested P3 entries are the declared three-state temporal cases and one
-binary-valued symmetric collection at scopes 2, 3, and 4. The report alone
-states which entries are admitted in a current run. It does not support
-arbitrary scopes, combined temporal and symmetry reduction, multiple
-collections, direct symmetry declarations, nested member values, or unbounded
-formulas.
-
-See [temporal and symmetry conformance](TemporalSymmetryConformance.md) for
-the complete local command, exit classes, retained evidence, and diagnosis
-steps.
+TLC supplies independent evidence for the declared finite model and
+configuration. The exact comparison supplies the admission fact for that
+case. The evidence record names the source model, compilation identity,
+configuration, module closure, tool identity, and retained graph data.

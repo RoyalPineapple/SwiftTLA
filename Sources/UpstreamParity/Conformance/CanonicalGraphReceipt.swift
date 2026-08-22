@@ -9,10 +9,10 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     case failed
   }
 
-  static let format = "canonical-graph-receipt/v1"
+  static let formatTag = "canonical-graph-receipt"
   static let recordsPerChunk = 512
 
-  let formatVersion: String
+  let format: String
   let compiledModelIdentity: String
   let configurationIdentity: String
   let symmetrySchemaIdentity: String
@@ -39,7 +39,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     outcome: CanonicalOutcome,
     diagnostics: [CanonicalDiagnostic] = []
   ) {
-    self.formatVersion = Self.format
+    self.format = Self.formatTag
     self.compiledModelIdentity = compiledModelIdentity
     self.configurationIdentity = configurationIdentity
     self.symmetrySchemaIdentity = symmetrySchemaIdentity
@@ -62,7 +62,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     self.graphChunkDigests = chunks.map(Self.digest)
     self.graphDigest = Self.digest(
       [
-        "header:formatVersion:\(self.formatVersion)",
+        "header:format:\(self.format)",
         "header:compiledModelIdentity:\(encodedBytes(self.compiledModelIdentity))",
         "header:configurationIdentity:\(encodedBytes(self.configurationIdentity))",
         "header:symmetrySchemaIdentity:\(encodedBytes(self.symmetrySchemaIdentity))",
@@ -164,4 +164,56 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
   private static func digest(_ records: [String]) -> String {
     SHA256.hex(Data(records.joined(separator: "\n").utf8))
   }
+}
+
+func canonicalGraphReceiptJSON(_ receipt: CanonicalGraphReceipt) -> [String: Any] {
+  var object: [String: Any] = [
+    "format": receipt.format,
+    "compiledModelIdentity": receipt.compiledModelIdentity,
+    "configurationIdentity": receipt.configurationIdentity,
+    "symmetrySchemaIdentity": receipt.symmetrySchemaIdentity,
+    "explorationStatus": receipt.explorationStatus.rawValue,
+    "maximumStateLimit": receipt.maximumStateLimit,
+    "initialStateCount": receipt.initialStateCount,
+    "stateCount": receipt.stateCount,
+    "edgeCount": receipt.edgeCount,
+    "initialStatesDigest": receipt.initialStatesDigest,
+    "statesDigest": receipt.statesDigest,
+    "edgesDigest": receipt.edgesDigest,
+    "graphChunkDigests": receipt.graphChunkDigests,
+    "graphDigest": receipt.graphDigest
+  ]
+  if let mappingIdentity = receipt.observableNameMappingIdentity {
+    object["observableNameMappingIdentity"] = mappingIdentity
+  }
+  return object
+}
+
+func firstDifferentGraphChunkJSON(
+  expected: CanonicalGraphReceipt,
+  actual: CanonicalGraphReceipt
+) -> [String: Any]? {
+  let sharedCount = min(expected.graphChunkDigests.count, actual.graphChunkDigests.count)
+  if let index = (0..<sharedCount).first(where: {
+    expected.graphChunkDigests[$0] != actual.graphChunkDigests[$0]
+  }) {
+    return [
+      "index": index,
+      "expectedDigest": expected.graphChunkDigests[index],
+      "actualDigest": actual.graphChunkDigests[index]
+    ]
+  }
+  guard expected.graphChunkDigests.count != actual.graphChunkDigests.count else { return nil }
+  var record: [String: Any] = [
+    "index": sharedCount,
+    "expectedChunkCount": expected.graphChunkDigests.count,
+    "actualChunkCount": actual.graphChunkDigests.count
+  ]
+  if sharedCount < expected.graphChunkDigests.count {
+    record["expectedDigest"] = expected.graphChunkDigests[sharedCount]
+  }
+  if sharedCount < actual.graphChunkDigests.count {
+    record["actualDigest"] = actual.graphChunkDigests[sharedCount]
+  }
+  return record
 }

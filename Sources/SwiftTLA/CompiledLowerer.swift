@@ -29,6 +29,28 @@ struct CompiledLowerer {
                 expression: try lower($0.expr, at: "temporalProperties.\($0.name)")
             )
         }
+        let theorems = try spec.theorems.map { theorem in
+            if let temporal = theorem.temporalBody {
+                return CompiledTheorem(
+                    name: theorem.name,
+                    body: .temporal(try lower(temporal, at: "theorems.\(theorem.name)"))
+                )
+            }
+            if let state = theorem.stateBody {
+                return CompiledTheorem(
+                    name: theorem.name,
+                    body: .state(try lower(state, at: "theorems.\(theorem.name)"))
+                )
+            }
+            throw CompilationDiagnostic(
+                code: .invalidFormalDeclaration,
+                stage: .lowering,
+                path: "theorems.\(theorem.name)",
+                expected: "a temporal or state theorem body",
+                actual: "no theorem body",
+                nextSafeAction: "Declare a theorem with a supported temporal or state expression."
+            )
+        }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
             try lower(condition, actions: spec.actions, at: "fairness[\(offset)]")
         }
@@ -48,8 +70,21 @@ struct CompiledLowerer {
                 body: try lower(function.body, at: "recursiveFunctions.\(function.name).body")
             )
         }
+        let formalModuleReplacements = try spec.importConfigurations.flatMap { configuration in
+            try configuration.replacements.map { replacement in
+                CompiledFormalModuleReplacement(
+                    moduleName: configuration.moduleName,
+                    operatorName: replacement.operatorName,
+                    definitionName: replacement.definitionName,
+                    expression: try lower(
+                        replacement.expression,
+                        at: "importConfigurations.\(configuration.moduleName).\(replacement.operatorName)"
+                    )
+                )
+            }
+        }
         let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
-        let linkedFormalOperators = try closure.resolvedFormalOperatorDefinitions
+        let linkedFormalOperators = try closure.linkedOperators.formalOperatorDefinitions
             .filter { !localFormalNames.contains($0.name) }
             .map { definition in
                 CompiledFormalOperatorDefinition(
@@ -59,7 +94,7 @@ struct CompiledLowerer {
                 )
             }
         let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
-        let linkedRecursiveFunctions = try closure.resolvedRecursiveFuncs
+        let linkedRecursiveFunctions = try closure.linkedOperators.recursiveFunctions
             .filter { !localRecursiveNames.contains($0.name) }
             .map { function in
                 CompiledRecursiveFunction(
@@ -76,11 +111,13 @@ struct CompiledLowerer {
             actions: actions,
             invariants: invariants,
             temporalProperties: temporalProperties,
+            theorems: theorems,
             fairness: fairness,
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
             assume: try lowerOptional(spec.assume, at: "assume"),
             formalOperatorDefinitions: formalOperators + linkedFormalOperators,
             recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions,
+            formalModuleReplacements: formalModuleReplacements,
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: symmetry.values)
             },
@@ -88,6 +125,10 @@ struct CompiledLowerer {
                 .init(members: $0.metadata.members)
             }
         )
+    }
+
+    func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
+        try lower(expression, at: path)
     }
 
     private func lower(
@@ -142,6 +183,9 @@ struct CompiledLowerer {
     }
 
     private func lower(_ action: NamedAction) throws -> CompiledAction {
+        if let issue = action.sourceIssue {
+            throw issue.compilationDiagnostic(stage: .lowering, path: "actions.\(action.name).bindings")
+        }
         guard let id = bindings.actions[action.name] else {
             throw diagnostic(path: "actions.\(action.name)")
         }
@@ -165,10 +209,16 @@ struct CompiledLowerer {
 
     private func lower(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
         switch expression {
+        case .sourceIssue(let issue):
+            throw issue.compilationDiagnostic(stage: .lowering, path: path)
         case .value(let value): return .value(value)
-        case .programCounter: return try valueReference(at: path)
+        case .currentProcess:
+            throw diagnostic(path: path)
+        case .programCounter, .procedureStack: return try valueReference(at: path)
         case .controlLocation: return .controlLocation(try controlLocation(at: path))
         case .variable: return try valueReference(at: path)
+        case .processLocalFamily:
+            throw diagnostic(path: path)
         case .enabledAction: return .enabledAction(try action(at: path))
         case .negate(let value): return .negate(try lower(value, at: path))
         case .not(let value): return .not(try lower(value, at: path))

@@ -12,13 +12,14 @@ public struct ChangRoberts {
     public enum Node: String, CaseIterable, FiniteDomainKey {
         case one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.chang-roberts.node")
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case deliver
     }
 
@@ -51,18 +52,18 @@ public struct ChangRoberts {
 
     public static var spec: TLASpec {
         #spec("ChangRoberts") {
-            Algorithm("ChangRoberts") {
-                let identifiers = SharedVar(initial: Function<Node, Int>.literal(
+            Algorithm("ChangRoberts", scoped: { scope in
+                let identifiers = scope.sharedVar("identifiers", initial: Function<Node, Int>.literal(
                     (.one, 8), (.two, 2), (.three, 11), (.four, 9),
                     (.five, 12), (.six, 3), (.seven, 1), (.eight, 5),
                     (.nine, 10), (.ten, 6), (.eleven, 4), (.twelve, 7)
                 ))
-                let next = SharedVar(initial: Function<Node, Node>.literal(
+                let next = scope.sharedVar("next", initial: Function<Node, Node>.literal(
                     (.one, .two), (.two, .three), (.three, .four), (.four, .five),
                     (.five, .six), (.six, .seven), (.seven, .eight), (.eight, .nine),
                     (.nine, .ten), (.ten, .eleven), (.eleven, .twelve), (.twelve, .one)
                 ))
-                let messages = SharedVar(initial: SetExpr<Record<MessageSchema>>.literal(
+                let messages = scope.sharedVar("messages", initial: SetExpr<Record<MessageSchema>>.literal(
                     Record.literal(.init(MessageSchema.candidate, 7), .init(MessageSchema.from, .twelve), .init(MessageSchema.to, .one)),
                     Record.literal(.init(MessageSchema.candidate, 8), .init(MessageSchema.from, .one), .init(MessageSchema.to, .two)),
                     Record.literal(.init(MessageSchema.candidate, 2), .init(MessageSchema.from, .two), .init(MessageSchema.to, .three)),
@@ -76,7 +77,7 @@ public struct ChangRoberts {
                     Record.literal(.init(MessageSchema.candidate, 6), .init(MessageSchema.from, .ten), .init(MessageSchema.to, .eleven)),
                     Record.literal(.init(MessageSchema.candidate, 4), .init(MessageSchema.from, .eleven), .init(MessageSchema.to, .twelve))
                 ))
-                let leader = SharedVar(initial: 0)
+                let leader = scope.sharedVar("leader", initial: 0)
 
                 Each(Node.all, fairness: .weak) { node in
                     Do(Step.deliver) {
@@ -109,7 +110,7 @@ public struct ChangRoberts {
                 Invariant("LeaderDomain") {
                     leader >= 0 && leader <= 12
                 }
-            }
+            })
         }
     }
 

@@ -1,36 +1,64 @@
 extension StateExpr {
-    public static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
+    private enum ReplacementTarget: Equatable {
+        case variable(String)
+        case processLocalFamily(String)
+        case currentProcess
+
+        var variableName: String? {
+            guard case .variable(let name) = self else { return nil }
+            return name
+        }
+    }
+
+    package static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
         substituteVariable(name, with: .value(value), in: expr)
     }
 
-    public static func substituteVariable(
+    package static func substituteVariable(
         _ name: String,
         with replacement: StateExpr,
         in expr: StateExpr
     ) -> StateExpr {
+        replace(in: expr, target: .variable(name), with: replacement)
+    }
+
+    package func replacingCurrentProcess(with replacement: StateExpr) -> StateExpr {
+        Self.replace(in: self, target: .currentProcess, with: replacement)
+    }
+
+    func replacingProcessLocalFamily(named name: String, with replacement: StateExpr) -> StateExpr {
+        Self.replace(in: self, target: .processLocalFamily(name), with: replacement)
+    }
+
+    private static func replace(
+        in expr: StateExpr,
+        target: ReplacementTarget,
+        with replacement: StateExpr
+    ) -> StateExpr {
         let replacementFreeVariables = replacement.freeVariableNames
 
         func underBinder(_ binder: String, body: StateExpr) -> (name: String, body: StateExpr) {
-            guard binder != name else { return (binder, body) }
+            guard binder != target.variableName else { return (binder, body) }
             guard replacementFreeVariables.contains(binder) else {
-                return (binder, Self.substituteVariable(name, with: replacement, in: body))
+                return (binder, Self.replace(in: body, target: target, with: replacement))
             }
 
             let fresh = Self.freshBoundName(
                 binder,
                 avoiding: body.freeVariableNames
                     .union(replacementFreeVariables)
-                    .union([name, binder])
+                    .union(target.variableName.map { [$0] } ?? [])
+                    .union([binder])
             )
             let renamed = Self.substituteVariable(binder, with: .variable(fresh), in: body)
-            return (fresh, Self.substituteVariable(name, with: replacement, in: renamed))
+            return (fresh, Self.replace(in: renamed, target: target, with: replacement))
         }
 
         func underParameters(
             _ parameters: [String],
             body: StateExpr
         ) -> (parameters: [String], body: StateExpr) {
-            guard !parameters.contains(name) else { return (parameters, body) }
+            guard target.variableName.map({ !parameters.contains($0) }) ?? true else { return (parameters, body) }
             var renamedParameters = parameters
             var renamedBody = body
             for index in renamedParameters.indices where replacementFreeVariables.contains(renamedParameters[index]) {
@@ -40,20 +68,23 @@ extension StateExpr {
                     avoiding: renamedBody.freeVariableNames
                         .union(replacementFreeVariables)
                         .union(Set(renamedParameters))
-                        .union([name])
+                        .union(target.variableName.map { [$0] } ?? [])
                 )
                 renamedBody = Self.substituteVariable(oldName, with: .variable(fresh), in: renamedBody)
                 renamedParameters[index] = fresh
             }
             return (
                 renamedParameters,
-                Self.substituteVariable(name, with: replacement, in: renamedBody)
+                Self.replace(in: renamedBody, target: target, with: replacement)
             )
         }
 
         switch expr {
-        case .variable(let n) where n == name: return replacement
-        case .variable, .programCounter: return expr
+        case .sourceIssue: return expr
+        case .variable(let name) where name == target.variableName: return replacement
+        case .processLocalFamily(let name) where target == .processLocalFamily(name): return replacement
+        case .currentProcess where target == .currentProcess: return replacement
+        case .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack: return expr
         case .value, .controlLocation, .enabledAction: return expr
         case .add(let l, let r): return .add(sub(l), sub(r))
         case .subtract(let l, let r): return .subtract(sub(l), sub(r))
@@ -164,7 +195,7 @@ extension StateExpr {
         }
 
         func sub(_ expression: StateExpr) -> StateExpr {
-            Self.substituteVariable(name, with: replacement, in: expression)
+            Self.replace(in: expression, target: target, with: replacement)
         }
     }
 
@@ -173,6 +204,37 @@ extension StateExpr {
         using rename: (String) -> String,
         lowerAnonymousLambdaApplications: Bool = false,
         lowerLocalFunctionApplications: [String: String] = [:]
+    ) -> StateExpr {
+        var ignoredResidualFormalLambda = false
+        return transform(
+            expression,
+            using: rename,
+            lowerAnonymousLambdaApplications: lowerAnonymousLambdaApplications,
+            lowerLocalFunctionApplications: lowerLocalFunctionApplications,
+            hasResidualFormalLambda: &ignoredResidualFormalLambda
+        )
+    }
+
+    static func plusCalExpression(
+        from expression: StateExpr,
+        using rename: (String) -> String
+    ) -> StateExpr? {
+        var hasResidualFormalLambda = false
+        let transformed = transform(
+            expression,
+            using: rename,
+            lowerAnonymousLambdaApplications: true,
+            hasResidualFormalLambda: &hasResidualFormalLambda
+        )
+        return hasResidualFormalLambda ? nil : transformed
+    }
+
+    private static func transform(
+        _ expression: StateExpr,
+        using rename: (String) -> String,
+        lowerAnonymousLambdaApplications: Bool = false,
+        lowerLocalFunctionApplications: [String: String] = [:],
+        hasResidualFormalLambda: inout Bool
     ) -> StateExpr {
         var activeLocalFunctionApplications = lowerLocalFunctionApplications
         func visitUnderBindings(_ names: Set<String>, _ expression: StateExpr) -> StateExpr {
@@ -184,7 +246,7 @@ extension StateExpr {
         }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
-            case .value, .variable, .programCounter, .controlLocation, .enabledAction: return expression
+            case .sourceIssue, .value, .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
             case .add(let a, let b): return .add(visit(a), visit(b))
             case .subtract(let a, let b): return .subtract(visit(a), visit(b))
             case .multiply(let a, let b): return .multiply(visit(a), visit(b))
@@ -242,6 +304,7 @@ extension StateExpr {
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
             case .foldFunction(let operation, let initial, let sequence):
+                hasResidualFormalLambda = true
                 return .foldFunction(
                     FormalLambda(parameters: operation.parameters, body: visitUnderBindings(Set(operation.parameters), operation.body)),
                     initial: visit(initial),
@@ -281,6 +344,15 @@ extension StateExpr {
                         guard case .value(let argument) = binding.1 else { return body }
                         return Self.substituteVariable(binding.0, with: argument, in: body)
                     }
+                }
+                if case .lambda = renamedOperator {
+                    hasResidualFormalLambda = true
+                }
+                if renamedArguments.contains(where: {
+                    if case .operator(.lambda) = $0 { return true }
+                    return false
+                }) {
+                    hasResidualFormalLambda = true
                 }
                 return .operatorApplication(renamedOperator, renamedArguments)
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))

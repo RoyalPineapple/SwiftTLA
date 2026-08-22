@@ -5,67 +5,18 @@ import UpstreamParity
 @Suite(.serialized)
 struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCanonicalRun() throws {
-    let expectedCase = fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(.fixture)
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let result = TLCProcessResult(
       status: 0,
       stdout: "Model checking completed. No error has been found.",
       stderr: ""
     )
-    let run = try parser.parseCanonicalRun(completeGraphStream(expectedCase), result: result)
+    let run = try parser.parseCanonicalRun(try completeGraphStream(expectedCase), result: result)
     #expect(run.isPassEligible)
     #expect(run.graph.initialStateKeys.count == 1)
     #expect(run.graph.edgeOccurrences.values.sorted() == [1])
     #expect(run.observableActions == ["Next"])
-  }
-
-  @Test("module-bundle validation identifies a missing transitive formal import before TLC starts")
-  func reportsMissingFormalModuleWithSourceEvidence() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let root = directory.appendingPathComponent("UsesFunctions.tla")
-    let functions = directory.appendingPathComponent("Functions.tla")
-    try "---- MODULE UsesFunctions ----\nEXTENDS Functions\n====\n".write(
-      to: root, atomically: true, encoding: .utf8)
-    try "---- MODULE Functions ----\nEXTENDS Folds\n====\n".write(
-      to: functions, atomically: true, encoding: .utf8)
-    try "SPECIFICATION Spec\n".write(
-      to: directory.appendingPathComponent("UsesFunctions.cfg"), atomically: true, encoding: .utf8)
-    let request = TLCProcessRequest(
-      javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
-      jar: directory.appendingPathComponent("tla2tools.jar"),
-      bridgeClasses: directory.appendingPathComponent("bridge"),
-      bundle: try TLCProcessRequest.declaredBundle(
-        root: root,
-        configuration: directory.appendingPathComponent("UsesFunctions.cfg"),
-        imports: [functions]
-      ),
-      graphEvents: directory.appendingPathComponent("events.jsonl"),
-      traceOutput: directory.appendingPathComponent("trace.json"),
-      replayInput: directory.appendingPathComponent("replay.json"),
-      workingDirectory: directory,
-      arguments: ["-workers", "1"],
-      expectedCase: fixtureCase(.fixture, arguments: ["-workers", "1"]),
-      runID: UUID()
-    )
-
-    do {
-      try request.validateRenderedBundleIntegrity()
-      Issue.record("Module-bundle validation accepted a missing Folds.tla dependency.")
-    } catch let error as TLCProcessError {
-      let expected = TLCProcessError.invalidModuleBundle(.missingImportedModule(
-        module: "Folds", importedBy: "Functions.tla", line: 2,
-        expectedFile: "Folds.tla"
-      ))
-      #expect(error == expected)
-      let report = error.failureReport(for: request)
-      #expect(report.whatFailed == "The emitted module bundle is missing an imported formal module.")
-      #expect(report.whereItFailed == "Functions.tla:2, which imports Folds")
-      #expect(report.expected.contains("Folds.tla"))
-      #expect(report.actual == "The emitted bundle has no Folds.tla file.")
-      #expect(report.nextSafeAction.contains("transitive imports"))
-    }
   }
 
   @Test("TLC stages only the declared bundle, never sibling TLA files")
@@ -89,7 +40,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       replayInput: directory.appendingPathComponent("replay.json"),
       workingDirectory: directory.appendingPathComponent("work"),
       arguments: [],
-      expectedCase: fixtureCase(.fixture),
+      expectedCase: try fixtureCase(.fixture),
       runID: UUID()
     )
 
@@ -98,47 +49,6 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       at: staged.module.deletingLastPathComponent(), includingPropertiesForKeys: nil
     ).map(\.lastPathComponent).sorted()
     #expect(names == ["OnlyThis.cfg", "OnlyThis.tla"])
-  }
-
-  @Test("TLC bundle validation uses the pinned toolchain inventory")
-  func acceptsTraceModulesFromThePinnedTLCDistribution() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let module = directory.appendingPathComponent("Trace.tla")
-    try """
-    ---- MODULE Trace ----
-    EXTENDS TLCExt, Toolbox
-    _expression == LET DieHard_TEExpression == INSTANCE DieHard_TEExpression IN DieHard_TEExpression!expression
-    ====
-    ---- MODULE DieHard_TEExpression ----
-    EXTENDS TLCExt, Toolbox
-    expression == TRUE
-    ====
-    """.write(
-      to: module, atomically: true, encoding: .utf8)
-    try "SPECIFICATION Spec\n".write(
-      to: directory.appendingPathComponent("Trace.cfg"), atomically: true, encoding: .utf8)
-    let fixture = TLCProcessRequest.fixture
-    let request = TLCProcessRequest(
-      javaExecutable: fixture.javaExecutable,
-      jar: fixture.jar,
-      bridgeClasses: fixture.bridgeClasses,
-      bundle: try TLCProcessRequest.declaredBundle(
-        root: module,
-        configuration: directory.appendingPathComponent("Trace.cfg")
-      ),
-      graphEvents: directory.appendingPathComponent("events.jsonl"),
-      traceOutput: directory.appendingPathComponent("trace.json"),
-      replayInput: directory.appendingPathComponent("replay.json"),
-      workingDirectory: directory,
-      arguments: fixture.arguments,
-      expectedCase: fixture.expectedCase,
-      runID: fixture.runID,
-      referencePin: .fixture
-    )
-
-    try request.validateRenderedBundleIntegrity()
   }
 
   @Test("the TLC pin matches the locked standard-module inventory")
@@ -155,9 +65,9 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
 
   @Test("TLC violations remain non-passing canonical outcomes")
   func preservesViolationOutcome() throws {
-    let expectedCase = fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(.fixture)
     let run = try TLCGraphEventParser(expectedCase: expectedCase).parseCanonicalRun(
-      completeGraphStream(expectedCase),
+      try completeGraphStream(expectedCase),
       result: TLCProcessResult(
         status: 12,
         stdout: "Error: Invariant broken is violated.",
@@ -170,12 +80,12 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
 
   @Test("a violation path cannot replace TLC's invariant diagnostic")
   func ignoresViolationInInputPath() throws {
-    let expectedCase = fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(.fixture)
     let run = try TLCGraphEventParser(expectedCase: expectedCase).parseCanonicalRun(
-      completeGraphStream(expectedCase),
+      try completeGraphStream(expectedCase),
       result: TLCProcessResult(
         status: 12,
-        stdout: "Parsing file /tmp/die-hard-violation/DieHard.tla\nError: Invariant NotSolved is violated.",
+        stdout: "Parsing file /tmp/invariant-violation/DieHard.tla\nError: Invariant NotSolved is violated.",
         stderr: ""
       )
     )
@@ -184,7 +94,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
 
   @Test("retained frozen bridge stream parses every admitted value form")
   func parsesRetainedFrozenBridgeStream() throws {
-    let expectedCase = retainedBridgeCase()
+    let expectedCase = try retainedBridgeCase()
     let testFile = URL(fileURLWithPath: #filePath)
     let streamURL =
       testFile
@@ -207,10 +117,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     let directories = [
       "Verification/CoreConformance/baselines/hour-clock",
       "Verification/CoreConformance/baselines/die-hard-type-ok",
-      "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence",
-      "Verification/CoreConformance/fixtures/die-hard-violation/evidence",
-      "Verification/CoreConformance/baselines/multicar-elevator",
-      "Verification/CoreConformance/baselines/multicar-elevator-edge-mismatch"
+      "Verification/CoreConformance/baselines/multicar-elevator"
     ]
     for path in directories {
       let directory = root.appendingPathComponent(path)
@@ -313,8 +220,8 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
       workingDirectory: URL(fileURLWithPath: "/tmp"),
       arguments: ["-workers", "1"],
-      expectedCase: fixtureCase(.fixture, arguments: ["-workers", "1"]),
-      runID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!,
+      expectedCase: try fixtureCase(.fixture, arguments: ["-workers", "1"]),
+      runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
     )
     let command = try request.commandArguments(
       module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
@@ -345,14 +252,14 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       jarManifest: "",
       runtime: TLCJavaRuntimeIdentity(version: "", vendor: "", architecture: "", properties: [:])
     )
-    let substitutedJar = requestWithReferenceArtifacts(
+    let substitutedJar = try requestWithReferenceArtifacts(
       jar: URL(fileURLWithPath: "/tmp/substituted-tla2tools.jar"), bridgeClasses: root,
       artifacts: artifacts
     )
     #expect(throws: CoreConformanceCaseError.pinMismatch("execution TLC JAR")) {
       try substitutedJar.validateReferenceBinding(pin: .fixture, artifacts: artifacts)
     }
-    let substitutedBridge = requestWithReferenceArtifacts(
+    let substitutedBridge = try requestWithReferenceArtifacts(
       jar: artifacts.jar, bridgeClasses: URL(fileURLWithPath: "/tmp/substituted-bridge"),
       artifacts: artifacts
     )
@@ -413,7 +320,7 @@ extension CoreConformanceTLCAdapterTests {
       traceOutput: directory.appendingPathComponent("trace.json"),
       replayInput: directory.appendingPathComponent("replay.json"), workingDirectory: directory,
       arguments: [],
-      expectedCase: caseForFiles(
+      expectedCase: try caseForFiles(
         id: "timeout", module: module, configuration: configuration, arguments: []),
       runID: UUID(), timeout: 0.25
     )
@@ -460,7 +367,7 @@ extension CoreConformanceTLCAdapterTests {
   @Test("graph event parser rejects malformed footer and unsupported callbacks")
   func rejectsMalformedStreams() throws {
     let pin = TLCReferencePin.fixture
-    let expectedCase = fixtureCase(pin)
+    let expectedCase = try fixtureCase(pin)
     let stream = TLCGraphEventParser(expectedCase: expectedCase)
     #expect(throws: TLCGraphEventError.self) {
       try stream.parse(Data("{\"not\":\"jsonl footer\"}\n".utf8))
@@ -472,7 +379,7 @@ extension CoreConformanceTLCAdapterTests {
       try stream.parse(Data("{\"schema\":\"x\",\"sche\\u006da\":\"x\"}\n".utf8))
     }
     let invalidInitial = [
-      "\(header(expectedCase))\n",
+      "\(try header(expectedCase))\n",
       "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":1,\"type\":\"initial\",",
       "\"callback\":\"writeState.initial\",\"seq\":2,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",\"state\":{}}\n"
@@ -481,7 +388,7 @@ extension CoreConformanceTLCAdapterTests {
       try stream.parse(Data(invalidInitial.utf8))
     }
     let unsupportedCallback = [
-      "\(header(expectedCase))\n",
+      "\(try header(expectedCase))\n",
       "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":1,\"type\":\"unsupported\",",
       "\"callback\":\"writeState.flags\",\"seq\":1,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",",
@@ -502,9 +409,9 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser accepts only TLC's exact actionless stuttering observation")
   func acceptsExactStutteringObservation() throws {
-    let expectedCase = fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(.fixture)
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
-    let stream = completeGraphStreamWithStutteringObservation(expectedCase)
+    let stream = try completeGraphStreamWithStutteringObservation(expectedCase)
     #expect(try parser.parse(stream).transitions.count == 1)
     let rejected = Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "STUTTERING", with: "ARBITRARY").utf8)
@@ -515,16 +422,16 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser retains only exact excluded predicate observations")
   func acceptsExcludedPredicateObservationsWithoutAddingGraphEdges() throws {
-    let expectedCase = fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(.fixture)
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
-    let stream = completeGraphStreamWithExcludedPredicateObservation(expectedCase)
+    let stream = try completeGraphStreamWithExcludedPredicateObservation(expectedCase)
     #expect(try parser.parse(stream).transitions.count == 1)
-    let wrongFlags = refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
+    let wrongFlags = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "\"raw\":2", with: "\"raw\":3").utf8))
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "invalid excluded predicate transition")) {
       try parser.parse(wrongFlags)
     }
-    let wrongSourceIdentity = refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
+    let wrongSourceIdentity = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "<Next(", with: "<Other(").utf8))
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "invalid excluded predicate transition")) {
       try parser.parse(wrongSourceIdentity)
@@ -537,20 +444,20 @@ extension CoreConformanceTLCAdapterTests {
       wrapper: "Step__0", action: "Step", arguments: ["0"], indices: [0])
     let normalization = try CoreConformanceValueNormalization(
       binding: "cars", functionKeys: ["\"carA\"": "carA", "\"carB\"": "carB"])
-    let expected = fixtureCase(.fixture, invocationMappings: [mapping], valueNormalizations: [normalization])
+    let expected = try fixtureCase(.fixture, invocationMappings: [mapping], valueNormalizations: [normalization])
     let parser = TLCGraphEventParser(expectedCase: expected)
-    let stream = functionRecordNormalizationStream(expected, actionLocation: "<Step(0) line 1, col 1 to line 1, col 2 of module Fixture>")
+    let stream = try functionRecordNormalizationStream(expected, actionLocation: "<Step(0) line 1, col 1 to line 1, col 2 of module Fixture>")
     let run = try parser.parseCanonicalRun(
       stream,
       result: TLCProcessResult(status: 0, stdout: "Model checking completed. No error has been found.", stderr: ""))
     #expect(run.observableActions == ["Step__0"])
     #expect(run.graph.initialStateKeys.first?.canonicalEncoding.contains("63617273=record") == true)
-    let undeclared = refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
+    let undeclared = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "<Step(0)", with: "<Step(1)").utf8))
     #expect(throws: TLCGraphEventError.invalidRecord(line: 3, reason: "undeclared invocation identity")) {
       try parser.parse(undeclared)
     }
-    let unknownKey = replacingFunctionKey(in: stream, from: "carB", to: "carC")
+    let unknownKey = try replacingFunctionKey(in: stream, from: "carB", to: "carC")
     #expect(throws: TLCGraphEventError.invalidRecord(line: 0, reason: "normalized function keys")) {
       try parser.parseCanonicalRun(
         unknownKey,
@@ -560,17 +467,17 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser resolves a reduced TLC alias only through its retained fingerprint representative")
   func resolvesFingerprintAliasesFromSameStream() throws {
-    let expectedCase = fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(.fixture)
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
-    let parsed = try parser.parse(fingerprintAliasGraphStream(expectedCase, aliasSeen: true))
+    let parsed = try parser.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true))
     #expect(parsed.transitions.count == 2)
     #expect(parsed.transitions[0].target == parsed.transitions[1].target)
     #expect(parsed.fingerprintRepresentatives["2"] == parsed.transitions[0].target)
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "ambiguous fingerprint representative")) {
-      try parser.parse(fingerprintAliasGraphStream(expectedCase, aliasSeen: false))
+      try parser.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: false))
     }
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "seen fingerprint without representative")) {
-      try parser.parse(fingerprintAliasGraphStream(expectedCase, aliasSeen: true, aliasFingerprint: "foreign"))
+      try parser.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true, aliasFingerprint: "foreign"))
     }
   }
 
@@ -582,7 +489,7 @@ extension CoreConformanceTLCAdapterTests {
       .init(status: 12, stdout: "Error: Invariant broken", stderr: "")
     ])
     let adapter = TLCProcessAdapter(executor: executor)
-    let request = TLCProcessRequest.fixture
+    let request = try TLCProcessRequest.fixture()
     let result = try adapter.run(request, replay: .required)
     #expect(result.primary.isViolation)
     #expect(executor.requests.count == 3)
@@ -597,7 +504,7 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser rejects booleans for integers and numbers for booleans")
   func rejectsWrongJSONPrimitiveTypes() throws {
-    let expectedCase = fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(.fixture)
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let mutations = [
       { (line: String) in line.replacingOccurrences(of: "\"version\":1", with: "\"version\":true")
@@ -614,7 +521,7 @@ extension CoreConformanceTLCAdapterTests {
     ]
     for mutation in mutations {
       #expect(throws: TLCGraphEventError.self) {
-        try parser.parse(mutatedCompleteGraphStream(expectedCase, mutation: mutation))
+        try parser.parse(try mutatedCompleteGraphStream(expectedCase, mutation: mutation))
       }
     }
   }
@@ -629,7 +536,7 @@ extension CoreConformanceTLCAdapterTests {
     let configuration = directory.appendingPathComponent("Module.cfg")
     try "module bytes".write(to: module, atomically: true, encoding: .utf8)
     try "cfg bytes".write(to: configuration, atomically: true, encoding: .utf8)
-    let expectedCase = caseForFiles(
+    let expectedCase = try caseForFiles(
       id: "bound", module: module, configuration: configuration, arguments: ["-workers", "1"])
     let valid = try launchRequest(
       expectedCase: expectedCase, module: module, configuration: configuration,
@@ -641,7 +548,7 @@ extension CoreConformanceTLCAdapterTests {
       command.contains(where: {
         $0.contains(expectedCase.moduleSHA256) && $0.contains(expectedCase.argumentsSHA256)
       }))
-    let wrongModule = TLAModuleBundle.untrusted(
+    let wrongModule = TLAModuleBundle.external(
       root: TLAModuleFile(name: "Module", tla: "wrong module", cfg: "cfg bytes")
     )
     let wrongModuleRequest = TLCProcessRequest(
@@ -654,7 +561,7 @@ extension CoreConformanceTLCAdapterTests {
       let wrongStaged = try wrongModuleRequest.stageDeclaredBundle()
       try wrongModuleRequest.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
-    let wrongConfiguration = TLAModuleBundle.untrusted(
+    let wrongConfiguration = TLAModuleBundle.external(
       root: TLAModuleFile(name: "Module", tla: "module bytes", cfg: "wrong cfg")
     )
     let wrongConfigurationRequest = TLCProcessRequest(

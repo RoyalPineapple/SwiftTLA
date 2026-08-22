@@ -33,13 +33,11 @@ public enum GeneratedDemoTestSuite {
     public static func run(_ target: GeneratedDemoTestTarget) -> [GeneratedDemoTestResult] {
         switch target {
         case .twoBuckets:
-            testResults(for: target.title, verifySpec: TwoBuckets.verifySpec,
-                        verifyTransitions: TwoBuckets.verifyTransitions, verifyInvariants: TwoBuckets.verifyInvariants)
+            machineResults(for: target.title, makeMachine: TwoBuckets.makeMachine)
         case .duckDuckLeader:
             ringTestResults()
         case .elevatorBank:
-            testResults(for: target.title, verifySpec: ElevatorBank.verifySpec,
-                        verifyTransitions: ElevatorBank.verifyTransitions, verifyInvariants: ElevatorBank.verifyInvariants)
+            machineResults(for: target.title, makeMachine: ElevatorBank.makeMachine)
         }
     }
 
@@ -47,22 +45,12 @@ public enum GeneratedDemoTestSuite {
         GeneratedDemoTestTarget.allCases.flatMap(run)
     }
 
-    private static func testResults(
+    private static func machineResults<Machine>(
         for model: String,
-        verifySpec: () throws -> Int,
-        verifyTransitions: () throws -> Int,
-        verifyInvariants: () throws -> Int
+        makeMachine: () throws -> Machine
     ) -> [GeneratedDemoTestResult] {
         [
-            result(model: model, check: "Specification") {
-                "\(try verifySpec()) verified states"
-            },
-            result(model: model, check: "Native transitions") {
-                "\(try verifyTransitions()) verified transitions"
-            },
-            result(model: model, check: "Invariants") {
-                "\(try verifyInvariants()) verified invariant checks"
-            }
+            result(model: model, check: "Typed machine") { _ = try makeMachine() }
         ]
     }
 

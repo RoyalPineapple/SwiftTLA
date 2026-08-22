@@ -17,7 +17,7 @@ public struct NanoBlockchainModel: Sendable {
         let initRecv: TLAValue = .function([.string("n1"): .set([]), .string("n2"): .set([])])
 
         return #spec("NanoBlockchain") {
-            Extends("Integers")
+            Extends(.integers)
 
             let lastHash = Var<String>("lastHash")
             let distributedLedger = Var<TLAValue>("distributedLedger")
@@ -57,7 +57,7 @@ public struct NanoBlockchainModel: Sendable {
                                 "signature": StateExpr.record(["data": h, "signedWith": .value(.string(priv))])
                             ])
                             return lastHash.becomes(Expr<String>(h))
-                                && .assign(distributedLedger.name, distributedLedger.stateExpr
+                                && .assign(.named(distributedLedger.name), distributedLedger.stateExpr
                                     .updated(at: "n1", to: distributedLedger.stateExpr.applying("n1").updated(at: h, to: sb))
                                     .updated(at: "n2", to: distributedLedger.stateExpr.applying("n2").updated(at: h, to: sb)))
                                 && received.stays
@@ -65,8 +65,7 @@ public struct NanoBlockchainModel: Sendable {
                 }
             }
 
-            for n in nodes {
-                let priv = ["n1": "prv1", "n2": "prv2"][n]!
+            for (n, priv) in zip(nodes, privKeys) {
                 Action("CreateSend_\(n)") {
                     lastHash != "NoHash"
                         && ActionExpr.exists("prev", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { prev in
@@ -83,7 +82,7 @@ public struct NanoBlockchainModel: Sendable {
                                             "signature": StateExpr.record(["data": h, "signedWith": .value(.string(priv))])
                                         ])
                                         return distributedLedger.stays
-                                            && .assign(received.name, received.stateExpr
+                                            && .assign(.named(received.name), received.stateExpr
                                                 .updated(at: n, to: StateExpr.union(received.stateExpr.applying(n),
                                                     StateExpr.singleton(sb))))
                                             && lastHash.stays

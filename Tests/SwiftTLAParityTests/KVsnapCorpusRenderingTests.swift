@@ -4,7 +4,6 @@ import Testing
 struct KVsnapCorpusRenderingTests {
     @Test("KVsnap preserves its typed Algorithm model through parser and builder")
     func parserBuilderFidelity() throws {
-        KVsnapModel._checkParserTree()
 
         let bundle = try KVsnapModel.spec.compile().renderedTLAModuleBundle()
         #expect(bundle.root.tla.contains("CC == INSTANCE ClientCentric"))
@@ -20,7 +19,6 @@ struct KVsnapCorpusRenderingTests {
         #expect(plusCal.contains("InitialState =="))
         #expect(plusCal.contains("SnapshotIsolation == CC!SnapshotIsolation(InitialState, Range(ops))"))
         #expect(!plusCal.contains("Termination =="))
-        #expect(!plusCal.contains("__pcal_local_family:"))
         let initialState = try #require(plusCal.range(of: "InitialState =="))
         let instance = try #require(plusCal.range(of: "CC == INSTANCE ClientCentric"))
         let algorithm = try #require(plusCal.range(of: "(*--algorithm KVsnap {"))

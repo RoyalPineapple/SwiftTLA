@@ -6,16 +6,16 @@ import SwiftTLAMacros
 /// and its value is the chosen column.
 @TLAModel
 public struct NQueensModel: Sendable {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case nextQueen = "nxtQ"
     }
 
     public static var spec: TLASpec {
         #spec("QueensPluscal") {
-            Extends("Naturals")
-            Algorithm("Queens") {
-                let todo = SharedVar(initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
-                let solutions = SharedVar(initial: SetExpr<TupleExpr<Int>>())
+            Extends(.naturals)
+            Algorithm("Queens", scoped: { scope in
+                let todo = scope.sharedVar("todo", initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
+                let solutions = scope.sharedVar("solutions", initial: SetExpr<TupleExpr<Int>>())
 
                 While(Step.nextQueen, !todo.expr.isEmpty) {
                     With(todo) { queens in
@@ -57,7 +57,7 @@ public struct NQueensModel: Sendable {
                         placement.expr.count == 4
                     }
                 }
-            }
+            })
         }
     }
 }

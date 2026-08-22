@@ -109,10 +109,6 @@ struct GeneratedMachineDocumentationTests {
     @Test("Live-machine guide describes typed live factories")
     func liveMachineGuideDescribesOneOwner() throws {
         let root = packageRoot()
-        let guide = try String(
-            contentsOf: root.appendingPathComponent("Documentation/GeneratedMachines.md"),
-            encoding: .utf8
-        )
         let live = try String(
             contentsOf: root.appendingPathComponent("Documentation/LiveMachines.md"),
             encoding: .utf8
@@ -145,7 +141,6 @@ struct GeneratedMachineDocumentationTests {
         "Isolation and callbacks",
         "Test an integration",
         "Debug a machine",
-        "Limits and evidence",
         "SwiftUI",
         "API reference",
         "Stable contract"
@@ -158,10 +153,6 @@ struct GeneratedMachineDocumentationTests {
         "A nested `@TLAObservable` adapter is main-actor isolated",
         "Adapters\nshare the enclosing model's typed `Live` runtime",
         "reduces a contiguous committed update",
-        "Generated `VerificationError`",
-        "Generated `verifySpec()`",
-        "Generated `verifyTransitions()`",
-        "Generated `verifyInvariants()`",
         "Generated `synchronousMachineObservation()`"
     ]
 
@@ -185,10 +176,9 @@ struct GeneratedMachineDocumentationTests {
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`@TLAActor`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAActor"),
             ("`@TLAObservable`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAObservable"),
-            ("`GeneratedMachineError`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum GeneratedMachineError"),
+            ("`GeneratedMachineError`", "Sources/SwiftTLA/TLAStateProjection.swift", "public enum GeneratedMachineError"),
             ("Generated `ActionLabel`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum ActionLabel"),
-            ("Generated `TransitionResult`", "Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift", "public struct TransitionResult"),
-            ("Generated `verifySpec()`", "Sources/SwiftTLAPlugin/MacroExpander+Generation.swift", "public static func verifySpec()")
+            ("Generated `TransitionResult`", "Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift", "public struct TransitionResult"),
         ]
     }
 

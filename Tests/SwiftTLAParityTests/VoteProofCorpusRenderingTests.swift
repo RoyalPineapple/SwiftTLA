@@ -2,12 +2,25 @@ import Testing
 @testable import UpstreamParity
 
 struct VoteProofCorpusRenderingTests {
-    @Test("VoteProof preserves typed local recursion and formal module composition")
-    func parserBuilderFidelity() throws {
-        VoteProofModel._checkParserTree()
-        #expect(try VoteProofModel.spec.compile().spec.name == "VoteProof")
+    @Test("VoteProof #spec macro compiles and preserves typed local recursion and formal module composition")
+    func specMacroCompilationPreservesFormalStructure() throws {
+        let compilation = try VoteProofModel.spec.compile()
+        #expect(compilation.spec.name == "VoteProof")
+        #expect(Set(compilation.description.variables.map(\.name)).isSuperset(of: Set(["votes", "maxBal"])))
+        #expect(Set(VoteProofModel.spec.formalOperatorDefinitions.map(\.name)) == [
+            "ChosenIn", "SafeAt", "chosen", "VoteProofTypeOK",
+            "VoteProofSingleVotePerBallot", "VoteProofVotesAreSafe",
+            "VoteProofAgreement", "VoteProofChosenValuesAgree"
+        ])
+        #expect(Set(VoteProofModel.spec.invariants.map(\.name)) == ["TypeOK", "VInv1", "VInv2", "VInv3", "VInv4"])
+        #expect(VoteProofModel.spec.refinements.map(\.name) == ["Refines"])
+        let definitions = Dictionary(uniqueKeysWithValues: VoteProofModel.spec.formalOperatorDefinitions.map {
+            ($0.name, $0)
+        })
+        #expect(definitions["VoteProofVotesAreSafe"]?.plusCalDependencies == ["SafeAt"])
+        #expect(definitions["VoteProofChosenValuesAgree"]?.plusCalDependencies == ["chosen"])
 
-        let bundle = try VoteProofModel.spec.compile().renderedTLAModuleBundle()
+        let bundle = try compilation.renderedTLAModuleBundle()
         #expect(VoteProofModel.spec.constants == [
             ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
             ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),
@@ -30,6 +43,9 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains(")) /\\ \\A "))
         #expect(bundle.root.tla.contains(" \\in ("))
         #expect(bundle.root.tla.contains("ChosenIn(b, v) =="))
+        #expect(bundle.root.tla.contains("VoteProofTypeOK =="))
+        #expect(bundle.root.tla.contains("TypeOK == VoteProofTypeOK"))
+        #expect(bundle.root.tla.contains("VInv4 == VoteProofChosenValuesAgree"))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
         let plusCal = try VoteProofModel.spec.compile().renderedPlusCalBundle().root.tla

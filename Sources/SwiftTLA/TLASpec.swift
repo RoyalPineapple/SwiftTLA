@@ -8,6 +8,8 @@ public enum CollectionVarType: Sendable, Equatable {
 enum VariableOrigin: Sendable, Equatable {
   case source
   case compiler
+  case programCounter
+  case procedureStack
 }
 
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
@@ -96,7 +98,9 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let body: ActionExpr
   public let bindings: [ActionBinding]
+  let sourceIssue: SourceModelIssue?
   let controlOwner: ControlOwner?
+  let generatedBindingSwiftTypes: [String: String]
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
     self.init(name: name, body: body, bindings: bindings, controlOwner: nil)
@@ -106,28 +110,34 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     name: String,
     body: ActionExpr,
     bindings: [ActionBinding] = [],
-    controlOwner: ControlOwner?
+    controlOwner: ControlOwner?,
+    generatedBindingSwiftTypes: [String: String] = [:]
   ) {
-    for binding in bindings {
-      precondition(
-        !binding.name.isEmpty, "Parameterized action '\(name)' requires a parameter name")
-      precondition(
-        !binding.values.isEmpty,
-        "Parameterized action '\(name)' parameter '\(binding.name)' requires a non-empty finite domain"
-      )
-      precondition(
-        Set(binding.values).count == binding.values.count,
-        "Parameterized action '\(name)' parameter '\(binding.name)' has duplicate finite-domain values"
-      )
-    }
-    precondition(
-      Set(bindings.map(\.name)).count == bindings.count,
-      "Parameterized action '\(name)' has duplicate parameter names"
-    )
     self.name = name
     self.body = body
     self.bindings = bindings
+    self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
     self.controlOwner = controlOwner
+    self.generatedBindingSwiftTypes = generatedBindingSwiftTypes
+  }
+
+  private static func bindingIssue(action: String, bindings: [ActionBinding]) -> SourceModelIssue? {
+    var names = Set<String>()
+    for binding in bindings {
+      guard !binding.name.isEmpty else {
+        return .actionBinding(action: action, parameter: nil, problem: "a parameter has no name")
+      }
+      guard !binding.values.isEmpty else {
+        return .actionBinding(action: action, parameter: binding.name, problem: "the domain is empty")
+      }
+      guard Set(binding.values).count == binding.values.count else {
+        return .actionBinding(action: action, parameter: binding.name, problem: "the domain contains duplicate values")
+      }
+      guard names.insert(binding.name).inserted else {
+        return .actionBinding(action: action, parameter: binding.name, problem: "the name is declared more than once")
+      }
+    }
+    return nil
   }
   public var description: String {
     let parameters = bindings.map(\.name).joined(separator: ", ")
@@ -147,7 +157,7 @@ func actionVariants(_ action: NamedAction) -> [(
     return binding.values.enumerated().flatMap { index, value in
       expand(
         position + 1, arguments + [value], indices + [index],
-        substituteVar(binding.name, with: value, in: body))
+        body.substitutingVariable(binding.name, with: .value(value)))
     }
   }
   return expand(0, [], [], action.body)
@@ -180,21 +190,31 @@ extension Array where Element == ConstantDecl {
     filter { current in !replacements.contains { $0.name == current.name } } + replacements
   }
 }
-/// A direct TLA+ declaration with explicit linker dependencies.
-///
-/// Rendering receives these declarations in compilation-owned order; it never
-/// searches declaration text to discover a dependency on an `INSTANCE`.
-public struct DirectModuleDefinition: Sendable, Equatable {
-  public let name: String?
-  public let text: String
-  public let dependencies: [String]
+struct RenderedModuleDefinition: Sendable, Equatable {
+  let name: String?
+  let text: String
+  let dependencies: [String]
 
-  public init(name: String? = nil, text: String, dependencies: [String] = []) {
+  init(name: String? = nil, text: String, dependencies: [String] = []) {
     self.name = name
     self.text = text
     self.dependencies = dependencies
   }
 }
+public enum StandardModule: String, Sendable, Hashable, CaseIterable {
+  case integers = "Integers"
+  case naturals = "Naturals"
+  case finiteSets = "FiniteSets"
+  case sequences = "Sequences"
+  case tlc = "TLC"
+}
+
+func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
+  modules.reduce(into: []) { result, module in
+    if !result.contains(module) { result.append(module) }
+  }
+}
+
 public struct TLASpec: Sendable {
   enum AlgorithmPhase: Sendable, Equatable {
     case source
@@ -211,11 +231,9 @@ public struct TLASpec: Sendable {
   public let fairness: [FairnessCondition]
   public let assume: StateExpr?
   public let checkDeadlock: Bool
-  public let definitions: [DirectModuleDefinition]
-  public let theorems: [String]
-  public let extendsModules: String
+  public let theorems: [TheoremDecl]
+  public let extendsModules: [StandardModule]
   public let constraint: StateExpr?
-  public let recursiveDefs: [String]
   public let recursiveFuncs: [RecursiveFunc]
   /// Executable, higher-order operator definitions. These remain formal AST
   /// data so the checker and runtime apply the same semantics.
@@ -226,11 +244,12 @@ public struct TLASpec: Sendable {
   public let importConfigurations: [FormalModuleConfiguration]
   /// Named source-level TLA+ `INSTANCE` declarations.
   public let moduleInstances: [FormalModuleInstance]
+  public let refinements: [RefinementDecl]
   public let symmetrySets: [SymmetrySet]
   public let symmetricCollections: [SymmetricCollectionDecl]
   /// Opaque source-level Algorithm evidence. This is distinct from the
   /// lowered variables/actions and never exposes the Algorithm IR.
-  public let algorithmFidelityTokens: [AlgorithmFidelityToken]
+  let algorithmFidelityTokens: [AlgorithmFidelityToken]
   /// Canonical Algorithm declarations retained solely for source rendering.
   ///
   /// The formal runtime still uses the one lowered `TLASpec` representation.
@@ -238,22 +257,20 @@ public struct TLASpec: Sendable {
   /// authored Algorithm as PlusCal without reconstructing it from TLA+ AST.
   let sourceAlgorithms: [Algorithm]
   var algorithmPhase: AlgorithmPhase
-  let authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration]
   public init(
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
     formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
-    definitions: [DirectModuleDefinition] = [], theorems: [String] = [], extendsModules: String = "Integers",
-    constraint: StateExpr? = nil, recursiveDefs: [String] = [],
+    theorems: [TheoremDecl] = [], extendsModules: [StandardModule] = [.integers],
+    constraint: StateExpr? = nil,
     recursiveFuncs: [RecursiveFunc] = [],
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
-    moduleInstances: [FormalModuleInstance] = [], symmetrySets: [SymmetrySet] = [],
+    moduleInstances: [FormalModuleInstance] = [], refinements: [RefinementDecl] = [], symmetrySets: [SymmetrySet] = [],
     symmetricCollections: [SymmetricCollectionDecl] = [],
     algorithmFidelityTokens: [AlgorithmFidelityToken] = [],
-    sourceAlgorithms: [Algorithm] = [],
-    authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
+    sourceAlgorithms: [Algorithm] = []
   ) {
     self.name = name
     self.variables = variables
@@ -265,22 +282,20 @@ public struct TLASpec: Sendable {
     self.fairness = fairness
     self.assume = assume
     self.checkDeadlock = checkDeadlock
-    self.definitions = definitions
     self.theorems = theorems
-    self.extendsModules = extendsModules
+    self.extendsModules = canonicalStandardModules(extendsModules)
     self.constraint = constraint
-    self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
     self.formalOperatorDefinitions = formalOperatorDefinitions
     self.imports = imports
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
+    self.refinements = refinements
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
-    self.authoredPlusCalDeclarations = authoredPlusCalDeclarations
   }
 
   public var description: String {
@@ -310,20 +325,20 @@ public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
 }
 
 /// Structural placement and dependency metadata retained for authored PlusCal.
-public struct AuthoredPlusCalDeclaration: Sendable, Equatable {
-  public let name: String?
-  public let text: String
-  public let phase: AuthoredPlusCalDeclarationPhase
-  public let dependencies: [String]
+struct AuthoredPlusCalDeclaration: Sendable, Equatable {
+  let name: String?
+  let text: String
+  let phase: AuthoredPlusCalDeclarationPhase
+  let dependencies: [String]
 
-  public init(name: String? = nil, text: String, phase: AuthoredPlusCalDeclarationPhase = .prelude, dependencies: [String] = []) {
+  init(name: String? = nil, text: String, phase: AuthoredPlusCalDeclarationPhase = .prelude, dependencies: [String] = []) {
     self.name = name
     self.text = text
     self.phase = phase
     self.dependencies = dependencies
   }
 }
-public struct VarDecl: SpecComponent {
+public struct VarDecl: SpecComponent, Sendable {
   public let name: String
   public let initial: TLAValue
   public let initialSet: StateExpr?
@@ -413,7 +428,7 @@ public enum FormalModuleParameterKind: String, Sendable, Equatable {
   case variable
 }
 
-public struct FormalModuleParameter: Sendable, Equatable {
+public struct FormalModuleParameter: SpecComponent, StateExprConvertible, Sendable, Equatable {
   public let name: String
   public let kind: FormalModuleParameterKind
 
@@ -421,53 +436,15 @@ public struct FormalModuleParameter: Sendable, Equatable {
     self.name = name
     self.kind = kind
   }
-}
-public struct FormalParameterDecl: SpecComponent {
-  public let parameter: FormalModuleParameter
-  init(_ parameter: FormalModuleParameter) { self.parameter = parameter }
-}
-public struct DefinitionDecl: SpecComponent, Equatable {
-  public let tlaText: String
-  public let name: String?
-  public let body: StateExpr?
-  public let plusCalPhase: AuthoredPlusCalDeclarationPhase
-  public let plusCalDependencies: [String]
-  init(_ tlaText: String, name: String? = nil, plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude, plusCalDependencies: [String] = []) {
-    self.tlaText = tlaText
-    self.name = name
-    self.body = nil
-    self.plusCalPhase = plusCalPhase
-    self.plusCalDependencies = plusCalDependencies
-  }
-  init(name: String, body: StateExpr, plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude, plusCalDependencies: [String] = []) {
-    self.tlaText = ""
-    self.name = name
-    self.body = body
-    self.plusCalPhase = plusCalPhase
-    self.plusCalDependencies = plusCalDependencies
-  }
-}
 
+  public var stateExpr: StateExpr { .variable(name) }
+}
 /// A named formal operator that stays executable in the SwiftTLA AST.
-/// Use this for definitions whose body or parameters must participate in
-/// model checking, rather than `Definition`, which is source-only text.
 public struct FormalOperatorDecl: SpecComponent, Equatable {
   public let definition: FormalOperatorDefinition
 
   public init(_ definition: FormalOperatorDefinition) {
     self.definition = definition
-  }
-
-  var tlaText: String {
-    let parameters = definition.parameters.map { parameter in
-      switch parameter {
-      case .value(let name): return name
-      case .operator(let name, let arity):
-        return "\(name)(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
-      }
-    }.joined(separator: ", ")
-    let declaration = parameters.isEmpty ? definition.name : "\(definition.name)(\(parameters))"
-    return "\(declaration) == \(definition.body)"
   }
 }
 
@@ -528,7 +505,7 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
     plusCalDependencies: dependsOn
   ))
 }
-public struct TheoremDecl: SpecComponent, Equatable {
+public struct TheoremDecl: SpecComponent, Sendable, Equatable {
   public let name: String
   public let temporalBody: TemporalExpr?
   public let stateBody: StateExpr?
@@ -543,13 +520,104 @@ public struct TheoremDecl: SpecComponent, Equatable {
     self.stateBody = state
   }
 }
+
+/// A named refinement of this specification by a module-instance specification.
+public struct RefinementDecl: SpecComponent, Sendable, Equatable {
+  public enum Operator: Sendable, Equatable {
+    case spec
+    case liveSpec
+    case liveSpecEquals
+
+    init?(sourceName: String) {
+      switch sourceName {
+      case "spec": self = .spec
+      case "liveSpec": self = .liveSpec
+      case "liveSpecEquals": self = .liveSpecEquals
+      default: return nil
+      }
+    }
+  }
+
+  public let name: String
+  public let instance: FormalModuleInstanceReference
+  public let `operator`: Operator
+  public let mappings: [RefinementMapping]
+
+  init(
+    name: String,
+    instance: FormalModuleInstanceReference,
+    operator: Operator,
+    mappings: [RefinementMapping]
+  ) {
+    self.name = name
+    self.instance = instance
+    self.operator = `operator`
+    self.mappings = mappings
+  }
+}
+
+extension RefinementDecl {
+  var renderedFormalDeclaration: String {
+    let target: String
+    switch `operator` {
+    case .spec: target = "Spec"
+    case .liveSpec: target = "LiveSpec"
+    case .liveSpecEquals: target = "LiveSpecEquals"
+    }
+    return "\(name) == \(instance.namespace)!\(target)"
+  }
+}
+
+/// One explicit source expression for an abstract module variable or parameter.
+public struct RefinementMapping: Sendable, Equatable {
+  public let target: String
+  public let source: StateExpr
+
+  public init<Value>(_ target: Var<Value>, from source: some StateExprConvertible) {
+    self.target = target.name
+    self.source = source.stateExpr
+  }
+
+  public init(_ target: FormalModuleParameter, from source: some StateExprConvertible) {
+    self.target = target.name
+    self.source = source.stateExpr
+  }
+
+  init(target: String, source: StateExpr) {
+    self.target = target
+    self.source = source
+  }
+}
+
+public func Refinement(
+  name: String,
+  instance: FormalModuleInstance,
+  operator: RefinementDecl.Operator = .spec,
+  mappings: [RefinementMapping]
+) -> RefinementDecl {
+  RefinementDecl(
+    name: name,
+    instance: instance.reference,
+    operator: `operator`,
+    mappings: mappings
+  )
+}
+
+extension TLASpec {
+  func instanceArguments(for instance: FormalModuleInstance) -> [ModuleArgument] {
+    guard let refinement = refinements.first(where: { $0.instance.resolves(instance) }) else {
+      return instance.arguments
+    }
+    return refinement.mappings.map { .init($0.target, expression: $0.source) }
+  }
+}
 public struct AssumeDecl: SpecComponent, Equatable {
   public let expr: StateExpr
   init(_ expr: StateExpr) { self.expr = expr }
 }
 public struct ExtendsDecl: SpecComponent, Equatable {
-  public let modules: String
-  init(_ modules: String) { self.modules = modules }
+  public let modules: [StandardModule]
+  init(_ modules: [StandardModule]) { self.modules = modules }
 }
 public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
@@ -574,20 +642,28 @@ public enum SpecBuilder {
   public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] {
     components.flatMap { $0 }
   }
+  public static func buildPartialBlock(first component: [SpecComponent]) -> [SpecComponent] {
+    component
+  }
+  public static func buildPartialBlock(
+    accumulated: [SpecComponent], next component: [SpecComponent]
+  ) -> [SpecComponent] {
+    accumulated + component
+  }
   public static func buildExpression(_ expr: VarDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ActionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: InvDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: FormalParameterDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: DefinitionDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FormalModuleParameter) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalOperatorDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: RefinementDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
@@ -595,6 +671,9 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
+    if let issue = expr.sourceIssue {
+      return [VarDecl(expr.name, initExpr: .sourceIssue(issue))]
+    }
     guard let initial = expr.initial else { return [] }
     return [VarDecl(expr.name, initial)]
   }
@@ -647,7 +726,10 @@ public enum ActionBuilder {
 }
 @discardableResult
 public func Variable(_ name: String, _ initial: some TLAValueConvertible) -> VarDecl {
-  VarDecl(name, initial.tlaValue)
+  if let issue = initial.sourceIssue {
+    return VarDecl(name, initExpr: .sourceIssue(issue))
+  }
+    return VarDecl(name, initial.tlaValue)
 }
 @discardableResult
 public func Variable(_ name: String, in values: some Sequence<some TLAValueConvertible>) -> VarDecl {
@@ -657,11 +739,17 @@ public func Variable(_ name: String, in values: some Sequence<some TLAValueConve
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>) -> VarDecl {
-  VarDecl(ref.name, ref.initial ?? .int(0))
+  if let issue = ref.sourceIssue {
+    return VarDecl(ref.name, initExpr: .sourceIssue(issue))
+  }
+    return VarDecl(ref.name, ref.initial ?? .int(0))
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
-  VarDecl(ref.name, initial.tlaValue)
+  if let issue = initial.sourceIssue {
+    return VarDecl(ref.name, initExpr: .sourceIssue(issue))
+  }
+    return VarDecl(ref.name, initial.tlaValue)
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueConvertible>)
@@ -740,19 +828,8 @@ public func Constant(_ name: String, _ value: some TLAValueConvertible) -> Const
 public func Parameter(
   _ name: String,
   kind: FormalModuleParameterKind = .constant
-) -> FormalParameterDecl {
-  FormalParameterDecl(FormalModuleParameter(name, kind: kind))
-}
-public func Definition(
-  _ tlaText: String,
-  named: String? = nil,
-  plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
-  dependsOn: [String] = []
-) -> DefinitionDecl {
-  DefinitionDecl(tlaText, name: named, plusCalPhase: plusCalPhase, plusCalDependencies: dependsOn)
-}
-public func Definition(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> DefinitionDecl {
-  DefinitionDecl(name: name, body: body())
+) -> FormalModuleParameter {
+  FormalModuleParameter(name, kind: kind)
 }
 public func Theorem(name: String, @InvariantBuilder always: () -> StateExpr) -> TheoremDecl {
   TheoremDecl(name: name, state: always())
@@ -766,7 +843,7 @@ public func Theorem(name: String, temporal: TemporalExpr) -> TheoremDecl {
 public func Assume(_ expr: some StateExprConvertible) -> AssumeDecl {
   AssumeDecl(expr.stateExpr)
 }
-public func Extends(_ modules: String) -> ExtendsDecl {
+public func Extends(_ modules: StandardModule...) -> ExtendsDecl {
   ExtendsDecl(modules)
 }
 public func Constraint(_ expr: some StateExprConvertible) -> ConstraintDecl {

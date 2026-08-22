@@ -24,7 +24,6 @@ func canonicalTestSpec(
     moduleInstances: [FormalModuleInstance] = [],
     formalParameters: [FormalModuleParameter] = [],
     formalOperatorDefinitions: [FormalOperatorDefinition] = [],
-    definitions: [DirectModuleDefinition] = [],
     symmetrySets: [SymmetrySet] = []
 ) -> TLASpec {
     TLASpec(
@@ -39,7 +38,6 @@ func canonicalTestSpec(
         invariants: invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
         temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
         fairness: fairness,
-        definitions: definitions,
         constraint: constraint,
         formalOperatorDefinitions: formalOperatorDefinitions,
         imports: imports,

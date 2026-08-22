@@ -25,19 +25,19 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
         let can = Var<TLAValue>("can")
         let cans = coffeeCans(maxBeanCount: maxBeanCount)
         return #spec("CoffeeCan") {
-            Extends("Naturals")
+            Extends(.naturals)
             Variable(can, in: cans)
             Action("PickSameColorBlack") {
                 StateExpr.recordAccess(can.stateExpr, "black")
                     + StateExpr.recordAccess(can.stateExpr, "white") > 1
                     && StateExpr.recordAccess(can.stateExpr, "black") >= 2
-                    && .assign(can.name, can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
+                    && .assign(.named(can.name), can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
             }
             Action("PickSameColorWhite") {
                 StateExpr.recordAccess(can.stateExpr, "black")
                     + StateExpr.recordAccess(can.stateExpr, "white") > 1
                     && StateExpr.recordAccess(can.stateExpr, "white") >= 2
-                    && .assign(can.name,
+                    && .assign(.named(can.name),
                         StateExpr.except(
                             StateExpr.except(
                                 .variable("can"),
@@ -54,7 +54,7 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
                     + StateExpr.recordAccess(can.stateExpr, "white") > 1
                     && StateExpr.recordAccess(can.stateExpr, "black") >= 1
                     && StateExpr.recordAccess(can.stateExpr, "white") >= 1
-                    && .assign(can.name, can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
+                    && .assign(.named(can.name), can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
             }
             Action("Termination") {
                 StateExpr.recordAccess(can.stateExpr, "black") + StateExpr.recordAccess(can.stateExpr, "white") == 1

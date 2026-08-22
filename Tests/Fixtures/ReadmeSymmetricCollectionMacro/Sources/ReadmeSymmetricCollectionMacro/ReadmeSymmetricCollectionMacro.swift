@@ -30,17 +30,26 @@ contract.phases.insert(device)
 let result = try contract.beginConnect(id: device.id)
 
 guard case .function = contract.state.phases else {
-    fatalError("Generated typed state did not retain phases")
+    throw FixtureError.invalidState
 }
 guard case .function = result.after.phases else {
-    fatalError("Generated transition result did not retain typed state")
+    throw FixtureError.invalidTransition
 }
 
 let generatedSpec = DeviceContract.spec
-precondition(generatedSpec.invariants.count == 1)
-guard case .forAll = generatedSpec.invariants[0].body else {
-    fatalError("README collection-wide invariant was not retained")
+guard generatedSpec.invariants.count == 1 else {
+    throw FixtureError.invalidInvariant
 }
-guard case .bounded(_, .ok) = try ModelChecker(spec: generatedSpec).check() else {
-    fatalError("README model did not complete its bounded check")
+guard case .forAll = generatedSpec.invariants[0].body else {
+    throw FixtureError.invalidInvariant
+}
+guard case .bounded(_, .ok) = try ModelChecker(compilation: try generatedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check() else {
+    throw FixtureError.incompleteCheck
+}
+
+private enum FixtureError: Error {
+    case invalidState
+    case invalidTransition
+    case invalidInvariant
+    case incompleteCheck
 }

@@ -28,15 +28,16 @@ set +e
 status=$?
 set -e
 
-report="$OUTPUT/support-admission.json"
-if [ ! -f "$report" ]; then
-    echo "temporal-symmetry release-check: retained admission report is missing" >&2
+if [ ! -f "$OUTPUT/current-support-admission.json" ]; then
+    echo "temporal-symmetry release-check: current admission reference is missing" >&2
     exit 2
 fi
 
+report="$("$PROJECT_ROOT/scripts/current_evidence_report.py" resolve "$OUTPUT")"
+
 validate_report() {
     if ! jq -e "$1" "$report" >/dev/null; then
-        echo "temporal-symmetry release-check: retained report does not match exit $status" >&2
+        echo "temporal-symmetry release-check: current report does not match exit $status" >&2
         exit 2
     fi
 }

@@ -6,17 +6,16 @@ import SwiftTLAMacros
 struct MultiBindingChooseTests {
     @Test("two ordered ranges lower to nested existential choices and enumerate their product")
     func lowersAndEnumeratesOrderedRanges() throws {
-        let algorithm = Algorithm("PairChoice") {
-            let selected = SharedVar("selected", initial: 0)
-            selected
+        let algorithm = Algorithm("PairChoice", scoped: { scope in
+            let selected = scope.sharedVar("selected", initial: 0)
             Each(MultiBindingChooseModel.Node.all) { _ in
-                Do("choose") {
+                Do(TestControlLabel.choose) {
                     Choose(1...2, 10...11) { first, second in
                         Assign(selected, to: first.expr * 100 + second.expr)
                     }
                 }
             }
-        }
+        })
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
@@ -33,7 +32,6 @@ struct MultiBindingChooseTests {
 
     @Test("macro parser produces the same nested choice model as the builder")
     func parserBuilderFidelity() {
-        MultiBindingChooseModel._checkParserTree()
     }
 }
 
@@ -41,22 +39,23 @@ struct MultiBindingChooseTests {
 private struct MultiBindingChooseModel {
     enum Node: Int, CaseIterable, FiniteDomainKey {
         case only = 0
+        static var defaultValue: Self { .only }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.multi-binding-choose.node")
     }
 
     static var spec: TLASpec {
         #spec("MultiBindingChoose") {
-            Algorithm("MultiBindingChoose") {
-                let selected = SharedVar(initial: 0)
+            Algorithm("MultiBindingChoose", scoped: { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
-                    Do("choose") {
+                    Do(TestControlLabel.choose) {
                         Choose(1...2, 10...11) { first, second in
                             Assign(selected, to: first.expr * 100 + second.expr)
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

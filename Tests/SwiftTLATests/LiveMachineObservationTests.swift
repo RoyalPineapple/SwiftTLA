@@ -8,40 +8,45 @@ private enum ObservationAction: Hashable, Sendable {
 
 @Suite("Live machine observation")
 struct LiveMachineObservationTests {
-    private static func countToken() throws -> TLAStateProjection.Token {
-        guard let token = TLAStateProjection.Token(validating: "count") else {
-            throw ObservationTestError.invalidToken
-        }
-        return token
-    }
-    private static let schema = MachineSchema(
-        identifier: "live-machine-observation-tests.counter-v1",
-        model: .init(name: "ObservationCounter"),
-        state: [.init(id: "count", display: .init(name: "count"), value: .integer, swiftType: "Int")],
-        actions: [.init(id: "advance", display: .init(name: "advance"), parameters: [])]
-    )
+    private struct Fixture {
+        let storage: _GeneratedMachineStorage
+        let owner: TLALiveMachineOwner<ObservationAction>
 
-    private static func makeOwner(capacity: Int = 64) throws -> TLALiveMachineOwner<ObservationAction> {
-        let initial = try TLAStateProjection(validating: [
-            .init(token: try countToken(), value: .int(0))
-        ])
-        let driver = TLALiveMachineTransitionDriver(
-            successors: { projection, action in
+        func count(in state: _GeneratedMachineStorage.State) throws -> Int {
+            try storage.value(at: 0, in: state)
+        }
+    }
+
+    private static func makeFixture(capacity: Int = 64) throws -> Fixture {
+        let storage = _GeneratedMachineStorage(compilation: try counterSpecification().compile())
+        let initial = try storage.initialState {
+            let count: Int = try storage.value(at: 0, in: $0)
+            return count == 0
+        }
+        let driver: TLALiveMachineTransitionDriver<ObservationAction> = .init(
+            successors: { state, action in
                 guard action == .advance else { return [] }
-                guard case .int(let count)? = projection.value(for: try Self.countToken()) else { return [] }
-                return [try TLAStateProjection(validating: [
-                    .init(token: try Self.countToken(), value: .int(count + 1))
-                ])]
+                let count: Int = try storage.value(at: 0, in: state)
+                return [try storage.replacing(value: count + 1, at: 0, in: state)]
             },
             validateAction: { _ in nil },
             decodeState: { _ in }
         )
-        return TLALiveMachineOwner.create(
-            schema: schema,
-            initial: initial,
-            driver: driver,
-            observationMailboxCapacity: capacity
+        return .init(
+            storage: storage,
+            owner: TLALiveMachineOwner.create(
+                initial: initial,
+                driver: driver,
+                observationMailboxCapacity: capacity
+            )
         )
+    }
+
+    private static func counterSpecification() -> TLASpec {
+        let count = Var<Int>("count")
+        return TLASpec("ObservationCounter") {
+            Variable(count, 0)
+        }
     }
 
     private static func attached(
@@ -61,7 +66,8 @@ struct LiveMachineObservationTests {
 
     @Test("Attachment is an atomic baseline of the existing runtime")
     func attachmentAfterPriorCommitUsesExistingRuntime() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
         _ = await machine.execute(.advance, requestID: UUID())
 
@@ -75,12 +81,13 @@ struct LiveMachineObservationTests {
         }
         #expect(snapshot.identity == machine.identity)
         #expect(snapshot.position == .init(value: 1))
-        #expect(snapshot.state.value(for: try Self.countToken()) == .int(1))
+        #expect(try fixture.count(in: snapshot.state) == 1)
     }
 
     @Test("Attachment baseline is followed by commits in runtime order")
     func attachmentThenCommitDeliversOneOrderedUpdate() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
         let subscription = try await Self.attached(machine)
         var iterator = subscription.makeAsyncIterator()
@@ -102,7 +109,8 @@ struct LiveMachineObservationTests {
 
     @Test("Overflow is explicit and recovery establishes a new baseline")
     func overflowRequiresResynchronization() async throws {
-        let owner = try Self.makeOwner(capacity: 1)
+        let fixture = try Self.makeFixture(capacity: 1)
+        let owner = fixture.owner
         let machine = owner.handle
         let subscription = try await Self.attached(machine)
         var iterator = subscription.makeAsyncIterator()
@@ -127,7 +135,7 @@ struct LiveMachineObservationTests {
             return
         }
         #expect(snapshot.position == .init(value: 2))
-        #expect(snapshot.state.value(for: try Self.countToken()) == .int(2))
+        #expect(try fixture.count(in: snapshot.state) == 2)
         #expect(loss.lastContiguousPosition == .init(value: 0))
 
         _ = await machine.execute(.advance, requestID: UUID())
@@ -142,7 +150,8 @@ struct LiveMachineObservationTests {
 
     @Test("Cancelling one subscription leaves peers and runtime live")
     func cancellationIsSubscriptionLocal() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
         let cancelled = try await Self.attached(machine)
         let peer = try await Self.attached(machine)
@@ -170,7 +179,8 @@ struct LiveMachineObservationTests {
 
     @Test("Owner shutdown fans out one terminal event and rejects later attachment")
     func ownerShutdownTerminatesAttachedObservers() async throws {
-        let owner = try Self.makeOwner()
+        let fixture = try Self.makeFixture()
+        let owner = fixture.owner
         let machine = owner.handle
         let first = try await Self.attached(machine)
         let second = try await Self.attached(machine)
@@ -209,5 +219,4 @@ struct LiveMachineObservationTests {
 
 private enum ObservationTestError: Error {
     case expectedAttachment
-    case invalidToken
 }

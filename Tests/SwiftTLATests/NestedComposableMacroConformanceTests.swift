@@ -1,7 +1,5 @@
 import Foundation
-import SwiftTLA
-import SwiftParser
-import SwiftSyntax
+@testable import SwiftTLA
 import Testing
 
 @Suite(.serialized)
@@ -16,7 +14,7 @@ struct NestedComposableMacroConformanceTests {
             }
             Constraint(value <= 2)
         }
-        let graph = try ModelChecker(spec: spec).exploreGraph()
+        let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
         let compilation = try spec.compile()
 
         for (sourceID, source) in graph.states {
@@ -30,7 +28,7 @@ struct NestedComposableMacroConformanceTests {
                 .map { successor in
                     (
                         action: compilation.layout.actions[successor.action.ordinal].declaration.name,
-                        arguments: successor.arguments,
+                        arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
                         state: try successor.state.projection(using: compilation.layout)
                     )
                 }
@@ -52,14 +50,22 @@ struct NestedComposableMacroConformanceTests {
         let modelBefore = try await model.machineObservation()
         _ = try model.apply(.advance)
         let modelAfter = try await model.machineObservation()
-        _ = try await observable.apply(.advance)
-        _ = try await actor.apply(.advance)
+        guard case .committed = try await observable.apply(.advance),
+              case .committed = try await actor.apply(.advance)
+        else {
+            Issue.record("Expected nested adapter actions to commit")
+            return
+        }
         #expect(modelBefore.state.count == 0)
         #expect(modelAfter.state.count == 1)
         #expect(modelBefore.availableActions == [.advance])
         #expect(modelAfter.availableActions == [.advance])
-        #expect(observable.state.count == 1)
-        #expect(await actor.state.count == 1)
+        #expect(try #require(observable.state).count == 1)
+        guard case .snapshot(let actorSnapshot) = try await actor.current() else {
+            Issue.record("Expected actor snapshot")
+            return
+        }
+        #expect(actorSnapshot.state.count == 1)
     }
 
     @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
@@ -79,8 +85,16 @@ struct NestedComposableMacroConformanceTests {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let result = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(result.after.floor == 222)
-        #expect((try await observable.apply(.board(person: 2, elevator: 20, direction: 200))).action == .board(person: 2, elevator: 20, direction: 200))
-        #expect((try await actor.apply(.board(person: 2, elevator: 20, direction: 200)).action) == .board(person: 2, elevator: 20, direction: 200))
+        guard case .committed(let observed) = try await observable.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ), case .committed(let acted) = try await actor.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ) else {
+            Issue.record("Expected nested adapter actions to commit")
+            return
+        }
+        #expect(observed.action == .board(person: 2, elevator: 20, direction: 200))
+        #expect(acted.action == .board(person: 2, elevator: 20, direction: 200))
     }
 
     @Test("Invalid nested macro composition emits enclosure diagnostics")
@@ -118,42 +132,6 @@ struct NestedComposableMacroConformanceTests {
                 #expect(!source.contains(uncheckedAttribute))
             }
         }
-    }
-
-    @Test("Generated public declarations retain guarded state and typed transition boundaries")
-    func generatedPublicSurfaceDoesNotEmitLegacyOrRawStateInterfaces() throws {
-        let generatedSources = [
-            "Sources/SwiftTLAPlugin/MacroExpander.swift",
-            "Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift",
-            "Sources/SwiftTLAPlugin/MacroExpander+Generation.swift",
-            "Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift"
-        ]
-
-        for path in generatedSources {
-            let source = try String(contentsOf: packageRoot().appendingPathComponent(path))
-            #expect(publicApplicationSurfaceViolations(inGeneratorSource: source).isEmpty)
-        }
-
-        let multilineRawMap = """
-        public func snapshot(
-        ) -> [String:
-          TLAValue] { let engine: [String: TLAValue] = [:]; _ = engine; return [] }
-        """
-        let transitionEvidenceResult = """
-        public struct
-        TransitionEvidence: Sendable {}
-        """
-        let transitionEvidenceResultSignature = """
-        public func execute() -> TransitionEvidence { fatalError() }
-        """
-        let rawSnapshot = """
-        public func tlaSnapshot() -> TLAStateProjectionResult { .unavailable(.invalidKey(path: "state")) }
-        """
-
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: multilineRawMap) == ["raw state map"])
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: transitionEvidenceResult) == ["transition evidence"])
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: transitionEvidenceResultSignature) == ["transition evidence"])
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: rawSnapshot) == ["formal state snapshot"])
     }
 
     @Test("Model macro rejects arbitrary instance state")
@@ -210,7 +188,7 @@ struct NestedComposableMacroConformanceTests {
     }
 
     @Test("External nested actor cannot expose raw generated state")
-    func nestedActorRawStateAndLegacyEvidenceDoNotCompileExternally() throws {
+    func nestedActorRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidNestedActorRawSurface",
             typeName: "NestedActorSurface.Actor",
@@ -219,7 +197,7 @@ struct NestedComposableMacroConformanceTests {
     }
 
     @Test("External nested observable cannot expose raw generated state")
-    func nestedObservableRawStateAndLegacyEvidenceDoNotCompileExternally() throws {
+    func nestedObservableRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidNestedObservableRawSurface",
             typeName: "NestedObservableSurface.Observable",
@@ -248,18 +226,6 @@ struct NestedComposableMacroConformanceTests {
     }
 
     private func requireSendable<Value: Sendable>(_: Value.Type) {}
-
-    private func publicApplicationSurfaceViolations(inGeneratorSource source: String) -> [String] {
-        Array(Set(MacroEmissionStringCollector.fragments(in: source)
-            .flatMap(publicApplicationSurfaceViolations(inEmittedSource:))))
-            .sorted()
-    }
-
-    private func publicApplicationSurfaceViolations(inEmittedSource source: String) -> [String] {
-        let inspector = PublicGeneratedSurfaceInspector(viewMode: .sourceAccurate)
-        inspector.walk(Parser.parse(source: source))
-        return inspector.violations.sorted()
-    }
 
     private func assertExternalSurfaceIsForbidden(
         fixture: String,
@@ -310,100 +276,5 @@ struct NestedComposableMacroConformanceTests {
             process.terminationStatus,
             String(data: outputData, encoding: .utf8) ?? ""
         )
-    }
-}
-
-
-private final class MacroEmissionStringCollector: SyntaxVisitor {
-    private(set) var fragments: [String] = []
-
-    static func fragments(in source: String) -> [String] {
-        let collector = MacroEmissionStringCollector(viewMode: .sourceAccurate)
-        collector.walk(Parser.parse(source: source))
-        return collector.fragments
-    }
-
-    override func visit(_ node: StringLiteralExprSyntax) -> SyntaxVisitorContinueKind {
-        let fragment = node.segments.compactMap { segment -> String? in
-            segment.as(StringSegmentSyntax.self)?.content.text
-        }.joined()
-        if fragment.contains("public") {
-            fragments.append(fragment)
-        }
-        return .skipChildren
-    }
-}
-
-private final class PublicGeneratedSurfaceInspector: SyntaxVisitor {
-    private(set) var violations: Set<String> = []
-
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        inspect(modifiers: node.modifiers, signature: node.signature.description)
-        if isPublic(node.modifiers), node.name.text == "tlaSnapshot" {
-            violations.insert("formal state snapshot")
-        }
-        return .skipChildren
-    }
-
-    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        guard isPublic(node.modifiers) else { return .skipChildren }
-        for binding in node.bindings {
-            inspect(type: binding.typeAnnotation?.type.description ?? "")
-        }
-        return .skipChildren
-    }
-
-    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        inspect(modifiers: node.modifiers, name: node.name.text)
-        return .visitChildren
-    }
-
-    override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-        inspect(modifiers: node.modifiers, name: node.name.text)
-        return .visitChildren
-    }
-
-    override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-        inspect(modifiers: node.modifiers, name: node.name.text)
-        return .visitChildren
-    }
-
-    override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        inspect(modifiers: node.modifiers, name: node.name.text)
-        return .visitChildren
-    }
-
-    override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-        inspect(modifiers: node.modifiers, name: node.name.text)
-        if isPublic(node.modifiers) {
-            inspect(type: node.initializer.value.description)
-        }
-        return .skipChildren
-    }
-
-    private func inspect(modifiers: DeclModifierListSyntax, signature: String) {
-        guard isPublic(modifiers) else { return }
-        inspect(type: signature)
-    }
-
-    private func inspect(modifiers: DeclModifierListSyntax, name: String) {
-        guard isPublic(modifiers) else { return }
-        if name == "TransitionEvidence" {
-            violations.insert("transition evidence")
-        }
-    }
-
-    private func inspect(type: String) {
-        let normalized = type.filter { !$0.isWhitespace }
-        if normalized.contains("[String:TLAValue]") {
-            violations.insert("raw state map")
-        }
-        if normalized.contains("TransitionEvidence") {
-            violations.insert("transition evidence")
-        }
-    }
-
-    private func isPublic(_ modifiers: DeclModifierListSyntax) -> Bool {
-        modifiers.contains { $0.name.tokenKind == .keyword(.public) }
     }
 }

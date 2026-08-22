@@ -3,7 +3,20 @@ extension TLASpec {
     _ name: String,
     @SpecBuilder _ builder: () -> [SpecComponent]
   ) {
-    let components = builder()
+    self.init(name, components: builder())
+  }
+
+  public init(
+    _ name: String,
+    @SpecBuilder scoped builder: (SpecificationScope) -> [SpecComponent]
+  ) {
+    let scope = SpecificationScope()
+    let body = builder(scope)
+    let components = scope.declarations + body
+    self.init(name, components: components)
+  }
+
+  private init(_ name: String, components: [SpecComponent]) {
     var variables: [NamedVar] = []
     var actions: [NamedAction] = []
     var invariants: [NamedInvariant] = []
@@ -11,20 +24,18 @@ extension TLASpec {
     var fairness: [FairnessCondition] = []
     var constants: [ConstantDecl] = []
     var formalParameters: [FormalModuleParameter] = []
-    var definitions: [DirectModuleDefinition] = []
-    var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
-    var theorems: [String] = []
+    var theorems: [TheoremDecl] = []
     var assumes: StateExpr?
-    var extendsMods = "Integers"
+    var extendsMods: [StandardModule] = [.integers]
     var deadlockFlag = false
     var constraint: StateExpr?
-    let recursiveDefs: [String] = []
     var recursiveFuncs: [RecursiveFunc] = []
     var formalOperatorDefinitions: [FormalOperatorDefinition] = []
     let imports = components.compactMap { $0 as? ImportDecl }
     let importedModules = imports.map(\.module)
     let importConfigurations = imports.compactMap(\.configuration)
     let moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
+    let refinements = components.compactMap { $0 as? RefinementDecl }
     var symmetrySets: [SymmetrySet] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
     var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
@@ -62,40 +73,14 @@ extension TLASpec {
         fairness.append(f.condition)
       } else if let c = comp as? ConstantDecl {
         constants.append(c)
-      } else if let parameter = comp as? FormalParameterDecl {
-        formalParameters.append(parameter.parameter)
-      } else if let d = comp as? DefinitionDecl {
-        let text: String
-        if let name = d.name, let body = d.body {
-          text = "\(name) == \(body)"
-        } else {
-          text = d.tlaText
-        }
-        definitions.append(.init(name: d.name, text: text, dependencies: d.plusCalDependencies))
-        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
-          name: d.name, text: text, phase: d.plusCalPhase, dependencies: d.plusCalDependencies
-        ))
-      } else if let definition = comp as? FormalOperatorDecl {
-        definitions.append(.init(
-          name: definition.definition.name,
-          text: definition.tlaText,
-          dependencies: definition.definition.plusCalDependencies
-        ))
-        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
-          name: definition.definition.name, text: definition.tlaText,
-          phase: definition.definition.plusCalPhase,
-          dependencies: definition.definition.plusCalDependencies
-        ))
+      } else if let parameter = comp as? FormalModuleParameter {
+        formalParameters.append(parameter)
       } else if let th = comp as? TheoremDecl {
-        if let body = th.temporalBody {
-          theorems.append("\(th.name) == Spec => \(body)")
-        } else if let body = th.stateBody {
-          theorems.append("\(th.name) == Spec => [](\(body))")
-        }
+        theorems.append(th)
       } else if let a = comp as? AssumeDecl {
         assumes = assumes.map { .and($0, a.expr) } ?? a.expr
       } else if let e = comp as? ExtendsDecl {
-        extendsMods = e.modules
+        extendsMods.append(contentsOf: e.modules)
       } else if comp is DeadlockDecl {
         deadlockFlag = true
       } else if let c = comp as? ConstraintDecl {
@@ -117,17 +102,15 @@ extension TLASpec {
     self.fairness = fairness
     self.assume = assumes
     self.checkDeadlock = deadlockFlag
-    self.definitions = definitions
-    self.authoredPlusCalDeclarations = authoredPlusCalDeclarations
     self.theorems = theorems
-    self.extendsModules = extendsMods
+    self.extendsModules = canonicalStandardModules(extendsMods)
     self.constraint = constraint
-    self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
     self.formalOperatorDefinitions = formalOperatorDefinitions
     self.imports = importedModules
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
+    self.refinements = refinements
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
@@ -144,8 +127,6 @@ extension TLASpec {
     var invariants = invariants
     var temporalProperties = temporalProperties
     var fairness = fairness
-    var definitions = definitions
-    var authoredPlusCalDeclarations = authoredPlusCalDeclarations
     var constraint = constraint
     var formalOperatorDefinitions = formalOperatorDefinitions
 
@@ -161,20 +142,6 @@ extension TLASpec {
       temporalProperties += lowered.temporalProperties
       fairness += lowered.fairness
       formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
-      for definition in algorithm.model.formalOperatorDefinitions {
-        let text = FormalOperatorDecl(definition).tlaText
-        definitions.append(.init(
-          name: definition.name,
-          text: text,
-          dependencies: definition.plusCalDependencies
-        ))
-        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
-          name: definition.name,
-          text: text,
-          phase: definition.plusCalPhase,
-          dependencies: definition.plusCalDependencies
-        ))
-      }
       if let loweredConstraint = lowered.constraint {
         constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
       }
@@ -184,8 +151,10 @@ extension TLASpec {
     actions = actions.map { action in
       NamedAction(
         name: action.name,
-        body: completeAction(action.body, allVars: variableNames),
-        bindings: action.bindings
+        body: ActionNormalization.complete(action.body, variables: variableNames),
+        bindings: action.bindings,
+        controlOwner: action.controlOwner,
+        generatedBindingSwiftTypes: action.generatedBindingSwiftTypes
       )
     }
 
@@ -200,37 +169,67 @@ extension TLASpec {
       fairness: fairness,
       assume: assume,
       checkDeadlock: checkDeadlock,
-      definitions: definitions,
       theorems: theorems,
       extendsModules: extendsModules,
       constraint: constraint,
-      recursiveDefs: recursiveDefs,
       recursiveFuncs: recursiveFuncs,
       formalOperatorDefinitions: formalOperatorDefinitions,
       imports: imports,
       importConfigurations: importConfigurations,
       moduleInstances: moduleInstances,
+      refinements: refinements,
       symmetrySets: symmetrySets,
       symmetricCollections: symmetricCollections,
       algorithmFidelityTokens: algorithmFidelityTokens,
-      sourceAlgorithms: sourceAlgorithms,
-      authoredPlusCalDeclarations: authoredPlusCalDeclarations
+      sourceAlgorithms: sourceAlgorithms
     )
     lowered.algorithmPhase = .lowered
     return lowered
   }
 
-  func authoredPlusCalModule() throws -> AuthoredPlusCalModule? {
+  func authoredPlusCalModule(
+    semantics: CompiledSemantics,
+    formalRenderer: CompiledTLARenderer,
+    renderedRefinements: [String]
+  ) throws -> AuthoredPlusCalModule? {
     guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
       return nil
     }
-    let renderer = AlgorithmPlusCalRenderer(model: algorithm.model)
+    let plusCalAlgorithm = algorithm.model.plusCalProjection()
+    let declarationSections = try authoredPlusCalDeclarationSections(
+      semantics: semantics,
+      formalRenderer: formalRenderer
+    )
+    let declarationPlan = AuthoredPlusCalModule(
+      name: name,
+      extendsModules: authoredPlusCalExtends,
+      constants: authoredPlusCalPrelude,
+      definitionsBeforeInstances: declarationSections.prelude,
+      instances: moduleInstances,
+      instanceArguments: Dictionary(uniqueKeysWithValues: moduleInstances.map { ($0.name, instanceArguments(for: $0)) }),
+      definitionsAfterInstances: [],
+      algorithm: plusCalAlgorithm,
+      defineDeclarations: declarationSections.define,
+      postTranslationDeclarations: [],
+      refinements: renderedRefinements
+    )
+    let renderer = AlgorithmPlusCalRenderer(module: declarationPlan)
     let sourceProperties = try renderer.sourcePropertyDefinitions()
     let sourcePropertyNames = sourceProperties.map(\.name)
-    let topLevelProperties = invariants
+    let topLevelProperties = try invariants
       .filter { sourcePropertyNames.contains($0.name) == false }
-      .map { invariant in
-        (name: invariant.name, definition: "\(invariant.name) == \(invariant.body.tlaModuleSource)")
+      .map { invariant -> (name: String, definition: String) in
+        guard let compiled = semantics.invariants.first(where: { $0.name == invariant.name }) else {
+          throw CompilationDiagnostic(
+            code: .compilationIdentityMismatch,
+            stage: .rendering,
+            path: "authoredPlusCal.invariants.\(invariant.name)",
+            expected: "a compiled invariant",
+            actual: "no compiled invariant",
+            nextSafeAction: "Compile the model again from its current source."
+          )
+        }
+        return (name: invariant.name, definition: "\(invariant.name) == \(try formalRenderer.state(compiled.body))")
       }
     let topLevelPropertyNames = topLevelProperties.map(\.name)
     let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
@@ -248,31 +247,34 @@ extension TLASpec {
           nextSafeAction: "Give each property a unique name and use a supported typed property expression."
         )
     }
-    let declarationSections = try authoredPlusCalDeclarationSections()
     let module = AuthoredPlusCalModule(
-      name: name.replacingOccurrences(of: " ", with: ""),
+      name: name,
       extendsModules: authoredPlusCalExtends,
       constants: authoredPlusCalPrelude,
       definitionsBeforeInstances: declarationSections.prelude,
-      instances: [],
+      instances: moduleInstances,
+      instanceArguments: Dictionary(uniqueKeysWithValues: moduleInstances.map { ($0.name, instanceArguments(for: $0)) }),
       definitionsAfterInstances: [],
-      algorithm: algorithm.model,
+      algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: (sourceProperties + topLevelProperties).map(\.definition)
-        + authoredPlusCalSymmetry
+        + authoredPlusCalSymmetry,
+      refinements: renderedRefinements
     )
     return module
   }
 
   private var authoredPlusCalExtends: [String] {
-    let requested = extendsModules.split(separator: ",").map {
-      $0.trimmingCharacters(in: .whitespaces)
+    let requested = extendsModules.map(\.rawValue)
+    let standard = [StandardModule.naturals, .integers, .sequences, .finiteSets].map(\.rawValue)
+    let symmetry = symmetrySets.isEmpty ? [] : [StandardModule.tlc.rawValue]
+    let imported = imports.map(\.name)
+    let candidates = requested + standard + symmetry + imported
+    var modules: [String] = []
+    for module in candidates where !modules.contains(module) {
+      modules.append(module)
     }
-    let symmetryModule = symmetrySets.isEmpty ? [] : ["TLC"]
-    return (requested + ["Naturals", "Integers", "Sequences", "FiniteSets"] + symmetryModule + imports.map(\.name))
-      .reduce(into: [String]()) { modules, module in
-        if !modules.contains(module) { modules.append(module) }
-      }
+    return modules
   }
 
   private var authoredPlusCalPrelude: [String] {
@@ -284,9 +286,30 @@ extension TLASpec {
     return lines
   }
 
-  private func authoredPlusCalDeclarationSections() throws -> AuthoredPlusCalDeclarationSections {
+  private func authoredPlusCalDeclarationSections(
+    semantics: CompiledSemantics,
+    formalRenderer: CompiledTLARenderer
+  ) throws -> AuthoredPlusCalDeclarationSections {
+    guard formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count else {
+      throw CompilationDiagnostic(
+        code: .compilationIdentityMismatch,
+        stage: .rendering,
+        path: "authoredPlusCal.definitions",
+        expected: "compiled definitions aligned with this source model",
+        actual: "\(semantics.formalOperatorDefinitions.count) compiled definitions for \(formalOperatorDefinitions.count) declared definitions",
+        nextSafeAction: "Compile the model again from its current source."
+      )
+    }
+    let definitions = try formalOperatorDefinitions.enumerated().map { index, definition in
+      AuthoredPlusCalDeclaration(
+        name: definition.name,
+        text: try formalRenderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
+        phase: definition.plusCalPhase,
+        dependencies: definition.plusCalDependencies
+      )
+    }
     let instances = moduleInstances.map { instance in
-      let arguments = instance.arguments.map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
+      let arguments = instanceArguments(for: instance).map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
       let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
       return AuthoredPlusCalDeclaration(
         name: instance.name,
@@ -295,12 +318,12 @@ extension TLASpec {
         dependencies: instance.plusCalDependencies
       )
     }
-    return try AuthoredPlusCalDeclarationSections(authoredPlusCalDeclarations + instances)
+    return try AuthoredPlusCalDeclarationSections(definitions + instances)
   }
 
   private var authoredPlusCalSymmetry: [String] {
     symmetrySets.map { symmetry in
-      let values = symmetry.values.sorted { $0.description < $1.description }
+      let values = symmetry.values.sorted()
         .map(\.description)
         .joined(separator: ", ")
       return "Symm\(symmetry.variableName) == Permutations({\(values)})"
@@ -338,294 +361,9 @@ struct AuthoredPlusCalDeclarationSections {
   }
 }
 
-public func substituteConstants(_ spec: TLASpec) -> TLASpec {
-  let constants = spec.constants
-  let vars = spec.variables.map { v in
-    NamedVar(
-      name: v.name,
-      initial: substituteInValue(v.initial, constants: constants),
-      initialSet: v.initialSet.map { substituteInState($0, constants: constants) },
-      initExpr: v.initExpr.map { substituteInState($0, constants: constants) },
-      lazySet: v.lazySet.map { substituteInState($0, constants: constants) },
-      collectionType: v.collectionType,
-      origin: v.origin
-    )
-  }
-  let acts = spec.actions.map { a in
-    NamedAction(
-      name: a.name, body: substituteInAction(a.body, constants: constants), bindings: a.bindings)
-  }
-  let invs = spec.invariants.map { i in
-    NamedInvariant(name: i.name, body: substituteInState(i.body, constants: constants))
-  }
-  var resolved = TLASpec(
-    name: spec.name,
-    variables: vars,
-    constants: [],
-    formalParameters: spec.formalParameters,
-    actions: acts,
-    invariants: invs,
-    temporalProperties: spec.temporalProperties.map { t in
-      NamedTemporal(name: t.name, expr: substituteInTemporal(t.expr, constants: constants))
-    },
-    fairness: spec.fairness,
-    assume: spec.assume.map { substituteInState($0, constants: constants) },
-    checkDeadlock: spec.checkDeadlock,
-    definitions: spec.definitions,
-    theorems: spec.theorems,
-    extendsModules: spec.extendsModules,
-    constraint: spec.constraint.map { substituteInState($0, constants: constants) },
-    recursiveDefs: spec.recursiveDefs,
-    recursiveFuncs: spec.recursiveFuncs,
-    formalOperatorDefinitions: spec.formalOperatorDefinitions,
-    imports: spec.imports,
-    importConfigurations: spec.importConfigurations,
-    moduleInstances: spec.moduleInstances,
-    symmetrySets: spec.symmetrySets,
-    symmetricCollections: spec.symmetricCollections,
-    algorithmFidelityTokens: spec.algorithmFidelityTokens,
-    sourceAlgorithms: spec.sourceAlgorithms
-  )
-  resolved.algorithmPhase = spec.algorithmPhase
-  return resolved
-}
-
-private func substituteInValue(_ value: TLAValue, constants: [ConstantDecl]) -> TLAValue {
-  if case .constant(let name) = value, let replacement = constants.value(named: name) {
-    return replacement
-  }
-  return value
-}
-
-private func substituteInState(_ expr: StateExpr, constants: [ConstantDecl]) -> StateExpr {
-  switch expr {
-  case .value(let v): return .value(substituteInValue(v, constants: constants))
-  case .variable, .programCounter: return expr
-  case .controlLocation: return expr
-  case .add(let a, let b):
-    return .add(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .subtract(let a, let b):
-    return .subtract(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .multiply(let a, let b):
-    return .multiply(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .divide(let a, let b):
-    return .divide(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .modulo(let a, let b):
-    return .modulo(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .negate(let a): return .negate(substituteInState(a, constants: constants))
-  case .integerDivide(let a, let b):
-    return .integerDivide(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .equal(let a, let b):
-    return .equal(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .notEqual(let a, let b):
-    return .notEqual(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .lessThan(let a, let b):
-    return .lessThan(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .lessOrEqual(let a, let b):
-    return .lessOrEqual(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .greaterThan(let a, let b):
-    return .greaterThan(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .greaterOrEqual(let a, let b):
-    return .greaterOrEqual(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .and(let a, let b):
-    return .and(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .or(let a, let b):
-    return .or(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .not(let a): return .not(substituteInState(a, constants: constants))
-  case .ifThenElse(let c, let t, let f):
-    return .ifThenElse(
-      substituteInState(c, constants: constants), substituteInState(t, constants: constants),
-      substituteInState(f, constants: constants))
-  case .setLiteral(let elems):
-    return .setLiteral(elems.map { substituteInState($0, constants: constants) })
-  case .in(let a, let b):
-    return .in(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .subset(let a, let b):
-    return .subset(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .union(let a, let b):
-    return .union(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .intersection(let a, let b):
-    return .intersection(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .setDifference(let a, let b):
-    return .setDifference(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .cardinality(let a): return .cardinality(substituteInState(a, constants: constants))
-  case .setFilter(let a, let qv, let b):
-    return .setFilter(
-      substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
-  case .setMap(let a, let qv, let b):
-    return .setMap(
-      substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
-  case .powerSet(let a): return .powerSet(substituteInState(a, constants: constants))
-  case .unionAll(let a): return .unionAll(substituteInState(a, constants: constants))
-  case .integerRange(let lower, let upper):
-    return .integerRange(substituteInState(lower, constants: constants), substituteInState(upper, constants: constants))
-  case .tupleLiteral(let elems):
-    return .tupleLiteral(elems.map { substituteInState($0, constants: constants) })
-  case .tupleAccess(let a, let i):
-    return .tupleAccess(substituteInState(a, constants: constants), i)
-  case .tupleDynamicAccess(let tuple, let index):
-    return .tupleDynamicAccess(substituteInState(tuple, constants: constants), substituteInState(index, constants: constants))
-  case .tupleLength(let a): return .tupleLength(substituteInState(a, constants: constants))
-  case .tupleAppend(let a, let b):
-    return .tupleAppend(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .tupleHead(let t): return .tupleHead(substituteInState(t, constants: constants))
-  case .tupleTail(let t): return .tupleTail(substituteInState(t, constants: constants))
-  case .tupleConcatenate(let a, let b):
-    return .tupleConcatenate(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .recordLiteral(let fields):
-    return .recordLiteral(.init(fields.fields.map {
-      .init(name: $0.name, value: substituteInState($0.value, constants: constants))
-    }))
-  case .recordAccess(let a, let f):
-    return .recordAccess(substituteInState(a, constants: constants), f)
-  case .domain(let a): return .domain(substituteInState(a, constants: constants))
-  case .functionLiteral(let a, let qv, let b):
-    return .functionLiteral(
-      substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
-  case .functionApply(let a, let b):
-    return .functionApply(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-  case .except(let a, let b, let c):
-    return .except(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants),
-      substituteInState(c, constants: constants))
-  case .caseExpr(let pairs, let other):
-    return .caseExpr(
-      pairs.map { substituteInState($0, constants: constants) },
-      other.map { substituteInState($0, constants: constants) })
-  case .forAll(let a, let qv, let b):
-    return .forAll(
-      substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
-  case .exists(let a, let qv, let b):
-    return .exists(
-      substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
-  case .choose(let a, let qv, let b):
-    return .choose(
-      substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
-  case .enabledAction: return expr
-  case .sequenceFromSet(let s): return .sequenceFromSet(substituteInState(s, constants: constants))
-  case .functionSet(let d, let r):
-    return .functionSet(
-      substituteInState(d, constants: constants), substituteInState(r, constants: constants))
-  case .setSum(let f, let s):
-    return .setSum(
-      substituteInState(f, constants: constants), substituteInState(s, constants: constants))
-  case .recursiveCall(let n, let a):
-    return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
-  case .letValue(let name, let value, let body):
-    let bodyConstants = constants.filter { $0.name != name }
-    return .letValue(
-      name,
-      substituteInState(value, constants: constants),
-      substituteInState(body, constants: bodyConstants)
-    )
-  case .foldFunction(let operation, let initial, let sequence):
-    let bodyConstants = constants.filter { !operation.parameters.contains($0.name) }
-    return .foldFunction(
-      FormalLambda(
-        parameters: operation.parameters,
-        body: substituteInState(operation.body, constants: bodyConstants)
-      ),
-      initial: substituteInState(initial, constants: constants),
-      sequence: substituteInState(sequence, constants: constants)
-    )
-  case .operatorApplication(let operation, let arguments):
-    let substitutedOperator: FormalOperator
-    switch operation {
-    case .lambda(let lambda):
-    let bodyConstants = constants.filter { !lambda.parameters.contains($0.name) }
-      substitutedOperator = .lambda(
-        FormalLambda(
-          parameters: lambda.parameters,
-          body: substituteInState(lambda.body, constants: bodyConstants)
-        )
-      )
-    case .reference:
-      substitutedOperator = operation
-    }
-    return .operatorApplication(
-      substitutedOperator,
-      arguments.map { argument in
-        switch argument {
-        case .value(let expression):
-          FormalCallArgument.value(substituteInState(expression, constants: constants))
-        case .operator(.reference(let name, let arity)):
-          FormalCallArgument.operator(.reference(name, arity: arity))
-        case .operator(.lambda(let lambda)):
-          FormalCallArgument.operator(.lambda(FormalLambda(
-            parameters: lambda.parameters,
-            body: substituteInState(lambda.body, constants: constants)
-          )))
-        }
-      }
-    )
-  case .letIn(let operators, let body):
-    return .letIn(
-      operators.map { operation in
-        let bodyConstants = constants.filter { !operation.parameters.contains($0.name) }
-        return LocalOperator(
-          operation.name,
-          parameters: operation.parameters,
-          domain: operation.domain.map { substituteInState($0, constants: constants) },
-          body: substituteInState(operation.body, constants: bodyConstants)
-        )
-      },
-      substituteInState(body, constants: constants)
-    )
-  }
-}
-
-private func substituteInAction(_ expr: ActionExpr, constants: [ConstantDecl]) -> ActionExpr {
-  switch expr {
-  case .assign(let v, let e): return .assign(v, substituteInState(e, constants: constants))
-  case .unchanged: return expr
-  case .guard_(let e): return .guard_(substituteInState(e, constants: constants))
-  case .chooseAction(let v, let s):
-    return .chooseAction(v, substituteInState(s, constants: constants))
-  case .and(let a, let b):
-    return .and(
-      substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
-  case .or(let a, let b):
-    return .or(
-      substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
-  case .ifElse(let c, let t, let e):
-    return .ifElse(
-      substituteInState(c, constants: constants), substituteInAction(t, constants: constants),
-      substituteInAction(e, constants: constants))
-  case .define(let v, let exp, let body):
-    return .define(
-      v, substituteInState(exp, constants: constants),
-      substituteInAction(body, constants: constants))
-  case .existsAction(let v, let s, let b):
-    return .existsAction(
-      v, substituteInState(s, constants: constants), substituteInAction(b, constants: constants))
-  }
-}
-
-public func assignedVars(_ e: ActionExpr) -> Set<String> {
+package func assignedVars(_ e: ActionExpr) -> Set<ActionTarget> {
   switch e {
-  case .assign(let v, _), .chooseAction(let v, _): return [v]
+  case .assign(let target, _), .chooseAction(let target, _): return [target]
   case .unchanged, .guard_: return []
   case .and(let a, let b): return assignedVars(a).union(assignedVars(b))
   case .or(let a, let b): return assignedVars(a).union(assignedVars(b))
@@ -635,30 +373,14 @@ public func assignedVars(_ e: ActionExpr) -> Set<String> {
   }
 }
 
-public func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
+package func explicitUnchanged(_ e: ActionExpr) -> Set<ActionTarget> {
   switch e {
-  case .unchanged(let v): return [v]
+  case .unchanged(let target): return [target]
   case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))
   case .or(let a, let b): return explicitUnchanged(a).intersection(explicitUnchanged(b))
   case .ifElse: return []
   case .define: return []
   case .existsAction: return []
   default: return []
-  }
-}
-
-/// Joint nondeterministic init: two variables from a constrained cross-product.
-private func substituteInTemporal(_ expr: TemporalExpr, constants: [ConstantDecl])
-  -> TemporalExpr {
-  switch expr {
-  case .always(let s): return .always(substituteInState(s, constants: constants))
-  case .eventually(let s): return .eventually(substituteInState(s, constants: constants))
-  case .alwaysEventually(let s):
-    return .alwaysEventually(substituteInState(s, constants: constants))
-  case .eventuallyAlways(let s):
-    return .eventuallyAlways(substituteInState(s, constants: constants))
-  case .leadsTo(let a, let b):
-    return .leadsTo(
-      substituteInState(a, constants: constants), substituteInState(b, constants: constants))
   }
 }

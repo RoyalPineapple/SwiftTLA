@@ -12,6 +12,7 @@ public struct PrisonersModel: Sendable {
         case three = "p3"
         case four = "p4"
 
+        public static var defaultValue: Self { .two }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.non-counter-prisoner")
 
@@ -21,26 +22,27 @@ public struct PrisonersModel: Sendable {
     private enum Scheduler: String, CaseIterable, FiniteDomainKey {
         case warden
 
+        static var defaultValue: Self { .warden }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.scheduler")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case chooseVisitor
     }
 
     public static var spec: TLASpec {
         #spec("Prisoners") {
-            Extends("Naturals")
-            Algorithm("Prisoners") {
-                let switchAUp = SharedVar(in: SetExpr<Bool>.literal(true, false))
-                let switchBUp = SharedVar(in: SetExpr<Bool>.literal(true, false))
-                let timesSwitched = SharedVar(initial: Function<NonCounterPrisoner, Int>.literal(
+            Extends(.naturals)
+            Algorithm("Prisoners", scoped: { scope in
+                let switchAUp = scope.sharedVar("switchAUp", in: SetExpr<Bool>.literal(true, false))
+                let switchBUp = scope.sharedVar("switchBUp", in: SetExpr<Bool>.literal(true, false))
+                let timesSwitched = scope.sharedVar("timesSwitched", initial: Function<NonCounterPrisoner, Int>.literal(
                     (.two, 0), (.three, 0), (.four, 0)
                 ))
-                let count = SharedVar(initial: 0)
+                let count = scope.sharedVar("count", initial: 0)
 
                 Each(Scheduler.all) { _ in
                     Do(Step.chooseVisitor) {
@@ -70,7 +72,7 @@ public struct PrisonersModel: Sendable {
                         Goto(Step.chooseVisitor)
                     }
                 }
-            }
+            })
         }
     }
 }

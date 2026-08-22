@@ -121,7 +121,7 @@ public struct KVsnapModel: Sendable {
         public static let value = field(\OperationFields.value)
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case start = "START"
         case read = "READ"
         case update = "UPDATE"
@@ -130,7 +130,7 @@ public struct KVsnapModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("KVsnap") {
-            Extends("Integers, Sequences, FiniteSets")
+            Extends(.integers, .sequences, .finiteSets)
             Import(KeyValueStoreUtil.module)
 
             // These are the upstream model values. Declaring them explicitly
@@ -155,18 +155,17 @@ public struct KVsnapModel: Sendable {
                 parameters: [],
                 body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
-            Algorithm("KVsnap") {
-                let store: SharedVariable<Function<Key, Value>> = SharedVar(initial: FormalCall("InitialState"))
-                let tx = SharedVar(initial: SetExpr<Transaction>())
-                let missed = SharedVar(initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
+            Algorithm("KVsnap", scoped: { scope in
+                let store: SharedVariable<Function<Key, Value>> = scope.sharedVar("store", initial: FormalCall("InitialState"))
+                let tx = scope.sharedVar("tx", initial: SetExpr<Transaction>())
+                let missed = scope.sharedVar("missed", initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
 
-                Each(Transaction.all, fairness: .weak) { selfID in
-                    let snapshotStore: LocalVariable<Function<Key, Value>> = LocalVar(
-                        initial: FormalCall("InitialState")
+                Each(Transaction.all, fairness: .weak, scoped: { selfID, scope in
+                    let snapshotStore: LocalVariable<Function<Key, Value>> = scope.localVar("snapshotStore", initial: FormalCall("InitialState")
                     )
-                    let readKeys: LocalVariable<SetExpr<Key>> = LocalVar(initial: SetExpr<Key>())
-                    let writeKeys: LocalVariable<SetExpr<Key>> = LocalVar(initial: SetExpr<Key>())
-                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = LocalVar(initial: TupleExpr<Record<OperationSchema>>())
+                    let readKeys: LocalVariable<SetExpr<Key>> = scope.localVar("readKeys", initial: SetExpr<Key>())
+                    let writeKeys: LocalVariable<SetExpr<Key>> = scope.localVar("writeKeys", initial: SetExpr<Key>())
+                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = scope.localVar("ops", initial: TupleExpr<Record<OperationSchema>>())
 
                     Do(Step.start) {
                         Assign(tx, to: tx.inserting(selfID))
@@ -240,7 +239,7 @@ public struct KVsnapModel: Sendable {
                             Range(ops.family(for: Transaction.self))
                         )
                     }
-                }
+                })
 
                 Invariant("TypeOK") {
                     Functions(from: Key.all, to: SetExpr<Value>.literal(
@@ -253,7 +252,7 @@ public struct KVsnapModel: Sendable {
                         ).contains(missed.expr)
                 }
                 Eventually("Termination", All(Transaction.all) { Finished($0) })
-            }
+            })
         }
     }
 }

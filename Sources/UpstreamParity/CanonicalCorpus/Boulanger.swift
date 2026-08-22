@@ -16,26 +16,27 @@ public struct BoulangerModel: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain: [Self] = [.one, .two]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.boulanger.process")
     }
 
-    private enum Label: String, PlusCalLabel {
+    private enum Label: String, PlusCalLabel, CaseIterable {
         case ncs, e1, e2, e3, e4, w1, w2, cs, exit
     }
 
     public static var spec: TLASpec {
         #spec("Boulanger") {
-            Extends("Integers")
-            Algorithm("Boulanger") {
-                let num = SharedVar(initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
-                let flag = SharedVar(initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+            Extends(.integers)
+            Algorithm("Boulanger", scoped: { scope in
+                let num = scope.sharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = scope.sharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
-                Each(Process.all, fairness: .weak) { selfID in
-                    let unchecked = LocalVar(initial: SetExpr<Process>())
-                    let max = LocalVar(initial: 0)
-                    let nxt = LocalVar(initial: Process.one)
-                    let previous = LocalVar(initial: -1)
+                Each(Process.all, fairness: .weak, scoped: { selfID, scope in
+                    let unchecked = scope.localVar("unchecked", initial: SetExpr<Process>())
+                    let max = scope.localVar("max", initial: 0)
+                    let nxt = scope.localVar("nxt", initial: Process.one)
+                    let previous = scope.localVar("previous", initial: -1)
 
                     Do(Label.ncs) { Skip() }
 
@@ -116,7 +117,7 @@ public struct BoulangerModel: Sendable {
                     }
 
                     Invariant("LocalTypeOK") { max >= 0 && previous >= -1 }
-                }
+                })
 
                 StateConstraint(All(Process.all) { process in num[process] < 3 })
                 Invariant("MutualExclusion") {
@@ -126,7 +127,7 @@ public struct BoulangerModel: Sendable {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

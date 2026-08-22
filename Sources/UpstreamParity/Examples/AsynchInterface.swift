@@ -12,6 +12,7 @@ public struct AsynchInterfaceModel: Sendable {
         case d2
         case d3
 
+        public static var defaultValue: Self { .d1 }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.asynch-interface.data")
         public var tlaValue: TLAValue { .string(rawValue) }
@@ -45,9 +46,9 @@ public struct AsynchInterfaceModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("AsynchInterface") {
-            Extends("Naturals")
-            let interface = SharedVar(in: SetExpr<Record<InterfaceSchema>>.literal(
+        #spec("AsynchInterface") { scope in
+            Extends(.naturals)
+            let interface = scope.sharedVar("interface", in: SetExpr<Record<InterfaceSchema>>.literal(
                 Record.literal(.init(InterfaceSchema.value, .d1), .init(InterfaceSchema.ready, 0), .init(InterfaceSchema.acknowledgement, 0)),
                 Record.literal(.init(InterfaceSchema.value, .d1), .init(InterfaceSchema.ready, 0), .init(InterfaceSchema.acknowledgement, 1)),
                 Record.literal(.init(InterfaceSchema.value, .d1), .init(InterfaceSchema.ready, 1), .init(InterfaceSchema.acknowledgement, 0)),

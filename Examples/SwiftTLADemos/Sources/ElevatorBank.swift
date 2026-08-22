@@ -14,6 +14,7 @@ public struct ElevatorBank {
         case two = 2
         case three = 3
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.floor")
 
@@ -24,6 +25,7 @@ public struct ElevatorBank {
         case carA
         case carB
 
+        public static var defaultValue: Self { .carA }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.car")
 
@@ -37,6 +39,7 @@ public struct ElevatorBank {
         case alice
         case bob
 
+        public static var defaultValue: Self { .none }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.rider")
 
@@ -47,6 +50,7 @@ public struct ElevatorBank {
         case closed
         case open
 
+        public static var defaultValue: Self { .closed }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.door")
 
@@ -58,13 +62,14 @@ public struct ElevatorBank {
         case onboard
         case arrived
 
+        public static var defaultValue: Self { .waiting }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.rider-phase")
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case operate
     }
 
@@ -128,12 +133,12 @@ public struct ElevatorBank {
 
     public static var spec: TLASpec {
         #spec("ElevatorBank") {
-            Algorithm("ElevatorBank") {
-                let cars = SharedVar(initial: Function<CarID, Record<CarSchema>>.literal(
+            Algorithm("ElevatorBank", scoped: { scope in
+                let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
                     (.carA, Record.literal(.init(CarSchema.floor, .one), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none))),
                     (.carB, Record.literal(.init(CarSchema.floor, .three), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none)))
                 ))
-                let riders = SharedVar(initial: Function<Rider, Record<RiderSchema>>.literal(
+                let riders = scope.sharedVar("riders", initial: Function<Rider, Record<RiderSchema>>.literal(
                     (.none, Record.literal(.init(RiderSchema.phase, .arrived), .init(RiderSchema.floor, .one), .init(RiderSchema.destination, .one))),
                     (.alice, Record.literal(.init(RiderSchema.phase, .waiting), .init(RiderSchema.floor, .one), .init(RiderSchema.destination, .three))),
                     (.bob, Record.literal(.init(RiderSchema.phase, .waiting), .init(RiderSchema.floor, .three), .init(RiderSchema.destination, .one)))
@@ -243,7 +248,7 @@ public struct ElevatorBank {
                         || cars[.carB][CarSchema.floor] == .two
                         || cars[.carB][CarSchema.floor] == .three
                 }
-            }
+            })
         }
     }
 

@@ -13,6 +13,7 @@ public struct ChannelModel: Sendable {
         case d2
         case d3
 
+        public static var defaultValue: Self { .d1 }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.channel.data")
         public var tlaValue: TLAValue { .string(rawValue) }
@@ -46,9 +47,9 @@ public struct ChannelModel: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("Channel") {
-            Extends("Naturals")
-            let channel = SharedVar(in: SetExpr<Record<ChannelSchema>>.literal(
+        #spec("Channel") { scope in
+            Extends(.naturals)
+            let channel = scope.sharedVar("channel", in: SetExpr<Record<ChannelSchema>>.literal(
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),

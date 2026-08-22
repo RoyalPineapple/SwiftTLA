@@ -29,7 +29,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(devices, verificationScope: 0, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .bounded(let scopes, let outcome) = result else {
       Issue.record("Expected bounded result, got \(result)")
       return
@@ -50,7 +50,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(devices, verificationScope: -1, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected negative scope validation error, got \(result)")
       return
@@ -67,7 +67,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(unnamed, verificationScope: 1, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected missing-name validation error, got \(result)")
       return
@@ -88,8 +88,8 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
     }
 
-    let duplicateResult = try ModelChecker(spec: duplicate).check().underlyingOutcome
-    let collisionResult = try ModelChecker(spec: collision).check().underlyingOutcome
+    let duplicateResult = try ModelChecker(compilation: try duplicate.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
+    let collisionResult = try ModelChecker(compilation: try collision.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
     guard case .error(let duplicateMessage) = duplicateResult,
           case .error(let collisionMessage) = collisionResult else {
       Issue.record("Expected declaration validation errors")
@@ -100,16 +100,8 @@ struct SymmetricCollectionValidationTests {
     #expect(collisionMessage.contains("__symmetric_devices_member_1"))
   }
 
-  @Test("Generated symbols are sanitized and reject every export namespace collision")
-  func generatedSymbolsAreReservedForDirectExport() {
-    let sanitized = SymmetricCollectionVar<Device, Int>("device phases-1")
-    let sanitizedSpec = TLASpec("Sanitized") {
-      SymmetricCollection(sanitized, verificationScope: 1, initial: 0)
-    }
-    #expect(sanitizedSpec.symmetricCollections[0].metadata.generatedSymbols == [
-      "Device_phases_1Member0", "Device_phases_1Keys", "SymmDevice_phases_1"
-    ])
-
+  @Test("generated symbols reserve the direct export namespace")
+  func generatedSymbolsReserveDirectExportNamespace() {
     let variable = Var<Int>("DevicePhasesKeys")
     let variableCollision = TLASpec("VariableCollision") {
       Variable(variable, 0)
@@ -120,18 +112,29 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(SymmetricCollectionVar<Device, Int>("devicePhases"), verificationScope: 1, initial: 0)
     }
     let definitionCollision = TLASpec("DefinitionCollision") {
-      Definition("SymmDevicePhases == TRUE")
+      FormalDefinition("SymmDevicePhases", parameters: [], body: .value(.bool(true)))
       SymmetricCollection(SymmetricCollectionVar<Device, Int>("devicePhases"), verificationScope: 1, initial: 0)
     }
-    let generatedCollision = TLASpec("GeneratedCollision") {
-      SymmetricCollection(SymmetricCollectionVar<Device, Int>("device-phases"), verificationScope: 1, initial: 0)
-      SymmetricCollection(SymmetricCollectionVar<Device, Int>("device phases"), verificationScope: 1, initial: 0)
-    }
-
     #expect(symbolCollision(variableCollision) == "DevicePhasesKeys")
     #expect(symbolCollision(constantCollision) == "DevicePhasesMember0")
     #expect(symbolCollision(definitionCollision) == "SymmDevicePhases")
-    #expect(symbolCollision(generatedCollision) == "Device_phasesMember0")
+  }
+
+  @Test("invalid collection names fail compilation before generated symbols are allocated")
+  func invalidCollectionNamesFailCompilation() {
+    let invalidName = TLASpec("InvalidCollectionName") {
+      SymmetricCollection(SymmetricCollectionVar<Device, Int>("device-phases"), verificationScope: 1, initial: 0)
+    }
+
+    do {
+      _ = try invalidName.compile()
+      Issue.record("Expected an invalid symmetric collection diagnostic.")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .invalidSymmetricCollection)
+      #expect(diagnostic.actual.contains("not a formal identifier"))
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error).")
+    }
   }
 
   @Test("Ordinary specifications do not opt into collection symmetry export")
@@ -169,7 +172,7 @@ struct SymmetricCollectionValidationTests {
       symmetricCollections: declared.symmetricCollections
     )
 
-    let result = try ModelChecker(spec: malformed).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try malformed.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected domain validation error, got \(result)")
       return
@@ -192,7 +195,7 @@ struct SymmetricCollectionValidationTests {
       symmetricCollections: declared.symmetricCollections
     )
 
-    let result = try ModelChecker(spec: malformed).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try malformed.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected ownership validation error, got \(result)")
       return
@@ -210,7 +213,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(right, verificationScope: 3, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec, permutationProductBudget: 35).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000), permutationProductBudget: 35).check()
     guard case .bounded(_, let outcome) = result,
           case .error(let message) = outcome else {
       Issue.record("Expected bounded budget error, got \(result)")

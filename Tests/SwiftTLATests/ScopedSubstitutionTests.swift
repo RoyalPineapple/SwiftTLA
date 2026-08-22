@@ -11,7 +11,7 @@ struct ScopedSubstitutionTests {
       .guard_(.equal(.variable("id"), .variable("outer")))
     )
 
-    let result = substituteVar("id", with: .int(99), in: action)
+    let result = action.substitutingVariable("id", with: .value(.int(99)))
 
     #expect(result == action)
   }
@@ -41,7 +41,7 @@ struct ScopedSubstitutionTests {
       .existsAction("id", .setLiteral([.value(.int(1))]), .guard_(.variable("id")))
     )
 
-    #expect(substituteVar("id", with: .int(7), in: action) == expected)
+    #expect(action.substitutingVariable("id", with: .value(.int(7))) == expected)
   }
 
   @Test("Substitution renames a quantifier binder before a free replacement can capture it")

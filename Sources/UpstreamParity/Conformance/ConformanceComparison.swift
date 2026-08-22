@@ -193,7 +193,14 @@ private func normalizedComparisonInputs(
         guard failures.isEmpty else {
             return .init(actual: actual, differences: [.mapping(failures)], mappingIdentity: mapping.canonicalIdentity)
         }
-        return .init(actual: remap(actual, with: mapping), differences: [], mappingIdentity: mapping.canonicalIdentity)
+        guard let remapped = remap(actual, with: mapping) else {
+            return .init(
+                actual: actual,
+                differences: [.mapping(["the declared mapping could not remap the canonical evidence"])],
+                mappingIdentity: mapping.canonicalIdentity
+            )
+        }
+        return .init(actual: remapped, differences: [], mappingIdentity: mapping.canonicalIdentity)
     }
     if expected.graph.variableNames != actual.graph.variableNames || expected.observableActions != actual.observableActions {
         differences.append(.mapping(["observable names differ without a declared total bijection"]))
@@ -246,70 +253,158 @@ private func declaredNameFailures(
     return failures
 }
 
-private func remap(_ run: CanonicalRun, with mapping: ObservableNameMapping) -> CanonicalRun {
+private func remap(_ run: CanonicalRun, with mapping: ObservableNameMapping) -> CanonicalRun? {
     let actualToExpectedVariables = Dictionary(uniqueKeysWithValues: mapping.variables.map { ($0.value, $0.key) })
     let actualToExpectedActions = Dictionary(uniqueKeysWithValues: mapping.actions.map { ($0.value, $0.key) })
-    let remappedStates = run.graph.states.values.map { state in
-        CanonicalState(bindings: Dictionary(uniqueKeysWithValues: state.bindings.map {
-            (actualToExpectedVariables[$0.key]!, $0.value)
-        }))
+    var remappedStates: [CanonicalState] = []
+    var keyMap: [CanonicalStateKey: CanonicalStateKey] = [:]
+    for state in run.graph.states.values {
+        var bindings: [String: CanonicalValue] = [:]
+        for (name, value) in state.bindings {
+            guard let remappedName = actualToExpectedVariables[name] else { return nil }
+            bindings[remappedName] = value
+        }
+        let remapped = CanonicalState(bindings: bindings)
+        remappedStates.append(remapped)
+        keyMap[state.key] = remapped.key
     }
-    let keyMap = Dictionary(uniqueKeysWithValues: run.graph.states.values.map { ($0.key, remapState($0, variables: actualToExpectedVariables).key) })
-    let remappedInitialStates = run.graph.initialStateKeys.map { initialKey in
-        let remappedKey = keyMap[initialKey]!
-        return remappedStates.first { $0.key == remappedKey }!
+
+    let statesByKey = Dictionary(uniqueKeysWithValues: remappedStates.map { ($0.key, $0) })
+    let remappedInitialStates = run.graph.initialStateKeys.compactMap { initialKey -> CanonicalState? in
+        guard let remappedKey = keyMap[initialKey] else { return nil }
+        return statesByKey[remappedKey]
     }
-    let remappedEdges = run.graph.edgeOccurrences.flatMap { edge, count in
-        Array(repeating: CanonicalEdge(
-            source: keyMap[edge.source]!,
-            action: actualToExpectedActions[edge.action]!,
-            target: keyMap[edge.target]!
-        ), count: count)
+    guard remappedInitialStates.count == run.graph.initialStateKeys.count else { return nil }
+
+    var remappedEdges: [CanonicalEdge] = []
+    for (edge, count) in run.graph.edgeOccurrences {
+        guard let source = keyMap[edge.source],
+              let action = actualToExpectedActions[edge.action],
+              let target = keyMap[edge.target]
+        else { return nil }
+        remappedEdges += Array(repeating: .init(source: source, action: action, target: target), count: count)
     }
     let remappedTraces = run.traces.map { trace in
         CanonicalTrace(
             id: trace.id,
-            steps: trace.steps.map { step in
+            steps: trace.steps.compactMap { step -> CanonicalTraceStep? in
+                guard let state = keyMap[step.state] else { return nil }
                 CanonicalTraceStep(
-                    state: keyMap[step.state]!,
+                    state: state,
                     action: actualToExpectedActions[step.action] ?? step.action
                 )
             }
         )
     }
+    guard zip(run.traces, remappedTraces).allSatisfy({ original, remapped in
+        original.steps.count == remapped.steps.count
+    }) else { return nil }
 
-    do {
-        let graph = try CanonicalGraph(
-            initialStates: remappedInitialStates,
-            states: remappedStates,
-            edges: remappedEdges
-        )
-        return try CanonicalRun(
-            schema: run.schema,
-            graph: graph,
-            observableActions: Set(run.observableActions.map { actualToExpectedActions[$0]! }),
-            outcome: remap(run.outcome, states: keyMap),
-            errors: run.errors,
-            traces: remappedTraces
-        )
-    } catch {
-        preconditionFailure("A validated total mapping produced invalid canonical evidence: \(error)")
-    }
-}
-
-private func remapState(
-    _ state: CanonicalState,
-    variables: [String: String]
-) -> CanonicalState {
-    CanonicalState(bindings: Dictionary(uniqueKeysWithValues: state.bindings.map { (variables[$0.key]!, $0.value) }))
+    guard let graph = try? CanonicalGraph(
+        initialStates: remappedInitialStates,
+        states: remappedStates,
+        edges: remappedEdges
+    ) else { return nil }
+    let observableActions = Set(run.observableActions.compactMap { actualToExpectedActions[$0] })
+    guard observableActions.count == run.observableActions.count else { return nil }
+    guard let outcome = remap(run.outcome, states: keyMap) else { return nil }
+    return try? CanonicalRun(
+        schema: run.schema,
+        graph: graph,
+        observableActions: observableActions,
+        outcome: outcome,
+        errors: run.errors,
+        traces: remappedTraces
+    )
 }
 
 private func remap(
     _ outcome: CanonicalOutcome,
     states: [CanonicalStateKey: CanonicalStateKey]
-) -> CanonicalOutcome {
+) -> CanonicalOutcome? {
     switch outcome {
-    case .deadlock(let state): return .deadlock(states[state]!)
+    case .deadlock(let state):
+        guard let remappedState = states[state] else { return nil }
+        return .deadlock(remappedState)
     default: return outcome
     }
+}
+
+func comparisonDifferencesJSON(_ comparison: ExactFiniteTLCComparison) -> [[String: Any]] {
+    comparison.differences.map { difference in
+        switch difference {
+        case .receipt(let expectedDigest, let actualDigest):
+            ["category": difference.category.rawValue, "expected": expectedDigest, "actual": actualDigest]
+        case .mapping(let messages):
+            ["category": difference.category.rawValue, "expected": [], "actual": [], "details": messages]
+        case .initialStates(let expected, let actual), .states(let expected, let actual):
+            [
+                "category": difference.category.rawValue,
+                "expected": expected.subtracting(actual).sorted().prefix(1).map(\.canonicalEncoding),
+                "actual": actual.subtracting(expected).sorted().prefix(1).map(\.canonicalEncoding)
+            ]
+        case .edges(let expected, let actual):
+            [
+                "category": difference.category.rawValue,
+                "expected": firstDifferentEdgeOccurrenceJSON(expected, actual),
+                "actual": firstDifferentEdgeOccurrenceJSON(actual, expected)
+            ]
+        case .observations(let expected, let actual):
+            [
+                "category": difference.category.rawValue,
+                "expected": firstDifferentObservationJSON(expected, actual),
+                "actual": firstDifferentObservationJSON(actual, expected)
+            ]
+        case .outcome(let expected, let actual):
+            ["category": difference.category.rawValue, "expected": outcomeJSON(expected), "actual": outcomeJSON(actual)]
+        case .errors(let expected, let actual):
+            [
+                "category": difference.category.rawValue,
+                "expected": expected.map { ["code": $0.code, "message": $0.message] },
+                "actual": actual.map { ["code": $0.code, "message": $0.message] }
+            ]
+        case .traces(let expected, let actual):
+            [
+                "category": difference.category.rawValue,
+                "expected": expected.map(traceJSON), "actual": actual.map(traceJSON)
+            ]
+        }
+    }
+}
+
+private func outcomeJSON(_ outcome: CanonicalOutcome) -> [String: String] {
+    switch outcome {
+    case .exhaustiveSuccess: ["kind": "exhaustiveSuccess"]
+    case .invariantViolation(let message): ["kind": "invariantViolation", "message": message]
+    case .deadlock(let state): ["kind": "deadlock", "state": state.canonicalEncoding]
+    case .incomplete(let message): ["kind": "incomplete", "message": message]
+    case .executionError(let message): ["kind": "executionError", "message": message]
+    }
+}
+
+private func traceJSON(_ trace: CanonicalTrace) -> [String: Any] {
+    ["id": trace.id, "steps": trace.steps.map { ["state": $0.state.canonicalEncoding, "action": $0.action] }]
+}
+
+private func firstDifferentEdgeOccurrenceJSON(
+    _ expected: [CanonicalEdge: Int], _ actual: [CanonicalEdge: Int]
+) -> [[String: Any]] {
+    guard let edge = Set(expected.keys).union(actual.keys).sorted().first(where: {
+        expected[$0] != actual[$0]
+    }), let count = expected[edge] else { return [] }
+    return [["edge": edge.canonicalEncoding, "count": count]]
+}
+
+private func firstDifferentObservationJSON(
+    _ expected: [CanonicalStateKey: CanonicalStateObservation],
+    _ actual: [CanonicalStateKey: CanonicalStateObservation]
+) -> [[String: Any]] {
+    guard let state = Set(expected.keys).union(actual.keys).sorted().first(where: {
+        expected[$0] != actual[$0]
+    }), let observation = expected[state] else { return [] }
+    return [[
+        "state": state.canonicalEncoding,
+        "enabledActions": observation.enabledActions.sorted(),
+        "isTerminal": observation.isTerminal
+    ]]
 }

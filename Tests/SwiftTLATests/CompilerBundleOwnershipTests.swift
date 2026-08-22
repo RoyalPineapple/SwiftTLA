@@ -35,6 +35,25 @@ struct CompilerBundleOwnershipTests {
     #expect(closure.edges.contains { if case .namedInstance("Library", let arguments) = $0.kind { arguments == [ModuleArgument("Base", value: 1)] } else { false } })
   }
 
+  @Test("an imported module plan uses its linked incoming configuration")
+  func importedModulePlanUsesLinkedIncomingConfiguration() throws {
+    let configuration = ZSequences.boundedNaturalNumbers(0...2)
+    let root = TLASpec("Root") {
+      Import(ZSequences.module, configuring: configuration)
+    }
+
+    let closure = try FormalModuleClosure.resolve(root: root)
+    let imported = try #require(closure.entries.first { $0.module.name == ZSequences.module.name })
+    let context = closure.planContext(for: imported)
+    let bundle = try root.compile().renderedTLAModuleBundle()
+
+    #expect(context.closure.entries.map(\.module.name) == ["ZSequences"])
+    #expect(context.incomingModuleParameters == configuration.replacements)
+    #expect(bundle.imports.first?.tla.contains("Nat") == true)
+    #expect(bundle.root.tla.contains("ZSequencesNat == 0..2"))
+    #expect(try #require(bundle.root.cfg).contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+  }
+
   @Test("same-name modules with different sources block compilation")
   func conflictingModuleSourcesBlockCompilation() throws {
     let first = TLASpec(
@@ -75,7 +94,7 @@ struct CompilerBundleOwnershipTests {
       ]
     )
 
-    let definitions = try root.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    let definitions = try root.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     let value = try compiledValue(
       .operatorApplication(.reference("ConfiguredValue", arity: 0), []),
       formalOperators: definitions
@@ -186,7 +205,7 @@ struct CompilerBundleOwnershipTests {
     )
 
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
-    #expect(throws: CompilationDiagnostic.self) { try ModelChecker(spec: invalid) }
+    #expect(throws: CompilationDiagnostic.self) { _ = ModelChecker(compilation: try invalid.compile(), configuration: try .init(maximumStateLimit: 100_000)) }
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
   }
 

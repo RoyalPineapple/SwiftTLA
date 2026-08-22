@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 
 struct StateProjectionCapabilityTests {
     @Test("State projections require validated tokens and safely enumerate entries")

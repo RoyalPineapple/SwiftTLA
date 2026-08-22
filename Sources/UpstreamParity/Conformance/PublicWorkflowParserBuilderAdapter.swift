@@ -24,7 +24,7 @@ public struct PublicWorkflowParserBuilderManifest: Decodable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     schema = try container.decode(String.self, forKey: .schema)
     declaredCase = try container.decode(PublicWorkflowConformanceCase.self, forKey: .declaredCase)
     source = try container.decode(CoreEvidenceReference.self, forKey: .source)
@@ -46,7 +46,7 @@ public struct PublicWorkflowParserBuilderManifest: Decodable, Sendable {
           declaredCase.category == .parserBuilder,
           declaredCase.sourceInput == source,
           declaredCase.configuration == configuration else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(
+      throw ConformanceGovernanceError.inconsistentReference(
         record: declaredCase.id, field: "parser-builder manifest")
     }
   }
@@ -67,7 +67,7 @@ public struct PublicWorkflowParserBuilderToolchain: Decodable, Sendable {
     public let evidence: CoreEvidenceReference
     private enum CodingKeys: String, CodingKey, CaseIterable { case id, evidence }
     public init(from decoder: Decoder) throws {
-      let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+      let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
       id = try container.decode(String.self, forKey: .id)
       evidence = try container.decode(CoreEvidenceReference.self, forKey: .evidence)
       try evidence.validate()
@@ -79,7 +79,7 @@ public struct PublicWorkflowParserBuilderToolchain: Decodable, Sendable {
     public let reason: CoreEvidenceReference
     private enum CodingKeys: String, CodingKey, CaseIterable { case id, reason }
     public init(from decoder: Decoder) throws {
-      let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+      let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
       id = try container.decode(String.self, forKey: .id)
       reason = try container.decode(CoreEvidenceReference.self, forKey: .reason)
       try reason.validate()
@@ -88,7 +88,7 @@ public struct PublicWorkflowParserBuilderToolchain: Decodable, Sendable {
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, dependencies, notApplicable }
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     schema = try container.decode(String.self, forKey: .schema)
     dependencies = try container.decode([Dependency].self, forKey: .dependencies)
     notApplicable = try container.decode([NotApplicable].self, forKey: .notApplicable)
@@ -97,16 +97,27 @@ public struct PublicWorkflowParserBuilderToolchain: Decodable, Sendable {
 
   public func validate() throws {
     guard schema == Self.schema,
-          Set(dependencies.map(\.id)) == ["swiftSyntaxResolution", "swiftTLAPackage", "adapterSource"],
-          dependencies.count == 3,
+          Set(dependencies.map(\.id)) == ["swiftSyntaxResolution", "swiftTLAPackage", "adapterSource", "evidenceSource"],
+          dependencies.count == 4,
           Set(notApplicable.map(\.id)) == ["tlc", "java", "bridgeBinary"],
           notApplicable.count == 3 else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "parser-builder toolchain", field: "identity coverage")
+      throw ConformanceGovernanceError.invalidField(record: "parser-builder toolchain", field: "identity coverage")
     }
   }
 
-  func dependency(_ id: String) -> CoreEvidenceReference { dependencies.first(where: { $0.id == id })!.evidence }
-  func nonApplicable(_ id: String) -> CoreEvidenceReference { notApplicable.first(where: { $0.id == id })!.reason }
+  func dependency(_ id: String) throws -> CoreEvidenceReference {
+    guard let reference = dependencies.first(where: { $0.id == id })?.evidence else {
+      throw ConformanceGovernanceError.invalidField(record: "parser-builder toolchain", field: id)
+    }
+    return reference
+  }
+
+  func nonApplicable(_ id: String) throws -> CoreEvidenceReference {
+    guard let reference = notApplicable.first(where: { $0.id == id })?.reason else {
+      throw ConformanceGovernanceError.invalidField(record: "parser-builder toolchain", field: id)
+    }
+    return reference
+  }
 }
 
 /// A deliberately narrow builder description. It prevents a caller from
@@ -122,13 +133,14 @@ public struct PublicWorkflowBoundedCounterConfiguration: Decodable, Sendable {
   public let initialValue: Int
   public let nextValue: Int
   public let upperBound: Int
+  public let maximumStateLimit: Int
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case schema, model, specificationName, variable, initialValue, nextValue, upperBound
+    case schema, model, specificationName, variable, initialValue, nextValue, upperBound, maximumStateLimit
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     schema = try container.decode(String.self, forKey: .schema)
     model = try container.decode(String.self, forKey: .model)
     specificationName = try container.decode(String.self, forKey: .specificationName)
@@ -136,13 +148,15 @@ public struct PublicWorkflowBoundedCounterConfiguration: Decodable, Sendable {
     initialValue = try container.decode(Int.self, forKey: .initialValue)
     nextValue = try container.decode(Int.self, forKey: .nextValue)
     upperBound = try container.decode(Int.self, forKey: .upperBound)
+    maximumStateLimit = try container.decode(Int.self, forKey: .maximumStateLimit)
     try validate()
   }
 
   public func validate() throws {
     guard schema == Self.schema, model == "boundedCounter", !specificationName.isEmpty,
-          variable == "x", initialValue == 0, nextValue > 0, upperBound >= nextValue else {
-      throw PublicWorkflowGovernanceError.invalidField(
+          variable == "x", initialValue == 0, nextValue > 0, upperBound >= nextValue,
+          maximumStateLimit > 0 else {
+      throw ConformanceGovernanceError.invalidField(
         record: "parser-builder configuration", field: "bounded counter")
     }
   }
@@ -189,25 +203,27 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
     outputDirectory: URL,
     correlation: PublicWorkflowCaseRunCorrelation
   ) throws -> PublicWorkflowParserBuilderRun {
-    let root = try validatedDirectory(projectRoot)
-    let manifestURL = try resolved(manifestURL, beneath: root)
+    let root = try ConformanceEvidence.projectRoot(projectRoot)
+    let manifestURL = try ConformanceEvidence.resolve(manifestURL, beneath: root)
     let manifestData = try Data(contentsOf: manifestURL)
     let manifest = try JSONDecoder().decode(PublicWorkflowParserBuilderManifest.self, from: manifestData)
     guard correlation.caseID == manifest.declaredCase.id else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: manifest.declaredCase.id, field: "run correlation")
+      throw ConformanceGovernanceError.inconsistentReference(record: manifest.declaredCase.id, field: "run correlation")
     }
 
-    let sourceData = try verifiedData(for: manifest.source, beneath: root)
-    let configurationData = try verifiedData(for: manifest.configuration, beneath: root)
-    let expectedParserData = try verifiedData(for: manifest.parserObservation, beneath: root)
-    let expectedBuilderData = try verifiedData(for: manifest.builderObservation, beneath: root)
+    let sourceData = try ConformanceEvidence.data(for: manifest.source, beneath: root)
+    let configurationData = try ConformanceEvidence.data(for: manifest.configuration, beneath: root)
+    let expectedParserData = try ConformanceEvidence.data(for: manifest.parserObservation, beneath: root)
+    let expectedBuilderData = try ConformanceEvidence.data(for: manifest.builderObservation, beneath: root)
     try validateToolchain(manifest.toolchain, provenance: manifest.declaredCase.provenance, beneath: root)
     let configuration = try JSONDecoder().decode(PublicWorkflowBoundedCounterConfiguration.self, from: configurationData)
     try validateProvenance(manifest.declaredCase.provenance, source: sourceData, configuration: configurationData,
                            toolchain: manifest.toolchain)
 
-    let parserObservation = try observeParser(source: String(decoding: sourceData, as: UTF8.self), name: configuration.specificationName)
-    let builderObservation = try observe(spec: configuration.makeSpec(), diagnostics: [])
+    let parserObservation = try observeParser(
+      source: String(decoding: sourceData, as: UTF8.self), configuration: configuration
+    )
+    let builderObservation = try observe(spec: configuration.makeSpec(), maximumStateLimit: configuration.maximumStateLimit, diagnostics: [])
     try verifyObservation(parserObservation, equals: expectedParserData, reference: manifest.parserObservation)
     try verifyObservation(builderObservation, equals: expectedBuilderData, reference: manifest.builderObservation)
 
@@ -219,48 +235,52 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
       caseID: manifest.declaredCase.id, correlation: correlation, left: parserObservation, right: builderObservation,
       outcome: outcome, diagnosticCode: diagnosticCode, leftBinding: bindings.parser, rightBinding: bindings.builder)
 
-    let output = try writableOutputDirectory(outputDirectory, beneath: root)
-    try writeCanonical(parserObservation, to: output.appendingPathComponent("parser-observation.json"))
-    try writeCanonical(builderObservation, to: output.appendingPathComponent("builder-observation.json"))
-    try writeCanonical(comparison, to: output.appendingPathComponent("comparison.json"))
+    let output = try ConformanceEvidence.outputDirectory(outputDirectory, beneath: root)
+    try ConformanceEvidence.writeCanonical(parserObservation, to: output.appendingPathComponent("parser-observation.json"), trailingNewline: true)
+    try ConformanceEvidence.writeCanonical(builderObservation, to: output.appendingPathComponent("builder-observation.json"), trailingNewline: true)
+    try ConformanceEvidence.writeCanonical(comparison, to: output.appendingPathComponent("comparison.json"), trailingNewline: true)
     let run = PublicWorkflowParserBuilderRun(
-      manifest: try reference(for: manifestURL, beneath: root, data: manifestData), comparison: comparison,
-      parserObservation: try reference(for: output.appendingPathComponent("parser-observation.json"), beneath: root),
-      builderObservation: try reference(for: output.appendingPathComponent("builder-observation.json"), beneath: root))
-    try writeCanonical(run, to: output.appendingPathComponent("run.json"))
+      manifest: try ConformanceEvidence.reference(for: manifestURL, beneath: root, data: manifestData), comparison: comparison,
+      parserObservation: try ConformanceEvidence.reference(for: output.appendingPathComponent("parser-observation.json"), beneath: root),
+      builderObservation: try ConformanceEvidence.reference(for: output.appendingPathComponent("builder-observation.json"), beneath: root))
+    try ConformanceEvidence.writeCanonical(run, to: output.appendingPathComponent("run.json"), trailingNewline: true)
     return run
   }
 
-  private func validateProvenance(_ provenance: CoreDivergenceProvenance, source: Data, configuration: Data,
+  private func validateProvenance(_ provenance: CoreEvidenceProvenance, source: Data, configuration: Data,
                                   toolchain: PublicWorkflowParserBuilderToolchain) throws {
+    let tlc = try toolchain.nonApplicable("tlc")
+    let java = try toolchain.nonApplicable("java")
+    let adapterSource = try toolchain.dependency("adapterSource")
+    let bridgeBinary = try toolchain.nonApplicable("bridgeBinary")
     guard provenance.moduleSHA256 == SHA256.hex(source), provenance.cfgSHA256 == SHA256.hex(configuration),
           provenance.argumentsSHA256 == SHA256.hex(configuration),
           provenance.tlcTag == "not-applicable-parser-builder",
           provenance.tlcCommit == "not-applicable-parser-builder",
-          provenance.tlcJarSHA256 == toolchain.nonApplicable("tlc").sha256,
+          provenance.tlcJarSHA256 == tlc.sha256,
           provenance.javaDistribution == "not-applicable-parser-builder",
           provenance.javaVersion == "not-applicable-parser-builder",
-          provenance.javaArchiveSHA256 == toolchain.nonApplicable("java").sha256,
-          provenance.bridgeSourceSHA256 == toolchain.dependency("adapterSource").sha256,
-          provenance.bridgeBinarySHA256 == toolchain.nonApplicable("bridgeBinary").sha256 else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: provenance.caseID, field: "source/configuration provenance")
+          provenance.javaArchiveSHA256 == java.sha256,
+          provenance.bridgeSourceSHA256 == adapterSource.sha256,
+          provenance.bridgeBinarySHA256 == bridgeBinary.sha256 else {
+      throw ConformanceGovernanceError.inconsistentReference(record: provenance.caseID, field: "source/configuration provenance")
     }
   }
 
   private func validateToolchain(_ toolchain: PublicWorkflowParserBuilderToolchain,
-                                 provenance: CoreDivergenceProvenance, beneath root: URL) throws {
-    for dependency in toolchain.dependencies { _ = try verifiedData(for: dependency.evidence, beneath: root) }
-    for nonApplicable in toolchain.notApplicable { _ = try verifiedData(for: nonApplicable.reason, beneath: root) }
+                                 provenance: CoreEvidenceProvenance, beneath root: URL) throws {
+    for dependency in toolchain.dependencies { _ = try ConformanceEvidence.data(for: dependency.evidence, beneath: root) }
+    for nonApplicable in toolchain.notApplicable { _ = try ConformanceEvidence.data(for: nonApplicable.reason, beneath: root) }
     guard provenance.bridgeClass == "SwiftTLA.PublicWorkflowParserBuilderAdapter" else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: provenance.caseID, field: "bridge identity")
+      throw ConformanceGovernanceError.inconsistentReference(record: provenance.caseID, field: "bridge identity")
     }
   }
 
   private func verifyObservation(_ observation: PublicWorkflowCanonicalObservation, equals expected: Data,
                                  reference: CoreEvidenceReference) throws {
-    let actual = try canonicalData(observation)
+    let actual = try ConformanceEvidence.canonicalData(observation, trailingNewline: true)
     guard actual == expected, SHA256.hex(actual) == reference.sha256 else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: reference.path, field: "generated observation")
+      throw ConformanceGovernanceError.inconsistentReference(record: reference.path, field: "generated observation")
     }
   }
 
@@ -276,25 +296,32 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
     return (try makeBinding(parserEvidence), try makeBinding(builderEvidence))
   }
 
-  private func observeParser(source: String, name: String) throws -> PublicWorkflowCanonicalObservation {
+  private func observeParser(
+    source: String,
+    configuration: PublicWorkflowBoundedCounterConfiguration
+  ) throws -> PublicWorkflowCanonicalObservation {
     let syntax = Parser.parse(source: source)
     guard let closure = syntax.statements.first?.item.as(ClosureExprSyntax.self) else {
       return try unavailableObservation("parser:no top-level specification closure")
     }
     let parsed = SpecParser.parseSpecClosure(closure)
     let diagnostics = parsed.diagnostics.map { "parser:\($0.message)" }
-    let parsedSpec = TLASpec(name: name,
+    let parsedSpec = TLASpec(configuration.specificationName,
       variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
       constants: parsed.constants,
       actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings) },
       invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
       temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) }, fairness: parsed.fairness)
-    return try observe(spec: parsedSpec, diagnostics: diagnostics)
+    return try observe(spec: parsedSpec, maximumStateLimit: configuration.maximumStateLimit, diagnostics: diagnostics)
   }
 
-  private func observe(spec: TLASpec, diagnostics: [String]) throws -> PublicWorkflowCanonicalObservation {
+  private func observe(
+    spec: TLASpec,
+    maximumStateLimit: Int,
+    diagnostics: [String]
+  ) throws -> PublicWorkflowCanonicalObservation {
     do {
-      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile()).explore()), diagnostics: diagnostics)
+      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: maximumStateLimit)).explore()), diagnostics: diagnostics)
     } catch {
       return try unavailableObservation("evaluation:\(String(describing: error))", diagnostics: diagnostics)
     }
@@ -308,14 +335,14 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
       reachableStates: graph.states.keys.sorted().map(\.canonicalEncoding),
       labeledTransitions: graph.edgeOccurrences.flatMap { edge, occurrences in Array(repeating: edge.canonicalEncoding, count: occurrences) }.sorted(),
       enabledTransitions: graph.observations.flatMap { state, observation in observation.enabledActions.map { "enabled:\(state.canonicalEncoding):\($0)" } }.sorted(),
-      properties: structuralProperties(spec: spec) + ["outcome:\(result.outcome)"],
+      properties: try structuralProperties(spec: spec) + ["outcome:\(result.outcome)"],
       deadlocks: graph.observations.compactMap { state, observation in observation.isTerminal ? state.canonicalEncoding : nil }.sorted(),
       failures: result.failure.map { [$0] } ?? [], diagnostics: (diagnostics + result.diagnostic).sorted(),
       trace: run.traces.flatMap { trace in trace.steps.map { "\(trace.id):\($0.state.canonicalEncoding):\($0.action)" } }.sorted().nilIfEmpty)
   }
 
-  private func structuralProperties(spec: TLASpec) -> [String] {
-    let variables = spec.variables.map { "\($0.name)=\(CanonicalValue($0.initial).canonicalEncoding)" }.sorted()
+  private func structuralProperties(spec: TLASpec) throws -> [String] {
+    let variables = try spec.variables.map { "\($0.name)=\(try CanonicalValue($0.initial).canonicalEncoding)" }.sorted()
     return [
       "variables:\(variables.joined(separator: ","))",
       "actions:\(spec.actions.map { "\($0.name):\($0.body)" }.sorted().joined(separator: ","))",
@@ -341,66 +368,6 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
       enabledTransitions: [], properties: ["outcome:unavailable"], deadlocks: [], failures: [failure], diagnostics: (diagnostics + [failure]).sorted())
   }
 
-  private func verifiedData(for reference: CoreEvidenceReference, beneath root: URL) throws -> Data {
-    let url = try resolved(root.appendingPathComponent(reference.path), beneath: root)
-    let data = try Data(contentsOf: url)
-    guard SHA256.hex(data) == reference.sha256 else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: reference.path, field: "SHA-256")
-    }
-    return data
-  }
-
-  private func validatedDirectory(_ url: URL) throws -> URL {
-    let resolved = url.resolvingSymlinksInPath().standardizedFileURL
-    var isDirectory: ObjCBool = false
-    guard FileManager.default.fileExists(atPath: resolved.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-      throw PublicWorkflowGovernanceError.invalidField(record: url.path, field: "project root")
-    }
-    return resolved
-  }
-
-  private func resolved(_ url: URL, beneath root: URL) throws -> URL {
-    let candidate = url.path.hasPrefix("/") ? url : root.appendingPathComponent(url.path)
-    var existing = candidate
-    var suffix = [String]()
-    while !FileManager.default.fileExists(atPath: existing.path) {
-      let parent = existing.deletingLastPathComponent()
-      guard parent != existing else { break }
-      suffix.append(existing.lastPathComponent)
-      existing = parent
-    }
-    let resolved = suffix.reversed().reduce(existing.resolvingSymlinksInPath().standardizedFileURL) {
-      $0.appendingPathComponent($1)
-    }.standardizedFileURL
-    guard resolved.path == root.path || resolved.path.hasPrefix(root.path + "/") else {
-      let field = url.path.hasPrefix("/") ? "path outside project root" : "path escape"
-      throw PublicWorkflowGovernanceError.invalidField(record: url.path, field: field)
-    }
-    return resolved
-  }
-
-  private func writableOutputDirectory(_ output: URL, beneath root: URL) throws -> URL {
-    let path = try resolved(output, beneath: root)
-    guard !FileManager.default.fileExists(atPath: path.path) else {
-      throw PublicWorkflowGovernanceError.invalidField(record: path.path, field: "output already exists")
-    }
-    try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-    return path
-  }
-
-  private func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> CoreEvidenceReference {
-    let url = try resolved(url, beneath: root)
-    let relative = String(url.path.dropFirst(root.path.count + (url.path == root.path ? 0 : 1)))
-    return try CoreEvidenceReference(path: relative, sha256: SHA256.hex(try data ?? Data(contentsOf: url)))
-  }
-
-  private func canonicalData<T: Encodable>(_ value: T) throws -> Data {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
-    return try encoder.encode(value) + Data([0x0A])
-  }
-
-  private func writeCanonical<T: Encodable>(_ value: T, to url: URL) throws { try canonicalData(value).write(to: url, options: .atomic) }
 }
 
 private extension Array where Element == String { var nilIfEmpty: [String]? { isEmpty ? nil : self } }

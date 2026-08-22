@@ -33,16 +33,16 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct ClockModel: Sendable {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case tick
     }
 
     public static var spec: TLASpec {
         #spec("Clock") {
             Algorithm("Clock") {
-                let hour = SharedVar(in: 0...23)
-                let minute = SharedVar(in: 0...59)
-                let second = SharedVar(in: 0...59)
+                let hour = SharedVar("hour", in: 0...23)
+                let minute = SharedVar("minute", in: 0...59)
+                let second = SharedVar("second", in: 0...59)
 
                 While(Step.tick, true) {
                     Either {
@@ -96,20 +96,11 @@ print(result.after)
 
 ## Validate the same specification
 
-The model checker explores the complete reachable graph from the model's
-initial state. It validates the invariants and properties that you define.
-
-```swift
-let compilation = try ClockModel.spec.compile()
-let result = try ModelChecker(compilation: compilation).check()
-print(result)
-// OK — explored 86,400 state(s)
-```
-
 The same compilation renders the TLA+ and PlusCal bundle. Core Conformance
-compares SwiftTLA's canonical graph with TLC's graph exactly. The separate
-ValidationEvidence workflow translates the canonical PlusCal corpus with the
-official translator and retains the independent TLC evidence.
+explores the compiled machine and compares its canonical graph with TLC's
+graph exactly. The separate ValidationEvidence workflow translates the
+canonical PlusCal corpus with the official translator and retains the
+independent TLC evidence.
 
 ## Use it where state order matters
 

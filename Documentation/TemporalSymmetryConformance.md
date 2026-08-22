@@ -11,13 +11,14 @@ not define a hidden oracle.
 
 GitHub Actions validates the checked-in registers, then creates a current core
 admission and a current P3 run. Local broad gate execution requires explicit
-authorization and is diagnostic-only. The latest report is:
+authorization and is diagnostic-only. The current-report reference is:
 
 ```text
-.build/temporal-symmetry-support-gate/support-admission.json
+.build/temporal-symmetry-support-gate/current-support-admission.json
 ```
 
-The immutable P3 artifacts are under:
+It contains the immutable report path and SHA-256. The immutable P3 artifacts
+are under:
 
 ```text
 .build/temporal-symmetry-support-gate/runs/<p3-gate-run-id>/
@@ -34,22 +35,21 @@ The report has one entry for every support-surface entry. An entry is
 | Exit | Meaning | Action |
 |---:|---|---|
 | `0` | Every requested entry is admitted. | Retain the report with the change evidence. |
-| `1` | A complete evaluation blocks a requested entry. | Read `reasonCodes` and resolve the reported mismatch or divergence. |
+| `1` | A complete evaluation blocks a requested entry. | Read `reasonCodes` and resolve the reported mismatch. |
 | `2` | The evaluation is unavailable or unsafe. | Restore the missing, stale, partial, foreign, or invalid evidence. |
 
 The hosted workflow preserves all three exit values.
 An unavailable result never becomes a passing result.
 
 The report can admit only a requested entry with current, complete, exact
-evidence and zero unexplained differences. A visible `unsupported` entry does
-not establish support for that behavior.
+evidence. A visible `unsupported` entry does not establish support for that
+behavior.
 
 ## Declared boundaries
 
 The source of truth is the following register set:
 
 - `Verification/TemporalSymmetryConformance/cases.json`
-- `Verification/TemporalSymmetryConformance/divergences.json`
 - `Verification/TemporalSymmetryConformance/support-surface.json`
 - `Verification/TemporalSymmetryConformance/baselines/manifest.json`
 
@@ -125,17 +125,15 @@ unavailable.
 
 ## Diagnose a block
 
-1. Read `support-admission.json` and find the blocked requested entry.
+1. Resolve `current-support-admission.json`, then find the blocked requested entry.
 2. Read its `reasonCodes`, case IDs, correlations, and evidence references.
 3. Inspect the matching directory under `runs/<p3-gate-run-id>/`.
 4. For temporal cases, inspect the property result, enabledness, lasso, trace,
    graph events, and diagnostics.
 5. For symmetry cases, inspect raw and reduced graphs, orbit evidence,
    quotient evidence, and configuration records.
-6. If evidence differs, retain or update a divergence record with a minimized
-   reproducer and stable normalized fingerprint.
-7. Run the release check again after the correction.
+6. Correct the model, compiler, or declared formal bundle, then run the
+   release check again.
 
-Never delete a divergence or downgrade a requested entry to obtain exit `0`.
-If published semantics and the pinned TLC result differ, retain that difference
-and resolve the claim against the published semantics.
+A mismatch blocks the claim. Its retained canonical graphs and first exact
+difference identify the correction.

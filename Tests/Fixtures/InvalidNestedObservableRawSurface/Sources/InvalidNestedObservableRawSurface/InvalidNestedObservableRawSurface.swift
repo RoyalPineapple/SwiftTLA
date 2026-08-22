@@ -16,6 +16,6 @@ struct NestedObservableSurface {
 
 @MainActor
 func rejectRawState(_ machine: NestedObservableSurface.Observable) {
-  let _: [String: TLAValue] = machine.tlaSnapshot()
+  _ = machine.tlaSnapshot()
   _ = NestedObservableSurface.Observable.TransitionEvidence.self
 }

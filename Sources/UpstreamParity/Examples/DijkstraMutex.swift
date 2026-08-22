@@ -15,13 +15,14 @@ public struct DijkstraMutexModel: Sendable {
         case two = "p2"
         case three = "p3"
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.dijkstra-mutex.process")
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Label: String, PlusCalLabel {
+    private enum Label: String, PlusCalLabel, CaseIterable {
         case li0 = "Li0"
         case li1 = "Li1"
         case li2 = "Li2"
@@ -41,6 +42,8 @@ public struct DijkstraMutexModel: Sendable {
     /// It is distinct from every process and set value.
     private enum TemporaryInitial: String, TLAValueType {
         case notAssigned = "defaultInitValue"
+
+        static var defaultValue: Self { .notAssigned }
     }
 
     private typealias ActiveTemporary = OneOf<Process, SetExpr<Process>>
@@ -48,19 +51,18 @@ public struct DijkstraMutexModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("DijkstraMutex") {
-            Extends("Integers")
-            Algorithm("Mutex") {
-                let b = SharedVar(initial: Function<Process, Bool>.literal(
+            Extends(.integers)
+            Algorithm("Mutex", scoped: { scope in
+                let b = scope.sharedVar("b", initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let c = SharedVar(initial: Function<Process, Bool>.literal(
+                let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let k = SharedVar(in: SetExpr<Process>.literal(.one, .two, .three))
+                let k = scope.sharedVar("k", in: SetExpr<Process>.literal(.one, .two, .three))
 
-                Each(Process.all, fairness: .weak) { selfID in
-                    let temporary = LocalVar(
-                        initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
+                Each(Process.all, fairness: .weak, scoped: { selfID, scope in
+                    let temporary = scope.localVar("temporary", initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {
@@ -144,7 +146,7 @@ public struct DijkstraMutexModel: Sendable {
                     Do(Label.li5) { Assign(c, to: c.updating(selfID, to: true)) }
                     Do(Label.li6) { Assign(b, to: b.updating(selfID, to: true)) }
                     Do(Label.nonCritical) { Goto(Label.li0) }
-                }
+                })
 
                 Invariant("MutualExclusion") {
                     All(Process.all) { first in
@@ -153,7 +155,7 @@ public struct DijkstraMutexModel: Sendable {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -165,7 +167,7 @@ extension Example {
         upstreamModule: "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.tla",
         upstreamCfg: "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.cfg",
         expectedDistinct: 90_882,
-        verificationStateLimit: 100_000,
+        maximumStateLimit: 100_000,
         spec: DijkstraMutexModel.spec,
         notes: "Published three-process Dijkstra mutex. TLC = 90,882."
     )

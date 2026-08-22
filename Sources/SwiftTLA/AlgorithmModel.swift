@@ -1,10 +1,5 @@
 import Foundation
 
-/// Internal marker for a process-local variable viewed as its lowered
-/// per-process function.  It is introduced only by `LocalVariable.family` and
-/// removed by the algorithm lowerer before the formal specification escapes.
-let algorithmLocalFamilyPrefix = "__pcal_local_family:"
-
 internal struct AlgorithmModel: Sendable {
     let name: String
     let components: [AlgorithmComponentModel]
@@ -104,6 +99,108 @@ internal struct AlgorithmModel: Sendable {
         collect(components, into: &result)
         return result
     }
+
+    func plusCalProjection() -> AlgorithmModel {
+        let localRoots: Set<String> = Set(processes.flatMap { process in
+            process.components.compactMap { component in
+                guard case .local(let declaration) = component else { return nil }
+                return declaration.root
+            }
+        })
+
+        func expression(_ value: StateExpr) -> StateExpr {
+            let family = localRoots.reduce(value) { result, root in
+                result.replacingProcessLocalFamily(named: root, with: .variable(root))
+            }
+            return family.replacingCurrentProcess(with: .variable("self"))
+        }
+
+        func temporal(_ value: TemporalExpr) -> TemporalExpr {
+            switch value {
+            case .always(let predicate): return .always(expression(predicate))
+            case .eventually(let predicate): return .eventually(expression(predicate))
+            case .alwaysEventually(let predicate): return .alwaysEventually(expression(predicate))
+            case .eventuallyAlways(let predicate): return .eventuallyAlways(expression(predicate))
+            case .leadsTo(let source, let destination): return .leadsTo(expression(source), expression(destination))
+            }
+        }
+
+        func state(_ value: AlgorithmStateModel) -> AlgorithmStateModel {
+            .init(
+                root: value.root,
+                initial: expression(value.initial),
+                initialSet: value.initialSet.map(expression),
+                swiftTypeName: value.swiftTypeName,
+                isTuple: value.isTuple
+            )
+        }
+
+        func statements(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
+            values.map { statement in
+                statement.replacingCurrentProcess(with: .variable("self"))
+            }.map { statement in
+                localRoots.reduce(statement) { result, root in
+                    result.replacingProcessLocalFamily(named: root, with: .variable(root))
+                }
+            }
+        }
+
+        func step(_ value: AlgorithmStepModel) -> AlgorithmStepModel {
+            .init(
+                label: value.label,
+                statements: statements(value.statements),
+                loopCondition: value.loopCondition.map(expression)
+            )
+        }
+
+        func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
+            switch value {
+            case .shared(let declaration): return .shared(state(declaration))
+            case .process(let process):
+                return .process(
+                    .init(
+                        typeName: process.typeName,
+                        domain: process.domain,
+                        fairness: process.fairness,
+                        components: process.components.map(component)
+                    )
+                )
+            case .procedure(let procedure):
+                return .procedure(
+                    .init(
+                        name: procedure.name,
+                        parameters: procedure.parameters.map {
+                            .init(root: $0.root, initial: expression($0.initial), swiftTypeName: $0.swiftTypeName)
+                        },
+                        locals: procedure.locals.map(state),
+                        steps: procedure.steps.map(step)
+                    )
+                )
+            case .invariant(let invariant):
+                return .invariant(.init(name: invariant.name, body: expression(invariant.body)))
+            case .temporal(let declaration):
+                return .temporal(.init(name: declaration.name, expr: temporal(declaration.expr)))
+            case .fairness:
+                return value
+            case .formalOperator(let definition):
+                return .formalOperator(
+                    .init(
+                        name: definition.name,
+                        parameters: definition.parameters,
+                        body: expression(definition.body),
+                        plusCalPhase: definition.plusCalPhase,
+                        plusCalDependencies: definition.plusCalDependencies
+                    )
+                )
+            case .stateConstraint(let constraint): return .stateConstraint(expression(constraint))
+            case .local(let declaration): return .local(state(declaration))
+            case .step(let declaration): return .step(step(declaration))
+            case .propertyBoundary: return .propertyBoundary
+            }
+        }
+
+        return .init(name: name, components: components.map(component))
+    }
 }
 
 /// Opaque pre-lowering evidence for an authored `Algorithm`.
@@ -120,51 +217,6 @@ public struct AlgorithmFidelityToken: Sendable, Hashable {
 
     var encodedCanonicalForm: String {
         Data(canonicalForm.utf8).base64EncodedString()
-    }
-}
-
-/// Returns semantic-path evidence for the first pre-lowering Algorithm
-/// difference. The token is intentionally opaque; callers cannot inspect or
-/// reconstruct the Algorithm IR from it.
-public func _tlaAlgorithmFidelityEvidence(
-    _ expected: [AlgorithmFidelityToken],
-    _ actual: [AlgorithmFidelityToken]
-) -> TLAParserFidelityDiagnostic? {
-    guard expected.count == actual.count else {
-        return TLAParserFidelityDiagnostic(
-            whatFailed: "algorithm count differs",
-            location: .semanticPath("algorithms"),
-            expected: "\(expected.count) algorithm(s)",
-            actual: "\(actual.count) algorithm(s)",
-            nextSafeAction: "Retain every Algorithm declaration in the #spec builder."
-        )
-    }
-    for index in expected.indices where expected[index] != actual[index] {
-        let expectedNodes = algorithmCanonicalNodes(expected[index].canonicalForm)
-        let actualNodes = algorithmCanonicalNodes(actual[index].canonicalForm)
-        let actualValues = Dictionary(uniqueKeysWithValues: actualNodes.map { ($0.path, $0.value) })
-        let firstDifference = expectedNodes.first { node in
-            actualValues[node.path] != node.value
-        } ?? actualNodes.first.map { (path: $0.path, value: "<missing>") }
-        let path = firstDifference.map { "algorithms[\(index)].\($0.path)" } ?? "algorithms[\(index)]"
-        let expectedValue = firstDifference.map(\.value) ?? "<missing canonical node>"
-        let actualValue = firstDifference.flatMap { actualValues[$0.path] } ?? "<missing canonical node>"
-        return TLAParserFidelityDiagnostic(
-            whatFailed: "Algorithm IR differs before lowering",
-            location: .semanticPath(path),
-            expected: expectedValue,
-            actual: actualValue,
-            nextSafeAction: "Inspect this Algorithm's declarations, labels, and scoped statements so parser and builder retain the same formal program."
-        )
-    }
-    return nil
-}
-
-private func algorithmCanonicalNodes(_ encoding: String) -> [(path: String, value: String)] {
-    encoding.split(separator: "\u{1E}", omittingEmptySubsequences: true).compactMap { record in
-        let fields = record.split(separator: "\u{1F}", maxSplits: 1, omittingEmptySubsequences: false)
-        guard fields.count == 2 else { return nil }
-        return (path: String(fields[0]), value: String(fields[1]))
     }
 }
 
@@ -230,10 +282,8 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
         case .step(let step):
             result = "step(\(step.label.name),\(step.loopCondition.map { state($0, environment) } ?? "nil"),[\(statements(step.statements, environment, path: "\(path).statements"))])"
         case .process(let process):
-            var processEnvironment = environment
-            processEnvironment["__pcal_self"] = "@process"
             let components = process.components.enumerated().map { index, child in
-                component(child, processEnvironment, path: "\(path).components[\(index)]")
+                component(child, environment, path: "\(path).components[\(index)]")
             }.joined(separator: ",")
             result = "process(\(process.typeName),[\(process.domain.map(\.description).joined(separator: ","))],\(process.fairness),[\(components)])"
         case .procedure(let procedure):
@@ -333,17 +383,20 @@ internal struct AlgorithmStateModel: Sendable {
     let initial: StateExpr
     let initialSet: StateExpr?
     let swiftTypeName: String?
+    let isTuple: Bool
 
     init(
         root: String,
         initial: StateExpr,
         initialSet: StateExpr? = nil,
-        swiftTypeName: String? = nil
+        swiftTypeName: String? = nil,
+        isTuple: Bool = false
     ) {
         self.root = root
         self.initial = initial
         self.initialSet = initialSet
         self.swiftTypeName = swiftTypeName
+        self.isTuple = isTuple
     }
 }
 
@@ -365,7 +418,7 @@ internal struct AlgorithmLabelModel: Sendable, Hashable {
     let name: String
 }
 
-internal enum AlgorithmLValueModel: Sendable {
+internal enum AlgorithmLValueModel: Sendable, Equatable {
     case root(String)
     case function(root: String, key: StateExpr)
 
@@ -377,7 +430,7 @@ internal enum AlgorithmLValueModel: Sendable {
     }
 }
 
-internal indirect enum AlgorithmStatementModel: Sendable {
+internal indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case rejected(AlgorithmDiagnosticCode)
     case await(StateExpr)
     case assert(StateExpr)

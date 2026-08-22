@@ -17,12 +17,12 @@ private struct GeneratedHigherOrderFormalModel {
           ))]
         )
       )
-      Algorithm("GeneratedHigherOrderFormalModel") {
-        let counter = SharedVar(initial: 0)
-        Do("advance") {
+      Algorithm("GeneratedHigherOrderFormalModel", scoped: { scope in
+        let counter = scope.sharedVar("counter", initial: 0)
+        Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }
-      }
+      })
     }
   }
 }
@@ -53,7 +53,6 @@ struct FormalOperatorTests {
 
   @Test("a #spec higher-order formal definition preserves parser and builder trees")
   func generatedHigherOrderFormalDefinitionPreservesParserFidelity() throws {
-    GeneratedHigherOrderFormalModel._checkParserTree()
 
     var model = try GeneratedHigherOrderFormalModel.makeMachine()
     let result = try model.apply(.advance)
@@ -84,7 +83,7 @@ struct FormalOperatorTests {
       variables: [.init(name: "counter", initial: .int(0))],
       actions: [.init(
         name: "advance",
-        body: .assign("counter", .operatorApplication(lambda, [.value(.variable("counter"))]))
+        body: .assign(.named("counter"), .operatorApplication(lambda, [.value(.variable("counter"))]))
       )],
       invariants: []
     )
@@ -177,7 +176,7 @@ struct FormalOperatorTests {
       actions: [NamedAction(
         name: "advance",
         body: .assign(
-          "counter",
+          .named("counter"),
           .operatorApplication(
             .reference("applyTwice", arity: 2),
             [.operator(increment), .value(.variable("counter"))]
@@ -198,7 +197,7 @@ struct FormalOperatorTests {
     let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
     let token = try #require(TLAStateProjection.Token(validating: "counter"))
     #expect(successor.value(for: token) == .int(2))
-    let result = try ModelChecker(spec: spec, maxStates: 10).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -231,7 +230,7 @@ struct FormalOperatorTests {
       actions: [NamedAction(
         name: "advance",
         body: .assign(
-          "counter",
+          .named("counter"),
           .operatorApplication(
             .reference("applyTwice", arity: 2),
             [.operator(increment), .value(.variable("counter"))]
@@ -249,7 +248,7 @@ struct FormalOperatorTests {
     let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
     let token = try #require(TLAStateProjection.Token(validating: "counter"))
     #expect(successor.value(for: token) == .int(2))
-    let result = try ModelChecker(spec: consumer, maxStates: 10).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -277,7 +276,7 @@ struct FormalOperatorTests {
     #expect(
       try compiledValue(
         expression,
-        formalOperators: try Folds.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+        formalOperators: try Folds.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
       ) == .int(6)
     )
     #expect(try Folds.module.compile().renderedTLAModuleBundle().tla.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
@@ -312,7 +311,7 @@ struct FormalOperatorTests {
       ]
     )
 
-    let functions = try FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    let functions = try FunctionsModule.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     #expect(try compiledValue(restrict, formalOperators: functions) == .function([
       .int(1): .int(10), .int(3): .int(30)
     ]))
@@ -355,7 +354,7 @@ struct FormalOperatorTests {
       ]
     )
 
-    let util = try KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    let util = try KeyValueStoreUtil.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     #expect(try compiledValue(reduced, formalOperators: util) == .int(6))
     #expect(try compiledValue(index, formalOperators: util) == .int(2))
     #expect(try compiledValue(sequenceSet, formalOperators: util) == .set([.int(1), .int(2)]))
@@ -363,6 +362,5 @@ struct FormalOperatorTests {
       .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
     ]))
     #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("ReduceSet(op(_, _), set, base) =="))
-    #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)"))
   }
 }

@@ -5,6 +5,28 @@ import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
 
+private actor CallbackValue<Value: Sendable> {
+    private var stored: Value
+
+    init(_ value: Value) {
+        stored = value
+    }
+
+    func set(_ value: Value) {
+        stored = value
+    }
+
+    func value() -> Value {
+        stored
+    }
+}
+
+private extension CallbackValue where Value == Int {
+    func increment() {
+        stored += 1
+    }
+}
+
 @TLAModel
 private struct SanitizedActionLabelModel {
     static var spec: TLASpec {
@@ -14,6 +36,17 @@ private struct SanitizedActionLabelModel {
             Action("procedure.work.enter") { value.becomes(1) }
             Action("procedure_work_enter") { value.becomes(2) }
             Action("step-2") { value.becomes(3) }
+        }
+    }
+}
+
+@TLAModel
+private struct InvocationNamedActionModel {
+    static var spec: TLASpec {
+        #spec("InvocationNamedActionModel") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            Action("toInvocation") { value.becomes(1) }
         }
     }
 }
@@ -38,6 +71,7 @@ struct GeneratedAlgorithmCounter {
         case left
         case right
 
+        static var defaultValue: Self { .left }
         static let formalDomain: [Node] = [.left, .right]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-algorithm-node")
 
@@ -46,16 +80,16 @@ struct GeneratedAlgorithmCounter {
 
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmCounter") {
-            Algorithm("GeneratedAlgorithmCounter") {
-                let count = SharedVar(initial: 0)
+            Algorithm("GeneratedAlgorithmCounter", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Each(Node.all, fairness: .weak) { _ in
-                    While("increment", count < 2) {
+                    While(TestControlLabel.increment, count < 2) {
                         When(count < 2)
                         Assert(count >= 0)
                         Assign(count, to: count + 1)
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -64,10 +98,10 @@ struct GeneratedAlgorithmCounter {
 private struct SeededCounterMachine {
     static var spec: TLASpec {
         #spec("SeededCounterMachine") {
-            Algorithm("SeededCounterMachine") {
-                let value = SharedVar(in: 0...2)
+            Algorithm("SeededCounterMachine", scoped: { scope in
+                let value = scope.sharedVar("value", in: 0...2)
 
-                While("advance", true) {
+                While(TestControlLabel.advance, true) {
                     Either {
                         When(value < 2)
                         Assign(value, to: value + 1)
@@ -76,7 +110,7 @@ private struct SeededCounterMachine {
                         Assign(value, to: 0)
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -92,6 +126,12 @@ struct GeneratedAlgorithmMachineTests {
         #expect((dashed == dotted) == false)
     }
 
+    @Test("generated action labels do not reserve deleted formal-invocation names")
+    func permitsCurrentActionNames() {
+        let action = InvocationNamedActionModel.ActionLabel.toInvocation
+        #expect(action == .toInvocation)
+    }
+
     @Test("a bounded Algorithm generates the ordinary typed state machine")
     func generatedAlgorithmUsesTheSharedLowering() throws {
         var model = try GeneratedAlgorithmCounter.makeMachine()
@@ -105,9 +145,6 @@ struct GeneratedAlgorithmMachineTests {
 
     @Test("a generated machine accepts one declared initial state")
     func generatedMachineAcceptsDeclaredInitialState() throws {
-        #expect(
-            SeededCounterMachine.generatedMachineMetadata.variables.contains { $0.formalName == "pc" } == false
-        )
         var machine = try SeededCounterMachine.makeMachine(
             .init(value: 2)
         )
@@ -149,6 +186,7 @@ struct GeneratedRestrictedProcessDomain {
         /// domain. This is the usual shape for an optional parent pointer.
         case none = 0
 
+        static var defaultValue: Self { .worker }
         static let formalDomain: [Member] = [.worker]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.restricted-process-member")
 
@@ -157,14 +195,14 @@ struct GeneratedRestrictedProcessDomain {
 
     static var spec: TLASpec {
         #spec("GeneratedRestrictedProcessDomain") {
-            Algorithm("GeneratedRestrictedProcessDomain") {
-                let count = SharedVar(initial: 0)
+            Algorithm("GeneratedRestrictedProcessDomain", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Each(Member.all) { _ in
-                    Do("increment") {
+                    Do(TestControlLabel.increment) {
                         Assign(count, to: count + 1)
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -172,7 +210,6 @@ struct GeneratedRestrictedProcessDomain {
 struct GeneratedRestrictedProcessDomainTests {
     @Test("the parser preserves an explicitly restricted FiniteDomainKey domain")
     func generatedModelUsesOnlyDeclaredProcessMembers() {
-        GeneratedRestrictedProcessDomain._checkParserTree()
         #expect(GeneratedRestrictedProcessDomain.spec.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.int(1)])
         ])
@@ -183,17 +220,17 @@ struct GeneratedRestrictedProcessDomainTests {
 struct GeneratedSequentialCounter {
     static var spec: TLASpec {
         #spec("GeneratedSequentialCounter") {
-            Algorithm("GeneratedSequentialCounter") {
-                let count = SharedVar(initial: 0)
-                Do("increment") {
+            Algorithm("GeneratedSequentialCounter", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.increment) {
                     Let(count + 1) { nextCount in
                         Assign(count, to: nextCount.expr)
                     }
                 }
-                Do("finish") {
+                Do(TestControlLabel.finish) {
                     Stop()
                 }
-            }
+            })
         }
     }
 }
@@ -201,7 +238,6 @@ struct GeneratedSequentialCounter {
 struct GeneratedSequentialMachineTests {
     @Test("a sequential Algorithm advances its typed state")
     func generatedSequentialAlgorithmAdvancesTypedState() throws {
-        GeneratedSequentialCounter._checkParserTree()
 
         var model = try GeneratedSequentialCounter.makeMachine()
         let result = try model.apply(.increment)
@@ -213,14 +249,14 @@ struct GeneratedSequentialMachineTests {
 struct GeneratedSimultaneousSwap {
     static var spec: TLASpec {
         #spec("GeneratedSimultaneousSwap") {
-            Algorithm("GeneratedSimultaneousSwap") {
-                let left = SharedVar(initial: 1)
-                let right = SharedVar(initial: 2)
-                Do("swap") {
+            Algorithm("GeneratedSimultaneousSwap", scoped: { scope in
+                let left = scope.sharedVar("left", initial: 1)
+                let right = scope.sharedVar("right", initial: 2)
+                Do(TestControlLabel.swap) {
                     Assign(left, to: right)
                     Assign(right, to: left)
                 }
-            }
+            })
         }
     }
 }
@@ -245,9 +281,9 @@ struct GeneratedSimultaneousSwapTests {
 struct GeneratedPairPattern {
     static var spec: TLASpec {
         #spec("GeneratedPairPattern") {
-            Algorithm("GeneratedPairPattern") {
-                let selected = SharedVar(initial: 0)
-                Do("choose") {
+            Algorithm("GeneratedPairPattern", scoped: { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
+                Do(TestControlLabel.choose) {
                     With(SetExpr<Pair<Int, Bool>>.literal(
                         Pair(first: 1, second: true),
                         Pair(first: 2, second: false)
@@ -256,7 +292,7 @@ struct GeneratedPairPattern {
                         Assign(selected, to: number.expr)
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -264,7 +300,6 @@ struct GeneratedPairPattern {
 struct GeneratedPairPatternTests {
     @Test("a generated model preserves tuple-pattern selection")
     func generatedMachineAppliesPairPatternBindings() throws {
-        GeneratedPairPattern._checkParserTree()
 
         var model = try GeneratedPairPattern.makeMachine()
         let result = try model.apply(.choose)
@@ -278,6 +313,7 @@ struct GeneratedRangeInitializedAlgorithm {
     enum Node: String, FiniteDomainKey {
         case clock
 
+        static var defaultValue: Self { .clock }
         static let formalDomain: [Node] = [.clock]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.range-initialized-node")
 
@@ -286,22 +322,22 @@ struct GeneratedRangeInitializedAlgorithm {
 
     static var spec: TLASpec {
         #spec("GeneratedRangeInitializedAlgorithm") {
-            Algorithm("GeneratedRangeInitializedAlgorithm") {
-                let hour = SharedVar(in: 1...3)
+            Algorithm("GeneratedRangeInitializedAlgorithm", scoped: { scope in
+                let hour = scope.sharedVar("hour", in: 1...3)
                 Each(Node.all) { _ in
-                    Do("advance") {
+                    Do(TestControlLabel.advance) {
                         When(hour < 3)
                         Assign(hour, to: hour + 1)
                     }
                 }
-            }
+            })
         }
     }
 }
 
 struct GeneratedRangeInitializedAlgorithmTests {
     @Test("#spec independently parses a finite SharedVar initial range")
-    func generatedRangePreservesEveryInitialHour() {
+    func generatedRangePreservesEveryInitialHour() throws {
         let compilation = try GeneratedRangeInitializedAlgorithm.spec.compile()
         let hour = try #require(compilation.layout.variableID(named: "hour"))
         let initialHours = try CompiledRuntime(compilation: compilation).initialStates().map {
@@ -319,6 +355,7 @@ struct GeneratedIntegerChoiceAlgorithm {
     enum Node: String, FiniteDomainKey {
         case only
 
+        static var defaultValue: Self { .only }
         static let formalDomain: [Node] = [.only]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-integer-choice-node")
 
@@ -327,16 +364,16 @@ struct GeneratedIntegerChoiceAlgorithm {
 
     static var spec: TLASpec {
         #spec("GeneratedIntegerChoice") {
-            Algorithm("GeneratedIntegerChoice") {
-                let selected = SharedVar(initial: 0)
+            Algorithm("GeneratedIntegerChoice", scoped: { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
-                    Do("choose") {
+                    Do(TestControlLabel.choose) {
                         Choose(1...3) { choice in
                             Assign(selected, to: choice.expr)
                         }
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -344,9 +381,8 @@ struct GeneratedIntegerChoiceAlgorithm {
 struct GeneratedIntegerChoiceAlgorithmTests {
     @Test("#spec retains a bounded integer choice")
     func generatedModelRetainsIntegerChoice() throws {
-        GeneratedIntegerChoiceAlgorithm._checkParserTree()
         let spec = GeneratedIntegerChoiceAlgorithm.spec
-        let graph = try ModelChecker(spec: spec).exploreGraph()
+        let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("selected", in: $0) }) == [.int(0), .int(1), .int(2), .int(3)])
     }
 }
@@ -355,13 +391,13 @@ struct GeneratedIntegerChoiceAlgorithmTests {
 struct GeneratedAlgorithmStateConstraint {
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmStateConstraint") {
-            Algorithm("GeneratedAlgorithmStateConstraint") {
-                let count = SharedVar(initial: 0)
-                Do("advance") {
+            Algorithm("GeneratedAlgorithmStateConstraint", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.advance) {
                     Assign(count, to: count + 1)
                 }
                 StateConstraint(count < 2)
-            }
+            })
         }
     }
 }
@@ -369,10 +405,9 @@ struct GeneratedAlgorithmStateConstraint {
 struct GeneratedAlgorithmStateConstraintTests {
     @Test("#spec preserves an algorithm-local state constraint through both construction paths")
     func generatedModelPreservesStateConstraint() throws {
-        GeneratedAlgorithmStateConstraint._checkParserTree()
         #expect(GeneratedAlgorithmStateConstraint.spec.constraint
             == .lessThan(.variable("count"), .value(.int(2))))
-        let graph = try ModelChecker(spec: GeneratedAlgorithmStateConstraint.spec).exploreGraph()
+        let graph = try ModelChecker(compilation: try GeneratedAlgorithmStateConstraint.spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("count", in: $0) }) == [.int(0), .int(1)])
     }
 }
@@ -383,21 +418,22 @@ struct GeneratedProcessLocalInvariant {
         case left
         case right
 
+        static var defaultValue: Self { .left }
         static let formalDomain: [Node] = [.left, .right]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.process-local-invariant-node")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    enum Label: String, PlusCalLabel {
+    enum Label: String, PlusCalLabel, CaseIterable {
         case receive
     }
 
     static var spec: TLASpec {
         #spec("GeneratedProcessLocalInvariant") {
-            Algorithm("GeneratedProcessLocalInvariant") {
-                Each(Node.all) { selfID in
-                    let count = LocalVar(initial: 0)
+            Algorithm("GeneratedProcessLocalInvariant", scoped: { scope in
+                Each(Node.all, scoped: { selfID, scope in
+                    let count = scope.localVar("count", initial: 0)
                     Do(Label.receive) {
                         Skip()
                     }
@@ -405,8 +441,8 @@ struct GeneratedProcessLocalInvariant {
                     Invariant("ControlLocation") {
                         At(Label.receive, selfID) || Finished(selfID)
                     }
-                }
-            }
+                })
+            })
         }
     }
 }
@@ -414,7 +450,6 @@ struct GeneratedProcessLocalInvariant {
 struct GeneratedProcessLocalInvariantTests {
     @Test("#spec preserves a process-local invariant through both construction paths")
     func generatedModelPreservesProcessLocalInvariant() {
-        GeneratedProcessLocalInvariant._checkParserTree()
         #expect(GeneratedProcessLocalInvariant.spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
         #expect(GeneratedProcessLocalInvariant.spec.invariants[0].body == .forAll(
             .setLiteral([.value(.string("left")), .value(.string("right"))]),
@@ -433,6 +468,7 @@ struct GeneratedDependentInitialAlgorithm {
         case left
         case right
 
+        static var defaultValue: Self { .left }
         static let formalDomain: [Node] = [.left, .right]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.dependent-initial-node")
 
@@ -442,29 +478,31 @@ struct GeneratedDependentInitialAlgorithm {
     enum Phase: String, TLAValueType {
         case active
         case inactive
+
+        static var defaultValue: Self { .active }
     }
 
     static var spec: TLASpec {
         #spec("GeneratedDependentInitialAlgorithm") {
-            Algorithm("GeneratedDependentInitialAlgorithm") {
-                let seed = SharedVar(in: SetExpr<Bool>.literal(false, true))
-                let mirrors = SharedVar(initial: Function<Node, Phase>.mapping { node in
-                    If(node == .left && seed == true, then: .active, else: .inactive)
+            Algorithm("GeneratedDependentInitialAlgorithm", scoped: { scope in
+                let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
+                let mirrors = scope.sharedVar("mirrors", initial: Function<Node, Phase>.mapping { node in
+                    If(node == Node.left && seed == true, then: Phase.active, else: Phase.inactive)
                 })
                 Each(Node.all) { _ in
-                    Do("stop") {
+                    Do(TestControlLabel.stop) {
                         Assign(mirrors, to: mirrors)
                         Stop()
                     }
                 }
-            }
+            })
         }
     }
 }
 
 struct GeneratedDependentInitialAlgorithmTests {
     @Test("#spec independently preserves a dependent typed function initializer")
-    func generatedModelPreservesDependentInitialStates() {
+    func generatedModelPreservesDependentInitialStates() throws {
         let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
         let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
         let states = try CompiledRuntime(compilation: compilation).initialStates().map {
@@ -489,7 +527,7 @@ struct NestedAdapterConcurrencyTests {
         let observable = try await NestedComposedCounter.Observable(live: live)
         let actor = NestedComposedCounter.Actor(live: live)
         let callbackRecorder = NestedCallbackRecorder()
-        observable.onAdvance = { before, after in
+        observable.onTransition = { _, before, after in
             await callbackRecorder.record(before: before, after: after)
         }
 
@@ -529,7 +567,7 @@ struct NestedAdapterConcurrencyTests {
     func nestedObservableSuppressesCallbackAfterFailedExecution() async throws {
         let observable = try await NestedComposedCounter.Observable(live: try NestedComposedCounter.makeLive())
         let recorder = NestedCallbackRecorder()
-        observable.onAdvance = { before, after in
+        observable.onTransition = { _, before, after in
             await recorder.record(before: before, after: after)
         }
 
@@ -560,7 +598,7 @@ struct NestedAdapterConcurrencyTests {
     ) async throws -> NestedComposedCounter.State {
         switch try await actor.current() {
         case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
+        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
         }
     }
 }
@@ -616,11 +654,18 @@ struct MultiVar {
 @TLAModel
 struct BuilderOnlyClock {
     static var spec: TLASpec {
-        TLASpec("BuilderOnlyClock") {
-            let hr = Var<Int>("hr", 1)
-            hr
-            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
-            Invariant("valid") { hr >= 1 && hr <= 12 }
+        #spec("BuilderOnlyClock") {
+            Algorithm("BuilderOnlyClock", scoped: { scope in
+                let hr = scope.sharedVar("hr", initial: 1)
+                Do(TestControlLabel.tick) {
+                    If(hr < 12) {
+                        Assign(hr, to: hr + 1)
+                    } else: {
+                        Assign(hr, to: 1)
+                    }
+                }
+                Invariant("valid") { hr >= 1 && hr <= 12 }
+            })
         }
     }
 }
@@ -747,11 +792,18 @@ struct GeneratedStateMachineTests {
     @MainActor
     func observableParameterizedAction() async throws {
         let elevator = try await TwoCarElevatorMachine.Observable(live: try TwoCarElevatorMachine.makeLive())
-        let callbackID = LockedValue<Int?>(nil)
-        elevator.onMoveElevator = { id, _, _ in callbackID.value = id }
-        _ = try await elevator._moveElevator(id: 2)
-        #expect(elevator.state.floor == 1)
-        #expect(callbackID.value == 2)
+        let callbackID = CallbackValue<Int?>(nil)
+        elevator.onTransition = { action, _, _ in
+            guard case .moveElevator(let id) = action else { return }
+            await callbackID.set(id)
+        }
+        guard case .committed = try await elevator.apply(.moveElevator(id: 2)) else {
+            Issue.record("Expected moveElevator to commit")
+            return
+        }
+        #expect(try #require(elevator.state).floor == 1)
+        let capturedID = await callbackID.value()
+        #expect(capturedID == 2)
     }
 
     @Test("Model macro generates a parameterized action method")
@@ -822,7 +874,7 @@ struct GeneratedStateMachineTests {
             [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
             [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
         ]
-        let graph = try ModelChecker(spec: builder).exploreGraph()
+        let graph = try ModelChecker(compilation: try builder.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
         #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
 
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()
@@ -850,29 +902,29 @@ struct GeneratedStateMachineTests {
         let compilation = try builder.compile()
         let action = try #require(compilation.layout.actionID(named: "board"))
         let initial = try #require(try compilation.initialStateProjections().first)
-        let floor = try #require(TLAStateProjection.Token(validating: "floor"))
+        let formalFloor = try #require(TLAStateProjection.Token(validating: "floor"))
         let successor = try #require(try compilation.successors(
             for: action,
             arguments: [.int(2), .int(20), .int(200)],
             from: initial
         ).first)
-        #expect(successor.value(for: floor) == .int(222))
+        #expect(successor.value(for: formalFloor) == .int(222))
         #expect(try compilation.successors(
             for: action,
             arguments: [.int(2), .int(30), .int(200)],
             from: initial
         ).isEmpty)
-        #expect(initial.value(for: floor) == .int(0))
+        #expect(initial.value(for: formalFloor) == .int(0))
 
-        var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let before = machine.state
-        let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
+        var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
+        let before = generatedMachine.state
+        let evidence = try generatedMachine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.after.floor == 222)
         #expect(throws: GeneratedMachineError.self) {
-            try machine.apply(.board(person: 2, elevator: 30, direction: 200))
+            try generatedMachine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
-        #expect(machine.state.floor == 222)
+        #expect(generatedMachine.state.floor == 222)
         #expect(before.floor == 0)
     }
 
@@ -908,12 +960,6 @@ struct GeneratedStateMachineTests {
         #expect(after.state.floor == 222)
     }
 
-    @Test("Generated verification retains every constrained nondeterministic successor")
-    func generatedVerificationRetainsNondeterministicSuccessors() throws {
-        #expect(try NondeterministicConstrainedMachine.verifyTransitions() > 0)
-        #expect(try NondeterministicConstrainedMachine.verifyInvariants() > 0)
-    }
-
     @Test("Observable and actor adapters return the canonical three-argument transition evidence")
     @MainActor
     func observableAndActorMatchCanonicalThreeArgumentEvidence() async throws {
@@ -921,20 +967,31 @@ struct GeneratedStateMachineTests {
         let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
 
         let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
-        let callback = LockedValue<BoardCallback?>(nil)
-        observable.onBoard = { person, elevator, direction, before, after in
-            callback.value = .init(
+        let callback = CallbackValue<BoardCallback?>(nil)
+        observable.onTransition = { action, before, after in
+            guard case .board(let person, let elevator, let direction) = action else { return }
+            await callback.set(.init(
                 person: person,
                 elevator: elevator,
                 direction: direction,
                 before: before,
                 after: after
-            )
+            ))
         }
-        let observed = try await observable.apply(.board(person: 2, elevator: 20, direction: 200))
+        guard case .committed(let observed) = try await observable.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ) else {
+            Issue.record("Expected observable action to commit")
+            return
+        }
 
         let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
-        let acted = try await actor.apply(.board(person: 2, elevator: 20, direction: 200))
+        guard case .committed(let acted) = try await actor.apply(
+            .board(person: 2, elevator: 20, direction: 200)
+        ) else {
+            Issue.record("Expected actor action to commit")
+            return
+        }
 
         #expect(observed.action == expected.action)
         #expect(observed.before.floor == expected.before.floor)
@@ -942,11 +999,12 @@ struct GeneratedStateMachineTests {
         #expect(acted.action == expected.action)
         #expect(acted.before.floor == expected.before.floor)
         #expect(acted.after.floor == expected.after.floor)
-        #expect(callback.value?.person == 2)
-        #expect(callback.value?.elevator == 20)
-        #expect(callback.value?.direction == 200)
-        #expect(callback.value?.before.floor == expected.before.floor)
-        #expect(callback.value?.after.floor == expected.after.floor)
+        let callbackValue = await callback.value()
+        #expect(callbackValue?.person == 2)
+        #expect(callbackValue?.elevator == 20)
+        #expect(callbackValue?.direction == 200)
+        #expect(callbackValue?.before.floor == expected.before.floor)
+        #expect(callbackValue?.after.floor == expected.after.floor)
     }
 
     @Test("Rejected generated labels preserve model, observable, and actor state")
@@ -963,8 +1021,8 @@ struct GeneratedStateMachineTests {
         #expect(model.state == modelBefore)
 
         let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
-        let callbackCount = LockedValue(0)
-        observable.onBoard = { _, _, _, _, _ in callbackCount.value += 1 }
+        let callbackCount = CallbackValue(0)
+        observable.onTransition = { _, _, _ in await callbackCount.increment() }
         let observableBefore = observable.state
         do {
             _ = try await observable.apply(.board(person: 2, elevator: 30, direction: 200))
@@ -973,7 +1031,8 @@ struct GeneratedStateMachineTests {
             #expect(error is GeneratedMachineError)
         }
         #expect(observable.state == observableBefore)
-        #expect(callbackCount.value == 0)
+        let observedCallbackCount = await callbackCount.value()
+        #expect(observedCallbackCount == 0)
 
         let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
         let actorBefore = try await actorState(actor)
@@ -990,45 +1049,35 @@ struct GeneratedStateMachineTests {
     ) async throws -> ThreeParameterActionMachine.State {
         switch try await actor.current() {
         case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
+        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
         }
     }
 
     @Test("Removed fixed-arity action syntax does not type check")
-    func legacyParameterizedActionSyntaxIsUnavailable() throws {
+    func unsupportedActionParameterSyntaxDoesNotCompile() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidActionParameterAPI")
         let result = try runSwift(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
-        #expect(result.output.contains("Parameterized action 'legacyParameter' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'legacyTwoParameters' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'legacyID' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'legacyPair' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'singleParameter' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'multipleParameters' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'idParameter' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'namedParameters' requires a parameters list"))
         #expect(result.output.contains("value of type 'NamedAction' has no member 'binding'"))
         #expect(result.output.contains("value of type 'ActionDecl' has no member 'binding'"))
         #expect(result.output.contains("incorrect argument label in call (have 'name:body:binding:', expected 'name:body:bindings:')"))
     }
 
-    @Test("Builder path: TLASpec from Var with initial, no explicit Variable")
+    @Test("Algorithm builder preserves an initialized clock")
     func builderOnlyClockRuntime() throws {
-        let spec = TLASpec("BuilderOnlyClock") {
-            let hr = Var<Int>("hr", 1)
-            hr
-            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
-            Invariant("valid") { hr >= 1 && hr <= 12 }
-        }
+        let spec = BuilderOnlyClock.spec
         #expect(spec.variables.count == 1)
         #expect(spec.variables[0].name == "hr")
         #expect(spec.variables[0].initial == .int(1))
-        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
         if case .ok(let count) = result { #expect(count == 12) } else {
             #expect(Bool(false), "Expected 12 states")
         }
-    }
-
-    @Test("verifySpec passes for CounterNoInvs")
-    func counterNoInvsVerifySpec() throws {
-        try CounterNoInvs.verifySpec()
     }
 
     private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {

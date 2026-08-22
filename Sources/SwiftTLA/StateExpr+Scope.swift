@@ -6,9 +6,11 @@ extension StateExpr {
     /// for deciding when it must rename a binder to avoid capture.
     var freeVariableNames: Set<String> {
         return switch self {
-        case .value, .programCounter, .controlLocation, .enabledAction:
+        case .sourceIssue, .value, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
             []
         case .variable(let name):
+            [name]
+        case .processLocalFamily(let name):
             [name]
         case .add(let lhs, let rhs), .subtract(let lhs, let rhs),
              .multiply(let lhs, let rhs), .divide(let lhs, let rhs),

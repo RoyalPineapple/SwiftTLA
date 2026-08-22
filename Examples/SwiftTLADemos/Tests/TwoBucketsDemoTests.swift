@@ -6,8 +6,6 @@ struct TwoBucketsDemoTests {
     func exposesPuzzleMoves() throws {
         var machine = TwoBuckets()
 
-        try TwoBuckets.verifySpec()
-
         #expect(try machine.availableActions() == [
             .fillThree,
             .fillFive

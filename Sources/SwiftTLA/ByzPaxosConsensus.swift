@@ -1,24 +1,24 @@
-/// Source-faithful formal dependency for the upstream byzpaxos `Consensus`
-/// module.
-///
-/// `VoteProof` instantiates this module with its same-named `Value` constant
-/// and `chosen` refinement mapping, so both symbols remain formal parameters.
+/// The typed abstract consensus model used by VoteProof's refinement.
 public enum ByzPaxosConsensus {
-  public static let module = TLASpec("Consensus") {
-    Extends("Naturals, FiniteSets, FiniteSetTheorems, TLAPS")
-    Parameter("Value")
-    Parameter("chosen", kind: .variable)
+  public static let Value = FormalModuleParameter("Value")
+  public static let chosen = Var<SetExpr<TLAValue>>("chosen", SetExpr())
 
-    Definition("vars == <<chosen>>")
-    Definition("Init == chosen = {}")
-    Definition("""
-      Next == /\\ chosen = {}
-              /\\ \\E v \\in Value:
-                   chosen' = {v}
-      """)
-    Definition("Spec == Init /\\ [][Next]_vars")
-    Definition("LiveSpec == Spec /\\ WF_vars(Next)")
-    Definition("Success == <>(chosen # {})")
-    Definition("LiveSpecEquals == LiveSpec <=> Spec /\\ ([]<><<Next>>_vars \\/ []<>(chosen # {}))")
+  public static let module = TLASpec("Consensus") {
+    Value
+    Variable(chosen)
+    Action("Next") {
+      .and(
+        .guard_(chosen.stateExpr == SetExpr<TLAValue>()),
+        ActionExpr.existsAction(
+          "candidate",
+          Value.stateExpr,
+          ActionExpr.assign(
+            .named(chosen.name),
+            StateExpr.singleton(StateExpr.variable("candidate"))
+          )
+        )
+      )
+    }
+    Eventually("Success", .notEqual(chosen.stateExpr, SetExpr<TLAValue>().stateExpr))
   }
 }

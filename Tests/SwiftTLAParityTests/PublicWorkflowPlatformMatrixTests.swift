@@ -56,7 +56,7 @@ struct PublicWorkflowPlatformMatrixTests {
     let configurationDigest = SHA256.hex(try Data(contentsOf: root.appendingPathComponent(configurationPath)))
     let source = try CoreEvidenceReference(path: sourcePath, sha256: sourceDigest)
     let configuration = try CoreEvidenceReference(path: configurationPath, sha256: configurationDigest)
-    let provenance = try CoreDivergenceProvenance(
+    let provenance = try CoreEvidenceProvenance(
       caseID: "public-library-macos", moduleSHA256: sourceDigest, cfgSHA256: configurationDigest,
       argumentsSHA256: SHA256.hex(try JSONEncoder().encode([["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]])),
       tlcTag: "v1.8.0", tlcCommit: "30cc3601321c3fc02e044d0ecb5c58d8921e18df", tlcJarSHA256: digest,
@@ -64,7 +64,8 @@ struct PublicWorkflowPlatformMatrixTests {
       bridgeClass: "org.swifttla.conformance.LosslessStateWriter", bridgeSourceSHA256: digest,
       bridgeBinarySHA256: digest)
     let context = BindingContext(
-      caseID: "public-library-macos", gateRunID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+      caseID: "public-library-macos",
+      gateRunID: try #require(UUID(uuidString: "11111111-1111-4111-8111-111111111111")),
       sourceInput: source, configuration: configuration, provenance: provenance)
     try JSONEncoder().encode(context).write(to: url)
     return url
@@ -117,6 +118,6 @@ struct PublicWorkflowPlatformMatrixTests {
     let gateRunID: UUID
     let sourceInput: CoreEvidenceReference
     let configuration: CoreEvidenceReference
-    let provenance: CoreDivergenceProvenance
+    let provenance: CoreEvidenceProvenance
   }
 }

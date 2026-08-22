@@ -10,10 +10,7 @@ public enum CoreConformanceEvidenceRetention: Sendable {
   case baseline
   case externalAdmission
 }
-private enum CoreConformanceRetentionError: Error {
-  case graphReceiptChunkMismatch
-}
-public enum CoreConformanceEngine: String, Equatable, Sendable {
+public enum CoreConformanceEngine: String, Codable, Equatable, Sendable {
   case swift
   case tlc
   case runner
@@ -145,6 +142,7 @@ public struct CoreConformanceRunner: Sendable {
     }
     var phase: CoreConformancePhase = .preflight
     var staging: URL?
+    var retainedTLCProcess = false
     do {
       let createdStaging = try createStagingDirectory(
         beside: outputDirectory,
@@ -152,12 +150,7 @@ public struct CoreConformanceRunner: Sendable {
         runID: tlcRequest.runID
       )
       staging = createdStaging
-      try retainInvocationSnapshot(
-        declaredCase: declaredCase,
-        request: tlcRequest,
-        correlations: correlations,
-        in: createdStaging
-      )
+      try tlcAdapter.retain(request: tlcRequest, in: createdStaging)
       guard declaredCase == tlcRequest.expectedCase else {
         throw RunnerError.tlcCaseMismatch
       }
@@ -165,38 +158,41 @@ public struct CoreConformanceRunner: Sendable {
       let swiftEvidence = try swiftExploration()
       let swiftRun = try swiftAdapter.adapt(
         swiftEvidence, for: declaredCase, actionNames: swiftActionNames)
+      let receiptContext = CanonicalRunEvidence.ReceiptContext(
+        compiledModelIdentity: swiftEvidence.compiledModelIdentity,
+        configurationIdentity: declaredCase.cfgSHA256,
+        symmetrySchemaIdentity: "none",
+        observableNameMappingIdentity: actionMappingReceiptIdentity(swiftActionNames),
+        maximumStateLimit: swiftEvidence.maximumStateLimit
+      )
       try writeCanonicalRun(
-        swiftRun, named: "swift.json", correlation: correlations.swift, to: createdStaging)
+        swiftRun, named: "swift-run.json", correlation: correlations.swift,
+        receiptContext: receiptContext, to: createdStaging)
       phase = .tlcExecution
       let tlcProcessRun = try tlcAdapter.run(tlcRequest, replay: replay)
-      try retainProcessRun(
-        tlcProcessRun, request: tlcRequest, correlation: correlations.tlc, in: createdStaging)
+      try tlcAdapter.retain(tlcProcessRun, request: tlcRequest, in: createdStaging)
+      retainedTLCProcess = true
+      let tlcCapture = try tlcAdapter.capture(tlcProcessRun, request: tlcRequest)
       phase = .tlcParsing
-      let graphEvents = try Data(contentsOf: tlcRequest.graphEvents)
-      let parser = TLCGraphEventParser(expectedCase: declaredCase)
-      let stream = try parser.parse(graphEvents)
-      guard stream.runID == tlcRequest.runID else {
-        throw RunnerError.tlcRunMismatch(expected: tlcRequest.runID, actual: stream.runID)
-      }
-      let tlcRun = try parser.parseCanonicalRun(graphEvents, result: tlcProcessRun.primary)
+      let tlcRun = tlcCapture.graph
       try writeCanonicalRun(
-        tlcRun, named: "tlc.json", correlation: correlations.tlc, to: createdStaging)
+        tlcRun, named: "tlc-run.json", correlation: correlations.tlc,
+        receiptContext: receiptContext, to: createdStaging)
       phase = .comparison
       let comparison = exactFiniteTLCGraph(
         expected: tlcRun,
         actual: swiftRun,
-        compiledModelIdentity: swiftEvidence.compiledModelIdentity,
-        configurationIdentity: declaredCase.cfgSHA256,
-        symmetrySchemaIdentity: "none",
+        compiledModelIdentity: receiptContext.compiledModelIdentity,
+        configurationIdentity: receiptContext.configurationIdentity,
+        symmetrySchemaIdentity: receiptContext.symmetrySchemaIdentity,
         maximumStateLimit: swiftEvidence.maximumStateLimit,
-        observableNameMappingIdentity: actionMappingReceiptIdentity(swiftActionNames)
+        observableNameMappingIdentity: receiptContext.observableNameMappingIdentity
       )
       let exitCode: CoreConformanceExitCode =
         comparison.isConformant ? .exact : .semanticDifference
       try writeReceipts(comparison, correlation: correlations.runner, to: createdStaging)
       if retention != .routine || !comparison.isConformant {
         try writeComparison(comparison, correlation: correlations.runner, to: createdStaging)
-        try writeGraphChunks(comparison, expected: tlcRun, actual: swiftRun, to: createdStaging)
       } else {
         try removeCanonicalRuns(from: createdStaging)
       }
@@ -212,8 +208,9 @@ public struct CoreConformanceRunner: Sendable {
         diagnostic: nil
       )
     } catch {
+      let failurePhase: CoreConformancePhase = error is TLCGraphEventError ? .tlcParsing : phase
       let failureDiagnostic = diagnostic(
-        phase: phase, error: error, request: tlcRequest, correlations: correlations)
+        phase: failurePhase, error: error, request: tlcRequest, correlations: correlations)
       guard let staging else {
         return CoreConformanceRunResult(
           exitCode: .failure,
@@ -258,7 +255,9 @@ public struct CoreConformanceRunner: Sendable {
         }
       }
       do {
-        try retainFailure(error, request: tlcRequest, in: staging)
+        if phase == .tlcExecution && !retainedTLCProcess {
+          try tlcAdapter.retain(error, request: tlcRequest, in: staging)
+        }
         try writeDiagnostic(failureDiagnostic, to: staging)
         try writeRun(
           exitCode: .failure,
@@ -294,7 +293,7 @@ public struct CoreConformanceRunner: Sendable {
   }
   private func createStagingDirectory(beside output: URL, caseID: String, runID: UUID) throws -> URL {
     let parent = output.deletingLastPathComponent()
-    try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    try ConformanceEvidence.createDirectory(parent, beneath: parent)
     for _ in 0..<16 {
       let path = parent.appendingPathComponent(
         ".\(caseID).\(runID.uuidString.lowercased()).\(UUID().uuidString.lowercased()).staging"
@@ -348,13 +347,7 @@ public struct CoreConformanceRunner: Sendable {
       runID: request.runID
     )
     do {
-      try retainInvocationSnapshot(
-        declaredCase: declaredCase,
-        request: request,
-        correlations: correlations,
-        in: staging
-      )
-      try retainRawArtifacts(from: request, in: staging)
+      try tlcAdapter.retain(request: request, in: staging)
       try writeDiagnostic(diagnostic, to: staging)
       try writeRun(
         exitCode: .failure,
@@ -369,191 +362,22 @@ public struct CoreConformanceRunner: Sendable {
       throw error
     }
   }
-  private func retainInvocationSnapshot(
-    declaredCase: CoreConformanceCase,
-    request: TLCProcessRequest,
-    correlations: Correlations,
-    in directory: URL
-  ) throws {
-    try writeJSON(caseJSON(declaredCase), to: directory.appendingPathComponent("case.json"))
-    try writeJSON(
-      toolchainJSON(for: request), to: directory.appendingPathComponent("toolchain.json"))
-    try writeJSON(
-      ["arguments": request.arguments], to: directory.appendingPathComponent("arguments.json"))
-    try writeJSON(correlations.json, to: directory.appendingPathComponent("correlations.json"))
-  }
-  private func retainProcessRun(
-    _ run: TLCProcessRun,
-    request: TLCProcessRequest,
-    correlation: CoreConformanceCorrelation,
-    in directory: URL
-  ) throws {
-    try retainProcessResult(run.primary, phase: .primary, in: directory)
-    if let trace = run.trace {
-      try retainProcessResult(trace, phase: .trace, in: directory)
-    }
-    if let replay = run.replay {
-      try retainProcessResult(replay, phase: .replay, in: directory)
-    }
-    try writeProcessSnapshot(
-      primary: run.primary,
-      trace: run.trace,
-      replay: run.replay,
-      errors: [:],
-      correlation: correlation,
-      to: directory
-    )
-    try retainRawArtifacts(from: request, in: directory)
-  }
-  private func retainFailure(_ error: Error, request: TLCProcessRequest, in directory: URL) throws {
-    let correlation = CoreConformanceCorrelation(
-      caseID: request.caseID, runID: request.runID, engine: .tlc)
-    switch error {
-    case TLCProcessError.traceCaptureFailed(let completed, let failed):
-      try retainProcessResult(completed.primary, phase: .primary, in: directory)
-      try retainProcessResult(failed, phase: .trace, in: directory)
-      try writeProcessSnapshot(
-        primary: completed.primary, trace: failed, replay: nil, errors: [:], correlation: correlation,
-        to: directory)
-    case TLCProcessError.requiredReplayFailed(let completed, let failed):
-      try retainProcessResult(completed.primary, phase: .primary, in: directory)
-      if let trace = completed.trace { try retainProcessResult(trace, phase: .trace, in: directory) }
-      try retainProcessResult(failed, phase: .replay, in: directory)
-      try writeProcessSnapshot(
-        primary: completed.primary, trace: completed.trace, replay: failed, errors: [:],
-        correlation: correlation, to: directory)
-    case TLCProcessError.traceCaptureExecutionFailed(let completed, let error):
-      try retainProcessResult(completed.primary, phase: .primary, in: directory)
-      try retainExecutionFailure(error, phase: .trace, in: directory)
-      try writeProcessSnapshot(
-        primary: completed.primary, trace: nil, replay: nil, errors: [.trace: error],
-        correlation: correlation, to: directory)
-    case TLCProcessError.requiredReplayExecutionFailed(let completed, let error):
-      try retainProcessResult(completed.primary, phase: .primary, in: directory)
-      if let trace = completed.trace { try retainProcessResult(trace, phase: .trace, in: directory) }
-      try retainExecutionFailure(error, phase: .replay, in: directory)
-      try writeProcessSnapshot(
-        primary: completed.primary, trace: completed.trace, replay: nil, errors: [.replay: error],
-        correlation: correlation, to: directory)
-    default:
-      let failure = TLCProcessExecutionFailure(error)
-      try retainExecutionFailure(failure, phase: .primary, in: directory)
-      try writeProcessSnapshot(
-        primary: nil, trace: nil, replay: nil, errors: [.primary: failure], correlation: correlation,
-        to: directory)
-    }
-    try retainRawArtifacts(from: request, in: directory)
-  }
-  private func retainProcessResult(
-    _ result: TLCProcessResult,
-    phase: TLCInvocationPhase,
-    in directory: URL
-  ) throws {
-    let logs = try logsDirectory(in: directory)
-    try writeText(sanitized(result.stdout), to: logs.appendingPathComponent(phase.stdoutLog))
-    try writeText(sanitized(result.stderr), to: logs.appendingPathComponent(phase.stderrLog))
-  }
 }
 
 extension CoreConformanceRunner {
-  private func retainExecutionFailure(
-    _ failure: TLCProcessExecutionFailure,
-    phase: TLCInvocationPhase,
-    in directory: URL
-  ) throws {
-    let logs = try logsDirectory(in: directory)
-    if let stdout = failure.partialStdout, let stderr = failure.partialStderr {
-      try writeText(sanitized(stdout), to: logs.appendingPathComponent(phase.stdoutLog))
-      try writeText(sanitized(stderr), to: logs.appendingPathComponent(phase.stderrLog))
-    } else {
-      try writeText(
-        sanitized(failure.message),
-        to: logs.appendingPathComponent("tlc.\(phase.rawValue).failure.log")
-      )
-    }
-  }
-  private func writeProcessSnapshot(
-    primary: TLCProcessResult?,
-    trace: TLCProcessResult?,
-    replay: TLCProcessResult?,
-    errors: [TLCInvocationPhase: TLCProcessExecutionFailure],
-    correlation: CoreConformanceCorrelation,
-    to directory: URL
-  ) throws {
-    let phases: [(TLCInvocationPhase, TLCProcessResult?)] = [
-      (.primary, primary), (.trace, trace), (.replay, replay)
-    ]
-    let attempts = phases.compactMap { phase, result -> String? in
-      result != nil || errors[phase] != nil ? phase.rawValue : nil
-    }
-    var snapshot: [String: Any] = [
-      "correlation": correlationJSON(correlation),
-      "attempted": attempts
-    ]
-    for (phase, result) in phases {
-      if let result {
-        snapshot[phase.rawValue] = processJSON(result)
-      } else if let error = errors[phase] {
-        snapshot[phase.rawValue] = ["executionError": sanitized(error.message)]
-      } else {
-        snapshot[phase.rawValue] = NSNull()
-      }
-    }
-    try writeJSON(snapshot, to: directory.appendingPathComponent("tlc-process.json"))
-  }
-  private func retainRawArtifacts(from request: TLCProcessRequest, in directory: URL) throws {
-    let artifacts = [
-      (request.graphEvents, "graph-events.jsonl"),
-      (graphEvents(for: request.graphEvents, phase: .trace), "graph-events.trace.jsonl"),
-      (graphEvents(for: request.graphEvents, phase: .replay), "graph-events.replay.jsonl"),
-      (request.traceOutput, "counterexample.json"),
-      (request.replayInput, "replay.json")
-    ]
-    var availability: [String: Bool] = [:]
-    for (source, name) in artifacts {
-      let destination = directory.appendingPathComponent(name)
-      let exists = FileManager.default.fileExists(atPath: source.path)
-      availability[name] = exists
-      if exists {
-        if FileManager.default.fileExists(atPath: destination.path) {
-          try FileManager.default.removeItem(at: destination)
-        }
-        try FileManager.default.copyItem(at: source, to: destination)
-      }
-    }
-    try writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
-  }
-  private func logsDirectory(in directory: URL) throws -> URL {
-    let logs = directory.appendingPathComponent("logs")
-    try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
-    return logs
-  }
-  private func graphEvents(for primary: URL, phase: TLCInvocationPhase) -> URL {
-    primary.deletingPathExtension().appendingPathExtension("\(phase.rawValue).jsonl")
-  }
   private func writeCanonicalRun(
     _ run: CanonicalRun,
     named name: String,
     correlation: CoreConformanceCorrelation,
+    receiptContext: CanonicalRunEvidence.ReceiptContext,
     to directory: URL
   ) throws {
-    let edges = run.graph.edgeOccurrences.keys.sorted().map { edge in
-      ["edge": edge.canonicalEncoding, "count": run.graph.edgeOccurrences[edge] ?? 0]
-        as [String: Any]
-    }
-    try writeJSON(
-      [
-        "schema": run.schema.rawValue,
-        "correlation": correlationJSON(correlation),
-        "initialStates": run.graph.initialStateKeys.sorted().map(\.canonicalEncoding),
-        "states": run.graph.states.keys.sorted().map(\.canonicalEncoding),
-        "edges": edges,
-        "observations": observationsJSON(run.graph.observations),
-        "observableActions": run.observableActions.sorted(),
-        "outcome": outcomeJSON(run.outcome),
-        "errors": run.errors.map { ["code": $0.code, "message": $0.message] },
-        "traces": run.traces.map(traceJSON)
-      ], to: directory.appendingPathComponent(name))
+    try CanonicalRunEvidence.write(
+      run,
+      correlation: correlation,
+      receiptContext: receiptContext,
+      to: directory.appendingPathComponent(name)
+    )
   }
   private func writeComparison(
     _ comparison: ExactFiniteTLCComparison,
@@ -563,17 +387,24 @@ extension CoreConformanceRunner {
     var record: [String: Any] = [
       "correlation": correlationJSON(correlation),
       "conformant": comparison.isConformant,
-      "differences": comparison.differences.map(differenceJSON)
+      "differences": comparisonDifferencesJSON(comparison)
     ]
     if let expectedReceipt = comparison.expectedReceipt {
-      record["expectedReceipt"] = receiptJSON(expectedReceipt)
+      record["expectedReceipt"] = canonicalGraphReceiptJSON(expectedReceipt)
     }
     if let actualReceipt = comparison.actualReceipt {
-      record["actualReceipt"] = receiptJSON(actualReceipt)
+      record["actualReceipt"] = canonicalGraphReceiptJSON(actualReceipt)
     }
-    try writeJSON(record, to: directory.appendingPathComponent("comparison.json"))
+    if let expectedReceipt = comparison.expectedReceipt,
+       let actualReceipt = comparison.actualReceipt,
+       let firstDifferentChunk = firstDifferentGraphChunkJSON(
+        expected: expectedReceipt, actual: actualReceipt
+       ) {
+      record["firstDifferentGraphChunk"] = firstDifferentChunk
+    }
+    try ConformanceEvidence.writeJSON(record, to: directory.appendingPathComponent("comparison.json"))
     if !comparison.isConformant {
-      try writeJSON(
+      try ConformanceEvidence.writeJSON(
         ["reports": comparison.failureReports.map(failureReportJSON)],
         to: directory.appendingPathComponent("comparison-diagnostics.json"))
     }
@@ -587,60 +418,24 @@ extension CoreConformanceRunner {
           let actualReceipt = comparison.actualReceipt else {
       return
     }
-    try writeJSON(
+    try ConformanceEvidence.writeJSON(
       [
         "correlation": correlationJSON(correlation),
-        "expected": receiptJSON(expectedReceipt),
-        "actual": receiptJSON(actualReceipt)
+        "expected": canonicalGraphReceiptJSON(expectedReceipt),
+        "actual": canonicalGraphReceiptJSON(actualReceipt)
       ], to: directory.appendingPathComponent("receipts.json"))
   }
   private func removeCanonicalRuns(from directory: URL) throws {
-    for name in ["swift.json", "tlc.json"] {
-      try FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+    for name in ["swift-run.json", "tlc-run.json"] {
+      let run = directory.appendingPathComponent(name)
+      try FileManager.default.removeItem(at: run)
+      try FileManager.default.removeItem(
+        at: directory.appendingPathComponent(run.deletingPathExtension().lastPathComponent + ".graph")
+      )
     }
-  }
-  private func writeGraphChunks(
-    _ comparison: ExactFiniteTLCComparison,
-    expected: CanonicalRun,
-    actual: CanonicalRun,
-    to directory: URL
-  ) throws {
-    guard let expectedReceipt = comparison.expectedReceipt,
-          let actualReceipt = comparison.actualReceipt else {
-      return
-    }
-    try writeGraphChunks(expected.graph, receipt: expectedReceipt, named: "tlc", to: directory)
-    try writeGraphChunks(actual.graph, receipt: actualReceipt, named: "swift", to: directory)
-  }
-  private func writeGraphChunks(
-    _ graph: CanonicalGraph,
-    receipt: CanonicalGraphReceipt,
-    named name: String,
-    to directory: URL
-  ) throws {
-    let chunks = CanonicalGraphReceipt.graphRecordChunks(for: graph)
-    guard chunks.count == receipt.graphChunkDigests.count else {
-      throw CoreConformanceRetentionError.graphReceiptChunkMismatch
-    }
-    guard chunks.count > 1 else { return }
-    let chunksDirectory = directory.appendingPathComponent("graph-records").appendingPathComponent(name)
-    try FileManager.default.createDirectory(at: chunksDirectory, withIntermediateDirectories: true)
-    for (index, records) in chunks.enumerated() {
-      let chunkFile = String(format: "%06d.jsonl", index)
-      try writeText(records.joined(separator: "\n") + "\n", to: chunksDirectory.appendingPathComponent(chunkFile))
-    }
-    try writeJSON(
-      [
-        "graphDigest": receipt.graphDigest,
-        "chunks": receipt.graphChunkDigests.enumerated().map { index, digest in
-          ["file": String(format: "%06d.jsonl", index), "digest": digest]
-        }
-      ],
-      to: chunksDirectory.appendingPathComponent("manifest.json")
-    )
   }
   private func writeDiagnostic(_ diagnostic: CoreConformanceDiagnostic, to directory: URL) throws {
-    try writeJSON(
+    try ConformanceEvidence.writeJSON(
       [
         "code": diagnostic.code,
         "message": diagnostic.message,
@@ -666,15 +461,7 @@ extension CoreConformanceRunner {
         "message": diagnostic.message
       ]
     }
-    try writeJSON(object, to: directory.appendingPathComponent("run.json"))
-  }
-  private func writeJSON(_ object: Any, to url: URL) throws {
-    let data = try JSONSerialization.data(
-      withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
-    try data.write(to: url, options: .atomic)
-  }
-  private func writeText(_ text: String, to url: URL) throws {
-    try Data(text.utf8).write(to: url, options: .atomic)
+    try ConformanceEvidence.writeJSON(object, to: directory.appendingPathComponent("run.json"))
   }
   private func diagnostic(
     phase: CoreConformancePhase,
@@ -708,178 +495,12 @@ extension CoreConformanceRunner {
       phase: phase
     )
   }
-  private func caseJSON(_ declaredCase: CoreConformanceCase) -> [String: Any] {
-    var snapshot: [String: Any] = [
-      "id": declaredCase.id,
-      "moduleSHA256": declaredCase.moduleSHA256,
-      "cfgSHA256": declaredCase.cfgSHA256,
-      "arguments": declaredCase.arguments,
-      "argumentsSHA256": declaredCase.argumentsSHA256,
-      "workers": declaredCase.workers,
-      "fingerprintPolynomial": declaredCase.fingerprintPolynomial,
-      "deadlock": declaredCase.deadlock,
-      "operatingSystem": declaredCase.operatingSystem,
-      "architecture": declaredCase.architecture,
-      "environment": declaredCase.environment,
-      "pin": pinJSON(declaredCase.pin),
-      "invocationMappings": declaredCase.invocationMappings.map { mapping in
-        [
-          "wrapper": mapping.wrapper,
-          "action": mapping.action,
-          "arguments": mapping.arguments,
-          "indices": mapping.indices
-        ]
-      },
-      "valueNormalizations": declaredCase.valueNormalizations.map { normalization in
-        [
-          "binding": normalization.binding,
-          "functionKeys": normalization.functionKeys
-        ]
-      }
-    ]
-    if let governance = declaredCase.governance {
-      snapshot["governance"] = [
-        "role": governance.role.rawValue,
-        "finiteBounds": [
-          "summary": governance.finiteBounds.summary,
-          "limits": governance.finiteBounds.limits
-        ],
-        "semanticCitations": governance.semanticCitations,
-        "expectedRegressionOutcome": governance.expectedRegressionOutcome.rawValue
-      ]
-    }
-    return snapshot
-  }
-  private func toolchainJSON(for request: TLCProcessRequest) -> [String: Any] {
-    var result: [String: Any] = ["declaredPin": pinJSON(request.expectedCase.pin)]
-    if let referencePin = request.referencePin {
-      result["referencePin"] = pinJSON(referencePin)
-    }
-    if let artifacts = request.referenceArtifacts {
-      result["referenceArtifacts"] = [
-        "jar": artifacts.jar.path,
-        "javaArchive": artifacts.javaArchive.path,
-        "bridgeSource": artifacts.bridgeSource.path,
-        "bridgeBinary": artifacts.bridgeBinary.path,
-        "jarManifest": artifacts.jarManifest,
-        "runtime": [
-          "version": artifacts.runtime.version,
-          "vendor": artifacts.runtime.vendor,
-          "architecture": artifacts.runtime.architecture,
-          "properties": artifacts.runtime.properties
-        ]
-      ]
-    }
-    return result
-  }
-  private func pinJSON(_ pin: TLCReferencePin) -> [String: String] {
-    [
-      "tag": pin.tag,
-      "commit": pin.commit,
-      "jarSHA256": pin.jarSHA256,
-      "javaDistribution": pin.javaDistribution,
-      "javaVersion": pin.javaVersion,
-      "javaArchiveSHA256": pin.javaArchiveSHA256,
-      "bridgeClass": pin.bridgeClass,
-      "bridgeSourceSHA256": pin.bridgeSourceSHA256,
-      "bridgeBinarySHA256": pin.bridgeBinarySHA256
-    ]
-  }
-  private func processJSON(_ result: TLCProcessResult) -> [String: Any] {
-    [
-      "status": result.status, "isViolation": result.isViolation,
-      "reportedExhaustiveCompletion": result.reportedExhaustiveCompletion
-    ]
-  }
-  private func outcomeJSON(_ outcome: CanonicalOutcome) -> [String: String] {
-    switch outcome {
-    case .exhaustiveSuccess: ["kind": "exhaustiveSuccess"]
-    case .invariantViolation(let value): ["kind": "invariantViolation", "message": value]
-    case .deadlock(let state): ["kind": "deadlock", "state": state.canonicalEncoding]
-    case .incomplete(let reason): ["kind": "incomplete", "message": reason]
-    case .executionError(let reason): ["kind": "executionError", "message": reason]
-    }
-  }
-  private func receiptJSON(_ receipt: CanonicalGraphReceipt) -> [String: Any] {
-    var object: [String: Any] = [
-      "formatVersion": receipt.formatVersion,
-      "compiledModelIdentity": receipt.compiledModelIdentity,
-      "configurationIdentity": receipt.configurationIdentity,
-      "symmetrySchemaIdentity": receipt.symmetrySchemaIdentity,
-      "explorationStatus": receipt.explorationStatus.rawValue,
-      "maximumStateLimit": receipt.maximumStateLimit,
-      "initialStateCount": receipt.initialStateCount,
-      "stateCount": receipt.stateCount,
-      "edgeCount": receipt.edgeCount,
-      "initialStatesDigest": receipt.initialStatesDigest,
-      "statesDigest": receipt.statesDigest,
-      "edgesDigest": receipt.edgesDigest,
-      "graphChunkDigests": receipt.graphChunkDigests,
-      "graphDigest": receipt.graphDigest
-    ]
-    if let mappingIdentity = receipt.observableNameMappingIdentity {
-      object["observableNameMappingIdentity"] = mappingIdentity
-    }
-    return object
-  }
   private func actionMappingReceiptIdentity(_ mapping: [String: String]) -> String? {
     guard !mapping.isEmpty else { return nil }
     let records = mapping.sorted { canonicalBytes($0.key, $1.key) }.map {
       "action:\(encodedBytes($0.key))->\(encodedBytes($0.value))"
     }
     return SHA256.hex(Data(records.joined(separator: "\n").utf8))
-  }
-  private func traceJSON(_ trace: CanonicalTrace) -> [String: Any] {
-    [
-      "id": trace.id,
-      "steps": trace.steps.map { ["state": $0.state.canonicalEncoding, "action": $0.action] }
-    ]
-  }
-  private func differenceJSON(_ difference: ConformanceDifference) -> [String: Any] {
-    switch difference {
-    case .receipt(let expectedDigest, let actualDigest):
-      [
-        "category": difference.category.rawValue,
-        "expected": expectedDigest,
-        "actual": actualDigest
-      ]
-    case .mapping(let messages):
-      ["category": difference.category.rawValue, "expected": [], "actual": [], "details": messages]
-    case .initialStates(let expected, let actual), .states(let expected, let actual):
-      [
-        "category": difference.category.rawValue,
-        "expected": expected.sorted().map(\.canonicalEncoding),
-        "actual": actual.sorted().map(\.canonicalEncoding)
-      ]
-    case .edges(let expected, let actual):
-      [
-        "category": difference.category.rawValue,
-        "expected": edgeOccurrencesJSON(expected),
-        "actual": edgeOccurrencesJSON(actual)
-      ]
-    case .observations(let expected, let actual):
-      [
-        "category": difference.category.rawValue,
-        "expected": observationsJSON(expected),
-        "actual": observationsJSON(actual)
-      ]
-    case .outcome(let expected, let actual):
-      [
-        "category": difference.category.rawValue, "expected": outcomeJSON(expected),
-        "actual": outcomeJSON(actual)
-      ]
-    case .errors(let expected, let actual):
-      [
-        "category": difference.category.rawValue,
-        "expected": expected.map { ["code": $0.code, "message": $0.message] },
-        "actual": actual.map { ["code": $0.code, "message": $0.message] }
-      ]
-    case .traces(let expected, let actual):
-      [
-        "category": difference.category.rawValue, "expected": expected.map(traceJSON),
-        "actual": actual.map(traceJSON)
-      ]
-    }
   }
   private func failureReportJSON(_ report: ConformanceFailureReport) -> [String: Any] {
     [
@@ -905,27 +526,11 @@ extension CoreConformanceRunner {
   private func nextSafeAction(for phase: CoreConformancePhase) -> String {
     switch phase {
     case .preflight: "Choose a fresh output directory or inspect the existing retained evidence; do not overwrite it."
-    case .swiftAdaptation: "Inspect swift.json and the declared Swift model before changing the formal source."
+    case .swiftAdaptation: "Inspect swift-run.json and the declared Swift model before changing the formal source."
     case .tlcExecution: "Inspect the retained TLC invocation, stdout, and stderr before retrying."
     case .tlcParsing: "Inspect graph-events.jsonl and the TLC module/configuration before rerunning."
-    case .comparison: "Inspect comparison-diagnostics.json, tlc.json, and swift.json before changing a guard or update."
+    case .comparison: "Inspect comparison-diagnostics.json, tlc-run.json, and swift-run.json before changing a guard or update."
     case .publication: "Inspect the staging and destination paths; preserve the failure evidence before retrying publication."
-    }
-  }
-  private func edgeOccurrencesJSON(_ occurrences: [CanonicalEdge: Int]) -> [[String: Any]] {
-    occurrences.keys.sorted().map { edge in
-      ["edge": edge.canonicalEncoding, "count": occurrences[edge] ?? 0]
-    }
-  }
-  private func observationsJSON(_ observations: [CanonicalStateKey: CanonicalStateObservation])
-    -> [[String: Any]] {
-    observations.keys.sorted().map { state in
-      let observation = observations[state]!
-      return [
-        "state": state.canonicalEncoding,
-        "enabledActions": observation.enabledActions.sorted(),
-        "isTerminal": observation.isTerminal
-      ]
     }
   }
   private func correlationJSON(_ correlation: CoreConformanceCorrelation) -> [String: String] {

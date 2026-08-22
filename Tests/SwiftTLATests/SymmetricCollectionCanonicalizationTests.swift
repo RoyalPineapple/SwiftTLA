@@ -76,7 +76,10 @@ struct SymmetricCollectionCanonicalizationTests {
     switch value {
     case .set(let values): return .set(Set(values.map { applyPermutation($0, mapping: mapping) }))
     case .tuple(let values): return .tuple(values.map { applyPermutation($0, mapping: mapping) })
-    case .record(let fields): return .record(fields.mapValues { applyPermutation($0, mapping: mapping) })
+    case .record(let fields):
+      return .record(.init(fields.fields.map { field in
+        .init(field.name, applyPermutation(field.value, mapping: mapping))
+      }))
     case .function(let entries):
       return .function(Dictionary(uniqueKeysWithValues: entries.map {
         (applyPermutation($0.key, mapping: mapping), applyPermutation($0.value, mapping: mapping))
@@ -100,7 +103,10 @@ struct SymmetricCollectionCanonicalizationTests {
     case .set(let values): return "set:[\(values.map(encode).sorted().joined(separator: ","))]"
     case .tuple(let values): return "tuple:[\(values.map(encode).joined(separator: ","))]"
     case .record(let fields):
-      return "record:[\(fields.keys.sorted().map { "\(String(reflecting: $0)):\(encode(fields[$0]!))" }.joined(separator: ","))]"
+      let entries = fields.fields.map { field in
+        "\(String(reflecting: field.name)):\(encode(field.value))"
+      }.joined(separator: ",")
+      return "record:[\(entries)]"
     case .function(let entries):
       return "function:[\(entries.map { "\(encode($0.key)):\(encode($0.value))" }.sorted().joined(separator: ","))]"
     }
@@ -127,7 +133,7 @@ struct SymmetricCollectionCanonicalizationTests {
         .existsAction(
           selected,
           .domain(.variable(members.name)),
-          .assign(members.name, .except(.variable(members.name), .variable(selected), nestedValue))
+          .assign(.named(members.name), .except(.variable(members.name), .variable(selected), nestedValue))
         )
       }
     }
@@ -138,8 +144,8 @@ struct SymmetricCollectionCanonicalizationTests {
       invariants: []
     )
 
-    let rawGraph = try ModelChecker(spec: unreduced).exploreGraph()
-    let reducedGraph = try ModelChecker(spec: symmetric).exploreGraph()
+    let rawGraph = try ModelChecker(compilation: try unreduced.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let reducedGraph = try ModelChecker(compilation: try symmetric.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
     let groups = symmetric.symmetricCollections.map { $0.metadata.members }
     #expect(independentlyCanonicalizedGraph(rawGraph, groups: groups)
       == independentlyCanonicalizedGraph(reducedGraph, groups: groups))
@@ -168,8 +174,8 @@ struct SymmetricCollectionCanonicalizationTests {
       )
 
       let groups = symmetric.symmetricCollections.map { $0.metadata.members }
-      let rawGraph = try ModelChecker(spec: unreduced).exploreGraph()
-      let reducedGraph = try ModelChecker(spec: symmetric).exploreGraph()
+      let rawGraph = try ModelChecker(compilation: try unreduced.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+      let reducedGraph = try ModelChecker(compilation: try symmetric.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
       #expect(independentlyCanonicalizedGraph(rawGraph, groups: groups)
         == independentlyCanonicalizedGraph(reducedGraph, groups: groups))
     }

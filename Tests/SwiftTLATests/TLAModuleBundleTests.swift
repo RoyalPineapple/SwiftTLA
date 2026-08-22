@@ -5,15 +5,23 @@ import SwiftSyntax
 @testable import SwiftTLA
 import SwiftTLAMacros
 
+private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
+  try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+}
+
+private func parseExpression(_ source: String) throws -> ExprSyntax {
+  try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
+}
+
 @TLAModel
 private struct ImportedFormalModuleGeneratedModel {
   static var spec: TLASpec {
     #spec("ImportedFormalModuleGeneratedModel") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
-      Algorithm("ImportedFormalModuleGeneratedModel") {
-        let value = SharedVar(initial: 0)
-        Do("keep") { Assign(value, to: value.expr) }
-      }
+      Algorithm("ImportedFormalModuleGeneratedModel", scoped: { scope in
+        let value = scope.sharedVar("value", initial: 0)
+        Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
+      })
     }
   }
 }
@@ -22,82 +30,19 @@ private struct ImportedFormalModuleGeneratedModel {
 private struct InstancedFormalModuleGeneratedModel {
   static var spec: TLASpec {
     #spec("InstancedFormalModuleGeneratedModel") {
-      Instance("Sequences", of: ZSequences.module)
-      Algorithm("InstancedFormalModuleGeneratedModel") {
-        let value = SharedVar(initial: 0)
-        Do("keep") { Assign(value, to: value.expr) }
-      }
+      Instance("Folding", of: Folds.module)
+      Algorithm("InstancedFormalModuleGeneratedModel", scoped: { scope in
+        let value = scope.sharedVar("value", initial: 0)
+        Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
+      })
     }
   }
 }
 
 @Suite("TLA+ module bundles")
 struct TLAModuleBundleTests {
-  @Test("a bundle rejects an unresolved nonstandard import before tools run")
-  func rejectsMissingLinkDependency() {
-    let bundle = TLAModuleBundle(root: .init(
-      name: "Consumer",
-      tla: "---- MODULE Consumer ----\nEXTENDS Integers, MissingModule\n====\n"
-    ))
-
-    #expect(throws: TLAModuleBundleIntegrityError.missingModule(
-      module: "MissingModule", importedBy: "Consumer", line: 2
-    )) {
-      try bundle.validateRenderedBundleIntegrity()
-    }
-  }
-
-  @Test("a bundle checks every module on an EXTENDS line")
-  func rejectsLaterMissingExtendDependency() {
-    let bundle = TLAModuleBundle(
-      root: .init(
-        name: "Consumer",
-        tla: "---- MODULE Consumer ----\nEXTENDS Integers, Present, MissingModule\n====\n"
-      ),
-      imports: [
-        .init(name: "Present", tla: "---- MODULE Present ----\n====\n")
-      ]
-    )
-
-    #expect(throws: TLAModuleBundleIntegrityError.missingModule(
-      module: "MissingModule", importedBy: "Consumer", line: 2
-    )) {
-      try bundle.validateRenderedBundleIntegrity()
-    }
-  }
-
-  @Test("a bundle accepts transitive source dependencies when all are present")
-  func acceptsCompleteLinkDependencyClosure() throws {
-    let bundle = TLAModuleBundle(
-      root: .init(name: "Consumer", tla: "---- MODULE Consumer ----\nC == INSTANCE Support\n====\n"),
-      imports: [
-        .init(name: "Support", tla: "---- MODULE Support ----\nEXTENDS Dependency\n====\n"),
-        .init(name: "Dependency", tla: "---- MODULE Dependency ----\nEXTENDS Integers\n====\n")
-      ]
-    )
-
-    try bundle.validateRenderedBundleIntegrity()
-  }
-
-  @Test("a bundle rejects cyclic nonstandard module dependencies")
-  func rejectsCyclicLinkDependency() {
-    let bundle = TLAModuleBundle(
-      root: .init(name: "Root", tla: "---- MODULE Root ----\nEXTENDS Support\n====\n"),
-      imports: [
-        .init(name: "Support", tla: "---- MODULE Support ----\nEXTENDS Root\n====\n")
-      ]
-    )
-
-    #expect(throws: TLAModuleBundleIntegrityError.cyclicModule(
-      module: "Root", path: ["Root", "Support", "Root"]
-    )) {
-      try bundle.validateRenderedBundleIntegrity()
-    }
-  }
-
   @Test("a generated model preserves its imported module")
   func generatedModelRetainsImportedModule() {
-    ImportedFormalModuleGeneratedModel._checkParserTree()
     #expect(ImportedFormalModuleGeneratedModel.spec.imports.map { $0.name } == ["ZSequences"])
     #expect(ImportedFormalModuleGeneratedModel.spec.importConfigurations == [
       ZSequences.boundedNaturalNumbers(0...2)
@@ -105,9 +50,9 @@ struct TLAModuleBundleTests {
   }
 
   @Test("the parser records imports for builder fidelity")
-  func parserRetainsImportedModule() {
+  func parserRetainsImportedModule() throws {
     let source = "{ Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2)) }"
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
     let runtime = TLASpec("Imported") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
@@ -121,13 +66,13 @@ struct TLAModuleBundleTests {
       importConfigurations: runtime.importConfigurations
     )
 
-    #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
+    #expect(try parserTree.compile().identity == runtimeTree.compile().identity)
   }
 
   @Test("the parser retains formal module parameters for builder fidelity")
-  func parserRetainsFormalModuleParameters() {
+  func parserRetainsFormalModuleParameters() throws {
     let source = "{ Parameter(\"Base\") }"
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
     let runtime = TLASpec("Parameterized") {
       Parameter("Base")
@@ -140,20 +85,19 @@ struct TLAModuleBundleTests {
     )
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
+    #expect(try parserTree.compile().identity == runtimeTree.compile().identity)
   }
 
   @Test("a generated model preserves a named module instance")
   func generatedModelRetainsNamedModuleInstance() {
-    InstancedFormalModuleGeneratedModel._checkParserTree()
-    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map(\.name) == ["Sequences"])
-    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map { $0.module.name } == ["ZSequences"])
+    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map(\.name) == ["Folding"])
+    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map { $0.module.name } == ["Folds"])
   }
 
   @Test("the parser preserves qualified ZSequences calls")
-  func parserRetainsQualifiedModuleCalls() {
+  func parserRetainsQualifiedModuleCalls() throws {
     let source = "ZSequences.rotation(of: corpus, leftBy: 1)"
-    let expression = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+    let expression = try parseExpression(source)
     let parsed = SpecParser.decodeStateExpr(expression)
 
     #expect(parsed == .recursiveCall("Rotation", [.variable("corpus"), .int(1)]))
@@ -163,9 +107,12 @@ struct TLAModuleBundleTests {
   func zeroBasedSequenceModuleIsExecutable() throws {
     let sequence = ZeroBasedSequence<Int>.literal(3, 1, 2)
     let rotated = ZSequences.rotation(of: sequence, leftBy: Expr(.int(1)))
+    let configured = TLASpec("ConfiguredZSequences") {
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+    }
     let result = try compiledValue(
       rotated.raw,
-      recursiveFunctions: try ZSequences.module.compile().formalModuleClosure.resolvedRecursiveFuncs
+      recursiveFunctions: try configured.compile().formalModuleClosure.linkedOperators.recursiveFunctions
     )
     #expect(result == .function([
       .int(0): .int(1), .int(1): .int(2), .int(2): .int(3)
@@ -195,7 +142,7 @@ struct TLAModuleBundleTests {
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("UsesZSequences.tla").path))
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("ZSequences.tla").path))
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("bundle-manifest.json").path))
-    let check = try ModelChecker(spec: consumer).check()
+    let check = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok = check.underlyingOutcome else {
       Issue.record("The imported ZSequences operators did not evaluate successfully.")
       return
@@ -216,7 +163,7 @@ struct TLAModuleBundleTests {
 
     let sequences = try compiledValue(
       .recursiveCall("ZSeq", [.setLiteral([.int(0), .int(1)])]),
-      recursiveFunctions: try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs
+      recursiveFunctions: try consumer.compile().formalModuleClosure.linkedOperators.recursiveFunctions
     )
     guard case .set(let values) = sequences else {
       Issue.record("The bounded ZSeq result was not a set.")
@@ -253,7 +200,7 @@ struct TLAModuleBundleTests {
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports.map { $0.name } == ["FormalArithmetic"])
     #expect(bundle.imports.first?.tla.contains("Twice(value) ==") == true)
-    let check = try ModelChecker(spec: consumer).check()
+    let check = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok = check.underlyingOutcome else {
       Issue.record("The imported operator did not evaluate successfully.")
       return
@@ -292,7 +239,7 @@ struct TLAModuleBundleTests {
     #expect(FileManager.default.fileExists(
       atPath: directory.appendingPathComponent("bundle-manifest.json").path
     ))
-    let result = try ModelChecker(spec: consumer).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not resolve the qualified module operator.")
       return
@@ -320,10 +267,10 @@ struct TLAModuleBundleTests {
       Invariant("CountsDown") { math.call("CountDown", value.stateExpr) == 3 }
     }
 
-    let resolved = try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs
+    let resolved = try consumer.compile().formalModuleClosure.linkedOperators.recursiveFunctions
     #expect(resolved.map(\.name) == ["Math!CountDown"])
     #expect(resolved[0].body.description.contains("Math!CountDown"))
-    let result = try ModelChecker(spec: consumer).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not resolve recursive instance calls.")
       return
@@ -351,7 +298,7 @@ struct TLAModuleBundleTests {
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports[0].tla.contains("CONSTANTS Base"))
     #expect(!bundle.imports[0].tla.contains("ASSUME Base"))
-    let result = try ModelChecker(spec: consumer).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not apply the module argument.")
       return
@@ -380,7 +327,7 @@ struct TLAModuleBundleTests {
 
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math == INSTANCE VariableParameterizedArithmetic WITH Base <- value"))
     #expect(try consumer.compile().renderedTLAModuleBundle().imports[0].tla.contains("VARIABLES Base"))
-    let result = try ModelChecker(spec: consumer).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not substitute the state parameter.")
       return

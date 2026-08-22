@@ -49,6 +49,6 @@ struct LiveMachineTests {
             return
         }
         #expect(rejection.reason == .actionNotEnabled)
-        #expect(try LiveCounter.State(projection: rejection.current.state) == .init(count: 1))
+        #expect(rejection.current.state == .init(count: 1))
     }
 }

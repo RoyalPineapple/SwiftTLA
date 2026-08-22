@@ -142,7 +142,7 @@ struct CompiledRuntime {
 
 struct CompiledSuccessor: Sendable {
     let action: ActionID
-    let arguments: [TLAValue]
+    let arguments: [CompiledValue]
     let state: CompiledState
 }
 

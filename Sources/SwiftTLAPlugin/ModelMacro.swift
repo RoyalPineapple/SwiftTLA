@@ -29,28 +29,10 @@ struct MacroCompilation {
     let typeName: String
     let compilation: CompiledSpecification
     let machineSurface: MachineSurfacePlan
-    let swiftFacts: MachineSurfaceSwiftFacts
     let enumInfos: [ParsedEnumInfo]
     let hasNestedLiveAdapter: Bool
 
     var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
-}
-
-enum NestedAdapterModelRegistry {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var models: [String: MacroCompilation] = [:]
-
-    static func record(_ model: MacroCompilation) {
-        lock.lock()
-        models[model.typeName] = model
-        lock.unlock()
-    }
-
-    static func model(named typeName: String) -> MacroCompilation? {
-        lock.lock()
-        defer { lock.unlock() }
-        return models[typeName]
-    }
 }
 
 enum TLASpecVerifier {
@@ -72,23 +54,10 @@ enum TLASpecVerifier {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
-        let rewritten = rewriteVarNames(in: source.closure)
         let enumInfos = Self.collectEnumVariables(from: memberList)
-        let (enumDefinitions, caseToType) = collectEnumMetadata(from: memberList)
-        let rewriter = EnumDotRewriter(caseToType: caseToType)
-        let dotRewrittenSyntax = rewriter.rewrite(rewritten)
-        let dotRewritten = dotRewrittenSyntax.as(ClosureExprSyntax.self) ?? rewritten
-        if let unknown = rewriter.unknownDots.first, !caseToType.isEmpty {
-            throw SpecParser.SymmetricCollectionParseDiagnostic(
-                message: "Unknown enum case '.\(unknown)'.",
-                source: dotRewritten.description,
-                expected: "a declared enum case or a recognized formal operator spelling",
-                actual: ".\(unknown); available cases: [\(caseToType.keys.sorted().joined(separator: ", "))]",
-                nextSafeAction: "Qualify the intended enum case, or use FormalOperator and FormalCallArgument spellings for formal operator syntax."
-            )
-        }
-        var parsed = SpecParser.parseSpecClosure(
-            dotRewritten,
+        let enumDefinitions = collectEnumMetadata(from: memberList)
+        let parsed = SpecParser.parseSpecClosure(
+            source.closure,
             enumDefinitions: enumDefinitions
         )
         if let diagnostic = parsed.diagnostics.first {
@@ -96,16 +65,6 @@ enum TLASpecVerifier {
         }
         if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty {
             throw SimpleError("No variables in spec")
-        }
-
-        let varBindings = scanVarBindings(in: rewritten)
-        for i in parsed.variables.indices {
-            if let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }),
-               binding.typeName != "TLAValue" {
-                if parsed.variables[i].swiftTypeName == nil {
-                    parsed.variables[i].swiftTypeName = binding.typeName
-                }
-            }
         }
 
         var allInvariants = parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) }
@@ -129,136 +88,9 @@ enum TLASpecVerifier {
             typeName: typeName,
             compilation: compilation,
             machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
-            swiftFacts: swiftFacts,
             enumInfos: enumInfos,
             hasNestedLiveAdapter: hasNestedLiveAdapter(in: memberList)
         )
-    }
-
-    // MARK: - Var bindings (scan pass)
-
-    struct VarBinding {
-        let name: String
-        let typeName: String
-    }
-
-    static func typeNameFromAnnotation(_ typeAnn: TypeAnnotationSyntax?) -> String? {
-        typeAnn?.type.as(IdentifierTypeSyntax.self)?.name.text
-    }
-
-    static func inferTypeFromExpr(_ expr: ExprSyntax) -> String? {
-        if expr.is(IntegerLiteralExprSyntax.self) { return "Int" }
-        if expr.is(BooleanLiteralExprSyntax.self) { return "Bool" }
-        if expr.is(StringLiteralExprSyntax.self) { return "String" }
-        if let memberAccess = expr.as(MemberAccessExprSyntax.self),
-           let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
-            return baseRef.baseName.text
-        }
-        return nil
-    }
-
-    static func scanVarBindings(in closure: ClosureExprSyntax) -> [VarBinding] {
-        var bindings: [VarBinding] = []
-        for item in closure.statements {
-            guard case .decl(let decl) = item.item,
-                  let varDecl = decl.as(VariableDeclSyntax.self)
-            else { continue }
-            for binding in varDecl.bindings {
-                guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                      let initializer = binding.initializer,
-                      let fc = initializer.value.as(FunctionCallExprSyntax.self)
-                else { continue }
-                let baseName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
-                    ?? fc.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-                guard baseName == "Var" else { continue }
-                let genericType = fc.calledExpression.as(GenericSpecializationExprSyntax.self)?
-                    .genericArgumentClause.arguments.first?.argument.as(IdentifierTypeSyntax.self)?.name.text
-                let args = Array(fc.arguments)
-                guard !args.isEmpty,
-                      let firstArg = args[0].expression.as(StringLiteralExprSyntax.self),
-                      let varName = firstArg.segments.first?.as(StringSegmentSyntax.self)?.content.text,
-                      varName == patternName
-                else { continue }
-                let typeName = typeNameFromAnnotation(binding.typeAnnotation)
-                    ?? genericType
-                    ?? (args.count >= 2 ? inferTypeFromExpr(args[1].expression) : nil)
-                    ?? "Int"
-                bindings.append(VarBinding(name: patternName, typeName: typeName))
-            }
-        }
-        return bindings
-    }
-
-    // MARK: - Var name injection
-
-    static func rewriteVarNames(in closure: ClosureExprSyntax) -> ClosureExprSyntax {
-        var newStatements: [CodeBlockItemSyntax] = []
-        for item in closure.statements {
-            newStatements.append(rewriteVarBinding(in: item))
-        }
-        return closure.with(\.statements, CodeBlockItemListSyntax(newStatements))
-    }
-
-    static func rewriteVarBinding(in item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
-        guard case .decl(let decl) = item.item,
-              let varDecl = decl.as(VariableDeclSyntax.self)
-        else { return item }
-
-        var bindingsChanged = false
-        var newBindings: [PatternBindingSyntax] = []
-        for binding in varDecl.bindings {
-            guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                  let initializer = binding.initializer,
-                  let fc = initializer.value.as(FunctionCallExprSyntax.self)
-            else { newBindings.append(binding); continue }
-
-            let callee = fc.calledExpression
-            let baseName = callee.as(DeclReferenceExprSyntax.self)?.baseName.text
-                ?? callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-            let isVar = baseName == "Var"
-            if isVar {
-                if let firstArg = fc.arguments.first,
-                   let label = firstArg.label?.text,
-                   label == "in" || label == "values" {
-                    let hasNameArg = fc.arguments.contains { $0.label?.text == "name" }
-                    if hasNameArg { newBindings.append(binding); continue }
-
-                    var newArgs = fc.arguments
-                    newArgs.append(LabeledExprSyntax(
-                        label: "name",
-                        colon: .colonToken(),
-                        expression: StringLiteralExprSyntax(content: patternName)
-                    ))
-                    let newFC = fc.with(\.arguments, newArgs)
-                    let newInit = initializer.with(\.value, ExprSyntax(newFC))
-                    let newBinding = binding.with(\.initializer, newInit)
-                    newBindings.append(newBinding)
-                    bindingsChanged = true
-                } else {
-                    let hasStringArg = fc.arguments.contains { arg in
-                        arg.label == nil && arg.expression.is(StringLiteralExprSyntax.self)
-                    }
-                    if hasStringArg { newBindings.append(binding); continue }
-
-                    var newArgs = fc.arguments
-                    newArgs.insert(LabeledExprSyntax(
-                        expression: StringLiteralExprSyntax(content: patternName)
-                    ), at: newArgs.startIndex)
-                    let newFC = fc.with(\.arguments, newArgs)
-                    let newInit = initializer.with(\.value, ExprSyntax(newFC))
-                    let newBinding = binding.with(\.initializer, newInit)
-                    newBindings.append(newBinding)
-                    bindingsChanged = true
-                }
-                continue
-            }
-
-            newBindings.append(binding)
-        }
-
-        guard bindingsChanged else { return item }
-        let newDecl = varDecl.with(\.bindings, PatternBindingListSyntax(newBindings))
-        return item.with(\.item, .decl(DeclSyntax(newDecl)))
     }
 
     // MARK: - Helpers
@@ -349,7 +181,7 @@ enum TLASpecVerifier {
                         value = .int(val)
                         idx = val + 1
                     } else if let raw = element.rawValue?.value.as(StringLiteralExprSyntax.self) {
-                        value = .string(raw.representedLiteralValue ?? raw.segments.description)
+                        value = .string(raw.representedLiteralValue ?? element.name.text)
                     } else if intBacked {
                         value = .int(idx)
                         idx += 1
@@ -388,8 +220,7 @@ enum TLASpecVerifier {
         else { return cases.map(\.value) }
 
         if initializer.as(DeclReferenceExprSyntax.self)?.baseName.text == "allCases"
-            || initializer.description.trimmingCharacters(in: .whitespacesAndNewlines)
-                .hasSuffix(".allCases") {
+            || initializer.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "allCases" {
             return cases.map(\.value)
         }
 
@@ -406,69 +237,6 @@ enum TLASpecVerifier {
 
 }
 
-private final class EnumDotRewriter: SyntaxRewriter {
-    let caseToType: [String: String]
-    var unknownDots: [String] = []
-
-    init(caseToType: [String: String]) {
-        self.caseToType = caseToType
-    }
-
-    override func visit(_ node: MemberAccessExprSyntax) -> ExprSyntax {
-        guard node.base == nil else { return super.visit(node) }
-        let caseName = node.declName.baseName.text
-        if caseName == "define",
-           node.parent?.as(LabeledExprSyntax.self)?.label?.text == "plusCalPhase" {
-            return super.visit(node)
-        }
-        guard let enumType = caseToType[caseName] else {
-            if isEnumCaseName(caseName) {
-                unknownDots.append(caseName)
-            }
-            return super.visit(node)
-        }
-        let qualified = MemberAccessExprSyntax(
-            base: ExprSyntax(DeclReferenceExprSyntax(baseName: .identifier(enumType))),
-            period: node.period,
-            declName: node.declName
-        )
-        return ExprSyntax(qualified)
-    }
-
-    private func isEnumCaseName(_ name: String) -> Bool {
-        guard let first = name.first else { return false }
-        return first.isLowercase && !knownPropertyNames.contains(name)
-    }
-
-    private let knownPropertyNames: Set<String> = [
-        "cardinality", "count", "isEmpty", "flattened", "subsets", "domain",
-        "head", "tail", "stays", "zero", "max", "min", "default", "init", "value",
-        "variable",
-        "int", "bool", "string", "set", "tuple", "record", "function", "constant",
-        // Formal operator syntax is expression data, not an application enum
-        // case. Keep these members unqualified so SpecParser's existing
-        // formal-expression decoder can preserve their AST structure.
-        "lambda", "reference", "operator",
-        // A FormalLambda body is authored with StateExpr cases. The enum-dot
-        // pass runs before source parsing, so it must not mistake any of
-        // those formal AST members for an application enum case.
-        "add", "subtract", "multiply", "divide", "modulo", "negate", "integerDivide",
-        "equal", "notEqual", "lessThan", "lessOrEqual", "greaterThan", "greaterOrEqual",
-        "and", "or", "not", "ifThenElse",
-        "setLiteral", "in", "subset", "union", "intersection", "setDifference",
-        "setFilter", "setMap", "powerSet", "unionAll", "integerRange",
-        "tupleLiteral", "tupleAccess", "tupleDynamicAccess", "tupleLength", "tupleAppend",
-        "tupleHead", "tupleTail", "tupleConcatenate",
-        "recordLiteral", "recordAccess", "functionLiteral", "functionApply", "except",
-        "caseExpr", "forAll", "exists", "choose", "enabledAction", "sequenceFromSet",
-        "setSum", "functionSet", "foldFunction", "operatorApplication", "recursiveCall",
-        "letValue", "letIn",
-        // These are DSL enum cases, not user-state enum cases. They remain
-        // unqualified so Algorithm's parser can recognize its public syntax.
-        "none", "weak", "strong"
-    ]
-}
-
 struct SimpleError: Error, CustomStringConvertible {
     let description: String
     init(_ description: String) { self.description = description }
@@ -482,7 +250,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         guard let ext = ("""
-            extension \(type.trimmed): TLAModelType, TLAMachineSchemaProviding {}
+            extension \(type.trimmed): TLAModelType {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
@@ -498,7 +266,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             context.diagnose(modelCompilationDiagnostic(error, in: declaration))
             return []
         }
-        NestedAdapterModelRegistry.record(parsed)
         return MacroExpander.generate(model: parsed)
     }
 }
@@ -508,7 +275,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested:
             guard let ext = ("""
-                extension \(type.trimmed): TLAMachineSchemaProviding {}
+                extension \(type.trimmed) {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:
@@ -519,16 +286,9 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested(let model):
-            guard let parsed = NestedAdapterModelRegistry.model(named: model.name.text) else {
-                context.diagnose(Diagnostic(
-                    node: Syntax(node),
-                    message: AdapterNestingDiagnostic(message: "Nested adapter could not resolve its enclosing @TLAModel")
-                ))
-                return []
-            }
             return MacroExpander.generateNestedAdapterMembers(
                 kind: .actor,
-                canonicalModel: parsed
+                canonicalModelTypeName: model.name.text
             )
         case .invalid:
             return []
@@ -541,7 +301,7 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested:
             guard let ext = ("""
-                @MainActor extension \(type.trimmed): Sendable, TLAMachineSchemaProviding {}
+                @MainActor extension \(type.trimmed): Sendable {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:
@@ -552,16 +312,9 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested(let model):
-            guard let parsed = NestedAdapterModelRegistry.model(named: model.name.text) else {
-                context.diagnose(Diagnostic(
-                    node: Syntax(node),
-                    message: AdapterNestingDiagnostic(message: "Nested adapter could not resolve its enclosing @TLAModel")
-                ))
-                return []
-            }
             return MacroExpander.generateNestedAdapterMembers(
                 kind: .observable,
-                canonicalModel: parsed
+                canonicalModelTypeName: model.name.text
             )
         case .invalid:
             return []
@@ -660,7 +413,7 @@ private func enclosingModelDeclarations(in context: some MacroExpansionContext) 
 private func hasTLAModelAttribute(_ attributes: AttributeListSyntax) -> Bool {
     attributes.contains { element in
         guard let attribute = element.as(AttributeSyntax.self) else { return false }
-        return attribute.attributeName.trimmedDescription == "TLAModel"
+        return attribute.hasTerminalName("TLAModel")
     }
 }
 
@@ -692,9 +445,21 @@ private func hasNestedLiveAdapter(in members: MemberBlockItemListSyntax) -> Bool
         }
         return attributes?.contains { element in
             guard let attribute = element.as(AttributeSyntax.self) else { return false }
-            let name = attribute.attributeName.trimmedDescription
-            return name == "TLAActor" || name == "TLAObservable"
+            return attribute.hasTerminalName("TLAActor")
+                || attribute.hasTerminalName("TLAObservable")
         } == true
+    }
+}
+
+private extension AttributeSyntax {
+    func hasTerminalName(_ expectedName: String) -> Bool {
+        if let identifier = attributeName.as(IdentifierTypeSyntax.self) {
+            return identifier.name.text == expectedName
+        }
+        if let member = attributeName.as(MemberTypeSyntax.self) {
+            return member.name.text == expectedName
+        }
+        return false
     }
 }
 
@@ -719,7 +484,6 @@ private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
     var message: String {
         "What failed: \(whatFailed). Where: this @TLAModel declaration. "
             + "Expected: \(expected). Actual: \(actual). "
-            + "Change status: no generated model was emitted. "
             + "Next safe action: \(nextSafeAction)"
     }
 }
@@ -729,7 +493,6 @@ private func parserDiagnostic(
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     let finder = ParserDiagnosticNodeFinder(
-        source: diagnostic.source,
         location: diagnostic.sourceSpan.location
     )
     finder.walk(Syntax(declaration))
@@ -755,16 +518,12 @@ private func modelCompilationDiagnostic(
 }
 
 private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
-    let source: String
     let location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
     var node: Syntax?
-    private var sourceMatch: Syntax?
 
     init(
-        source: String,
         location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
     ) {
-        self.source = source.trimmingCharacters(in: .whitespacesAndNewlines)
         self.location = location
         super.init(viewMode: .sourceAccurate)
     }
@@ -778,11 +537,7 @@ private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
         case .unavailable:
             matchesOffset = false
         }
-        let matchesSource = candidate.description.trimmingCharacters(in: .whitespacesAndNewlines) == source
-        if matchesSource, sourceMatch == nil {
-            sourceMatch = candidate
-        }
-        if matchesOffset && matchesSource {
+        if matchesOffset {
             node = candidate
             return .skipChildren
         }
@@ -790,6 +545,6 @@ private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
     }
 
     func resolvedNode() -> Syntax? {
-        node ?? sourceMatch
+        node
     }
 }

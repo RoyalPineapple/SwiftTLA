@@ -14,21 +14,22 @@ public struct ReachableModel: Sendable {
         case three = 3
         case four = 4
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain: [Self] = [.one, .two, .three, .four]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.reachable.node")
 
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a
     }
 
     public static var spec: TLASpec {
         #spec("Reachable") {
-            Extends("FiniteSets")
-            Extends("Integers")
-            Algorithm("Reachable") {
+            Extends(.finiteSets)
+            Extends(.integers)
+            Algorithm("Reachable", scoped: { scope in
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
@@ -38,8 +39,8 @@ public struct ReachableModel: Sendable {
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )
-                let marked = SharedVar(initial: SetExpr<Node>())
-                let frontier = SharedVar(initial: SetExpr<Node>.literal(.one))
+                let marked = scope.sharedVar("marked", initial: SetExpr<Node>())
+                let frontier = scope.sharedVar("frontier", initial: SetExpr<Node>.literal(.one))
 
                 While(Step.a, !frontier.isEmpty) {
                     With(frontier) { node in
@@ -59,7 +60,7 @@ public struct ReachableModel: Sendable {
                 }
                 WeakFairnessNext()
                 Eventually("EventuallyFinished", Finished())
-            }
+            })
         }
     }
 }

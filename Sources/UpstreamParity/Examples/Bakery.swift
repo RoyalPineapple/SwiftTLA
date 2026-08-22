@@ -12,12 +12,13 @@ public struct BakeryN2Model: Sendable {
         case one = 1
         case two = 2
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.bakery.n2.process")
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case ncs
         case e1
         case e2
@@ -31,15 +32,15 @@ public struct BakeryN2Model: Sendable {
 
     public static var spec: TLASpec {
         #spec("Bakery") {
-            Extends("Integers")
-            Algorithm("Bakery") {
-                let num = SharedVar(initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
-                let flag = SharedVar(initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+            Extends(.integers)
+            Algorithm("Bakery", scoped: { scope in
+                let num = scope.sharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = scope.sharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
-                Each(Process.all, fairness: .weak) { process in
-                    let unchecked: LocalVariable<SetExpr<Process>> = LocalVar(initial: SetExpr<Process>())
-                    let maxSeen = LocalVar(initial: 0)
-                    let next: LocalVariable<Process> = LocalVar(initial: .one)
+                Each(Process.all, fairness: .weak, scoped: { process, scope in
+                    let unchecked: LocalVariable<SetExpr<Process>> = scope.localVar("unchecked", initial: SetExpr<Process>())
+                    let maxSeen = scope.localVar("maxSeen", initial: 0)
+                    let next: LocalVariable<Process> = scope.localVar("next", initial: .one)
 
                     Do(Step.ncs) {
                         Skip()
@@ -136,8 +137,8 @@ public struct BakeryN2Model: Sendable {
                             Goto(Step.ncs)
                         }
                     }
-                }
-            }
+                })
+            })
         }
     }
 }

@@ -18,6 +18,10 @@ struct OperatorID: Hashable, Sendable {
     let ordinal: Int
 }
 
+struct ModuleInstanceID: Hashable, Sendable {
+    let ordinal: Int
+}
+
 struct FieldID: Hashable, Sendable {
     let ordinal: Int
 }
@@ -56,6 +60,7 @@ struct CompiledVariableLayout: Hashable, Sendable {
 struct CompiledActionLayout: Hashable, Sendable {
     let id: ActionID
     let declaration: CompiledDeclaration
+    let renderedName: String
 }
 
 struct CompiledFieldLayout: Hashable, Sendable {
@@ -91,11 +96,11 @@ enum ControlOwner: Hashable, Sendable {
 
 public struct ControlLocationReference: Hashable, Sendable {
     let owner: ControlOwner?
-    public let sourceName: String
+    let sourceName: String
 
-    public static let done = Self("Done")
+    static let done = Self(CompilerControlSymbol.done.rawValue)
 
-    public init(_ sourceName: String) {
+    init(_ sourceName: String) {
         self.owner = nil
         self.sourceName = sourceName
     }
@@ -132,12 +137,18 @@ struct CompiledControlLocation: Hashable, Sendable {
     let renderedName: String
 }
 
+struct CompiledModuleInstanceLayout: Hashable, Sendable {
+    let id: ModuleInstanceID
+    let namespace: String
+}
+
 struct CompiledLayout: Hashable, Sendable {
     let variables: [CompiledVariableLayout]
     let actions: [CompiledActionLayout]
     let fields: [CompiledFieldLayout]
     let procedures: [CompiledProcedureLayout]
     let controlLocations: [CompiledControlLocation]
+    let moduleInstances: [CompiledModuleInstanceLayout]
     let declarations: [CompiledDeclaration]
 
     init(source spec: TLASpec) {
@@ -160,12 +171,12 @@ struct CompiledLayout: Hashable, Sendable {
                 )
             )
         }
-        actions = spec.actions.enumerated().map { ordinal, action in
-            CompiledActionLayout(
-                id: ActionID(ordinal: ordinal),
-                declaration: .init(kind: .action, name: action.name, sourceOffset: nil)
-            )
-        }
+        let controlLocations = Self.controlLocations(
+            in: spec.sourceAlgorithms,
+            actions: spec.actions,
+            hasProgramCounter: spec.variables.contains { $0.name == CompilerControlSymbol.programCounter.rawValue }
+        )
+        actions = Self.actions(spec.actions, controlLocations: controlLocations)
         fields = Self.fields(in: modules).enumerated().map { ordinal, name in
             .init(id: .init(ordinal: ordinal), renderedName: name)
         }
@@ -174,11 +185,10 @@ struct CompiledLayout: Hashable, Sendable {
                 .init(algorithm: algorithm.model.name, name: procedure.name, sourceOffset: nil)
             }
         }
-        controlLocations = Self.controlLocations(
-            in: spec.sourceAlgorithms,
-            actions: spec.actions,
-            hasProgramCounter: spec.variables.contains { $0.name == "pc" }
-        )
+        self.controlLocations = controlLocations
+        moduleInstances = spec.moduleInstances.enumerated().map {
+            .init(id: .init(ordinal: $0.offset), namespace: $0.element.name)
+        }
         declarations = variables.map(\.declaration)
             + actions.map(\.declaration)
             + spec.invariants.map { .init(kind: .invariant, name: $0.name, sourceOffset: nil) }
@@ -193,12 +203,22 @@ struct CompiledLayout: Hashable, Sendable {
 
     func programCounterID() -> VariableID? {
         variables.first {
-            $0.declaration.origin == .compiler && $0.declaration.name == "pc"
+            $0.declaration.origin == .programCounter
+        }?.id
+    }
+
+    func procedureStackID() -> VariableID? {
+        variables.first {
+            $0.declaration.origin == .procedureStack
         }?.id
     }
 
     func actionID(named name: String) -> ActionID? {
         actions.first { $0.declaration.name == name }?.id
+    }
+
+    func moduleInstanceID(named namespace: String) -> ModuleInstanceID? {
+        moduleInstances.first { $0.namespace == namespace }?.id
     }
 
     func fieldID(named name: String) -> FieldID? {
@@ -236,6 +256,8 @@ struct CompiledLayout: Hashable, Sendable {
             switch declaration.origin {
             case .source: origin = "source"
             case .compiler: origin = "compiler"
+            case .programCounter: origin = "programCounter"
+            case .procedureStack: origin = "procedureStack"
             }
             return "\(ordinal):\(kind.utf8.count):\(kind)\(name.utf8.count):\(name)\(origin.utf8.count):\(origin)"
         }.joined(separator: "|")
@@ -243,13 +265,17 @@ struct CompiledLayout: Hashable, Sendable {
             let owner = label.owner.canonicalEncoding
             return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
         }.joined(separator: "|")
+        let actionEncoding = actions.map { action in
+            "\(action.id.ordinal):\(action.renderedName.utf8.count):\(action.renderedName)"
+        }.joined(separator: "|")
         let procedureEncoding = procedures.map { procedure in
             "\(procedure.algorithm.utf8.count):\(procedure.algorithm)\(procedure.name.utf8.count):\(procedure.name)"
         }.joined(separator: "|")
         let fieldEncoding = fields.map { field in
             "\(field.id.ordinal):\(field.renderedName.utf8.count):\(field.renderedName)"
         }.joined(separator: "|")
-        return "declarations[\(declarationEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]"
+        let instanceEncoding = moduleInstances.map { "\($0.id.ordinal):\($0.namespace)" }.joined(separator: "|")
+        return "declarations[\(declarationEncoding)]actions[\(actionEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]instances[\(instanceEncoding)]"
     }
 
     private static func fields(in modules: [TLASpec]) -> [String] {
@@ -284,9 +310,11 @@ struct CompiledLayout: Hashable, Sendable {
 
         func visit(_ expression: StateExpr) {
             switch expression {
+            case .sourceIssue:
+                return
             case .value(let value):
                 visit(value)
-            case .variable, .programCounter, .controlLocation, .enabledAction:
+            case .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
                 return
             case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
                  .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
@@ -478,15 +506,15 @@ struct CompiledLayout: Hashable, Sendable {
                 labels.append(
                     .init(
                         id: .init(ordinal: labels.count),
-                        owner: .generated(algorithm: model.name, purpose: "Done"),
-                        sourceName: "Done",
-                        renderedName: "Done"
+                        owner: .generated(algorithm: model.name, purpose: CompilerControlSymbol.done.rawValue),
+                        sourceName: CompilerControlSymbol.done.rawValue,
+                        renderedName: CompilerControlSymbol.done.rawValue
                     )
                 )
             }
         }
         let knownActionNames = Set(labels.flatMap { [$0.sourceName, $0.renderedName] })
-        for action in actions where action.name != "Terminating" && knownActionNames.contains(action.name) == false {
+        for action in actions where action.name != CompilerControlSymbol.terminatingAction.rawValue && knownActionNames.contains(action.name) == false {
             labels.append(
                 .init(
                     id: .init(ordinal: labels.count),
@@ -496,17 +524,60 @@ struct CompiledLayout: Hashable, Sendable {
                 )
             )
         }
-        if hasProgramCounter, labels.contains(where: { $0.sourceName == "Done" }) == false {
+        if hasProgramCounter, labels.contains(where: { $0.sourceName == CompilerControlSymbol.done.rawValue }) == false {
             labels.append(
                 .init(
                     id: .init(ordinal: labels.count),
-                    owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: "Done"),
-                    sourceName: "Done",
-                    renderedName: "Done"
+                    owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: CompilerControlSymbol.done.rawValue),
+                    sourceName: CompilerControlSymbol.done.rawValue,
+                    renderedName: CompilerControlSymbol.done.rawValue
                 )
             )
         }
         return labels
+    }
+
+    private static func actions(
+        _ declarations: [NamedAction],
+        controlLocations: [CompiledControlLocation]
+    ) -> [CompiledActionLayout] {
+        let actionNames = Set(declarations.map(\.name))
+        let procedureControls = controlLocations.compactMap { label -> (qualified: String, label: String)? in
+            guard case .procedure = label.owner else { return nil }
+            return (qualified: label.renderedName, label: label.sourceName)
+        }
+        let labelCounts = Dictionary(grouping: procedureControls, by: \.label).mapValues(\.count)
+        let unqualifiedActions = actionNames.subtracting(Set(procedureControls.map(\.qualified)))
+        let preferredNames: [String: String] = Dictionary(uniqueKeysWithValues: procedureControls.compactMap { candidate -> (String, String)? in
+            guard actionNames.contains(candidate.qualified),
+                  labelCounts[candidate.label] == 1,
+                  !unqualifiedActions.contains(candidate.label) else {
+                return nil
+            }
+            return (candidate.qualified, candidate.label)
+        })
+
+        var used: Set<String> = []
+        return declarations.enumerated().map { ordinal, action in
+            let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122, 95: String(scalar)
+                default: "_"
+                }
+            }.joined()
+            let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
+            var renderedName = stem.isEmpty ? "Action" : stem
+            var suffix = 2
+            while !used.insert(renderedName).inserted {
+                renderedName = "\(stem)__\(suffix)"
+                suffix += 1
+            }
+            return .init(
+                id: .init(ordinal: ordinal),
+                declaration: .init(kind: .action, name: action.name, sourceOffset: nil),
+                renderedName: renderedName
+            )
+        }
     }
 }
 
@@ -530,6 +601,7 @@ struct CompiledBindingTable: Sendable {
     init(
         layout: CompiledLayout,
         operators: [String: OperatorID] = [:],
+        operatorNames: [OperatorID: String]? = nil,
         binders: [BinderID: String] = [:],
         references: [String: CompiledReference] = [:]
     ) {
@@ -541,7 +613,9 @@ struct CompiledBindingTable: Sendable {
         )
         self.operators = operators
         self.binders = binders
-        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
+        self.operatorNames = operatorNames ?? Dictionary(
+            uniqueKeysWithValues: operators.map { ($0.value, $0.key) }
+        )
         self.references = references
     }
 
@@ -554,25 +628,38 @@ struct BindingValidator {
     private let layout: CompiledLayout
     private let closure: FormalModuleClosure
     private let constants: [ConstantDecl]
+    private let formalConstants: Set<String>
+    private let incomingModuleParameters: [FormalModuleReplacement]
     private var operators: [String: OperatorID]
+    private var operatorNames: [OperatorID: String]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal = 0
     private var knownBinderNames: Set<String> = []
     private var binders: [BinderID: String] = [:]
     private var references: [String: CompiledReference] = [:]
 
-    init(spec: TLASpec, layout: CompiledLayout, closure: FormalModuleClosure) {
+    init(
+        spec: TLASpec,
+        layout: CompiledLayout,
+        closure: FormalModuleClosure,
+        incomingModuleParameters: [FormalModuleReplacement] = []
+    ) {
         self.layout = layout
         self.closure = closure
         constants = spec.constants
+        formalConstants = Set(spec.formalParameters.compactMap { parameter in
+            parameter.kind == .constant ? parameter.name : nil
+        })
+        self.incomingModuleParameters = incomingModuleParameters
         let names = spec.formalOperatorDefinitions.map(\.name)
             + spec.recursiveFuncs.map(\.name)
-            + closure.resolvedFormalOperatorDefinitions.map(\.name)
-            + closure.resolvedRecursiveFuncs.map(\.name)
+            + closure.linkedOperators.formalOperatorDefinitions.map(\.name)
+            + closure.linkedOperators.recursiveFunctions.map(\.name)
         operators = names.reduce(into: [:]) { result, name in
             guard result[name] == nil else { return }
             result[name] = OperatorID(ordinal: result.count)
         }
+        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
         nextOperatorOrdinal = operators.count
     }
 
@@ -599,6 +686,9 @@ struct BindingValidator {
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
         for definition in spec.formalOperatorDefinitions {
+            if let issue = definition.sourceIssue {
+                throw issue.compilationDiagnostic(stage: .binding, path: "formalOperators.\(definition.name)")
+            }
             guard let id = operators[definition.name] else {
                 throw diagnostic(code: .unknownReference, path: "formalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
             }
@@ -617,7 +707,7 @@ struct BindingValidator {
             try validateExpression(function.body, at: "recursiveFunctions.\(function.name).body", scope: scope)
         }
         let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
-        for definition in closure.resolvedFormalOperatorDefinitions where !localFormalNames.contains(definition.name) {
+        for definition in closure.linkedOperators.formalOperatorDefinitions where !localFormalNames.contains(definition.name) {
             guard let id = operators[definition.name] else {
                 throw diagnostic(code: .unknownReference, path: "linkedFormalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
             }
@@ -628,7 +718,7 @@ struct BindingValidator {
             operators = outerOperators
         }
         let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
-        for function in closure.resolvedRecursiveFuncs where !localRecursiveNames.contains(function.name) {
+        for function in closure.linkedOperators.recursiveFunctions where !localRecursiveNames.contains(function.name) {
             guard let id = operators[function.name] else {
                 throw diagnostic(code: .unknownReference, path: "linkedRecursiveFunctions.\(function.name)", expected: "a declared operator", actual: "no operator identity")
             }
@@ -639,6 +729,29 @@ struct BindingValidator {
         return CompiledBindingTable(
             layout: layout,
             operators: operators,
+            operatorNames: operatorNames,
+            binders: binders,
+            references: references
+        )
+    }
+
+    mutating func validateRefinementMappings(_ refinements: [RefinementDecl]) throws {
+        for refinement in refinements {
+            for mapping in refinement.mappings {
+                try validateExpression(
+                    mapping.source,
+                    at: "refinements.\(refinement.name).mappings.\(mapping.target)",
+                    scope: [:]
+                )
+            }
+        }
+    }
+
+    func bindingTable() -> CompiledBindingTable {
+        CompiledBindingTable(
+            layout: layout,
+            operators: operators,
+            operatorNames: operatorNames,
             binders: binders,
             references: references
         )
@@ -665,8 +778,17 @@ struct BindingValidator {
 
     private mutating func validateExpression(_ expression: StateExpr, at path: String, scope: [String: BinderID]) throws {
         switch expression {
+        case .sourceIssue(let issue):
+            throw issue.compilationDiagnostic(stage: .validation, path: path)
         case .value:
             return
+        case .currentProcess:
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a process scope",
+                actual: "current-process identity outside an algorithm process"
+            )
         case .programCounter:
             guard let id = layout.programCounterID() else {
                 throw diagnostic(
@@ -674,6 +796,16 @@ struct BindingValidator {
                     path: path,
                     expected: "a compiler-owned program counter",
                     actual: "this model has no program counter"
+                )
+            }
+            references[path] = .variable(id)
+        case .procedureStack:
+            guard let id = layout.procedureStackID() else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: path,
+                    expected: "a compiler-owned procedure stack",
+                    actual: "this model has no procedure stack"
                 )
             }
             references[path] = .variable(id)
@@ -689,6 +821,13 @@ struct BindingValidator {
             references[path] = .controlLocation(id)
         case .variable(let name):
             try resolveValue(name, at: path, scope: scope)
+        case .processLocalFamily(let name):
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a process-local declaration lowered from an algorithm",
+                actual: "process-local family '\(name)' outside algorithm lowering"
+            )
         case .enabledAction(let name):
             guard let id = layout.actionID(named: name) else {
                 try unresolved(name, at: path, expected: "a declared action")
@@ -807,6 +946,9 @@ struct BindingValidator {
             }
             references[path] = .operator(id)
         case .lambda(let lambda):
+            if let issue = lambda.sourceIssue {
+                throw issue.compilationDiagnostic(stage: .binding, path: path)
+            }
             let bodyScope = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
             try validateExpression(lambda.body, at: "\(path).body", scope: bodyScope)
         }
@@ -818,6 +960,11 @@ struct BindingValidator {
         at path: String,
         scope: [String: BinderID]
     ) throws {
+        for operation in operators {
+            if let issue = operation.sourceIssue {
+                throw issue.compilationDiagnostic(stage: .binding, path: "\(path).\(operation.name)")
+            }
+        }
         try duplicate(operators.map(\.name), at: "\(path).operators")
         let outerOperators = self.operators
         let localOperators = operators.map { operation in
@@ -826,6 +973,7 @@ struct BindingValidator {
         nextOperatorOrdinal += localOperators.count
         for local in localOperators {
             self.operators[local.0] = local.1
+            operatorNames[local.1] = local.0
         }
         defer { self.operators = outerOperators }
         for operation in operators {
@@ -845,15 +993,15 @@ struct BindingValidator {
 
     private mutating func actionExpression(_ action: ActionExpr, at path: String, scope: [String: BinderID]) throws {
         switch action {
-        case .assign(let name, let value):
-            try assignmentTarget(name, at: "\(path).assign", scope: scope)
+        case .assign(let target, let value):
+            try assignmentTarget(target, at: "\(path).assign", scope: scope)
             try validateExpression(value, at: "\(path).value", scope: scope)
-        case .unchanged(let name):
-            try assignmentTarget(name, at: "\(path).unchanged", scope: scope)
+        case .unchanged(let target):
+            try assignmentTarget(target, at: "\(path).unchanged", scope: scope)
         case .guard_(let condition):
             try validateExpression(condition, at: "\(path).guard", scope: scope)
-        case .chooseAction(let name, let set):
-            try assignmentTarget(name, at: "\(path).choose", scope: scope)
+        case .chooseAction(let target, let set):
+            try assignmentTarget(target, at: "\(path).choose", scope: scope)
             try validateExpression(set, at: "\(path).set", scope: scope)
         case .existsAction(let name, let set, let body):
             try validateExpression(set, at: "\(path).set", scope: scope)
@@ -886,6 +1034,14 @@ struct BindingValidator {
             references[path] = .constant(value)
             return
         }
+        if formalConstants.contains(name) {
+            references[path] = .constant(.constant(name))
+            return
+        }
+        if incomingModuleParameters.contains(where: { $0.operatorName == name }) {
+            references[path] = .constant(.constant(name))
+            return
+        }
         if let id = operators[name] {
             references[path] = .operator(id)
             return
@@ -893,7 +1049,36 @@ struct BindingValidator {
         try unresolved(name, at: path, expected: "a declared variable, scoped binder, or linked symbol")
     }
 
-    private mutating func assignmentTarget(_ name: String, at path: String, scope: [String: BinderID]) throws {
+    private mutating func assignmentTarget(_ target: ActionTarget, at path: String, scope: [String: BinderID]) throws {
+        switch target {
+        case .programCounter:
+            guard let id = layout.programCounterID() else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: path,
+                    expected: "a compiler-owned program counter",
+                    actual: "this model has no program counter"
+                )
+            }
+            references[path] = .variable(id)
+            return
+        case .procedureStack:
+            guard let id = layout.procedureStackID() else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: path,
+                    expected: "a compiler-owned procedure stack",
+                    actual: "this model has no procedure stack"
+                )
+            }
+            references[path] = .variable(id)
+            return
+        case .named(let name):
+            try assignmentTarget(named: name, at: path, scope: scope)
+        }
+    }
+
+    private mutating func assignmentTarget(named name: String, at path: String, scope: [String: BinderID]) throws {
         if scope[name] != nil || knownBinderNames.contains(name) {
             throw diagnostic(
                 code: .assignmentToBinder,
@@ -943,6 +1128,7 @@ struct BindingValidator {
                 let id = OperatorID(ordinal: nextOperatorOrdinal)
                 nextOperatorOrdinal += 1
                 operators[name] = id
+                operatorNames[id] = name
                 references["\(path).\(name)"] = .operator(id)
             }
         }

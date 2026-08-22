@@ -15,8 +15,8 @@ struct SymmetricCollectionTLCOracleTests {
   func scopesRetainModelValueOrbitCounts() throws {
     for scope in 2...4 {
       let spec = oracleSpec(scope: scope)
-      let graph = try ModelChecker(spec: spec).exploreGraph()
-      let result = try ModelChecker(spec: spec).check()
+      let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+      let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
 
       #expect(graph.states.count == scope + 1)
       #expect(result.boundedScopes == [
@@ -34,47 +34,8 @@ struct SymmetricCollectionTLCOracleTests {
         actions: spec.actions,
         invariants: spec.invariants
       )
-      #expect(try ModelChecker(spec: unreduced).exploreGraph().states.count == 1 << scope)
+      #expect(try ModelChecker(compilation: try unreduced.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 1 << scope)
     }
-  }
-
-  @Test("The configured TLC command checks symmetric scopes and rejects quoted members")
-  func symmetricCollectionsCommandExecutesTLC() throws {
-    let root = packageRoot()
-    let jar = ProcessInfo.processInfo.environment["TLA_TOOLS_JAR"]
-      ?? root.appendingPathComponent(".build/tla-tools/tla2tools.jar").path
-    let configuredJava = [
-      ProcessInfo.processInfo.environment["TLC_JAVA"],
-      ProcessInfo.processInfo.environment["JAVA_HOME"].map { "\($0)/bin/java" },
-      "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java",
-      "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java"
-    ].compactMap { $0 }.contains { FileManager.default.isExecutableFile(atPath: $0) }
-    let executable = [
-      testProductExecutable(named: "tlc-validate"),
-      root.appendingPathComponent(".build/out/Products/Debug/tlc-validate").path,
-      root.appendingPathComponent(".build/debug/tlc-validate").path
-    ].compactMap { $0 }.first(where: FileManager.default.isExecutableFile(atPath:))
-    guard FileManager.default.fileExists(atPath: jar), configuredJava, let executable else { return }
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: executable)
-    process.arguments = ["symmetric-collections"]
-    process.currentDirectoryURL = root
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = pipe
-    try process.run()
-    process.waitUntilExit()
-    let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-
-    guard process.terminationStatus == 0 else {
-      Issue.record("TLC command failed:\n\(output)")
-      return
-    }
-    for (scope, states) in zip(2...4, 3...5) {
-      #expect(output.contains("symmetric scope \(scope) — Swift/TLC \(states) orbit states"))
-    }
-    #expect(output.contains("quoted-string symmetry control rejected by TLC"))
   }
 
   @Test("Parser and runtime collection specifications retain metadata, AST, states, and bounded outcomes")
@@ -107,7 +68,7 @@ struct SymmetricCollectionTLCOracleTests {
     #expect(normalizedActions(parsed.actions.map { NamedAction(name: $0.name, body: $0.body) })
       == normalizedActions(runtime.actions))
     #expect(try parsedSpec.compile().initialStateProjections() == runtime.compile().initialStateProjections())
-    #expect(try ModelChecker(spec: parsedSpec).check().description == ModelChecker(spec: runtime).check().description)
+    #expect(try ModelChecker(compilation: try parsedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description == ModelChecker(compilation: try runtime.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description)
   }
 
   @Test("Every opaque member identity misuse family produces symmetry guidance")
@@ -138,13 +99,13 @@ struct SymmetricCollectionTLCOracleTests {
 
   @Test("Bounded claims, ordinary results, lazy initial states, and Game of Life remain stable")
   func boundedAndOrdinaryBehaviorRemainStable() throws {
-    let bounded = try ModelChecker(spec: oracleSpec(scope: 2)).check()
+    let bounded = try ModelChecker(compilation: try oracleSpec(scope: 2).compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     #expect(bounded.description.contains("devices: 2 exchangeable members"))
     #expect(bounded.description.contains("does not prove larger populations"))
 
     let counter = Var<Int>("counter")
     let ordinary = TLASpec("Ordinary") { Variable(counter, 0) }
-    let ordinaryResult = try ModelChecker(spec: ordinary).check()
+    let ordinaryResult = try ModelChecker(compilation: try ordinary.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     #expect({ if case .ok = ordinaryResult { true } else { false } }())
     #expect(ordinaryResult.description == "OK — explored 1 state(s)")
     #expect(!(try ordinary.compile().renderedTLAModuleBundle().tla.contains("TLC")))
@@ -154,10 +115,10 @@ struct SymmetricCollectionTLCOracleTests {
     let lazySpec = TLASpec("LazyInit") {
       Variable(from: lazy.name, StateExpr.set([1, 2, 3]))
     }
-    #expect(try ModelChecker(spec: lazySpec).exploreGraph().states.count == 3)
+    #expect(try ModelChecker(compilation: try lazySpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 3)
     #expect(try lazySpec.compile().renderedTLAModuleBundle().tla.contains("Init == lazy \\in {1, 2, 3}"))
 
-    #expect(try ModelChecker(spec: Example.gameOfLife.spec, maxStates: 10).exploreGraph().states.count == 2)
+    #expect(try ModelChecker(compilation: try Example.gameOfLife.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).exploreGraph().states.count == 2)
     let gameOfLifeCFG = try Example.gameOfLife.spec.compile().renderedTLAModuleBundle().cfg
     #expect(gameOfLifeCFG.contains("SPECIFICATION Spec"))
     #expect(gameOfLifeCFG.contains("INVARIANT TypeOK"))

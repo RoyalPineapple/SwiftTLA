@@ -1,9 +1,8 @@
 # Core support
 
 Core support is a bounded claim. The [support register](../Verification/CoreConformance/support-surface.json)
-names each behavior, its
-finite bounds, required cases, graph relation, requested status, and any
-linked divergence. Behavior outside that register is not admitted.
+names each behavior, its finite bounds, required cases, graph relation, and
+requested status.
 
 Parser, macro, generated-machine, and public-library macOS checks
 use a separate [public workflow conformance](PublicWorkflowConformance.md)
@@ -17,8 +16,8 @@ the core finite-graph claim in this document.
 
 The P3 source registers are under
 `Verification/TemporalSymmetryConformance/`. A current P3 report can admit
-only the exact requested temporal and symmetry entries named there. Its report
-is at `.build/temporal-symmetry-support-gate/support-admission.json`.
+only the exact requested temporal and symmetry entries named there. Its
+reference is at `.build/temporal-symmetry-support-gate/current-support-admission.json`.
 
 GitHub Actions runs the required P3 qualification. Its report uses exit `0`
 for admission, `1` for a complete blocking result, and `2` when evidence is
@@ -45,11 +44,9 @@ The current requested entries are limited to these exact finite cases:
 The graph relation is `exactFiniteTLCGraph`: initial states, state bindings,
 labeled transitions, and outcome must all agree for the declared case.
 
-The altered HourClock edge and failing DieHard `NotSolved` invariant are
-permanent negative controls. They are intentionally unsupported. All other
-finite core behavior outside the two declared exact graphs is also explicitly
-unsupported. This does not claim temporal, liveness, fairness, symmetry,
-parser, annotation, generated-behavior, platform, or arbitrary-bound support.
+The declared graph cases define the current core support surface. Temporal,
+liveness, fairness, symmetry, parser, annotation, generated-behavior,
+platform, and arbitrary-bound claims use their own declared evidence.
 
 ## Read the gate
 
@@ -57,71 +54,43 @@ The hosted gate validates pinned prerequisites, creates one gate run ID, runs
 the declared cases, and writes an admission report even when setup or
 execution fails. Local broad gate execution requires explicit authorization.
 
-The latest report is:
+The current-report reference is:
 
 ```text
-.build/core-support-gate/support-admission.json
+.build/core-support-gate/current-support-admission.json
 ```
 
-The immutable report, invocation record, and case evidence are retained at:
+It contains the immutable report path and SHA-256. The immutable report,
+invocation record, and case evidence are retained at:
 
 ```text
 .build/core-support-gate/runs/<gate-run-id>/
 ```
 
-Do not use an older retained run as current support evidence. The gate binds
-all case evidence to its one gate run ID and rejects missing, partial,
-foreign, or digest-mismatched evidence.
+Each gate run binds its case evidence to one gate run ID.
 
-Each report entry links its required case IDs, linked divergence IDs, retained
-evidence references, and case-run correlations. Use those links to trace an
-admission or block back to the declared support entry and evidence from the
-same gate run.
+Each report entry links its required case IDs, retained evidence references,
+and case-run correlations.
 
 ## Read a report
 
-`support-admission.json` is `CoreSupportAdmission`. It contains:
+The report resolved by `current-support-admission.json` is `CoreSupportAdmission`. It contains:
 
 - The gate run ID and the fixed authority statement.
 - One decision for each support entry: `admitted`, `blocked`, or `unsupported`.
-- Stable reason codes, required case IDs, linked divergence IDs, evidence
-  references, and case-run correlations.
+- Stable reason codes, required case IDs, evidence references, and case-run
+  correlations.
 - Counts for admitted, blocked, unsupported, missing, stale, failing, and
-  unexplained entries.
+  non-exact entries.
 - The computed final exit class.
 
 `admitted` means every required case was produced in this run, used the
-declared inputs and toolchain, completed, and matched exactly with no
-unresolved linked divergence. `unsupported` is visible scope, not a pass for
-that behavior. `blocked` means a requested entry did not meet the admission
-contract.
+declared inputs and toolchain, completed, and matched exactly. `unsupported`
+marks a declared support boundary. `blocked` means a requested entry did not
+meet the admission contract.
 
-For a blocked entry, start with `reasonCodes`. Restore a missing prerequisite;
-rerun incomplete or foreign evidence; correct an input or toolchain digest;
-or investigate a non-exact or unexplained divergence. Then run the gate again.
-Do not relabel a failure as admitted.
-
-## Divergence records
-
-The divergence ledger uses these classifications:
-
-- `swiftTLADefect`: SwiftTLA disagrees with cited published TLA+ semantics.
-- `harnessOrConfigurationDefect`: an input, mapping, bridge, tool setup, or
-  run configuration caused the disagreement.
-- `unsupportedConstruct`: the construct is outside the current support
-  surface.
-- `publishedSemanticsAmbiguity`: the cited published material does not give
-  one clear result.
-- `suspectedTLCDefect`: the pinned TLC executable may disagree with the cited
-  published semantics.
-
-The current disposition is `open`, `resolved`, `unsupported`,
-`awaitingSemanticsReview`, or `suspectedReferenceDefect`. Only `resolved`
-allows a linked divergence to stop blocking support, and it requires an exact
-latest comparison. An `unsupported` record remains in the ledger as a
-regression: its retained difference fingerprint must still match. See [core
-graph conformance](CoreGraphConformance.md#divergences-and-support-admission)
-for the complete retention checklist.
+For a blocked entry, start with `reasonCodes`, then inspect the referenced
+case evidence and exact comparison report.
 
 ## Exit status
 

@@ -1,3 +1,11 @@
+enum CompilerControlSymbol: String, Sendable {
+    case programCounter = "pc"
+    case stack
+    case procedure
+    case done = "Done"
+    case terminatingAction = "Terminating"
+}
+
 func generatedBinderName(
     file: StaticString = #fileID,
     line: UInt = #line,
@@ -19,13 +27,20 @@ public struct LocalOperator: Hashable, Sendable {
     /// A bounded local recursive function parameter (`name[param \in domain]`).
     public let domain: StateExpr?
     public let body: StateExpr
+    let sourceIssue: SourceModelIssue?
 
     public init(_ name: String, parameters: [String] = [], domain: StateExpr? = nil, body: StateExpr) {
-        precondition(domain == nil || parameters.count == 1, "A bounded local function needs exactly one parameter.")
         self.name = name
         self.parameters = parameters
         self.domain = domain
         self.body = body
+        if name.isEmpty {
+            self.sourceIssue = .formalDeclaration(kind: "local operator", name: nil, problem: "it has no name")
+        } else if domain != nil, parameters.count != 1 {
+            self.sourceIssue = .formalDeclaration(kind: "bounded local function", name: name, problem: "it has \(parameters.count) parameters")
+        } else {
+            self.sourceIssue = nil
+        }
     }
 }
 
@@ -37,12 +52,18 @@ public struct LocalOperator: Hashable, Sendable {
 public struct FormalLambda: Hashable, Sendable {
     public let parameters: [String]
     public let body: StateExpr
+    let sourceIssue: SourceModelIssue?
 
     public init(parameters: [String], body: StateExpr) {
-        precondition(!parameters.isEmpty, "A formal lambda needs at least one parameter.")
-        precondition(Set(parameters).count == parameters.count, "A formal lambda cannot repeat a parameter name.")
         self.parameters = parameters
         self.body = body
+        if parameters.isEmpty {
+            self.sourceIssue = .formalDeclaration(kind: "formal lambda", name: nil, problem: "it has no parameters")
+        } else if Set(parameters).count != parameters.count {
+            self.sourceIssue = .formalDeclaration(kind: "formal lambda", name: nil, problem: "it repeats a parameter name")
+        } else {
+            self.sourceIssue = nil
+        }
     }
 }
 
@@ -110,6 +131,7 @@ public struct FormalOperatorDefinition: Hashable, Sendable {
     public let body: StateExpr
     public let plusCalPhase: AuthoredPlusCalDeclarationPhase
     public let plusCalDependencies: [String]
+    let sourceIssue: SourceModelIssue?
 
     public init(
         name: String,
@@ -118,16 +140,18 @@ public struct FormalOperatorDefinition: Hashable, Sendable {
         plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
         plusCalDependencies: [String] = []
     ) {
-        precondition(!name.isEmpty, "A formal operator definition needs a name.")
-        precondition(
-            Set(parameters.map(\.name)).count == parameters.count,
-            "A formal operator definition cannot repeat a parameter name."
-        )
         self.name = name
         self.parameters = parameters
         self.body = body
         self.plusCalPhase = plusCalPhase
         self.plusCalDependencies = plusCalDependencies
+        if name.isEmpty {
+            self.sourceIssue = .formalDeclaration(kind: "formal operator", name: nil, problem: "it has no name")
+        } else if Set(parameters.map(\.name)).count != parameters.count {
+            self.sourceIssue = .formalDeclaration(kind: "formal operator", name: name, problem: "it repeats a parameter name")
+        } else {
+            self.sourceIssue = nil
+        }
     }
 }
 
@@ -157,10 +181,90 @@ public struct StateRecordExpression: Hashable, Sendable {
     }
 }
 
+/// An invalid construct retained in the typed source model until compilation.
+public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
+    case recordField(schema: String)
+    case recordLiteral(schema: String, duplicateFields: [String], missingFields: [String])
+    case invalidRecordDefault(schema: String)
+    case functionLiteral(domain: String, duplicateValues: [String], missingValues: [String])
+    case staticSelection(String)
+    case sequenceElementDomain(operation: String)
+    case negativeSequenceLength(operation: String, lowerBound: Int)
+    case finiteDomain(type: String, problem: String)
+    case finiteDomainValue(type: String, value: String)
+    case actionBinding(action: String, parameter: String?, problem: String)
+    case formalDeclaration(kind: String, name: String?, problem: String)
+    case symmetricMember(collection: String, owner: String)
+
+    private var diagnostic: (code: CompilationDiagnostic.Code, expected: String, actual: String, nextSafeAction: String) {
+        switch self {
+        case .recordField(let schema):
+            return (
+                .invalidTypedRecordField,
+                "a field declared by \(schema)",
+                "an undeclared record field",
+                "Use one of the fields declared by \(schema), then compile again."
+            )
+        case .recordLiteral(let schema, let duplicates, let missing):
+            let details = [
+                duplicates.isEmpty ? nil : "repeated fields: \(duplicates.joined(separator: ", "))",
+                missing.isEmpty ? nil : "missing fields: \(missing.joined(separator: ", "))"
+            ].compactMap { $0 }.joined(separator: "; ")
+            return (.invalidTypedRecordLiteral, "one value for every field declared by \(schema)", details, "Provide each declared record field exactly once, then compile again.")
+        case .invalidRecordDefault(let schema):
+            return (.invalidTypedRecordLiteral, "a complete default record declared by \(schema)", "the schema default omits a field or has an invalid field value", "Provide a valid default record for \(schema), then compile again.")
+        case .functionLiteral(let domain, let duplicates, let missing):
+            let details = [
+                duplicates.isEmpty ? nil : "repeated domain values: \(duplicates.joined(separator: ", "))",
+                missing.isEmpty ? nil : "missing domain values: \(missing.joined(separator: ", "))"
+            ].compactMap { $0 }.joined(separator: "; ")
+            return (.invalidTypedFunctionLiteral, "one value for every member of \(domain)", details, "Provide every finite domain value exactly once, then compile again.")
+        case .staticSelection(let reason):
+            return (.invalidStaticSelection, "a closed formal selection with a matching value", reason, "Use a closed domain with at least one matching value, then compile again.")
+        case .sequenceElementDomain(let operation):
+            return (.invalidSequenceElementDomain, "SetExpr.literal(...) as the element domain for \(operation)", "a symbolic formal set", "Use SetExpr.literal(...) for this bounded sequence declaration, then compile again.")
+        case .negativeSequenceLength(let operation, let lowerBound):
+            return (.invalidSequenceLength, "a non-negative lower sequence length for \(operation)", "\(lowerBound)", "Use only non-negative sequence lengths, then compile again.")
+        case .finiteDomain(let type, let problem):
+            return (.invalidFiniteDomain, "a non-empty finite domain with distinct formal values for \(type)", problem, "Declare one or more distinct finite values, then compile again.")
+        case .finiteDomainValue(let type, let value):
+            return (.invalidFiniteDomainValue, "a value declared by \(type).finiteValues", value, "Use a declared finite-domain value, then compile again.")
+        case .actionBinding(let action, let parameter, let problem):
+            let location = parameter.map { "parameter '\($0)' of action '\(action)'" } ?? "parameters of action '\(action)'"
+            return (.invalidActionBinding, "a named parameter with a non-empty, distinct finite domain", "\(location): \(problem)", "Declare each action parameter once with one or more distinct values, then compile again.")
+        case .formalDeclaration(let kind, let name, let problem):
+            let location = name.map { "\(kind) '\($0)'" } ?? kind
+            return (.invalidFormalDeclaration, "a valid \(kind) declaration", "\(location): \(problem)", "Correct the declaration, then compile again.")
+        case .symmetricMember(let collection, let owner):
+            return (.invalidSymmetricMember, "a member declared by symmetric collection '\(collection)'", "the member belongs to symmetric collection '\(owner)'", "Use a member from '\(collection)', then compile again.")
+        }
+    }
+
+    func compilationDiagnostic(
+        stage: CompilationDiagnostic.Stage,
+        path: String
+    ) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: diagnostic.code,
+            stage: stage,
+            path: path,
+            expected: diagnostic.expected,
+            actual: diagnostic.actual,
+            nextSafeAction: diagnostic.nextSafeAction
+        )
+    }
+
+    public var description: String { diagnostic.actual }
+}
+
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
+    case sourceIssue(SourceModelIssue)
     case value(TLAValue)
     case variable(String)
+    case processLocalFamily(String)
+    case currentProcess
     case programCounter
+    case procedureStack
     case controlLocation(ControlLocationReference)
 
     case add(StateExpr, StateExpr)
@@ -234,9 +338,13 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String {
         switch self {
+        case .sourceIssue(let issue): return issue.description
         case .value(let v): return v.description
         case .variable(let n): return n
-        case .programCounter: return "pc"
+        case .processLocalFamily(let name): return "processLocalFamily(\(name))"
+        case .currentProcess: return "currentProcess"
+        case .programCounter: return CompilerControlSymbol.programCounter.rawValue
+        case .procedureStack: return CompilerControlSymbol.stack.rawValue
         case .controlLocation(let reference): return TLAValue.string(reference.sourceName).description
         case .add(let a, let b): return "(\(a) + \(b))"
         case .subtract(let a, let b): return "(\(a) - \(b))"
@@ -282,9 +390,9 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .tupleConcatenate(let a, let b): return "(\(a) \\o \(b))"
         case .recordLiteral(let fields):
             let orderedKeys: [String]
-            if fields.value(named: "procedure") != nil, fields.value(named: "pc") != nil {
-                orderedKeys = ["procedure", "pc"]
-                    + fields.fields.map(\.name).filter { $0 != "procedure" && $0 != "pc" }
+            if fields.value(named: CompilerControlSymbol.procedure.rawValue) != nil, fields.value(named: CompilerControlSymbol.programCounter.rawValue) != nil {
+                orderedKeys = [CompilerControlSymbol.procedure.rawValue, CompilerControlSymbol.programCounter.rawValue]
+                    + fields.fields.map(\.name).filter { $0 != CompilerControlSymbol.procedure.rawValue && $0 != CompilerControlSymbol.programCounter.rawValue }
             } else {
                 orderedKeys = fields.fields.map(\.name)
             }
@@ -382,7 +490,7 @@ private extension FormalCallArgument {
 
 private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
     switch expression {
-    case .value, .variable, .programCounter, .controlLocation, .enabledAction:
+    case .sourceIssue, .value, .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
         return []
     case .recursiveCall(let name, let arguments):
         return Set([name]).union(

@@ -37,7 +37,7 @@ private func value(
   @Test func constantsAndAssume() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
-      Extends("Naturals")
+      Extends(.naturals)
       Constant("N", 10)
       Assume(StateExpr.greaterOrEqual(.variable("N"), .value(.int(1))))
       Variable(x, 0)
@@ -98,18 +98,18 @@ private func value(
   @Test func definitionsOutput() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
-      Definition("Min(m,n) == IF m < n THEN m ELSE n")
+      FormalDefinition("Min", parameters: [.value("m"), .value("n")], body: .ifThenElse(.lessThan(.variable("m"), .variable("n")), .variable("m"), .variable("n")))
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("Min(m,n) =="))
+    #expect(tla.contains("Min(m, n) =="))
   }
 
   @Test func extendsNaturals() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
-      Extends("Naturals")
+      Extends(.naturals)
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
@@ -131,8 +131,8 @@ private func value(
       }
       Invariant("HCini") { hr >= 1 && hr <= 12 }
     }
-    #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 12)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 12)
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -157,8 +157,8 @@ private func value(
           || (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
       }
     }
-    #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 16)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 16)
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -173,21 +173,21 @@ private func value(
       Action("Deallocate") { a.becomes(a + 1).when(b > 0) && b.becomes(b - 1) }
       Invariant("ResourceCount") { a + b == 3 }
     }
-    #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 4)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 4)
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
   @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
   func coffeeCanMax5() throws {
-    let count = try ModelChecker(spec: Example.coffeeCanMax5.spec, maxStates: 500)
+    let count = try ModelChecker(compilation: try Example.coffeeCanMax5.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
       .exploreGraph().states.count
     #expect(count == 20)
   }
 
   @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
   func movingCatEven() throws {
-    let count = try ModelChecker(spec: Example.catEvenBoxes.spec, maxStates: 500)
+    let count = try ModelChecker(compilation: try Example.catEvenBoxes.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
       .exploreGraph().states.count
     #expect(count == 48)
   }
@@ -200,7 +200,7 @@ private func value(
       Action("once") { x.becomes(1).when(x == 0) }
       DeadlockCheck()
     }
-    let r = try ModelChecker(spec: spec, maxStates: 100).check()
+    let r = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     if case .deadlocked(let state) = r {
       let token = try #require(TLAStateProjection.Token(validating: "x"))
       #expect(state.value(for: token) == .int(1))
@@ -228,17 +228,17 @@ private func value(
             || cnt != 0 && cand != i && cnt.becomes(cnt - 1))
       }
     }
-    let count = try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count
+    let count = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count
     #expect(count >= 1)
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
   @Test("Multi-choose is Cartesian product")
   func multiChooseProduct() throws {
     let action: ActionExpr = .and(
-      .chooseAction("x", .setLiteral([.value(.int(1)), .value(.int(2))])),
-      .chooseAction("y", .setLiteral([.value(.int(10)), .value(.int(20))]))
+      .chooseAction(.named("x"), .setLiteral([.value(.int(1)), .value(.int(2))])),
+      .chooseAction(.named("y"), .setLiteral([.value(.int(10)), .value(.int(20))]))
     )
     let (compilation, states) = try compiledSuccessors(
       for: action,
@@ -275,7 +275,7 @@ private func value(
       .map { successor in
         (
           action: compilation.layout.actions[successor.action.ordinal].declaration.name,
-          arguments: successor.arguments,
+          arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
           state: try successor.state.projection(using: compilation.layout)
         )
       }
@@ -340,7 +340,7 @@ private func value(
       }
       Constraint(counter <= StateExpr.value(.constant("limit")))
     }
-    let graph = try ModelChecker(spec: spec).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
     let compilation = try spec.compile()
 
     for (sourceID, source) in graph.states {
@@ -388,27 +388,22 @@ private func value(
     #expect(try compilation.successors(for: action, arguments: [.int(3)], from: initial).isEmpty)
   }
 
-  @Test("compiled execution propagates invalid action evaluation")
-  func compiledExecutionPropagatesInvalidActionEvaluation() throws {
+  @Test("free action reference blocks compilation")
+  func freeActionReferenceBlocksCompilation() {
     let counter = Var<Int>("counter")
     let spec = TLASpec("InvalidAvailability") {
       Variable(counter, 0)
       Action("advance") { counter.becomes(counter + 1).when(StateExpr.variable("missing")) }
     }
-    let compilation = try spec.compile()
-    let state = try #require(try compilation.initialStateProjections().first)
-
     do {
-      _ = try successors(compilation, from: state)
-      Issue.record("Expected availability evaluation failure")
-    } catch let error as EvalError {
-      guard case .undefinedVariable("missing") = error else {
-        Issue.record("Expected missing-variable evaluator error, got \(error)")
-        return
-      }
+      _ = try spec.compile()
+      Issue.record("Expected a binding diagnostic")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .unknownReference)
+      #expect(diagnostic.stage == .binding)
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error)")
     }
-
-    #expect(compilation.layout.actionID(named: "unknown") == nil)
   }
 
   @Test("compiled execution applies a declared action")
@@ -433,7 +428,7 @@ private func value(
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 4) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     #expect(graph.states.count == 5)  // 0,1,2,3,4
     let values = try Set(graph.states.values.compactMap { try value("x", in: $0) })
     #expect(values == Set([.int(0), .int(1), .int(2), .int(3), .int(4)]))
@@ -449,7 +444,7 @@ private func value(
       Action("incA") { a.becomes(a + 1).when(a < 3) }
       Action("incB") { b.becomes(b + 1).when(b < 3) }
     }
-    let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
     for (_, ts) in graph.transitions {
       for t in ts {
         #expect(graph.states[t.target] != nil)
@@ -464,7 +459,7 @@ private func value(
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1) }
     }
-    let g = try ModelChecker(spec: spec, maxStates: 5).exploreGraph()
+    let g = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 5)).exploreGraph()
     // maxStates limits processed, last state may discover one extra
     #expect(g.states.count <= 5 + 1)
   }
@@ -477,7 +472,7 @@ private func value(
       Action("inc") { x.becomes(x + 1).when(x < 5) }
       Invariant("nonNeg") { x >= 0 }
     }
-    if case .ok(let c) = try ModelChecker(spec: spec, maxStates: 100).check() {
+    if case .ok(let c) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check() {
       #expect(c == 6)
     } else {
       #expect(Bool(false))
@@ -489,10 +484,10 @@ private func value(
   @Test("3-level nested OR in AND")
   func nestedOrL3() throws {
     let a: ActionExpr = .and(
-      .assign("x", .value(.int(1))),
+      .assign(.named("x"), .value(.int(1))),
       .or(
-        .or(.assign("y", .value(.int(2))), .assign("y", .value(.int(3)))),
-        .assign("y", .value(.int(4))))
+        .or(.assign(.named("y"), .value(.int(2))), .assign(.named("y"), .value(.int(3)))),
+        .assign(.named("y"), .value(.int(4))))
     )
     let (_, successors) = try compiledSuccessors(
       for: a,
@@ -509,7 +504,7 @@ private func value(
       Action("a") { x.becomes(2).when(x == 1) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     var dead = false
     if case .deadlocked = result { dead = true } else { dead = false }
     #expect(dead)
@@ -523,7 +518,7 @@ private func value(
       Action("a") { x.becomes(x + 1).when(x < 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     var val: TLAValue = .int(-1)
     if case .deadlocked(let s) = result { val = s["x"] ?? .int(-1) }
     #expect(val == .int(2))
@@ -537,7 +532,7 @@ private func value(
       Action("a") { x.becomes((x + 1) % 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(spec: spec, maxStates: 100).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
     var ok = false
     if case .ok = result { ok = true }
     #expect(ok)
@@ -550,50 +545,26 @@ private func value(
       Variable(x, 0)
       Action("a") { x.becomes(x + 1) }
     }
-    let g = try ModelChecker(spec: spec, maxStates: 1).exploreGraph()
+    let g = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).exploreGraph()
     #expect(g.states.count <= 2)
   }
 }
 
-// MARK: - completion coverage
-@Suite(.serialized) struct CompletionCoverageTests { @Test("completeAction pushes UNCHANGED into OR branches")
-  func perBranchUnchanged() {
-    // OR action: only one branch assigns x, the other doesn't
-    let action: ActionExpr = .or(
-      .assign("x", .value(.int(1))),
-      .assign("y", .value(.int(2)))
-    )
-    // completeAction should add UNCHANGED y to first branch, UNCHANGED x to second
-    let completed = completeAction(action, allVars: ["x", "y"])
-    let desc = completed.description
-    #expect(desc.contains("UNCHANGED y"))
-    #expect(desc.contains("UNCHANGED x"))
-  }
-
-  @Test("completeAction doesn't add UNCHANGED when all vars assigned")
-  func noUnchangedWhenAllAssigned() {
-    let action: ActionExpr = .and(
-      .assign("x", .value(.int(1))),
-      .assign("y", .value(.int(2)))
-    )
-    let completed = completeAction(action, allVars: ["x", "y"])
-    #expect(!completed.description.contains("UNCHANGED"))
-  }
-
+@Suite(.serialized) struct CompiledExpressionEvaluationTests {
   @Test("CHOOSE + functionApply + EXCEPT in single action enumerates correctly")
   func chooseWithFunctionApply() throws {
     let chosenProcess: ActionExpr = .chooseAction(
-      "process", .setLiteral([.value(.int(1)), .value(.int(2))]))
+      .named("process"), .setLiteral([.value(.int(1)), .value(.int(2))]))
     let readState: ActionExpr = .guard_(
       .equal(
         .functionApply(.variable("programCounter"), .variable("process")),
         .value(.string("initial"))
       ))
     let updateState: ActionExpr = .assign(
-      "programCounter",
+      .named("programCounter"),
       .except(.variable("programCounter"), .variable("process"), .value(.string("done")))
     )
-    let unchanged: ActionExpr = .unchanged("sent")
+    let unchanged: ActionExpr = .unchanged(.named("sent"))
     let action = ActionExpr.and(
       chosenProcess, ActionExpr.and(readState, ActionExpr.and(updateState, unchanged)))
     let (compilation, successors) = try compiledSuccessors(for: action, from: [
@@ -661,18 +632,6 @@ private func value(
     #expect(!(large < small))
   }
 
-  @Test("renameVar replaces variable references by AST rewrite")
-  func renameVarReplacesNested() {
-    let body: StateExpr = .add(
-      .multiply(.variable("userVar"), .value(.int(2))),
-      .variable("userVar")
-    )
-    let result = renameVar("userVar", to: "x0", in: body)
-    let desc = result.description
-    #expect(!desc.contains("userVar"))
-    #expect(desc.contains("x0"))
-  }
-
   @Test("raw function AST construction remains explicit")
   func rawFunctionASTConstruction() {
     let rawFunction = Var<TLAValue>("rawFunction")
@@ -695,12 +654,12 @@ private func value(
         choose(selfProcess, from: StateExpr.set([1, 2]))
           && StateExpr.functionApply(programCounter.stateExpr, selfProcess.stateExpr) == "initial"
           && .assign(
-            programCounter.name,
+            .named(programCounter.name),
             .except(programCounter.stateExpr, selfProcess.stateExpr, .value(.string("done")))
           )
       }
     }
-    if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 50).check() {
+    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50)).check() {
       #expect(count >= 2)
     } else {
       #expect(Bool(false))

@@ -13,6 +13,7 @@ public struct PrisonerModel: Sendable {
         case bob = "Bob"
         case eve = "Eve"
 
+        public static var defaultValue: Self { .alice }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.prisoner")
 
@@ -22,33 +23,36 @@ public struct PrisonerModel: Sendable {
     public enum Light: String, TLAValueType {
         case off
         case on
+
+        public static var defaultValue: Self { .off }
     }
 
     private enum Scheduler: String, CaseIterable, FiniteDomainKey {
         case warden
 
+        static var defaultValue: Self { .warden }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.scheduler")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case chooseVisitor
     }
 
     public static var spec: TLASpec {
         #spec("Prisoner") {
-            Extends("Naturals")
-            Algorithm("Prisoner") {
-                let counter = SharedVar(initial: Prisoner.alice)
-                let count = SharedVar(initial: 1)
-                let announced = SharedVar(initial: false)
-                let signalled = SharedVar(initial: Function<Prisoner, Int>.literal(
+            Extends(.naturals)
+            Algorithm("Prisoner", scoped: { scope in
+                let counter = scope.sharedVar("counter", initial: Prisoner.alice)
+                let count = scope.sharedVar("count", initial: 1)
+                let announced = scope.sharedVar("announced", initial: false)
+                let signalled = scope.sharedVar("signalled", initial: Function<Prisoner, Int>.literal(
                     (.alice, 0), (.bob, 0), (.eve, 0)
                 ))
-                let light = SharedVar(initial: Light.off)
-                let hasVisited = SharedVar(initial: SetExpr<Prisoner>())
+                let light = scope.sharedVar("light", initial: Light.off)
+                let hasVisited = scope.sharedVar("hasVisited", initial: SetExpr<Prisoner>())
 
                 Each(Scheduler.all) { _ in
                     Do(Step.chooseVisitor) {
@@ -81,7 +85,7 @@ public struct PrisonerModel: Sendable {
                         Goto(Step.chooseVisitor)
                     }
                 }
-            }
+            })
         }
     }
 }

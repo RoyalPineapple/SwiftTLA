@@ -1,8 +1,4 @@
 import Foundation
-public enum CoreConformanceCaseRole: String, Codable, Sendable {
-  case requiredComparison
-  case permanentRegression
-}
 public enum CoreSupportCategory: String, Codable, Sendable {
   case stateSpace
   case transitionRelation
@@ -47,42 +43,32 @@ public enum CoreSupportReasonCode: String, CaseIterable, Codable, Sendable {
   case toolchainDigestMismatch
   case executionFailed
   case nonExactComparison
-  case unresolvedDivergence
-  case unexplainedDivergence
 }
 public struct CoreConformanceCaseGovernance: Equatable, Codable, Sendable {
-  public let role: CoreConformanceCaseRole
   public let finiteBounds: CoreFiniteBounds
   public let semanticCitations: [String]
-  public let expectedRegressionOutcome: CoreRegressionOutcome
   public init(
-    role: CoreConformanceCaseRole,
     finiteBounds: CoreFiniteBounds,
-    semanticCitations: [String],
-    expectedRegressionOutcome: CoreRegressionOutcome
+    semanticCitations: [String]
   ) throws {
-    self.role = role
     self.finiteBounds = finiteBounds
     self.semanticCitations = semanticCitations
-    self.expectedRegressionOutcome = expectedRegressionOutcome
     try validate()
   }
   public func validate() throws {
     try finiteBounds.validate()
     guard !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
-      throw CoreGovernanceError.invalidField(record: "case", field: "semanticCitations")
+      throw ConformanceGovernanceError.invalidField(record: "case", field: "semanticCitations")
     }
   }
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case role, finiteBounds, semanticCitations, expectedRegressionOutcome
+    case finiteBounds, semanticCitations
   }
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
-      role: container.decode(CoreConformanceCaseRole.self, forKey: .role),
       finiteBounds: container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
-      semanticCitations: container.decode([String].self, forKey: .semanticCitations),
-      expectedRegressionOutcome: container.decode(CoreRegressionOutcome.self, forKey: .expectedRegressionOutcome))
+      semanticCitations: container.decode([String].self, forKey: .semanticCitations))
   }
 }
 public struct CoreSupportSurfaceEntry: Equatable, Codable, Sendable {
@@ -93,7 +79,6 @@ public struct CoreSupportSurfaceEntry: Equatable, Codable, Sendable {
   public let relation: CanonicalSchema
   public let mandatoryCaseIDs: [String]
   public let requestedStatus: CoreSupportRequest
-  public let linkedDivergenceIDs: [String]
   public let reason: String?
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case id
@@ -103,7 +88,6 @@ public struct CoreSupportSurfaceEntry: Equatable, Codable, Sendable {
     case relation
     case mandatoryCaseIDs
     case requestedStatus
-    case linkedDivergenceIDs
     case reason
   }
   public init(
@@ -114,7 +98,6 @@ public struct CoreSupportSurfaceEntry: Equatable, Codable, Sendable {
     relation: CanonicalSchema = .exactFiniteTLCGraph,
     mandatoryCaseIDs: [String],
     requestedStatus: CoreSupportRequest,
-    linkedDivergenceIDs: [String] = [],
     reason: String? = nil
   ) throws {
     self.id = id
@@ -124,29 +107,27 @@ public struct CoreSupportSurfaceEntry: Equatable, Codable, Sendable {
     self.relation = relation
     self.mandatoryCaseIDs = mandatoryCaseIDs
     self.requestedStatus = requestedStatus
-    self.linkedDivergenceIDs = linkedDivergenceIDs
     self.reason = reason
     try validate()
   }
   public func validate() throws {
     try finiteBounds.validate()
     guard !id.isEmpty, !behavior.isEmpty, !mandatoryCaseIDs.isEmpty,
-          Set(mandatoryCaseIDs).count == mandatoryCaseIDs.count,
-          Set(linkedDivergenceIDs).count == linkedDivergenceIDs.count else {
-      throw CoreGovernanceError.invalidField(record: id, field: "support entry")
+          Set(mandatoryCaseIDs).count == mandatoryCaseIDs.count else {
+      throw ConformanceGovernanceError.invalidField(record: id, field: "support entry")
     }
     guard category.isSupportedBy else {
-      throw CoreGovernanceError.unsupportedCategory(category.rawValue)
+      throw ConformanceGovernanceError.unsupportedCategory(category.rawValue)
     }
     guard relation == .exactFiniteTLCGraph else {
-      throw CoreGovernanceError.invalidField(record: id, field: "relation")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "relation")
     }
     if requestedStatus != .requested, reason?.isEmpty != false {
-      throw CoreGovernanceError.invalidField(record: id, field: "reason")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "reason")
     }
   }
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     let relation = try CanonicalSchema(validating: container.decode(String.self, forKey: .relation))
     try self.init(
       id: container.decode(String.self, forKey: .id),
@@ -156,7 +137,6 @@ public struct CoreSupportSurfaceEntry: Equatable, Codable, Sendable {
       relation: relation,
       mandatoryCaseIDs: container.decode([String].self, forKey: .mandatoryCaseIDs),
       requestedStatus: container.decode(CoreSupportRequest.self, forKey: .requestedStatus),
-      linkedDivergenceIDs: try container.decodeIfPresent([String].self, forKey: .linkedDivergenceIDs) ?? [],
       reason: try container.decodeIfPresent(String.self, forKey: .reason))
   }
   public func encode(to encoder: Encoder) throws {
@@ -168,7 +148,6 @@ public struct CoreSupportSurfaceEntry: Equatable, Codable, Sendable {
     try container.encode(relation.rawValue, forKey: .relation)
     try container.encode(mandatoryCaseIDs, forKey: .mandatoryCaseIDs)
     try container.encode(requestedStatus, forKey: .requestedStatus)
-    try container.encode(linkedDivergenceIDs, forKey: .linkedDivergenceIDs)
     try container.encodeIfPresent(reason, forKey: .reason)
   }
 }
@@ -180,12 +159,12 @@ public struct CoreSupportSurface: Equatable, Codable, Sendable {
     try self.init(schema: Self.schema, entries: entries)
   }
   public init(schema: String, entries: [CoreSupportSurfaceEntry]) throws {
-    guard schema == Self.schema else { throw CoreGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var identifiers = Set<String>()
     for entry in entries {
       try entry.validate()
       guard identifiers.insert(entry.id).inserted else {
-        throw CoreGovernanceError.duplicateID(kind: "support", id: entry.id)
+        throw ConformanceGovernanceError.duplicateID(kind: "support", id: entry.id)
       }
     }
     self.schema = schema
@@ -193,25 +172,16 @@ public struct CoreSupportSurface: Equatable, Codable, Sendable {
   }
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, entries }
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: container.decode(String.self, forKey: .schema),
       entries: container.decode([CoreSupportSurfaceEntry].self, forKey: .entries))
   }
-  public func validate(caseIDs: Set<String>, ledger: CoreDivergenceLedger) throws {
-    try ledger.validate(caseIDs: caseIDs)
-    let divergenceIDs = Set(ledger.records.map(\.id))
+  public func validate(caseIDs: Set<String>) throws {
     for entry in entries {
       for caseID in entry.mandatoryCaseIDs where !caseIDs.contains(caseID) {
-        throw CoreGovernanceError.unknownCaseID(caseID)
+        throw ConformanceGovernanceError.unknownCaseID(caseID)
       }
-      for divergenceID in entry.linkedDivergenceIDs where !divergenceIDs.contains(divergenceID) {
-        throw CoreGovernanceError.unknownDivergenceID(divergenceID)
-      }
-    }
-    let linkedDivergenceIDs = Set(entries.flatMap(\.linkedDivergenceIDs))
-    guard divergenceIDs.isSubset(of: linkedDivergenceIDs) else {
-      throw CoreGovernanceError.invalidField(record: "support surface", field: "unlinked divergence")
     }
   }
 }
@@ -220,7 +190,6 @@ public struct CoreSupportAdmissionEntry: Equatable, Codable, Sendable {
   public let decision: CoreSupportDecision
   public let reasonCodes: [CoreSupportReasonCode]
   public let mandatoryCaseIDs: [String]
-  public let divergenceIDs: [String]
   public let evidence: [CoreEvidenceReference]
   public let caseRunCorrelations: [CoreSupportCaseRunCorrelation]
   public init(
@@ -228,7 +197,6 @@ public struct CoreSupportAdmissionEntry: Equatable, Codable, Sendable {
     decision: CoreSupportDecision,
     reasonCodes: [CoreSupportReasonCode],
     mandatoryCaseIDs: [String],
-    divergenceIDs: [String],
     evidence: [CoreEvidenceReference] = [],
     caseRunCorrelations: [CoreSupportCaseRunCorrelation] = []
   ) throws {
@@ -236,7 +204,6 @@ public struct CoreSupportAdmissionEntry: Equatable, Codable, Sendable {
     self.decision = decision
     self.reasonCodes = reasonCodes
     self.mandatoryCaseIDs = mandatoryCaseIDs
-    self.divergenceIDs = divergenceIDs
     self.evidence = evidence
     self.caseRunCorrelations = caseRunCorrelations
     try validate()
@@ -244,39 +211,37 @@ public struct CoreSupportAdmissionEntry: Equatable, Codable, Sendable {
   public func validate() throws {
     guard !supportID.isEmpty, !mandatoryCaseIDs.isEmpty,
           Set(reasonCodes).count == reasonCodes.count,
-          Set(mandatoryCaseIDs).count == mandatoryCaseIDs.count,
-          Set(divergenceIDs).count == divergenceIDs.count else {
-      throw CoreGovernanceError.invalidField(record: supportID, field: "admission entry")
+          Set(mandatoryCaseIDs).count == mandatoryCaseIDs.count else {
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "admission entry")
     }
     if decision == .admitted, !reasonCodes.isEmpty {
-      throw CoreGovernanceError.invalidField(record: supportID, field: "reasonCodes")
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "reasonCodes")
     }
     if decision != .admitted, reasonCodes.isEmpty {
-      throw CoreGovernanceError.invalidField(record: supportID, field: "reasonCodes")
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "reasonCodes")
     }
     try evidence.forEach { try $0.validate() }
     try caseRunCorrelations.forEach { try $0.validate() }
     let correlatedCases = Set(caseRunCorrelations.map(\.caseID))
     guard correlatedCases.count == caseRunCorrelations.count else {
-      throw CoreGovernanceError.invalidField(record: supportID, field: "caseRunCorrelations")
+      throw ConformanceGovernanceError.invalidField(record: supportID, field: "caseRunCorrelations")
     }
     if decision == .admitted {
       guard !evidence.isEmpty, correlatedCases == Set(mandatoryCaseIDs) else {
-        throw CoreGovernanceError.invalidField(record: supportID, field: "evidence or caseRunCorrelations")
+        throw ConformanceGovernanceError.invalidField(record: supportID, field: "evidence or caseRunCorrelations")
       }
     }
   }
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case supportID, decision, reasonCodes, mandatoryCaseIDs, divergenceIDs, evidence, caseRunCorrelations
+    case supportID, decision, reasonCodes, mandatoryCaseIDs, evidence, caseRunCorrelations
   }
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       supportID: container.decode(String.self, forKey: .supportID),
       decision: container.decode(CoreSupportDecision.self, forKey: .decision),
       reasonCodes: container.decode([CoreSupportReasonCode].self, forKey: .reasonCodes),
       mandatoryCaseIDs: container.decode([String].self, forKey: .mandatoryCaseIDs),
-      divergenceIDs: container.decode([String].self, forKey: .divergenceIDs),
       evidence: container.decode([CoreEvidenceReference].self, forKey: .evidence),
       caseRunCorrelations: container.decode(
         [CoreSupportCaseRunCorrelation].self, forKey: .caseRunCorrelations))
@@ -304,14 +269,14 @@ public struct CoreSupportCaseRunCorrelation: Equatable, Codable, Sendable {
   }
   public func validate() throws {
     guard !caseID.isEmpty else {
-      throw CoreGovernanceError.invalidField(record: "caseRunCorrelation", field: "caseID")
+      throw ConformanceGovernanceError.invalidField(record: "caseRunCorrelation", field: "caseID")
     }
   }
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case caseID, gateRunID, swiftRunID, tlcRunID, comparisonRunID
   }
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       gateRunID: container.decode(UUID.self, forKey: .gateRunID),
@@ -327,7 +292,7 @@ public struct CoreSupportAdmissionCounts: Equatable, Codable, Sendable {
   public let missing: Int
   public let stale: Int
   public let failing: Int
-  public let unexplained: Int
+  public let nonExact: Int
   public init(entries: [CoreSupportAdmissionEntry]) {
     admitted = entries.count { $0.decision == .admitted }
     blocked = entries.count { $0.decision == .blocked }
@@ -341,8 +306,8 @@ public struct CoreSupportAdmissionCounts: Equatable, Codable, Sendable {
         || entry.reasonCodes.contains(.toolchainDigestMismatch)
     }
     failing = entries.count { $0.reasonCodes.contains(.executionFailed) }
-    unexplained = entries.reduce(into: 0) { count, entry in
-      if entry.reasonCodes.contains(.unexplainedDivergence) { count += 1 }
+    nonExact = entries.reduce(into: 0) { count, entry in
+      if entry.reasonCodes.contains(.nonExactComparison) { count += 1 }
     }
   }
   private init(
@@ -352,10 +317,10 @@ public struct CoreSupportAdmissionCounts: Equatable, Codable, Sendable {
     missing: Int,
     stale: Int,
     failing: Int,
-    unexplained: Int
+    nonExact: Int
   ) throws {
-    guard [admitted, blocked, unsupported, missing, stale, failing, unexplained].allSatisfy({ $0 >= 0 }) else {
-      throw CoreGovernanceError.invalidField(record: "admission", field: "counts")
+    guard [admitted, blocked, unsupported, missing, stale, failing, nonExact].allSatisfy({ $0 >= 0 }) else {
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "counts")
     }
     self.admitted = admitted
     self.blocked = blocked
@@ -363,13 +328,13 @@ public struct CoreSupportAdmissionCounts: Equatable, Codable, Sendable {
     self.missing = missing
     self.stale = stale
     self.failing = failing
-    self.unexplained = unexplained
+    self.nonExact = nonExact
   }
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case admitted, blocked, unsupported, missing, stale, failing, unexplained
+    case admitted, blocked, unsupported, missing, stale, failing, nonExact
   }
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       admitted: container.decode(Int.self, forKey: .admitted),
       blocked: container.decode(Int.self, forKey: .blocked),
@@ -377,7 +342,7 @@ public struct CoreSupportAdmissionCounts: Equatable, Codable, Sendable {
       missing: container.decode(Int.self, forKey: .missing),
       stale: container.decode(Int.self, forKey: .stale),
       failing: container.decode(Int.self, forKey: .failing),
-      unexplained: container.decode(Int.self, forKey: .unexplained))
+      nonExact: container.decode(Int.self, forKey: .nonExact))
   }
 }
 public struct CoreSupportAdmission: Equatable, Codable, Sendable {
@@ -399,16 +364,16 @@ public struct CoreSupportAdmission: Equatable, Codable, Sendable {
   }
   public init(schema: String, gateRunID: UUID, authority: String, entries: [CoreSupportAdmissionEntry]) throws {
     guard schema == Self.schema, authority == Self.authorityBoundary else {
-      throw CoreGovernanceError.invalidSchema(schema)
+      throw ConformanceGovernanceError.invalidSchema(schema)
     }
     var identifiers = Set<String>()
     for entry in entries {
       try entry.validate()
       guard entry.caseRunCorrelations.allSatisfy({ $0.gateRunID == gateRunID }) else {
-        throw CoreGovernanceError.invalidField(record: entry.supportID, field: "caseRunCorrelations")
+        throw ConformanceGovernanceError.invalidField(record: entry.supportID, field: "caseRunCorrelations")
       }
       guard identifiers.insert(entry.supportID).inserted else {
-        throw CoreGovernanceError.duplicateID(kind: "admission", id: entry.supportID)
+        throw ConformanceGovernanceError.duplicateID(kind: "admission", id: entry.supportID)
       }
     }
     self.schema = schema
@@ -416,12 +381,12 @@ public struct CoreSupportAdmission: Equatable, Codable, Sendable {
     self.authority = authority
     self.entries = entries
     self.counts = CoreSupportAdmissionCounts(entries: entries)
-    self.finalExitClass = !entries.contains { $0.decision == .blocked } && counts.unexplained == 0
+    self.finalExitClass = !entries.contains { $0.decision == .blocked }
       ? .success
       : .blocked
   }
   public init(from decoder: Decoder) throws {
-    let container = try CoreGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     let entries = try container.decode([CoreSupportAdmissionEntry].self, forKey: .entries)
     try self.init(
       schema: container.decode(String.self, forKey: .schema),
@@ -430,11 +395,11 @@ public struct CoreSupportAdmission: Equatable, Codable, Sendable {
       entries: entries)
     let reportedCounts = try container.decode(CoreSupportAdmissionCounts.self, forKey: .counts)
     guard reportedCounts == counts else {
-      throw CoreGovernanceError.invalidField(record: "admission", field: "counts")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "counts")
     }
     let reportedExitClass = try container.decode(CoreSupportAdmissionExitClass.self, forKey: .finalExitClass)
     guard reportedExitClass == finalExitClass else {
-      throw CoreGovernanceError.invalidField(record: "admission", field: "finalExitClass")
+      throw ConformanceGovernanceError.invalidField(record: "admission", field: "finalExitClass")
     }
   }
 }
@@ -456,21 +421,18 @@ public struct CoreSupportCaseEvidence: Sendable {
 public struct CoreSupportGateInput: Sendable {
   public let gateRunID: UUID
   public let manifest: CoreConformanceCasesManifest
-  public let ledger: CoreDivergenceLedger
   public let surface: CoreSupportSurface
   public let evidence: [CoreSupportCaseEvidence]
   public let prerequisiteAvailable: Bool
   public init(
     gateRunID: UUID,
     manifest: CoreConformanceCasesManifest,
-    ledger: CoreDivergenceLedger,
     surface: CoreSupportSurface,
     evidence: [CoreSupportCaseEvidence],
     prerequisiteAvailable: Bool = true
   ) {
     self.gateRunID = gateRunID
     self.manifest = manifest
-    self.ledger = ledger
     self.surface = surface
     self.evidence = evidence
     self.prerequisiteAvailable = prerequisiteAvailable
@@ -480,16 +442,14 @@ public struct CoreSupportGateInput: Sendable {
 /// It does not infer support from a passing graph or act as another checker.
 public struct CoreSupportGate: Sendable {
   public init() {}
-  /// Never throws for an evidence or register problem. Instead it returns a
-  /// blocked report with stable reason codes so the caller can retain it.
-  public func evaluate(_ input: CoreSupportGateInput) -> CoreSupportAdmission {
+  public func evaluate(_ input: CoreSupportGateInput) throws -> CoreSupportAdmission {
     let manifestByID = Dictionary(uniqueKeysWithValues: input.manifest.cases.map { ($0.id, $0) })
     let evidenceGroups = Dictionary(grouping: input.evidence, by: \.caseID)
     let evidenceByCaseID = evidenceGroups.compactMapValues { $0.count == 1 ? $0[0] : nil }
     let registerIsValid: Bool
     do {
-      try input.manifest.validate(ledger: input.ledger)
-      try input.surface.validate(caseIDs: Set(manifestByID.keys), ledger: input.ledger)
+      try input.manifest.validate()
+      try input.surface.validate(caseIDs: Set(manifestByID.keys))
       registerIsValid = evidenceGroups.values.allSatisfy { $0.count == 1 }
     } catch {
       registerIsValid = false
@@ -499,64 +459,39 @@ public struct CoreSupportGate: Sendable {
         declaredCase,
         evidence: evidenceByCaseID[declaredCase.id],
         gateRunID: input.gateRunID,
-        prerequisiteAvailable: input.prerequisiteAvailable,
-        expectsExactComparison: input.ledger.records.contains {
-          $0.disposition == .resolved && $0.permanentRegressionCaseID == declaredCase.id
-        })
+        prerequisiteAvailable: input.prerequisiteAvailable)
     }
-    let unexplained = unexplainedDivergenceCaseIDs(
-      observations: observations, ledger: input.ledger)
-    let retainedRegressionsAreCurrent = input.ledger.records.allSatisfy { record in
-      guard let observation = observations[record.permanentRegressionCaseID], observation.reasons.isEmpty else {
-        return false
-      }
-      if record.disposition == .resolved {
-        return record.latestComparison.outcome == .exact && !observation.comparisonIsDifference
-      }
-      let current = record.latestComparison.outcome == .difference
-        && observation.comparisonIsDifference
-        && observation.differenceFingerprint == record.normalizedDifferenceFingerprint
-      return current
-    }
-    let entries = input.surface.entries.map { entry in
-      decision(
+    let entries = try input.surface.entries.map { entry in
+      try decision(
         for: entry,
         observations: observations,
-        ledger: input.ledger,
         registerIsValid: registerIsValid,
-        hasUnexplainedDivergence: !unexplained.isEmpty,
-        retainedRegressionsAreCurrent: retainedRegressionsAreCurrent,
         gateRunID: input.gateRunID)
     }
     let reportEntries: [CoreSupportAdmissionEntry]
     if entries.isEmpty || !registerIsValid && input.surface.entries.isEmpty {
-      reportEntries = [invalidRegisterEntry()]
+      reportEntries = [try invalidRegisterEntry()]
     } else {
       reportEntries = entries
     }
-    return try! CoreSupportAdmission(gateRunID: input.gateRunID, entries: reportEntries)
+    return try CoreSupportAdmission(gateRunID: input.gateRunID, entries: reportEntries)
   }
-  private func invalidRegisterEntry() -> CoreSupportAdmissionEntry {
-    try! CoreSupportAdmissionEntry(
+  private func invalidRegisterEntry() throws -> CoreSupportAdmissionEntry {
+    try CoreSupportAdmissionEntry(
       supportID: "governance-register", decision: .blocked, reasonCodes: [.invalidRegister],
-      mandatoryCaseIDs: ["governance-register"], divergenceIDs: [])
+      mandatoryCaseIDs: ["governance-register"])
   }
   private func decision(
     for entry: CoreSupportSurfaceEntry,
     observations: [String: CaseObservation],
-    ledger: CoreDivergenceLedger,
     registerIsValid: Bool,
-    hasUnexplainedDivergence: Bool,
-    retainedRegressionsAreCurrent: Bool,
     gateRunID: UUID
-  ) -> CoreSupportAdmissionEntry {
+  ) throws -> CoreSupportAdmissionEntry {
     var reasons = Set<CoreSupportReasonCode>()
     var evidence: [CoreEvidenceReference] = []
     var correlations: [CoreSupportCaseRunCorrelation] = []
     if !registerIsValid { reasons.insert(.invalidRegister) }
     if !entry.category.isSupportedBy { reasons.insert(.unsupportedCategory) }
-    if hasUnexplainedDivergence { reasons.insert(.unexplainedDivergence) }
-    if !retainedRegressionsAreCurrent { reasons.insert(.unresolvedDivergence) }
     for caseID in entry.mandatoryCaseIDs {
       guard let observation = observations[caseID] else {
         reasons.insert(.missingEvidence)
@@ -565,23 +500,6 @@ public struct CoreSupportGate: Sendable {
       reasons.formUnion(observation.reasons)
       evidence.append(contentsOf: observation.references)
       if let correlation = observation.correlation { correlations.append(correlation) }
-    }
-    let related = ledger.records.filter {
-      entry.mandatoryCaseIDs.contains($0.provenance.caseID)
-        || entry.mandatoryCaseIDs.contains($0.permanentRegressionCaseID)
-    }
-    guard Set(related.map(\.id)).isSubset(of: Set(entry.linkedDivergenceIDs)) else {
-      reasons.insert(.unexplainedDivergence)
-      return try! CoreSupportAdmissionEntry(
-        supportID: entry.id, decision: .blocked,
-        reasonCodes: reasons.sorted { $0.rawValue < $1.rawValue },
-        mandatoryCaseIDs: entry.mandatoryCaseIDs,
-        divergenceIDs: entry.linkedDivergenceIDs,
-        evidence: evidence, caseRunCorrelations: correlations)
-    }
-    let linked = ledger.records.filter { entry.linkedDivergenceIDs.contains($0.id) }
-    if linked.contains(where: { $0.disposition != .resolved }) {
-      reasons.insert(.unresolvedDivergence)
     }
     let decision: CoreSupportDecision
     switch entry.requestedStatus {
@@ -596,73 +514,65 @@ public struct CoreSupportGate: Sendable {
     case .requested:
       decision = reasons.isEmpty ? .admitted : .blocked
     }
-    return try! CoreSupportAdmissionEntry(
+    return try CoreSupportAdmissionEntry(
       supportID: entry.id,
       decision: decision,
       reasonCodes: reasons.sorted { $0.rawValue < $1.rawValue },
       mandatoryCaseIDs: entry.mandatoryCaseIDs,
-      divergenceIDs: entry.linkedDivergenceIDs,
       evidence: evidence,
       caseRunCorrelations: correlations)
-  }
-  private func unexplainedDivergenceCaseIDs(
-    observations: [String: CaseObservation], ledger: CoreDivergenceLedger
-  ) -> Set<String> {
-    let recordsByCaseID = Dictionary(grouping: ledger.records, by: \.permanentRegressionCaseID)
-    return Set(observations.compactMap { caseID, observation in
-      guard observation.comparisonIsDifference else { return nil }
-      guard let record = recordsByCaseID[caseID]?.first,
-            observation.differenceFingerprint == record.normalizedDifferenceFingerprint else {
-        return caseID
-      }
-      return nil
-    })
   }
   private func inspect(
     _ declaredCase: CoreConformanceCasesManifest.Entry,
     evidence: CoreSupportCaseEvidence?,
     gateRunID: UUID,
-    prerequisiteAvailable: Bool,
-    expectsExactComparison: Bool
+    prerequisiteAvailable: Bool
   ) -> CaseObservation {
     guard prerequisiteAvailable else {
       return CaseObservation(reasons: [.missingPrerequisite])
     }
     guard let evidence else { return CaseObservation(reasons: [.missingEvidence]) }
     let requiredFiles = [
-      "case.json", "toolchain.json", "arguments.json", "correlations.json", "run.json", "swift.json",
-      "tlc.json", "comparison.json", "tlc-process.json", "raw-artifacts.json", "graph-events.jsonl"
+      "run.json", "swift-run.json",
+      "tlc-run.json", "comparison.json", "tlc-process.json", "raw-artifacts.json", "graph-events.jsonl"
     ]
     guard requiredFiles.allSatisfy({ FileManager.default.fileExists(atPath: evidence.directory.appendingPathComponent($0).path) }) else {
       return CaseObservation(reasons: [.partialEvidence])
     }
     do {
-      let caseJSON = try object(named: "case.json", in: evidence.directory)
-      let toolchainJSON = try object(named: "toolchain.json", in: evidence.directory)
-      let argumentsJSON = try object(named: "arguments.json", in: evidence.directory)
-      let correlationsJSON = try object(named: "correlations.json", in: evidence.directory)
+      let processJSON = try object(named: "tlc-process.json", in: evidence.directory)
+      guard let requestJSON = processJSON["request"] as? [String: Any],
+            let caseJSON = requestJSON["case"] as? [String: Any],
+            let toolchainJSON = requestJSON["toolchain"] as? [String: Any],
+            let argumentsJSON = requestJSON["arguments"] as? [String]
+      else { throw EvidenceError.invalidJSON }
       let runJSON = try object(named: "run.json", in: evidence.directory)
       let comparisonJSON = try object(named: "comparison.json", in: evidence.directory)
-      let swiftJSON = try object(named: "swift.json", in: evidence.directory)
-      let tlcJSON = try object(named: "tlc.json", in: evidence.directory)
+      let swiftLoaded = try canonicalRunEvidence(named: "swift-run.json", in: evidence.directory)
+      let tlcLoaded = try canonicalRunEvidence(named: "tlc-run.json", in: evidence.directory)
+      let swiftEvidence = swiftLoaded.evidence
+      let tlcEvidence = tlcLoaded.evidence
+      let swiftRun = swiftLoaded.run
+      let tlcRun = tlcLoaded.run
       var reasons = Set<CoreSupportReasonCode>()
+      guard swiftEvidence.receiptContext.maximumStateLimit == declaredCase.maximumStateLimit,
+            tlcEvidence.receiptContext.maximumStateLimit == declaredCase.maximumStateLimit
+      else { throw EvidenceError.invalidJSON }
       let expectedCase = try declaredCaseContract(declaredCase)
       if !caseMatches(caseJSON, declaredCase, expectedCase)
-        || !argumentsMatch(argumentsJSON, declaredCase) {
+        || argumentsJSON != declaredCase.arguments {
         reasons.insert(.manifestDigestMismatch)
       }
       if !toolchainMatches(toolchainJSON, declaredCase) { reasons.insert(.toolchainDigestMismatch) }
       let correlation = try correlation(
-        caseID: declaredCase.id, gateRunID: gateRunID, correlations: correlationsJSON,
-        run: runJSON, swift: swiftJSON, tlc: tlcJSON, comparison: comparisonJSON)
+        caseID: declaredCase.id, gateRunID: gateRunID, process: processJSON,
+        run: runJSON, swift: swiftEvidence, tlc: tlcEvidence, comparison: comparisonJSON)
       guard let correlation else {
         reasons.insert(.foreignRun)
         return CaseObservation(reasons: reasons)
       }
-      let expectedExact = expectsExactComparison || declaredCase.governance.expectedRegressionOutcome == .exact
-      let completeGraphs = canonicalGraphsAreComplete(swiftJSON, tlcJSON, requireExhaustiveCompletion: expectedExact)
-      let matchingExactGraphs = !expectedExact || canonicalGraphsAgree(swiftJSON, tlcJSON)
-      let processJSON = try object(named: "tlc-process.json", in: evidence.directory)
+      let completeGraphs = canonicalRunsAreComplete(swiftRun, tlcRun, requireExhaustiveCompletion: true)
+      let matchingExactGraphs = canonicalRunsAgree(swiftRun, tlcRun)
       guard let processIsViolation = processLifecycle(
         processJSON, caseID: declaredCase.id, gateRunID: gateRunID
       ) else { throw EvidenceError.invalidJSON }
@@ -672,34 +582,30 @@ public struct CoreSupportGate: Sendable {
         isViolation: processIsViolation)
       let rawEvidence = try rawEvidenceMatchesCanonicalOutcome(
         in: evidence.directory, expectedCase: expectedCase, gateRunID: gateRunID,
-        isViolation: processIsViolation, tlc: tlcJSON)
+        isViolation: processIsViolation, tlc: tlcRun)
       guard completeGraphs, matchingExactGraphs, rawManifest, rawEvidence
       else { throw EvidenceError.invalidJSON }
       let exitCode = runJSON["exitCode"] as? Int
       guard let exitCode else { throw EvidenceError.invalidJSON }
       let computed = try comparisonMatchesCanonicalTruth(
-        swift: swiftJSON, tlc: tlcJSON, comparison: comparisonJSON)
+        swift: swiftEvidence, swiftRun: swiftRun,
+        tlc: tlcEvidence, tlcRun: tlcRun,
+        comparison: comparisonJSON)
       if exitCode == Int(CoreConformanceExitCode.failure.rawValue) {
         reasons.insert(.executionFailed)
       }
-      if expectedExact && (exitCode != Int(CoreConformanceExitCode.exact.rawValue)
-        || computed.isDifference) {
-        reasons.insert(.nonExactComparison)
-      }
-      if !expectedExact && (exitCode != Int(CoreConformanceExitCode.semanticDifference.rawValue)
-        || !computed.isDifference) {
+      if exitCode != Int(CoreConformanceExitCode.exact.rawValue) || computed {
         reasons.insert(.nonExactComparison)
       }
       let references = try references(in: evidence)
       return CaseObservation(
-        reasons: reasons, references: references, correlation: correlation,
-        comparisonIsDifference: computed.isDifference, differenceFingerprint: computed.fingerprint)
+        reasons: reasons, references: references, correlation: correlation)
     } catch {
       return CaseObservation(reasons: [.partialEvidence])
     }
   }
   private func references(in evidence: CoreSupportCaseEvidence) throws -> [CoreEvidenceReference] {
-    try ["case.json", "toolchain.json", "run.json", "comparison.json"].map { file in
+    try ["tlc-process.json", "run.json", "comparison.json"].map { file in
       try CoreEvidenceReference(
         path: evidence.relativeDirectory + "/" + file,
         sha256: SHA256.hex(try Data(contentsOf: evidence.directory.appendingPathComponent(file))))
@@ -708,26 +614,26 @@ public struct CoreSupportGate: Sendable {
   private func correlation(
     caseID: String,
     gateRunID: UUID,
-    correlations: [String: Any],
+    process: [String: Any],
     run: [String: Any],
-    swift: [String: Any],
-    tlc: [String: Any],
+    swift: CanonicalRunEvidence,
+    tlc: CanonicalRunEvidence,
     comparison: [String: Any]
   ) throws -> CoreSupportCaseRunCorrelation? {
     let expectedRunID = gateRunID.uuidString.lowercased()
+    let processCorrelation = (process["request"] as? [String: Any])?["correlation"] as? [String: Any] ?? [:]
     let sources: [(String, [String: Any], String)] = [
-      ("swift", correlations["swift"] as? [String: Any] ?? [:], "swift"),
-      ("tlc", correlations["tlc"] as? [String: Any] ?? [:], "tlc"),
-      ("runner", correlations["runner"] as? [String: Any] ?? [:], "runner"),
-      ("swift", swift["correlation"] as? [String: Any] ?? [:], "swift"),
-      ("tlc", tlc["correlation"] as? [String: Any] ?? [:], "tlc"),
+      ("tlc", processCorrelation, "tlc"),
       ("runner", run["correlation"] as? [String: Any] ?? [:], "runner"),
       ("runner", comparison["correlation"] as? [String: Any] ?? [:], "runner")
     ]
     guard sources.allSatisfy({ expected, object, _ in
       object["caseID"] as? String == caseID && object["engine"] as? String == expected
         && object["runID"] as? String == expectedRunID
-    }) else { return nil }
+    }),
+      swift.correlation.matches(caseID: caseID, runID: gateRunID, engine: .swift),
+      tlc.correlation.matches(caseID: caseID, runID: gateRunID, engine: .tlc)
+    else { return nil }
     return try CoreSupportCaseRunCorrelation(
       caseID: caseID, gateRunID: gateRunID, swiftRunID: gateRunID, tlcRunID: gateRunID,
       comparisonRunID: gateRunID)
@@ -739,12 +645,15 @@ public struct CoreSupportGate: Sendable {
     }
     return object
   }
+  private func canonicalRunEvidence(
+    named file: String, in directory: URL
+  ) throws -> (evidence: CanonicalRunEvidence, run: CanonicalRun) {
+    try CanonicalRunEvidence.read(from: directory.appendingPathComponent(file))
+  }
   private struct CaseObservation {
     let reasons: Set<CoreSupportReasonCode>
     var references: [CoreEvidenceReference] = []
     var correlation: CoreSupportCaseRunCorrelation?
-    var comparisonIsDifference = false
-    var differenceFingerprint: String?
   }
   private enum EvidenceError: Error { case invalidJSON }
 }

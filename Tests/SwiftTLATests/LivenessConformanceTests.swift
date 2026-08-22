@@ -18,14 +18,14 @@ struct LivenessConformanceTests {
     private func graph(
         transitions: [StateGraph.StateID: [StateGraph.Transition]],
         values: [StateGraph.StateID: Int]
-    ) -> StateGraph {
+    ) throws -> StateGraph {
         StateGraph(
             specName: "liveness-conformance",
             variableNames: ["x"],
             transitions: transitions,
             states: Dictionary(
-                uniqueKeysWithValues: values.map { identifier, value in
-                    (identifier, try fixtureProjection([("x", .int(value))]))
+                uniqueKeysWithValues: try values.map { identifier, value in
+                    (identifier, try projection([("x", .int(value))]))
                 }
             )
         )
@@ -94,10 +94,10 @@ struct LivenessConformanceTests {
                 terminal: [.init(label: .init(.init(name: "done")), target: terminal)]
             ],
             states: [
-                initial: try fixtureProjection([("x", .int(0))]),
-                left: try fixtureProjection([("x", .int(1))]),
-                right: try fixtureProjection([("x", .int(2))]),
-                terminal: try fixtureProjection([("x", .int(3))])
+                initial: try projection([("x", .int(0))]),
+                left: try projection([("x", .int(1))]),
+                right: try projection([("x", .int(2))]),
+                terminal: try projection([("x", .int(3))])
             ]
         )
         let property: StateExpr = .or(
@@ -127,7 +127,7 @@ struct LivenessConformanceTests {
 
     @Test("the temporal form matrix returns fair-lasso violations")
     func temporalFormMatrix() throws {
-        let graph = graph(transitions: [:], values: [initial: 0])
+        let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
         let cases: [(String, TemporalExpr)] = [
@@ -151,7 +151,7 @@ struct LivenessConformanceTests {
         let trigger = StateGraph.StateID(2)
         let safe = StateGraph.StateID(3)
         let cycle = StateGraph.StateID(4)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "trigger")), target: trigger)],
                 trigger: [.init(label: .init(.init(name: "A")), target: qState), .init(label: .init(.init(name: "B")), target: safe)],
@@ -191,7 +191,7 @@ struct LivenessConformanceTests {
         let far = StateGraph.StateID(1)
         let near = StateGraph.StateID(2)
         let bridge = StateGraph.StateID(3)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "bridge")), target: bridge), .init(label: .init(.init(name: "near")), target: near)],
                 bridge: [.init(label: .init(.init(name: "far")), target: far)],
@@ -215,7 +215,7 @@ struct LivenessConformanceTests {
     @Test("eventually is satisfied when P holds in the initial state")
     func eventuallyDoesNotTreatPostSatisfactionLoopAsAViolation() throws {
         let avoiding = StateGraph.StateID(1)
-        let graph = graph(
+        let graph = try graph(
             transitions: [initial: [.init(label: .init(.init(name: "leave")), target: avoiding)]],
             values: [initial: 1, avoiding: 0]
         )
@@ -239,7 +239,7 @@ struct LivenessConformanceTests {
         let longC = StateGraph.StateID(3)
         let shortA = StateGraph.StateID(10)
         let shortB = StateGraph.StateID(11)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "long")), target: longA), .init(label: .init(.init(name: "short")), target: shortA)],
                 longA: [.init(label: .init(.init(name: "A")), target: longB)],
@@ -270,7 +270,7 @@ struct LivenessConformanceTests {
         let longB = StateGraph.StateID(2)
         let longC = StateGraph.StateID(3)
         let short = StateGraph.StateID(4)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "A")), target: longA), .init(label: .init(.init(name: "A")), target: short)],
                 longA: [.init(label: .init(.init(name: "loop")), target: longB)],
@@ -297,7 +297,7 @@ struct LivenessConformanceTests {
     @Test("disabled fairness alternative wins inside an SCC that also contains A")
     func disabledFairnessAlternativeWinsInsideMixedSCC() throws {
         let enabled = StateGraph.StateID(1)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "B")), target: enabled)],
                 enabled: [.init(label: .init(.init(name: "A")), target: initial)]
@@ -324,7 +324,7 @@ struct LivenessConformanceTests {
     @Test("enabledness and fairness are reported for changing action availability")
     func changingEnablednessFairnessMatrix() throws {
         let disabled = StateGraph.StateID(1)
-        let graph = graph(
+        let graph = try graph(
             transitions: [
                 initial: [.init(label: .init(.init(name: "A")), target: terminal), .init(label: .init(.init(name: "B")), target: disabled)],
                 disabled: [.init(label: .init(.init(name: "C")), target: initial)],
@@ -373,7 +373,7 @@ struct LivenessConformanceTests {
 
     @Test("unavailable evidence is explicit for unknown actions, evaluation errors, and incomplete exploration")
     func unavailableEvidenceMatrix() throws {
-        let unknownActionGraph = graph(
+        let unknownActionGraph = try graph(
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
@@ -381,7 +381,7 @@ struct LivenessConformanceTests {
             specName: "liveness-conformance",
             variableNames: ["x"],
             transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
-            states: [initial: try fixtureProjection([("other", .int(0))])]
+            states: [initial: try projection([("other", .int(0))])]
         )
         let unavailable: [(String, TemporalAnalysisResult, TemporalDiagnosticReason)] = [
             (
@@ -409,7 +409,7 @@ struct LivenessConformanceTests {
 
     @Test("liveness requires compiled action identities")
     func livenessRequiresCompiledActionIdentity() throws {
-        let sourceGraph = graph(
+        let sourceGraph = try graph(
             transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
             values: [initial: 0]
         )
@@ -451,14 +451,14 @@ struct LivenessConformanceTests {
         }
     }
 
-    @Test("ModelChecker keeps liveness and incomplete-exploration results compatible")
-    func modelCheckerCompatibility() throws {
+    @Test("ModelChecker reports liveness violations and bounded exploration separately")
+    func reportsDistinctLivenessAndBoundedOutcomes() throws {
         let x = Var<Int>("x")
         let livenessSpec = TLASpec("liveness") {
             Variable(x, 0)
             Eventually("reachesOne", x == 1)
         }
-        let liveness = try ModelChecker(spec: livenessSpec).checkLiveness()
+        let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).checkLiveness()
         if case .livenessViolated = liveness.underlyingOutcome {
         } else {
             Issue.record("Expected liveness violation, got \(liveness)")
@@ -469,14 +469,10 @@ struct LivenessConformanceTests {
             Action("step") { x.becomes(x + 1).when(x < 2) }
             Eventually("reachesTwo", x == 2)
         }
-        let incomplete = try ModelChecker(spec: completeSpec, maxStates: 1).checkLiveness()
+        let incomplete = try ModelChecker(compilation: try completeSpec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).checkLiveness()
         if case .depthExceeded = incomplete.underlyingOutcome {
         } else {
             Issue.record("Expected depth-exceeded result, got \(incomplete)")
         }
     }
-}
-
-private func fixtureProjection(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
-    try projection(entries)
 }

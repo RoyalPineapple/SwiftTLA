@@ -8,22 +8,22 @@ import SwiftTLAMacros
 /// atomic step, including its two scoped `with` bindings.
 @TLAModel
 public struct BinarySearchModel: Sendable {
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case a
     }
 
     public static var spec: TLASpec {
         #spec("BinarySearch") {
-            Extends("Integers")
-            Algorithm("BinarySearch") {
-                let seq = SharedVar(in: SortedSequences(
+            Extends(.integers)
+            Algorithm("BinarySearch", scoped: { scope in
+                let seq = scope.sharedVar("seq", in: SortedSequences(
                     of: SetExpr<Int>.literal(1, 2, 3, 4, 5),
                     lengths: 0...8
                 ))
-                let val = SharedVar(in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
-                let low = SharedVar(initial: 1)
-                let high = SharedVar(initial: seq.count)
-                let result = SharedVar(initial: 0)
+                let val = scope.sharedVar("val", in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
+                let low = scope.sharedVar("low", initial: 1)
+                let high = scope.sharedVar("high", initial: seq.count)
+                let result = scope.sharedVar("result", initial: 0)
 
                 While(Step.a, low <= high && result == 0) {
                     Let((low + high).integerDivided(by: 2)) { mid in
@@ -57,7 +57,7 @@ public struct BinarySearchModel: Sendable {
                     )
                 }
                 WeakFairnessNext()
-            }
+            })
         }
     }
 }
@@ -69,7 +69,7 @@ extension Example {
         upstreamModule: "specifications/LoopInvariance/BinarySearch.tla",
         upstreamCfg: "specifications/LoopInvariance/MCBinarySearch.cfg",
         expectedDistinct: 27_963,
-        verificationStateLimit: 100_000,
+        maximumStateLimit: 100_000,
         spec: BinarySearchModel.spec,
         notes: "Published BinarySearch with Values = 1...5 and MaxSeqLen = 8."
     )

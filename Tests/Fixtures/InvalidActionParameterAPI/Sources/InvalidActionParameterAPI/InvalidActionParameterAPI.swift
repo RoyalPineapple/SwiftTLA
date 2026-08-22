@@ -1,23 +1,23 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-let legacyNamedAction = NamedAction(name: "legacyNamed", body: .unchanged("floor"))
-let legacyNamedBinding = legacyNamedAction.binding
-let legacyActionDecl = Action("legacyDecl") { .unchanged("floor") }
-let legacyActionDeclBinding = legacyActionDecl.binding
-let legacyNamedActionForwarder = NamedAction(
-  name: "legacyNamedForwarder",
-  body: .unchanged("floor"),
+let namedAction = NamedAction(name: "named", body: .unchanged(.named("floor")))
+let namedActionBinding = namedAction.binding
+let actionDeclaration = Action("declared") { .unchanged(.named("floor")) }
+let actionDeclarationBinding = actionDeclaration.binding
+let namedActionWithBinding = NamedAction(
+  name: "namedWithBinding",
+  body: .unchanged(.named("floor")),
   binding: ActionBinding(name: "id", values: [.int(1), .int(2)])
 )
 
 @TLAModel
-struct InvalidLegacyParameterAPI {
+struct InvalidSingleParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidLegacyParameterAPI") {
+    TLASpec("InvalidSingleParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
-      Action("legacyParameter", parameter: ActionParameter("id", values: [1, 2])) { id in
+      Action("singleParameter", parameter: ActionParameter("id", values: [1, 2])) { id in
         floor.becomes(id)
       }
     }
@@ -25,13 +25,13 @@ struct InvalidLegacyParameterAPI {
 }
 
 @TLAModel
-struct InvalidLegacyTwoParameterAPI {
+struct InvalidMultipleParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidLegacyTwoParameterAPI") {
+    TLASpec("InvalidMultipleParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action(
-        "legacyTwoParameters",
+        "multipleParameters",
         parameter: ActionParameter("person", values: [1, 2]),
         parameter: ActionParameter("elevator", values: [3, 4])
       ) { person, elevator in
@@ -42,12 +42,12 @@ struct InvalidLegacyTwoParameterAPI {
 }
 
 @TLAModel
-struct InvalidLegacyIDAPI {
+struct InvalidIDParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidLegacyIDAPI") {
+    TLASpec("InvalidIDParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
-      Action("legacyID", id: [1, 2]) { id in
+      Action("idParameter", id: [1, 2]) { id in
         floor.becomes(id)
       }
     }
@@ -55,12 +55,12 @@ struct InvalidLegacyIDAPI {
 }
 
 @TLAModel
-struct InvalidLegacyPairAPI {
+struct InvalidNamedParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidLegacyPairAPI") {
+    TLASpec("InvalidNamedParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
-      Action("legacyPair", person: [1, 2], elevator: [3, 4]) { person, elevator in
+      Action("namedParameters", person: [1, 2], elevator: [3, 4]) { person, elevator in
         floor.becomes(person + elevator)
       }
     }

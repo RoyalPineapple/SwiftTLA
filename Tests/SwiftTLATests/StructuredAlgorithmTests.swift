@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 
 /// The smallest end-to-end witness: a finite map holds typed records, an
@@ -10,6 +10,7 @@ private struct StructuredCarModel {
         case north
         case south
 
+        static var defaultValue: Self { .north }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.structured-car")
 
@@ -20,6 +21,7 @@ private struct StructuredCarModel {
         case closed
         case open
 
+        static var defaultValue: Self { .closed }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.structured-door")
 
@@ -53,21 +55,21 @@ private struct StructuredCarModel {
 
     static var spec: TLASpec {
         #spec("StructuredCar") {
-            Algorithm("StructuredCar") {
-                let cars = SharedVar(initial: Function<Car, Record<CarRecord>>.literal(
-                    (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, .closed))),
-                    (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, .closed)))
+            Algorithm("StructuredCar", scoped: { scope in
+                let cars = scope.sharedVar("cars", initial: Function<Car, Record<CarRecord>>.literal(
+                    (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, Door.closed))),
+                    (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, Door.closed)))
                 ))
 
                 Each(Car.all) { car in
-                    Do("open") {
-                        When(cars[car][CarRecord.door] == .closed)
+                    Do(TestControlLabel.open) {
+                        When(cars[car][CarRecord.door] == Door.closed)
                         Assign(cars, to: cars.updating(car) { vehicle in
-                            vehicle.updating(CarRecord.door, to: .open)
+                            vehicle.updating(CarRecord.door, to: Door.open)
                         })
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -76,8 +78,6 @@ private struct StructuredCarModel {
 struct StructuredAlgorithmTests {
     @Test("record-valued map updates survive #spec, lowering, and generated state")
     func generatedStateRetainsNestedTypedRecordUpdate() throws {
-        StructuredCarModel._checkParserTree()
-
         var model = try StructuredCarModel.makeMachine()
         let result = try model.apply(.open(process: .north))
 
@@ -89,8 +89,8 @@ struct StructuredAlgorithmTests {
 
     @Test("function comprehensions retain typed record values through lowering and evaluation")
     func loweredFunctionComprehensionRetainsRecords() throws {
-        let algorithm = Algorithm("StructuredComprehension") {
-            let cars = SharedVar(
+        let algorithm = Algorithm("StructuredComprehension", scoped: { scope in
+            let cars = scope.sharedVar(
                 "cars",
                 initial: Function<StructuredCarModel.Car, Record<StructuredCarModel.CarRecord>>.mapping { _ in
                     Record.literal(
@@ -99,20 +99,26 @@ struct StructuredAlgorithmTests {
                     )
                 }
             )
-            cars
-            Do("hold") { Assign(cars, to: cars.expr) }
-        }
+            Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
+        })
 
         let spec = try compiledSourceSpecification(algorithm)
         let compilation = try spec.compile()
         let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let cars = try #require(compilation.layout.variableID(named: "cars"))
-        let values = try initial.value(for: cars).rendered(using: compilation.layout).functionValue
+        guard case .function(let values) = try initial.value(for: cars).rendered(using: compilation.layout) else {
+            Issue.record("Expected a formal function for cars.")
+            return
+        }
 
         for car in StructuredCarModel.Car.allCases {
-            let record = try #require(Record<StructuredCarModel.CarRecord>(formalValue: values[car.tlaValue]))
+            guard let value = values[car.tlaValue],
+                  let record = Record<StructuredCarModel.CarRecord>(formalValue: value) else {
+                Issue.record("Expected a typed car record.")
+                return
+            }
             #expect(record[StructuredCarModel.CarRecord.floor] == 4)
-            #expect(record[StructuredCarModel.CarRecord.door] == .closed)
+            #expect(record[StructuredCarModel.CarRecord.door] == StructuredCarModel.Door.closed)
         }
     }
 }

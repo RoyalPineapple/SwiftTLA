@@ -7,6 +7,10 @@ TMP="$ROOT/.build/temporal-symmetry-command-$(uuidgen | tr '[:upper:]' '[:lower:
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP"
 
+current_report() {
+    "$ROOT/scripts/current_evidence_report.py" resolve "$1"
+}
+
 expect_exit() {
     local expected="$1"
     shift
@@ -125,8 +129,8 @@ test "$manifest_digest_before" = "$manifest_digest_after_wrapper_alias"
 wrapper_output="$TMP/wrapper-output"
 expect_exit 2 env CORE_CONFORMANCE_CASES="$TMP/missing-cases.json" \
     "$GATE" --output "$wrapper_output"
-latest_report="$wrapper_output/support-admission.json"
-test -f "$latest_report"
+test -f "$wrapper_output/current-support-admission.json"
+latest_report="$(current_report "$wrapper_output")"
 wrapper_run="$(jq -r '.gateRunID' "$latest_report")"
 test -f "$wrapper_output/runs/$wrapper_run/support-admission.json"
 test -f "$wrapper_output/runs/$wrapper_run/invocation.json"

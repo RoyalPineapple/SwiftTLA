@@ -2,33 +2,18 @@ import SwiftSyntax
 import SwiftTLA
 
 extension TLASpecVerifier {
-    static func collectEnumPhaseMap(
+    static func collectEnumMetadata(
         from members: MemberBlockItemListSyntax
-    ) -> (definitions: [ParserEnumDefinition], caseToType: [String: String]) {
+    ) -> [ParserEnumDefinition] {
         let infos = collectEnumVariables(from: members)
-        var definitions: [ParserEnumDefinition] = []
-        var caseToType: [String: String] = [:]
-        for info in infos {
-            for (caseName, _) in info.cases {
-                caseToType[caseName] = info.typeName
-            }
-            definitions.append(.init(
+        let definitions = infos.map { info in
+            ParserEnumDefinition(
                 typeName: info.typeName,
                 cases: TLARecord(info.cases.map { .init($0.name, $0.value) }),
                 formalDomain: info.formalDomain
-            ))
+            )
         }
-        return (definitions, caseToType)
-    }
-
-    static func collectEnumMetadata(
-        from members: MemberBlockItemListSyntax
-    ) -> (definitions: [ParserEnumDefinition], caseToType: [String: String]) {
-        let metadata = collectEnumPhaseMap(from: members)
-        return (
-            metadata.definitions + collectPlusCalLabelMap(from: members),
-            metadata.caseToType
-        )
+        return definitions + collectPlusCalLabelMap(from: members)
     }
 
     static func collectPlusCalLabelMap(from members: MemberBlockItemListSyntax) -> [ParserEnumDefinition] {
@@ -48,7 +33,7 @@ extension TLASpecVerifier {
                 for element in caseDecl.elements {
                     let rawValue: String
                     if let literal = element.rawValue?.value.as(StringLiteralExprSyntax.self) {
-                        rawValue = literal.representedLiteralValue ?? literal.segments.description
+                        rawValue = literal.representedLiteralValue ?? element.name.text
                     } else {
                         rawValue = element.name.text
                     }

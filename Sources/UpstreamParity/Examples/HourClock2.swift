@@ -3,9 +3,14 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct HourClock2Model: Sendable {
+    public enum Step: String, PlusCalLabel, CaseIterable {
+        case HCnxt2
+    }
+
     public enum ClockProcess: String, CaseIterable, FiniteDomainKey {
         case clock
 
+        public static var defaultValue: Self { .clock }
         public static let formalDomain = allCases
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.hour-clock2.process")
 
@@ -14,17 +19,17 @@ public struct HourClock2Model: Sendable {
 
     public static var spec: TLASpec {
         #spec("HourClock2") {
-            Algorithm("HourClock2") {
-                let hr = SharedVar(in: 1...12)
+            Algorithm("HourClock2", scoped: { scope in
+                let hr = scope.sharedVar("hr", in: 1...12)
 
                 Each(ClockProcess.all) { _ in
-                    Do("HCnxt2") {
+                    Do(Step.HCnxt2) {
                         Assign(hr, to: (hr % 12) + 1)
-                        Goto("HCnxt2")
+                        Goto(Step.HCnxt2)
                     }
                 }
                 Invariant("HCini") { hr >= 1 && hr <= 12 }
-            }
+            })
         }
     }
 }

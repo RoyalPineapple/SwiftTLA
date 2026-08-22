@@ -206,7 +206,7 @@ final class CapturePreviewNSView: NSView {
         wantsLayer = true
         layer?.addSublayer(previewLayer)
     }
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { nil }
     override func layout() {
         super.layout()
         CATransaction.begin()
@@ -231,7 +231,7 @@ final class PlayerNSView: NSView {
         l.videoGravity = .resizeAspectFill
         layer?.addSublayer(l)
     }
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { nil }
     override func layout() {
         super.layout()
         (layer?.sublayers?.first as? AVPlayerLayer)?.frame = bounds
@@ -269,36 +269,41 @@ enum RollItem: Identifiable {
 @TLAModel
 struct CameraWorkflow {
     private enum ReadyProcess: String, FiniteDomainKey { case readyEvent
+        static var defaultValue: Self { .readyEvent }
         static let formalDomain: [Self] = [.readyEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.ready")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum RecordProcess: String, FiniteDomainKey { case recordEvent
+        static var defaultValue: Self { .recordEvent }
         static let formalDomain: [Self] = [.recordEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.record")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum StopProcess: String, FiniteDomainKey { case stopEvent
+        static var defaultValue: Self { .stopEvent }
         static let formalDomain: [Self] = [.stopEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.stop")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum PlayProcess: String, FiniteDomainKey { case playEvent
+        static var defaultValue: Self { .playEvent }
         static let formalDomain: [Self] = [.playEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.play")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum LiveProcess: String, FiniteDomainKey { case liveEvent
+        static var defaultValue: Self { .liveEvent }
         static let formalDomain: [Self] = [.liveEvent]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.live")
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, PlusCalLabel { case ready, record, stop, play, live }
+    private enum Step: String, PlusCalLabel, CaseIterable { case ready, record, stop, play, live }
 
     static var spec: TLASpec {
         #spec("CameraWorkflow") {
-            Algorithm("CameraWorkflow") {
-                let phase = SharedVar(initial: 0)
+            Algorithm("CameraWorkflow", scoped: { scope in
+                let phase = scope.sharedVar("phase", initial: 0)
                 Each(ReadyProcess.all) { _ in
                     Do(Step.ready) { When(phase == 0); Assign(phase, to: 1); Goto(Step.ready) }
                 }
@@ -315,7 +320,7 @@ struct CameraWorkflow {
                     Do(Step.live) { When(phase == 3); Assign(phase, to: 1); Goto(Step.live) }
                 }
                 Invariant("validPhase") { phase >= 0 && phase <= 3 }
-            }
+            })
         }
     }
 
@@ -340,38 +345,38 @@ final class CameraModel {
     var phase: Int { machine.state.phase }
 
     init() {
-        machine.onReady = { [weak self] _, _ in
-            guard let self, let device = AVCaptureDevice.default(for: .video) else { return }
-            do {
-                try await self.capture.configure(device: device)
-                let output = AVCaptureMovieFileOutput()
-                self.capture.session.addOutput(output)
-                self.movieOutput = output
-                try await self.capture.start()
-            } catch { print("Camera error: \(error)") }
-        }
-        machine.onRecord = { [weak self] _, _ in
-            guard let self, let movieOutput = self.movieOutput else { return }
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
-            self.recordedURL = url
-            movieOutput.startRecording(to: url, recordingDelegate: self.recordDelegate)
-        }
-        machine.onStop = { [weak self] _, _ in
-            self?.movieOutput?.stopRecording()
-            if let url = self?.recordedURL { self?.roll.append(.video(url)) }
-        }
-        machine.onPlay = { [weak self] _, _ in
-            guard let self, let url = self.recordedURL else { return }
-            let player = AVPlayer(url: url)
-            self.currentPlayer = player
-            player.play()
-            NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
-                Task { try? await self?.machine._live() }
+        machine.onTransition = { [weak self] action, _, _ in
+            guard let self else { return }
+            switch action {
+            case .ready:
+                guard let device = AVCaptureDevice.default(for: .video) else { return }
+                do {
+                    try await self.capture.configure(device: device)
+                    let output = AVCaptureMovieFileOutput()
+                    self.capture.session.addOutput(output)
+                    self.movieOutput = output
+                    try await self.capture.start()
+                } catch { print("Camera error: \(error)") }
+            case .record:
+                guard let movieOutput = self.movieOutput else { return }
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
+                self.recordedURL = url
+                movieOutput.startRecording(to: url, recordingDelegate: self.recordDelegate)
+            case .stop:
+                self.movieOutput?.stopRecording()
+                if let url = self.recordedURL { self.roll.append(.video(url)) }
+            case .play:
+                guard let url = self.recordedURL else { return }
+                let player = AVPlayer(url: url)
+                self.currentPlayer = player
+                player.play()
+                NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
+                    Task { try? await self?.machine._live() }
+                }
+            case .live:
+                self.currentPlayer?.pause()
+                self.currentPlayer = nil
             }
-        }
-        machine.onLive = { [weak self] _, _ in
-            self?.currentPlayer?.pause()
-            self?.currentPlayer = nil
         }
     }
 

@@ -6,6 +6,7 @@ public enum SwiftGraphAdapterError: Error, Equatable, Sendable {
   case transitionStateMissing(Int)
   case traceStateMissing
   case invalidValueNormalization(binding: String)
+  case invalidUnderlyingOutcome
 }
 
 public struct SwiftExplorationEvidence {
@@ -104,7 +105,7 @@ public struct SwiftGraphAdapter: Sendable {
     for entry in projection.entries {
       let binding = entry.token.description
       let value = entry.value
-      let canonical = CanonicalValue(value)
+      let canonical = try CanonicalValue(value)
       canonicalBindings[binding] =
         try normalizations[binding].map {
           try normalize(canonical, using: $0)
@@ -135,8 +136,10 @@ public struct SwiftGraphAdapter: Sendable {
       return .invariantViolation(message)
     case .error(let message):
       return .executionError(message)
+    case .refinementUnproven:
+      return .incomplete(reason: result.description)
     case .bounded:
-      preconditionFailure("underlyingOutcome must unwrap bounded results")
+      throw SwiftGraphAdapterError.invalidUnderlyingOutcome
     }
   }
 

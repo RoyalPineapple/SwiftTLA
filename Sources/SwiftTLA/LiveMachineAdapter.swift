@@ -1,7 +1,7 @@
 import Foundation
 
 /// The lifecycle state of an observable adapter's locally derived cache.
-public enum TLALiveMachineAdapterStatus: Sendable, Equatable {
+package enum TLALiveMachineAdapterStatus: Sendable, Equatable {
     case attaching
     case current(TLALiveMachinePosition)
     case recovering(TLALiveMachineObservationLoss)
@@ -10,7 +10,7 @@ public enum TLALiveMachineAdapterStatus: Sendable, Equatable {
 }
 
 /// A typed state derived from one contiguous live-runtime observation.
-public struct TLALiveMachineAdapterSnapshot<State: Sendable & Equatable>: Sendable, Equatable {
+package struct TLALiveMachineAdapterSnapshot<State: Sendable & Equatable>: Sendable, Equatable {
     public let identity: TLALiveMachineIdentity
     public let position: TLALiveMachinePosition
     public let state: State
@@ -25,21 +25,18 @@ public struct TLALiveMachineAdapterSnapshot<State: Sendable & Equatable>: Sendab
 /// The single event reducer for a generated observable adapter.
 /// Action requests never mutate this cache. Only subscription events can do so.
 @MainActor
-public final class TLALiveMachineObservableReducer<State: Sendable & Equatable, Action: Sendable & Equatable>: Sendable {
+package final class TLALiveMachineObservableReducer<State: Sendable & Equatable, Action: Sendable & Equatable>: Sendable {
     public private(set) var status: TLALiveMachineAdapterStatus = .attaching
     public private(set) var current: TLALiveMachineAdapterSnapshot<State>?
 
     private let identity: TLALiveMachineIdentity
-    private let schemaIdentifier: String
-    private let decode: @Sendable (TLAStateProjection) throws -> State
+    private let decode: @Sendable (_GeneratedMachineStorage.State) throws -> State
 
     public init(
         identity: TLALiveMachineIdentity,
-        schemaIdentifier: String,
-        decode: @escaping @Sendable (TLAStateProjection) throws -> State
+        decode: @escaping @Sendable (_GeneratedMachineStorage.State) throws -> State
     ) {
         self.identity = identity
-        self.schemaIdentifier = schemaIdentifier
         self.decode = decode
     }
 
@@ -98,11 +95,6 @@ public final class TLALiveMachineObservableReducer<State: Sendable & Equatable, 
         guard snapshot.identity == identity else {
             current = nil
             status = .invalidEvent("The observation belongs to a different runtime identity.")
-            return false
-        }
-        guard snapshot.schemaIdentifier == schemaIdentifier else {
-            current = nil
-            status = .invalidEvent("The observation has an incompatible schema identifier.")
             return false
         }
         return true

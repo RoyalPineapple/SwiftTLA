@@ -23,7 +23,7 @@ require '"success"' "$CHECK"
 require '"blocked"' "$CHECK"
 require '"unavailable"' "$CHECK"
 require '"admitted"' "$CHECK"
-require "support-admission.json" "$CHECK"
+require "current-support-admission.json" "$CHECK"
 require "TemporalSymmetryRegisterTests" "$CHECK"
 require "support-surface.json" "$CHECK"
 

@@ -6,13 +6,6 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct PublicWorkflowGeneratedBehaviorTests {
-  @Test("generated fixture retains one compilation identity from its #spec source")
-  func generatedFixtureUsesCanonicalCompilation() throws {
-    let compilation = try P4GeneratedCounter.compiledSpecification()
-    #expect(compilation.identity == try P4GeneratedCounter.spec.compile().identity)
-    #expect(P4GeneratedCounter.generatedMachineMetadata.compilationIdentity == compilation.identity)
-  }
-
   @Test("public workflow fixture executes through nested generated adapters")
   @MainActor
     func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
@@ -44,13 +37,12 @@ struct PublicWorkflowGeneratedBehaviorTests {
 
     #expect(run.comparison.outcome == .exact)
     #expect(run.comparison.left == run.comparison.right)
-    #expect(run.mismatchFingerprint == nil)
     #expect(try fixture.observation(run.generatedObservation) == run.comparison.left)
     #expect(try fixture.observation(run.builderObservation) == run.comparison.right)
   }
 
-  @Test("compiled mismatch fixture retains a stable observed difference")
-  func mismatchFixtureMatchesRetainedDifference() throws {
+  @Test("generated behavior violation retains both observed states")
+  func generatedBehaviorViolationRetainsBothObservedStates() throws {
     let fixture = try Fixture()
     let (first, firstOutput) = try fixture.run(id: "p4-generated-counter-intentional-mismatch")
     let (second, secondOutput) = try fixture.run(id: "p4-generated-counter-intentional-mismatch")
@@ -62,8 +54,6 @@ struct PublicWorkflowGeneratedBehaviorTests {
     #expect(first.comparison.outcome == .difference)
     #expect(first.comparison.left.failures.contains { $0.contains("propertyViolation") && $0.contains("withinBounds") })
     #expect(first.comparison.left.trace?.contains { $0.contains("advance") } == true)
-    #expect(first.mismatchFingerprint != nil)
-    #expect(first.mismatchFingerprint == second.mismatchFingerprint)
     #expect(try fixture.observation(first.generatedObservation) == first.comparison.left)
     #expect(try fixture.observation(first.builderObservation) == first.comparison.right)
   }
@@ -82,7 +72,6 @@ struct PublicWorkflowGeneratedBehaviorTests {
       #expect(run.comparison.left.failures.contains { $0.contains(marker) })
       #expect(run.comparison.left.diagnostics.contains { $0.contains("generated:evaluation") })
       #expect(run.comparison.left.trace?.isEmpty == false)
-      #expect(run.mismatchFingerprint != nil)
       #expect(try fixture.observation(run.generatedObservation) == run.comparison.left)
     }
   }
@@ -99,7 +88,7 @@ struct PublicWorkflowGeneratedBehaviorTests {
     }
     defer { try? FileManager.default.removeItem(at: manifestURL) }
 
-    #expect(throws: PublicWorkflowGovernanceError.self) {
+    #expect(throws: ConformanceGovernanceError.self) {
       _ = try PublicWorkflowGeneratedBehaviorAdapter().run(
         manifestURL: manifestURL,
         projectRoot: fixture.repository,

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Why a state-bearing observation was sent.
-public enum TLALiveMachineSnapshotReason: Sendable, Equatable {
+package enum TLALiveMachineSnapshotReason: Sendable, Equatable {
     /// The atomic baseline captured while attaching to an existing runtime.
     case attached
     /// The atomic baseline that re-establishes continuity after delivery loss.
@@ -9,7 +9,7 @@ public enum TLALiveMachineSnapshotReason: Sendable, Equatable {
 }
 
 /// The explicit boundary where an observer can no longer treat delivery as contiguous.
-public struct TLALiveMachineObservationLoss: Sendable, Equatable {
+package struct TLALiveMachineObservationLoss: Sendable, Equatable {
     public let identity: TLALiveMachineIdentity
     public let lastContiguousPosition: TLALiveMachinePosition
     public let latestKnownPosition: TLALiveMachinePosition
@@ -26,7 +26,7 @@ public struct TLALiveMachineObservationLoss: Sendable, Equatable {
 }
 
 /// The owner-ended terminal event for one observation subscription.
-public struct TLALiveMachineTermination: Sendable, Equatable {
+package struct TLALiveMachineTermination: Sendable, Equatable {
     public let identity: TLALiveMachineIdentity
     public let finalPosition: TLALiveMachinePosition
     public let reason: TLALiveMachineUnavailableReason
@@ -43,7 +43,7 @@ public struct TLALiveMachineTermination: Sendable, Equatable {
 }
 
 /// One event from an attached live-machine observation.
-public enum TLALiveMachineObservationEvent<Action: Sendable & Equatable>: Sendable, Equatable {
+package enum TLALiveMachineObservationEvent<Action: Sendable & Equatable>: Sendable, Equatable {
     /// An atomic baseline captured at attachment or recovery.
     case snapshot(TLALiveMachineSnapshot, reason: TLALiveMachineSnapshotReason)
     /// One committed transition in this runtime's commit order.
@@ -55,13 +55,13 @@ public enum TLALiveMachineObservationEvent<Action: Sendable & Equatable>: Sendab
 }
 
 /// The result of attaching an observer to an existing runtime.
-public enum TLALiveMachineAttachmentOutcome<Action: Sendable & Equatable>: Sendable {
+package enum TLALiveMachineAttachmentOutcome<Action: Sendable & Equatable>: Sendable {
     case attached(TLALiveMachineObservationSubscription<Action>)
     case unavailable(TLALiveMachineUnavailableReason)
 }
 
 /// The result of asking a subscription to establish a fresh atomic baseline.
-public enum TLALiveMachineResynchronizationOutcome: Sendable, Equatable {
+package enum TLALiveMachineResynchronizationOutcome: Sendable, Equatable {
     /// A resynchronization snapshot is queued at this position.
     case resumed(at: TLALiveMachinePosition)
     /// The runtime ended before a fresh snapshot could be captured.
@@ -75,7 +75,7 @@ public enum TLALiveMachineResynchronizationOutcome: Sendable, Equatable {
 /// The subscription carries no machine state. Its operations route to the
 /// authoritative runtime storage actor, where attachment, commits, recovery,
 /// cancellation, and owner termination are serialized.
-public final class TLALiveMachineObservationSubscription<Action: Sendable & Equatable>: AsyncSequence, Sendable {
+package final class TLALiveMachineObservationSubscription<Action: Sendable & Equatable>: AsyncSequence, Sendable {
     public typealias Element = TLALiveMachineObservationEvent<Action>
 
     public let identity: TLALiveMachineIdentity

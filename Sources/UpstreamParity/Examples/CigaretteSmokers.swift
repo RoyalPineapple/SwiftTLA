@@ -4,12 +4,12 @@ import SwiftTLAMacros
 @TLAModel
 public struct CigaretteSmokersModel: Sendable {
     public static var spec: TLASpec {
-        #spec("CigaretteSmokers") {
-            Extends("Integers")
-            let smokingM = SharedVar(initial: false)
-            let smokingP = SharedVar(initial: false)
-            let smokingT = SharedVar(initial: false)
-            let dealer = SharedVar(in: 1...3)
+        #spec("CigaretteSmokers") { scope in
+            Extends(.integers)
+            let smokingM = scope.sharedVar("smokingM", initial: false)
+            let smokingP = scope.sharedVar("smokingP", initial: false)
+            let smokingT = scope.sharedVar("smokingT", initial: false)
+            let dealer = scope.sharedVar("dealer", in: 1...3)
             Action("start_1") {
                 dealer == 1 && smokingT.becomes(true) && dealer.becomes(0) && smokingM.stays && smokingP.stays
             }

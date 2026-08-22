@@ -1,44 +1,5 @@
 import Foundation
 
-public enum PublicWorkflowGovernanceError: Error, Equatable, Sendable {
-  case invalidSchema(String)
-  case duplicateID(kind: String, id: String)
-  case invalidField(record: String, field: String)
-  case unknownCaseID(String)
-  case unknownDivergenceID(String)
-  case inconsistentReference(record: String, field: String)
-}
-
-private struct PublicWorkflowAnyCodingKey: CodingKey {
-  let stringValue: String
-  let intValue: Int?
-
-  init?(stringValue: String) {
-    self.stringValue = stringValue
-    intValue = nil
-  }
-
-  init?(intValue: Int) {
-    stringValue = String(intValue)
-    self.intValue = intValue
-  }
-}
-
-enum PublicWorkflowDecoding {
-  static func container<Key>(
-    _ decoder: Decoder, keyedBy keyType: Key.Type
-  ) throws -> KeyedDecodingContainer<Key> where Key: CodingKey & CaseIterable {
-    let actual = try decoder.container(keyedBy: PublicWorkflowAnyCodingKey.self)
-    let known = Set(Key.allCases.map(\.stringValue))
-    let unknown = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
-    guard unknown.isEmpty else {
-      throw PublicWorkflowGovernanceError.invalidField(
-        record: "decode", field: "unknown field \(unknown.sorted().joined(separator: ","))")
-    }
-    return try decoder.container(keyedBy: keyType)
-  }
-}
-
 public enum PublicWorkflowCaseCategory: String, Codable, Sendable {
   case annotation
   case parserBuilder
@@ -81,7 +42,7 @@ public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
   public let publicName: String
   public let finiteBounds: CoreFiniteBounds
   public let semanticCitations: [String]
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let sourceInput: CoreEvidenceReference
   public let configuration: CoreEvidenceReference
   public let expectedOutcome: PublicWorkflowExpectedOutcome
@@ -93,7 +54,7 @@ public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
     publicName: String,
     finiteBounds: CoreFiniteBounds,
     semanticCitations: [String],
-    provenance: CoreDivergenceProvenance,
+    provenance: CoreEvidenceProvenance,
     sourceInput: CoreEvidenceReference,
     configuration: CoreEvidenceReference,
     expectedOutcome: PublicWorkflowExpectedOutcome,
@@ -120,7 +81,7 @@ public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
     guard !id.isEmpty, !publicName.isEmpty, provenance.caseID == id,
           !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }),
           authorityBoundary == .publishedSemantics else {
-      throw PublicWorkflowGovernanceError.invalidField(record: id, field: "case declaration")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
     }
   }
 
@@ -130,14 +91,14 @@ public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
       category: try container.decode(PublicWorkflowCaseCategory.self, forKey: .category),
       publicName: try container.decode(String.self, forKey: .publicName),
       finiteBounds: try container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
       semanticCitations: try container.decode([String].self, forKey: .semanticCitations),
-      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: try container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
       configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
       expectedOutcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .expectedOutcome),
@@ -153,12 +114,12 @@ public struct PublicWorkflowCases: Equatable, Codable, Sendable {
   public init(cases: [PublicWorkflowConformanceCase]) throws { try self.init(schema: Self.schema, cases: cases) }
 
   public init(schema: String, cases: [PublicWorkflowConformanceCase]) throws {
-    guard schema == Self.schema else { throw PublicWorkflowGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var ids = Set<String>()
     for record in cases {
       try record.validate()
       guard ids.insert(record.id).inserted else {
-        throw PublicWorkflowGovernanceError.duplicateID(kind: "case", id: record.id)
+        throw ConformanceGovernanceError.duplicateID(kind: "case", id: record.id)
       }
     }
     self.schema = schema
@@ -168,7 +129,7 @@ public struct PublicWorkflowCases: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(schema: try container.decode(String.self, forKey: .schema), cases: try container.decode([PublicWorkflowConformanceCase].self, forKey: .cases))
   }
 }
@@ -181,7 +142,7 @@ public struct PublicWorkflowCaseRunCorrelation: Equatable, Codable, Sendable {
 
   public init(caseID: String, gateRunID: UUID, fixtureRunID: UUID, comparisonRunID: UUID) throws {
     guard !caseID.isEmpty, Set([gateRunID, fixtureRunID, comparisonRunID]).count == 3 else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "correlation", field: "caseID or run IDs")
+      throw ConformanceGovernanceError.invalidField(record: "correlation", field: "caseID or run IDs")
     }
     self.caseID = caseID
     self.gateRunID = gateRunID
@@ -192,7 +153,7 @@ public struct PublicWorkflowCaseRunCorrelation: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, gateRunID, fixtureRunID, comparisonRunID }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(caseID: try container.decode(String.self, forKey: .caseID), gateRunID: try container.decode(UUID.self, forKey: .gateRunID), fixtureRunID: try container.decode(UUID.self, forKey: .fixtureRunID), comparisonRunID: try container.decode(UUID.self, forKey: .comparisonRunID))
   }
 }
@@ -203,12 +164,12 @@ public struct PublicWorkflowEvidenceBinding: Equatable, Codable, Sendable {
   public let evidenceRunID: UUID
   public let sourceInput: CoreEvidenceReference
   public let configuration: CoreEvidenceReference
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let evidence: CoreEvidenceReference
 
   public init(
     caseID: String, gateRunID: UUID, evidenceRunID: UUID, sourceInput: CoreEvidenceReference,
-    configuration: CoreEvidenceReference, provenance: CoreDivergenceProvenance,
+    configuration: CoreEvidenceReference, provenance: CoreEvidenceProvenance,
     evidence: CoreEvidenceReference
   ) throws {
     self.caseID = caseID
@@ -227,7 +188,7 @@ public struct PublicWorkflowEvidenceBinding: Equatable, Codable, Sendable {
     try provenance.validate()
     try evidence.validate()
     guard !caseID.isEmpty, provenance.caseID == caseID else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: caseID, field: "evidence binding")
+      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "evidence binding")
     }
   }
 
@@ -245,14 +206,14 @@ public struct PublicWorkflowEvidenceBinding: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: try container.decode(String.self, forKey: .caseID),
       gateRunID: try container.decode(UUID.self, forKey: .gateRunID),
       evidenceRunID: try container.decode(UUID.self, forKey: .evidenceRunID),
       sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
       configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
-      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: try container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       evidence: try container.decode(CoreEvidenceReference.self, forKey: .evidence))
   }
 }
@@ -303,10 +264,10 @@ public struct PublicWorkflowCaseEvidence: Equatable, Codable, Sendable {
     try provenanceBinding.validate()
     try execution.validate()
     guard !caseID.isEmpty, correlation.caseID == caseID else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: caseID, field: "correlation")
+      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "correlation")
     }
     guard status == .complete ? outcome != .unavailable && diagnosticCode != .evidenceUnavailable : outcome == .unavailable && diagnosticCode == .evidenceUnavailable else {
-      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "evidence status")
+      throw ConformanceGovernanceError.invalidField(record: caseID, field: "evidence status")
     }
   }
 
@@ -316,7 +277,7 @@ public struct PublicWorkflowCaseEvidence: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(caseID: try container.decode(String.self, forKey: .caseID), correlation: try container.decode(PublicWorkflowCaseRunCorrelation.self, forKey: .correlation), status: try container.decode(PublicWorkflowEvidenceStatus.self, forKey: .status), fixture: try container.decode(CoreEvidenceReference.self, forKey: .fixture), comparison: try container.decode(CoreEvidenceReference.self, forKey: .comparison), provenance: try container.decode(CoreEvidenceReference.self, forKey: .provenance), fixtureBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .fixtureBinding), comparisonBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .comparisonBinding), provenanceBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .provenanceBinding), outcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .outcome), diagnosticCode: try container.decode(PublicWorkflowDiagnosticCode.self, forKey: .diagnosticCode), execution: try container.decode(PublicWorkflowCIExecution.self, forKey: .execution))
   }
 }
@@ -357,14 +318,14 @@ public struct PublicWorkflowFixtureResult: Equatable, Codable, Sendable {
     guard !caseID.isEmpty, !command.isEmpty,
           binding.caseID == caseID, binding.evidenceRunID == runID, binding.evidence == fixture,
           actualOutcome == .succeeded || diagnosticCode?.isEmpty == false else {
-      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "fixture result")
+      throw ConformanceGovernanceError.invalidField(record: caseID, field: "fixture result")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, runID, fixture, command, expectedOutcome, actualOutcome, diagnosticCode, stdout, stderr, binding }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(caseID: try container.decode(String.self, forKey: .caseID), runID: try container.decode(UUID.self, forKey: .runID), fixture: try container.decode(CoreEvidenceReference.self, forKey: .fixture), command: try container.decode(String.self, forKey: .command), expectedOutcome: try container.decode(PublicWorkflowFixtureOutcome.self, forKey: .expectedOutcome), actualOutcome: try container.decode(PublicWorkflowFixtureOutcome.self, forKey: .actualOutcome), diagnosticCode: try container.decodeIfPresent(String.self, forKey: .diagnosticCode), stdout: try container.decode(CoreEvidenceReference.self, forKey: .stdout), stderr: try container.decode(CoreEvidenceReference.self, forKey: .stderr), binding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .binding))
   }
 }
@@ -396,14 +357,14 @@ public struct PublicWorkflowCanonicalObservation: Equatable, Codable, Sendable {
   public func validate() throws {
     let collections = [initialStates, reachableStates, labeledTransitions, enabledTransitions, properties, deadlocks, failures, diagnostics]
     guard !initialStates.isEmpty, collections.allSatisfy({ $0.allSatisfy { !$0.isEmpty } }), trace?.allSatisfy({ !$0.isEmpty }) != false else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "observation", field: "canonical fields")
+      throw ConformanceGovernanceError.invalidField(record: "observation", field: "canonical fields")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case initialStates, reachableStates, labeledTransitions, enabledTransitions, properties, deadlocks, failures, diagnostics, trace }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(initialStates: try container.decode([String].self, forKey: .initialStates), reachableStates: try container.decode([String].self, forKey: .reachableStates), labeledTransitions: try container.decode([String].self, forKey: .labeledTransitions), enabledTransitions: try container.decode([String].self, forKey: .enabledTransitions), properties: try container.decode([String].self, forKey: .properties), deadlocks: try container.decode([String].self, forKey: .deadlocks), failures: try container.decode([String].self, forKey: .failures), diagnostics: try container.decode([String].self, forKey: .diagnostics), trace: try container.decodeIfPresent([String].self, forKey: .trace))
   }
 }
@@ -439,18 +400,18 @@ public struct PublicWorkflowComparison: Equatable, Codable, Sendable {
           leftBinding.gateRunID == correlation.gateRunID, rightBinding.gateRunID == correlation.gateRunID,
           leftBinding.evidenceRunID == correlation.comparisonRunID,
           rightBinding.evidenceRunID == correlation.comparisonRunID, outcome != .unavailable else {
-      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "comparison correlation")
+      throw ConformanceGovernanceError.invalidField(record: caseID, field: "comparison correlation")
     }
     let matches = left == right
     guard (outcome == .exact && matches && diagnosticCode == .exactAgreement) || (outcome == .difference && !matches && diagnosticCode == .observationDifference) else {
-      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "comparison outcome")
+      throw ConformanceGovernanceError.invalidField(record: caseID, field: "comparison outcome")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, correlation, left, right, outcome, diagnosticCode, leftBinding, rightBinding }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(caseID: try container.decode(String.self, forKey: .caseID), correlation: try container.decode(PublicWorkflowCaseRunCorrelation.self, forKey: .correlation), left: try container.decode(PublicWorkflowCanonicalObservation.self, forKey: .left), right: try container.decode(PublicWorkflowCanonicalObservation.self, forKey: .right), outcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .outcome), diagnosticCode: try container.decode(PublicWorkflowDiagnosticCode.self, forKey: .diagnosticCode), leftBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .leftBinding), rightBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .rightBinding))
   }
 }
@@ -494,13 +455,13 @@ public struct PublicWorkflowCIExecution: Equatable, Codable, Sendable {
     switch authority {
     case .diagnostic:
       guard gitSHA == nil, repository == nil, workflow == nil, ref == nil, runID == nil, runAttempt == nil, job == nil, serverURL == nil else {
-        throw PublicWorkflowGovernanceError.invalidField(record: "diagnostic execution", field: "hosted identity")
+        throw ConformanceGovernanceError.invalidField(record: "diagnostic execution", field: "hosted identity")
       }
     case .candidate:
       let isSHA = gitSHA?.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil
       guard isSHA, repository?.isEmpty == false, workflow?.isEmpty == false, ref?.isEmpty == false, runID?.isEmpty == false,
             (runAttempt ?? 0) > 0, job?.isEmpty == false, serverURL?.isEmpty == false else {
-        throw PublicWorkflowGovernanceError.invalidField(record: "CI execution", field: "identity")
+        throw ConformanceGovernanceError.invalidField(record: "CI execution", field: "identity")
       }
     }
   }
@@ -514,7 +475,7 @@ public struct PublicWorkflowPlatformRunCorrelation: Equatable, Codable, Sendable
 
   public init(caseID: String, gateRunID: UUID, platformRunID: UUID) throws {
     guard !caseID.isEmpty else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "platform correlation", field: "caseID")
+      throw ConformanceGovernanceError.invalidField(record: "platform correlation", field: "caseID")
     }
     self.caseID = caseID
     self.gateRunID = gateRunID
@@ -524,7 +485,7 @@ public struct PublicWorkflowPlatformRunCorrelation: Equatable, Codable, Sendable
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, gateRunID, platformRunID }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(caseID: try container.decode(String.self, forKey: .caseID),
                   gateRunID: try container.decode(UUID.self, forKey: .gateRunID),
                   platformRunID: try container.decode(UUID.self, forKey: .platformRunID))
@@ -576,28 +537,28 @@ public struct PublicWorkflowPlatformEvidence: Equatable, Codable, Sendable {
     try stderrBinding.validate()
     try execution.validate()
     guard !platform.isEmpty, !command.isEmpty, !sdk.isEmpty, !destination.isEmpty, !xcodeVersion.isEmpty else {
-      throw PublicWorkflowGovernanceError.invalidField(record: "platform", field: "identity")
+      throw ConformanceGovernanceError.invalidField(record: "platform", field: "identity")
     }
     guard [fixtureBinding, stdoutBinding, stderrBinding].allSatisfy({
       $0.caseID == correlation.caseID && $0.gateRunID == correlation.gateRunID
         && $0.evidenceRunID == correlation.platformRunID
     }), fixtureBinding.evidence == fixture, stdoutBinding.evidence == stdout, stderrBinding.evidence == stderr else {
-      throw PublicWorkflowGovernanceError.inconsistentReference(record: platform, field: "platform artifacts")
+      throw ConformanceGovernanceError.inconsistentReference(record: platform, field: "platform artifacts")
     }
     switch status {
     case .succeeded:
-      guard exitCode == 0 else { throw PublicWorkflowGovernanceError.invalidField(record: platform, field: "exitCode") }
+      guard exitCode == 0 else { throw ConformanceGovernanceError.invalidField(record: platform, field: "exitCode") }
     case .failed:
-      guard let exitCode, exitCode != 0 else { throw PublicWorkflowGovernanceError.invalidField(record: platform, field: "exitCode") }
+      guard let exitCode, exitCode != 0 else { throw ConformanceGovernanceError.invalidField(record: platform, field: "exitCode") }
     case .unavailable:
-      guard exitCode == nil else { throw PublicWorkflowGovernanceError.invalidField(record: platform, field: "exitCode") }
+      guard exitCode == nil else { throw ConformanceGovernanceError.invalidField(record: platform, field: "exitCode") }
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case platform, command, sdk, destination, xcodeVersion, fixture, status, exitCode, stdout, stderr, correlation, fixtureBinding, stdoutBinding, stderrBinding, execution }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(platform: try container.decode(String.self, forKey: .platform), command: try container.decode(String.self, forKey: .command), sdk: try container.decode(String.self, forKey: .sdk), destination: try container.decode(String.self, forKey: .destination), xcodeVersion: try container.decode(String.self, forKey: .xcodeVersion), fixture: try container.decode(CoreEvidenceReference.self, forKey: .fixture), status: try container.decode(PublicWorkflowPlatformStatus.self, forKey: .status), exitCode: try container.decodeIfPresent(Int.self, forKey: .exitCode), stdout: try container.decode(CoreEvidenceReference.self, forKey: .stdout), stderr: try container.decode(CoreEvidenceReference.self, forKey: .stderr), correlation: try container.decode(PublicWorkflowPlatformRunCorrelation.self, forKey: .correlation), fixtureBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .fixtureBinding), stdoutBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .stdoutBinding), stderrBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .stderrBinding), execution: try container.decode(PublicWorkflowCIExecution.self, forKey: .execution))
   }
 }

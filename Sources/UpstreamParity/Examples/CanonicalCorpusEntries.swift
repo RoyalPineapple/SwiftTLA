@@ -7,7 +7,7 @@ extension Example {
         upstreamModule: "specifications/Boulanger/Boulanger.tla",
         upstreamCfg: "specifications/Boulanger/MCBoulanger.cfg",
         expectedDistinct: 0,
-        verificationStateLimit: 1,
+        maximumStateLimit: 1,
         spec: BoulangerModel.spec,
         notes: "Canonical Boulanger source port. External validation retains the bounded official PlusCal and TLC comparison."
     )
@@ -18,7 +18,7 @@ extension Example {
         upstreamModule: "specifications/KeyValueStore/KVsnap.tla",
         upstreamCfg: "specifications/KeyValueStore/MCKVsnap.cfg",
         expectedDistinct: 0,
-        verificationStateLimit: 1,
+        maximumStateLimit: 1,
         spec: KVsnapModel.spec,
         notes: "Canonical KVsnap source port. The independent ValidationEvidence benchmark retains the bounded TLC count and graph evidence."
     )
@@ -29,7 +29,7 @@ extension Example {
         upstreamModule: "specifications/byzpaxos/VoteProof.tla",
         upstreamCfg: "specifications/byzpaxos/VoteProof.cfg",
         expectedDistinct: 0,
-        verificationStateLimit: 1,
+        maximumStateLimit: 1,
         spec: VoteProofModel.spec,
         notes: "Canonical VoteProof source port. External validation retains the bounded official PlusCal and TLC comparison."
     )

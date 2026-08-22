@@ -33,7 +33,6 @@ struct SymmetryParserFidelityTests {
 
     @Test("Symmetry participates in generated parser-builder fidelity")
     func generatedModelPreservesSymmetry() throws {
-        GeneratedSymmetryModel._checkParserTree()
         #expect(GeneratedSymmetryModel.spec.symmetrySets == [
             SymmetrySet(variableName: "TxId", values: [.string("t1"), .string("t2")])
         ])
@@ -49,13 +48,14 @@ private struct GeneratedSymmetryModel {
     enum Transaction: String, FiniteDomainKey {
         case t1, t2
 
+        static var defaultValue: Self { .t1 }
         static let formalDomain: [Self] = [.t1, .t2]
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.symmetry-parser.transaction")
     }
 
     static var spec: TLASpec {
-        #spec("GeneratedSymmetry") {
-            let value = SharedVar(initial: 0)
+        #spec("GeneratedSymmetry") { scope in
+            let value = scope.sharedVar("value", initial: 0)
             Symmetry("TxId", Set(Transaction.all))
             Invariant("TypeOK") { value >= 0 }
         }

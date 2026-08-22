@@ -23,7 +23,7 @@ struct PublicWorkflowConformanceRunnerTests {
     #expect(FileManager.default.fileExists(atPath: result.reportURL.path))
     let persisted = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: Data(contentsOf: result.reportURL))
     #expect(persisted.checks.map(\.id) == result.report.checks.map(\.id))
-    let current = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: Data(contentsOf: output.appending(path: "support-admission.json")))
+    let current = try currentReport(at: output)
     #expect(current.runID == persisted.runID)
   }
 
@@ -40,7 +40,7 @@ struct PublicWorkflowConformanceRunnerTests {
     #expect(result.report.checks.count == 1)
     #expect(result.report.checks[0].status == .unavailable)
     if case .unavailable = result.report.finalExitClass {} else { Issue.record("missing register must be unavailable") }
-    #expect(FileManager.default.fileExists(atPath: output.appending(path: "support-admission.json").path))
+    #expect(FileManager.default.fileExists(atPath: output.appending(path: "current-support-admission.json").path))
   }
 
   @Test("completed disagreement maps to the blocked exit class")
@@ -71,7 +71,7 @@ struct PublicWorkflowConformanceRunnerTests {
         "PUBLIC_WORKFLOW_FAKE_MODE": mode
       ])
       #expect(result == exitCode)
-      let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: Data(contentsOf: output.appending(path: "support-admission.json")))
+      let report = try currentReport(at: output)
       #expect(report.checks.contains(where: { $0.id == "annotation-fixtures" }))
       #expect(report.checks.contains(where: { $0.id == "public-library-platform-matrix" }))
       #expect(report.finalExitClass.rawValue == expectedExit)
@@ -116,8 +116,7 @@ struct PublicWorkflowConformanceRunnerTests {
       ])
     #expect(exit == 0)
 
-    let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
-      from: Data(contentsOf: temporary.appending(path: "evidence/support-admission.json")))
+    let report = try currentReport(at: temporary.appending(path: "evidence"))
     #expect(report.authority == .diagnostic)
     #expect(report.claimStatus == "diagnosticOnly")
     #expect(report.finalExitClass == .success)
@@ -149,7 +148,7 @@ struct PublicWorkflowConformanceRunnerTests {
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
     let xcodebuild = try fakeXcodebuild(at: temporary)
 
-    for (mode, expectedExit, expectedClass) in [("matched", 0, PublicWorkflowAdmissionExitClass.success), ("platform-failure", 1, .blocked), ("unavailable", 2, .unavailable)] {
+    for (mode, expectedExit, expectedClass) in [("matched", 0, PublicWorkflowDiagnosticExit.success), ("platform-failure", 1, .blocked), ("unavailable", 2, .unavailable)] {
       let output = temporary.appending(path: mode)
       let exit = try run(URL(fileURLWithPath: "/bin/bash"), from: root,
         arguments: ["scripts/run_public_workflow_support_gate.sh", "--output", output.path],
@@ -160,8 +159,7 @@ struct PublicWorkflowConformanceRunnerTests {
         ])
       #expect(exit == expectedExit)
 
-      let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
-        from: Data(contentsOf: output.appending(path: "support-admission.json")))
+      let report = try currentReport(at: output)
       #expect(report.finalExitClass == expectedClass)
       let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
         from: Data(contentsOf: output.appending(path: "runs/\(report.runID.uuidString.lowercased())/support-admission.json")))
@@ -193,8 +191,7 @@ struct PublicWorkflowConformanceRunnerTests {
       #expect(result.report.checks.count == 1)
       #expect(result.report.checks[0].status == .unavailable)
       #expect(result.report.checks[0].diagnostic?.contains(expectedDiagnostic) == true)
-      let persisted = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
-        from: Data(contentsOf: output.appending(path: "support-admission.json")))
+      let persisted = try currentReport(at: output)
       #expect(persisted.finalExitClass == .unavailable)
     }
   }
@@ -219,8 +216,7 @@ struct PublicWorkflowConformanceRunnerTests {
         "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_JOB", "GITHUB_SERVER_URL",
       ])
     #expect(exit == 0)
-    let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
-      from: Data(contentsOf: output.appending(path: "support-admission.json")))
+    let report = try currentReport(at: output)
     #expect(report.authority == .diagnostic)
     #expect(report.claimStatus == "diagnosticOnly")
   }
@@ -230,6 +226,17 @@ struct PublicWorkflowConformanceRunnerTests {
       arguments: ["-scheme", "tlc-validate", "-sdk", "macosx", "-destination", "platform=macOS", "-derivedDataPath", derivedData.path, "build"], environment: [:])
     guard result == 0 else { throw CocoaError(.executableNotLoadable) }
     return derivedData.appending(path: "Build/Products/Debug/tlc-validate")
+  }
+
+  private func currentReport(at output: URL) throws -> PublicWorkflowDiagnosticReport {
+    let reference = try JSONDecoder().decode(
+      CoreEvidenceReference.self,
+      from: Data(contentsOf: output.appending(path: "current-support-admission.json")))
+    let data = try Data(contentsOf: output.appending(path: reference.path))
+    guard SHA256.hex(data) == reference.sha256 else {
+      throw CocoaError(.fileReadCorruptFile)
+    }
+    return try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: data)
   }
 
   private func fakeXcodebuild(at directory: URL) throws -> URL {

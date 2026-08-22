@@ -209,6 +209,10 @@ public struct TLCGraphEventParser: Sendable {
 
     public func parseCanonicalRun(_ data: Data, result: TLCProcessResult) throws -> CanonicalRun {
         let stream = try parse(data)
+        return try canonicalRun(stream, result: result)
+    }
+
+    package func canonicalRun(_ stream: TLCGraphEventStream, result: TLCProcessResult) throws -> CanonicalRun {
         var canonicalStatesByFingerprint: [String: CanonicalState] = [:]
         func canonicalRepresentative(_ state: TLCGraphState) throws -> CanonicalState {
             if let existing = canonicalStatesByFingerprint[state.fingerprint] {
@@ -449,7 +453,7 @@ enum TLCValueParser {
                 return CanonicalFunctionEntry(key: try parse(pair[0]), value: try parse(pair[1]))
             }
             guard Set(entries.map(\.key)).count == entries.count else { throw TLCGraphEventError.unsupportedValue(text) }
-            return .function(entries)
+            return try .function(entries)
         }
         guard value.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil else {
             throw TLCGraphEventError.unsupportedValue(text)

@@ -47,9 +47,3 @@ Positions begin at zero and have meaning only within one runtime identity. `Live
 ## Generated adapters
 
 Nested `@TLAActor` and `@TLAObservable` types accept the enclosing model's typed `Live` value with `init(live:)`. The actor forwards control to that runtime. The main-actor observable adapter reduces subscription events into its typed cache. It records `recovering` after loss and `terminated` after runtime termination.
-
-## Verification helpers
-
-Generated models provide `verifySpec()`, `verifyTransitions()`, and `verifyInvariants()` for their declared finite model. They return the verified state, transition, and invariant-check counts. These helpers use the bounded checker and the model's `verificationStateLimit` (default: `100_000`).
-
-For a narrative guide and limits, read `Documentation/GeneratedMachines.md` and `Documentation/LiveMachines.md` in the repository.

@@ -13,6 +13,7 @@ public struct DiningPhilosophersModel: Sendable {
         case four = 4
         case five = 5
 
+        public static var defaultValue: Self { .one }
         public static let formalDomain: [Self] = [.one, .two, .three, .four, .five]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.dining-philosophers.philosopher")
 
@@ -41,7 +42,7 @@ public struct DiningPhilosophersModel: Sendable {
         public static let clean = field(\ForkFields.clean)
     }
 
-    private enum Step: String, PlusCalLabel {
+    private enum Step: String, PlusCalLabel, CaseIterable {
         case loop = "Loop"
         case think = "Think"
         case eat = "Eat"
@@ -49,10 +50,10 @@ public struct DiningPhilosophersModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("DiningPhilosophers") {
-            Extends("Integers")
+            Extends(.integers)
 
-            Algorithm("DiningPhilosophers") {
-                let forks = SharedVar(initial: Function<Philosopher, Record<Fork>>.literal(
+            Algorithm("DiningPhilosophers", scoped: { scope in
+                let forks = scope.sharedVar("forks", initial: Function<Philosopher, Record<Fork>>.literal(
                     (Philosopher.one, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
                     (Philosopher.two, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
                     (Philosopher.three, Record.literal(.init(Fork.holder, Philosopher.three), .init(Fork.clean, false))),
@@ -60,8 +61,8 @@ public struct DiningPhilosophersModel: Sendable {
                     (Philosopher.five, Record.literal(.init(Fork.holder, Philosopher.five), .init(Fork.clean, false)))
                 ))
 
-                Each(Philosopher.all) { philosopher in
-                    let hungry = LocalVar(initial: true)
+                Each(Philosopher.all, scoped: { philosopher, scope in
+                    let hungry = scope.localVar("hungry", initial: true)
 
                     Do(Step.loop) {
                         let right = If(philosopher == Philosopher.one, then: Philosopher.two, else:
@@ -153,7 +154,7 @@ public struct DiningPhilosophersModel: Sendable {
                             && (hungry == true || hungry == false)
                             && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
                     }
-                }
+                })
 
                 Invariant("ExclusiveAccess") {
                     All(Philosopher.all) { first in
@@ -168,7 +169,7 @@ public struct DiningPhilosophersModel: Sendable {
                         }
                     }
                 }
-            }
+            })
         }
     }
 }

@@ -16,22 +16,23 @@ struct ClientCentricModuleTests {
       ])
     }
 
-    let snapshot = ModuleCall<Bool>(
+    let snapshot = ModuleCall(
+      as: Bool.self,
       "CC", "SnapshotIsolation", Expr<Function<TestKey, TestValue>>(initial),
       Expr<SetExpr<TupleExpr<Int>>>(.setLiteral([]))
     )
     let closure = try consumer.compile().formalModuleClosure
     #expect(try compiledValue(
       snapshot.raw,
-      recursiveFunctions: closure.resolvedRecursiveFuncs,
-      formalOperators: closure.resolvedFormalOperatorDefinitions
+      recursiveFunctions: closure.linkedOperators.recursiveFunctions,
+      formalOperators: closure.linkedOperators.formalOperatorDefinitions
     ) == .bool(true))
     #expect(try consumer.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
   }
 
   @Test("a selected injective function can concatenate as a TLA sequence")
-  func chosenFunctionRemainsSequenceCompatible() throws {
+  func chosenFunctionConcatenatesAsSequence() throws {
     let selected = StateExpr.choose(
       .functionSet(.integerRange(.int(1), .int(2)), .setLiteral([.int(1), .int(2)])),
       "f",
@@ -40,7 +41,7 @@ struct ClientCentricModuleTests {
     let expression = StateExpr.tupleConcatenate(.tupleLiteral([]), selected)
     let result = try compiledValue(
       expression,
-      formalOperators: try FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+      formalOperators: try FunctionsModule.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     )
     guard case .tuple(let values) = result else {
       Issue.record("An injective function choice must be consumable as a formal sequence.")
@@ -51,12 +52,14 @@ struct ClientCentricModuleTests {
 
   private enum TestKey: String, FiniteDomainKey {
     case key = "k"
+    static var defaultValue: Self { .key }
     static let formalDomain: [Self] = [.key]
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.clientCentric.key")
   }
 
   private enum TestValue: String, FiniteDomainKey {
     case none
+    static var defaultValue: Self { .none }
     static let formalDomain: [Self] = [.none]
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.clientCentric.value")
   }

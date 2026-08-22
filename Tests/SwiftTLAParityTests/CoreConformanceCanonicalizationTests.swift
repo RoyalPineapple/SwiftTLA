@@ -34,18 +34,28 @@ struct CoreConformanceCanonicalizationTests {
     }
 
     @Test("canonical values are stable across unordered collection insertion")
-    func canonicalizesNestedUnorderedValues() {
+    func canonicalizesNestedUnorderedValues() throws {
         let left = CanonicalValue.record([
             "values": .set([.integer(2), .integer(1)]),
-            "mapping": .function([.init(key: .string("b"), value: .boolean(false)), .init(key: .string("a"), value: .boolean(true))])
+            "mapping": try .function([.init(key: .string("b"), value: .boolean(false)), .init(key: .string("a"), value: .boolean(true))])
         ])
         let right = CanonicalValue.record([
-            "mapping": .function([.init(key: .string("a"), value: .boolean(true)), .init(key: .string("b"), value: .boolean(false))]),
+            "mapping": try .function([.init(key: .string("a"), value: .boolean(true)), .init(key: .string("b"), value: .boolean(false))]),
             "values": .set([.integer(1), .integer(2)])
         ])
 
         #expect(left == right)
         #expect(left.canonicalEncoding == right.canonicalEncoding)
+    }
+
+    @Test("canonical functions reject duplicate keys")
+    func rejectsDuplicateFunctionKeys() {
+        #expect(throws: CanonicalValueError.self) {
+            _ = try CanonicalValue.function([
+                .init(key: .string("member"), value: .integer(1)),
+                .init(key: .string("member"), value: .integer(2))
+            ])
+        }
     }
 
     @Test("Swift normalization canonicalizes complete graph state references")
@@ -72,7 +82,7 @@ struct CoreConformanceCanonicalizationTests {
             moduleSHA256: String(repeating: "a", count: 64),
             cfgSHA256: String(repeating: "b", count: 64),
             arguments: [],
-            argumentsSHA256: CoreConformanceCase.argumentsDigest([]),
+            argumentsSHA256: try CoreConformanceCase.argumentsDigest([]),
             workers: 1,
             fingerprintPolynomial: 1,
             deadlock: false,

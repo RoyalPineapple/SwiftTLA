@@ -4,6 +4,10 @@ import SwiftSyntax
 import SwiftTLAMacros
 import Testing
 
+private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
+    try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+}
+
 @TLAModel
 private struct TypedFiniteConstantGeneratedModel {
     static var spec: TLASpec {
@@ -19,11 +23,13 @@ private struct TypedFiniteConstantGeneratedModel {
 private struct VoteProofShapedConstantGeneratedModel {
     enum Value: String, FiniteTLAValueDomain {
         case v1, v2
+        static var defaultValue: Self { .v1 }
         static let finiteValues: [Self] = [.v1, .v2]
     }
 
     enum Acceptor: String, FiniteTLAValueDomain {
         case a1, a2, a3
+        static var defaultValue: Self { .a1 }
         static let finiteValues: [Self] = [.a1, .a2, .a3]
     }
 
@@ -53,14 +59,14 @@ struct TypedFiniteConstantTests {
         #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
-    @Test func parserRetainsTheSameTypedFiniteSet() {
-        let closure = Parser.parse(source: """
+    @Test func parserRetainsTheSameTypedFiniteSet() throws {
+        let closure = try parseClosure("""
         {
             Constant("Value", SetExpr<Int>(1, 2))
             let count = Var<Int>("count")
             Variable(count, 0)
         }
-        """).statements.first!.item.as(ClosureExprSyntax.self)!
+        """)
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
@@ -85,14 +91,14 @@ struct TypedFiniteConstantTests {
         #expect(try VoteProofShapedConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
     }
 
-    @Test func parserDiagnosesDynamicConstantValues() {
-        let closure = Parser.parse(source: """
+    @Test func parserDiagnosesDynamicConstantValues() throws {
+        let closure = try parseClosure("""
         {
             let values = Var<SetExpr<Int>>("values")
             Variable(values, SetExpr<Int>())
             Constant("Value", values)
         }
-        """).statements.first!.item.as(ClosureExprSyntax.self)!
+        """)
         let parsed = SpecParser.parseSpecClosure(closure)
 
         guard let diagnostic = parsed.diagnostics.first else {
@@ -101,6 +107,5 @@ struct TypedFiniteConstantTests {
         }
         #expect(diagnostic.message == "Constant 'Value' must be static; dynamic formal expressions are not constant values.")
         #expect(diagnostic.expected == "a literal value or SetExpr<Element>(...) with static members")
-        #expect(diagnostic.changeStatus == .noFormalModelWasBuilt)
     }
 }

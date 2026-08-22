@@ -1,7 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAModel
+@SwiftTLAMacros.TLAModel
 struct ObservableHost {
   static var spec: TLASpec {
     TLASpec("StandaloneObservableSendable") {
@@ -11,7 +11,7 @@ struct ObservableHost {
     }
   }
 
-  @TLAObservable
+  @SwiftTLAMacros.TLAObservable
   final class Observable {}
 }
 
@@ -24,19 +24,41 @@ requireSendable(ObservableHost.Observable.TransitionResult.self)
 
 let live = try ObservableHost.makeLive()
 let observable = try await ObservableHost.Observable(live: live)
-let result = try await observable.apply(.advance)
+guard case .committed(let result) = try await observable.apply(.advance) else {
+  throw FixtureError.invalidTransition
+}
 
-precondition(result.action == .advance)
-precondition(result.before.count == 0)
-precondition(result.after.count == 1)
-let stateCount = observable.state.count
-precondition(stateCount == 1)
+guard result.action == .advance,
+      result.before.count == 0,
+      result.after.count == 1 else {
+  throw FixtureError.invalidTransition
+}
+guard let stateCount = observable.state?.count else {
+  throw FixtureError.invalidState
+}
+guard stateCount == 1 else {
+  throw FixtureError.invalidState
+}
 
 let beforeRejectedAction = observable.state
+let rejected: Bool
 do {
   _ = try await observable.apply(.advance)
-  fatalError("Expected disabled action")
+  rejected = false
 } catch {
-  let stateAfterRejectedAction = observable.state
-  precondition(stateAfterRejectedAction == beforeRejectedAction)
+  rejected = true
+}
+guard rejected else {
+  throw FixtureError.expectedDisabledAction
+}
+let stateAfterRejectedAction = observable.state
+guard stateAfterRejectedAction == beforeRejectedAction else {
+  throw FixtureError.invalidRejection
+}
+
+private enum FixtureError: Error {
+  case invalidTransition
+  case invalidState
+  case expectedDisabledAction
+  case invalidRejection
 }

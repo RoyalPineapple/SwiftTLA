@@ -10,6 +10,7 @@ struct TypedFacadeContractTests {
     case carA
     case carB
 
+    static var defaultValue: Self { .carA }
     static let finiteValues = allCases
   }
 
@@ -17,6 +18,7 @@ struct TypedFacadeContractTests {
     case alice
     case bob
 
+    static var defaultValue: Self { .alice }
     static let finiteValues = allCases
   }
 
@@ -55,7 +57,7 @@ struct TypedFacadeContractTests {
     #expect(
       calls.inserting(.alice)
         == .assign(
-          "calls",
+          .named("calls"),
           .union(.variable("calls"), .setLiteral([.value(.string("alice"))]))
         ))
 
@@ -106,10 +108,10 @@ struct TypedFacadeContractTests {
     #expect(literal.raw == .setLiteral([closed.raw, open.raw]))
     #expect(
       calls.inserting(closed)
-        == .assign("calls", .union(.variable("calls"), .setLiteral([closed.raw]))))
+        == .assign(.named("calls"), .union(.variable("calls"), .setLiteral([closed.raw]))))
     #expect(
       calls.removing(closed)
-        == .assign("calls", .setDifference(.variable("calls"), .setLiteral([closed.raw]))))
+        == .assign(.named("calls"), .setDifference(.variable("calls"), .setLiteral([closed.raw]))))
     #expect(calls.contains(closed) == .in(closed.raw, .variable("calls")))
     guard case .functionLiteral = cars.raw else {
       Issue.record("Expected the typed function literal to lower to StateExpr.functionLiteral")
@@ -160,6 +162,18 @@ struct TypedFacadeContractTests {
     }
   }
 
+  @Test("external consumers cannot name raw execution implementation types")
+  func rawExecutionImplementationTypesDoNotTypeCheck() throws {
+    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidRawExecutionSurface")
+    let result = try runSwift(["build", "--package-path", fixture.path])
+
+    #expect(result.status != 0)
+    #expect(result.output.contains("cannot find 'ModelChecker' in scope"))
+    #expect(result.output.contains("cannot find 'StateGraph' in scope"))
+    #expect(result.output.contains("cannot find 'TLALiveMachine' in scope"))
+    #expect(result.output.contains("cannot find 'TLALiveMachineTransitionDriver' in scope"))
+  }
+
   @Test("typed DSL invalid fixture reports each source-local diagnostic")
   func invalidTypedDSLReportsSourceLocalDiagnostics() throws {
     let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedDSL")
@@ -193,19 +207,19 @@ struct TypedFacadeContractTests {
   func explicitCoreASTBoundariesRemainAvailable() {
     let raw = Var<TLAValue>("raw")
     let expression = StateExpr.variable(raw.name)
-    let action = ActionExpr.assign(raw.name, expression.updated(at: 1, to: 2))
+    let action = ActionExpr.assign(.named(raw.name), expression.updated(at: 1, to: 2))
 
     #expect(
       action
         == .assign(
-          "raw",
+          .named("raw"),
           .except(.variable("raw"), .value(.int(1)), .value(.int(2)))
         ))
   }
 
   @Test("bounded elevator source model checks successfully")
   func boundedElevatorSourceModelChecksSuccessfully() throws {
-    let checker = try ModelChecker(spec: MultiCarElevator.spec, maxStates: 30_000)
+    let checker = try ModelChecker(compilation: try MultiCarElevator.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 30_000))
     guard case .ok(let stateCount) = try checker.check() else {
       Issue.record("Bounded MultiCarElevator safety model did not complete successfully")
       return

@@ -60,7 +60,7 @@ fi
 RUN_ROOT="$REPORT_ROOT/runs/$GATE_RUN_ID"
 REPORT="$RUN_ROOT/support-admission.json"
 CORE_ROOT="$RUN_ROOT/core"
-CURRENT_CORE_REPORT="$CORE_ROOT/support-admission.json"
+CURRENT_CORE_REFERENCE="$CORE_ROOT/current-support-admission.json"
 
 if ! reject_unsafe_output "$REPORT_ROOT" "$REPORT" \
     "$CASES_FILE" "$DIVERGENCES_FILE" "$SUPPORT_SURFACE_FILE" "$TOOLCHAIN_FILE"; then
@@ -87,43 +87,47 @@ set +e
 core_status=$?
 set -e
 
-if [ ! -f "$CURRENT_CORE_REPORT" ]; then
+if [ ! -f "$CURRENT_CORE_REFERENCE" ]; then
     prerequisite="unavailable"
-    echo "temporal-symmetry: current core admission report is missing: $CURRENT_CORE_REPORT" >&2
+    echo "temporal-symmetry: current core admission reference is missing: $CURRENT_CORE_REFERENCE" >&2
 fi
 
 CORE_ADMISSION_PATH="unavailable/core-admission.json"
 CORE_GATE_RUN_ID=""
 CORE_REPORT_SHA256=""
-if [ -f "$CURRENT_CORE_REPORT" ]; then
-    if ! core_context="$(python3 - "$CURRENT_CORE_REPORT" "$CORE_ROOT" "$PROJECT_ROOT" <<'PY'
+CORE_REPORT="$CORE_ROOT/unavailable-core-admission.json"
+if [ -f "$CURRENT_CORE_REFERENCE" ]; then
+    if ! core_context="$(python3 - "$SCRIPT_DIR/current_evidence_report.py" "$CORE_ROOT" "$PROJECT_ROOT" <<'PY'
 from hashlib import sha256
 from pathlib import Path
 import json
+import subprocess
 import sys
 import uuid
 
-report = Path(sys.argv[1]).resolve()
+utility = Path(sys.argv[1])
 core_root = Path(sys.argv[2]).resolve()
 project_root = Path(sys.argv[3]).resolve()
 try:
+    report = Path(subprocess.check_output([utility, "resolve", core_root], text=True).strip())
     report_data = json.loads(report.read_text())
     core_run_id = str(uuid.UUID(report_data["gateRunID"]))
     retained = core_root / "runs" / core_run_id / "support-admission.json"
-    if not retained.is_file() or sha256(retained.read_bytes()).digest() != sha256(report.read_bytes()).digest():
+    if report != retained.resolve():
         raise ValueError("current core report is not the retained report for its run")
     print("\t".join((
         core_run_id,
         str(report.relative_to(project_root)),
         sha256(report.read_bytes()).hexdigest(),
+        str(report),
     )))
-except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-    raise SystemExit(f"temporal-symmetry: invalid current core admission report: {error}")
+except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
+    raise SystemExit(f"temporal-symmetry: invalid current core admission reference: {error}")
 PY
     )"; then
         prerequisite="unavailable"
     else
-        IFS=$'\t' read -r CORE_GATE_RUN_ID CORE_ADMISSION_PATH CORE_REPORT_SHA256 <<< "$core_context"
+        IFS=$'\t' read -r CORE_GATE_RUN_ID CORE_ADMISSION_PATH CORE_REPORT_SHA256 CORE_REPORT <<< "$core_context"
     fi
 fi
 
@@ -151,7 +155,7 @@ set +e
         --evidence "$RUN_ROOT/cases" \
         --report "$REPORT" \
         --run-id "$GATE_RUN_ID" \
-        --core-admission "$CURRENT_CORE_REPORT" \
+        --core-admission "$CORE_REPORT" \
         --core-report-id "$CORE_REPORT_ID" \
         --prerequisite "$prerequisite"
 )
@@ -159,7 +163,7 @@ gate_status=$?
 set -e
 
 if [ -f "$REPORT" ]; then
-    cp "$REPORT" "$REPORT_ROOT/support-admission.json"
+    "$SCRIPT_DIR/current_evidence_report.py" write "$REPORT_ROOT" "$REPORT"
 else
     echo "temporal-symmetry: report generation failed: $REPORT" >&2
     exit 2

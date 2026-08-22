@@ -9,7 +9,7 @@ public struct TLAModuleFile: Sendable, Equatable {
   public let tla: String
   public let cfg: String?
 
-  public init(name: String, tla: String, cfg: String? = nil) {
+  package init(name: String, tla: String, cfg: String? = nil) {
     self.name = name
     self.tla = tla
     self.cfg = cfg
@@ -53,11 +53,31 @@ public struct TLAModuleBundle: Sendable, Equatable {
     }
   }
 
-  /// Provenance distinguishes compiler-linked input from text reconstructed at
-  /// an external tool boundary.
+  /// One source-level module relationship retained by compilation.
+  public struct ModuleDependency: Sendable, Equatable, Codable {
+    public let importingModule: String
+    public let importedModule: String
+    public let structuralPath: [String]
+
+    public init(
+      importingModule: String,
+      importedModule: String,
+      structuralPath: [String]
+    ) {
+      self.importingModule = importingModule
+      self.importedModule = importedModule
+      self.structuralPath = structuralPath
+    }
+  }
+
+  /// Provenance identifies compiler-linked output and external formal-source input.
   public enum Provenance: Sendable, Equatable {
-    case compiled(identity: CompilationIdentity, ownership: [OwnershipEntry])
-    case untrusted
+    case compiled(
+      identity: CompilationIdentity,
+      ownership: [OwnershipEntry],
+      dependencies: [ModuleDependency]
+    )
+    case external
   }
 
   public let root: TLAModuleFile
@@ -67,35 +87,27 @@ public struct TLAModuleBundle: Sendable, Equatable {
   init(
     root: TLAModuleFile,
     imports: [TLAModuleFile] = [],
-    provenance: Provenance = .untrusted
+    provenance: Provenance = .external
   ) {
     self.root = root
     self.imports = imports
     self.provenance = provenance
   }
 
-  /// Creates text reconstructed from an external tool boundary.
-  ///
-  /// This result intentionally has no compiler-link or source-ownership claim.
-  public static func untrusted(
+  /// Creates a bundle supplied by an external formal-source boundary.
+  package static func external(
     root: TLAModuleFile,
     imports: [TLAModuleFile] = []
   ) -> Self {
-    Self(root: root, imports: imports, provenance: .untrusted)
+    Self(root: root, imports: imports, provenance: .external)
   }
 
   public var tla: String { root.tla }
   public var cfg: String { root.cfg ?? "" }
   public var files: [TLAModuleFile] { imports + [root] }
 
-  /// Checks that rendered files still match a complete bundle before TLC runs.
-  ///
-  /// This scans emitted text only for post-render integrity. It must not be
-  /// used to resolve source imports or diagnose compiler linking failures.
-  public func validateRenderedBundleIntegrity(
-    standardModules: Set<String>? = nil
-  ) throws {
-    let standardModules = standardModules ?? Self.formalStandardModules
+  /// Checks that compiler-rendered files materialize their declared closure.
+  public func validateDeclaredClosure() throws {
     var sources: [String: TLAModuleFile] = [:]
     for file in files {
       guard sources[file.name] == nil else {
@@ -104,15 +116,28 @@ public struct TLAModuleBundle: Sendable, Equatable {
       sources[file.name] = file
     }
 
-    for file in files {
-      for dependency in Self.dependencies(in: file.tla) where !standardModules.contains(dependency.name) {
-        guard sources[dependency.name] != nil else {
-          throw TLAModuleBundleIntegrityError.missingModule(
-            module: dependency.name,
-            importedBy: file.name,
-            line: dependency.line
-          )
-        }
+    guard case let .compiled(_, ownership, dependencies) = provenance else {
+      return
+    }
+
+    let expectedModules = Set(ownership.map(\.moduleName))
+    guard expectedModules == Set(sources.keys),
+          ownership.contains(where: { $0.moduleName == root.name }) else {
+      throw TLAModuleBundleIntegrityError.missingModule(
+        module: root.name,
+        importedBy: root.name,
+        line: 0
+      )
+    }
+
+    for dependency in dependencies {
+      guard sources[dependency.importingModule] != nil,
+            sources[dependency.importedModule] != nil else {
+        throw TLAModuleBundleIntegrityError.missingModule(
+          module: dependency.importedModule,
+          importedBy: dependency.importingModule,
+          line: 0
+        )
       }
     }
 
@@ -128,59 +153,13 @@ public struct TLAModuleBundle: Sendable, Equatable {
       guard visited.insert(name).inserted else { return }
       active.append(name)
       defer { active.removeLast() }
-      guard let file = sources[name] else { return }
-      for dependency in Self.dependencies(in: file.tla) where !standardModules.contains(dependency.name) {
-        try visit(dependency.name)
+      for dependency in dependencies where dependency.importingModule == name {
+        try visit(dependency.importedModule)
       }
     }
 
     try visit(root.name)
   }
-
-  private struct Dependency {
-    let name: String
-    let line: Int
-  }
-
-  private static func dependencies(in source: String) -> [Dependency] {
-    let localModules = moduleNames(in: source)
-    var dependencies: [Dependency] = []
-    for (offset, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-      let line = rawLine.trimmingCharacters(in: .whitespaces)
-      if line.hasPrefix("EXTENDS ") {
-        for token in line.dropFirst("EXTENDS ".count).split(separator: ",") {
-          let name = token.trimmingCharacters(in: .whitespaces)
-          if isModuleIdentifier(name), !localModules.contains(String(name)) {
-            dependencies.append(Dependency(name: name, line: offset + 1))
-          }
-        }
-        continue
-      }
-      guard let range = line.range(of: "INSTANCE ") else { continue }
-      let name = line[range.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-      if isModuleIdentifier(name), !localModules.contains(String(name)) {
-        dependencies.append(Dependency(name: String(name), line: offset + 1))
-      }
-    }
-    return dependencies
-  }
-
-  private static func moduleNames(in source: String) -> Set<String> {
-    Set(source.split(separator: "\n", omittingEmptySubsequences: false).compactMap { rawLine in
-      let line = rawLine.trimmingCharacters(in: .whitespaces)
-      guard line.hasPrefix("---- MODULE ") else { return nil }
-      let name = line.dropFirst("---- MODULE ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-      return isModuleIdentifier(name) ? String(name) : nil
-    })
-  }
-
-  private static func isModuleIdentifier(_ value: some StringProtocol) -> Bool {
-    !value.isEmpty && value.first?.isLetter == true
-  }
-
-  private static let formalStandardModules: Set<String> = [
-    "Bags", "FiniteSets", "Integers", "Naturals", "Randomization", "RealTime", "Sequences", "TLC"
-  ]
 }
 
 /// Imports a named TLA+ module as a source dependency.
@@ -221,41 +200,92 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 /// Entries are dependency-first and include the root exactly once. Every
 /// retained edge records its declared relationship instead of flattening
 /// imports and named instances into a name-only module list.
-public struct FormalModuleClosure: Sendable {
-  public struct Entry: Sendable {
-    public let module: TLASpec
-    public let owningRoot: String
-    public let structuralPath: [String]
+package struct FormalModuleClosure: Sendable {
+  struct ModulePlanContext: Sendable {
+    let closure: FormalModuleClosure
+    let incomingModuleParameters: [FormalModuleReplacement]
   }
 
-  public enum EdgeKind: Sendable, Equatable {
+  struct LinkedOperatorPlan: Sendable {
+    let recursiveFunctions: [RecursiveFunc]
+    let formalOperatorDefinitions: [FormalOperatorDefinition]
+  }
+
+  struct Entry: Sendable {
+    let module: TLASpec
+    let owningRoot: String
+    let structuralPath: [String]
+  }
+
+  enum EdgeKind: Sendable, Equatable {
     case importModule(configuration: FormalModuleConfiguration?)
     case namedInstance(namespace: String, arguments: [ModuleArgument])
   }
 
-  public struct Edge: Sendable, Equatable {
-    public let owningRoot: String
-    public let fromModule: String
-    public let toModule: String
-    public let structuralPath: [String]
-    public let kind: EdgeKind
+  struct Edge: Sendable, Equatable {
+    let owningRoot: String
+    let fromModule: String
+    let toModule: String
+    let structuralPath: [String]
+    let kind: EdgeKind
   }
 
-  public let root: Entry
-  public let entries: [Entry]
-  public let edges: [Edge]
+  let root: Entry
+  let entries: [Entry]
+  let edges: [Edge]
+  let linkedOperators: LinkedOperatorPlan
 
-  public var resolvedRecursiveFuncs: [RecursiveFunc] {
+  func planContext(for entry: Entry) -> ModulePlanContext {
+    var reachable = Set([entry.module.name])
+    var pending = [entry.module.name]
+    while let module = pending.popLast() {
+      for edge in edges where edge.fromModule == module {
+        if reachable.insert(edge.toModule).inserted {
+          pending.append(edge.toModule)
+        }
+      }
+    }
+    let entries = entries.filter { reachable.contains($0.module.name) }
+    let edges = edges.filter {
+      reachable.contains($0.fromModule) && reachable.contains($0.toModule)
+    }
+    let incomingModuleParameters = self.edges.flatMap { edge -> [FormalModuleReplacement] in
+      guard edge.toModule == entry.module.name,
+            case .importModule(let configuration) = edge.kind else { return [] }
+      return configuration?.replacements ?? []
+    }
+    return .init(
+      closure: .init(
+        root: entry,
+        entries: entries,
+        edges: edges,
+        linkedOperators: Self.makeLinkedOperatorPlan(root: entry, entries: entries, edges: edges)
+      ),
+      incomingModuleParameters: incomingModuleParameters
+    )
+  }
+
+  private static func makeLinkedOperatorPlan(
+    root: Entry,
+    entries: [Entry],
+    edges: [Edge]
+  ) -> LinkedOperatorPlan {
     let modules = Dictionary(uniqueKeysWithValues: entries.map { ($0.module.name, $0.module) })
-    func resolve(_ name: String, replacements: [FormalModuleReplacement]) -> [RecursiveFunc] {
+    func recursiveFunctions(
+      named name: String,
+      replacements: [FormalModuleReplacement]
+    ) -> [RecursiveFunc] {
       guard let module = modules[name] else { return [] }
       var result: [RecursiveFunc] = []
       for edge in edges where edge.fromModule == name {
         switch edge.kind {
         case .importModule(let configuration):
-          result += resolve(edge.toModule, replacements: configuration?.replacements ?? [])
+          result += recursiveFunctions(
+            named: edge.toModule,
+            replacements: configuration?.replacements ?? []
+          )
         case .namedInstance(let namespace, let arguments):
-          let functions = resolve(edge.toModule, replacements: [])
+          let functions = recursiveFunctions(named: edge.toModule, replacements: [])
           let localNames = Set(functions.map(\.name))
           result += functions.map { function in
             let body = arguments.reduce(function.body) {
@@ -280,12 +310,8 @@ public struct FormalModuleClosure: Sendable {
       }
       return result
     }
-    return resolve(root.module.name, replacements: [])
-  }
 
-  public var resolvedFormalOperatorDefinitions: [FormalOperatorDefinition] {
-    let modules = Dictionary(uniqueKeysWithValues: entries.map { ($0.module.name, $0.module) })
-    func resolve(
+    func formalOperatorDefinitions(
       _ name: String,
       replacements: [FormalModuleReplacement]
     ) -> [FormalOperatorDefinition] {
@@ -294,12 +320,12 @@ public struct FormalModuleClosure: Sendable {
       for edge in edges where edge.fromModule == name {
         switch edge.kind {
         case .importModule(let configuration):
-          result += resolve(
+          result += formalOperatorDefinitions(
             edge.toModule,
             replacements: configuration?.replacements ?? []
           )
         case .namedInstance(let namespace, let arguments):
-          let definitions = resolve(edge.toModule, replacements: [])
+          let definitions = formalOperatorDefinitions(edge.toModule, replacements: [])
           let localNames = Set(definitions.map(\.name))
           result += definitions.map { definition in
             let body = arguments.reduce(definition.body) {
@@ -325,13 +351,17 @@ public struct FormalModuleClosure: Sendable {
       }
       return result
     }
-    return resolve(root.module.name, replacements: [])
+
+    return .init(
+      recursiveFunctions: recursiveFunctions(named: root.module.name, replacements: []),
+      formalOperatorDefinitions: formalOperatorDefinitions(root.module.name, replacements: [])
+    )
   }
 
-  public static func resolve(root: TLASpec) throws -> FormalModuleClosure {
+  static func resolve(root: TLASpec) throws -> FormalModuleClosure {
     var entries: [Entry] = []
     var edges: [Edge] = []
-    var sourceByName: [String: String] = [:]
+    var sourceByName: [String: CompilationIdentity] = [:]
     var active: [String] = []
 
     func diagnostic(
@@ -360,9 +390,9 @@ public struct FormalModuleClosure: Sendable {
         throw diagnostic(.duplicateFormalModuleParameter, path: path + ["parameters", duplicate], expected: "one formal parameter named '\(duplicate)'", actual: "multiple formal parameters", nextSafeAction: "Rename or remove the duplicate parameter, then compile again.")
       }
       let importNames = module.imports.map(\.name)
-      var sourceByImportName: [String: String] = [:]
+      var sourceByImportName: [String: CompilationIdentity] = [:]
       for imported in module.imports {
-        let source = imported.compilationFingerprint
+        let source = imported.compilationIdentity
         if let firstSource = sourceByImportName[imported.name] {
           guard firstSource == source else {
             throw diagnostic(
@@ -441,7 +471,7 @@ public struct FormalModuleClosure: Sendable {
         )
       }
       for instance in module.moduleInstances {
-        let arguments = instance.arguments.map(\.parameter)
+        let arguments = module.instanceArguments(for: instance).map(\.parameter)
         if let duplicate = Self.firstDuplicate(in: arguments) {
           throw diagnostic(
             .duplicateFormalModuleArgument,
@@ -452,6 +482,7 @@ public struct FormalModuleClosure: Sendable {
           )
         }
         let declared = Set(instance.module.formalParameters.map(\.name))
+          .union(instance.module.variables.map(\.name))
         if let invalid = arguments.first(where: { $0.isEmpty || !declared.contains($0) }) {
           throw diagnostic(
             .invalidFormalModuleArgument,
@@ -466,7 +497,7 @@ public struct FormalModuleClosure: Sendable {
 
     func visit(_ module: TLASpec, path: [String]) throws {
       try validateDeclaredRelationships(module, path: path)
-      let source = module.compilationFingerprint
+      let source = module.compilationIdentity
       if let previousSource = sourceByName[module.name] {
         guard previousSource == source else {
           throw diagnostic(
@@ -512,7 +543,7 @@ public struct FormalModuleClosure: Sendable {
           fromModule: module.name,
           toModule: instance.module.name,
           structuralPath: edgePath,
-          kind: .namedInstance(namespace: instance.name, arguments: instance.arguments)
+          kind: .namedInstance(namespace: instance.name, arguments: module.instanceArguments(for: instance))
         ))
         try visit(instance.module, path: edgePath)
       }
@@ -523,9 +554,20 @@ public struct FormalModuleClosure: Sendable {
     try visit(root, path: [root.name])
     try Self.validateImportedSymbols(entries: entries, edges: edges, diagnostic: diagnostic)
     guard let rootEntry = entries.last else {
-      fatalError("Formal module closure resolution produced no root entry.")
+      throw diagnostic(
+        .emptyFormalModuleClosure,
+        path: [root.name],
+        expected: "the root module in the linked closure",
+        actual: "an empty closure",
+        nextSafeAction: "Compile the source model again."
+      )
     }
-    return FormalModuleClosure(root: rootEntry, entries: entries, edges: edges)
+    return FormalModuleClosure(
+      root: rootEntry,
+      entries: entries,
+      edges: edges,
+      linkedOperators: Self.makeLinkedOperatorPlan(root: rootEntry, entries: entries, edges: edges)
+    )
   }
 
   private static func firstDuplicate(in names: [String]) -> String? {
@@ -541,10 +583,13 @@ public struct FormalModuleClosure: Sendable {
   /// with one.
   private static func moduleInterfaceSymbols(of module: TLASpec) -> Set<String> {
     var symbols = Set(module.formalParameters.map(\.name))
-    let moduleDeclarations = Set(module.variables.map(\.name))
+    var moduleDeclarations = Set(module.variables.map(\.name))
       .union(module.constants.map(\.name))
       .union(module.recursiveFuncs.map(\.name))
       .union(module.formalOperatorDefinitions.map(\.name))
+    if !module.variables.isEmpty || !module.actions.isEmpty {
+      moduleDeclarations.formUnion(["Init", "Next", "Spec"])
+    }
 
     func actionFreeNames(_ action: ActionExpr) -> Set<String> {
       switch action {
@@ -689,12 +734,29 @@ public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
       && lhs.plusCalPhase == rhs.plusCalPhase && lhs.plusCalDependencies == rhs.plusCalDependencies
   }
 
+  public var reference: FormalModuleInstanceReference {
+    .init(instance: self)
+  }
+
   /// References one operator through this instance's TLA+ namespace.
   ///
   /// The expression exports as `Name!Operator(...)` and the checker resolves
   /// it against this instance's separately declared module.
   public func call(_ operatorName: String, _ arguments: StateExpr...) -> StateExpr {
     .recursiveCall("\(name)!\(operatorName)", arguments)
+  }
+}
+
+/// A source-model reference to one declared module instance.
+public struct FormalModuleInstanceReference: Sendable, Equatable {
+  let namespace: String
+
+  init(instance: FormalModuleInstance) {
+    self.namespace = instance.name
+  }
+
+  func resolves(_ instance: FormalModuleInstance) -> Bool {
+    namespace == instance.name
   }
 }
 

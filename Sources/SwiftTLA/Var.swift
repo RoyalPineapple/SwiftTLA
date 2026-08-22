@@ -33,9 +33,7 @@ extension String: TLAValueType {
   }
 }
 
-/// All RawRepresentable Int enums get TLAValueType support.
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
-  public static var defaultValue: Self { Self(rawValue: 0)! }
   public var tlaValue: TLAValue { .int(rawValue) }
   public init?(formalValue: TLAValue) {
     guard case .int(let value) = formalValue else { return nil }
@@ -49,9 +47,7 @@ where Self: RawRepresentable, Self.RawValue == Int, Self: CustomStringConvertibl
   public var description: String { String(describing: self) }
 }
 
-/// All RawRepresentable String enums get TLAValueType support.
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
-  public static var defaultValue: Self { Self(rawValue: "")! }
   public var tlaValue: TLAValue { .string(rawValue) }
   public init?(formalValue: TLAValue) {
     guard case .string(let value) = formalValue else { return nil }
@@ -111,7 +107,7 @@ public enum VarConstraint: Hashable, Sendable {
 public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
   public let raw: StateExpr
   public init(_ raw: StateExpr) { self.raw = raw }
-  public init(_ value: T) { raw = .value(value.tlaValue) }
+  public init(_ value: T) { raw = value.sourceIssue.map(StateExpr.sourceIssue) ?? .value(value.tlaValue) }
   public var stateExpr: StateExpr { raw }
 
   /// Typed equality keeps enum literals contextual in formal expressions:
@@ -137,39 +133,44 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecCompo
   public let name: String
   public let initial: TLAValue?
   public let constraint: VarConstraint?
+  public let sourceIssue: SourceModelIssue?
 
   public init(_ name: String, _ value: T) {
     self.name = name
     self.initial = value.tlaValue
     self.constraint = nil
+    self.sourceIssue = value.sourceIssue
   }
   public init(_ name: String? = nil, _ initial: TLAValue? = nil, constraint: VarConstraint? = nil) {
     self.name = name ?? ""
     self.initial = initial
     self.constraint = constraint
+    self.sourceIssue = nil
   }
   public init(_ name: String? = nil, bounded range: ClosedRange<Int>) where T == Int {
     self.name = name ?? ""
     self.initial = nil
     self.constraint = .intRange(range)
+    self.sourceIssue = nil
   }
   public init(_ name: String? = nil, values: [String]) where T == String {
     self.name = name ?? ""
     self.initial = nil
     self.constraint = .enumValues(values)
+    self.sourceIssue = nil
   }
   public var description: String { name }
   /// Type-safe assignment: `Var<Int>.becomes(5)` — only values matching T.
   @discardableResult
-  public func becomes(_ value: T) -> ActionExpr { .assign(name, .value(value.tlaValue)) }
+  public func becomes(_ value: T) -> ActionExpr { .assign(.named(name), .value(value.tlaValue)) }
   /// Type-safe assignment: `Var<Int>.becomes(x + 1)` — only Expr<T>.
   @discardableResult
-  public func becomes(_ expr: Expr<T>) -> ActionExpr { .assign(name, expr.raw) }
+  public func becomes(_ expr: Expr<T>) -> ActionExpr { .assign(.named(name), expr.raw) }
   /// Assign the value of another Var: `y0.becomes(x1)`.
   @discardableResult
-  public func becomes(_ other: Var<T>) -> ActionExpr { .assign(name, other.stateExpr) }
+  public func becomes(_ other: Var<T>) -> ActionExpr { .assign(.named(name), other.stateExpr) }
   /// Returns `UNCHANGED x` — the variable stays the same in the next state.
-  public var stays: ActionExpr { .unchanged(name) }
+  public var stays: ActionExpr { .unchanged(.named(name)) }
 
 }
 
@@ -182,13 +183,6 @@ extension ActionExpr {
   }
 }
 
-extension Dictionary where Key == String, Value == TLAValue {
-  public subscript<T: TLAValueType>(_ variable: Var<T>) -> TLAValue? {
-    get { self[variable.name] }
-    set { self[variable.name] = newValue }
-  }
-}
-
 public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
 extension Int: StateExprConvertible { public var stateExpr: StateExpr { .value(.int(self)) } }
@@ -197,7 +191,15 @@ extension String: StateExprConvertible { public var stateExpr: StateExpr { .valu
 extension Var: StateExprConvertible { public var stateExpr: StateExpr { .variable(name) } }
 extension TLAValue: StateExprConvertible { public var stateExpr: StateExpr { .value(self) } }
 
-public protocol TLAValueConvertible { var tlaValue: TLAValue { get } }
+public protocol TLAValueConvertible {
+  var tlaValue: TLAValue { get }
+  var sourceIssue: SourceModelIssue? { get }
+}
+
+extension TLAValueConvertible {
+  public var sourceIssue: SourceModelIssue? { nil }
+}
+
 extension TLAValue: TLAValueConvertible { public var tlaValue: TLAValue { self } }
 extension Int: TLAValueConvertible { public var tlaValue: TLAValue { .int(self) } }
 extension Bool: TLAValueConvertible { public var tlaValue: TLAValue { .bool(self) } }
@@ -441,7 +443,7 @@ extension StateExpr {
 
 extension ActionExpr {
   public static func choose(_ variable: String, from set: StateExpr) -> ActionExpr {
-    .chooseAction(variable, set)
+    .chooseAction(.named(variable), set)
   }
 
   public static func exists(
@@ -486,7 +488,7 @@ extension StateExpr {
 @discardableResult
 public func choose(_ variable: Var<some TLAValueType>, from set: some StateExprConvertible)
   -> ActionExpr {
-  .chooseAction(variable.name, set.stateExpr)
+  .chooseAction(.named(variable.name), set.stateExpr)
 }
 
 extension StateExpr {
@@ -505,7 +507,6 @@ extension StateExpr {
   }
 }
 
-/// Replaces `.variable(from)` with `.variable(to)` throughout a StateExpr AST.
-public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateExpr {
+package func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateExpr {
   StateExpr.substituteVariable(from, with: .variable(to), in: expr)
 }

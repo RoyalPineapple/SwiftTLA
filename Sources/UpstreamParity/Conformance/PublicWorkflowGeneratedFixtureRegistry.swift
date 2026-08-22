@@ -16,7 +16,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
   static func fixture(id: String) throws -> PublicWorkflowGeneratedFixture {
     switch id {
     case "p4-generated-counter":
-      let compilation = try P4GeneratedCounterFixture.compiledSpecification()
+      let compilation = try P4GeneratedCounterFixture.spec.compile()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
@@ -27,7 +27,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
           },
           propertyOutcomes: compilation.propertyOutcomes(in:)))
     case "p4-generated-counter-intentional-mismatch":
-      let compilation = try P4GeneratedCounterMismatchFixture.compiledSpecification()
+      let compilation = try P4GeneratedCounterMismatchFixture.spec.compile()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
@@ -38,7 +38,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
           },
           propertyOutcomes: compilation.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-failed":
-      let compilation = try P4GeneratedCounterFixture.compiledSpecification()
+      let compilation = try P4GeneratedCounterFixture.spec.compile()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
@@ -50,7 +50,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
           },
           propertyOutcomes: compilation.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-unavailable":
-      let compilation = try P4GeneratedCounterFixture.compiledSpecification()
+      let compilation = try P4GeneratedCounterFixture.spec.compile()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
@@ -62,7 +62,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
           },
           propertyOutcomes: compilation.propertyOutcomes(in:)))
     default:
-      throw PublicWorkflowGovernanceError.invalidField(
+      throw ConformanceGovernanceError.invalidField(
         record: id, field: "compiled generated fixture registry")
     }
   }
@@ -73,7 +73,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
   ) throws -> [PublicWorkflowGeneratedAction] {
     try names.map { name in
       guard let id = compilation.actionID(named: name) else {
-        throw PublicWorkflowGovernanceError.invalidField(
+        throw ConformanceGovernanceError.invalidField(
           record: compilation.identity.value,
           field: "compiled fixture action \(name)"
         )

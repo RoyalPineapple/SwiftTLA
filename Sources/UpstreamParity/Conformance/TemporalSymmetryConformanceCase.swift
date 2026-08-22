@@ -1,45 +1,5 @@
 import Foundation
 
-public enum TemporalSymmetryGovernanceError: Error, Equatable, Sendable {
-  case invalidSchema(String)
-  case duplicateID(kind: String, id: String)
-  case invalidField(record: String, field: String)
-  case unknownCaseID(String)
-  case unknownDivergenceID(String)
-  case inconsistentReference(record: String, field: String)
-}
-
-private struct TemporalSymmetryAnyCodingKey: CodingKey {
-  let stringValue: String
-  let intValue: Int?
-
-  init?(stringValue: String) {
-    self.stringValue = stringValue
-    intValue = nil
-  }
-
-  init?(intValue: Int) {
-    stringValue = String(intValue)
-    self.intValue = intValue
-  }
-}
-
-enum TemporalSymmetryGovernanceDecoding {
-  static func container<Key>(
-    _ decoder: Decoder,
-    keyedBy keyType: Key.Type
-  ) throws -> KeyedDecodingContainer<Key> where Key: CodingKey & CaseIterable {
-    let actual = try decoder.container(keyedBy: TemporalSymmetryAnyCodingKey.self)
-    let known = Set(Key.allCases.map(\.stringValue))
-    let unexpected = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
-    guard unexpected.isEmpty else {
-      throw TemporalSymmetryGovernanceError.invalidField(
-        record: "decode", field: "unknown field \(unexpected.sorted().joined(separator: ","))")
-    }
-    return try decoder.container(keyedBy: Key.self)
-  }
-}
-
 public enum TemporalSymmetryCaseKind: String, Codable, Sendable {
   case temporal
   case symmetry
@@ -114,7 +74,7 @@ public struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendable
   private enum CodingKeys: String, CodingKey, CaseIterable { case configuration }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(configuration: container.decode(CoreEvidenceReference.self, forKey: .configuration))
   }
 }
@@ -153,29 +113,29 @@ public struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
   public func validate() throws {
     guard Set(fairnessActions).count == fairnessActions.count,
           fairnessActions.allSatisfy({ !$0.isEmpty }) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "configuration", field: "fairnessActions")
+      throw ConformanceGovernanceError.invalidField(record: "configuration", field: "fairnessActions")
     }
     if property == nil {
       guard fairness == nil, fairnessActions.isEmpty, !allowsImplicitStuttering, completeGraphPass == nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "configuration", field: "temporal fields")
+        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "temporal fields")
       }
     } else {
       guard property?.isEmpty == false, fairness != nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "configuration", field: "property or fairness")
+        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "property or fairness")
       }
     }
     if completeGraphPass != nil {
       guard property != nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "configuration", field: "complete graph pass")
+        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "complete graph pass")
       }
     }
     if symmetryEnabled {
       guard symmetryCollection?.isEmpty == false, (symmetryScope ?? 0) > 0 else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "configuration", field: "symmetry")
+        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "symmetry")
       }
     } else {
       guard symmetryCollection == nil, symmetryScope == nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "configuration", field: "disabled symmetry")
+        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "disabled symmetry")
       }
     }
   }
@@ -186,7 +146,7 @@ public struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       property: try container.decodeIfPresent(String.self, forKey: .property),
       fairness: try container.decodeIfPresent(TemporalFairnessMode.self, forKey: .fairness),
@@ -203,7 +163,7 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   public let id: String
   public let kind: TemporalSymmetryCaseKind
   public let swiftSpec: String
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let finiteBounds: CoreFiniteBounds
   public let semanticCitations: [String]
   public let sourceInput: CoreEvidenceReference
@@ -214,7 +174,7 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
     id: String,
     kind: TemporalSymmetryCaseKind,
     swiftSpec: String,
-    provenance: CoreDivergenceProvenance,
+    provenance: CoreEvidenceProvenance,
     finiteBounds: CoreFiniteBounds,
     semanticCitations: [String],
     sourceInput: CoreEvidenceReference,
@@ -240,16 +200,16 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
     try configuration.validate()
     guard !id.isEmpty, !swiftSpec.isEmpty, provenance.caseID == id,
           !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: id, field: "case declaration")
+      throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
     }
     switch kind {
     case .temporal:
       guard configuration.property != nil, configuration.fairness != nil, !configuration.symmetryEnabled else {
-        throw TemporalSymmetryGovernanceError.inconsistentReference(record: id, field: "temporal configuration")
+        throw ConformanceGovernanceError.inconsistentReference(record: id, field: "temporal configuration")
       }
     case .symmetry:
       guard configuration.property == nil, configuration.symmetryEnabled else {
-        throw TemporalSymmetryGovernanceError.inconsistentReference(record: id, field: "symmetry configuration")
+        throw ConformanceGovernanceError.inconsistentReference(record: id, field: "symmetry configuration")
       }
     }
   }
@@ -259,12 +219,12 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
       swiftSpec: container.decode(String.self, forKey: .swiftSpec),
-      provenance: container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       finiteBounds: container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
       semanticCitations: container.decode([String].self, forKey: .semanticCitations),
       sourceInput: container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
@@ -283,12 +243,12 @@ public struct TemporalSymmetryCases: Equatable, Codable, Sendable {
   }
 
   public init(schema: String, cases: [TemporalSymmetryCase]) throws {
-    guard schema == Self.schema else { throw TemporalSymmetryGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var ids = Set<String>()
     for item in cases {
       try item.validate()
       guard ids.insert(item.id).inserted else {
-        throw TemporalSymmetryGovernanceError.duplicateID(kind: "case", id: item.id)
+        throw ConformanceGovernanceError.duplicateID(kind: "case", id: item.id)
       }
     }
     self.schema = schema
@@ -298,7 +258,7 @@ public struct TemporalSymmetryCases: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(schema: container.decode(String.self, forKey: .schema), cases: container.decode([TemporalSymmetryCase].self, forKey: .cases))
   }
 }
@@ -313,7 +273,7 @@ public struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
   public init(caseID: String, gateRunID: UUID, swiftRunID: UUID, tlcRunID: UUID, comparisonRunID: UUID) throws {
     guard !caseID.isEmpty,
           Set([gateRunID, swiftRunID, tlcRunID, comparisonRunID]).count == 4 else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "correlation", field: "caseID")
+      throw ConformanceGovernanceError.invalidField(record: "correlation", field: "caseID")
     }
     self.caseID = caseID
     self.gateRunID = gateRunID
@@ -327,7 +287,7 @@ public struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       gateRunID: container.decode(UUID.self, forKey: .gateRunID),
@@ -346,14 +306,14 @@ public struct TemporalLassoWitness: Equatable, Codable, Sendable {
     self.cycleStateIDs = cycleStateIDs
     guard prefixStateIDs.allSatisfy({ !$0.isEmpty }), cycleStateIDs.count >= 2,
           cycleStateIDs.allSatisfy({ !$0.isEmpty }), cycleStateIDs.first == cycleStateIDs.last else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "temporal lasso", field: "state IDs")
+      throw ConformanceGovernanceError.invalidField(record: "temporal lasso", field: "state IDs")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case prefixStateIDs, cycleStateIDs }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       prefixStateIDs: container.decode([String].self, forKey: .prefixStateIDs),
       cycleStateIDs: container.decode([String].self, forKey: .cycleStateIDs))
@@ -367,7 +327,7 @@ public struct TemporalRecurrentComponent: Equatable, Codable, Sendable {
   public init(stateIDs: [String], reasonCode: TemporalRecurrentReasonCode) throws {
     guard !stateIDs.isEmpty, Set(stateIDs).count == stateIDs.count,
           stateIDs.allSatisfy({ !$0.isEmpty }) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "recurrent component", field: "state IDs or reason")
+      throw ConformanceGovernanceError.invalidField(record: "recurrent component", field: "state IDs or reason")
     }
     self.stateIDs = stateIDs.sorted()
     self.reasonCode = reasonCode
@@ -376,7 +336,7 @@ public struct TemporalRecurrentComponent: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case stateIDs, reasonCode }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       stateIDs: container.decode([String].self, forKey: .stateIDs),
       reasonCode: container.decode(TemporalRecurrentReasonCode.self, forKey: .reasonCode))
@@ -415,35 +375,35 @@ public struct TemporalPropertyResult: Equatable, Codable, Sendable {
     guard !graphID.isEmpty, !initialStateIDs.isEmpty,
           Set(initialStateIDs).count == initialStateIDs.count,
           initialStateIDs.allSatisfy({ !$0.isEmpty }) else {
-      throw TemporalSymmetryGovernanceError.invalidField(record: "temporal result", field: "graph or initial states")
+      throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "graph or initial states")
     }
     try traceEvidence?.validate()
     switch availability {
     case .evaluated:
       guard outcome != nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "temporal result", field: "missing property outcome")
+        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "missing property outcome")
       }
     case .unavailable:
       guard outcome == nil, traceAvailability == .unavailable, traceEvidence == nil, lasso == nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "temporal result", field: "unavailable evaluation")
+        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "unavailable evaluation")
       }
       return
     }
     switch traceAvailability {
     case .available:
       guard traceEvidence != nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "temporal result", field: "traceEvidence")
+        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "traceEvidence")
       }
       if outcome == .violated, lasso == nil {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "temporal result", field: "lasso")
+        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "lasso")
       }
     case .unavailable:
       guard traceEvidence == nil, lasso == nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "temporal result", field: "unavailable trace")
+        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "unavailable trace")
       }
     case .notApplicable:
       guard outcome == .satisfied, traceEvidence == nil, lasso == nil else {
-        throw TemporalSymmetryGovernanceError.invalidField(record: "temporal result", field: "not applicable trace")
+        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "not applicable trace")
       }
     }
   }
@@ -453,7 +413,7 @@ public struct TemporalPropertyResult: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       availability: container.decode(TemporalEvaluationAvailability.self, forKey: .availability),
       outcome: try container.decodeIfPresent(TemporalPropertyOutcome.self, forKey: .outcome),
@@ -492,7 +452,7 @@ public struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
     result: CoreEvidenceReference
   ) throws {
     guard propertyRunID != graphRunID else {
-      throw TemporalSymmetryGovernanceError.inconsistentReference(record: "complete graph evidence", field: "run IDs")
+      throw ConformanceGovernanceError.inconsistentReference(record: "complete graph evidence", field: "run IDs")
     }
     try sourceInput.validate()
     try configuration.validate()
@@ -517,7 +477,7 @@ public struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       propertyRunID: container.decode(UUID.self, forKey: .propertyRunID),
       graphRunID: container.decode(UUID.self, forKey: .graphRunID),

@@ -24,7 +24,6 @@ public func LetRec<
     _ definition: (LocalRecursion<Input, Output>, WithValue<Input>) -> Definition,
     in body: (LocalRecursion<Input, Output>) -> Result
 ) -> Expr<Output> {
-    precondition(!name.isEmpty, "A local recursive operator needs a name.")
     let inputName = generatedBinderName()
     let recursion = LocalRecursion<Input, Output>(name: name)
     return Expr(.letIn(

@@ -5,8 +5,8 @@ import SwiftTLAMacros
 @TLAModel
 private struct TypedSetAlgorithm {
   static var spec: TLASpec {
-    #spec("TypedSetAlgorithm") {
-      let seen = SharedVar(initial: SetExpr<Int>())
+    #spec("TypedSetAlgorithm") { scope in
+      let seen = scope.sharedVar("seen", initial: SetExpr<Int>())
       Action("add") {
         seen.becomes(seen.inserting(1))
       }
@@ -23,8 +23,8 @@ private struct TypedSetAlgorithm {
 @TLAModel
 private struct TypedTupleAlgorithm {
   static var spec: TLASpec {
-    #spec("TypedTupleAlgorithm") {
-      let values = SharedVar(initial: TupleExpr<Int>())
+    #spec("TypedTupleAlgorithm") { scope in
+      let values = scope.sharedVar("values", initial: TupleExpr<Int>())
       Action("append") {
         values.count < 2 && values.becomes(values.appending(1))
       }
@@ -38,8 +38,8 @@ private struct TypedTupleAlgorithm {
 @TLAModel
 private struct TypedFiniteInitialAlgorithm {
   static var spec: TLASpec {
-    #spec("TypedFiniteInitialAlgorithm") {
-      let phase = SharedVar(in: SetExpr<Int>.literal(1, 2))
+    #spec("TypedFiniteInitialAlgorithm") { scope in
+      let phase = scope.sharedVar("phase", in: SetExpr<Int>.literal(1, 2))
       Action("prepare") {
         phase == 1 && phase.becomes(2)
       }
@@ -53,8 +53,7 @@ private struct TypedFiniteInitialAlgorithm {
 @Suite(.serialized)
 struct TypedFormalCollectionTests {
   @Test func typedSetLowersAndChecksThroughBothPaths() throws {
-    TypedSetAlgorithm._checkParserTree()
-    let result = try ModelChecker(spec: TypedSetAlgorithm.spec).check()
+    let result = try ModelChecker(compilation: try TypedSetAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok(let count) = result.underlyingOutcome else {
       Issue.record("Expected successful set proof, got \(result)")
       return
@@ -64,8 +63,7 @@ struct TypedFormalCollectionTests {
   }
 
   @Test func typedTupleLowersAndChecksThroughBothPaths() throws {
-    TypedTupleAlgorithm._checkParserTree()
-    let result = try ModelChecker(spec: TypedTupleAlgorithm.spec).check()
+    let result = try ModelChecker(compilation: try TypedTupleAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok(let count) = result.underlyingOutcome else {
       Issue.record("Expected successful tuple proof, got \(result)")
       return
@@ -85,8 +83,7 @@ struct TypedFormalCollectionTests {
   }
 
   @Test func typedFiniteInitialDomainChecksThroughBothPaths() throws {
-    TypedFiniteInitialAlgorithm._checkParserTree()
-    let result = try ModelChecker(spec: TypedFiniteInitialAlgorithm.spec).check()
+    let result = try ModelChecker(compilation: try TypedFiniteInitialAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     guard case .ok(let count) = result.underlyingOutcome else {
       Issue.record("Expected successful finite-domain proof, got \(result)")
       return

@@ -1,39 +1,60 @@
-/// Explores every reachable state of a TLA+ specification with breadth-first search.
-public struct ModelChecker {
-    public let spec: TLASpec
-    /// Present when this checker entered through the validated compiler gate.
-    public let compilation: CompiledSpecification
-    public let maxStates: Int
-    public let permutationProductBudget: Int
+public enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
+    case nonPositiveStateLimit(Int)
+}
 
-    init(spec: TLASpec, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) throws {
-        self.init(
-            compilation: try spec.compile(),
-            maxStates: maxStates,
-            permutationProductBudget: permutationProductBudget
-        )
+public struct FiniteExplorationConfiguration: Sendable, Equatable, Hashable {
+    public let maximumStateLimit: Int
+
+    public init(maximumStateLimit: Int) throws {
+        guard maximumStateLimit > 0 else {
+            throw FiniteExplorationConfigurationError.nonPositiveStateLimit(maximumStateLimit)
+        }
+        self.init(validatedMaximumStateLimit: maximumStateLimit)
     }
 
-    public init(compilation: CompiledSpecification, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
+    private init(validatedMaximumStateLimit: Int) {
+        self.maximumStateLimit = validatedMaximumStateLimit
+    }
+}
+
+/// Explores every reachable state of a TLA+ specification with breadth-first search.
+package struct ModelChecker {
+    private let spec: TLASpec
+    let compilation: CompiledSpecification
+    let configuration: FiniteExplorationConfiguration
+    let permutationProductBudget: Int
+
+    private var maxStates: Int { configuration.maximumStateLimit }
+
+    init(
+        compilation: CompiledSpecification,
+        configuration: FiniteExplorationConfiguration,
+        permutationProductBudget: Int = 100_000
+    ) {
         self.spec = compilation.spec
         self.compilation = compilation
-        self.maxStates = maxStates
+        self.configuration = configuration
         self.permutationProductBudget = permutationProductBudget
     }
 
-    public func check() throws -> CheckResult {
+    func check() throws -> CheckResult {
         do {
-            return try explore().result
+            let exploration = try explore()
+            if let result = try RefinementChecker(compilation: compilation).check(exploration) {
+                return result
+            }
+            guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
+            return exploration.result
         } catch {
             guard !spec.symmetricCollections.isEmpty else { throw error }
             return bounded(.error(String(describing: error)))
         }
     }
-    public func exploreGraph() throws -> StateGraph { try explore().graph }
+    func exploreGraph() throws -> StateGraph { try explore().graph }
 
-    public func explore() throws -> ModelExplorationResult { try runExploration() }
+    func explore() throws -> ModelExplorationResult { try runExploration() }
 
-    public func checkLiveness() throws -> CheckResult {
+    func checkLiveness() throws -> CheckResult {
         do {
             let exploration = try explore()
             guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
@@ -196,7 +217,8 @@ private func compiledBFS(
             return .init(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
-                result: .depthExceeded(statesCount: processed, limit: maxStates)
+                result: .depthExceeded(statesCount: processed, limit: maxStates),
+                compiledStates: idToState
             )
         }
         let current = queue[head]
@@ -214,7 +236,8 @@ private func compiledBFS(
                         invariant: invariant.name,
                         state: try current.projection(using: layout),
                         trace: try trace(to: current, initial: queue[0])
-                    )
+                    ),
+                    compiledStates: idToState
                 )
             }
         }
@@ -224,11 +247,13 @@ private func compiledBFS(
             return .init(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
-                result: .deadlocked(state: try current.projection(using: layout))
+                result: .deadlocked(state: try current.projection(using: layout)),
+                compiledStates: idToState
             )
         }
 
         for successor in successors {
+            let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
             let successorKey = try runtime.canonicalState(successor.state)
             let targetID: StateGraph.StateID
             if let existing = stateToID[successorKey] {
@@ -240,7 +265,7 @@ private func compiledBFS(
                 let actionName = layout.actions[successor.action.ordinal].declaration.name
                 predecessors[successor.state] = (
                     current,
-                    formalActionCall(named: actionName, arguments: successor.arguments)
+                    formalActionCall(named: actionName, arguments: formalArguments)
                 )
                 queue.append(successor.state)
                 nextID += 1
@@ -251,7 +276,7 @@ private func compiledBFS(
                     label: .init(
                         action: successor.action,
                         formalName: actionName,
-                        arguments: successor.arguments
+                        arguments: formalArguments
                     ),
                     target: targetID
                 )
@@ -262,7 +287,8 @@ private func compiledBFS(
     return .init(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
-        result: .ok(statesCount: processed)
+        result: .ok(statesCount: processed),
+        compiledStates: idToState
     )
 }
 
@@ -271,18 +297,19 @@ private func compiledBFS(
 /// The class of a model-checking result that needs an engineer's attention.
 /// This is deliberately a domain enum rather than a Boolean or a generic
 /// error string so tooling can present the failed formal concept directly.
-public enum ModelCheckingFailureKind: String, Sendable, Equatable {
+package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case invariantViolated
     case deadlock
     case stateLimit
     case liveness
+    case refinement
     case assumption
     case initialState
     case evaluation
 }
 
 /// One safely projected state in a counterexample trace.
-public struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
+package struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
     public let action: String
     public let state: TLAStateProjectionResult
 
@@ -304,7 +331,7 @@ public struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
 /// This companion is the public diagnostic boundary: it retains the named formal
 /// property, the failing state, counterexample trace when there is one, the
 /// expected condition, actual result, mutation outcome, and recovery step.
-public struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
+package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
     public let kind: ModelCheckingFailureKind
     public let subject: String?
     public let expected: String
@@ -350,16 +377,19 @@ public struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConverti
     }
 }
 
-public indirect enum CheckResult: CustomStringConvertible {
+package indirect enum CheckResult: CustomStringConvertible {
     case ok(statesCount: Int)
     case invariantViolated(invariant: String, state: TLAStateProjection, trace: [TraceStep])
     case depthExceeded(statesCount: Int, limit: Int)
     case deadlocked(state: TLAStateProjection)
     case livenessViolated(String)
     case error(String)
+    case refinementViolated(refinement: String, evidence: RefinementFailureEvidence)
+    case refinementUnproven(refinement: String, exploration: CheckResult)
     case bounded(scopes: [SymmetricCollectionScope], outcome: CheckResult)
 
     public var underlyingOutcome: CheckResult {
+        if case .refinementUnproven = self { return self }
         if case .bounded(_, let outcome) = self { return outcome.underlyingOutcome }
         return self
     }
@@ -419,6 +449,36 @@ public indirect enum CheckResult: CustomStringConvertible {
                 actual: message,
                 nextSafeAction: "Inspect the named construct in the diagnostic and correct the model before rerunning verification."
             )
+        case .refinementViolated(let refinement, let evidence):
+            switch evidence {
+            case .initialState(let mapped, let abstractInitialStates):
+                return .init(
+                    kind: .refinement,
+                    subject: refinement,
+                    expected: "the mapped concrete initial state to be an abstract initial state",
+                    actual: "mapped state \(mapped); abstract initial states \(abstractInitialStates)",
+                    state: .projected(mapped),
+                    nextSafeAction: "Inspect the refinement mapping and abstract initial condition."
+                )
+            case .transition(let action, let source, let target, let mappedSource, let mappedTarget, let abstractSuccessors):
+                return .init(
+                    kind: .refinement,
+                    subject: refinement,
+                    expected: "an abstract successor or stuttering step for action \(action)",
+                    actual: "\(source) to \(target) maps to \(mappedSource) to \(mappedTarget); abstract successors \(abstractSuccessors)",
+                    state: .projected(source),
+                    trace: [.init(action: action, state: target)],
+                    nextSafeAction: "Inspect the refinement mapping and the named action update."
+                )
+            }
+        case .refinementUnproven(let refinement, let exploration):
+            return .init(
+                kind: .stateLimit,
+                subject: refinement,
+                expected: "a complete exploration before refinement checking",
+                actual: exploration.description,
+                nextSafeAction: "Increase the declared finite bound, then rerun the refinement check."
+            )
         case .bounded(_, let outcome):
             return outcome.diagnostic
         }
@@ -431,8 +491,10 @@ public indirect enum CheckResult: CustomStringConvertible {
             return diagnostic?.description ?? "Invariant violation"
         case .depthExceeded(let count, let l):
             return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
-        case .deadlocked, .livenessViolated, .error:
+        case .deadlocked, .livenessViolated, .error, .refinementViolated:
             return diagnostic?.description ?? "Verification diagnostic unavailable"
+        case .refinementUnproven:
+            return diagnostic?.description ?? "Refinement is unproven"
         case .bounded(let scopes, let outcome):
             return "BOUNDED VERIFICATION — " + scopes.map(\.description).joined(separator: "; ")
                 + "; this does not prove larger populations\n" + outcome.description
@@ -440,7 +502,7 @@ public indirect enum CheckResult: CustomStringConvertible {
     }
 }
 
-public struct TraceStep: CustomStringConvertible {
+package struct TraceStep: CustomStringConvertible {
     public let state: TLAStateProjection
     public let action: String
     public var description: String { "[" + action + "] " + state.description }

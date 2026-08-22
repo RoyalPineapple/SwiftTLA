@@ -5,6 +5,17 @@ public enum CanonicalSchemaError: Error, Equatable, Sendable {
     case unknownSchema(String)
 }
 
+public enum CanonicalValueError: Error, Equatable, Sendable, CustomStringConvertible {
+    case duplicateFunctionKey(CanonicalValue)
+
+    public var description: String {
+        switch self {
+        case .duplicateFunctionKey(let key):
+            return "Canonical function contains duplicate key \(key.canonicalEncoding)."
+        }
+    }
+}
+
 public enum CanonicalSchema: String, Hashable, Sendable {
     case exactFiniteTLCGraph
 
@@ -39,26 +50,28 @@ public enum CanonicalValue: Hashable, Sendable {
             .sorted { canonicalBytes($0.name, $1.name) })
     }
 
-    public static func function(_ entries: [CanonicalFunctionEntry]) -> CanonicalValue {
+    public static func function(_ entries: [CanonicalFunctionEntry]) throws -> CanonicalValue {
         let ordered = entries.sorted { canonicalBytes($0.key.canonicalEncoding, $1.key.canonicalEncoding) }
-        precondition(
-            Set(ordered.map(\.key)).count == ordered.count,
-            "A canonical finite function cannot contain duplicate keys."
-        )
+        var keys = Set<CanonicalValue>()
+        for entry in ordered {
+            guard keys.insert(entry.key).inserted else {
+                throw CanonicalValueError.duplicateFunctionKey(entry.key)
+            }
+        }
         return .orderedFunction(ordered)
     }
 
-    public init(_ value: TLAValue) {
+    public init(_ value: TLAValue) throws {
         switch value {
         case .int(let value): self = .integer(value)
         case .bool(let value): self = .boolean(value)
         case .string(let value): self = .string(value)
         case .constant(let value): self = .constant(value)
-        case .set(let values): self = .set(values.map(Self.init))
-        case .tuple(let values): self = .tuple(values.map(Self.init))
-        case .record(let fields): self = .record(fields.mapValues(Self.init))
+        case .set(let values): self = .set(try values.map(Self.init))
+        case .tuple(let values): self = .tuple(try values.map(Self.init))
+        case .record(let fields): self = .record(try fields.mapValues(Self.init))
         case .function(let entries):
-            self = .function(entries.map { CanonicalFunctionEntry(key: Self($0.key), value: Self($0.value)) })
+            self = try .function(entries.map { try CanonicalFunctionEntry(key: Self($0.key), value: Self($0.value)) })
         }
     }
 

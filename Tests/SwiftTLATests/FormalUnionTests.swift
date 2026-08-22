@@ -6,6 +6,7 @@ private enum UnionMember: String, FiniteDomainKey {
     case first
     case second
 
+    static var defaultValue: Self { .first }
     static let formalDomain: [UnionMember] = [.first, .second]
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.formal-union-member")
 
@@ -18,13 +19,14 @@ private struct GeneratedFormalUnionAlgorithm {
         case first
         case second
 
+        static var defaultValue: Self { .first }
         static let formalDomain = allCases
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-formal-union-node")
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Label: String, PlusCalLabel {
+    private enum Label: String, PlusCalLabel, CaseIterable {
         case inspect
         case collect
         case finish
@@ -33,14 +35,13 @@ private struct GeneratedFormalUnionAlgorithm {
     static var spec: TLASpec {
         #spec("GeneratedFormalUnion") {
             Algorithm("GeneratedFormalUnion") {
-                Each(Node.all) { _ in
-                    let temporary: LocalVariable<OneOf<Node, SetExpr<Node>>> = LocalVar(
-                        initial: OneOf<Node, SetExpr<Node>>.first(.first)
+                Each(Node.all, scoped: { _, scope in
+                    let temporary: LocalVariable<OneOf<Node, SetExpr<Node>>> = scope.localVar("temporary", initial: OneOf<Node, SetExpr<Node>>.first(.first)
                     )
 
                     Do(Label.inspect) {
                         let member = temporary.expr.assumingFirst(Node.self)
-                        Assert(member == .first)
+                        Assert(member == Node.first)
                     }
                     Do(Label.collect) {
                         Assign(
@@ -54,7 +55,7 @@ private struct GeneratedFormalUnionAlgorithm {
                         let remaining = temporary.expr.assumingSecond(SetExpr<Node>.self)
                         When(!remaining.isEmpty)
                     }
-                }
+                })
             }
         }
     }
@@ -81,7 +82,6 @@ struct FormalUnionTests {
 
     @Test("#spec preserves a labeled formal-union view through both construction paths")
     func generatedAlgorithmPreservesFormalUnion() throws {
-        GeneratedFormalUnionAlgorithm._checkParserTree()
-        #expect(try GeneratedFormalUnionAlgorithm.verifySpec() > 0)
+        _ = try GeneratedFormalUnionAlgorithm.spec.compile()
     }
 }

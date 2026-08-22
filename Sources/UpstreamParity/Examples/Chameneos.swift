@@ -31,7 +31,7 @@ private func chameneosSpec() -> TLASpec {
     let allFuncs = TLAValue.functionSet(domain: ids, range: colorRange)
 
     return #spec("Chameneos") {
-        Extends("Integers")
+        Extends(.integers)
 
         DefineRecursive("Sum", params: ["f", "S"]) {
             let s = StateExpr.variable("S")
@@ -80,12 +80,12 @@ private func chameneosSpec() -> TLASpec {
 
                 let enter: ActionExpr = .and(.guard_(StateExpr.equal(mp, empty)),
                     .and(.guard_(nm < nM),
-                        .and(.assign("meetingPlace", cid),
-                            .and(.unchanged("chameneoses"), .unchanged("numMeetings")))))
+                        .and(.assign(.named("meetingPlace"), cid),
+                            .and(.unchanged(.named("chameneoses")), .unchanged(.named("numMeetings"))))))
                 let fade: ActionExpr = .and(.guard_(StateExpr.equal(mp, empty)),
                     .and(.guard_(StateExpr.not(StateExpr.lessThan(nm, nM))),
-                        .and(.assign("chameneoses", cham.updated(at: cid, to: StateExpr.tuple([fadedE, cham.applying(cid).at(2)]))),
-                            .and(.unchanged("meetingPlace"), .unchanged("numMeetings")))))
+                        .and(.assign(.named("chameneoses"), cham.updated(at: cid, to: StateExpr.tuple([fadedE, cham.applying(cid).at(2)]))),
+                            .and(.unchanged(.named("meetingPlace")), .unchanged(.named("numMeetings"))))))
                 let mpEmptyBranch: ActionExpr = .or(enter, fade)
 
                 let myColor = cham.applying(cid).at(1)
@@ -98,11 +98,11 @@ private func chameneosSpec() -> TLASpec {
 
                 let twoMeet: ActionExpr = .and(.guard_(StateExpr.notEqual(mp, empty)),
                     .and(.guard_(StateExpr.notEqual(mp, cid)),
-                        .and(.assign("meetingPlace", empty),
-                            .and(.assign("chameneoses", cham
+                        .and(.assign(.named("meetingPlace"), empty),
+                            .and(.assign(.named("chameneoses"), cham
                                 .updated(at: cid, to: StateExpr.tuple([complementColor, cham.applying(cid).at(2) + 1]))
                                 .updated(at: mp, to: StateExpr.tuple([complementColor, cham.applying(mp).at(2) + 1]))),
-                                .assign("numMeetings", nm + 1)))))
+                                .assign(.named("numMeetings"), nm + 1)))))
 
                 return .and(.guard_(unfaded), .or(mpEmptyBranch, twoMeet))
             }
