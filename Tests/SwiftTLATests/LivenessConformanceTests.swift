@@ -24,7 +24,7 @@ struct LivenessConformanceTests {
             variableNames: ["x"],
             transitions: transitions,
             states: Dictionary(
-                uniqueKeysWithValues: values.map { identifier, value in
+                uniqueKeysWithValues: try values.map { identifier, value in
                     (identifier, try projection([("x", .int(value))]))
                 }
             )

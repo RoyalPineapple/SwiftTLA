@@ -23,7 +23,7 @@ struct LiveMachineObservationTests {
             let count: Int = try storage.value(at: 0, in: $0)
             return count == 0
         }
-        let driver = TLALiveMachineTransitionDriver(
+        let driver: TLALiveMachineTransitionDriver<ObservationAction> = .init(
             successors: { state, action in
                 guard action == .advance else { return [] }
                 let count: Int = try storage.value(at: 0, in: state)
