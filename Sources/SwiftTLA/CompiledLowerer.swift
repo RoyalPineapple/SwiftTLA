@@ -328,7 +328,7 @@ struct CompiledLowerer {
             let localOperatorIDs = Set(localOperators.map(\.1))
             let operatorIDsByName = Dictionary(uniqueKeysWithValues: localOperators.map { ($0.0.name, $0.1) })
             let calls = Dictionary(uniqueKeysWithValues: localOperators.map { operation, id in
-                let targets = Set(operation.body.localOperatorCalls.compactMap { operatorIDsByName[$0] })
+                let targets = Set(operation.body.localOperatorReferences.compactMap { operatorIDsByName[$0] })
                 return (id, targets)
             })
             func isRecursive(_ start: OperatorID, from current: OperatorID, visited: Set<OperatorID>) -> Bool {
