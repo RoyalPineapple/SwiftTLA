@@ -11,13 +11,14 @@ not define a hidden oracle.
 
 GitHub Actions validates the checked-in registers, then creates a current core
 admission and a current P3 run. Local broad gate execution requires explicit
-authorization and is diagnostic-only. The latest report is:
+authorization and is diagnostic-only. The current-report reference is:
 
 ```text
-.build/temporal-symmetry-support-gate/support-admission.json
+.build/temporal-symmetry-support-gate/current-support-admission.json
 ```
 
-The immutable P3 artifacts are under:
+It contains the immutable report path and SHA-256. The immutable P3 artifacts
+are under:
 
 ```text
 .build/temporal-symmetry-support-gate/runs/<p3-gate-run-id>/
@@ -124,7 +125,7 @@ unavailable.
 
 ## Diagnose a block
 
-1. Read `support-admission.json` and find the blocked requested entry.
+1. Resolve `current-support-admission.json`, then find the blocked requested entry.
 2. Read its `reasonCodes`, case IDs, correlations, and evidence references.
 3. Inspect the matching directory under `runs/<p3-gate-run-id>/`.
 4. For temporal cases, inspect the property result, enabledness, lasso, trace,

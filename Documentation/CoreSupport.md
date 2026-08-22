@@ -16,8 +16,8 @@ the core finite-graph claim in this document.
 
 The P3 source registers are under
 `Verification/TemporalSymmetryConformance/`. A current P3 report can admit
-only the exact requested temporal and symmetry entries named there. Its report
-is at `.build/temporal-symmetry-support-gate/support-admission.json`.
+only the exact requested temporal and symmetry entries named there. Its
+reference is at `.build/temporal-symmetry-support-gate/current-support-admission.json`.
 
 GitHub Actions runs the required P3 qualification. Its report uses exit `0`
 for admission, `1` for a complete blocking result, and `2` when evidence is
@@ -54,13 +54,14 @@ The hosted gate validates pinned prerequisites, creates one gate run ID, runs
 the declared cases, and writes an admission report even when setup or
 execution fails. Local broad gate execution requires explicit authorization.
 
-The latest report is:
+The current-report reference is:
 
 ```text
-.build/core-support-gate/support-admission.json
+.build/core-support-gate/current-support-admission.json
 ```
 
-The immutable report, invocation record, and case evidence are retained at:
+It contains the immutable report path and SHA-256. The immutable report,
+invocation record, and case evidence are retained at:
 
 ```text
 .build/core-support-gate/runs/<gate-run-id>/
@@ -73,7 +74,7 @@ and case-run correlations.
 
 ## Read a report
 
-`support-admission.json` is `CoreSupportAdmission`. It contains:
+The report resolved by `current-support-admission.json` is `CoreSupportAdmission`. It contains:
 
 - The gate run ID and the fixed authority statement.
 - One decision for each support entry: `admitted`, `blocked`, or `unsupported`.

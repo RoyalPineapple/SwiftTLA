@@ -8,6 +8,10 @@ GATE="$ROOT/scripts/run_core_support_gate.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+current_report() {
+    "$ROOT/scripts/current_evidence_report.py" resolve "$1"
+}
+
 expect_failure() {
     local expected="$1"
     shift
@@ -140,14 +144,14 @@ expect_exit 2 env CORE_CONFORMANCE_CASES="$TMP/malformed-cases.json" \
 test -f "$MALFORMED_REPORT"
 
 # Wrapper preflight failures retain reports, and a second run replaces the
-# stable latest report while retaining both per-run reports.
+# current report reference while retaining both per-run reports.
 MISSING_OUTPUT="$TMP/missing-manifest-output"
 expect_exit 2 env CORE_CONFORMANCE_CASES="$TMP/not-present.json" "$GATE" --output "$MISSING_OUTPUT"
-test -f "$MISSING_OUTPUT/support-admission.json"
-first_run="$(jq -r .gateRunID "$MISSING_OUTPUT/support-admission.json")"
+test -f "$MISSING_OUTPUT/current-support-admission.json"
+first_run="$(jq -r .gateRunID "$(current_report "$MISSING_OUTPUT")")"
 expect_exit 2 env CORE_CONFORMANCE_CASES="$TMP/not-present.json" "$GATE" --output "$MISSING_OUTPUT"
-test -f "$MISSING_OUTPUT/support-admission.json"
-second_run="$(jq -r .gateRunID "$MISSING_OUTPUT/support-admission.json")"
+test -f "$MISSING_OUTPUT/current-support-admission.json"
+second_run="$(jq -r .gateRunID "$(current_report "$MISSING_OUTPUT")")"
 test "$first_run" != "$second_run"
 test -f "$MISSING_OUTPUT/runs/$first_run/support-admission.json"
 test -f "$MISSING_OUTPUT/runs/$second_run/support-admission.json"
@@ -160,7 +164,7 @@ chmod +x "$FAKE_SETUP"
 RUNNER_FAILURE_OUTPUT="$TMP/runner-failure-output"
 expect_exit 2 env CORE_CONFORMANCE_SETUP_SCRIPT="$FAKE_SETUP" \
     CORE_CONFORMANCE_TOOL_ROOT="$TMP/empty-tool-root" "$GATE" --output "$RUNNER_FAILURE_OUTPUT"
-test -f "$RUNNER_FAILURE_OUTPUT/support-admission.json"
+test -f "$RUNNER_FAILURE_OUTPUT/current-support-admission.json"
 jq -e '.conformanceExitCode == 2' "$RUNNER_FAILURE_OUTPUT/runs"/*/invocation.json >/dev/null
 
 # A file where the output directory belongs is also retained as a report in a
@@ -168,7 +172,7 @@ jq -e '.conformanceExitCode == 2' "$RUNNER_FAILURE_OUTPUT/runs"/*/invocation.jso
 OUTPUT_COLLISION="$TMP/output-collision"
 printf '%s\n' collision >"$OUTPUT_COLLISION"
 expect_exit 2 "$GATE" --output "$OUTPUT_COLLISION"
-find "$TMP" -maxdepth 1 -type d -name 'output-collision.failed-*' -exec test -f '{}/support-admission.json' \;
+find "$TMP" -maxdepth 1 -type d -name 'output-collision.failed-*' -exec test -f '{}/current-support-admission.json' \;
 
 
 echo "core-conformance command checks passed"

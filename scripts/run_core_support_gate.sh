@@ -79,7 +79,7 @@ gate_status=$?
 set -e
 
 if [ -f "$REPORT" ]; then
-    cp "$REPORT" "$REPORT_ROOT/support-admission.json"
+    "$SCRIPT_DIR/current_evidence_report.py" write "$REPORT_ROOT" "$REPORT"
 else
     echo "core-support-gate: report generation failed: $REPORT" >&2
     exit 2

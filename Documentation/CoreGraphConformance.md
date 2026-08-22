@@ -59,7 +59,7 @@ and first difference. The gate reports `.nonExactComparison` and blocks the
 requested entry.
 
 The admission report is written to
-`.build/core-support-gate/support-admission.json`; the immutable report and
+`.build/core-support-gate/current-support-admission.json`; the immutable report and
 case evidence for that invocation are retained at
 `.build/core-support-gate/runs/<gate-run-id>/`. The report lists each entry,
 its decision, reason codes, mandatory cases, evidence references, run

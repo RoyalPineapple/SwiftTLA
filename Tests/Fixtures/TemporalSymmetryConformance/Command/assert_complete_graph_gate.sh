@@ -7,13 +7,17 @@ TMP="$ROOT/.build/temporal-symmetry-complete-graph-$(uuidgen | tr '[:upper:]' '[
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP"
 
+current_report() {
+    "$ROOT/scripts/current_evidence_report.py" resolve "$1"
+}
+
 set +e
 CORE_CONFORMANCE_TOOL_ROOT="$TOOL_ROOT" "$ROOT/scripts/run_temporal_symmetry_support_gate.sh" --output "$TMP/source"
 source_status=$?
 set -e
 test "$source_status" -eq 0
 
-run_id="$(jq -r '.gateRunID' "$TMP/source/support-admission.json")"
+run_id="$(jq -r '.gateRunID' "$(current_report "$TMP/source")")"
 core_report="$TMP/source/runs/$run_id/core/support-admission.json"
 source_cases="$TMP/source/runs/$run_id/cases"
 test -f "$core_report"
