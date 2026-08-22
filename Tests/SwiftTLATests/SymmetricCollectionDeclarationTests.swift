@@ -37,7 +37,7 @@ struct SymmetricCollectionDeclarationTests {
 
     let compilation = try spec.compile()
     let initialState = try #require(try compilation.initialStateProjections().first)
-    let begin = try #require(compilation.actionID(named: "begin"))
+    let begin = try #require(compilation.compiledActions.first).id
     let successors = try compilation.successors(for: begin, arguments: [], from: initialState)
     #expect(successors.count == 2)
     for successor in successors {

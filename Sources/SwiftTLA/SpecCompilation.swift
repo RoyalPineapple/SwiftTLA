@@ -150,8 +150,8 @@ public struct CompiledSpecification: Sendable {
         }
     }
 
-    package func actionID(named name: String) -> ActionID? {
-        layout.actionID(named: name)
+    package var compiledActions: [(id: ActionID, renderedName: String)] {
+        layout.actions.map { (id: $0.id, renderedName: $0.renderedName) }
     }
 
     package func actionRequest(
