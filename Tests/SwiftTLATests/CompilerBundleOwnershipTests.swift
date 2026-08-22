@@ -51,7 +51,7 @@ struct CompilerBundleOwnershipTests {
     #expect(context.incomingModuleParameters == configuration.replacements)
     #expect(bundle.imports.first?.tla.contains("Nat") == true)
     #expect(bundle.root.tla.contains("ZSequencesNat == 0..2"))
-    #expect(bundle.root.cfg.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+    #expect(try #require(bundle.root.cfg).contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
   }
 
   @Test("same-name modules with different sources block compilation")
@@ -205,7 +205,7 @@ struct CompilerBundleOwnershipTests {
     )
 
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
-    #expect(throws: CompilationDiagnostic.self) { try ModelChecker(compilation: try invalid.compile(), configuration: .standard) }
+    #expect(throws: CompilationDiagnostic.self) { _ = ModelChecker(compilation: try invalid.compile(), configuration: .standard) }
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
   }
 

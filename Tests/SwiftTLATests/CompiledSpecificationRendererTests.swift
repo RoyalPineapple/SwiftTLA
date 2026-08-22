@@ -68,9 +68,8 @@ struct CompiledSpecificationRendererTests {
         #expect(ownership.map(\.structuralPath) == [
             ["Root", "Left", "Support"], ["Root", "Left"], ["Root", "Right"], ["Root"]
         ])
-        #expect(dependencies.map { ($0.importingModule, $0.importedModule) } == [
-            ("Root", "Left"), ("Left", "Support"), ("Root", "Right"), ("Right", "Support")
-        ])
+        #expect(dependencies.map(\.importingModule) == ["Root", "Left", "Root", "Right"])
+        #expect(dependencies.map(\.importedModule) == ["Left", "Support", "Right", "Support"])
     }
 
     @Test("rendering rejects a bundle whose identity no longer matches its source")
@@ -109,8 +108,9 @@ struct CompiledSpecificationRendererTests {
         let compilation = try specification.compile()
 
         let bundle = try compilation.renderedPlusCalBundle()
+        let directBundle = try compilation.renderedTLAModuleBundle()
         #expect(bundle.root.tla.contains("--algorithm Authored"))
-        #expect(bundle.root.cfg == try compilation.renderedTLAModuleBundle().root.cfg)
+        #expect(bundle.root.cfg == directBundle.root.cfg)
         #expect(bundle.imports.map(\.name) == ["Support"])
         guard case .compiled = bundle.provenance else {
             Issue.record("A compiled authored PlusCal bundle lost its provenance.")
