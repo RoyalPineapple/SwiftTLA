@@ -639,6 +639,14 @@ public enum SpecBuilder {
   public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] {
     components.flatMap { $0 }
   }
+  public static func buildPartialBlock(first component: [SpecComponent]) -> [SpecComponent] {
+    component
+  }
+  public static func buildPartialBlock(
+    accumulated: [SpecComponent], next component: [SpecComponent]
+  ) -> [SpecComponent] {
+    accumulated + component
+  }
   public static func buildExpression(_ expr: VarDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ActionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: InvDecl) -> [SpecComponent] { [expr] }
