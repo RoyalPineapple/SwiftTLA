@@ -3,9 +3,6 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// The freestanding boundary that lets the compiler see an entire formal
-/// specification body before its enclosing `@TLAModel` expands. The builder
-/// body remains intact so runtime construction stays independent of parsing.
 public struct SpecExpressionMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -26,8 +23,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         }
 
-        let runtimeClosure = SpecDeclarationRegistration().rewrite(closure)
-        return specCall(named: name, body: runtimeClosure)
+        return specCall(named: name, body: closure)
     }
 
     private static func specCall(
@@ -43,61 +39,6 @@ public struct SpecExpressionMacro: ExpressionMacro {
             rightParen: .rightParenToken(),
             trailingClosure: body
         ))
-    }
-}
-
-private final class SpecDeclarationRegistration {
-    func rewrite(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
-        closure.with(\.statements, rewriteSpecStatements(closure.statements))
-    }
-
-    private func rewriteSpecStatements(_ statements: CodeBlockItemListSyntax) -> CodeBlockItemListSyntax {
-        .init(statements.map { rewriteBuilderCall($0) })
-    }
-
-    private func rewriteBuilderCall(_ item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
-        guard case .expr(let expression) = item.item,
-              let call = expression.as(FunctionCallExprSyntax.self),
-              isBuilderCall(call),
-              let closure = call.trailingClosure
-        else { return item }
-        return item.with(
-            \.item,
-            .expr(ExprSyntax(call.with(\.trailingClosure, register(closure))))
-        )
-    }
-
-    private func register(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
-        var items: [CodeBlockItemSyntax] = []
-        for item in closure.statements {
-            let rewritten = rewriteBuilderCall(item)
-            items.append(rewritten)
-            guard let reference = declaredVariableReference(in: item) else { continue }
-            items.append(
-                .init(item: .expr(ExprSyntax(reference)))
-            )
-        }
-        return closure.with(\.statements, .init(items))
-    }
-
-    private func isBuilderCall(_ call: FunctionCallExprSyntax) -> Bool {
-        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              ["Algorithm", "Each", "Procedure"].contains(name)
-        else { return false }
-        return true
-    }
-
-    private func declaredVariableReference(in item: CodeBlockItemSyntax) -> DeclReferenceExprSyntax? {
-        guard case .decl(let declaration) = item.item,
-              let variable = declaration.as(VariableDeclSyntax.self),
-              variable.bindings.count == 1,
-              let binding = variable.bindings.first,
-              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
-              let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-              let constructor = initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              constructor == "SharedVar" || constructor == "LocalVar"
-        else { return nil }
-        return .init(baseName: name.with(\.leadingTrivia, .newlines(1)))
     }
 }
 
