@@ -8,49 +8,6 @@ import SwiftParser
 import SwiftTLA
 
 enum MacroExpander {
-    static func generatedActionIdentifiers(actions: [NamedAction]) -> [String] {
-        let reserved: Set<String> = ["init", "deinit", "subscript", "rawValue"]
-        var used: Set<String> = []
-        return actions.map { action in
-            let scalars = action.name.unicodeScalars.map { scalar -> Character in
-                switch scalar.value {
-                case 65...90, 97...122, 48...57, 95: return Character(String(scalar))
-                default: return "_"
-                }
-            }
-            var base = String(scalars)
-            if base.isEmpty { base = "action" }
-            if base.unicodeScalars.first.map({ (48...57).contains($0.value) }) == true || reserved.contains(base) {
-                base = "action_\(base)"
-            }
-            var identifier = base
-            var suffix = 2
-            while used.contains(identifier) {
-                identifier = "\(base)_\(suffix)"
-                suffix += 1
-            }
-            used.insert(identifier)
-            return identifier
-        }
-    }
-
-    static func swiftType(
-        for action: NamedAction,
-        binding: ActionBinding,
-        facts: MachineSurfaceSwiftFacts
-    ) -> String {
-        facts.actionBindingTypes[action.name]?[binding.name] ?? swiftType(forTLAValue: binding.values[0])
-    }
-
-    static func swiftType(forTLAValue value: TLAValue) -> String {
-        switch value {
-        case .int: "Int"
-        case .bool: "Bool"
-        case .string: "String"
-        case .set, .tuple, .record, .function, .constant: "TLAValue"
-        }
-    }
-
     static func literalExpr(for value: TLAValue) -> String {
         switch value {
         case .int(let value): "\(value)"
