@@ -49,6 +49,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.imports.map(\.name).contains("Consensus"))
         #expect(bundle.root.tla.contains("SafeAt(value0, value1) =="))
         #expect(bundle.root.tla.contains("LET SA["))
+        #expect(!bundle.root.tla.contains("LET RECURSIVE SA"))
         #expect(bundle.root.tla.contains("IN SA[value0]"))
         #expect(bundle.root.tla.contains("THEN TRUE ELSE ((SA["))
         #expect(bundle.root.tla.contains(")) /\\ \\A "))
@@ -61,6 +62,7 @@ struct VoteProofCorpusRenderingTests {
 
         let plusCal = try VoteProofModel.spec.compile().renderedPlusCalBundle().root.tla
         #expect(plusCal.contains("--algorithm Voting"))
+        #expect(!plusCal.contains("LET RECURSIVE SA"))
         let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))
         let defineRange = try #require(plusCal.range(of: "define {"))
         let defineEndRange = try #require(plusCal.range(of: "}\n\nfair process"))
