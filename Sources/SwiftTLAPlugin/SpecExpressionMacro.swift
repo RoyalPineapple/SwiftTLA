@@ -84,12 +84,15 @@ private final class BinderLocationRewriter: SyntaxRewriter {
         }
 
         var arguments = Array(visited.arguments)
+        let insertionIndex = name == "LetRec"
+            ? arguments.firstIndex(where: { $0.label?.text == "in" }) ?? arguments.endIndex
+            : arguments.endIndex
+        arguments.insert(argument("file", location.file), at: insertionIndex)
+        arguments.insert(argument("line", location.line), at: insertionIndex + 1)
+        arguments.insert(argument("column", location.column), at: insertionIndex + 2)
         for index in arguments.indices {
-            arguments[index].trailingComma = .commaToken()
+            arguments[index].trailingComma = index == arguments.indices.last ? nil : .commaToken()
         }
-        arguments.append(argument("file", location.file, comma: true))
-        arguments.append(argument("line", location.line, comma: true))
-        arguments.append(argument("column", location.column, comma: false))
 
         return ExprSyntax(visited.with(\.arguments, LabeledExprListSyntax(arguments)))
     }
@@ -100,12 +103,11 @@ private final class BinderLocationRewriter: SyntaxRewriter {
                 .expression.as(DeclReferenceExprSyntax.self)?.baseName.text
     }
 
-    private func argument(_ label: String, _ expression: ExprSyntax, comma: Bool) -> LabeledExprSyntax {
+    private func argument(_ label: String, _ expression: ExprSyntax) -> LabeledExprSyntax {
         LabeledExprSyntax(
             label: .identifier(label),
             colon: .colonToken(),
-            expression: expression,
-            trailingComma: comma ? .commaToken() : nil
+            expression: expression
         )
     }
 }
