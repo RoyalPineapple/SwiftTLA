@@ -593,12 +593,12 @@ private func temporalSymmetryAdmissionReport(
         defaultPath: "Verification/CoreConformance/toolchain.json")
     let cases = try decode(TemporalSymmetryCases.self, at: casesURL)
     let surface = try decode(TemporalSymmetrySupportSurface.self, at: surfaceURL)
-    let manifestSHA256 = try fileSHA256(casesURL)
-    let toolchainSHA256 = try fileSHA256(toolchainURL)
+    let manifestSHA256 = try ConformanceEvidence.reference(for: casesURL, beneath: projectRoot).sha256
+    let toolchainSHA256 = try ConformanceEvidence.reference(for: toolchainURL, beneath: projectRoot).sha256
     let coreURL = URL(fileURLWithPath: options.coreAdmission).standardizedFileURL
     let corePath = try projectRelativePath(coreURL, projectRoot: projectRoot)
     let coreReport = try decode(CoreSupportAdmission.self, at: coreURL)
-    let coreDigest = try fileSHA256(coreURL)
+    let coreDigest = try ConformanceEvidence.reference(for: coreURL, beneath: projectRoot).sha256
     let coreReference = try TemporalSymmetryCoreAdmissionReference(
         reportID: options.coreReportID,
         gateRunID: coreReport.gateRunID,
@@ -642,9 +642,7 @@ private func temporalSymmetryEvidence(
         let path = root.appendingPathComponent(declaredCase.id, isDirectory: true)
             .appendingPathComponent(filename)
         guard FileManager.default.fileExists(atPath: path.path) else { return nil }
-        let reference = try CoreEvidenceReference(
-            path: try projectRelativePath(path, projectRoot: projectRoot),
-            sha256: try fileSHA256(path))
+        let reference = try ConformanceEvidence.reference(for: path, beneath: projectRoot)
         let data = try Data(contentsOf: path)
         let comparison: TemporalSymmetryComparisonEvidence
         switch declaredCase.kind {
@@ -685,7 +683,7 @@ private func validateCompleteGraphEvidence(
         let url = projectRoot.appendingPathComponent(reference.path).resolvingSymlinksInPath().standardizedFileURL
         guard url.path.hasPrefix(projectRoot.resolvingSymlinksInPath().standardizedFileURL.path + "/"),
               FileManager.default.fileExists(atPath: url.path),
-              try fileSHA256(url) == reference.sha256 else {
+              try ConformanceEvidence.reference(for: url, beneath: projectRoot).sha256 == reference.sha256 else {
             throw TemporalSymmetryCLIError.invalidEvidence("substituted complete graph artifact")
         }
         urls[reference.path] = url
@@ -843,9 +841,6 @@ private func pathsOverlap(_ first: URL, _ second: URL) -> Bool {
     first.path == second.path
         || first.path.hasPrefix(second.path + "/")
         || second.path.hasPrefix(first.path + "/")
-}
-private func fileSHA256(_ url: URL) throws -> String {
-    SHA256.hex(try Data(contentsOf: url))
 }
 private func failTemporalSymmetry(_ error: Error) -> Never {
     fputs("temporal-symmetry: \(error)\n", stderr)
