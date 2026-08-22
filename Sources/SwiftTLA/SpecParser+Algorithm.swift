@@ -304,7 +304,7 @@ extension ParserSession {
             return nil
         }
         let bindings = closureParameterNames(in: closure)
-        let parameterArguments = call.arguments.dropFirst()
+        let parameterArguments = call.arguments.dropFirst().filter { $0.label?.text != "scoped" }
         guard parameterArguments.count <= 4 else {
             algorithmParseFailure = "Procedure '\(name)' has arity \(parameterArguments.count); SwiftTLA supports 0 through 4 typed parameters. Use a Record parameter or add a typed overload."
             return nil
