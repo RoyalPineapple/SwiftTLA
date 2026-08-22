@@ -918,9 +918,6 @@ public extension TLASpec {
             return lines.joined(separator: "\n") + "\n"
         }
 
-        let symmetricMetadataByName = Dictionary(
-            uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0.metadata) }
-        )
         let initialPredicates = try layout.variables.map { variable -> String in
             let name = variable.declaration.name
             guard let initializer = semantics.variableInitializers[variable.id],
@@ -934,8 +931,8 @@ public extension TLASpec {
                     nextSafeAction: "Compile the model again from its current source."
                 )
             }
-            if let metadata = symmetricMetadataByName[name] {
-                return "\(name) = [member \\in \(metadata.domainSymbol) |-> \(metadata.initial)]"
+            if let collection = semantics.symmetricCollections.first(where: { $0.variable == variable.id }) {
+                return "\(name) = [member \\in \(collection.domainSymbol) |-> \(try initialValue.rendered(using: layout))]"
             }
             if let set = initializer.lazySet { return "\(name) \\in \(try renderer.state(set))" }
             if let set = initializer.initialSet { return "\(name) \\in \(try renderer.state(set))" }

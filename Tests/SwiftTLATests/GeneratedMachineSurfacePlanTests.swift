@@ -13,7 +13,7 @@ struct GeneratedMachineSurfacePlanTests {
         #expect(throws: GeneratedMachineSurfaceDiagnostic.self) {
             try MachineSurfacePlan(
                 compilation: compilation,
-                swiftFacts: .init(variableTypes: ["value": "TLAValue"])
+                swiftFacts: .init(variableTypes: [compilation.layout.variables[0].id: "TLAValue"])
             )
         }
     }

@@ -70,8 +70,7 @@ enum MacroExpander {
         }
         """))
 
-        let symmetricCollectionNames = Set(plan.symmetricCollections.map(\.formalName))
-        let ordinaryVariables = plan.variables.filter { !symmetricCollectionNames.contains($0.formalName) }
+        let ordinaryVariables = plan.variables.filter { $0.isSymmetricCollection == false }
 
         decls.append(contentsOf: generateActionLabel(actions: plan.actions))
         decls.append(DeclSyntax(generateStateStruct(variables: ordinaryVariables, enumInfos: model.enumInfos)))
@@ -81,7 +80,9 @@ enum MacroExpander {
             actions: plan.actions,
             variables: plan.variables,
             symmetricCollections: plan.symmetricCollections,
-            identityRoutedActions: Set(plan.collectionActions.keys)
+            identityRoutedActions: Set(plan.actions.compactMap { action in
+                action.symmetricCollection == nil ? nil : action.formalName
+            })
         ))
         if model.hasNestedLiveAdapter {
             decls.append(contentsOf: generateLiveMachineMembers(model: model))
@@ -93,10 +94,7 @@ enum MacroExpander {
         ).map(DeclSyntax.init))
         decls.append(contentsOf: generateActionMethods(
             isActor: isActor,
-            actions: plan.actions,
-            collectionActions: plan.collectionActions,
-            symmetricCollections: Dictionary(uniqueKeysWithValues: plan.symmetricCollections.map { ($0.formalName, $0) }),
-            variableOrdinals: Dictionary(uniqueKeysWithValues: plan.variables.map { ($0.formalName, $0.storageOrdinal) })
+            actions: plan.actions
         ))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
@@ -409,16 +407,11 @@ extension MacroExpander {
 
     static func generateActionMethods(
         isActor: Bool = false,
-        actions: [MachineSurfacePlan.Action],
-        collectionActions: [String: String],
-        symmetricCollections: [String: MachineSurfacePlan.SymmetricCollection],
-        variableOrdinals: [String: Int]
+        actions: [MachineSurfacePlan.Action]
     ) -> [DeclSyntax] {
         let methods = actions.map { action -> DeclSyntax in
             if action.bindings.isEmpty,
-               let collectionName = collectionActions[action.formalName],
-               let collection = symmetricCollections[collectionName],
-               let variableOrdinal = variableOrdinals[collectionName] {
+               let collection = action.symmetricCollection {
                 let source = """
                 @discardableResult
                 \(isActor ? "fileprivate" : "public mutating") func \(action.swiftIdentifier)(id: \(collection.elementType).ID) throws -> TransitionResult {
@@ -431,7 +424,7 @@ extension MacroExpander {
                         from: storageState
                     ) { candidate in
                         try _storage.collectionChangesOnly(
-                            at: \(variableOrdinal),
+                            at: \(collection.storageOrdinal),
                             selected: id,
                             from: storageState,
                             to: candidate
@@ -439,7 +432,7 @@ extension MacroExpander {
                     }
                     let after = try State(storage: _storage, storageState: afterStorageState)
                     guard let nextValue: \(collection.valueType) = try _storage.collectionValue(
-                        at: \(variableOrdinal),
+                        at: \(collection.storageOrdinal),
                         for: id,
                         as: \(collection.valueType).self,
                         in: afterStorageState

@@ -198,4 +198,17 @@ struct SymmetricCollectionCanonicalizationTests {
     #expect(bundle.cfg.contains("SYMMETRY SymmDevicePhases"))
     #expect(!bundle.tla.contains("\"DevicePhasesMember0\""))
   }
+
+  @Test("Compiled symmetric collections retain their declared variable identity")
+  func symmetricCollectionUsesCompiledVariableIdentity() throws {
+    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let compilation = try TLASpec("DeviceIdentity") {
+      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+    }.compile()
+
+    let collection = try #require(compilation.semantics.symmetricCollections.first)
+    let variable = try #require(compilation.layout.variableID(named: devices.name))
+    #expect(collection.variable == variable)
+    #expect(collection.domainSymbol == "DevicesKeys")
+  }
 }
