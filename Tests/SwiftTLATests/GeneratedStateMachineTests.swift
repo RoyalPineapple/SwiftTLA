@@ -80,8 +80,8 @@ struct GeneratedAlgorithmCounter {
 
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmCounter") {
-            Algorithm("GeneratedAlgorithmCounter") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("GeneratedAlgorithmCounter") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Each(Node.all, fairness: .weak) { _ in
                     While(TestControlLabel.increment, count < 2) {
                         When(count < 2)
@@ -98,8 +98,8 @@ struct GeneratedAlgorithmCounter {
 private struct SeededCounterMachine {
     static var spec: TLASpec {
         #spec("SeededCounterMachine") {
-            Algorithm("SeededCounterMachine") {
-                let value = SharedVar("value", in: 0...2)
+            Algorithm("SeededCounterMachine") { scope in
+                let value = scope.sharedVar("value", in: 0...2)
 
                 While(TestControlLabel.advance, true) {
                     Either {
@@ -195,8 +195,8 @@ struct GeneratedRestrictedProcessDomain {
 
     static var spec: TLASpec {
         #spec("GeneratedRestrictedProcessDomain") {
-            Algorithm("GeneratedRestrictedProcessDomain") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("GeneratedRestrictedProcessDomain") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Each(Member.all) { _ in
                     Do(TestControlLabel.increment) {
                         Assign(count, to: count + 1)
@@ -220,8 +220,8 @@ struct GeneratedRestrictedProcessDomainTests {
 struct GeneratedSequentialCounter {
     static var spec: TLASpec {
         #spec("GeneratedSequentialCounter") {
-            Algorithm("GeneratedSequentialCounter") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("GeneratedSequentialCounter") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Let(count + 1) { nextCount in
                         Assign(count, to: nextCount.expr)
@@ -249,9 +249,9 @@ struct GeneratedSequentialMachineTests {
 struct GeneratedSimultaneousSwap {
     static var spec: TLASpec {
         #spec("GeneratedSimultaneousSwap") {
-            Algorithm("GeneratedSimultaneousSwap") {
-                let left = SharedVar("left", initial: 1)
-                let right = SharedVar("right", initial: 2)
+            Algorithm("GeneratedSimultaneousSwap") { scope in
+                let left = scope.sharedVar("left", initial: 1)
+                let right = scope.sharedVar("right", initial: 2)
                 Do(TestControlLabel.swap) {
                     Assign(left, to: right)
                     Assign(right, to: left)
@@ -281,8 +281,8 @@ struct GeneratedSimultaneousSwapTests {
 struct GeneratedPairPattern {
     static var spec: TLASpec {
         #spec("GeneratedPairPattern") {
-            Algorithm("GeneratedPairPattern") {
-                let selected = SharedVar("selected", initial: 0)
+            Algorithm("GeneratedPairPattern") { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
                 Do(TestControlLabel.choose) {
                     With(SetExpr<Pair<Int, Bool>>.literal(
                         Pair(first: 1, second: true),
@@ -322,8 +322,8 @@ struct GeneratedRangeInitializedAlgorithm {
 
     static var spec: TLASpec {
         #spec("GeneratedRangeInitializedAlgorithm") {
-            Algorithm("GeneratedRangeInitializedAlgorithm") {
-                let hour = SharedVar("hour", in: 1...3)
+            Algorithm("GeneratedRangeInitializedAlgorithm") { scope in
+                let hour = scope.sharedVar("hour", in: 1...3)
                 Each(Node.all) { _ in
                     Do(TestControlLabel.advance) {
                         When(hour < 3)
@@ -364,8 +364,8 @@ struct GeneratedIntegerChoiceAlgorithm {
 
     static var spec: TLASpec {
         #spec("GeneratedIntegerChoice") {
-            Algorithm("GeneratedIntegerChoice") {
-                let selected = SharedVar("selected", initial: 0)
+            Algorithm("GeneratedIntegerChoice") { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
                     Do(TestControlLabel.choose) {
                         Choose(1...3) { choice in
@@ -391,8 +391,8 @@ struct GeneratedIntegerChoiceAlgorithmTests {
 struct GeneratedAlgorithmStateConstraint {
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmStateConstraint") {
-            Algorithm("GeneratedAlgorithmStateConstraint") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("GeneratedAlgorithmStateConstraint") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(count, to: count + 1)
                 }
@@ -431,9 +431,9 @@ struct GeneratedProcessLocalInvariant {
 
     static var spec: TLASpec {
         #spec("GeneratedProcessLocalInvariant") {
-            Algorithm("GeneratedProcessLocalInvariant") {
-                Each(Node.all) { selfID in
-                    let count = LocalVar("count", initial: 0)
+            Algorithm("GeneratedProcessLocalInvariant") { scope in
+                Each(Node.all) { selfID, scope in
+                    let count = scope.localVar("count", initial: 0)
                     Do(Label.receive) {
                         Skip()
                     }
@@ -484,9 +484,9 @@ struct GeneratedDependentInitialAlgorithm {
 
     static var spec: TLASpec {
         #spec("GeneratedDependentInitialAlgorithm") {
-            Algorithm("GeneratedDependentInitialAlgorithm") {
-                let seed = SharedVar("seed", in: SetExpr<Bool>.literal(false, true))
-                let mirrors = SharedVar("mirrors", initial: Function<Node, Phase>.mapping { node in
+            Algorithm("GeneratedDependentInitialAlgorithm") { scope in
+                let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
+                let mirrors = scope.sharedVar("mirrors", initial: Function<Node, Phase>.mapping { node in
                     If(node == .left && seed == true, then: .active, else: .inactive)
                 })
                 Each(Node.all) { _ in
@@ -655,8 +655,8 @@ struct MultiVar {
 struct BuilderOnlyClock {
     static var spec: TLASpec {
         #spec("BuilderOnlyClock") {
-            Algorithm("BuilderOnlyClock") {
-                let hr = SharedVar("hr", initial: 1)
+            Algorithm("BuilderOnlyClock") { scope in
+                let hr = scope.sharedVar("hr", initial: 1)
                 Do(TestControlLabel.tick) {
                     If(hr < 12) {
                         Assign(hr, to: hr + 1)
