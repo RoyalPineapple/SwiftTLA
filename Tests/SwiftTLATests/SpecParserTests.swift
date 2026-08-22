@@ -130,6 +130,17 @@ private func parserEnum(
         ])
     }
 
+    @Test("Variable reports an unsupported initializer")
+    func reportsUnsupportedVariableInitializer() throws {
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure("{ let value = Var<Int>(\"value\"); Variable(value, UnsupportedValue()) }")
+        )
+
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Variable 'value' requires a supported initial formal value."
+        ])
+    }
+
     @Test("Algorithm parser rejects a local declaration scope")
     func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
         let source = """

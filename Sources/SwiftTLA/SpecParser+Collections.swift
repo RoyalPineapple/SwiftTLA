@@ -434,7 +434,14 @@ extension ParserSession {
         }
         guard let firstName = args.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
             ?? args.first?.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
-        else { return }
+        else {
+            result.diagnostics.append(.init(
+                message: "Variable requires a declared variable binding.",
+                source: call,
+                expected: "Variable(variable) or Variable(variable, initialValue)"
+            ))
+            return
+        }
 
         // Variable(name, in: set)
         if args.count >= 2 {
@@ -476,10 +483,12 @@ extension ParserSession {
             }
         }
 
-        // Variable(name, initializerExpr) — fallback
         if args.count >= 2 {
-            let initial: TLAValue = .int(0)
-            result.variables.append(.init(name: firstName, initial: initial))
+            result.diagnostics.append(.init(
+                message: "Variable '\(firstName)' requires a supported initial formal value.",
+                source: call,
+                expected: "an integer, boolean, string, supported TLAValue constructor, or finite initial-state expression"
+            ))
         }
     }
 
