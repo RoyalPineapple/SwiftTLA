@@ -23,7 +23,14 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         }
 
-        return specCall(named: name, body: closure)
+        return try specCall(named: name, body: detachedClosure(closure))
+    }
+
+    private static func detachedClosure(_ body: ClosureExprSyntax) throws -> ClosureExprSyntax {
+        guard let detached = Syntax(body).detached.as(ClosureExprSyntax.self) else {
+            throw SimpleError("Could not detach #spec builder closure")
+        }
+        return detached
     }
 
     private static func specCall(

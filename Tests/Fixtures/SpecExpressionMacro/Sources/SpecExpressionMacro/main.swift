@@ -49,7 +49,7 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter", scoped: { scope in
+            let algorithm: Algorithm = Algorithm("Counter", scoped: { scope in
                 let value = scope.sharedVar("value", initial: 0)
                 let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
                     (.one, Record<CarSchema>.literal(.init(CarSchema.floor, 1), .init(CarSchema.doorsOpen, false))),
@@ -68,6 +68,7 @@ struct Counter {
                     }
                 })
             })
+            algorithm
         }
     }
 }
