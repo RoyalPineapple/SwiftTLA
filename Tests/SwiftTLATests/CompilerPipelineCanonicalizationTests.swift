@@ -6,13 +6,27 @@ private struct CompilerPipelineMember: Identifiable, Sendable {
     let id: Int
 }
 
+private enum CompilerPipelineNode: String, FiniteDomainKey, PlusCalLabel, CaseIterable {
+    case first
+    case second
+
+    static var defaultValue: Self { .first }
+    static let formalDomain: [Self] = [.first, .second]
+    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.compiler-pipeline.node")
+
+    var tlaValue: TLAValue { .string(rawValue) }
+}
+
 @TLAModel
 private struct CompilerPipelineGeneratedModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineGeneratedModel") {
-            let counter = Var<Int>("counter")
-            Variable(counter, 0)
-            Action("increment") { counter.becomes(counter + 1) }
+            Algorithm("CompilerPipelineGeneratedModel", scoped: { scope in
+                let counter = scope.sharedVar("counter", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(counter, to: counter + 1)
+                }
+            })
         }
     }
 }
@@ -21,9 +35,12 @@ private struct CompilerPipelineGeneratedModel {
 private struct CompilerPipelineExplicitFormalNameModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineExplicitFormalName") {
-            let counter = Var<Int>("counter", 0)
-            Variable(counter)
-            Action("increment") { counter.becomes(counter + 1) }
+            Algorithm("CompilerPipelineExplicitFormalName", scoped: { scope in
+                let counter = scope.sharedVar("counter", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(counter, to: counter + 1)
+                }
+            })
         }
     }
 }
@@ -46,11 +63,15 @@ private struct CompilerPipelineAlgorithmModel {
 private struct CompilerPipelineInitializationModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineInitializationModel") {
-            let computed = Var<Int>("computed")
-            let choice = Var<Int>("choice")
-            Variable(computed: computed) { computed + 1 }
-            Variable(from: choice.name, StateExpr.set([1, 2]))
-            Action("stay") { computed.stays && choice.stays }
+            Algorithm("CompilerPipelineInitializationModel", scoped: { scope in
+                let seed = scope.sharedVar("seed", initial: 0)
+                let computed = scope.sharedVar("computed", initial: seed + 1)
+                let choice = scope.sharedVar("choice", in: SetExpr<Int>.literal(1, 2))
+                Do(TestControlLabel.done) {
+                    Assign(computed, to: computed)
+                    Assign(choice, to: choice)
+                }
+            })
         }
     }
 }
@@ -82,9 +103,11 @@ struct CompilerPipelineCanonicalizationTests {
         let first = try sourceModel().compile()
         _ = sourceModel()
         let second = try sourceModel().compile()
+        let firstModule = try first.renderedTLAModuleBundle().root.tla
+        let secondModule = try second.renderedTLAModuleBundle().root.tla
 
         #expect(first.identity == second.identity)
-        #expect(try first.renderedTLAModuleBundle().root.tla == second.renderedTLAModuleBundle().root.tla)
+        #expect(firstModule == secondModule)
     }
 
     @Test("compiled binders have distinct rendered names")
@@ -102,18 +125,20 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let first = try #require(compilation.bindings.binderName(.init(ordinal: 0)))
         let second = try #require(compilation.bindings.binderName(.init(ordinal: 1)))
+        let module = try compilation.renderedTLAModuleBundle().root.tla
 
         #expect(first != second)
-        #expect(try compilation.renderedTLAModuleBundle().root.tla.contains(first))
-        #expect(try compilation.renderedTLAModuleBundle().root.tla.contains(second))
+        #expect(module.contains(first))
+        #expect(module.contains(second))
     }
 
     @Test("macro compilation uses the explicit formal module name")
     func macroUsesExplicitFormalModuleName() throws {
         let compilation = try CompilerPipelineExplicitFormalNameModel.spec.compile()
+        let repeated = try CompilerPipelineExplicitFormalNameModel.spec.compile()
 
         #expect(compilation.spec.name == "CompilerPipelineExplicitFormalName")
-        #expect(compilation.identity == try CompilerPipelineExplicitFormalNameModel.spec.compile().identity)
+        #expect(compilation.identity == repeated.identity)
     }
 
     @Test("direct specifications retain one identity through runtime and checker")
@@ -135,9 +160,10 @@ struct CompilerPipelineCanonicalizationTests {
         let initial = try TLAStateProjection(validating: [.init(token: counter, value: .int(0))])
         let action = try #require(compilation.layout.actionID(named: "increment"))
         let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
+        let graph = try checker.exploreGraph()
         #expect(successor.value(for: counter) == .int(1))
         #expect(compilation.propertyOutcomes(in: initial) == [.satisfied(name: "NonNegative")])
-        #expect(try checker.exploreGraph().states.count == 3)
+        #expect(graph.states.count == 3)
     }
 
     @Test("compiled layout assigns private IDs in declaration order")
@@ -168,7 +194,7 @@ struct CompilerPipelineCanonicalizationTests {
     func compiledLayoutAssignsScopedControlLocationIDs() throws {
         let algorithm = Algorithm("ControlLayout", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
-            Each(Node.all) { _ in
+            Each(CompilerPipelineNode.all) { _ in
                 Do(TestControlLabel.start) {
                     Assign(value, to: value + 1)
                 }
@@ -187,7 +213,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let source = try compiledSourceSpecification(algorithm)
         #expect(source.actions.map(\.controlOwner) == [
-            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "Node"),
+            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode"),
             .procedure(algorithm: "ControlLayout", name: "first"),
             .procedure(algorithm: "ControlLayout", name: "second"),
             nil
@@ -202,14 +228,14 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(description.controlLocations.map(\.sourceName) == ["start", "start", "start", "Done"])
         #expect(description.controlLocations.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start", "Done"])
         #expect(description.controlLocations.map(\.owner) == [
-            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "Node"),
+            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode"),
             .procedure(algorithm: "ControlLayout", name: "first"),
             .procedure(algorithm: "ControlLayout", name: "second"),
             .generated(algorithm: "ControlLayout", purpose: "Done")
         ])
         let changed = Algorithm("ControlLayout", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
-            Each(Node.all) { _ in
+            Each(CompilerPipelineNode.all) { _ in
                 Do(TestControlLabel.changed) {
                     Assign(value, to: value + 1)
                 }
@@ -232,7 +258,7 @@ struct CompilerPipelineCanonicalizationTests {
     func compiledAlgorithmUsesControlLocationIdentities() throws {
         let algorithm = Algorithm("ControlRuntime", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
-            Each(Node.all) { _ in
+            Each(CompilerPipelineNode.all) { _ in
                 Do(TestControlLabel.start) {
                     Assign(value, to: value + 1)
                     Goto(TestControlLabel.finish)
@@ -358,10 +384,12 @@ struct CompilerPipelineCanonicalizationTests {
         let nextStates = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
+        let counter = try nextStates[0].value(for: .init(ordinal: 0))
+        let candidate = try nextStates[0].value(for: .init(ordinal: 1))
 
         #expect(nextStates.count == 1)
-        #expect(try nextStates[0].value(for: .init(ordinal: 0)) == .integer(2))
-        #expect(try nextStates[0].value(for: .init(ordinal: 1)) == .integer(2))
+        #expect(counter == .integer(2))
+        #expect(candidate == .integer(2))
     }
 
     @Test("compiled action bindings enumerate their declared values")
@@ -422,8 +450,9 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected an operator identity")
             return
         }
+        let counter = try #require(next.first).value(for: .init(ordinal: 0))
         #expect(compilation.bindings.operators["Double"] == id)
-        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .integer(4))
+        #expect(counter == .integer(4))
     }
 
     @Test("compiled higher-order calls bind operator identities")
@@ -467,8 +496,9 @@ struct CompilerPipelineCanonicalizationTests {
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
+        let counter = try #require(next.first).value(for: .init(ordinal: 0))
 
-        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .integer(6))
+        #expect(counter == .integer(6))
     }
 
     @Test("compiled runtime enumerates slot-backed initial and successor states")
@@ -494,8 +524,9 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(initial.count == 2)
         let firstSuccessor = try runtime.successors(from: try #require(initial.first))
+        let invariantHolds = try runtime.invariantHolds(compilation.semantics.invariants[0], in: firstSuccessor[0].state)
         #expect(firstSuccessor.count == 1)
-        #expect(try runtime.invariantHolds(compilation.semantics.invariants[0], in: firstSuccessor[0].state))
+        #expect(invariantHolds)
 
         let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).explore()
         #expect(exploration.graph.states.count == 5)
@@ -562,11 +593,15 @@ struct CompilerPipelineCanonicalizationTests {
         let second = compilation.layout.variables[1].id
         let state = try CompiledState(formalValues: [.int(1), .int(2)], compilation: compilation)
         let updated = try state.updating(second, to: .integer(3))
+        let stateFirst = try state.value(for: first)
+        let stateSecond = try state.value(for: second)
+        let updatedFirst = try updated.value(for: first)
+        let updatedSecond = try updated.value(for: second)
 
-        #expect(try state.value(for: first) == .integer(1))
-        #expect(try state.value(for: second) == .integer(2))
-        #expect(try updated.value(for: first) == .integer(1))
-        #expect(try updated.value(for: second) == .integer(3))
+        #expect(stateFirst == .integer(1))
+        #expect(stateSecond == .integer(2))
+        #expect(updatedFirst == .integer(1))
+        #expect(updatedSecond == .integer(3))
     }
 
     @Test("compiled runtimes reject states from another declaration layout")
@@ -692,7 +727,12 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected a compiled guard")
             return
         }
-        #expect(try CompiledEvaluator(state: state, semantics: compilation.semantics, layout: compilation.layout).evaluate(compiled) == .boolean(true))
+        let result = try CompiledEvaluator(
+            state: state,
+            semantics: compilation.semantics,
+            layout: compilation.layout
+        ).evaluate(compiled)
+        #expect(result == .boolean(true))
     }
 
     @Test("compiled actions update formal state by variable identity")
@@ -710,9 +750,10 @@ struct CompilerPipelineCanonicalizationTests {
         let successors = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
+        let counter = try successors[0].value(for: compilation.layout.variables[0].id)
 
         #expect(successors.count == 1)
-        #expect(try successors[0].value(for: compilation.layout.variables[0].id) == .integer(2))
+        #expect(counter == .integer(2))
     }
 
     @Test("compiled record access uses a field identity")
@@ -731,7 +772,8 @@ struct CompilerPipelineCanonicalizationTests {
         }
         #expect(compilation.layout.field(field)?.renderedName == "count")
         let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-        #expect(try CompiledRuntime(compilation: compilation).successors(from: initial).count == 1)
+        let successors = try CompiledRuntime(compilation: compilation).successors(from: initial)
+        #expect(successors.count == 1)
     }
 
     @Test("compiled record function access retains its formal key")
@@ -785,7 +827,9 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
 
-        #expect(try first.compile().identity != second.compile().identity)
+        let firstIdentity = try first.compile().identity
+        let secondIdentity = try second.compile().identity
+        #expect(firstIdentity != secondIdentity)
     }
 
     @Test("compiled descriptions preserve declaration order without exposing runtime slots")
@@ -809,9 +853,12 @@ struct CompilerPipelineCanonicalizationTests {
     @Test("#spec Algorithm lowering reaches macro-generated consumers through one identity")
     func algorithmSpecificationUsesMacroCompiledPayload() throws {
         let compilation = try CompilerPipelineAlgorithmModel.spec.compile()
+        let repeated = try CompilerPipelineAlgorithmModel.spec.compile()
+        let rendered = try compilation.renderedTLAModuleBundle().tla
+        let repeatedRendered = try repeated.renderedTLAModuleBundle().tla
 
-        #expect(try CompilerPipelineAlgorithmModel.spec.compile().identity == compilation.identity)
-        #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineAlgorithmModel.spec.compile().renderedTLAModuleBundle().tla)
+        #expect(repeated.identity == compilation.identity)
+        #expect(rendered == repeatedRendered)
     }
 
     @Test("duplicate declarations fail with an actionable typed diagnostic")
@@ -950,9 +997,12 @@ struct CompilerPipelineCanonicalizationTests {
     @Test("macro-generated consumers and rendering retain the compiled identity")
     func macroGeneratedConsumersUseCompiledPayload() throws {
         let compilation = try CompilerPipelineGeneratedModel.spec.compile()
+        let repeated = try CompilerPipelineGeneratedModel.spec.compile()
+        let rendered = try compilation.renderedTLAModuleBundle().tla
+        let repeatedRendered = try repeated.renderedTLAModuleBundle().tla
 
-        #expect(try CompilerPipelineGeneratedModel.spec.compile().identity == compilation.identity)
-        #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineGeneratedModel.spec.compile().renderedTLAModuleBundle().tla)
+        #expect(repeated.identity == compilation.identity)
+        #expect(rendered == repeatedRendered)
     }
 
     @Test("#spec lowering preserves every canonical variable initialization field")
@@ -960,12 +1010,13 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try CompilerPipelineInitializationModel.spec.compile()
         let computed = try #require(compilation.spec.variables.first { $0.name == "computed" })
         let choice = try #require(compilation.spec.variables.first { $0.name == "choice" })
+        let repeated = try CompilerPipelineInitializationModel.spec.compile()
 
-        #expect(computed.initExpr == .add(.variable("computed"), .int(1)))
+        #expect(computed.initExpr == .add(.variable("seed"), .int(1)))
         #expect(computed.lazySet == nil)
         #expect(choice.initExpr == nil)
         #expect(choice.lazySet == .setLiteral([.value(.int(1)), .value(.int(2))]))
-        #expect(try CompilerPipelineInitializationModel.spec.compile().identity == compilation.identity)
+        #expect(repeated.identity == compilation.identity)
     }
 
     @Test("#spec lowering preserves symmetric collection metadata")
@@ -973,11 +1024,12 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try CompilerPipelineCollectionModel.spec.compile()
         let devices = try #require(compilation.spec.variables.first { $0.name == "devices" })
         let declaration = try #require(compilation.spec.symmetricCollections.first { $0.name == "devices" })
+        let repeated = try CompilerPipelineCollectionModel.spec.compile()
 
         #expect(devices.collectionType == .dictionary(2))
         #expect(declaration.variable == devices)
         #expect(declaration.verificationScope == 2)
-        #expect(try CompilerPipelineCollectionModel.spec.compile().identity == compilation.identity)
+        #expect(repeated.identity == compilation.identity)
     }
 
     @Test("semantic compilation fields change the identity")
@@ -998,7 +1050,8 @@ struct CompilerPipelineCanonicalizationTests {
 
         let identity = try base.compile().identity
         for variant in variants {
-            #expect(try variant.compile().identity != identity)
+            let variantIdentity = try variant.compile().identity
+            #expect(variantIdentity != identity)
         }
     }
 
@@ -1040,9 +1093,12 @@ struct CompilerPipelineCanonicalizationTests {
 
         let identity = try base.compile().identity
         for variant in variants {
-            #expect(try variant.compile().identity != identity)
+            let variantIdentity = try variant.compile().identity
+            #expect(variantIdentity != identity)
         }
-        #expect(try variants[3].compile().identity != variants[4].compile().identity)
+        let importedAIdentity = try variants[3].compile().identity
+        let importedBIdentity = try variants[4].compile().identity
+        #expect(importedAIdentity != importedBIdentity)
     }
 
     @Test("nested set values with separator-bearing strings have distinct identities")
@@ -1064,7 +1120,9 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
 
-        #expect(try splitValues.compile().identity != embeddedSeparator.compile().identity)
+        let splitIdentity = try splitValues.compile().identity
+        let embeddedIdentity = try embeddedSeparator.compile().identity
+        #expect(splitIdentity != embeddedIdentity)
     }
 
     @Test("invalid action parameter declarations fail during compilation")
