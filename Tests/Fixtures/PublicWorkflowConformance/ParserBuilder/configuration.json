@@ -1,1 +1,1 @@
-{"initialValue":0,"model":"boundedCounter","nextValue":1,"schema":"PublicWorkflowBoundedCounterConfiguration","specificationName":"Counter","upperBound":1,"variable":"x"}
+{"initialValue":0,"maximumStateLimit":100000,"model":"boundedCounter","nextValue":1,"schema":"PublicWorkflowBoundedCounterConfiguration","specificationName":"Counter","upperBound":1,"variable":"x"}

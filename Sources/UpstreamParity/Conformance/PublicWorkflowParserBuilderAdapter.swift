@@ -133,9 +133,10 @@ public struct PublicWorkflowBoundedCounterConfiguration: Decodable, Sendable {
   public let initialValue: Int
   public let nextValue: Int
   public let upperBound: Int
+  public let maximumStateLimit: Int
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case schema, model, specificationName, variable, initialValue, nextValue, upperBound
+    case schema, model, specificationName, variable, initialValue, nextValue, upperBound, maximumStateLimit
   }
 
   public init(from decoder: Decoder) throws {
@@ -147,12 +148,14 @@ public struct PublicWorkflowBoundedCounterConfiguration: Decodable, Sendable {
     initialValue = try container.decode(Int.self, forKey: .initialValue)
     nextValue = try container.decode(Int.self, forKey: .nextValue)
     upperBound = try container.decode(Int.self, forKey: .upperBound)
+    maximumStateLimit = try container.decode(Int.self, forKey: .maximumStateLimit)
     try validate()
   }
 
   public func validate() throws {
     guard schema == Self.schema, model == "boundedCounter", !specificationName.isEmpty,
-          variable == "x", initialValue == 0, nextValue > 0, upperBound >= nextValue else {
+          variable == "x", initialValue == 0, nextValue > 0, upperBound >= nextValue,
+          maximumStateLimit > 0 else {
       throw ConformanceGovernanceError.invalidField(
         record: "parser-builder configuration", field: "bounded counter")
     }
@@ -217,8 +220,10 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
     try validateProvenance(manifest.declaredCase.provenance, source: sourceData, configuration: configurationData,
                            toolchain: manifest.toolchain)
 
-    let parserObservation = try observeParser(source: String(decoding: sourceData, as: UTF8.self), name: configuration.specificationName)
-    let builderObservation = try observe(spec: configuration.makeSpec(), diagnostics: [])
+    let parserObservation = try observeParser(
+      source: String(decoding: sourceData, as: UTF8.self), configuration: configuration
+    )
+    let builderObservation = try observe(spec: configuration.makeSpec(), maximumStateLimit: configuration.maximumStateLimit, diagnostics: [])
     try verifyObservation(parserObservation, equals: expectedParserData, reference: manifest.parserObservation)
     try verifyObservation(builderObservation, equals: expectedBuilderData, reference: manifest.builderObservation)
 
@@ -291,25 +296,32 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
     return (try makeBinding(parserEvidence), try makeBinding(builderEvidence))
   }
 
-  private func observeParser(source: String, name: String) throws -> PublicWorkflowCanonicalObservation {
+  private func observeParser(
+    source: String,
+    configuration: PublicWorkflowBoundedCounterConfiguration
+  ) throws -> PublicWorkflowCanonicalObservation {
     let syntax = Parser.parse(source: source)
     guard let closure = syntax.statements.first?.item.as(ClosureExprSyntax.self) else {
       return try unavailableObservation("parser:no top-level specification closure")
     }
     let parsed = SpecParser.parseSpecClosure(closure)
     let diagnostics = parsed.diagnostics.map { "parser:\($0.message)" }
-    let parsedSpec = TLASpec(name: name,
+    let parsedSpec = TLASpec(configuration.specificationName,
       variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
       constants: parsed.constants,
       actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings) },
       invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
       temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) }, fairness: parsed.fairness)
-    return try observe(spec: parsedSpec, diagnostics: diagnostics)
+    return try observe(spec: parsedSpec, maximumStateLimit: configuration.maximumStateLimit, diagnostics: diagnostics)
   }
 
-  private func observe(spec: TLASpec, diagnostics: [String]) throws -> PublicWorkflowCanonicalObservation {
+  private func observe(
+    spec: TLASpec,
+    maximumStateLimit: Int,
+    diagnostics: [String]
+  ) throws -> PublicWorkflowCanonicalObservation {
     do {
-      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).explore()), diagnostics: diagnostics)
+      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: maximumStateLimit)).explore()), diagnostics: diagnostics)
     } catch {
       return try unavailableObservation("evaluation:\(String(describing: error))", diagnostics: diagnostics)
     }
