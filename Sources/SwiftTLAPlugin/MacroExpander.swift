@@ -484,7 +484,7 @@ extension MacroExpander {
                         throw GeneratedMachineStateDiagnostic.missingRequiredValue(
                             path: \(String(reflecting: collection.formalName)),
                             expected: "a formal collection function"
-                        ))
+                        )
                     }
                     let before = _state
                     let afterStorageState = try _storage.apply(
@@ -512,7 +512,7 @@ extension MacroExpander {
                             path: \(String(reflecting: collection.formalName)),
                             expected: "\(collection.valueType)",
                             actual: String(describing: afterValue)
-                        ))
+                        )
                     }
                     try \(collection.formalName).update(id: id, to: nextValue)
                     _storageState = afterStorageState
