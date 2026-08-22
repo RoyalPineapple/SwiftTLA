@@ -87,7 +87,7 @@ struct SymmetricCollectionPredicateTests {
     let generated = GeneratedPredicateRuntime.spec
 
     #expect(generated.symmetricCollections.map(\.metadata) == direct.symmetricCollections.map(\.metadata))
-    #expect(normalized(generated.invariants.map(\.description)) == normalized(direct.invariants.map(\.description)))
+    #expect(generated.invariants == direct.invariants)
     #expect(try generated.compile().initialStateProjections() == direct.compile().initialStateProjections())
     #expect(try ModelChecker(compilation: try generated.compile(), configuration: .standard).check().description
       == ModelChecker(compilation: try direct.compile(), configuration: .standard).check().description)
