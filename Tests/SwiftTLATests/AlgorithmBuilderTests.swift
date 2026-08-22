@@ -127,7 +127,7 @@ struct AlgorithmBuilderTests {
 
     @Test("process-local family references preserve lexical bindings")
     func processLocalFamilyReplacementPreservesLexicalBindings() {
-        var scope = ProcessScope()
+        let scope = ProcessScope()
         let local = scope.localVar("count", initial: 0)
         #expect(local.family(for: Node.self).raw == .processLocalFamily("count"))
 
@@ -458,7 +458,7 @@ struct AlgorithmBuilderTests {
     @Test("a begin-style algorithm keeps a scalar program counter")
     func lowersSequentialAlgorithmWithoutInventingAProcess() throws {
         let algorithm = Algorithm("SequentialCounter", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let _ = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.increment) {
                 Let(value + 1) { nextValue in
                     Assign(value, to: nextValue.expr)
@@ -852,7 +852,7 @@ struct AlgorithmBuilderTests {
             FormalDefinition("same", taking: Int.self, Int.self) { left, right in
                 left == right
             }
-            let value = scope.sharedVar("value", initial: 0)
+            let _ = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.stop) { Stop() }
         })
 
