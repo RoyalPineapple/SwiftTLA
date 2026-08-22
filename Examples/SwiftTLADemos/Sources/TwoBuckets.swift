@@ -79,9 +79,9 @@ public struct TwoBuckets {
 
     public static var spec: TLASpec {
         #spec("TwoBuckets") {
-            Algorithm("TwoBuckets") {
-                let three = SharedVar("three", initial: 0)
-                let five = SharedVar("five", initial: 0)
+            Algorithm("TwoBuckets") { scope in
+                let three = scope.sharedVar("three", initial: 0)
+                let five = scope.sharedVar("five", initial: 0)
 
                 Each(FillThreeProcess.all) { _ in
                     Do(Step.fillThree) {
