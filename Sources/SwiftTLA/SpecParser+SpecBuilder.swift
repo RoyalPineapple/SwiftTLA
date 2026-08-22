@@ -59,6 +59,7 @@ extension ParserSession {
         /// The parser's top-level declaration facts for generated Swift.
         public var sourceContext = BoundSourceContext()
         var instanceBindings: [String: FormalModuleInstance] = [:]
+        var algorithmBindings: [String: Algorithm] = [:]
         var sourceValues: [String: StateExpr] = [:]
 
         public func swiftVariableTypes() -> [String: String] {
@@ -293,6 +294,11 @@ extension ParserSession {
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       result.instanceBindings[reference.baseName.text] != nil {
                 continue
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let algorithm = result.algorithmBindings[reference.baseName.text] {
+                result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
+                result.sourceAlgorithms.append(algorithm)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &result)
             } else if case .decl(let decl) = statement.item,
@@ -344,6 +350,18 @@ extension ParserSession {
                       let instance = result.moduleInstances.last
                 else { continue }
                 result.instanceBindings[sourceName] = instance
+            } else if algorithmBindingType(in: binding),
+                      call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" {
+                guard result.algorithmBindings[sourceName] == nil else {
+                    result.diagnostics.append(.init(
+                        message: "Specification algorithm binding '\(sourceName)' is declared more than once.",
+                        source: binding
+                    ))
+                    continue
+                }
+                if let algorithm = parseAlgorithm(call, into: &result) {
+                    result.algorithmBindings[sourceName] = algorithm
+                }
             } else if typedFacadeType(call.calledExpression)?.name == "SymmetricCollectionVar" {
                 // `SymmetricCollection` owns the declaration; this handle only
                 // gives that declaration its authored source name and types.
@@ -367,6 +385,10 @@ extension ParserSession {
         if containsVariableConstructor {
             parseVarDecl(declaration, into: &result, declarationScope: declarationScope)
         }
+    }
+
+    private func algorithmBindingType(in binding: PatternBindingSyntax) -> Bool {
+        binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)?.name.text == "Algorithm"
     }
 
     func parseForLoop(_ forStmt: ForStmtSyntax, into result: inout ParsedSpecComponents) {
@@ -783,7 +805,10 @@ extension ParserSession {
 
         switch name {
         case "Algorithm":
-            parseAlgorithm(call, into: &result)
+            if let algorithm = parseAlgorithm(call, into: &result) {
+                result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
+                result.sourceAlgorithms.append(algorithm)
+            }
         case "SymmetricCollection":
             parseSymmetricCollectionDecl(call, into: &result, collectionTypes: collectionTypes)
         case "CollectionAction":

@@ -95,6 +95,29 @@ private func parserEnum(
         #expect(surface.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
     }
 
+    @Test("Specification parser binds a typed local algorithm component")
+    func bindsTypedLocalAlgorithmComponent() throws {
+        let source = """
+        {
+            let algorithm: Algorithm = Algorithm("Counter", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(count, to: count + 1)
+                    Stop()
+                }
+            })
+            algorithm
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.sourceAlgorithms.count == 1)
+        let compilation = try compile(parsed, named: "Counter")
+        #expect(compilation.spec.variables.map(\.name) == ["pc", "count"])
+        #expect(compilation.spec.actions.map(\.name) == ["increment", "Terminating"])
+    }
+
     @Test("Algorithm parser rejects a local declaration scope")
     func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
         let source = """

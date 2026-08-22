@@ -129,7 +129,7 @@ extension ParserSession {
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
-    ) {
+    ) -> Algorithm? {
         guard let name = extractStringArg(call, index: 0),
               let closure = algorithmBuilderClosure(in: call)
         else {
@@ -137,7 +137,7 @@ extension ParserSession {
                 message: "Algorithm requires a string literal name and a builder body.",
                 source: call
             ))
-            return
+            return nil
         }
 
         var components: [AlgorithmComponentModel] = []
@@ -160,7 +160,7 @@ extension ParserSession {
                 let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text ?? ""
                 guard macros[name] == nil else {
                     result.diagnostics.append(.init(message: "Algorithm macro '\(name)' is declared more than once.", source: statement))
-                    return
+                    return nil
                 }
                 macros[name] = macro
                 continue
@@ -196,7 +196,7 @@ extension ParserSession {
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: statement
                 ))
-                return
+                return nil
             }
             guard let call = expression.as(FunctionCallExprSyntax.self),
                   let construct = AlgorithmSourceConstruct(call.calledExpression)
@@ -207,7 +207,7 @@ extension ParserSession {
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: expression
                 ))
-                return
+                return nil
             }
             if case .formalDefinition = construct {
                 guard let definition = decodeFormalDefinition(call) else {
@@ -219,7 +219,7 @@ extension ParserSession {
                             + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                         source: expression
                     ))
-                    return
+                    return nil
                 }
                 components.append(.formalOperator(definition))
                 continue
@@ -231,7 +231,7 @@ extension ParserSession {
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: expression
                 ))
-                return
+                return nil
             }
             components.append(component)
         }
@@ -243,14 +243,10 @@ extension ParserSession {
                 message: "Invalid Algorithm '\(name)': \(diagnostics.map(\.description).joined(separator: "; "))",
                 source: call
             ))
-            return
+            return nil
         }
 
-        // Keep the source-level IR before the one and only parser lowering.
-        // Retain the authored Algorithm in the source model.
-        result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: model))
-
-        result.sourceAlgorithms.append(Algorithm(model: model))
+        return Algorithm(model: model)
     }
 
     private func parseAlgorithmComponent(
