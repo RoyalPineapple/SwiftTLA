@@ -76,7 +76,14 @@ extension ParserSession {
               let collectionName = arguments.first(where: { $0.label?.text == "on" })?.expression
                 .as(DeclReferenceExprSyntax.self)?.baseName.text,
               let closure = call.trailingClosure
-        else { return }
+        else {
+            result.diagnostics.append(.init(
+                message: "CollectionAction requires a literal name, a declared collection binding, and a builder body.",
+                source: call,
+                expected: "CollectionAction(\"update\", on: collection) { member in ... }"
+            ))
+            return
+        }
 
         guard let memberName = collectionActionMemberName(in: closure) else {
             result.diagnostics.append(.init(

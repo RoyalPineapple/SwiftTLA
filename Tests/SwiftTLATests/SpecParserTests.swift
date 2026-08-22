@@ -118,6 +118,18 @@ private func parserEnum(
         #expect(compilation.spec.actions.map(\.name) == ["increment", "Terminating"])
     }
 
+    @Test("CollectionAction reports an incomplete declaration")
+    func reportsIncompleteCollectionAction() throws {
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure("{ CollectionAction(\"update\") }")
+        )
+
+        #expect(parsed.collectionActions.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == [
+            "CollectionAction requires a literal name, a declared collection binding, and a builder body."
+        ])
+    }
+
     @Test("Algorithm parser rejects a local declaration scope")
     func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
         let source = """
