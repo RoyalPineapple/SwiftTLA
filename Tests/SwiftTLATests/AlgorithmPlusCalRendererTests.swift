@@ -41,13 +41,10 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
-        let algorithm = Algorithm("RenderedProcess") {
-            let count = SharedVar("count", initial: 0)
-            let flags = SharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
-            let sentinel = SharedVar("sentinel", initial: "author text")
-            count
-            flags
-            sentinel
+        let algorithm = Algorithm("RenderedProcess") { scope in
+            let count = scope.sharedVar("count", initial: 0)
+            let flags = scope.sharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
+            let sentinel = scope.sharedVar("sentinel", initial: "author text")
             Each(Node.all, fairness: .strong) { node in
                 let local = LocalVar("local", initial: 0)
                 local
@@ -97,9 +94,8 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("compilation prepares process identifiers for PlusCal")
     func preparesProcessIdentifiers() throws {
-        let algorithm = Algorithm("ProcessIdentifier") {
-            let flags = SharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
-            flags
+        let algorithm = Algorithm("ProcessIdentifier") { scope in
+            let flags = scope.sharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
             Each(Node.all) { node in
                 Do(ProcessStep.done) {
                     Assign(flags, to: flags.updating(node, to: true))
@@ -115,9 +111,8 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("imports Integers when rendering a negative formal value")
     func rendersNegativeFormalValue() throws {
-        let algorithm = Algorithm("Negative") {
-            let previous = SharedVar("previous", initial: -1)
-            previous
+        let algorithm = Algorithm("Negative") { scope in
+            let previous = scope.sharedVar("previous", initial: -1)
             Do(TestControlLabel.stop) { Stop() }
         }
 
@@ -131,9 +126,8 @@ struct AlgorithmPlusCalRendererTests {
     func rendersStructuredDeclarationSections() throws {
         let spec = TLASpec("Sections") {
             FormalDefinition("Bound", parameters: [], body: .value(.int(2)))
-            Algorithm("Sections") {
-                let count = SharedVar("count", initial: 0)
-                count
+            Algorithm("Sections") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 FormalDefinition(
                     "UsesCount",
                     parameters: [],
@@ -155,9 +149,8 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("renders formal definitions in their declaration section")
     func rendersDirectFormalDefinitionInDefine() throws {
-        let algorithm = Algorithm("DirectSections") {
-            let count = SharedVar("count", initial: 0)
-            count
+        let algorithm = Algorithm("DirectSections") { scope in
+            let count = scope.sharedVar("count", initial: 0)
             FormalDefinition("Ready", taking: Int.self, plusCalPhase: .define) { _ in
                 count == 0
             }
@@ -177,9 +170,8 @@ struct AlgorithmPlusCalRendererTests {
     @Test("renders typed properties outside the authored Algorithm")
     func rendersTopLevelTypedProperty() throws {
         let spec = TLASpec("CompilerProperty") {
-            Algorithm("Counter") {
-                let count = SharedVar("count", initial: 0)
-                count
+            Algorithm("Counter") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.done) { Stop() }
             }
             Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
@@ -211,9 +203,8 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("renders a sequential body and procedures")
     func rendersSequentialProcedureAlgorithm() throws {
-        let algorithm = Algorithm("Procedures") {
-            let output = SharedVar("output", initial: 0)
-            output
+        let algorithm = Algorithm("Procedures") { scope in
+            let output = scope.sharedVar("output", initial: 0)
             Procedure("work", parameters: Int.self) { value in
                 let offset = LocalVar("offset", initial: 1)
                 offset
@@ -238,9 +229,8 @@ struct AlgorithmPlusCalRendererTests {
     @Test("retains authored Algorithm source for independent PlusCal rendering")
     func retainsAuthoredAlgorithmOnTheLoweredSpec() throws {
         let spec = TLASpec("Retained") {
-            Algorithm("Retained") {
-                let count = SharedVar("count", initial: 0)
-                count
+            Algorithm("Retained") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
                 StateConstraint(count < 2)
             }
@@ -261,9 +251,8 @@ struct AlgorithmPlusCalRendererTests {
             Constant("N", 2)
             FormalDefinition("Seed", parameters: [], body: .variable("N"))
             Symmetry("member", [1, 2] as Set<Int>)
-            Algorithm("Context") {
-                let count = SharedVar("count", initial: 0)
-                count
+            Algorithm("Context") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
                 Invariant("Bounded") { count.expr <= 2 }
             }
@@ -287,9 +276,8 @@ struct AlgorithmPlusCalRendererTests {
         let spec = TLASpec("Modules") {
             Extends(.naturals)
             Extends(.finiteSets)
-            Algorithm("Modules") {
-                let count = SharedVar("count", initial: 0)
-                count
+            Algorithm("Modules") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
             }
         }
