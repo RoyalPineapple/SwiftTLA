@@ -265,7 +265,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []
         } catch {
-            context.diagnose(modelCompilationDiagnostic(error, in: declaration))
+            context.diagnose(modelCompilationDiagnostic(error, at: node))
             return []
         }
         return MacroExpander.generate(model: parsed)
@@ -507,10 +507,10 @@ private func parserDiagnostic(
 
 private func modelCompilationDiagnostic(
     _ error: Error,
-    in declaration: some DeclGroupSyntax
+    at node: some SyntaxProtocol
 ) -> Diagnostic {
     Diagnostic(
-        node: Syntax(declaration),
+        node: Syntax(node),
         message: ModelCompilationDiagnosticMessage(
             whatFailed: "the formal model could not be parsed or verified",
             expected: "a bounded @TLAModel specification whose declarations, imports, and properties are valid",
