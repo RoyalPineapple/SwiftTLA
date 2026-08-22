@@ -44,7 +44,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             ))
         }
         arguments = [
-            LabeledExprSyntax(expression: name),
+            LabeledExprSyntax(expression: name, trailingComma: .commaToken()),
             LabeledExprSyntax(
                 label: .identifier("scoped"),
                 colon: .colonToken(),
