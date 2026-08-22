@@ -194,9 +194,10 @@ struct CompiledLayout: Hashable, Sendable {
                 declaration: .init(kind: .invariant, name: invariant.name, sourceOffset: nil)
             )
         }
+        let statePropertyCount = spec.invariants.count
         temporalProperties = spec.temporalProperties.enumerated().map { ordinal, temporal in
             .init(
-                id: .init(ordinal: stateProperties.count + ordinal),
+                id: .init(ordinal: statePropertyCount + ordinal),
                 declaration: .init(kind: .temporalProperty, name: temporal.name, sourceOffset: nil)
             )
         }
