@@ -82,19 +82,12 @@ extension ParserSession {
         package func machineSurfaceSwiftFacts(
             for compilation: CompiledSpecification
         ) -> MachineSurfaceSwiftFacts {
-            let processDomains = sourceAlgorithms.flatMap { algorithm in
-                algorithm.model.processes.map { ($0.domain, $0.typeName) }
-            }
             var actionBindingTypes = Dictionary(
                 uniqueKeysWithValues: actions.map { ($0.name, $0.bindingSwiftTypes) }
             )
             for action in compilation.spec.actions {
-                let bindings = action.bindings.reduce(into: [String: String]()) { types, binding in
-                    if let domain = processDomains.first(where: { $0.0 == binding.values }) {
-                        types[binding.name] = domain.1
-                    }
-                }
-                if !bindings.isEmpty { actionBindingTypes[action.name] = bindings }
+                guard action.generatedBindingSwiftTypes.isEmpty == false else { continue }
+                actionBindingTypes[action.name] = action.generatedBindingSwiftTypes
             }
             return .init(
                 variableTypes: swiftVariableTypes(),

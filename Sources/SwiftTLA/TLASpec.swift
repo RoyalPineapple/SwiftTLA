@@ -100,6 +100,7 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let bindings: [ActionBinding]
   let sourceIssue: SourceModelIssue?
   let controlOwner: ControlOwner?
+  let generatedBindingSwiftTypes: [String: String]
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
     self.init(name: name, body: body, bindings: bindings, controlOwner: nil)
@@ -109,13 +110,15 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     name: String,
     body: ActionExpr,
     bindings: [ActionBinding] = [],
-    controlOwner: ControlOwner?
+    controlOwner: ControlOwner?,
+    generatedBindingSwiftTypes: [String: String] = [:]
   ) {
     self.name = name
     self.body = body
     self.bindings = bindings
     self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
     self.controlOwner = controlOwner
+    self.generatedBindingSwiftTypes = generatedBindingSwiftTypes
   }
 
   private static func bindingIssue(action: String, bindings: [ActionBinding]) -> SourceModelIssue? {

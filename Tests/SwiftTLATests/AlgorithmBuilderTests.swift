@@ -1159,6 +1159,20 @@ struct AlgorithmBuilderTests {
             .function([.string("first"): .bool(true), .string("second"): .bool(true)])
         ])
     }
+
+    @Test("lowered process actions retain their generated parameter type")
+    func preservesGeneratedProcessParameterType() throws {
+        let algorithm = Algorithm("TypedProcess") {
+            Each(Node.all) { _ in
+                Do(TestControlLabel.mark) { Stop() }
+                Do(TestControlLabel.done) { Stop() }
+            }
+        }
+
+        let compilation = try compiledSourceSpecification(algorithm).compile()
+        let action = try #require(compilation.spec.actions.first { $0.name == "mark" })
+        #expect(action.generatedBindingSwiftTypes == ["process": "Node"])
+    }
 }
 
 private enum Node: String, FiniteDomainKey, PlusCalLabel, CaseIterable {

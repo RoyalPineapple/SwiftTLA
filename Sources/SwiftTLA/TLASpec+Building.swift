@@ -152,7 +152,9 @@ extension TLASpec {
       NamedAction(
         name: action.name,
         body: ActionNormalization.complete(action.body, variables: variableNames),
-        bindings: action.bindings
+        bindings: action.bindings,
+        controlOwner: action.controlOwner,
+        generatedBindingSwiftTypes: action.generatedBindingSwiftTypes
       )
     }
 

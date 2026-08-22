@@ -215,7 +215,8 @@ enum AlgorithmLowerer {
                         variables: variableNames
                     ),
                     bindings: [ActionBinding(name: processBinding, values: process.domain)],
-                    controlOwner: controlOwner
+                    controlOwner: controlOwner,
+                    generatedBindingSwiftTypes: [processBinding: process.typeName]
                 )
                 if requiresProgramCounter {
                     let actionAssertions = assertionInvariants(
