@@ -28,8 +28,8 @@ public struct LockModel: Sendable {
     public static var spec: TLASpec {
         #spec("Lock") {
             Extends(.integers)
-            Algorithm("Lock") {
-                let lock = SharedVar("lock", initial: 1)
+            Algorithm("Lock") { scope in
+                let lock = scope.sharedVar("lock", initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     Await(value == 1)
                     Assign(value, to: 0)

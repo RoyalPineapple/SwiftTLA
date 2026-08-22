@@ -35,8 +35,8 @@ public struct ChangRobertsModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("ChangRoberts") {
-            Algorithm("ChangRoberts") {
-                let initiator = SharedVar("initiator", in: SetExpr<Function<Node, Bool>>.literal(
+            Algorithm("ChangRoberts") { scope in
+                let initiator = scope.sharedVar("initiator", in: SetExpr<Function<Node, Bool>>.literal(
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, false)),
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, true)),
                     Function<Node, Bool>.literal((.one, false), (.two, true), (.three, false)),
@@ -46,17 +46,17 @@ public struct ChangRobertsModel: Sendable {
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, false)),
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, true))
                 ))
-                let processState = SharedVar("processState", initial: Function<Node, ProcessState>.mapping { node in
+                let processState = scope.sharedVar("processState", initial: Function<Node, ProcessState>.mapping { node in
                     If(
                         initiator[node] == true,
                         then: .candidate,
                         else: .lost
                     )
                 })
-                let successor = SharedVar("successor", initial: Function<Node, Node>.literal(
+                let successor = scope.sharedVar("successor", initial: Function<Node, Node>.literal(
                     (.one, .two), (.two, .three), (.three, .one)
                 ))
-                let messages = SharedVar("messages", initial: Function<Node, SetExpr<Node>>.literal(
+                let messages = scope.sharedVar("messages", initial: Function<Node, SetExpr<Node>>.literal(
                     (.one, SetExpr<Node>()),
                     (.two, SetExpr<Node>()),
                     (.three, SetExpr<Node>())

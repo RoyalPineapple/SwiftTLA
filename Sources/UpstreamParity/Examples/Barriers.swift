@@ -29,11 +29,11 @@ public struct BarriersN6Model: Sendable {
     public static var spec: TLASpec {
         #spec("Barriers") {
             Extends(.integers)
-            Algorithm("Barriers") {
-                let lock = SharedVar("lock", initial: 1)
-                let gate1 = SharedVar("gate1", initial: 0)
-                let gate2 = SharedVar("gate2", initial: 0)
-                let rendezvous = SharedVar("rendezvous", initial: 0)
+            Algorithm("Barriers") { scope in
+                let lock = scope.sharedVar("lock", initial: 1)
+                let gate1 = scope.sharedVar("gate1", initial: 0)
+                let gate2 = scope.sharedVar("gate2", initial: 0)
+                let rendezvous = scope.sharedVar("rendezvous", initial: 0)
 
                 let acquire = Macro { (lock: MacroParameter<Int>) in
                     Await(lock == 1)

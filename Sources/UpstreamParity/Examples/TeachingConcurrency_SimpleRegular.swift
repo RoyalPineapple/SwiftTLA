@@ -28,14 +28,14 @@ public struct TeachingSimpleRegularN8Model: Sendable {
     public static var spec: TLASpec {
         #spec("SimpleRegular") {
             Extends(.integers)
-            Algorithm("SimpleRegular") {
-                let x = SharedVar("x", initial: Function<Process, SetExpr<Int>>.literal(
+            Algorithm("SimpleRegular") { scope in
+                let x = scope.sharedVar("x", initial: Function<Process, SetExpr<Int>>.literal(
                     (.p0, SetExpr<Int>.literal(0)), (.p1, SetExpr<Int>.literal(0)),
                     (.p2, SetExpr<Int>.literal(0)), (.p3, SetExpr<Int>.literal(0)),
                     (.p4, SetExpr<Int>.literal(0)), (.p5, SetExpr<Int>.literal(0)),
                     (.p6, SetExpr<Int>.literal(0)), (.p7, SetExpr<Int>.literal(0))
                 ))
-                let y = SharedVar("y", initial: Function<Process, Int>.literal(
+                let y = scope.sharedVar("y", initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0), (.p3, 0),
                     (.p4, 0), (.p5, 0), (.p6, 0), (.p7, 0)
                 ))

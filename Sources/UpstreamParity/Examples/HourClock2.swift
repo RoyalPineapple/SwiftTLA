@@ -19,8 +19,8 @@ public struct HourClock2Model: Sendable {
 
     public static var spec: TLASpec {
         #spec("HourClock2") {
-            Algorithm("HourClock2") {
-                let hr = SharedVar("hr", in: 1...12)
+            Algorithm("HourClock2") { scope in
+                let hr = scope.sharedVar("hr", in: 1...12)
 
                 Each(ClockProcess.all) { _ in
                     Do(Step.HCnxt2) {

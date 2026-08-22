@@ -91,13 +91,13 @@ public struct TwoPhaseModel: Sendable {
     public static var spec: TLASpec {
         #spec("TwoPhase") {
             Extends(.integers)
-            Algorithm("TwoPhase") {
-                let resourceManagerState = SharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
+            Algorithm("TwoPhase") { scope in
+                let resourceManagerState = scope.sharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
                     (.one, .working), (.two, .working), (.three, .working)
                 ))
-                let transactionManagerState = SharedVar("transactionManagerState", initial: TransactionManagerState.initial)
-                let prepared = SharedVar("prepared", initial: SetExpr<ResourceManager>())
-                let messages = SharedVar("messages", initial: SetExpr<Record<MessageSchema>>())
+                let transactionManagerState = scope.sharedVar("transactionManagerState", initial: TransactionManagerState.initial)
+                let prepared = scope.sharedVar("prepared", initial: SetExpr<ResourceManager>())
+                let messages = scope.sharedVar("messages", initial: SetExpr<Record<MessageSchema>>())
 
                 Each(ResourceManager.all) { resourceManager in
                     Do(ResourceManagerStep.resourceManagerOperate) {

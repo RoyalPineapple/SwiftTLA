@@ -80,13 +80,13 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
     public static var spec: TLASpec {
         #spec("TwoPhaseWithBackupManager") {
             Extends(.integers)
-            Algorithm("TransactionCommit") {
-                let resourceManagerState = SharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
+            Algorithm("TransactionCommit") { scope in
+                let resourceManagerState = scope.sharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
                     (.one, .working),
                     (.two, .working),
                     (.three, .working)
                 ))
-                let transactionManagerState = SharedVar("transactionManagerState", initial: TransactionManagerState.initial)
+                let transactionManagerState = scope.sharedVar("transactionManagerState", initial: TransactionManagerState.initial)
 
                 let prepare = Macro { (manager: MacroParameter<ResourceManager>) in
                     Await(resourceManagerState[manager] == .working)

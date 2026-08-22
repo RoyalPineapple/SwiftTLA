@@ -36,13 +36,13 @@ public struct PrisonersModel: Sendable {
     public static var spec: TLASpec {
         #spec("Prisoners") {
             Extends(.naturals)
-            Algorithm("Prisoners") {
-                let switchAUp = SharedVar("switchAUp", in: SetExpr<Bool>.literal(true, false))
-                let switchBUp = SharedVar("switchBUp", in: SetExpr<Bool>.literal(true, false))
-                let timesSwitched = SharedVar("timesSwitched", initial: Function<NonCounterPrisoner, Int>.literal(
+            Algorithm("Prisoners") { scope in
+                let switchAUp = scope.sharedVar("switchAUp", in: SetExpr<Bool>.literal(true, false))
+                let switchBUp = scope.sharedVar("switchBUp", in: SetExpr<Bool>.literal(true, false))
+                let timesSwitched = scope.sharedVar("timesSwitched", initial: Function<NonCounterPrisoner, Int>.literal(
                     (.two, 0), (.three, 0), (.four, 0)
                 ))
-                let count = SharedVar("count", initial: 0)
+                let count = scope.sharedVar("count", initial: 0)
 
                 Each(Scheduler.all) { _ in
                     Do(Step.chooseVisitor) {

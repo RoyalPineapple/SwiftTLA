@@ -13,9 +13,9 @@ public struct NQueensModel: Sendable {
     public static var spec: TLASpec {
         #spec("QueensPluscal") {
             Extends(.naturals)
-            Algorithm("Queens") {
-                let todo = SharedVar("todo", initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
-                let solutions = SharedVar("solutions", initial: SetExpr<TupleExpr<Int>>())
+            Algorithm("Queens") { scope in
+                let todo = scope.sharedVar("todo", initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
+                let solutions = scope.sharedVar("solutions", initial: SetExpr<TupleExpr<Int>>())
 
                 While(Step.nextQueen, !todo.expr.isEmpty) {
                     With(todo) { queens in

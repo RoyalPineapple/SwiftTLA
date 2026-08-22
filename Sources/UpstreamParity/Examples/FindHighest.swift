@@ -15,13 +15,13 @@ public struct FindHighestModel: Sendable {
     public static var spec: TLASpec {
         #spec("Highest") {
             Extends(.integers)
-            Algorithm("Highest") {
-                let f = SharedVar("f", in: Sequences(
+            Algorithm("Highest") { scope in
+                let f = scope.sharedVar("f", in: Sequences(
                     of: SetExpr<Int>.literal(0, 1, 2, 3, 4),
                     lengths: 0...3
                 ))
-                let h = SharedVar("h", initial: -1)
-                let i = SharedVar("i", initial: 1)
+                let h = scope.sharedVar("h", initial: -1)
+                let i = scope.sharedVar("i", initial: 1)
 
                 While(Step.lb, i <= f.count) {
                     Assign(h, to: If(h >= f[i], then: h.expr, else: f[i]))

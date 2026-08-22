@@ -31,8 +31,8 @@ public struct ConsensusModel: Sendable {
         #spec("Consensus") {
             Extends(.finiteSets)
             Extends(.integers)
-            Algorithm("Consensus") {
-                let chosen = SharedVar("chosen", initial: SetExpr<Value>())
+            Algorithm("Consensus") { scope in
+                let chosen = scope.sharedVar("chosen", initial: SetExpr<Value>())
 
                 let choose = Macro {
                     When(chosen.isEmpty)

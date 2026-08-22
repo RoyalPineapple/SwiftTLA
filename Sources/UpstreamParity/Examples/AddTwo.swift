@@ -17,8 +17,8 @@ public struct AddTwoModel: Sendable {
     public static var spec: TLASpec {
         #spec("AddTwo") {
             Extends(.naturals)
-            Algorithm("Increase") {
-                let x = SharedVar("x", initial: 0)
+            Algorithm("Increase") { scope in
+                let x = scope.sharedVar("x", initial: 0)
 
                 Do(Label.increase) {
                     Assign(x, to: x + 2)

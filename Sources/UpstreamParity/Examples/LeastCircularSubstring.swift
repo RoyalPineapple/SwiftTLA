@@ -79,16 +79,16 @@ public enum LeastCircularSubstringModel {
     public static let spec = TLASpec("MCLeastCircularSubstring") {
         Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...6))
 
-        Algorithm("LeastCircularSubstring") {
+        Algorithm("LeastCircularSubstring") { scope in
             let characterSet = SetExpr<Int>.literal(0, 1)
-            let b = SharedVar(
+            let b = scope.sharedVar(
                 "b",
                 in: ZSequences.sequences(over: characterSet)
             )
             b
-            let n = SharedVar("n", initial: ZSequences.length(of: b.expr))
+            let n = scope.sharedVar("n", initial: ZSequences.length(of: b.expr))
             n
-            let f = SharedVar(
+            let f = scope.sharedVar(
                 "f",
                 initial: Expr<TLAValue>(.functionLiteral(
                     .integerRange(.int(0), .multiply(.int(2), n.stateExpr)),
@@ -97,11 +97,11 @@ public enum LeastCircularSubstringModel {
                 ))
             )
             f
-            let i = SharedVar("i", initial: -1)
+            let i = scope.sharedVar("i", initial: -1)
             i
-            let j = SharedVar("j", initial: 1)
+            let j = scope.sharedVar("j", initial: 1)
             j
-            let k = SharedVar("k", initial: 0)
+            let k = scope.sharedVar("k", initial: 0)
             k
 
             Do(Step.l3) {

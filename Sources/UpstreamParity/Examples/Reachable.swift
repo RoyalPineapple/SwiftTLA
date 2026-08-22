@@ -29,7 +29,7 @@ public struct ReachableModel: Sendable {
         #spec("Reachable") {
             Extends(.finiteSets)
             Extends(.integers)
-            Algorithm("Reachable") {
+            Algorithm("Reachable") { scope in
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
@@ -39,8 +39,8 @@ public struct ReachableModel: Sendable {
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )
-                let marked = SharedVar("marked", initial: SetExpr<Node>())
-                let frontier = SharedVar("frontier", initial: SetExpr<Node>.literal(.one))
+                let marked = scope.sharedVar("marked", initial: SetExpr<Node>())
+                let frontier = scope.sharedVar("frontier", initial: SetExpr<Node>.literal(.one))
 
                 While(Step.a, !frontier.isEmpty) {
                     With(frontier) { node in

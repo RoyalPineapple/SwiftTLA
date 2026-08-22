@@ -15,15 +15,15 @@ public struct BinarySearchModel: Sendable {
     public static var spec: TLASpec {
         #spec("BinarySearch") {
             Extends(.integers)
-            Algorithm("BinarySearch") {
-                let seq = SharedVar("seq", in: SortedSequences(
+            Algorithm("BinarySearch") { scope in
+                let seq = scope.sharedVar("seq", in: SortedSequences(
                     of: SetExpr<Int>.literal(1, 2, 3, 4, 5),
                     lengths: 0...8
                 ))
-                let val = SharedVar("val", in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
-                let low = SharedVar("low", initial: 1)
-                let high = SharedVar("high", initial: seq.count)
-                let result = SharedVar("result", initial: 0)
+                let val = scope.sharedVar("val", in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
+                let low = scope.sharedVar("low", initial: 1)
+                let high = scope.sharedVar("high", initial: seq.count)
+                let result = scope.sharedVar("result", initial: 0)
 
                 While(Step.a, low <= high && result == 0) {
                     Let((low + high).integerDivided(by: 2)) { mid in

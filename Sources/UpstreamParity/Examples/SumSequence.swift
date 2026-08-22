@@ -15,13 +15,13 @@ public struct SumSequenceModel: Sendable {
     public static var spec: TLASpec {
         #spec("SumSequence") {
             Extends(.integers)
-            Algorithm("SumSequence") {
-                let sequence = SharedVar("sequence", in: Sequences(
+            Algorithm("SumSequence") { scope in
+                let sequence = scope.sharedVar("sequence", in: Sequences(
                     of: SetExpr<Int>.literal(-1, 0, 1),
                     lengths: 0...3
                 ))
-                let sum = SharedVar("sum", initial: 0)
-                let index = SharedVar("index", initial: 1)
+                let sum = scope.sharedVar("sum", initial: 0)
+                let index = scope.sharedVar("index", initial: 1)
 
                 While(Step.a, index <= sequence.count) {
                     Assign(sum, to: sum + sequence[index])

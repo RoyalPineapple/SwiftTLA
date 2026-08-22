@@ -44,15 +44,15 @@ public struct PrisonerModel: Sendable {
     public static var spec: TLASpec {
         #spec("Prisoner") {
             Extends(.naturals)
-            Algorithm("Prisoner") {
-                let counter = SharedVar("counter", initial: Prisoner.alice)
-                let count = SharedVar("count", initial: 1)
-                let announced = SharedVar("announced", initial: false)
-                let signalled = SharedVar("signalled", initial: Function<Prisoner, Int>.literal(
+            Algorithm("Prisoner") { scope in
+                let counter = scope.sharedVar("counter", initial: Prisoner.alice)
+                let count = scope.sharedVar("count", initial: 1)
+                let announced = scope.sharedVar("announced", initial: false)
+                let signalled = scope.sharedVar("signalled", initial: Function<Prisoner, Int>.literal(
                     (.alice, 0), (.bob, 0), (.eve, 0)
                 ))
-                let light = SharedVar("light", initial: Light.off)
-                let hasVisited = SharedVar("hasVisited", initial: SetExpr<Prisoner>())
+                let light = scope.sharedVar("light", initial: Light.off)
+                let hasVisited = scope.sharedVar("hasVisited", initial: SetExpr<Prisoner>())
 
                 Each(Scheduler.all) { _ in
                     Do(Step.chooseVisitor) {
