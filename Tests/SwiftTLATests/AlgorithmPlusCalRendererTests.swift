@@ -205,9 +205,8 @@ struct AlgorithmPlusCalRendererTests {
     func rendersSequentialProcedureAlgorithm() throws {
         let algorithm = Algorithm("Procedures") { scope in
             let output = scope.sharedVar("output", initial: 0)
-            Procedure("work", parameters: Int.self) { value in
-                let offset = LocalVar("offset", initial: 1)
-                offset
+            Procedure("work", parameters: Int.self) { value, scope in
+                let offset = scope.localVar("offset", initial: 1)
                 Do(ProcedureStep.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()

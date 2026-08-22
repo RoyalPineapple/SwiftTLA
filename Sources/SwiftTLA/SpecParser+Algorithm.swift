@@ -309,8 +309,10 @@ extension ParserSession {
             algorithmParseFailure = "Procedure '\(name)' parameter types could not be decoded. Expected metatype arguments such as Int.self."
             return nil
         }
-        guard bindings.count == parameterTypes.count else {
-            algorithmParseFailure = "Procedure '\(name)' expected \(parameterTypes.count) typed parameter binding(s), found \(bindings.count)."
+        let declarationScope = bindings.count == parameterTypes.count + 1 ? bindings.last : nil
+        let parameterBindings = declarationScope == nil ? bindings : Array(bindings.dropLast())
+        guard parameterBindings.count == parameterTypes.count else {
+            algorithmParseFailure = "Procedure '\(name)' expected \(parameterTypes.count) typed parameter binding(s), found \(parameterBindings.count)."
             return nil
         }
         let parameters = parameterTypes.enumerated().map { index, type in
@@ -318,7 +320,7 @@ extension ParserSession {
         }
         var procedureScope = typedFacadeScope(
             scope,
-            bindings: bindings.enumerated().map { index, sourceName in
+            bindings: parameterBindings.enumerated().map { index, sourceName in
                 (sourceName: sourceName, value: .variable(parameters[index].root))
             }
         )
@@ -330,7 +332,8 @@ extension ParserSession {
                let component = parseAlgorithmVariableDeclaration(
                     variable,
                     kind: .local,
-                    scope: procedureScope
+                    scope: procedureScope,
+                    declarationScope: declarationScope
                ),
                case .local(let local) = component {
                 locals.append(local)

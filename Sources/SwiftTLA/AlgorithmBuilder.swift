@@ -1439,12 +1439,39 @@ public func Procedure<Value: TLAValueType>(
     @AlgorithmBuilder _ body: (ProcedureParameter<Value>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     let parameterName = "parameter0"
-    let components = body(ProcedureParameter(name: parameterName)).map(\.model)
-    return AlgorithmElement(model: .procedure(.init(
+    return procedure(
         name: name,
         parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: String(reflecting: Value.self))],
-        locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } },
-        steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } }
+        components: body(ProcedureParameter(name: parameterName))
+    )
+}
+
+public func Procedure<Value: TLAValueType>(
+    _ name: String,
+    parameters: Value.Type,
+    @AlgorithmBuilder _ body: (ProcedureParameter<Value>, inout ProcedureScope) -> [AlgorithmElement]
+) -> AlgorithmElement {
+    let parameterName = "parameter0"
+    var scope = ProcedureScope()
+    let body = body(ProcedureParameter(name: parameterName), &scope)
+    return procedure(
+        name: name,
+        parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: String(reflecting: Value.self))],
+        components: scope.declarations + body
+    )
+}
+
+private func procedure(
+    name: String,
+    parameters: [AlgorithmProcedureParameterModel],
+    components: [AlgorithmElement]
+) -> AlgorithmElement {
+    let models = components.map(\.model)
+    return AlgorithmElement(model: .procedure(.init(
+        name: name,
+        parameters: parameters,
+        locals: models.compactMap { if case .local(let value) = $0 { value } else { nil } },
+        steps: models.compactMap { if case .step(let value) = $0 { value } else { nil } }
     )))
 }
 
