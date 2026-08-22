@@ -451,6 +451,24 @@ struct LivenessConformanceTests {
         }
     }
 
+    @Test("compiled fairness retains an action identity")
+    func compiledFairnessUsesBoundAction() throws {
+        let spec = TLASpec(
+            name: "fairness-identity",
+            variables: [NamedVar(name: "x", initial: .int(0))],
+            actions: [action("advance")],
+            invariants: [],
+            fairness: [.weakFairness("advance")]
+        )
+
+        let compilation = try spec.compile()
+        guard case .action(let action) = try #require(compilation.semantics.fairness.first).scope else {
+            Issue.record("Expected fairness to bind an action identity")
+            return
+        }
+        #expect(action == compilation.layout.actions[0].id)
+    }
+
     @Test("ModelChecker reports liveness violations and bounded exploration separately")
     func reportsDistinctLivenessAndBoundedOutcomes() throws {
         let x = Var<Int>("x")

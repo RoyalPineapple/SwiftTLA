@@ -682,6 +682,33 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.layout.fields.map(\.renderedName) == ["a", "z"])
     }
 
+    @Test("compiled record fields retain their bound identity beside like-named variables")
+    func compiledRecordFieldsUseBoundIdentity() throws {
+        let compilation = try TLASpec(
+            name: "RecordFieldBinding",
+            variables: [.init(name: "value", initial: .int(1))],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .guard_(.equal(
+                        .recordLiteral(.init([.init(name: "value", value: .variable("value"))])),
+                        .recordLiteral(.init([.init(name: "value", value: .int(1))]))
+                    ))
+                )
+            ],
+            invariants: []
+        ).compile()
+
+        guard case .guard_(.equal(.recordLiteral(let record), _)) = compilation.semantics.actions[0].body,
+              case .stateVariable(let variable) = record.fields[0].value else {
+            Issue.record("Expected a compiled record with a bound variable value")
+            return
+        }
+
+        #expect(record.fields[0].id == compilation.layout.fields[0].id)
+        #expect(variable == compilation.layout.variables[0].id)
+    }
+
     @Test("source record expressions have canonical field order")
     func sourceRecordExpressionsHaveCanonicalFieldOrder() {
         let record = StateRecordExpression([

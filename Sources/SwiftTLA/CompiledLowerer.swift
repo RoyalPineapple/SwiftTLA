@@ -6,17 +6,19 @@ struct CompiledLowerer {
     func lower(spec: TLASpec) throws -> CompiledSemantics {
         var initialValues: [VariableID: CompiledValue] = [:]
         var initializers: [VariableID: CompiledVariableInitializer] = [:]
-        for variable in spec.variables {
-            guard let id = bindings.variables[variable.name] else {
-                throw diagnostic(path: "variables.\(variable.name)")
-            }
-            initialValues[id] = try initialValue(for: variable)
+        for declaration in spec.variables {
+            let path = "variables.\(declaration.name)"
+            let id = try variable(at: "\(path).declaration")
+            initialValues[id] = try initialValue(for: declaration)
             initializers[id] = .init(
-                initialSet: try lowerOptional(variable.initialSet, at: "variables.\(variable.name).initialSet"),
-                initExpr: try initialExpression(for: variable),
-                lazySet: try lowerOptional(variable.lazySet, at: "variables.\(variable.name).lazySet")
+                initialSet: try lowerOptional(declaration.initialSet, at: "\(path).initialSet"),
+                initExpr: try initialExpression(for: declaration),
+                lazySet: try lowerOptional(declaration.lazySet, at: "\(path).lazySet")
             )
         }
+        let actionDeclarations = try Dictionary(uniqueKeysWithValues: spec.actions.map { action in
+            (try self.action(at: "actions.\(action.name).declaration"), action)
+        })
         let actions: [CompiledAction] = try spec.actions.map {
             try lower($0)
         }
@@ -52,7 +54,7 @@ struct CompiledLowerer {
             )
         }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
-            try lower(condition, actions: spec.actions, at: "fairness[\(offset)]")
+            try lower(condition, actionDeclarations: actionDeclarations, at: "fairness[\(offset)]")
         }
         let formalOperators: [CompiledFormalOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             CompiledFormalOperatorDefinition(
@@ -133,43 +135,34 @@ struct CompiledLowerer {
 
     private func lower(
         _ condition: FairnessCondition,
-        actions: [NamedAction],
+        actionDeclarations: [ActionID: NamedAction],
         at path: String
     ) throws -> CompiledFairnessCondition {
-        let name: String
+        let action: ActionID
         let arguments: [TLAValue]?
         switch condition {
         case .weakFairnessNext:
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:
             return .init(scope: .next, isStrong: true)
-        case .weakFairness(let value):
-            name = value
+        case .weakFairness:
+            action = try self.action(at: "\(path).action")
             arguments = nil
-        case .strongFairness(let value):
-            name = value
+        case .strongFairness:
+            action = try self.action(at: "\(path).action")
             arguments = nil
         case .weakFairnessActionCall(let value), .strongFairnessActionCall(let value):
-            name = value.name
+            action = try self.action(at: "\(path).action")
             arguments = value.arguments
         }
-        guard let action = bindings.actions[name], let declaration = actions.first(where: { $0.name == name }) else {
-            throw CompilationDiagnostic(
-                code: .unknownReference,
-                stage: .lowering,
-                path: path,
-                expected: "a declared action",
-                actual: "fairness references '\(name)'",
-                nextSafeAction: "Declare the action in the source model or correct the fairness condition."
-            )
-        }
+        guard let declaration = actionDeclarations[action] else { throw diagnostic(path: path) }
         if let arguments, actionVariants(declaration).contains(where: { $0.arguments == arguments }) == false {
             throw CompilationDiagnostic(
                 code: .unknownReference,
                 stage: .lowering,
                 path: path,
                 expected: "a declared finite action call",
-                actual: "fairness references '\(formalActionCall(named: name, arguments: arguments))'",
+                actual: "fairness references '\(formalActionCall(named: declaration.name, arguments: arguments))'",
                 nextSafeAction: "Use an action call declared by the source model."
             )
         }
@@ -186,9 +179,7 @@ struct CompiledLowerer {
         if let issue = action.sourceIssue {
             throw issue.compilationDiagnostic(stage: .lowering, path: "actions.\(action.name).bindings")
         }
-        guard let id = bindings.actions[action.name] else {
-            throw diagnostic(path: "actions.\(action.name)")
-        }
+        let id = try self.action(at: "actions.\(action.name).declaration")
         return CompiledAction(
             id: id,
             bindings: try action.bindings.map {
@@ -265,17 +256,18 @@ struct CompiledLowerer {
         case .tupleLiteral(let values): return try .tupleLiteral(lower(values, at: path))
         case .tupleAccess(let value, let index): return try .tupleAccess(lower(value, at: path), index)
         case .recordLiteral(let fields):
-            return try .recordLiteral(.init(fields.fields.map { item in
-                .init(
-                    id: try field(named: item.name, at: "\(path).\(item.name)"),
+            return try .recordLiteral(.init(fields.fields.enumerated().map { index, item in
+                let fieldPath = "\(path).fields[\(index)]"
+                return .init(
+                    id: try field(at: "\(fieldPath).declaration"),
                     key: .string(item.name),
-                    value: try lower(item.value, at: "\(path).\(item.name)")
+                    value: try lower(item.value, at: "\(fieldPath).value")
                 )
             }))
         case .recordAccess(let value, let field):
             return try .recordAccess(
-                lower(value, at: path),
-                self.field(named: field, at: "\(path).\(field)"),
+                lower(value, at: "\(path).value"),
+                self.field(at: "\(path).field"),
                 .string(field)
             )
         case .except(let function, let key, let value):
@@ -326,10 +318,8 @@ struct CompiledLowerer {
                 (operation, try operatorID(at: "\(path).\(operation.name).declaration"))
             }
             let localOperatorIDs = Set(localOperators.map(\.1))
-            let operatorIDsByName = Dictionary(uniqueKeysWithValues: localOperators.map { ($0.0.name, $0.1) })
-            let calls = Dictionary(uniqueKeysWithValues: localOperators.map { operation, id in
-                let targets = Set(operation.body.localOperatorReferences.compactMap { operatorIDsByName[$0] })
-                return (id, targets)
+            let calls = Dictionary(uniqueKeysWithValues: localOperators.map { _, id in
+                (id, bindings.localOperatorDependencies[id, default: []].intersection(localOperatorIDs))
             })
             func isRecursive(_ start: OperatorID, from current: OperatorID, visited: Set<OperatorID>) -> Bool {
                 for target in calls[current, default: []] {
@@ -513,7 +503,7 @@ struct CompiledLowerer {
         case .controlLocation(let id): return .controlLocation(id)
         case .constant(let value): return .value(value)
         case .operator(let id): return .operatorReference(id)
-        case .action: throw diagnostic(path: path)
+        case .action, .field: throw diagnostic(path: path)
         }
     }
 
@@ -537,18 +527,9 @@ struct CompiledLowerer {
         return id
     }
 
-    private func field(named name: String, at path: String) throws -> FieldID {
-        guard let field = layout.fieldID(named: name) else {
-            throw CompilationDiagnostic(
-                code: .unknownReference,
-                stage: .lowering,
-                path: path,
-                expected: "a field declared by the compiled layout",
-                actual: "unresolved field '\(name)'",
-                nextSafeAction: "Compile the source model with the field declaration, then lower it."
-            )
-        }
-        return field
+    private func field(at path: String) throws -> FieldID {
+        guard case .field(let id) = try reference(at: path) else { throw diagnostic(path: path) }
+        return id
     }
 
     private func operatorID(at path: String) throws -> OperatorID {

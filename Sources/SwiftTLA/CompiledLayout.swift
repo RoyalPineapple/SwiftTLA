@@ -586,36 +586,26 @@ enum CompiledReference: Hashable, Sendable {
     case binder(BinderID)
     case action(ActionID)
     case controlLocation(ControlLocationID)
+    case field(FieldID)
     case constant(TLAValue)
     case `operator`(OperatorID)
 }
 
 struct CompiledBindingTable: Sendable {
-    let variables: [String: VariableID]
-    let actions: [String: ActionID]
-    let operators: [String: OperatorID]
     let binders: [BinderID: String]
     let operatorNames: [OperatorID: String]
+    let localOperatorDependencies: [OperatorID: Set<OperatorID>]
     let references: [String: CompiledReference]
 
     init(
-        layout: CompiledLayout,
-        operators: [String: OperatorID] = [:],
-        operatorNames: [OperatorID: String]? = nil,
+        operatorNames: [OperatorID: String] = [:],
         binders: [BinderID: String] = [:],
+        localOperatorDependencies: [OperatorID: Set<OperatorID>] = [:],
         references: [String: CompiledReference] = [:]
     ) {
-        variables = Dictionary(
-            uniqueKeysWithValues: layout.variables.map { ($0.declaration.name, $0.id) }
-        )
-        actions = Dictionary(
-            uniqueKeysWithValues: layout.actions.map { ($0.declaration.name, $0.id) }
-        )
-        self.operators = operators
         self.binders = binders
-        self.operatorNames = operatorNames ?? Dictionary(
-            uniqueKeysWithValues: operators.map { ($0.value, $0.key) }
-        )
+        self.operatorNames = operatorNames
+        self.localOperatorDependencies = localOperatorDependencies
         self.references = references
     }
 
@@ -636,6 +626,7 @@ struct BindingValidator {
     private var nextOperatorOrdinal = 0
     private var knownBinderNames: Set<String> = []
     private var binders: [BinderID: String] = [:]
+    private var localOperatorDependencies: [OperatorID: Set<OperatorID>] = [:]
     private var references: [String: CompiledReference] = [:]
 
     init(
@@ -674,8 +665,20 @@ struct BindingValidator {
             }
         }
         for action in spec.actions {
+            guard let id = layout.actionID(named: action.name) else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: "actions.\(action.name).declaration",
+                    expected: "a declared action",
+                    actual: "no action identity"
+                )
+            }
+            references["actions.\(action.name).declaration"] = .action(id)
             let scope = try bind(action.bindings.map(\.name), at: "actions.\(action.name).bindings", scope: [:])
             try actionExpression(action.body, at: "actions.\(action.name).body", scope: scope)
+        }
+        for (offset, condition) in spec.fairness.enumerated() {
+            try validate(condition, at: "fairness[\(offset)]")
         }
         for invariant in spec.invariants {
             try validateExpression(invariant.body, at: "invariants.\(invariant.name).body", scope: [:])
@@ -727,10 +730,9 @@ struct BindingValidator {
             try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
         }
         return CompiledBindingTable(
-            layout: layout,
-            operators: operators,
             operatorNames: operatorNames,
             binders: binders,
+            localOperatorDependencies: localOperatorDependencies,
             references: references
         )
     }
@@ -749,10 +751,9 @@ struct BindingValidator {
 
     func bindingTable() -> CompiledBindingTable {
         CompiledBindingTable(
-            layout: layout,
-            operators: operators,
             operatorNames: operatorNames,
             binders: binders,
+            localOperatorDependencies: localOperatorDependencies,
             references: references
         )
     }
@@ -765,6 +766,27 @@ struct BindingValidator {
             try validateExpression(from, at: "\(path).from", scope: [:])
             try validateExpression(to, at: "\(path).to", scope: [:])
         }
+    }
+
+    private mutating func validate(_ condition: FairnessCondition, at path: String) throws {
+        let name: String
+        switch condition {
+        case .weakFairnessNext, .strongFairnessNext:
+            return
+        case .weakFairness(let value), .strongFairness(let value):
+            name = value
+        case .weakFairnessActionCall(let value), .strongFairnessActionCall(let value):
+            name = value.name
+        }
+        guard let id = layout.actionID(named: name) else {
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a declared action",
+                actual: "fairness references '\(name)'"
+            )
+        }
+        references["\(path).action"] = .action(id)
     }
 
     private mutating func validateExpression(
@@ -857,11 +879,14 @@ struct BindingValidator {
             for (index, value) in values.enumerated() {
                 try validateExpression(value, at: "\(path)[\(index)]", scope: scope)
             }
-        case .tupleAccess(let value, _), .recordAccess(let value, _):
+        case .tupleAccess(let value, _):
             try validateExpression(value, at: path, scope: scope)
+        case .recordAccess(let value, let field):
+            try validateExpression(value, at: "\(path).value", scope: scope)
+            try bindField(field, at: "\(path).field")
         case .recordLiteral(let values):
             var names = Set<String>()
-            for field in values.fields {
+            for (index, field) in values.fields.enumerated() {
                 guard names.insert(field.name).inserted else {
                     throw CompilationDiagnostic(
                         code: .duplicateRecordField,
@@ -872,7 +897,9 @@ struct BindingValidator {
                         nextSafeAction: "Give each record field a distinct name."
                     )
                 }
-                try validateExpression(field.value, at: "\(path).\(field.name)", scope: scope)
+                let fieldPath = "\(path).fields[\(index)]"
+                try bindField(field.name, at: "\(fieldPath).declaration")
+                try validateExpression(field.value, at: "\(fieldPath).value", scope: scope)
             }
         case .except(let function, let key, let value):
             try validateExpression(function, at: "\(path).function", scope: scope)
@@ -977,12 +1004,19 @@ struct BindingValidator {
         }
         defer { self.operators = outerOperators }
         for operation in operators {
-            try validateExpression(operation.domain, at: "\(path).\(operation.name).domain", scope: scope)
-            let bodyScope = try bind(operation.parameters, at: "\(path).\(operation.name).parameters", scope: scope)
-            try validateExpression(operation.body, at: "\(path).\(operation.name).body", scope: bodyScope)
             guard let id = self.operators[operation.name] else {
                 throw diagnostic(code: .unknownReference, path: path, expected: "a declared operator", actual: "no operator identity")
             }
+            let referencePathsBeforeBody = Set(references.keys)
+            try validateExpression(operation.domain, at: "\(path).\(operation.name).domain", scope: scope)
+            let bodyScope = try bind(operation.parameters, at: "\(path).\(operation.name).parameters", scope: scope)
+            try validateExpression(operation.body, at: "\(path).\(operation.name).body", scope: bodyScope)
+            localOperatorDependencies[id] = Set(references.compactMap { path, reference in
+                guard !referencePathsBeforeBody.contains(path), case .operator(let target) = reference else {
+                    return nil
+                }
+                return target
+            })
             references["\(path).\(operation.name).declaration"] = .operator(id)
         }
         for local in localOperators {
@@ -1019,6 +1053,18 @@ struct BindingValidator {
             try actionExpression(lhs, at: "\(path).left", scope: scope)
             try actionExpression(rhs, at: "\(path).right", scope: scope)
         }
+    }
+
+    private mutating func bindField(_ name: String, at path: String) throws {
+        guard let id = layout.fieldID(named: name) else {
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a field declared by the compiled layout",
+                actual: "unresolved field '\(name)'"
+            )
+        }
+        references[path] = .field(id)
     }
 
     private mutating func resolveValue(_ name: String, at path: String, scope: [String: BinderID]) throws {
