@@ -68,6 +68,33 @@ private func parserEnum(
         #expect(facts.actionBindingTypes["increment"] == ["process": "Node"])
     }
 
+    @Test("Function mapping declarations retain their generated Swift type")
+    func preservesFunctionMappingTypeForGeneratedSurface() throws {
+        let source = """
+        {
+            Algorithm("Counter", scoped: { scope in
+                let values = scope.sharedVar("values", initial: Function<Node, SetExpr<Int>>.mapping { _ in SetExpr<Int>() })
+                Do(TestControlLabel.increment) {
+                    Assign(values, to: values)
+                    Stop()
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let compilation = try compile(parsed, named: "Counter")
+        let surface = try MachineSurfacePlan(
+            compilation: compilation,
+            swiftFacts: parsed.machineSurfaceSwiftFacts(for: compilation)
+        )
+        #expect(surface.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
+    }
+
     @Test("Algorithm parser rejects a local declaration scope")
     func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
         let source = """

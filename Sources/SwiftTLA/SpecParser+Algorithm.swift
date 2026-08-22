@@ -693,9 +693,13 @@ extension ParserSession {
     private func algorithmInitialTypeName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "literal",
-           let base = member.base {
-            return typedFacadeType(base)?.renderedSourceName ?? terminalTypeName(in: base)
+           let type = typedFacadeType(member.base) {
+            switch (member.declName.baseName.text, type.name) {
+            case ("literal", _), ("mapping", "Function"):
+                return type.renderedSourceName
+            default:
+                break
+            }
         }
         return initialValueTypeName(from: expression)
     }
