@@ -21,8 +21,8 @@ struct CounterHost {
 
     static var spec: TLASpec {
         #spec("CounterHost") {
-            Algorithm("CounterHost") {
-                let value = SharedVar("value", initial: 0)
+            Algorithm("CounterHost") { scope in
+                let value = scope.sharedVar("value", initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance) {
                         When(value < 1)

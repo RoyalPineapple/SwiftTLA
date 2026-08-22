@@ -49,14 +49,14 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter") {
-                let value = SharedVar("value", initial: 0)
-                let cars = SharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
+            Algorithm("Counter") { scope in
+                let value = scope.sharedVar("value", initial: 0)
+                let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
                     (.one, Record<CarSchema>.literal(.init(CarSchema.floor, 1), .init(CarSchema.doorsOpen, false))),
                     (.two, Record<CarSchema>.literal(.init(CarSchema.floor, 2), .init(CarSchema.doorsOpen, false)))
                 ))
-                Each(Node.all) { _ in
-                    let visits = LocalVar("visits", initial: 0)
+                Each(Node.all) { _, scope in
+                    let visits = scope.localVar("visits", initial: 0)
                     Do(Step.advance) {
                         When(value < 1)
                         Assign(value, to: value + 1)

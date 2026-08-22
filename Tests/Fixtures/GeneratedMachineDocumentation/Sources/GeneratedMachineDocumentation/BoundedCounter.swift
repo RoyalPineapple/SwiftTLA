@@ -21,8 +21,8 @@ struct BoundedCounter {
 
     static var spec: TLASpec {
         #spec("BoundedCounter") {
-            Algorithm("BoundedCounter") {
-                let value = SharedVar("value", initial: 0)
+            Algorithm("BoundedCounter") { scope in
+                let value = scope.sharedVar("value", initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance) {
                         When(value < 1)
