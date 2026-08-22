@@ -303,7 +303,15 @@ struct LocalOperatorTests {
       FormalDefinition("Answer", parameters: [], body: .letIn([sumTo], .recursiveCall("SumTo", [.int(4)])))
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("LET RECURSIVE SumTo(_)"))
+    let compilation = try spec.compile()
+    #expect(try compilation.renderedTLAModuleBundle().tla.contains("LET RECURSIVE SumTo(_)"))
+
+    let definition = try #require(compilation.semantics.formalOperatorDefinitions.first)
+    guard case .letIn(let operators, _) = definition.body else {
+      Issue.record("Expected a compiled local operator")
+      return
+    }
+    #expect(compilation.bindings.localOperatorDependencies[operators[0].id] == [operators[0].id])
   }
 
   @Test("the macro parser retains LET operator definitions")

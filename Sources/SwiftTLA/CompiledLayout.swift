@@ -594,15 +594,18 @@ enum CompiledReference: Hashable, Sendable {
 struct CompiledBindingTable: Sendable {
     let binders: [BinderID: String]
     let operatorNames: [OperatorID: String]
+    let localOperatorDependencies: [OperatorID: Set<OperatorID>]
     let references: [String: CompiledReference]
 
     init(
         operatorNames: [OperatorID: String] = [:],
         binders: [BinderID: String] = [:],
+        localOperatorDependencies: [OperatorID: Set<OperatorID>] = [:],
         references: [String: CompiledReference] = [:]
     ) {
         self.binders = binders
         self.operatorNames = operatorNames
+        self.localOperatorDependencies = localOperatorDependencies
         self.references = references
     }
 
@@ -623,6 +626,7 @@ struct BindingValidator {
     private var nextOperatorOrdinal = 0
     private var knownBinderNames: Set<String> = []
     private var binders: [BinderID: String] = [:]
+    private var localOperatorDependencies: [OperatorID: Set<OperatorID>] = [:]
     private var references: [String: CompiledReference] = [:]
 
     init(
@@ -728,6 +732,7 @@ struct BindingValidator {
         return CompiledBindingTable(
             operatorNames: operatorNames,
             binders: binders,
+            localOperatorDependencies: localOperatorDependencies,
             references: references
         )
     }
@@ -748,6 +753,7 @@ struct BindingValidator {
         CompiledBindingTable(
             operatorNames: operatorNames,
             binders: binders,
+            localOperatorDependencies: localOperatorDependencies,
             references: references
         )
     }
@@ -998,12 +1004,19 @@ struct BindingValidator {
         }
         defer { self.operators = outerOperators }
         for operation in operators {
-            try validateExpression(operation.domain, at: "\(path).\(operation.name).domain", scope: scope)
-            let bodyScope = try bind(operation.parameters, at: "\(path).\(operation.name).parameters", scope: scope)
-            try validateExpression(operation.body, at: "\(path).\(operation.name).body", scope: bodyScope)
             guard let id = self.operators[operation.name] else {
                 throw diagnostic(code: .unknownReference, path: path, expected: "a declared operator", actual: "no operator identity")
             }
+            let referencePathsBeforeBody = Set(references.keys)
+            try validateExpression(operation.domain, at: "\(path).\(operation.name).domain", scope: scope)
+            let bodyScope = try bind(operation.parameters, at: "\(path).\(operation.name).parameters", scope: scope)
+            try validateExpression(operation.body, at: "\(path).\(operation.name).body", scope: bodyScope)
+            localOperatorDependencies[id] = Set(references.compactMap { path, reference in
+                guard !referencePathsBeforeBody.contains(path), case .operator(let target) = reference else {
+                    return nil
+                }
+                return target
+            })
             references["\(path).\(operation.name).declaration"] = .operator(id)
         }
         for local in localOperators {
