@@ -265,6 +265,11 @@ extension TLASpec {
         )
     }
     let constraint = try semantics.constraint.map { "StateConstraint == \(try formalRenderer.state($0))" }
+    let renderedProperties = (renderedSourceProperties + topLevelProperties).map(\.definition)
+    let postTranslationDeclarations = declarationSections.postTranslation
+      + (constraint.map { [$0] } ?? [])
+      + renderedProperties
+      + authoredPlusCalSymmetry
     let module = AuthoredPlusCalModule(
       name: name,
       extendsModules: authoredPlusCalExtends,
@@ -272,10 +277,7 @@ extension TLASpec {
       preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
-      postTranslationDeclarations: declarationSections.postTranslation
-        + (constraint.map { [$0] } ?? [])
-        + (sourceProperties + topLevelProperties).map(\.definition)
-        + authoredPlusCalSymmetry,
+      postTranslationDeclarations: postTranslationDeclarations,
       refinements: renderedRefinements
     )
     return module

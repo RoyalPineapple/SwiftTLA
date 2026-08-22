@@ -347,7 +347,7 @@ internal struct AlgorithmPlusCalRenderer {
     private func propertyNames(
         in components: [AlgorithmComponentModel],
         path: String
-    ) throws -> [String] {
+    ) throws -> [AuthoredPlusCalPropertyReference] {
         try components.enumerated().flatMap { index, component in
             let componentPath = "\(path)[\(index)]"
             switch component {
