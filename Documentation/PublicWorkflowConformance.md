@@ -69,13 +69,14 @@ but must not convert `diagnosticOnly` or `candidateEvidence` into â€œsupported.â
 
 ## Reports and retained evidence
 
-An explicitly authorized local run writes the current report to:
+An explicitly authorized local run writes a hash-verified reference to the current report at:
 
 ```text
-.build/public-workflow-support-gate/support-admission.json
+.build/public-workflow-support-gate/current-support-admission.json
 ```
 
-The report and the evidence for one immutable run are below:
+The reference contains the immutable report path and SHA-256. The report and
+the evidence for one immutable run are below:
 
 ```text
 .build/public-workflow-support-gate/runs/<run-id>/
