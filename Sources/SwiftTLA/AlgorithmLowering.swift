@@ -1,4 +1,8 @@
 enum AlgorithmLowerer {
+    private enum CompilerBindingSymbol: String, Sendable {
+        case process
+    }
+
     // These frame keys are the names emitted by the official PlusCal
     // translator.  The runtime stack remains an implementation detail, but
     // its formal representation must be comparable to the independent
@@ -19,7 +23,7 @@ enum AlgorithmLowerer {
             ))
         }
     }
-    private static let processBinding = "process"
+    private static let processBinding = CompilerBindingSymbol.process
     private static func lowered(_ specification: TLASpec) -> TLASpec {
         var specification = specification
         specification.algorithmPhase = .lowered
@@ -67,7 +71,7 @@ enum AlgorithmLowerer {
                     name: invariant.name,
                     body: .forAll(
                         processDomain,
-                        processBinding,
+                        processBinding.rawValue,
                         rewrite(invariant.body, localRoots: localRoots)
                     )
                 )
@@ -206,7 +210,7 @@ enum AlgorithmLowerer {
                         requiresProgramCounter
                             ? .and(
                                 .guard_(.equal(
-                                .functionApply(.programCounter, .variable(processBinding)),
+                                .functionApply(.programCounter, .variable(processBinding.rawValue)),
                                     control.location(atomic.label.name)
                                 )),
                                 body
@@ -214,9 +218,9 @@ enum AlgorithmLowerer {
                             : body,
                         variables: variableNames
                     ),
-                    bindings: [ActionBinding(name: processBinding, values: process.domain)],
+                    bindings: [ActionBinding(name: processBinding.rawValue, values: process.domain)],
                     controlOwner: controlOwner,
-                    generatedBindingSwiftTypes: [processBinding: process.typeName]
+                    generatedBindingSwiftTypes: [processBinding.rawValue: process.typeName]
                 )
                 if requiresProgramCounter {
                     let actionAssertions = assertionInvariants(
@@ -249,7 +253,7 @@ enum AlgorithmLowerer {
                         sourceName: CompilerControlSymbol.done.rawValue
                     ))
                 let guardExpression = StateExpr.equal(
-                    .functionApply(.programCounter, .variable(processBinding)),
+                    .functionApply(.programCounter, .variable(processBinding.rawValue)),
                     control.location(atomic.label.name)
                 )
                 let loweredStatements = lower(
@@ -265,7 +269,7 @@ enum AlgorithmLowerer {
                 return NamedAction(
                     name: label,
                     body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variableNames),
-                    bindings: [ActionBinding(name: processBinding, values: controlDomainValues(processes))],
+                    bindings: [ActionBinding(name: processBinding.rawValue, values: controlDomainValues(processes))],
                     controlOwner: .procedure(algorithm: algorithm.name, name: procedure.name)
                 )
             }
@@ -277,9 +281,9 @@ enum AlgorithmLowerer {
                 let members = StateExpr.setLiteral(process.domain.map(StateExpr.value))
                 let processDone = StateExpr.forAll(
                     members,
-                    processBinding,
+                    processBinding.rawValue,
                     .equal(
-                        .functionApply(.programCounter, .variable(processBinding)),
+                        .functionApply(.programCounter, .variable(processBinding.rawValue)),
                         .controlLocation(.init(
                             owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
                             sourceName: CompilerControlSymbol.done.rawValue
@@ -692,7 +696,7 @@ enum AlgorithmLowerer {
               let entry = procedure.steps.first?.label.name else {
             return .guard_(.value(.bool(false)))
         }
-        let process = StateExpr.variable(processBinding)
+        let process = StateExpr.variable(processBinding.rawValue)
         let stack = StateExpr.functionApply(.procedureStack, process)
         let frameFields = [
             (CompilerControlSymbol.procedure.rawValue, StateExpr.value(.string(procedure.name))),
@@ -725,7 +729,7 @@ enum AlgorithmLowerer {
         procedures: [AlgorithmProcedureModel]
     ) -> ActionExpr {
         guard owner != nil else { return .guard_(.value(.bool(false))) }
-        let process = StateExpr.variable(processBinding)
+        let process = StateExpr.variable(processBinding.rawValue)
         let stack = StateExpr.functionApply(.procedureStack, process)
         let frame = StateExpr.tupleHead(stack)
         let restore = procedureSlots(procedures).map {
@@ -750,7 +754,7 @@ enum AlgorithmLowerer {
               let entry = procedure.steps.first?.label.name else {
             return .guard_(.value(.bool(false)))
         }
-        let process = StateExpr.variable(processBinding)
+        let process = StateExpr.variable(processBinding.rawValue)
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign(.named($0.0.root), .except(.variable($0.0.root), process, $0.1))
         }
@@ -869,7 +873,7 @@ enum AlgorithmLowerer {
             .programCounter,
             .except(
                 .programCounter,
-                .variable(processBinding),
+                .variable(processBinding.rawValue),
                 label))
     }
 
@@ -909,7 +913,7 @@ enum AlgorithmLowerer {
             case .root(let root) where localRoots.contains(root):
                 return .assign(
                     .named(root),
-                    .except(.variable(root), .variable(processBinding), value))
+                    .except(.variable(root), .variable(processBinding.rawValue), value))
             case .root(let root):
                 return .assign(.named(root), value)
             case .function(let root, let key):
@@ -977,7 +981,7 @@ enum AlgorithmLowerer {
         quantifiedBindings: [(variable: String, source: StateExpr)]
     ) -> [NamedInvariant] {
         let pcAtLabel = StateExpr.equal(
-            .functionApply(.programCounter, .variable(processBinding)),
+            .functionApply(.programCounter, .variable(processBinding.rawValue)),
             label
         )
         let labelName: String
@@ -1006,7 +1010,7 @@ enum AlgorithmLowerer {
                         )
                     }
                     let predicate = StateExpr.substituteVariable(
-                        processBinding,
+                        processBinding.rawValue,
                         identifier,
                         in: .or(.not(executedAtLabel), assertion)
                     )
@@ -1113,10 +1117,10 @@ enum AlgorithmLowerer {
             case .sourceIssue, .value, .programCounter, .procedureStack, .controlLocation:
                 return expression
             case .currentProcess:
-                return .variable(processBinding)
+                return .variable(processBinding.rawValue)
             case .variable(let name):
                 if localRoots.contains(name) {
-                    return .functionApply(.variable(name), .variable(processBinding))
+                    return .functionApply(.variable(name), .variable(processBinding.rawValue))
                 }
                 return expression
             case .processLocalFamily(let root):
