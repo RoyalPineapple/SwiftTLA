@@ -58,6 +58,39 @@ struct AlgorithmBuilderTests {
         #expect(compilation.spec.actions.map(\.name).contains("advance"))
     }
 
+    @Test("action completion preserves assigned compiler control state")
+    func actionCompletionPreservesAssignedCompilerControlState() {
+        let programCounter = NamedVar(
+            name: CompilerControlSymbol.programCounter.rawValue,
+            initial: .string("start"),
+            origin: .programCounter
+        )
+        let action = ActionNormalization.complete(
+            .assign(.programCounter, .controlLocation(.done)),
+            variables: [programCounter]
+        )
+
+        #expect(assignedVars(action).contains(.programCounter))
+        #expect(!explicitUnchanged(action).contains(.programCounter))
+    }
+
+    @Test("direct TLA action headers use compiled process bindings")
+    func directTLAActionHeadersUseCompiledProcessBindings() throws {
+        let algorithm = Algorithm("BoundProcessHeader", scoped: { scope in
+            let count = scope.sharedVar("count", initial: 0)
+            Each(Node.all) { _ in
+                Do(TestControlLabel.advance) { Assign(count, to: count + 1) }
+            }
+        })
+
+        let module = try TLASpec("BoundProcessHeader") { algorithm }
+            .compile()
+            .renderedTLAModuleBundle()
+            .tla
+        #expect(module.contains("advance(__swift_tla_binder_"))
+        #expect(!module.contains("advance(process)"))
+    }
+
     @Test("algorithm builder preserves the order of many elements")
     func algorithmBuilderPreservesManyElementOrder() {
         let algorithm = Algorithm("OrderedElements") {

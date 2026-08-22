@@ -77,6 +77,7 @@ struct DirectModuleSectionPlan: Sendable, Equatable {
 
 struct DirectModuleAction: Sendable, Equatable {
     let declaration: NamedAction
+    let renderedParameters: [String]
     let renderedBody: String
 }
 
@@ -730,9 +731,11 @@ public extension TLASpec {
             declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
         )
         let renderedActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
-            DirectModuleAction(
+            let compiled = semantics.actions[index]
+            return DirectModuleAction(
                 declaration: declaration,
-                renderedBody: try renderer.action(semantics.actions[index].body)
+                renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
+                renderedBody: try renderer.action(compiled.body)
             )
         }
         return DirectModuleSectionPlan(
@@ -961,13 +964,13 @@ public extension TLASpec {
 
         for renderedAction in renderedActions where !renderedAction.declaration.name.isEmpty {
             let action = renderedAction.declaration
-            let parameters = action.bindings.map(\.name).joined(separator: ", ")
+            let parameters = renderedAction.renderedParameters.joined(separator: ", ")
             let emittedName = emittedActionNames[action.name] ?? action.name
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
             lines.append("\(header) == \(renderedAction.renderedBody)")
             for variant in actionVariants(action) where !variant.indices.isEmpty {
                 let suffix = variant.indices.map(String.init).joined(separator: "_")
-                lines.append("\(emittedName)__\(suffix) == \(formalActionCall(named: action.name, arguments: variant.arguments))")
+                lines.append("\(emittedName)__\(suffix) == \(formalActionCall(named: emittedName, arguments: variant.arguments))")
             }
         }
         lines.append("")

@@ -263,7 +263,7 @@ struct CompiledTLARenderer {
         return layout.actions[id.ordinal].declaration.name
     }
 
-    private func binderName(_ id: BinderID) throws -> String {
+    func binderName(_ id: BinderID) throws -> String {
         guard let name = bindings.binderName(id) else { throw missing("binder", id.ordinal) }
         return name
     }

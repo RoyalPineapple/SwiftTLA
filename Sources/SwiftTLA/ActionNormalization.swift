@@ -1,16 +1,28 @@
 enum ActionNormalization {
-    static func complete(_ action: ActionExpr, variables: [String]) -> ActionExpr {
+    static func complete(_ action: ActionExpr, variables: [NamedVar]) -> ActionExpr {
+        let targets = variables.map(actionTarget(for:))
         let completed = branches(of: action).map { branch in
             let assigned = assignedVars(branch)
             let explicit = explicitUnchanged(branch)
             var completedBranch = branch
-            for variable in variables where !assigned.contains(.named(variable)) && !explicit.contains(.named(variable)) {
-                completedBranch = .and(completedBranch, .unchanged(.named(variable)))
+            for target in targets where !assigned.contains(target) && !explicit.contains(target) {
+                completedBranch = .and(completedBranch, .unchanged(target))
             }
             return completedBranch
         }
         guard let first = completed.first else { return action }
         return completed.dropFirst().reduce(first) { .or($0, $1) }
+    }
+
+    private static func actionTarget(for variable: NamedVar) -> ActionTarget {
+        switch variable.origin {
+        case .programCounter:
+            .programCounter
+        case .procedureStack:
+            .procedureStack
+        case .source, .compiler:
+            .named(variable.name)
+        }
     }
 
     static func branches(of action: ActionExpr) -> [ActionExpr] {
