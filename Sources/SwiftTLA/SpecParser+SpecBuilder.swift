@@ -1197,6 +1197,7 @@ extension ParserSession {
             .expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
         switch phase {
         case "define": return .define
+        case "postTranslation": return .postTranslation
         default: return .prelude
         }
     }

@@ -77,7 +77,7 @@ public struct VoteProofModel: Sendable {
             let consensus = Instance(
                 "C",
                 of: ByzPaxosConsensus.module,
-                plusCalPhase: .define,
+                plusCalPhase: .postTranslation,
                 dependsOn: ["chosen"]
             )
             consensus
