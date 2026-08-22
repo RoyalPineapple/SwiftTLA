@@ -68,10 +68,11 @@ struct VoteProofCorpusRenderingTests {
         let instanceRange = try #require(plusCal.range(of: "C == INSTANCE Consensus"))
         let safeAtRange = try #require(plusCal.range(of: "SafeAt(value0, value1) =="))
         let chosenRange = try #require(plusCal.range(of: "ChosenIn(b, v) =="))
+        #expect(plusCal.components(separatedBy: "C == INSTANCE Consensus").count == 2)
         #expect(defineRange.lowerBound > algorithmRange.lowerBound)
         #expect(defineRange.lowerBound < safeAtRange.lowerBound)
+        #expect(defineEndRange.lowerBound < chosenRange.lowerBound)
         #expect(chosenRange.lowerBound < instanceRange.lowerBound)
         #expect(instanceRange.lowerBound < refinesRange.lowerBound)
-        #expect(refinesRange.lowerBound < defineEndRange.lowerBound)
     }
 }

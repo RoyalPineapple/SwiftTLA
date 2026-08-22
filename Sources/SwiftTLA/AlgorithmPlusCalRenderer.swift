@@ -25,32 +25,18 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
     }
 }
 
-/// Ordered declarations consumed by the PlusCal renderer.
-///
-/// Constants and support definitions precede instances, which precede the
-/// Algorithm. Properties follow the translator-owned section.
 internal struct AuthoredPlusCalModule: Sendable {
     let name: String
     let extendsModules: [String]
     let constants: [String]
-    let definitionsBeforeInstances: [String]
-    let instances: [FormalModuleInstance]
-    let instanceArguments: [String: [ModuleArgument]]
-    let definitionsAfterInstances: [String]
+    let preludeDeclarations: [String]
     let algorithm: AlgorithmModel
     let defineDeclarations: [String]
     let postTranslationDeclarations: [String]
     let refinements: [String]
 
     var supportDeclarations: [String] {
-        constants
-            + definitionsBeforeInstances
-            + instances.map { instance in
-                let arguments = (instanceArguments[instance.name] ?? instance.arguments).map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
-                let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-                return "\(instance.name) == INSTANCE \(instance.module.name)\(withClause)"
-            }
-            + definitionsAfterInstances
+        constants + preludeDeclarations
     }
 }
 

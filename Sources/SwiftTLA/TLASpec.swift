@@ -322,6 +322,7 @@ public protocol SpecComponent {}
 public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
   case prelude
   case define
+  case postTranslation
 }
 
 /// Structural placement and dependency metadata retained for authored PlusCal.

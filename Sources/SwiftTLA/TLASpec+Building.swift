@@ -203,10 +203,7 @@ extension TLASpec {
       name: name,
       extendsModules: authoredPlusCalExtends,
       constants: authoredPlusCalPrelude,
-      definitionsBeforeInstances: declarationSections.prelude,
-      instances: moduleInstances,
-      instanceArguments: Dictionary(uniqueKeysWithValues: moduleInstances.map { ($0.name, instanceArguments(for: $0)) }),
-      definitionsAfterInstances: [],
+      preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: [],
@@ -266,13 +263,11 @@ extension TLASpec {
       name: name,
       extendsModules: authoredPlusCalExtends,
       constants: authoredPlusCalPrelude,
-      definitionsBeforeInstances: declarationSections.prelude,
-      instances: moduleInstances,
-      instanceArguments: Dictionary(uniqueKeysWithValues: moduleInstances.map { ($0.name, instanceArguments(for: $0)) }),
-      definitionsAfterInstances: [],
+      preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
-      postTranslationDeclarations: (constraint.map { [$0] } ?? [])
+      postTranslationDeclarations: declarationSections.postTranslation
+        + (constraint.map { [$0] } ?? [])
         + (sourceProperties + topLevelProperties).map(\.definition)
         + authoredPlusCalSymmetry,
       refinements: renderedRefinements
@@ -350,6 +345,7 @@ extension TLASpec {
 struct AuthoredPlusCalDeclarationSections {
   let prelude: [String]
   let define: [String]
+  let postTranslation: [String]
 
   init(_ declarations: [AuthoredPlusCalDeclaration]) throws {
     var emitted: Set<String> = []
@@ -374,6 +370,7 @@ struct AuthoredPlusCalDeclarationSections {
     }
     prelude = try order(.prelude)
     define = try order(.define)
+    postTranslation = try order(.postTranslation)
   }
 }
 
