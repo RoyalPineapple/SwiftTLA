@@ -1546,11 +1546,11 @@ public func With<First: TLAValueType, Second: TLAValueType>(
     line: UInt = #line,
     column: UInt = #column
 ) -> StepStatement {
-    With(first, file: file, line: line, column: column) { firstValue in
-        With(second, file: file, line: line, column: column + 1) { secondValue in
+    With(first, { firstValue in
+        With(second, { secondValue in
             body(firstValue, secondValue)
-        }
-    }
+        }, file: file, line: line, column: column + 1)
+    }, file: file, line: line, column: column)
 }
 
 /// Binds three independent members in formal left-to-right scope order.
@@ -1563,13 +1563,13 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>
     line: UInt = #line,
     column: UInt = #column
 ) -> StepStatement {
-    With(first, file: file, line: line, column: column) { firstValue in
-        With(second, file: file, line: line, column: column + 1) { secondValue in
-            With(third, file: file, line: line, column: column + 2) { thirdValue in
+    With(first, { firstValue in
+        With(second, { secondValue in
+            With(third, { thirdValue in
                 body(firstValue, secondValue, thirdValue)
-            }
-        }
-    }
+            }, file: file, line: line, column: column + 2)
+        }, file: file, line: line, column: column + 1)
+    }, file: file, line: line, column: column)
 }
 
 /// Binds four independent members in formal left-to-right scope order.
@@ -1583,11 +1583,11 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
     line: UInt = #line,
     column: UInt = #column
 ) -> StepStatement {
-    With(first, second, third, file: file, line: line, column: column) { firstValue, secondValue, thirdValue in
-        With(fourth, file: file, line: line, column: column + 3) { fourthValue in
+    With(first, second, third, { firstValue, secondValue, thirdValue in
+        With(fourth, { fourthValue in
             body(firstValue, secondValue, thirdValue, fourthValue)
-        }
-    }
+        }, file: file, line: line, column: column + 3)
+    }, file: file, line: line, column: column)
 }
 
 /// Destructures a selected two-member formal tuple for one atomic block.
@@ -1602,13 +1602,13 @@ public func With<First: TLAValueType, Second: TLAValueType>(
     line: UInt = #line,
     column: UInt = #column
 ) -> StepStatement {
-    With(pairs, file: file, line: line, column: column) { pair in
-        Let(pair.first(), file: file, line: line, column: column + 1) { first in
-            Let(pair.second(), file: file, line: line, column: column + 2) { second in
+    With(pairs, { pair in
+        Let(pair.first(), { first in
+            Let(pair.second(), { second in
                 body(first, second)
-            }
-        }
-    }
+            }, file: file, line: line, column: column + 2)
+        }, file: file, line: line, column: column + 1)
+    }, file: file, line: line, column: column)
 }
 
 /// Binds a deterministic formal value for one atomic block.
@@ -1665,11 +1665,11 @@ public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
     line: UInt = #line,
     column: UInt = #column
 ) -> Expr<Bool> {
-    Exists(in: first, file: file, line: line, column: column) { firstValue in
-        Exists(in: second, file: file, line: line, column: column + 1) { secondValue in
+    Exists(in: first, where: { firstValue in
+        Exists(in: second, where: { secondValue in
             predicate(firstValue, secondValue)
-        }
-    }
+        }, file: file, line: line, column: column + 1)
+    }, file: file, line: line, column: column)
 }
 
 /// Tests whether every bounded formal set member satisfies `predicate`.
@@ -1695,11 +1695,11 @@ public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
     line: UInt = #line,
     column: UInt = #column
 ) -> Expr<Bool> {
-    ForAll(in: first, file: file, line: line, column: column) { firstValue in
-        ForAll(in: second, file: file, line: line, column: column + 1) { secondValue in
+    ForAll(in: first, where: { firstValue in
+        ForAll(in: second, where: { secondValue in
             predicate(firstValue, secondValue)
-        }
-    }
+        }, file: file, line: line, column: column + 1)
+    }, file: file, line: line, column: column)
 }
 
 /// States that every member of a bounded formal set satisfies `predicate`.
@@ -1730,11 +1730,11 @@ public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprC
     line: UInt = #line,
     column: UInt = #column
 ) -> StateExpr {
-    All(in: first, file: file, line: line, column: column) { firstValue in
-        All(in: second, file: file, line: line, column: column + 1) { secondValue in
+    All(in: first, where: { firstValue in
+        All(in: second, where: { secondValue in
             predicate(firstValue, secondValue)
-        }
-    }
+        }, file: file, line: line, column: column + 1)
+    }, file: file, line: line, column: column)
 }
 
 /// Tests a predicate for every member of a declared finite domain.
