@@ -28,7 +28,10 @@ struct AlgorithmBuilderTests {
         let action = try #require(compilation.layout.actionID(named: name))
         return try CompiledRuntime(compilation: compilation)
             .successors(for: action, from: state)
-            .filter { arguments == nil || try $0.arguments.map { try $0.rendered(using: compilation.layout) } == arguments }
+            .filter {
+                guard let arguments else { return true }
+                return try $0.arguments.map { try $0.rendered(using: compilation.layout) } == arguments
+            }
             .map(\.state)
     }
 
