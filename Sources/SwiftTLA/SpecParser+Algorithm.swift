@@ -22,6 +22,7 @@ private enum AlgorithmSourceConstruct: Equatable {
     case formalDefinition
     case macro
     case state(AlgorithmStateDeclarationKind)
+    case scopedState(AlgorithmStateDeclarationKind, scope: String)
     case procedure
     case each
     case doStep
@@ -49,12 +50,30 @@ private enum AlgorithmSourceConstruct: Equatable {
     case letBinding
 
     init?(_ expression: ExprSyntax) {
-        guard let reference = Self.reference(in: expression) else { return nil }
-        self.init(reference)
+        if let reference = Self.reference(in: expression) {
+            self.init(reference)
+            return
+        }
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              let scope = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+        else { return nil }
+        switch member.declName.baseName.text {
+        case "sharedVar": self = .scopedState(.shared, scope: scope)
+        case "localVar": self = .scopedState(.local, scope: scope)
+        default: return nil
+        }
     }
 
     static func referenceName(in expression: ExprSyntax) -> String? {
         reference(in: expression)?.baseName.text
+    }
+
+    func isState(_ kind: AlgorithmStateDeclarationKind, in scope: String?) -> Bool {
+        switch self {
+        case .state(let actual): actual == kind
+        case .scopedState(let actual, let owner): actual == kind && owner == scope
+        default: false
+        }
     }
 
     private init?(_ reference: DeclReferenceExprSyntax) {
@@ -460,7 +479,9 @@ extension ParserSession {
             algorithmParseFailure = "Each could not resolve its finite domain. Known finite domains: \(known)."
             return nil
         }
-        let parameter = closureParameterNames(in: closure).first ?? "self"
+        let closureParameters = closureParameterNames(in: closure)
+        let parameter = closureParameters.first ?? "self"
+        let declarationScope = closureParameters.count > 1 ? closureParameters.last : nil
         var processScope = typedFacadeScope(
             scope,
             binding: parameter,
@@ -473,7 +494,8 @@ extension ParserSession {
                let component = parseAlgorithmVariableDeclaration(
                     variable,
                     kind: .local,
-                    scope: processScope
+                    scope: processScope,
+                    declarationScope: declarationScope
                ) {
                 guard case .local(let state) = component else { return nil }
                 components.append(.local(.init(
@@ -534,7 +556,7 @@ extension ParserSession {
               let binding = declaration.bindings.first,
               let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-              isStateConstructor(initializer.calledExpression, kind: kind, scope: declarationScope)
+              AlgorithmSourceConstruct(initializer.calledExpression)?.isState(kind, in: declarationScope) == true
         else { return nil }
 
         if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
@@ -597,27 +619,6 @@ extension ParserSession {
             return nil
         }
         return kind == .shared ? .shared(state) : .local(state)
-    }
-
-    private func isStateConstructor(
-        _ expression: ExprSyntax,
-        kind: AlgorithmStateDeclarationKind,
-        scope: String?
-    ) -> Bool {
-        if AlgorithmSourceConstruct(expression) == .state(kind) {
-            return true
-        }
-        guard let scope,
-              let member = expression.as(MemberAccessExprSyntax.self),
-              let base = member.base?.as(DeclReferenceExprSyntax.self),
-              base.baseName.text == scope
-        else { return false }
-        switch (kind, member.declName.baseName.text) {
-        case (.shared, "sharedVar"), (.local, "localVar"):
-            return true
-        default:
-            return false
-        }
     }
 
     private func parseAlgorithmMacroDeclaration(

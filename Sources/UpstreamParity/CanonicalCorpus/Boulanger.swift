@@ -28,15 +28,15 @@ public struct BoulangerModel: Sendable {
     public static var spec: TLASpec {
         #spec("Boulanger") {
             Extends(.integers)
-            Algorithm("Boulanger") {
-                let num = SharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
-                let flag = SharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+            Algorithm("Boulanger") { scope in
+                let num = scope.sharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = scope.sharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
-                Each(Process.all, fairness: .weak) { selfID in
-                    let unchecked = LocalVar("unchecked", initial: SetExpr<Process>())
-                    let max = LocalVar("max", initial: 0)
-                    let nxt = LocalVar("nxt", initial: Process.one)
-                    let previous = LocalVar("previous", initial: -1)
+                Each(Process.all, fairness: .weak) { selfID, scope in
+                    let unchecked = scope.localVar("unchecked", initial: SetExpr<Process>())
+                    let max = scope.localVar("max", initial: 0)
+                    let nxt = scope.localVar("nxt", initial: Process.one)
+                    let previous = scope.localVar("previous", initial: -1)
 
                     Do(Label.ncs) { Skip() }
 

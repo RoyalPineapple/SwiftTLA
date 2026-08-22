@@ -1273,6 +1273,21 @@ public func Each<Value: FiniteDomainKey>(
     process(domain, fairness: fairness.model, body)
 }
 
+public func Each<Value: FiniteDomainKey>(
+    _ domain: FiniteDomain<Value>,
+    fairness: ProcessFairness = .none,
+    @AlgorithmBuilder _ body: (ProcessIdentifier<Value>, inout ProcessScope) -> [AlgorithmElement]
+) -> AlgorithmElement {
+    var scope = ProcessScope()
+    let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
+    return AlgorithmElement(model: .process(.init(
+        typeName: String(describing: Value.self),
+        domain: domain.values.map(\.tlaValue),
+        fairness: fairness.model,
+        components: scope.declarations.map(\.model) + body(identifier, &scope).map(\.model)
+    )))
+}
+
 private func process<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
     fairness: AlgorithmFairness,

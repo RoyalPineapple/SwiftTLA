@@ -155,17 +155,17 @@ public struct KVsnapModel: Sendable {
                 parameters: [],
                 body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
-            Algorithm("KVsnap") {
-                let store: SharedVariable<Function<Key, Value>> = SharedVar("store", initial: FormalCall("InitialState"))
-                let tx = SharedVar("tx", initial: SetExpr<Transaction>())
-                let missed = SharedVar("missed", initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
+            Algorithm("KVsnap") { scope in
+                let store: SharedVariable<Function<Key, Value>> = scope.sharedVar("store", initial: FormalCall("InitialState"))
+                let tx = scope.sharedVar("tx", initial: SetExpr<Transaction>())
+                let missed = scope.sharedVar("missed", initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
 
-                Each(Transaction.all, fairness: .weak) { selfID in
-                    let snapshotStore: LocalVariable<Function<Key, Value>> = LocalVar("snapshotStore", initial: FormalCall("InitialState")
+                Each(Transaction.all, fairness: .weak) { selfID, scope in
+                    let snapshotStore: LocalVariable<Function<Key, Value>> = scope.localVar("snapshotStore", initial: FormalCall("InitialState")
                     )
-                    let readKeys: LocalVariable<SetExpr<Key>> = LocalVar("readKeys", initial: SetExpr<Key>())
-                    let writeKeys: LocalVariable<SetExpr<Key>> = LocalVar("writeKeys", initial: SetExpr<Key>())
-                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = LocalVar("ops", initial: TupleExpr<Record<OperationSchema>>())
+                    let readKeys: LocalVariable<SetExpr<Key>> = scope.localVar("readKeys", initial: SetExpr<Key>())
+                    let writeKeys: LocalVariable<SetExpr<Key>> = scope.localVar("writeKeys", initial: SetExpr<Key>())
+                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = scope.localVar("ops", initial: TupleExpr<Record<OperationSchema>>())
 
                     Do(Step.start) {
                         Assign(tx, to: tx.inserting(selfID))

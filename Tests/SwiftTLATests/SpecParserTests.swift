@@ -39,8 +39,8 @@ private func parserEnum(
     func parsesBoundedAlgorithm() throws {
         let source = """
         {
-            Algorithm("Counter") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("Counter") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Each(Node.all) { node in
                     Do(TestControlLabel.increment) {
                         Await(count < 2)
@@ -66,6 +66,22 @@ private func parserEnum(
         ])
         let facts = parsed.machineSurfaceSwiftFacts(for: compilation)
         #expect(facts.actionBindingTypes["increment"] == ["process": "Node"])
+    }
+
+    @Test("Algorithm parser rejects a local declaration scope")
+    func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
+        let source = """
+        {
+            Algorithm("Counter") { scope in
+                let count = scope.localVar("count", initial: 0)
+                Do(TestControlLabel.increment) { Stop() }
+            }
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.count == 1)
+        #expect(parsed.diagnostics[0].message.contains("Unsupported Algorithm declaration"))
     }
 
     @Test("Algorithm parser rejects declarations it does not lower")
