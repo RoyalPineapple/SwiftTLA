@@ -8,7 +8,7 @@ extension TLASpec {
 
   public init(
     _ name: String,
-    @SpecBuilder _ builder: (inout SpecificationScope) -> [SpecComponent]
+    @SpecBuilder scoped builder: (inout SpecificationScope) -> [SpecComponent]
   ) {
     var scope = SpecificationScope()
     let body = builder(&scope)

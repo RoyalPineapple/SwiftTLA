@@ -30,14 +30,30 @@ public struct SpecExpressionMacro: ExpressionMacro {
         named name: some ExprSyntaxProtocol,
         body: ClosureExprSyntax
     ) -> ExprSyntax {
+        let arguments: LabeledExprListSyntax
+        if body.signature == nil {
+            arguments = [LabeledExprSyntax(expression: name)]
+            return ExprSyntax(FunctionCallExprSyntax(
+                calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+                leftParen: .leftParenToken(),
+                arguments: arguments,
+                rightParen: .rightParenToken(),
+                trailingClosure: body
+            ))
+        }
+        arguments = [
+            LabeledExprSyntax(expression: name),
+            LabeledExprSyntax(
+                label: .identifier("scoped"),
+                colon: .colonToken(),
+                expression: ExprSyntax(body)
+            )
+        ]
         ExprSyntax(FunctionCallExprSyntax(
             calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
             leftParen: .leftParenToken(),
-            arguments: LabeledExprListSyntax([
-                LabeledExprSyntax(expression: name)
-            ]),
-            rightParen: .rightParenToken(),
-            trailingClosure: body
+            arguments: arguments,
+            rightParen: .rightParenToken()
         ))
     }
 }

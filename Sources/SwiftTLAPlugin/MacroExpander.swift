@@ -200,18 +200,18 @@ enum MacroExpander {
 
     static func codegenTLAValue(_ value: TLAValue) -> String {
         switch value {
-        case .int(let n): return ".int(\(n))"
-        case .bool(let b): return ".bool(\(b))"
-        case .string(let s): return ".string(\"\(s)\")"
-        case .set(let s): return ".set([\(s.map(codegenTLAValue).joined(separator: ", "))])"
-        case .tuple(let t): return ".tuple([\(t.map(codegenTLAValue).joined(separator: ", "))])"
+        case .int(let n): return "TLAValue.int(\(n))"
+        case .bool(let b): return "TLAValue.bool(\(b))"
+        case .string(let s): return "TLAValue.string(\"\(s)\")"
+        case .set(let s): return "TLAValue.set([\(s.map(codegenTLAValue).joined(separator: ", "))])"
+        case .tuple(let t): return "TLAValue.tuple([\(t.map(codegenTLAValue).joined(separator: ", "))])"
         case .record(let r):
             let fields = r.fields.map { "\"\($0.name)\": \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return fields.isEmpty ? ".record([:])" : ".record([\(fields)])"
+            return fields.isEmpty ? "TLAValue.record([:])" : "TLAValue.record([\(fields)])"
         case .function(let f):
             let entries = f.map { "\(codegenTLAValue($0.key)): \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return entries.isEmpty ? ".function([:])" : ".function([\(entries)])"
-        case .constant(let c): return ".constant(\"\(c)\")"
+            return entries.isEmpty ? "TLAValue.function([:])" : "TLAValue.function([\(entries)])"
+        case .constant(let c): return "TLAValue.constant(\"\(c)\")"
         }
     }
 
