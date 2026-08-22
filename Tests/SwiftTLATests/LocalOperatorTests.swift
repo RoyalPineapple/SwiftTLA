@@ -94,6 +94,9 @@ struct LocalOperatorTests {
     let body = try #require(GeneratedTypedLocalRecursionModel.spec.formalOperatorDefinitions.first?.body)
     #expect(body.description.contains("Count[number \\in 0..4]"))
     #expect(body.description.contains("IN Count[4]"))
+    let rendered = try GeneratedTypedLocalRecursionModel.spec.compile().renderedTLAModuleBundle().tla
+    #expect(rendered.contains("LET Count["))
+    #expect(!rendered.contains("LET RECURSIVE Count"))
 
     var model = try GeneratedTypedLocalRecursionModel.makeMachine()
     #expect(try model.apply(.advance).after.counter == 1)
