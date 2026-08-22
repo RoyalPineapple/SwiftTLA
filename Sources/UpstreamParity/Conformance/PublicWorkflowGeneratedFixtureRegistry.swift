@@ -21,7 +21,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: try actions(named: ["advance"], in: compilation),
+          actions: actions(in: compilation),
           apply: { state, action in
             generatedActionResult(compilation, action: action, in: state)
           },
@@ -32,7 +32,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: try actions(named: ["advance"], in: compilation),
+          actions: actions(in: compilation),
           apply: { state, action in
             P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(compilation: compilation, action: action, in: state)
           },
@@ -43,7 +43,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: try actions(named: ["advance"], in: compilation),
+          actions: actions(in: compilation),
           apply: { _, _ in
             .evaluationFailed(
               .init(code: .evaluationError, message: "fixture failure"))
@@ -55,7 +55,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: try actions(named: ["advance"], in: compilation),
+          actions: actions(in: compilation),
           apply: { _, _ in
             .evaluationUnavailable(
               .init(code: .evaluatorUnavailable, message: "fixture unavailable"))
@@ -67,18 +67,9 @@ enum PublicWorkflowGeneratedFixtureRegistry {
     }
   }
 
-  private static func actions(
-    named names: [String],
-    in compilation: CompiledSpecification
-  ) throws -> [PublicWorkflowGeneratedAction] {
-    try names.map { name in
-      guard let id = compilation.actionID(named: name) else {
-        throw ConformanceGovernanceError.invalidField(
-          record: compilation.identity.value,
-          field: "compiled fixture action \(name)"
-        )
-      }
-      return .init(id: id, renderedName: name)
+  private static func actions(in compilation: CompiledSpecification) -> [PublicWorkflowGeneratedAction] {
+    compilation.compiledActions.map {
+      .init(id: $0.id, renderedName: $0.renderedName)
     }
   }
 }

@@ -158,7 +158,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(checker.compilation.identity == compilation.identity)
         let counterToken = try #require(TLAStateProjection.Token(validating: "counter"))
         let initial = try TLAStateProjection(validating: [.init(token: counterToken, value: .int(0))])
-        let action = try #require(compilation.actionID(named: "increment"))
+        let action = try #require(compilation.compiledActions.first).id
         let successor = try #require(
             try compilation.successors(for: action, arguments: [], from: initial).first
         )
@@ -805,7 +805,7 @@ struct CompilerPipelineCanonicalizationTests {
             return
         }
         #expect(field.ordinal == 0)
-        let action = try #require(compilation.actionID(named: "step"))
+        let action = try #require(compilation.compiledActions.first).id
         let initial = try #require(try compilation.initialStateProjections().first)
         let successors = try compilation.successors(for: action, arguments: [], from: initial)
         #expect(successors.count == 1)
@@ -831,7 +831,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let action = try #require(compilation.actionID(named: "step"))
+        let action = try #require(compilation.compiledActions.first).id
         let initial = try #require(try compilation.initialStateProjections().first)
         let projection = try #require(
             try compilation.successors(for: action, arguments: [], from: initial).first
