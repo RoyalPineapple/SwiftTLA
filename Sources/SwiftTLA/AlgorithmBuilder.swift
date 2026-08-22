@@ -1541,10 +1541,13 @@ public func With<Value: TLAValueType>(
 public func With<First: TLAValueType, Second: TLAValueType>(
     _ first: Expr<SetExpr<First>>,
     _ second: Expr<SetExpr<Second>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    With(first) { firstValue in
-        With(second) { secondValue in
+    With(first, file: file, line: line, column: column) { firstValue in
+        With(second, file: file, line: line, column: column + 1) { secondValue in
             body(firstValue, secondValue)
         }
     }
@@ -1555,11 +1558,14 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>
     _ first: Expr<SetExpr<First>>,
     _ second: Expr<SetExpr<Second>>,
     _ third: Expr<SetExpr<Third>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    With(first) { firstValue in
-        With(second) { secondValue in
-            With(third) { thirdValue in
+    With(first, file: file, line: line, column: column) { firstValue in
+        With(second, file: file, line: line, column: column + 1) { secondValue in
+            With(third, file: file, line: line, column: column + 2) { thirdValue in
                 body(firstValue, secondValue, thirdValue)
             }
         }
@@ -1572,10 +1578,13 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
     _ second: Expr<SetExpr<Second>>,
     _ third: Expr<SetExpr<Third>>,
     _ fourth: Expr<SetExpr<Fourth>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>, WithValue<Fourth>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>, WithValue<Fourth>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    With(first, second, third) { firstValue, secondValue, thirdValue in
-        With(fourth) { fourthValue in
+    With(first, second, third, file: file, line: line, column: column) { firstValue, secondValue, thirdValue in
+        With(fourth, file: file, line: line, column: column + 3) { fourthValue in
             body(firstValue, secondValue, thirdValue, fourthValue)
         }
     }
@@ -1588,11 +1597,14 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
 /// formal expressions and never become host-language tuple values.
 public func With<First: TLAValueType, Second: TLAValueType>(
     _ pairs: Expr<SetExpr<Pair<First, Second>>>,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    With(pairs) { pair in
-        Let(pair.first()) { first in
-            Let(pair.second()) { second in
+    With(pairs, file: file, line: line, column: column) { pair in
+        Let(pair.first(), file: file, line: line, column: column + 1) { first in
+            Let(pair.second(), file: file, line: line, column: column + 2) { second in
                 body(first, second)
             }
         }
@@ -1605,18 +1617,24 @@ public func With<First: TLAValueType, Second: TLAValueType>(
 /// It lowers to a scoped TLA+ `LET name == expression IN ...` expression.
 public func Let<Value: TLAValueType>(
     _ value: Expr<Value>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    let variable = generatedBinderName()
+    let variable = generatedBinderName(file: file, line: line, column: column)
     let bound = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .letBinding(variable: variable, value: value.raw, body(bound).map(\.model)))
 }
 
 public func Let<Value: TLAValueType>(
     _ value: Value,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    Let(Expr<Value>(.value(value.tlaValue)), body)
+    Let(Expr<Value>(.value(value.tlaValue)), body, file: file, line: line, column: column)
 }
 
 /// Tests whether a bounded formal set has a member that satisfies `predicate`.
@@ -1642,10 +1660,13 @@ public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
 public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
     in first: Expr<SetExpr<First>>,
     and second: Expr<SetExpr<Second>>,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> Expr<Bool> {
-    Exists(in: first) { firstValue in
-        Exists(in: second) { secondValue in
+    Exists(in: first, file: file, line: line, column: column) { firstValue in
+        Exists(in: second, file: file, line: line, column: column + 1) { secondValue in
             predicate(firstValue, secondValue)
         }
     }
@@ -1669,10 +1690,13 @@ public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
 public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
     in first: Expr<SetExpr<First>>,
     and second: Expr<SetExpr<Second>>,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> Expr<Bool> {
-    ForAll(in: first) { firstValue in
-        ForAll(in: second) { secondValue in
+    ForAll(in: first, file: file, line: line, column: column) { firstValue in
+        ForAll(in: second, file: file, line: line, column: column + 1) { secondValue in
             predicate(firstValue, secondValue)
         }
     }
@@ -1701,10 +1725,13 @@ public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
 public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
     in first: Expr<SetExpr<First>>,
     and second: Expr<SetExpr<Second>>,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StateExpr {
-    All(in: first) { firstValue in
-        All(in: second) { secondValue in
+    All(in: first, file: file, line: line, column: column) { firstValue in
+        All(in: second, file: file, line: line, column: column + 1) { secondValue in
             predicate(firstValue, secondValue)
         }
     }
@@ -1781,33 +1808,45 @@ public func At<Label: PlusCalLabel, Value: FiniteDomainKey>(
 
 public func With<Value: TLAValueType>(
     _ source: Var<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    With(Expr<SetExpr<Value>>(source.stateExpr), body)
+    With(Expr<SetExpr<Value>>(source.stateExpr), body, file: file, line: line, column: column)
 }
 
 public func With<Value: TLAValueType>(
     _ source: SharedVariable<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    With(Expr<SetExpr<Value>>(source.stateExpr), body)
+    With(Expr<SetExpr<Value>>(source.stateExpr), body, file: file, line: line, column: column)
 }
 
 /// Binds one member of a process-local formal set.
 public func With<Value: TLAValueType>(
     _ source: LocalVariable<SetExpr<Value>>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    With(source.expr, body)
+    With(source.expr, body, file: file, line: line, column: column)
 }
 
 /// Binds one member of a finite Swift domain. This is the most direct Swift
 /// spelling of PlusCal `with (value \in Type)`.
 public func With<Value: FiniteDomainKey>(
     _ source: FiniteDomain<Value>,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    let variable = generatedBinderName()
+    let variable = generatedBinderName(file: file, line: line, column: column)
     let value = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .with(
         variable: variable,
@@ -1914,9 +1953,12 @@ public func Either(
 
 public func Choose<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
-    @DoBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement]
+    @DoBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    let name = generatedBinderName()
+    let name = generatedBinderName(file: file, line: line, column: column)
     let value = ProcessIdentifier<Value>(expression: .variable(name))
     return StepStatement(model: .choose(variable: name, domain: domain.values.map(\.tlaValue), body(value).map(\.model)))
 }
@@ -1926,10 +1968,13 @@ public func Choose<Value: FiniteDomainKey>(
 public func Choose<First: FiniteDomainKey, Second: FiniteDomainKey>(
     _ firstDomain: FiniteDomain<First>,
     _ secondDomain: FiniteDomain<Second>,
-    @DoBuilder _ body: (ProcessIdentifier<First>, ProcessIdentifier<Second>) -> [StepStatement]
+    @DoBuilder _ body: (ProcessIdentifier<First>, ProcessIdentifier<Second>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    let firstName = generatedBinderName()
-    let secondName = generatedBinderName()
+    let firstName = generatedBinderName(file: file, line: line, column: column)
+    let secondName = generatedBinderName(file: file, line: line, column: column + 1)
     let first = ProcessIdentifier<First>(expression: .variable(firstName))
     let second = ProcessIdentifier<Second>(expression: .variable(secondName))
     return StepStatement(model: .choose(
@@ -1946,9 +1991,12 @@ public func Choose<First: FiniteDomainKey, Second: FiniteDomainKey>(
 /// data: the closure describes one choice branch, not a Swift loop.
 public func Choose(
     _ domain: ClosedRange<Int>,
-    @DoBuilder _ body: (WithValue<Int>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Int>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    let name = generatedBinderName()
+    let name = generatedBinderName(file: file, line: line, column: column)
     let value = WithValue<Int>(expression: .variable(name))
     return StepStatement(model: .choose(
         variable: name,
@@ -1961,10 +2009,13 @@ public func Choose(
 public func Choose(
     _ firstDomain: ClosedRange<Int>,
     _ secondDomain: ClosedRange<Int>,
-    @DoBuilder _ body: (WithValue<Int>, WithValue<Int>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Int>, WithValue<Int>) -> [StepStatement],
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
 ) -> StepStatement {
-    let firstName = generatedBinderName()
-    let secondName = generatedBinderName()
+    let firstName = generatedBinderName(file: file, line: line, column: column)
+    let secondName = generatedBinderName(file: file, line: line, column: column + 1)
     let first = WithValue<Int>(expression: .variable(firstName))
     let second = WithValue<Int>(expression: .variable(secondName))
     return StepStatement(model: .choose(
