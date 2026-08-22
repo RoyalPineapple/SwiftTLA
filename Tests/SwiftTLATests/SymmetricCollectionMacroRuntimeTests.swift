@@ -25,7 +25,7 @@ public struct StringMacroDevice: Identifiable, Sendable {
 }
 
 @TLAModel
-public struct GeneratedSymmetricRuntime {
+public struct GeneratedSymmetricRuntime: Sendable {
   public static var spec: TLASpec {
     TLASpec("GeneratedSymmetricRuntime") {
       let devices = SymmetricCollectionVar<MacroDevice, Int>("devices")

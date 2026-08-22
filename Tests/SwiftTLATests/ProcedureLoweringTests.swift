@@ -233,7 +233,10 @@ struct ProcedureLoweringTests {
         let action = try #require(compilation.layout.actionID(named: label))
         return try CompiledRuntime(compilation: compilation)
             .successors(for: action, from: state)
-            .filter { arguments == nil || try $0.arguments.map { try $0.rendered(using: compilation.layout) } == arguments }
+            .filter { successor in
+                guard let arguments else { return true }
+                return try successor.arguments.map { try $0.rendered(using: compilation.layout) } == arguments
+            }
             .map(\.state)
     }
 
@@ -249,6 +252,13 @@ struct ProcedureLoweringTests {
         compilation: CompiledSpecification
     ) throws -> TLAValue {
         let formalValue = try value(named: root, in: state, compilation: compilation)
-        return try #require(formalValue.functionValue[key])
+        guard case .function(let values) = formalValue else {
+            throw ProcedureLoweringTestError.expectedFunction
+        }
+        return try #require(values[key])
     }
+}
+
+private enum ProcedureLoweringTestError: Error {
+    case expectedFunction
 }

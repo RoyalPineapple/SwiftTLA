@@ -1,5 +1,5 @@
 import Foundation
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 
 @Suite(.serialized)

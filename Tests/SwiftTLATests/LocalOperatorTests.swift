@@ -41,7 +41,7 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
         FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
           LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
             If(current == 0, then: true, else: recursion(current.expr - 1))
-          }, in: { recursion in recursion(ballot.expr) })
+          }, in: { recursion in recursion(ballot) })
         }
         let counter = SharedVar("counter", initial: 0)
         Do(TestControlLabel.advance) {
@@ -61,7 +61,7 @@ private struct GeneratedTopLevelTypedFormalDefinitionModel {
       FormalDefinition("SafeAt", taking: Int.self) { ballot in
         LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
           If(current == 0, then: true, else: recursion(current.expr - 1))
-        }, in: { recursion in recursion(ballot.expr) })
+        }, in: { recursion in recursion(ballot) })
       }
       Action("advance") {
         counter.becomes(counter.expr + 1)
@@ -107,7 +107,7 @@ struct LocalOperatorTests {
     #expect(definition.parameters == [.value("value0"), .value("value1")])
     #expect(definition.body.description.contains("LET RECURSIVE SA"))
 
-    var model = GeneratedTypedFormalDefinitionAlgorithm()
+    var model = try GeneratedTypedFormalDefinitionAlgorithm.makeMachine()
     #expect(try model.apply(.advance).after.counter == 1)
   }
 
