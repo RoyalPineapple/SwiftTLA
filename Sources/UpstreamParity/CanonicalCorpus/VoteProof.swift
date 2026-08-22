@@ -151,16 +151,22 @@ public struct VoteProofModel: Sendable {
                     dependsOn: ["ChosenIn"]
                 )
 
-                Invariant("TypeOK") {
-                    ForAll(in: acceptors) { acceptor in
+                FormalDefinition(
+                    "VoteProofTypeOK",
+                    parameters: [],
+                    body: ForAll(in: acceptors) { acceptor in
                         ForAll(in: votes[acceptor]) { vote in
                             ballots.contains(vote.first()) && values.contains(vote.second())
                         } && ballots.union(SetExpr<Int>.literal(-1)).contains(maxBal[acceptor])
-                    }
-                }
+                    },
+                    plusCalPhase: .define
+                )
+                Invariant("TypeOK") { FormalCall(as: Bool.self, "VoteProofTypeOK") }
 
-                Invariant("VInv1") {
-                    ForAll(in: acceptors) { acceptor in
+                FormalDefinition(
+                    "VoteProofSingleVotePerBallot",
+                    parameters: [],
+                    body: ForAll(in: acceptors) { acceptor in
                         ForAll(in: ballots) { ballot in
                             ForAll(in: values) { value in
                                 ForAll(in: values) { otherValue in
@@ -170,22 +176,31 @@ public struct VoteProofModel: Sendable {
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                    plusCalPhase: .define
+                )
+                Invariant("VInv1") { FormalCall(as: Bool.self, "VoteProofSingleVotePerBallot") }
 
-                Invariant("VInv2") {
-                    ForAll(in: acceptors) { acceptor in
+                FormalDefinition(
+                    "VoteProofVotesAreSafe",
+                    parameters: [],
+                    body: ForAll(in: acceptors) { acceptor in
                         ForAll(in: ballots) { ballot in
                             ForAll(in: values) { value in
                                 !votes[acceptor].contains(Pair<Int, Value>.literal(ballot.expr, value.expr))
                                     || FormalCall(as: Bool.self, "SafeAt", ballot.expr, value.expr)
                             }
                         }
-                    }
-                }
+                    },
+                    plusCalPhase: .define,
+                    dependsOn: ["SafeAt"]
+                )
+                Invariant("VInv2") { FormalCall(as: Bool.self, "VoteProofVotesAreSafe") }
 
-                Invariant("VInv3") {
-                    ForAll(in: acceptors) { firstAcceptor in
+                FormalDefinition(
+                    "VoteProofAgreement",
+                    parameters: [],
+                    body: ForAll(in: acceptors) { firstAcceptor in
                         ForAll(in: acceptors) { secondAcceptor in
                             ForAll(in: ballots) { ballot in
                                 ForAll(in: values) { firstValue in
@@ -197,17 +212,23 @@ public struct VoteProofModel: Sendable {
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                    plusCalPhase: .define
+                )
+                Invariant("VInv3") { FormalCall(as: Bool.self, "VoteProofAgreement") }
 
-                Invariant("VInv4") {
-                    let chosenValues = FormalCall(as: SetExpr<Value>.self, "chosen")
-                    return ForAll(in: chosenValues) { value in
-                        ForAll(in: chosenValues) { otherValue in
+                FormalDefinition(
+                    "VoteProofChosenValuesAgree",
+                    parameters: [],
+                    body: ForAll(in: FormalCall(as: SetExpr<Value>.self, "chosen")) { value in
+                        ForAll(in: FormalCall(as: SetExpr<Value>.self, "chosen")) { otherValue in
                             value == otherValue
                         }
-                    }
-                }
+                    },
+                    plusCalPhase: .define,
+                    dependsOn: ["chosen"]
+                )
+                Invariant("VInv4") { FormalCall(as: Bool.self, "VoteProofChosenValuesAgree") }
 
                 let increaseMaxBal = Macro { (ballot: MacroParameter<Int>, acceptor: MacroParameter<Acceptor>) in
                     When(ballot.expr > maxBal[acceptor])
