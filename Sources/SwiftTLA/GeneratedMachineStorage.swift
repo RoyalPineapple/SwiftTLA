@@ -28,11 +28,11 @@ public struct _GeneratedMachineStorage: Sendable {
             return try _GeneratedMachineStorage.decode(values[index], at: "action argument \(index)")
         }
 
-        public func matches<Value: TLAValueConvertible>(
-            _ value: Value,
+        public func matches(
+            _ value: TLAValue,
             at index: Int
         ) -> Bool {
-            values.indices.contains(index) && values[index] == value.tlaValue
+            values.indices.contains(index) && values[index] == value
         }
     }
 
