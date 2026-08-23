@@ -37,7 +37,7 @@ Checked-in baseline and control evidence lives under
 `Verification/CoreConformance/baselines/` and
 `Verification/CoreConformance/fixtures/`.
 
-When a run fails, first inspect its `comparison.json`, then the canonical
+When a run fails, first inspect its `core-decision.json`, then the canonical
 graphs and `logs/` in that case's evidence directory. A graph mismatch is
 classified by relation (for example, an initial state, state binding, edge,
 outcome, or mapping difference); do not reduce it to a count mismatch.
@@ -66,7 +66,7 @@ its decision, reason codes, mandatory cases, evidence references, run
 correlations, aggregate counts, and final exit class.
 
 For a blocked entry, start with its reason codes and then inspect the retained
-`comparison.json` and graph records for the named case.
+`core-decision.json` and graph records for the named case.
 
 ## Controls and limits
 

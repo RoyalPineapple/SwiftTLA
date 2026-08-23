@@ -271,13 +271,20 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
 
   @Test("required replay fails when its TLC execution does not succeed")
   func requiredReplayFailureIsExplicit() throws {
+    let directory = try helperProcessDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let request = try retainedCaptureRequest(in: directory)
     let executor = RecordingTLCExecutor(results: [
       .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
       .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
       .init(status: 1, stdout: "", stderr: "cannot replay")
     ])
     #expect(throws: TLCProcessError.self) {
-      _ = try TLCProcessAdapter(executor: executor).run(try TLCProcessRequest.fixture(), replay: .required)
+      _ = try TLCProcessAdapter(executor: executor).capture(
+        request,
+        replay: .required,
+        retainingIn: directory.appendingPathComponent("evidence")
+      )
     }
   }
 
@@ -484,23 +491,30 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("process adapter adds trace and replay only after a violation")
   func onlyRequestsTraceAfterViolation() throws {
+    let directory = try helperProcessDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let request = try retainedCaptureRequest(in: directory)
+    try completeGraphStream(request.expectedCase).write(to: request.graphEvents, options: .atomic)
     let executor = RecordingTLCExecutor(results: [
       .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
       .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
       .init(status: 12, stdout: "Error: Invariant broken", stderr: "")
     ])
     let adapter = TLCProcessAdapter(executor: executor)
-    let request = try TLCProcessRequest.fixture()
-    let result = try adapter.run(request, replay: .required)
-    #expect(result.primary.isViolation)
+    let capture = try adapter.capture(
+      request,
+      replay: .required,
+      retainingIn: directory.appendingPathComponent("evidence")
+    )
+    #expect(capture.run.primary.isViolation)
     #expect(executor.requests.count == 3)
     #expect(executor.requests[0].traceMode == .none)
     #expect(executor.requests[1].traceMode == .dumpJSON)
     #expect(executor.requests[2].traceMode == .loadJSON)
-    #expect(executor.requests[0].graphEvents.path == "/tmp/events.jsonl")
-    #expect(executor.requests[1].graphEvents.path == "/tmp/events.trace.jsonl")
-    #expect(executor.requests[2].graphEvents.path == "/tmp/events.replay.jsonl")
-    #expect(result.replay == .init(status: 12, stdout: "Error: Invariant broken", stderr: ""))
+    #expect(executor.requests[0].graphEvents == request.graphEvents)
+    #expect(executor.requests[1].graphEvents.lastPathComponent == "events.trace.jsonl")
+    #expect(executor.requests[2].graphEvents.lastPathComponent == "events.replay.jsonl")
+    #expect(capture.run.replay == .init(status: 12, stdout: "Error: Invariant broken", stderr: ""))
   }
 
   @Test("graph event parser rejects booleans for integers and numbers for booleans")
@@ -583,4 +597,21 @@ extension CoreConformanceTLCAdapterTests {
       try wrongArguments.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
   }
+}
+
+private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessRequest {
+  let fixture = try TLCProcessRequest.fixture()
+  return TLCProcessRequest(
+    javaExecutable: fixture.javaExecutable,
+    jar: fixture.jar,
+    bridgeClasses: fixture.bridgeClasses,
+    bundle: fixture.bundle,
+    graphEvents: directory.appendingPathComponent("events.jsonl"),
+    traceOutput: directory.appendingPathComponent("counterexample.json"),
+    replayInput: directory.appendingPathComponent("counterexample.json"),
+    workingDirectory: directory.appendingPathComponent("work"),
+    arguments: fixture.arguments,
+    expectedCase: fixture.expectedCase,
+    runID: fixture.runID
+  )
 }
