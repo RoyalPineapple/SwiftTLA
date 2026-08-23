@@ -9,22 +9,22 @@ use a separate [public workflow conformance](PublicWorkflowConformance.md)
 report. Its diagnostic or hosted-candidate result does not widen this core
 support register.
 
-## Temporal and symmetry admission boundary
+## Temporal and symmetry admission
 
-Temporal and symmetry admission is a separate P3 boundary. It does not widen
-the core finite-graph claim in this document.
+Temporal and symmetry admission has a separate support register and report.
+It does not widen the core finite-graph claim in this document.
 
-The P3 source registers are under
-`Verification/TemporalSymmetryConformance/`. A current P3 report can admit
-only the exact requested temporal and symmetry entries named there. Its
-reference is at `.build/temporal-symmetry-support-gate/current-support-admission.json`.
+The source registers are under `Verification/TemporalSymmetryConformance/`.
+A current report can admit only the requested temporal and symmetry entries
+named there. Its reference is at
+`.build/temporal-symmetry-support-gate/current-support-admission.json`.
 
-GitHub Actions runs the required P3 qualification. Its report uses exit `0`
-for admission, `1` for a complete blocking result, and `2` when evidence is
-unavailable or unsafe. It always retains a report and never converts `1` or
-`2` into success.
+GitHub Actions runs the temporal and symmetry qualification. Its report uses
+exit `0` for admission and exit `1` for a complete blocking result. Exit `2`
+means that evidence is unavailable or unsafe. The gate always retains a
+report and never converts exit `1` or `2` into success.
 
-P3 currently evaluates only declared temporal matrix cases and one
+The gate evaluates only declared temporal matrix cases and one
 binary-valued `SymmetricCollection` at exact scopes 2, 3, and 4. It explicitly
 does not support larger scopes, combined temporal-plus-symmetry checking,
 multiple collections, direct symmetry declarations, or nested member-bearing
@@ -89,8 +89,8 @@ declared inputs and toolchain, completed, and matched exactly. `unsupported`
 marks a declared support boundary. `blocked` means a requested entry did not
 meet the admission contract.
 
-For a blocked entry, start with `reasonCodes`, then inspect the referenced
-case evidence and exact comparison report.
+For a blocked entry, start with `reasonCodes`. Then inspect the referenced
+case evidence and exact decision record.
 
 ## Exit status
 

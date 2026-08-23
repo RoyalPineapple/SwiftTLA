@@ -12,11 +12,11 @@ macros that generate typed machines from a `TLASpec` declaration.
 Application code reads generated `State`, `ActionLabel`, and
 `TransitionResult` values. It does not read a raw formal state map.
 
-## Compile before formal work
+## Compile the source model
 
-`TLASpec` is the one formal meaning of a supported model. Compile it before
-you export TLA+ text. Generated models construct their own
-typed machines.
+`TLASpec` is the typed source model. `compile()` validates, binds, links,
+lowers, and returns one immutable `CompiledSpecification`. Generated machines,
+bounded exploration, and rendered bundles use this compiled meaning.
 
 ```swift
 let compilation = try Counter.spec.compile()
@@ -24,14 +24,29 @@ var machine = try Counter.makeMachine()
 try machine.apply(.advance)
 ```
 
-`CompiledSpecification` contains the canonical `TLASpec`, its
+`CompiledSpecification` contains the compiled declaration plan, its
 `FormalModuleClosure`, and a stable `CompilationIdentity`. The closure records
-the root module, every required import or instance, the owner, and the path
-that requires each module. It contains no unrelated modules.
+the root module, every required import or instance, its owner, and the path
+that requires each module.
 
 Compilation can throw `CompilationDiagnostic`. The diagnostic identifies the
 stage, code, source path, expected value, actual value, and next safe action.
 Fix that source relationship before you compile again.
+
+## Inspect language support
+
+`LanguageCapabilityLedger` records the support dimensions for each
+`DeclaredLanguageConstruct`.
+
+```swift
+let procedure = LanguageCapabilityLedger.capability(for: .procedure)
+let capabilities = LanguageCapabilityLedger.all
+```
+
+The parser and result builders use the same ledger. If a required dimension
+is unsupported, compilation throws `LanguageCapabilityDiagnostic`. The
+diagnostic identifies the construct, operation, source path, and required
+action. No compiled specification is available after this failure.
 
 ## Materialize a linked bundle
 
@@ -78,6 +93,13 @@ External comparison is a separate evidence step. Read
 - ``FormalModuleClosure``
 - ``TLAModuleBundle``
 - ``TLAModuleBundleIntegrityError``
+
+### Language capabilities
+
+- ``DeclaredLanguageConstruct``
+- ``LanguageCapability``
+- ``LanguageCapabilityLedger``
+- ``LanguageCapabilityDiagnostic``
 
 ### Generated-machine errors
 

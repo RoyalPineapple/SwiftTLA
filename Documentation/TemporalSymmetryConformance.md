@@ -10,22 +10,23 @@ not define a hidden oracle.
 ## Run the hosted gate
 
 GitHub Actions validates the checked-in registers, then creates a current core
-admission and a current P3 run. Local broad gate execution requires explicit
-authorization and is diagnostic-only. The current-report reference is:
+admission and a current temporal and symmetry run. Local broad gate execution
+requires explicit authorization and is diagnostic-only. The current-report
+reference is:
 
 ```text
 .build/temporal-symmetry-support-gate/current-support-admission.json
 ```
 
-It contains the immutable report path and SHA-256. The immutable P3 artifacts
+It contains the immutable report path and SHA-256. The immutable run artifacts
 are under:
 
 ```text
-.build/temporal-symmetry-support-gate/runs/<p3-gate-run-id>/
+.build/temporal-symmetry-support-gate/runs/<gate-run-id>/
 ```
 
 Do not use an old report as current evidence. Each report binds its cases,
-comparison artifacts, core admission, digests, and run IDs to one P3 run.
+comparison artifacts, core admission, digests, and run IDs to one gate run.
 
 ## Read the result
 
@@ -119,15 +120,15 @@ The bridge pin contains the `LosslessStateWriter` class plus source and binary
 digests.
 
 When the bridge changes, update the declared source and binary pins together.
-Then create fresh P3 evidence. Do not mix evidence from the old bridge with
-evidence from the new bridge. A digest mismatch makes the evaluation
-unavailable.
+Then create fresh temporal and symmetry evidence. Do not mix evidence from the
+old bridge with evidence from the new bridge. A digest mismatch makes the
+evaluation unavailable.
 
 ## Diagnose a block
 
 1. Resolve `current-support-admission.json`, then find the blocked requested entry.
 2. Read its `reasonCodes`, case IDs, correlations, and evidence references.
-3. Inspect the matching directory under `runs/<p3-gate-run-id>/`.
+3. Inspect the matching directory under `runs/<gate-run-id>/`.
 4. For temporal cases, inspect the property result, enabledness, lasso, trace,
    graph events, and diagnostics.
 5. For symmetry cases, inspect raw and reduced graphs, orbit evidence,

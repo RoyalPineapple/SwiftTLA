@@ -2,12 +2,12 @@
 
 **SwiftTLA brings formal programming into Swift.**
 
-**SwiftTLA generates typed Swift state machines and exhaustively validates all reachable behavior against your specification.**
+**SwiftTLA generates typed Swift state machines and explores reachable behavior within a declared finite configuration.**
 
 Define a system's state, actions, algorithms, invariants, and temporal
-properties in Swift. SwiftTLA compiles that one source model into a machine
-your app can run, a model checker for your tests, and TLA+/PlusCal artifacts
-for TLC.
+properties in Swift. SwiftTLA compiles that source model into a machine that
+your app can run. The same compilation supplies bounded exploration and
+TLA+/PlusCal bundles for TLC.
 
 **One specification. Production behavior. Formal evidence.**
 
@@ -96,11 +96,12 @@ print(result.after)
 
 ## Validate the same specification
 
-The same compilation renders the TLA+ and PlusCal bundle. Core Conformance
-explores the compiled machine and compares its canonical graph with TLC's
-graph exactly. The separate ValidationEvidence workflow translates the
-canonical PlusCal corpus with the official translator and retains the
-independent TLC evidence.
+The same compiled specification renders the TLA+ and PlusCal bundles. Core
+conformance explores the compiled machine and compares its canonical graph
+with the TLC graph. Each declared hosted run retains the exact graphs,
+`core-decision.json`, the TLC process record, and their provenance. A graph
+receipt summarizes the completed exploration. Exact graph comparison decides
+the finite case.
 
 ## Use it where state order matters
 

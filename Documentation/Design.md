@@ -117,16 +117,24 @@ the retained canonical records provide the difference explanation.
 See [Core graph conformance](CoreGraphConformance.md) and
 [Upstream parity](UpstreamParity.md).
 
-## Language surface
+## Inspect language capabilities
 
-The typed source model includes finite values, sets, tuples, records,
-functions, sequences, arithmetic, predicates, actions, invariants, temporal
-properties, fairness declarations, procedures, module imports, instances,
-and refinements.
+`LanguageCapabilityLedger` records one capability for every
+`DeclaredLanguageConstruct`. Each record states whether source decoding,
+result-builder construction, compilation, TLA+ rendering, PlusCal rendering,
+execution, and bounded conformance are supported.
 
-Every source construct has a typed representation. A required capability is
-also a typed declaration. Compilation reports its named diagnostic when the
-current compiler cannot supply that capability.
+```swift
+let capability = LanguageCapabilityLedger.capability(for: .procedure)
+let capabilities = LanguageCapabilityLedger.all
+```
+
+The parser and result builders use this ledger before compilation publishes a
+compiled specification. `LanguageCapabilityDiagnostic` identifies the
+construct, operation, source path, expected boundary, actual use, and next
+action. Capability validation also visits declarations inside processes and
+procedures. If the required capability is unsupported, compilation returns no
+compiled specification.
 
 Refinement checking evaluates a typed concrete model, typed abstract model,
 and typed state mapping. It checks mapped initial states and concrete edges,
