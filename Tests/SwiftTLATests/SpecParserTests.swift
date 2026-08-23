@@ -122,6 +122,71 @@ private func parserEnum(
         #expect(surface.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
     }
 
+    @Test("Algorithm parser carries prior shared bindings into mapping initializers")
+    func parsesScopedSharedBindingInMappingInitializer() throws {
+        let source = """
+        {
+            Algorithm("MappingScope", scoped: { scope in
+                let enabled = scope.sharedVar("enabled", initial: true)
+                let values = scope.sharedVar("values", initial: Function<Node, Int>.mapping { _ in
+                    If(enabled == true, then: 1, else: 0)
+                })
+                Do(TestControlLabel.done) { Stop() }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "MappingScope").spec.variables.map(\.name) == ["pc", "enabled", "values"])
+    }
+
+    @Test("Algorithm parser carries shared bindings into Each bodies")
+    func parsesScopedSharedBindingInEachBody() throws {
+        let source = """
+        {
+            Algorithm("EachScope", scoped: { scope in
+                let enabled = scope.sharedVar("enabled", initial: true)
+                Each(Node.all) { _ in
+                    Do(TestControlLabel.step) {
+                        Await(enabled == true)
+                        Stop()
+                    }
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "EachScope").spec.actions.map(\.name) == ["step", "Terminating"])
+    }
+
+    @Test("Algorithm parser carries shared bindings into macro declarations")
+    func parsesScopedSharedBindingInMacroDeclaration() throws {
+        let source = """
+        {
+            Algorithm("MacroScope", scoped: { scope in
+                let enabled = scope.sharedVar("enabled", initial: true)
+                let waitUntilEnabled = Macro { (value: MacroParameter<Bool>) in
+                    Await(enabled == value.expr)
+                }
+                Do(TestControlLabel.step) { waitUntilEnabled(enabled) }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "MacroScope").spec.actions.map(\.name) == ["step", "Terminating"])
+    }
+
     @Test("Specification parser binds a typed local algorithm component")
     func bindsTypedLocalAlgorithmComponent() throws {
         let source = """

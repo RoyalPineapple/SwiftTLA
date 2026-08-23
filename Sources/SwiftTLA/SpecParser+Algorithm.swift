@@ -307,7 +307,7 @@ extension ParserSession {
         for statement in closure.statements {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let macro = parseAlgorithmMacroDeclaration(variable) {
+               let macro = parseAlgorithmMacroDeclaration(variable, scope: sourceScope) {
                 let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text ?? ""
                 guard macros[name] == nil else {
                     result.diagnostics.append(.init(message: "Algorithm macro '\(name)' is declared more than once.", source: statement))
@@ -321,6 +321,7 @@ extension ParserSession {
                let component = parseAlgorithmVariableDeclaration(
                     variable,
                     kind: .shared,
+                    scope: sourceScope,
                     declarationScope: declarationScope
                ) {
                 components.append(component)
@@ -407,7 +408,12 @@ extension ParserSession {
                 components.append(.formalOperator(definition))
                 continue
             }
-            guard let component = parseAlgorithmComponent(call, construct: construct, macros: macros) else {
+            guard let component = parseAlgorithmComponent(
+                call,
+                construct: construct,
+                macros: macros,
+                scope: sourceScope
+            ) else {
                 if let diagnostic = algorithmCapabilityDiagnostic {
                     result.diagnostics.append(.init(capability: diagnostic))
                     return nil
@@ -439,14 +445,15 @@ extension ParserSession {
     private func parseAlgorithmComponent(
         _ call: FunctionCallExprSyntax,
         construct: AlgorithmSourceConstruct,
-        macros: [String: AlgorithmMacroDefinition]
+        macros: [String: AlgorithmMacroDefinition],
+        scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
         guard admitsSourceDecoding(construct, expression: call.calledExpression) else { return nil }
         switch construct {
         case .procedure:
-            return parseProcedure(call, macros: macros, scope: .empty)
+            return parseProcedure(call, macros: macros, scope: scope)
         case .each:
-            let component = parseEach(call, macros: macros, scope: .empty)
+            let component = parseEach(call, macros: macros, scope: scope)
             if component == nil, algorithmParseFailure == nil {
                 algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
             }
@@ -457,19 +464,19 @@ extension ParserSession {
                 construct: construct,
                 processParameter: "__pcal_sequential",
                 macros: macros,
-                scope: .empty
+                scope: scope
             )
         case .invariant:
-            guard let invariant = parseAlgorithmInvariant(call, scope: .empty) else { return nil }
+            guard let invariant = parseAlgorithmInvariant(call, scope: scope) else { return nil }
             return .invariant(invariant)
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
-            guard let temporal = parseAlgorithmTemporal(call, construct: construct) else { return nil }
+            guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
             return .temporal(temporal)
         case .fairness, .assume, .theorem:
             return .unsupported(construct.declaredConstruct)
         case .stateConstraint:
             guard let argument = call.arguments.first,
-                  let condition = decodeStateExpr(argument.expression)
+                  let condition = decodeAlgorithmStateExpression(argument.expression, scope: scope)
             else { return nil }
             return .stateConstraint(condition)
         default:
@@ -596,7 +603,8 @@ extension ParserSession {
 
     private func parseAlgorithmTemporal(
         _ call: FunctionCallExprSyntax,
-        construct: AlgorithmSourceConstruct
+        construct: AlgorithmSourceConstruct,
+        scope: TypedFacadeScope
     ) -> NamedTemporal? {
         guard let name = extractStringArg(call, index: 0) else { return nil }
         let arguments = Array(call.arguments).map(\.expression)
@@ -604,18 +612,18 @@ extension ParserSession {
         switch construct {
         case .leadsTo:
             guard arguments.count == 3,
-                  let from = decodeStateExpr(arguments[1]),
-                  let to = decodeStateExpr(arguments[2])
+                  let from = formalAlgorithmProperty(arguments[1], scope: scope),
+                  let to = formalAlgorithmProperty(arguments[2], scope: scope)
             else { return nil }
             expression = .leadsTo(from, to)
         case .eventually:
-            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.eventually) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: scope).map(TemporalExpr.eventually) : nil
         case .always:
-            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.always) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: scope).map(TemporalExpr.always) : nil
         case .alwaysEventually:
-            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.alwaysEventually) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: scope).map(TemporalExpr.alwaysEventually) : nil
         case .eventuallyAlways:
-            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.eventuallyAlways) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: scope).map(TemporalExpr.eventuallyAlways) : nil
         default:
             return nil
         }
@@ -848,7 +856,8 @@ extension ParserSession {
     }
 
     private func parseAlgorithmMacroDeclaration(
-        _ declaration: VariableDeclSyntax
+        _ declaration: VariableDeclSyntax,
+        scope: TypedFacadeScope
     ) -> AlgorithmMacroDefinition? {
         guard let initializer = declaration.bindings.first?.initializer?.value.as(FunctionCallExprSyntax.self),
               let closure = initializer.trailingClosure
@@ -863,15 +872,15 @@ extension ParserSession {
               admitsSourceDecoding(construct, expression: initializer.calledExpression),
               construct == .macro
         else { return nil }
-        let scope = typedFacadeScope(
-            .empty,
+        let macroScope = typedFacadeScope(
+            scope,
             bindings: parameters.map { (sourceName: $0, value: .variable($0)) }
         )
         guard let statements = parseAlgorithmStatements(
             closure.statements,
             processParameter: "__pcal_macro_no_process",
             macros: [:],
-            scope: scope
+            scope: macroScope
         ) else { return nil }
         return .init(
             parameters: parameters,
