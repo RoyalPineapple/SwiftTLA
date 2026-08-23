@@ -424,12 +424,6 @@ package struct TLCProcessAdapter: Sendable {
     return TLCProcessRun(primary: primary, trace: trace, replay: replayResult)
   }
 
-  package func capture(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
-    -> TLCProcessCapture {
-    let run = try run(request, replay: replay)
-    return try capture(run, request: request)
-  }
-
   package func capture(
     _ request: TLCProcessRequest,
     replay: TLCReplayPolicy,

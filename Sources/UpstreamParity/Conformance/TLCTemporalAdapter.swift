@@ -122,15 +122,9 @@ package struct TLCTemporalAdapter: Sendable {
       let completeGraph = try captureCompleteGraph(input)
       try clearTraceOutput(for: input.request)
 
-      let run: TLCProcessRun
-      do {
-        run = try processAdapter.run(input.request, replay: .none)
-      } catch {
-        try processAdapter.retain(error, request: input.request, in: input.outputDirectory)
-        throw error
-      }
-      try processAdapter.retain(run, request: input.request, in: input.outputDirectory)
-      let capture = try processAdapter.capture(run, request: input.request)
+      let capture = try processAdapter.capture(
+        input.request, replay: .none, retainingIn: input.outputDirectory)
+      let run = capture.run
       let propertyGraph = capture.graph
       let graph = completeGraph?.graph ?? propertyGraph
       let graphID = CanonicalGraphReceipt.graphRecordDigest(for: graph.graph)
@@ -276,16 +270,10 @@ package struct TLCTemporalAdapter: Sendable {
     try clearTraceOutput(for: request)
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
     try ConformanceEvidence.createDirectory(directory, beneath: input.outputDirectory)
-    let run: TLCProcessRun
-    do {
-      run = try processAdapter.run(request, replay: .none)
-    } catch {
-      try processAdapter.retain(error, request: request, in: directory)
-      throw error
+    let capture = try processAdapter.capture(request, replay: .none, retainingIn: directory)
+    guard capture.run.primary.reportedExhaustiveCompletion else {
+      throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
-    try processAdapter.retain(run, request: request, in: directory)
-    guard run.primary.reportedExhaustiveCompletion else { throw TLCTemporalAdapterError.graphEvidenceInvalid }
-    let capture = try processAdapter.capture(run, request: request)
     try ConformanceEvidence.writeJSON([
       "caseID": request.caseID,
       "graphRunID": request.runID.uuidString.lowercased(),
