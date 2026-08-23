@@ -53,7 +53,7 @@ public struct ObservableNameMapping: Hashable, Sendable {
     }
 }
 
-public enum ConformanceDifferenceCategory: String, Hashable, Sendable {
+public enum ConformanceDifferenceCategory: String, Codable, Hashable, Sendable {
     case receipt
     case mapping
     case initialStates

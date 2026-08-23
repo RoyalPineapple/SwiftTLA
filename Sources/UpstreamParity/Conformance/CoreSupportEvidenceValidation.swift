@@ -130,10 +130,6 @@ extension CoreSupportGate {
     }
   }
 
-  func canonicalRunsAgree(_ swift: CanonicalRun, _ tlc: CanonicalRun) -> Bool {
-    exactFiniteTLCGraph(expected: tlc, actual: swift).isConformant
-  }
-
   func rawArtifactManifestIsComplete(
     _ object: [String: Any], in directory: URL, isViolation: Bool
   ) -> Bool {
@@ -469,57 +465,6 @@ extension CoreSupportGate {
     let initialState: CanonicalState
     let transitions: [CanonicalEdge]
   }
-
-  func comparisonMatchesCanonicalTruth(
-    swift: CanonicalRunEvidence,
-    swiftRun: CanonicalRun,
-    tlc: CanonicalRunEvidence,
-    tlcRun: CanonicalRun,
-    comparison: [String: Any]
-  ) throws -> Bool {
-    guard swift.receiptContext == tlc.receiptContext else {
-      throw EvidenceValidationError.invalidCanonicalRecord
-    }
-    let context = swift.receiptContext
-    let expected = exactFiniteTLCGraph(
-      expected: tlcRun, actual: swiftRun,
-      compiledModelIdentity: context.compiledModelIdentity,
-      configurationIdentity: context.configurationIdentity,
-      symmetrySchemaIdentity: context.symmetrySchemaIdentity,
-      maximumStateLimit: context.maximumStateLimit,
-      observableNameMappingIdentity: context.observableNameMappingIdentity
-    )
-    var expectedRecord: [String: Any] = [
-      "conformant": expected.isConformant,
-      "differences": comparisonDifferencesJSON(expected)
-    ]
-    if let receipt = expected.expectedReceipt { expectedRecord["expectedReceipt"] = canonicalGraphReceiptJSON(receipt) }
-    if let receipt = expected.actualReceipt { expectedRecord["actualReceipt"] = canonicalGraphReceiptJSON(receipt) }
-    if let expectedReceipt = expected.expectedReceipt,
-       let actualReceipt = expected.actualReceipt,
-       let firstDifferentChunk = firstDifferentGraphChunkJSON(
-        expected: expectedReceipt, actual: actualReceipt
-       ) {
-      expectedRecord["firstDifferentGraphChunk"] = firstDifferentChunk
-    }
-    guard Set(comparison.keys) == Set(expectedRecord.keys).union(["correlation"]),
-          jsonValue(comparison["conformant"]) == jsonValue(expectedRecord["conformant"]),
-          jsonValue(comparison["differences"]) == jsonValue(expectedRecord["differences"]),
-          jsonValue(comparison["expectedReceipt"]) == jsonValue(expectedRecord["expectedReceipt"]),
-          jsonValue(comparison["actualReceipt"]) == jsonValue(expectedRecord["actualReceipt"]),
-          jsonValue(comparison["firstDifferentGraphChunk"])
-            == jsonValue(expectedRecord["firstDifferentGraphChunk"])
-    else { throw EvidenceValidationError.invalidCanonicalRecord }
-
-    return !expected.isConformant
-  }
-
-  private func jsonValue(_ value: Any?) -> Data? {
-    guard let value else { return nil }
-    return try? JSONSerialization.data(withJSONObject: ["value": value], options: [.sortedKeys])
-  }
-
-  private enum EvidenceValidationError: Error { case invalidCanonicalRecord }
 
   private func exactSuccessRecord(_ object: [String: Any]) -> Bool {
     Set(object.keys) == ["status", "isViolation", "reportedExhaustiveCompletion"]

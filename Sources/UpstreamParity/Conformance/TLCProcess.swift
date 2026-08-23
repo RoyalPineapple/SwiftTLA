@@ -385,7 +385,7 @@ package struct TLCProcessAdapter: Sendable {
     self.executor = executor
   }
 
-  package func run(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
+  private func run(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
     -> TLCProcessRun {
     let primary = try executor.execute(request)
     guard primary.isViolation else {
@@ -424,12 +424,6 @@ package struct TLCProcessAdapter: Sendable {
     return TLCProcessRun(primary: primary, trace: trace, replay: replayResult)
   }
 
-  package func capture(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
-    -> TLCProcessCapture {
-    let run = try run(request, replay: replay)
-    return try capture(run, request: request)
-  }
-
   package func capture(
     _ request: TLCProcessRequest,
     replay: TLCReplayPolicy,
@@ -447,7 +441,7 @@ package struct TLCProcessAdapter: Sendable {
     return try capture(run, request: request)
   }
 
-  package func capture(_ run: TLCProcessRun, request: TLCProcessRequest) throws
+  private func capture(_ run: TLCProcessRun, request: TLCProcessRequest) throws
     -> TLCProcessCapture {
     let graphEvents = try Data(contentsOf: request.graphEvents)
     let parser = TLCGraphEventParser(expectedCase: request.expectedCase)
@@ -467,7 +461,7 @@ package struct TLCProcessAdapter: Sendable {
     try retainRawArtifacts(from: request, in: directory)
   }
 
-  package func retain(
+  private func retain(
     _ run: TLCProcessRun,
     request: TLCProcessRequest,
     in directory: URL
@@ -484,7 +478,7 @@ package struct TLCProcessAdapter: Sendable {
     try retainRawArtifacts(from: request, in: directory)
   }
 
-  package func retain(
+  private func retain(
     _ error: Error,
     request: TLCProcessRequest,
     in directory: URL
@@ -515,7 +509,7 @@ package struct TLCProcessAdapter: Sendable {
     try retainRawArtifacts(from: request, in: directory)
   }
 
-  package func retainRawArtifacts(from request: TLCProcessRequest, in directory: URL) throws {
+  private func retainRawArtifacts(from request: TLCProcessRequest, in directory: URL) throws {
     let artifacts = [
       (request.graphEvents, "graph-events.jsonl"),
       (graphEvents(for: request.graphEvents, mode: .dumpJSON), "graph-events.trace.jsonl"),
