@@ -28,8 +28,7 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.graph/000000.jsonl").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.graph/000000.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison-diagnostics.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("core-decision.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     let processRequest = try #require(process["request"] as? [String: Any])
@@ -40,36 +39,28 @@ struct CoreConformanceRunnerTests {
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     let swift = try json(at: output.appendingPathComponent("swift-run.json"))
     let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
-    let comparison = try json(at: output.appendingPathComponent("comparison.json"))
+    let decision = try CanonicalConformanceEvidence.read(from: output)
     #expect(correlation(in: swift)["engine"] as? String == "swift")
     #expect(correlation(in: tlc)["engine"] as? String == "tlc")
-    #expect(correlation(in: comparison)["engine"] as? String == "runner")
-    let expectedReceipt = try #require(comparison["expectedReceipt"] as? [String: Any])
-    let actualReceipt = try #require(comparison["actualReceipt"] as? [String: Any])
+    #expect(decision.evidence.correlation.engine == .runner)
+    let expectedReceipt = decision.evidence.comparison.expectedReceipt
+    let actualReceipt = decision.evidence.comparison.actualReceipt
     let fixtureIdentity = try fixtureCompilationIdentity().value
-    #expect(expectedReceipt["compiledModelIdentity"] as? String == fixtureIdentity)
-    #expect(actualReceipt["compiledModelIdentity"] as? String == fixtureIdentity)
-    #expect(expectedReceipt["maximumStateLimit"] as? Int == 10)
-    #expect(actualReceipt["maximumStateLimit"] as? Int == 10)
+    #expect(expectedReceipt.compiledModelIdentity == fixtureIdentity)
+    #expect(actualReceipt.compiledModelIdentity == fixtureIdentity)
+    #expect(expectedReceipt.maximumStateLimit == 10)
+    #expect(actualReceipt.maximumStateLimit == 10)
     #expect(
-      (expectedReceipt["graphDigest"] as? String) != (actualReceipt["graphDigest"] as? String)
+      expectedReceipt.graphDigest != actualReceipt.graphDigest
     )
-    #expect((comparison["differences"] as? [[String: Any]])?.first?["category"] as? String == "receipt")
-    #expect((comparison["firstDifferentGraphChunk"] as? [String: Any]) != nil)
-    let edgeDifference = try #require(
-      (comparison["differences"] as? [[String: Any]])?.first {
-        $0["category"] as? String == "edges"
-      })
-    #expect((edgeDifference["expected"] as? [[String: Any]])?.isEmpty == false)
-    #expect((edgeDifference["actual"] as? [[String: Any]])?.isEmpty == true)
-    let comparisonReports = try json(at: output.appendingPathComponent("comparison-diagnostics.json"))
-    let report = try #require((comparisonReports["reports"] as? [[String: Any]])?.first {
-      $0["whatFailed"] as? String == "The labeled transition multisets differ."
+    #expect(decision.evidence.comparison.differenceCategories.first == .receipt)
+    #expect(decision.evidence.comparison.differenceCategories.contains(.edges))
+    let report = try #require(decision.comparison.failureReports.first {
+      $0.whatFailed == "The labeled transition multisets differ."
     })
-    #expect(report["whatFailed"] as? String == "The labeled transition multisets differ.")
-    #expect((report["expected"] as? String)?.contains("TLC permits") == true)
-    #expect((report["actual"] as? String)?.contains("SwiftTLA permits") == true)
-    #expect((report["nextSafeAction"] as? String)?.contains("guard") == true)
+    #expect(report.expected.contains("TLC permits"))
+    #expect(report.actual.contains("SwiftTLA permits"))
+    #expect(report.nextSafeAction.contains("guard"))
   }
   @Test("runner publishes partial evidence and a diagnostic after TLC capture failure")
   func retainsFailureEvidenceAtomically() throws {
@@ -141,10 +132,10 @@ struct CoreConformanceRunnerTests {
 
     #expect(result.exitCode == .semanticDifference)
     let swift = try json(at: output.appendingPathComponent("swift-run.json"))
-    let comparison = try json(at: output.appendingPathComponent("comparison.json"))
+    let decision = try CanonicalConformanceEvidence.read(from: output)
     #expect((swift["receiptContext"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
-    #expect((comparison["expectedReceipt"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
-    #expect((comparison["actualReceipt"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
+    #expect(decision.evidence.comparison.expectedReceipt.maximumStateLimit == 3)
+    #expect(decision.evidence.comparison.actualReceipt.maximumStateLimit == 3)
   }
 
   @Test("runner rejects Swift evidence bound to another declared case")
@@ -279,14 +270,14 @@ struct CoreConformanceRunnerTests {
     #expect(graphRecords.filter { $0.hasPrefix("edge:") }.count == 1)
   }
 
-  @Test("routine matching evidence retains receipts instead of canonical graph copies")
-  func retainsRoutineReceiptOnly() throws {
+  @Test("matching evidence retains and verifies the exact canonical decision")
+  func retainsVerifiableCanonicalDecision() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
-    let output = root.appendingPathComponent("routine-evidence")
+    let output = root.appendingPathComponent("matching-evidence")
     let result = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
         executor: FixtureTLCExecutor(stream: try graphStream(for: request.expectedCase, runID: request.runID))
@@ -300,16 +291,25 @@ struct CoreConformanceRunnerTests {
       },
       tlcRequest: request,
       replay: .none,
-      outputDirectory: output,
-      retention: .routine
+      outputDirectory: output
     )
 
     #expect(result.exitCode == .exact)
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("receipts.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("core-decision.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
-    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
-    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
-    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.graph/000000.jsonl").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.graph/000000.jsonl").path))
+    #expect(try CanonicalConformanceEvidence.read(from: output).comparison.isConformant)
+
+    try Data("tampered".utf8).write(
+      to: output.appendingPathComponent("swift-run.graph/000000.jsonl"),
+      options: .atomic
+    )
+    #expect(throws: ConformanceGovernanceError.self) {
+      try CanonicalConformanceEvidence.read(from: output)
+    }
   }
 }
 

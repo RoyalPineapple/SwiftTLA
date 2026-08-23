@@ -1,9 +1,9 @@
 import Foundation
 
 /// A stable digest-backed summary of one finite canonical graph.
-package struct CanonicalGraphReceipt: Hashable, Sendable {
+package struct CanonicalGraphReceipt: Hashable, Codable, Sendable {
   /// The completion state of a finite graph exploration.
-  enum ExplorationStatus: String, Hashable, Sendable {
+  enum ExplorationStatus: String, Hashable, Codable, Sendable {
     case complete
     case bounded
     case failed
