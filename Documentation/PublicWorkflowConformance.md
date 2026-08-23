@@ -8,9 +8,9 @@ macro, generated model, package configuration, or Apple platform is supported.
 
 Published TLA+ semantics remain authoritative. The parser, builder, runtime,
 macro-generated machine, and platform builds are the subjects of these checks.
-TLC and Java are explicitly not applicable to the parser-builder, generated,
-annotation, and platform cases in this P4 runner; their placeholder identities
-do not turn those checks into TLC conformance claims.
+TLC and Java do not apply to the parser-builder, generated, annotation, and
+platform cases. Their placeholder identities do not turn those checks into
+TLC conformance claims.
 
 ## Run validation
 
@@ -57,15 +57,15 @@ compiler-owned state boundary.
 
 ### Annotation availability
 
-| Annotation | P4 disposition |
+| Annotation | Evidence status |
 |---|---|
 | `@TLAModel` | Release-facing fixture pair exists; current local evidence is diagnostic and hosted evidence is a candidate for the exact fixture only. |
 | `@TLAActor` | Same bounded fixture disposition; the actor runtime proof is also diagnostic. |
 | `@TLAObservable` | Same bounded fixture disposition. |
 
-There are currently no report-derived, generally admitted P4 entries to list in
-public claims. Public material may describe the exact validation cases above,
-but must not convert `diagnosticOnly` or `candidateEvidence` into “supported.”
+There are no report-derived, generally admitted entries for these workflows.
+Public material can describe the exact validation cases above. It must not
+convert `diagnosticOnly` or `candidateEvidence` into “supported.”
 
 ## Reports and retained evidence
 
@@ -114,6 +114,6 @@ behavior, device behavior, runtime UI behavior, or every package consumer. Its
 Apple matrix is build/test evidence only for the exact named destinations and
 the pinned nested package tree.
 
-P1 core graph support and P3 temporal/symmetry support keep separate registers,
+Core graph support and temporal or symmetry support keep separate registers,
 reports, and authority boundaries. See [core support](CoreSupport.md) and
 [temporal and symmetry conformance](TemporalSymmetryConformance.md).

@@ -32,10 +32,13 @@ Both explorations use the canonical graph schema.
 
 The comparator evaluates canonical initial states, state bindings, labeled
 edge multiplicities, and outcomes. A graph receipt summarizes a completed
-exploration. The retained canonical records locate the first difference.
+exploration. It does not decide conformance.
 
 GitHub Actions retains the provenance, tool identity, raw TLC event stream,
-canonical runs, receipts, and comparison record for each declared case. See
+canonical runs, receipts, and `core-decision.json` for each declared case.
+The decision record references the exact run and graph chunks by digest. The
+gate reads those records and repeats the exact comparison before admission.
+The retained canonical records locate the first difference. See
 [Core graph conformance](CoreGraphConformance.md) and
 [Core support](CoreSupport.md).
 
