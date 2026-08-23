@@ -39,44 +39,38 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
     receiptContext: CanonicalRunEvidence.ReceiptContext,
     to directory: URL
   ) throws {
-    try CanonicalRunEvidence.write(
-      run,
-      correlation: correlation,
-      receiptContext: receiptContext,
-      to: directory.appendingPathComponent("swift-run.json")
-    )
+    try writeRun(run, correlation: correlation, receiptContext: receiptContext, named: "swift-run.json", to: directory)
+  }
+
+  static func writeTLCRun(
+    _ run: CanonicalRun,
+    correlation: CoreConformanceCorrelation,
+    receiptContext: CanonicalRunEvidence.ReceiptContext,
+    to directory: URL
+  ) throws {
+    try writeRun(run, correlation: correlation, receiptContext: receiptContext, named: "tlc-run.json", to: directory)
   }
 
   static func write(
-    swift swiftRun: CanonicalRun,
-    tlc tlcRun: CanonicalRun,
     correlations: Correlations,
-    receiptContext: CanonicalRunEvidence.ReceiptContext,
     to directory: URL
   ) throws -> ExactFiniteTLCComparison {
     let swiftURL = directory.appendingPathComponent("swift-run.json")
     let tlcURL = directory.appendingPathComponent("tlc-run.json")
-    try writeSwiftRun(
-      swiftRun,
-      correlation: correlations.swift,
-      receiptContext: receiptContext,
-      to: directory
-    )
-    try CanonicalRunEvidence.write(
-      tlcRun,
-      correlation: correlations.tlc,
-      receiptContext: receiptContext,
-      to: tlcURL
+    let retained = try retainedRuns(
+      in: directory,
+      caseID: correlations.runner.caseID,
+      runID: correlations.runner.runID
     )
 
     let exact = exactFiniteTLCGraph(
-      expected: tlcRun,
-      actual: swiftRun,
-      compiledModelIdentity: receiptContext.compiledModelIdentity,
-      configurationIdentity: receiptContext.configurationIdentity,
-      symmetrySchemaIdentity: receiptContext.symmetrySchemaIdentity,
-      maximumStateLimit: receiptContext.maximumStateLimit,
-      observableNameMappingIdentity: receiptContext.observableNameMappingIdentity
+      expected: retained.tlc.run,
+      actual: retained.swift.run,
+      compiledModelIdentity: retained.context.compiledModelIdentity,
+      configurationIdentity: retained.context.configurationIdentity,
+      symmetrySchemaIdentity: retained.context.symmetrySchemaIdentity,
+      maximumStateLimit: retained.context.maximumStateLimit,
+      observableNameMappingIdentity: retained.context.observableNameMappingIdentity
     )
     guard let expectedReceipt = exact.expectedReceipt,
           let actualReceipt = exact.actualReceipt else {
@@ -118,22 +112,16 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
           try runReference(for: tlcURL, beneath: directory) == evidence.tlc else {
       throw CanonicalConformanceEvidenceError.invalidRecord
     }
-    let swift = try CanonicalRunEvidence.read(from: swiftURL)
-    let tlc = try CanonicalRunEvidence.read(from: tlcURL)
-    guard swift.evidence.correlation.engine == .swift,
-          tlc.evidence.correlation.engine == .tlc,
-          swift.evidence.correlation.caseID == evidence.correlation.caseID,
-          tlc.evidence.correlation.caseID == evidence.correlation.caseID,
-          swift.evidence.correlation.runID == evidence.correlation.runID,
-          tlc.evidence.correlation.runID == evidence.correlation.runID,
-          swift.evidence.receiptContext == tlc.evidence.receiptContext else {
-      throw CanonicalConformanceEvidenceError.invalidRecord
-    }
+    let retained = try retainedRuns(
+      in: directory,
+      caseID: evidence.correlation.caseID,
+      runID: evidence.correlation.runID
+    )
 
-    let context = swift.evidence.receiptContext
+    let context = retained.context
     let exact = exactFiniteTLCGraph(
-      expected: tlc.run,
-      actual: swift.run,
+      expected: retained.tlc.run,
+      actual: retained.swift.run,
       compiledModelIdentity: context.compiledModelIdentity,
       configurationIdentity: context.configurationIdentity,
       symmetrySchemaIdentity: context.symmetrySchemaIdentity,
@@ -152,7 +140,50 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
     guard verifiedComparison == evidence.comparison else {
       throw CanonicalConformanceEvidenceError.invalidRecord
     }
-    return Loaded(evidence: evidence, swiftRun: swift.run, tlcRun: tlc.run, comparison: exact)
+    return Loaded(
+      evidence: evidence,
+      swiftRun: retained.swift.run,
+      tlcRun: retained.tlc.run,
+      comparison: exact
+    )
+  }
+
+  private static func writeRun(
+    _ run: CanonicalRun,
+    correlation: CoreConformanceCorrelation,
+    receiptContext: CanonicalRunEvidence.ReceiptContext,
+    named name: String,
+    to directory: URL
+  ) throws {
+    try CanonicalRunEvidence.write(
+      run,
+      correlation: correlation,
+      receiptContext: receiptContext,
+      to: directory.appendingPathComponent(name)
+    )
+  }
+
+  private static func retainedRuns(
+    in directory: URL,
+    caseID: String,
+    runID: UUID
+  ) throws -> (
+    swift: (evidence: CanonicalRunEvidence, run: CanonicalRun),
+    tlc: (evidence: CanonicalRunEvidence, run: CanonicalRun),
+    context: CanonicalRunEvidence.ReceiptContext
+  ) {
+    let swift = try CanonicalRunEvidence.read(
+      from: directory.appendingPathComponent("swift-run.json")
+    )
+    let tlc = try CanonicalRunEvidence.read(
+      from: directory.appendingPathComponent("tlc-run.json")
+    )
+    guard swift.evidence.correlation.matches(caseID: caseID, runID: runID, engine: .swift),
+          tlc.evidence.correlation.matches(caseID: caseID, runID: runID, engine: .tlc),
+          swift.evidence.receiptContext == tlc.evidence.receiptContext else {
+      throw CanonicalConformanceEvidenceError.invalidRecord
+    }
+    return (swift, tlc, swift.evidence.receiptContext)
   }
 
   private static func runReference(for runURL: URL, beneath directory: URL) throws -> RunReference {

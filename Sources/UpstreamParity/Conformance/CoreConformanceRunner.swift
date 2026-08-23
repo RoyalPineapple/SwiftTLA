@@ -136,7 +136,6 @@ package struct CoreConformanceRunner: Sendable {
     }
     var phase: CoreConformancePhase = .preflight
     var staging: URL?
-    var retainedTLCProcess = false
     do {
       let createdStaging = try createStagingDirectory(
         beside: outputDirectory,
@@ -166,18 +165,22 @@ package struct CoreConformanceRunner: Sendable {
         to: createdStaging
       )
       phase = .tlcExecution
-      let tlcProcessRun = try tlcAdapter.run(tlcRequest, replay: replay)
-      try tlcAdapter.retain(tlcProcessRun, request: tlcRequest, in: createdStaging)
-      retainedTLCProcess = true
-      let tlcCapture = try tlcAdapter.capture(tlcProcessRun, request: tlcRequest)
+      let tlcCapture = try tlcAdapter.capture(
+        tlcRequest,
+        replay: replay,
+        retainingIn: createdStaging
+      )
       phase = .tlcParsing
       let tlcRun = tlcCapture.graph
+      try CanonicalConformanceEvidence.writeTLCRun(
+        tlcRun,
+        correlation: correlations.tlc,
+        receiptContext: receiptContext,
+        to: createdStaging
+      )
       phase = .comparison
       let comparison = try CanonicalConformanceEvidence.write(
-        swift: swiftRun,
-        tlc: tlcRun,
         correlations: correlations,
-        receiptContext: receiptContext,
         to: createdStaging
       )
       let exitCode: CoreConformanceExitCode =
@@ -241,9 +244,6 @@ package struct CoreConformanceRunner: Sendable {
         }
       }
       do {
-        if phase == .tlcExecution && !retainedTLCProcess {
-          try tlcAdapter.retain(error, request: tlcRequest, in: staging)
-        }
         try writeDiagnostic(failureDiagnostic, to: staging)
         try writeRun(
           exitCode: .failure,

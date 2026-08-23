@@ -307,6 +307,10 @@ struct CoreConformanceRunnerTests {
       to: output.appendingPathComponent("swift-run.graph/000000.jsonl"),
       options: .atomic
     )
+    let correlations = Correlations(caseID: request.expectedCase.id, runID: request.runID)
+    #expect(throws: CanonicalRunEvidenceError.self) {
+      try CanonicalConformanceEvidence.write(correlations: correlations, to: output)
+    }
     #expect(throws: ConformanceGovernanceError.self) {
       try CanonicalConformanceEvidence.read(from: output)
     }
