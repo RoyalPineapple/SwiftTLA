@@ -81,10 +81,6 @@ enum AlgorithmLowerer {
             guard case .temporal(let temporal) = component else { return nil }
             return temporal
         }
-        let declaredFairness = algorithm.components.compactMap { component -> FairnessCondition? in
-            guard case .fairness(let fairness) = component else { return nil }
-            return fairness
-        }
         let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
@@ -305,7 +301,7 @@ enum AlgorithmLowerer {
             invariants: declaredInvariants + processInvariants
                 + compilerOwnedAssertionInvariants(generatedAssertionInvariants),
             temporalProperties: declaredTemporal,
-            fairness: declaredFairness + fairness,
+            fairness: fairness,
             constraint: declaredConstraint,
             formalOperatorDefinitions: resolvedFormalOperators,
             sourceAlgorithms: [Algorithm(model: algorithm)]))
@@ -380,10 +376,6 @@ enum AlgorithmLowerer {
             guard case .temporal(let temporal) = component else { return nil }
             return temporal
         }
-        let declaredFairness = algorithm.components.compactMap { component -> FairnessCondition? in
-            guard case .fairness(let fairness) = component else { return nil }
-            return fairness
-        }
         let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
@@ -425,7 +417,7 @@ enum AlgorithmLowerer {
                 actions: [],
                 invariants: declaredInvariants,
                 temporalProperties: declaredTemporal,
-                fairness: declaredFairness,
+                fairness: sequentialFairnessConditions(for: algorithm.sequentialFairness),
                 constraint: declaredConstraint,
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 sourceAlgorithms: [Algorithm(model: algorithm)]
@@ -524,7 +516,7 @@ enum AlgorithmLowerer {
             actions: actions,
             invariants: declaredInvariants + compilerOwnedAssertionInvariants(generatedAssertionInvariants),
             temporalProperties: declaredTemporal,
-            fairness: declaredFairness,
+            fairness: sequentialFairnessConditions(for: algorithm.sequentialFairness),
             constraint: declaredConstraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
             sourceAlgorithms: [Algorithm(model: algorithm)]
@@ -533,6 +525,15 @@ enum AlgorithmLowerer {
 
     private static func sequentialTransfer(to location: StateExpr) -> ActionExpr {
         .assign(.programCounter, location)
+    }
+
+    private static func sequentialFairnessConditions(
+        for fairness: SequentialAlgorithmFairness
+    ) -> [FairnessCondition] {
+        switch fairness {
+        case .none: []
+        case .weak: [.weakFairnessNext]
+        }
     }
 
     private static func emittedLabel(_ label: String, owner: AlgorithmProcedureModel?) -> String {

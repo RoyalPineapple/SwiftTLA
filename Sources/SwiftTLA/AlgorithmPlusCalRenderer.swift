@@ -83,7 +83,8 @@ internal struct AlgorithmPlusCalRenderer {
             lines += module.supportDeclarations
             lines.append("")
         }
-        lines.append("(*--algorithm \(model.name) {")
+        let fairness = model.sequentialFairness == .weak ? "fair " : ""
+        lines.append("(*--\(fairness)algorithm \(model.name) {")
 
         let shared = model.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let declaration) = component else { return nil }
@@ -124,20 +125,10 @@ internal struct AlgorithmPlusCalRenderer {
                 // The operator is emitted after the PlusCal comment, where
                 // the official translator preserves it for TLC's CONSTRAINT.
                 continue
-            case .fairness:
-                // Only AlgorithmFairness belongs to a PlusCal process header.
-                // A generic TLA+ fairness condition has no direct source-level
-                // PlusCal spelling in this IR, so preserve the no-semantics
-                // boundary with a complete diagnostic.
-                throw unsupported(
-                    path: "components[\(index)]",
-                    expected: "a process fairness modifier (`fair process` or `fair+ process`)",
-                    actual: "top-level fairness declaration"
-                )
+            case .unsupported:
+                preconditionFailure("Algorithm capability validation must run before PlusCal rendering.")
             case .local:
                 throw unsupported(path: "components[\(index)]", expected: "a process or procedure local declaration", actual: "top-level local declaration")
-            case .propertyBoundary:
-                throw unsupported(path: "components[\(index)]", expected: "a directly renderable PlusCal declaration", actual: "property boundary")
             }
         }
 
@@ -204,12 +195,10 @@ internal struct AlgorithmPlusCalRenderer {
             case .invariant, .temporal, .formalOperator:
                 // Properties are emitted once after the PlusCal comment.
                 continue
-            case .fairness:
-                throw unsupported(path: "\(path).components[\(index)]", expected: "the process fairness modifier (`fair` or `fair+`)", actual: "nested process fairness declaration")
             case .stateConstraint:
                 throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "process state constraint")
-            case .propertyBoundary:
-                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "property boundary")
+            case .unsupported:
+                preconditionFailure("Algorithm capability validation must run before PlusCal rendering.")
             case .shared, .process, .procedure:
                 throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "nested algorithm component")
             }
@@ -369,7 +358,7 @@ internal struct AlgorithmPlusCalRenderer {
                 return [AuthoredPlusCalPropertyReference(name: temporal.name, kind: .temporal)]
             case .process(let process):
                 return try propertyNames(in: process.components, path: "\(componentPath).components")
-            case .shared, .procedure, .fairness, .formalOperator, .stateConstraint, .local, .step, .propertyBoundary:
+            case .shared, .procedure, .formalOperator, .stateConstraint, .unsupported, .local, .step:
                 return []
             }
         }
@@ -380,7 +369,7 @@ internal struct AlgorithmPlusCalRenderer {
             switch component {
             case .temporal(let temporal): return [temporal]
             case .process(let process): return temporals(in: process.components)
-            case .shared, .procedure, .invariant, .fairness, .formalOperator, .stateConstraint, .local, .step, .propertyBoundary: return []
+            case .shared, .procedure, .invariant, .formalOperator, .stateConstraint, .unsupported, .local, .step: return []
             }
         }
     }

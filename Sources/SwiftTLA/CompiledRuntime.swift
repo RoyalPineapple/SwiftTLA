@@ -15,26 +15,23 @@ struct CompiledRuntime {
 
         for variable in layout.variables {
             guard let initializer = semantics.variableInitializers[variable.id] else { continue }
-            guard let set = initializer.lazySet ?? initializer.initialSet else { continue }
-            states = try states.flatMap { state in
-                guard case .set(let values) = try CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(set) else {
-                    throw EvalError.typeMismatch("Variable initialization requires a set")
-                }
-                return try CompiledValue.sorted(values).map { value in
-                    try state.updating(variable.id, to: value)
+            if let set = initializer.lazySet ?? initializer.initialSet {
+                states = try states.flatMap { state in
+                    guard case .set(let values) = try CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(set) else {
+                        throw EvalError.typeMismatch("Variable initialization requires a set")
+                    }
+                    return try CompiledValue.sorted(values).map { value in
+                        try state.updating(variable.id, to: value)
+                    }
                 }
             }
-        }
-
-        for variable in layout.variables {
-            guard let initializer = semantics.variableInitializers[variable.id], let expression = initializer.initExpr else {
-                continue
-            }
-            states = try states.map { state in
-                try state.updating(
-                    variable.id,
-                    to: CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(expression)
-                )
+            if let expression = initializer.initExpr {
+                states = try states.map { state in
+                    try state.updating(
+                        variable.id,
+                        to: CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(expression)
+                    )
+                }
             }
         }
         return states

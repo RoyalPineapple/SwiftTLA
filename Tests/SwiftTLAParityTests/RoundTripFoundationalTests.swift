@@ -121,7 +121,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
     let successors = try compiledSuccessors(
       action,
-      from: ["x": .int(0)],
+      from: [("x", .int(0))],
       variables: ["x"]
     )
     let x = try #require(TLAStateProjection.Token(validating: "x"))
@@ -214,12 +214,16 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
   @Test func simpleAssign() throws {
     let r = try compiledSuccessors(.assign(.named("x"), .value(.int(42))), from: s0, variables: ["x"])
-    #expect(r.count == 1 && try value("x", in: r[0]) == .int(42))
+    let assigned = try value("x", in: try #require(r.first))
+    #expect(r.count == 1)
+    #expect(assigned == .int(42))
   }
 
   @Test func unchanged() throws {
     let r = try compiledSuccessors(.unchanged(.named("x")), from: s0, variables: ["x"])
-    #expect(r.count == 1 && try value("x", in: r[0]) == .int(0))
+    let unchanged = try value("x", in: try #require(r.first))
+    #expect(r.count == 1)
+    #expect(unchanged == .int(0))
   }
 
   @Test func guardTrue() throws {
@@ -239,7 +243,12 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   @Test func twoVars() throws {
     let a: ActionExpr = .and(.assign(.named("a"), .value(.int(1))), .assign(.named("b"), .value(.int(2))))
     let r = try compiledSuccessors(a, from: s2, variables: ["a", "b"])
-    #expect(r.count == 1 && try value("a", in: r[0]) == .int(1) && try value("b", in: r[0]) == .int(2))
+    let successor = try #require(r.first)
+    let aValue = try value("a", in: successor)
+    let bValue = try value("b", in: successor)
+    #expect(r.count == 1)
+    #expect(aValue == .int(1))
+    #expect(bValue == .int(2))
   }
 
   @Test func orBranches() throws {
@@ -435,14 +444,14 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       arguments: [.int(2), .int(20), .int(200)],
       from: initial
     ).first)
-    let floor = try #require(TLAStateProjection.Token(validating: "floor"))
-    #expect(next.value(for: floor) == .int(222))
+    let floorToken = try #require(TLAStateProjection.Token(validating: "floor"))
+    #expect(next.value(for: floorToken) == .int(222))
     #expect(try compilation.successors(
       for: action,
       arguments: [.int(3), .int(20), .int(200)],
       from: initial
     ).isEmpty)
-    #expect(initial.value(for: floor) == .int(0))
+    #expect(initial.value(for: floorToken) == .int(0))
   }
 
   @Test func parameterizedActionExpandsFiniteDomainAndLabelsTransitions() throws {
@@ -494,7 +503,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(from: x.name, StateExpr.set([1, 2]))
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let checker = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
+    let checker = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
 
     let exploration = try checker.explore()
     let graph = try checker.exploreGraph()
@@ -630,11 +639,12 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     }
 
     let compilation = try spec.compile()
-    let x = try #require(compilation.layout.variableID(named: "x"))
+    let variable = try #require(compilation.layout.variableID(named: "x"))
     let initialValues = try CompiledRuntime(compilation: compilation).initialStates().map {
-      try $0.value(for: x).rendered(using: compilation.layout)
+      try $0.value(for: variable).rendered(using: compilation.layout)
     }
-    #expect(Set(initialValues) == Set([.int(1), .int(2), .int(3)]))
+    let expectedValues: Set<TLAValue> = [.int(1), .int(2), .int(3)]
+    #expect(Set(initialValues) == expectedValues)
     #expect(try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 3)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
@@ -753,12 +763,13 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       }
       Action("pop") { seq.stateExpr.count > 0 && result.becomes(Expr<Int>(seq.stateExpr.at(1))) }
     }
-    let g = try ModelChecker(
-      spec: spec,
+    let compilation = try spec.compile()
+    let exploration = try ModelChecker(
+      compilation: compilation,
       configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
-    ).exploreGraph()
-    let states = g.states.values
-    let results = Set(states.compactMap { $0["result"] })
+    ).explore()
+    let resultToken = try #require(TLAStateProjection.Token(validating: "result"))
+    let results = Set(exploration.graph.states.values.compactMap { $0.value(for: resultToken) })
     #expect(results.contains(.int(0)))
     #expect(results.contains(.int(42)))
   }
@@ -775,14 +786,15 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
         clock.becomes(Expr<TLAValue>(fun)).when(clock.stateExpr.domain.cardinality == 0)
       }
     }
-    let g = try ModelChecker(
-      spec: spec,
+    let compilation = try spec.compile()
+    let exploration = try ModelChecker(
+      compilation: compilation,
       configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
-    ).exploreGraph()
-    let states = g.states.values
+    ).explore()
+    let clockToken = try #require(TLAStateProjection.Token(validating: "clock"))
     var found = false
-    for s in states {
-      if case .function(let m) = s["clock"] {
+    for state in exploration.graph.states.values {
+      if case .function(let m)? = state.value(for: clockToken) {
         if m[.int(1)] == .int(10) && m[.int(2)] == .int(20) {
           found = true
         }

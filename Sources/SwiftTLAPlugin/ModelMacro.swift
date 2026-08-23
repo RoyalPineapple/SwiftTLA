@@ -488,7 +488,7 @@ private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
     }
 }
 
-private func parserDiagnostic(
+package func parserDiagnostic(
     _ diagnostic: SpecParser.SymmetricCollectionParseDiagnostic,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
@@ -498,7 +498,7 @@ private func parserDiagnostic(
     finder.walk(Syntax(declaration))
     return Diagnostic(
         node: finder.resolvedNode() ?? Syntax(declaration),
-        message: ParserDiagnosticMessage(message: diagnostic.message)
+        message: ParserDiagnosticMessage(message: diagnostic.renderedMessage)
     )
 }
 

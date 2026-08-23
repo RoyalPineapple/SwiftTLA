@@ -182,7 +182,8 @@ public struct CoreConformanceCase: Equatable, Sendable {
         guard TLCReferencePin.isSHA256(cfgSHA256) else { throw CoreConformanceCaseError.invalidSHA256(field: "cfgSHA256") }
         guard workers == 1 else { throw CoreConformanceCaseError.invalidWorkers(workers) }
         guard fingerprintPolynomial >= 0 else { throw CoreConformanceCaseError.invalidFingerprintPolynomial(fingerprintPolynomial) }
-        guard argumentsSHA256 == try Self.argumentsDigest(arguments) else { throw CoreConformanceCaseError.invalidArgumentsDigest }
+        let computedArgumentsDigest = try Self.argumentsDigest(arguments)
+        guard argumentsSHA256 == computedArgumentsDigest else { throw CoreConformanceCaseError.invalidArgumentsDigest }
         self.id = id
         self.moduleSHA256 = moduleSHA256
         self.cfgSHA256 = cfgSHA256
@@ -378,8 +379,9 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
                   !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
             }
+            let computedArgumentsDigest = try CoreConformanceCase.argumentsDigest(arguments)
             guard TLCReferencePin.isSHA256(moduleSHA256), TLCReferencePin.isSHA256(cfgSHA256),
-                  argumentsSHA256 == try CoreConformanceCase.argumentsDigest(arguments), workers == 1,
+                  argumentsSHA256 == computedArgumentsDigest, workers == 1,
                   fingerprintPolynomial >= 0, maximumStateLimit > 0 else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "launch contract")
             }
@@ -458,6 +460,6 @@ public struct TLCJavaRuntimeIdentity: Equatable, Sendable {
 
 public enum SHA256 {
     public static func hex(_ data: Data) -> String {
-        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        CryptoKit.SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }

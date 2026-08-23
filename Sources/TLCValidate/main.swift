@@ -278,16 +278,14 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 case: caseDefinition,
                 swiftExploration: {
                     let compilation = try swiftSpec.compile()
-                    SwiftExplorationEvidence(
+                    return SwiftExplorationEvidence(
                         caseID: caseDefinition.id,
                         exploration: try ModelChecker(
                             compilation: compilation,
                             configuration: try FiniteExplorationConfiguration(
                                 maximumStateLimit: entry.maximumStateLimit
                             )
-                        ).explore(),
-                        compiledModelIdentity: compilation.identity.value,
-                        maximumStateLimit: entry.maximumStateLimit
+                        ).explore()
                     )
                 },
                 tlcRequest: request,
@@ -498,7 +496,13 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
     } catch {
         failTemporalSymmetry(error)
     }
-    let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL
+    let projectRoot: URL
+    do {
+        projectRoot = try ConformanceEvidence.projectRoot(
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+    } catch {
+        failTemporalSymmetry(error)
+    }
     let reportURL = URL(fileURLWithPath: options.report).standardizedFileURL
     do {
         try validateTemporalSymmetryReportDestination(
@@ -545,7 +549,9 @@ private func runTemporalSymmetryEvidence(
         environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
         defaultPath: "Verification/TemporalSymmetryConformance/cases.json")
     let cases = try decode(TemporalSymmetryCases.self, at: casesURL)
-    _ = try projectRelativePath(URL(fileURLWithPath: options.evidence), projectRoot: projectRoot)
+    _ = try ConformanceEvidence.relativePath(
+        for: URL(fileURLWithPath: options.evidence),
+        beneath: projectRoot)
     try TemporalSymmetryConformanceRunner().run(TemporalSymmetryConformanceRunnerInput(
         cases: cases,
         gateRunID: options.gateRunID,
@@ -596,21 +602,20 @@ private func temporalSymmetryAdmissionReport(
     let manifestSHA256 = try ConformanceEvidence.reference(for: casesURL, beneath: projectRoot).sha256
     let toolchainSHA256 = try ConformanceEvidence.reference(for: toolchainURL, beneath: projectRoot).sha256
     let coreURL = URL(fileURLWithPath: options.coreAdmission).standardizedFileURL
-    let corePath = try projectRelativePath(coreURL, projectRoot: projectRoot)
+    let coreEvidence = try ConformanceEvidence.reference(for: coreURL, beneath: projectRoot)
     let coreReport = try decode(CoreSupportAdmission.self, at: coreURL)
-    let coreDigest = try ConformanceEvidence.reference(for: coreURL, beneath: projectRoot).sha256
     let coreReference = try TemporalSymmetryCoreAdmissionReference(
         reportID: options.coreReportID,
         gateRunID: coreReport.gateRunID,
-        report: try CoreEvidenceReference(path: corePath, sha256: coreDigest))
+        report: coreEvidence)
     let coreContext = try TemporalSymmetryCoreAdmissionContext(
         temporalSymmetryGateRunID: options.gateRunID,
         reportID: coreReference.reportID,
         coreGateRunID: coreReport.gateRunID,
-        reportPath: corePath,
-        reportSHA256: coreDigest)
+        reportPath: coreEvidence.path,
+        reportSHA256: coreEvidence.sha256)
     let evidenceRoot = URL(fileURLWithPath: options.evidence).standardizedFileURL
-    _ = try projectRelativePath(evidenceRoot, projectRoot: projectRoot)
+    _ = try ConformanceEvidence.relativePath(for: evidenceRoot, beneath: projectRoot)
     let evidence = try temporalSymmetryEvidence(
         cases: cases,
         root: evidenceRoot,
@@ -680,9 +685,15 @@ private func validateCompleteGraphEvidence(
     }
     var urls: [String: URL] = [:]
     for reference in [evidence.sourceInput, evidence.configuration, evidence.graphEvents, evidence.result] {
-        let url = projectRoot.appendingPathComponent(reference.path).resolvingSymlinksInPath().standardizedFileURL
-        guard url.path.hasPrefix(projectRoot.resolvingSymlinksInPath().standardizedFileURL.path + "/"),
-              FileManager.default.fileExists(atPath: url.path),
+        let url: URL
+        do {
+            url = try ConformanceEvidence.resolve(
+                projectRoot.appendingPathComponent(reference.path),
+                beneath: projectRoot)
+        } catch {
+            throw TemporalSymmetryCLIError.invalidEvidence("substituted complete graph artifact")
+        }
+        guard FileManager.default.fileExists(atPath: url.path),
               try ConformanceEvidence.reference(for: url, beneath: projectRoot).sha256 == reference.sha256 else {
             throw TemporalSymmetryCLIError.invalidEvidence("substituted complete graph artifact")
         }
@@ -813,13 +824,6 @@ private func temporalSymmetryExitCode(_ exitClass: TemporalSymmetryAdmissionExit
     case .success: return 0
     case .blocked: return 1
     case .unavailable: return 2
-    }
-}
-private func projectRelativePath(_ path: URL, projectRoot: URL) throws -> String {
-    do {
-        return try ConformanceEvidence.relativePath(for: path, beneath: projectRoot)
-    } catch {
-        throw TemporalSymmetryCLIError.evidenceOutsideProject(path.path)
     }
 }
 private func resolvedProspectivePath(_ url: URL) -> URL {

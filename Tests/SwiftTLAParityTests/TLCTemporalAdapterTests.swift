@@ -339,7 +339,7 @@ struct TLCTemporalAdapterTests {
     ) throws -> TLCTemporalCaptureInput {
       let graphResult = try swiftResult ?? TemporalPropertyResult(
         availability: .unavailable, outcome: nil, graphID: "unavailable", initialStateIDs: ["unavailable"],
-        traceAvailability: .unavailable))
+        traceAvailability: .unavailable)
       return TLCTemporalCaptureInput(
         declaredCase: declaredCase, correlation: correlation ?? self.correlation, request: request ?? self.request,
         swiftResult: graphResult,

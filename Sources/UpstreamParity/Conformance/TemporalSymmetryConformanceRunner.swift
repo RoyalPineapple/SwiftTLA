@@ -106,7 +106,6 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
           } else if declaredCase.kind == .symmetry, let toolRoot = input.toolRoot {
             do {
               let result = try captureSymmetry(
-                compilation: compilation, maximumStateLimit: model.maxStates,
                 declaredCase: declaredCase, exploration: exploration, gateRunID: input.gateRunID,
                 toolRoot: toolRoot, projectRoot: root, evidenceRoot: output,
                 outputDirectory: directory)
@@ -232,8 +231,6 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
   }
 
   private func captureSymmetry(
-    compilation: CompiledSpecification,
-    maximumStateLimit: Int,
     declaredCase: TemporalSymmetryCase,
     exploration: ModelExplorationResult,
     gateRunID: UUID,
@@ -262,10 +259,10 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       id: declaredCase.id, module: source, configuration: reducedConfig, pin: pin, architecture: context.architecture)
     let rawRequest = try request(
       context: context, module: source, configuration: rawConfig, work: work.appendingPathComponent("raw"),
-      declared: rawCase, runID: correlation.tlcRunID)
+      declared: rawCase, runID: correlation.tlcRunID, projectRoot: projectRoot)
     let reducedRequest = try request(
       context: context, module: source, configuration: reducedConfig, work: work.appendingPathComponent("reduced"),
-      declared: reducedCase, runID: reducedRunID)
+      declared: reducedCase, runID: reducedRunID, projectRoot: projectRoot)
     try validateSymmetryRequests(raw: rawRequest, reduced: reducedRequest)
     let processAdapter = TLCProcessAdapter()
     let rawTLC = try processAdapter.capture(
@@ -295,11 +292,11 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       }.sorted().joined(separator: "\n").utf8
     ))
     let receiptContext = CanonicalRunEvidence.ReceiptContext(
-      compiledModelIdentity: compilation.identity.value,
+      compiledModelIdentity: exploration.compilationIdentity.value,
       configurationIdentity: configurationDigest,
       symmetrySchemaIdentity: symmetrySchemaIdentity,
       observableNameMappingIdentity: nil,
-      maximumStateLimit: maximumStateLimit)
+      maximumStateLimit: exploration.configuration.maximumStateLimit)
     let swiftReducedRunID = UUID()
     try CanonicalRunEvidence.write(
       swiftRaw,
@@ -360,7 +357,7 @@ extension TemporalSymmetryConformanceRunner {
       fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos", architecture: architecture, environment: [:], pin: pin)
   }
 
-  private func request(context: TLCContext, module: URL, configuration: URL, work: URL, declared: CoreConformanceCase, runID: UUID) throws -> TLCProcessRequest {
+  private func request(context: TLCContext, module: URL, configuration: URL, work: URL, declared: CoreConformanceCase, runID: UUID, projectRoot: URL) throws -> TLCProcessRequest {
     try ConformanceEvidence.createDirectory(work, beneath: projectRoot)
     return TLCProcessRequest(
       javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
@@ -501,7 +498,7 @@ extension TemporalSymmetryConformanceRunner {
   }
 
   private func stateKeys(_ exploration: ModelExplorationResult) throws -> [StateGraph.StateID: String] {
-    Dictionary(uniqueKeysWithValues: exploration.graph.states.map { id, projection in
+    try Dictionary(uniqueKeysWithValues: exploration.graph.states.map { id, projection in
       let bindings = try Dictionary(
         uniqueKeysWithValues: projection.entries.map { entry in
           (entry.token.description, try CanonicalValue(entry.value))

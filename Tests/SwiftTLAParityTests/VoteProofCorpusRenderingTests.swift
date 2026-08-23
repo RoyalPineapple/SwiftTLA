@@ -5,12 +5,12 @@ import SwiftTLA
 struct VoteProofCorpusRenderingTests {
     @Test("VoteProof retains nested typed binder identities during execution")
     func nestedTypedBindersExecute() throws {
-        let graph = try ModelChecker(
+        let exploration = try ModelChecker(
             compilation: try VoteProofModel.spec.compile(),
             configuration: try .init(maximumStateLimit: 1)
-        ).exploreGraph()
+        ).explore()
 
-        #expect(graph.states.count == 1)
+        #expect(exploration.graph.states.count == 1)
     }
 
     @Test("VoteProof #spec macro compiles and preserves typed local recursion and formal module composition")

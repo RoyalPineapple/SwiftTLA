@@ -1,7 +1,7 @@
 import Foundation
 
 package enum ConformanceEvidence {
-  static func projectRoot(_ url: URL) throws -> URL {
+  package static func projectRoot(_ url: URL) throws -> URL {
     let root = url.resolvingSymlinksInPath().standardizedFileURL
     var isDirectory: ObjCBool = false
     guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -10,7 +10,7 @@ package enum ConformanceEvidence {
     return root
   }
 
-  static func resolve(_ url: URL, beneath root: URL) throws -> URL {
+  package static func resolve(_ url: URL, beneath root: URL) throws -> URL {
     let candidate = url.path.hasPrefix("/") ? url : root.appendingPathComponent(url.path)
     var existing = candidate
     var suffix = [String]()
@@ -39,7 +39,7 @@ package enum ConformanceEvidence {
     return data
   }
 
-  static func relativePath(for url: URL, beneath root: URL) throws -> String {
+  package static func relativePath(for url: URL, beneath root: URL) throws -> String {
     let resolved = try resolve(url, beneath: root)
     let prefix = root.path + "/"
     guard resolved.path.hasPrefix(prefix) else {
@@ -78,18 +78,24 @@ package enum ConformanceEvidence {
   }
 
   static func writeJSON(_ value: Any, to url: URL) throws {
-    try write(JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]), to: url)
+    let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
+    try write(data, to: url)
   }
 
-  static func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> CoreEvidenceReference {
+  package static func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> CoreEvidenceReference {
     let url = try resolve(url, beneath: root)
-    let bytes = data ?? (try Data(contentsOf: url))
+    let bytes: Data
+    if let data {
+      bytes = data
+    } else {
+      bytes = try Data(contentsOf: url)
+    }
     return try CoreEvidenceReference(
       path: relativePath(for: url, beneath: root),
       sha256: SHA256.hex(bytes))
   }
 
-  static func reference(for url: URL, beneath root: URL, pathPrefix: String) throws -> CoreEvidenceReference {
+  package static func reference(for url: URL, beneath root: URL, pathPrefix: String) throws -> CoreEvidenceReference {
     let reference = try reference(for: url, beneath: root)
     return try CoreEvidenceReference(path: "\(pathPrefix)/\(reference.path)", sha256: reference.sha256)
   }

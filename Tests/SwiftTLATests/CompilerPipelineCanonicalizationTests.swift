@@ -454,7 +454,7 @@ struct CompilerPipelineCanonicalizationTests {
             return
         }
         let counter = try #require(next.first).value(for: .init(ordinal: 0))
-        #expect(compilation.bindings.operators["Double"] == id)
+        #expect(compilation.bindings.operatorName(id) == "Double")
         #expect(counter == .integer(4))
     }
 
@@ -931,7 +931,8 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        #expect(compilation.bindings.variables["counter"] == .init(ordinal: 0))
+        #expect(compilation.layout.variableID(named: "counter") == .init(ordinal: 0))
+        #expect(compilation.bindings.references.values.contains(.variable(.init(ordinal: 0))))
         #expect(compilation.bindings.references.values.contains(.binder(.init(ordinal: 0))))
         #expect(compilation.bindings.references.values.contains(.binder(.init(ordinal: 1))))
     }

@@ -80,17 +80,17 @@ public struct CoreConformanceRunResult: Sendable {
     self.diagnostic = diagnostic
   }
 }
-public struct CoreConformanceRunner: Sendable {
+package struct CoreConformanceRunner: Sendable {
   private let swiftAdapter: SwiftGraphAdapter
   private let tlcAdapter: TLCProcessAdapter
-  public init(
+  package init(
     swiftAdapter: SwiftGraphAdapter = SwiftGraphAdapter(),
     tlcAdapter: TLCProcessAdapter = TLCProcessAdapter()
   ) {
     self.swiftAdapter = swiftAdapter
     self.tlcAdapter = tlcAdapter
   }
-  public func run(
+  package func run(
     `case` declaredCase: CoreConformanceCase,
     swiftExploration: () throws -> SwiftExplorationEvidence,
     tlcRequest: TLCProcessRequest,
@@ -159,11 +159,11 @@ public struct CoreConformanceRunner: Sendable {
       let swiftRun = try swiftAdapter.adapt(
         swiftEvidence, for: declaredCase, actionNames: swiftActionNames)
       let receiptContext = CanonicalRunEvidence.ReceiptContext(
-        compiledModelIdentity: swiftEvidence.compiledModelIdentity,
+        compiledModelIdentity: swiftEvidence.exploration.compilationIdentity.value,
         configurationIdentity: declaredCase.cfgSHA256,
         symmetrySchemaIdentity: "none",
         observableNameMappingIdentity: actionMappingReceiptIdentity(swiftActionNames),
-        maximumStateLimit: swiftEvidence.maximumStateLimit
+        maximumStateLimit: swiftEvidence.exploration.configuration.maximumStateLimit
       )
       try writeCanonicalRun(
         swiftRun, named: "swift-run.json", correlation: correlations.swift,
@@ -185,7 +185,7 @@ public struct CoreConformanceRunner: Sendable {
         compiledModelIdentity: receiptContext.compiledModelIdentity,
         configurationIdentity: receiptContext.configurationIdentity,
         symmetrySchemaIdentity: receiptContext.symmetrySchemaIdentity,
-        maximumStateLimit: swiftEvidence.maximumStateLimit,
+        maximumStateLimit: swiftEvidence.exploration.configuration.maximumStateLimit,
         observableNameMappingIdentity: receiptContext.observableNameMappingIdentity
       )
       let exitCode: CoreConformanceExitCode =

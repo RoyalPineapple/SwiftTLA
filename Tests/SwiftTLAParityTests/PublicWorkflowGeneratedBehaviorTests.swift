@@ -10,13 +10,18 @@ struct PublicWorkflowGeneratedBehaviorTests {
   @MainActor
     func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
     var model = try P4GeneratedCounter.makeMachine()
-    let live = try P4GeneratedCounter.makeLive()
-    let observable = try await P4GeneratedCounter.Observable(live: live)
-    let actor = P4GeneratedCounter.Actor(live: live)
+    let observable = try await P4GeneratedCounter.Observable(live: try P4GeneratedCounter.makeLive())
+    let actor = P4GeneratedCounter.Actor(live: try P4GeneratedCounter.makeLive())
 
     let modelEvidence = try model.apply(.advance)
-    let observableEvidence = try await observable.apply(.advance)
-    let actorEvidence = try await actor.apply(.advance)
+    guard case .committed(let observableEvidence) = try await observable.apply(.advance) else {
+      Issue.record("Expected observable action to commit")
+      return
+    }
+    guard case .committed(let actorEvidence) = try await actor.apply(.advance) else {
+      Issue.record("Expected actor action to commit")
+      return
+    }
 
     #expect(modelEvidence.action == .advance)
     #expect(observableEvidence.action == .advance)
@@ -45,7 +50,7 @@ struct PublicWorkflowGeneratedBehaviorTests {
   func generatedBehaviorViolationRetainsBothObservedStates() throws {
     let fixture = try Fixture()
     let (first, firstOutput) = try fixture.run(id: "p4-generated-counter-intentional-mismatch")
-    let (second, secondOutput) = try fixture.run(id: "p4-generated-counter-intentional-mismatch")
+    let (_, secondOutput) = try fixture.run(id: "p4-generated-counter-intentional-mismatch")
     defer {
       try? FileManager.default.removeItem(at: firstOutput)
       try? FileManager.default.removeItem(at: secondOutput)

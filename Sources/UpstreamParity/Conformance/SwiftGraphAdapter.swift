@@ -9,29 +9,23 @@ public enum SwiftGraphAdapterError: Error, Equatable, Sendable {
   case invalidUnderlyingOutcome
 }
 
-public struct SwiftExplorationEvidence {
-  public let caseID: String
-  public let exploration: ModelExplorationResult
-  public let compiledModelIdentity: String
-  public let maximumStateLimit: Int
+package struct SwiftExplorationEvidence {
+  package let caseID: String
+  package let exploration: ModelExplorationResult
 
-  public init(
+  package init(
     caseID: String,
-    exploration: ModelExplorationResult,
-    compiledModelIdentity: String,
-    maximumStateLimit: Int
+    exploration: ModelExplorationResult
   ) {
     self.caseID = caseID
     self.exploration = exploration
-    self.compiledModelIdentity = compiledModelIdentity
-    self.maximumStateLimit = maximumStateLimit
   }
 }
 
-public struct SwiftGraphAdapter: Sendable {
-  public init() {}
+package struct SwiftGraphAdapter: Sendable {
+  package init() {}
 
-  public func adapt(
+  package func adapt(
     _ evidence: SwiftExplorationEvidence,
     for declaredCase: CoreConformanceCase,
     actionNames: [String: String] = [:]
@@ -49,7 +43,7 @@ public struct SwiftGraphAdapter: Sendable {
     )
   }
 
-  public func adapt(
+  package func adapt(
     _ exploration: ModelExplorationResult,
     actionNames: [String: String] = [:],
     valueNormalizations: [CoreConformanceValueNormalization] = []
@@ -136,6 +130,8 @@ public struct SwiftGraphAdapter: Sendable {
       return .invariantViolation(message)
     case .error(let message):
       return .executionError(message)
+    case .refinementViolated(let refinement, _):
+      return .invariantViolation(refinement)
     case .refinementUnproven:
       return .incomplete(reason: result.description)
     case .bounded:

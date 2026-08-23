@@ -69,7 +69,7 @@ func invocationMappings(
             try expand(position + 1, arguments + [value.description], indices + [index])
         }
     }
-    return expand(0, [], [])
+    return try expand(0, [], [])
 }
 
 func validateIdentityMapping(
@@ -235,12 +235,11 @@ func inputPath(_ relativePath: String, within root: String) throws -> URL {
     guard !relativePath.hasPrefix("/") else {
         throw CoreConformanceCLIError.invalidManifest("input paths must be relative")
     }
-    let rootURL = URL(fileURLWithPath: root).standardizedFileURL
+    let rootURL = try ConformanceEvidence.projectRoot(URL(fileURLWithPath: root))
     do {
         return try ConformanceEvidence.resolve(
             rootURL.appendingPathComponent(relativePath),
-            beneath: rootURL
-        )
+            beneath: rootURL)
     } catch {
         throw CoreConformanceCLIError.invalidManifest("input path escapes the pinned checkout")
     }

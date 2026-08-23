@@ -34,26 +34,26 @@ public struct TLCTemporalCaptureResult: Sendable {
   }
 }
 
-public struct TLCTemporalCaptureInput: Sendable {
-  public let declaredCase: TemporalSymmetryCase
-  public let correlation: TemporalSymmetryCaseRunCorrelation
-  public let request: TLCProcessRequest
-  public let completeGraphRequest: TLCProcessRequest?
-  public let swiftResult: TemporalPropertyResult
-  public let swiftEvidence: CoreEvidenceReference
-  public let enablednessEvidence: CoreEvidenceReference
-  public let fairComponents: [TemporalRecurrentComponent]
-  public let rejectedComponents: [TemporalRecurrentComponent]
-  public let allowsImplicitStuttering: Bool
-  public let manifest: CoreEvidenceReference
-  public let manifestURL: URL
-  public let toolchain: CoreEvidenceReference
-  public let toolchainURL: URL
-  public let sourceInputURL: URL
-  public let outputDirectory: URL
-  public let relativeOutputDirectory: String
+package struct TLCTemporalCaptureInput: Sendable {
+  package let declaredCase: TemporalSymmetryCase
+  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let request: TLCProcessRequest
+  package let completeGraphRequest: TLCProcessRequest?
+  package let swiftResult: TemporalPropertyResult
+  package let swiftEvidence: CoreEvidenceReference
+  package let enablednessEvidence: CoreEvidenceReference
+  package let fairComponents: [TemporalRecurrentComponent]
+  package let rejectedComponents: [TemporalRecurrentComponent]
+  package let allowsImplicitStuttering: Bool
+  package let manifest: CoreEvidenceReference
+  package let manifestURL: URL
+  package let toolchain: CoreEvidenceReference
+  package let toolchainURL: URL
+  package let sourceInputURL: URL
+  package let outputDirectory: URL
+  package let relativeOutputDirectory: String
 
-  public init(
+  package init(
     declaredCase: TemporalSymmetryCase,
     correlation: TemporalSymmetryCaseRunCorrelation,
     request: TLCProcessRequest,
@@ -103,14 +103,14 @@ public enum TLCTemporalAdapterError: Error, Equatable, Sendable {
   case graphEvidenceInvalid
 }
 
-public struct TLCTemporalAdapter: Sendable {
+package struct TLCTemporalAdapter: Sendable {
   private let processAdapter: TLCProcessAdapter
 
-  public init(processAdapter: TLCProcessAdapter = TLCProcessAdapter()) {
+  package init(processAdapter: TLCProcessAdapter = TLCProcessAdapter()) {
     self.processAdapter = processAdapter
   }
 
-  public func capture(_ input: TLCTemporalCaptureInput) -> TLCTemporalCaptureResult {
+  package func capture(_ input: TLCTemporalCaptureInput) -> TLCTemporalCaptureResult {
     do {
       guard !FileManager.default.fileExists(atPath: input.outputDirectory.path) else {
         throw TLCTemporalAdapterError.outputAlreadyExists
@@ -168,11 +168,11 @@ public struct TLCTemporalAdapter: Sendable {
           : nil)
     } catch {
       let directory = retainedFailureDirectory(for: input)
-      try? ConformanceEvidence.createDirectory(
+      _ = try? ConformanceEvidence.createDirectory(
         directory, beneath: input.outputDirectory.deletingLastPathComponent())
       let diagnostic = TLCTemporalCaptureDiagnostic(
         code: diagnosticCode(for: error), message: String(describing: error))
-      try? ConformanceEvidence.writeJSON(["code": diagnostic.code, "message": diagnostic.message], to: directory.appendingPathComponent("diagnostic.json"))
+      _ = try? ConformanceEvidence.writeJSON(["code": diagnostic.code, "message": diagnostic.message], to: directory.appendingPathComponent("diagnostic.json"))
       return TLCTemporalCaptureResult(
         status: .unavailable, comparison: nil, evidenceDirectory: directory, diagnostic: diagnostic)
     }

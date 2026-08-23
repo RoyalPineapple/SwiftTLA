@@ -306,7 +306,7 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
     }
     let parsed = SpecParser.parseSpecClosure(closure)
     let diagnostics = parsed.diagnostics.map { "parser:\($0.message)" }
-    let parsedSpec = TLASpec(configuration.specificationName,
+    let parsedSpec = TLASpec(name: configuration.specificationName,
       variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
       constants: parsed.constants,
       actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings) },

@@ -438,7 +438,7 @@ package struct TLCProcessAdapter: Sendable {
     try ConformanceEvidence.createDirectory(directory, beneath: directory.deletingLastPathComponent())
     let run: TLCProcessRun
     do {
-      run = try run(request, replay: replay)
+      run = try self.run(request, replay: replay)
     } catch {
       try retain(error, request: request, in: directory)
       throw error

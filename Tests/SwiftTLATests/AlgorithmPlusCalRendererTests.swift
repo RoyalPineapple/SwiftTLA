@@ -1,5 +1,6 @@
 import Testing
 @testable import SwiftTLA
+import SwiftTLAMacros
 
 @Suite("PlusCal Algorithm renderer")
 struct AlgorithmPlusCalRendererTests {

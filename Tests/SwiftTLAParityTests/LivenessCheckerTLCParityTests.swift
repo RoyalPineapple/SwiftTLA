@@ -100,7 +100,7 @@ import UpstreamParity
 @Test("ChangRoberts liveness: cand ~> won holds")
 func changRobertsLiveness() throws {
   let spec = Example.changRobertsN3.spec
-  let mc = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
+  let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
   let graph = try mc.exploreGraph()
   let lc = LivenessChecker(compilation: try spec.compile(), graph: graph)
   // Verify temporal property exists
@@ -113,7 +113,7 @@ func changRobertsLiveness() throws {
 @Test("ChangRoberts liveness verified by TLC")
 func changRobertsLivenessParity() throws {
   let spec = Example.changRobertsN3.spec
-  let mc = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
+  let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
   let graph = try mc.exploreGraph()
   let lc = LivenessChecker(compilation: try spec.compile(), graph: graph)
   let results = lc.analyze(initialStateIDs: graph.states.keys.sorted(by: { $0.id < $1.id }))

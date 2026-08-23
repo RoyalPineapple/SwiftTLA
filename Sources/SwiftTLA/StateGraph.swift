@@ -58,6 +58,8 @@ package struct ModelExplorationResult {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
     public let result: CheckResult
+    package let compilationIdentity: CompilationIdentity
+    package let configuration: FiniteExplorationConfiguration
     let compiledStates: [StateGraph.StateID: CompiledState]
 
     public var isComplete: Bool {
@@ -68,11 +70,15 @@ package struct ModelExplorationResult {
     public init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
-        result: CheckResult
+        result: CheckResult,
+        compilationIdentity: CompilationIdentity,
+        configuration: FiniteExplorationConfiguration
     ) {
         self.graph = graph
         self.initialStateIDs = initialStateIDs
         self.result = result
+        self.compilationIdentity = compilationIdentity
+        self.configuration = configuration
         compiledStates = [:]
     }
 
@@ -80,11 +86,15 @@ package struct ModelExplorationResult {
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
         result: CheckResult,
+        compilationIdentity: CompilationIdentity,
+        configuration: FiniteExplorationConfiguration,
         compiledStates: [StateGraph.StateID: CompiledState]
     ) {
         self.graph = graph
         self.initialStateIDs = initialStateIDs
         self.result = result
+        self.compilationIdentity = compilationIdentity
+        self.configuration = configuration
         self.compiledStates = compiledStates
     }
 }

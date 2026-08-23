@@ -6,7 +6,6 @@ import SwiftTLAMacros
 /// The input is an assumption: `seq` is selected from the finite set of
 /// nondecreasing sequences. The `While` body is the source's one labeled
 /// atomic step, including its two scoped `with` bindings.
-@TLAModel
 public struct BinarySearchModel: Sendable {
     private enum Step: String, PlusCalLabel, CaseIterable {
         case a
@@ -15,7 +14,7 @@ public struct BinarySearchModel: Sendable {
     public static var spec: TLASpec {
         #spec("BinarySearch") {
             Extends(.integers)
-            Algorithm("BinarySearch", scoped: { scope in
+            Algorithm("BinarySearch", fairness: .weak, scoped: { scope in
                 let seq = scope.sharedVar("seq", in: SortedSequences(
                     of: SetExpr<Int>.literal(1, 2, 3, 4, 5),
                     lengths: 0...8
@@ -56,7 +55,6 @@ public struct BinarySearchModel: Sendable {
                         else: result == 0
                     )
                 }
-                WeakFairnessNext()
             })
         }
     }

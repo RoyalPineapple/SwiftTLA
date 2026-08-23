@@ -65,8 +65,7 @@ struct SymmetricCollectionTLCOracleTests {
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.symmetricCollections.map { $0.declaration.metadata }
       == runtime.symmetricCollections.map(\.metadata))
-    #expect(normalizedActions(parsed.actions.map { NamedAction(name: $0.name, body: $0.body) })
-      == normalizedActions(runtime.actions))
+    #expect(parsed.actions.map { NamedAction(name: $0.name, body: $0.body) } == runtime.actions)
     #expect(try parsedSpec.compile().initialStateProjections() == runtime.compile().initialStateProjections())
     #expect(try ModelChecker(compilation: try parsedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description == ModelChecker(compilation: try runtime.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description)
   }
@@ -164,8 +163,4 @@ struct SymmetricCollectionTLCOracleTests {
     return SpecParser.parseSpecClosure(closure)
   }
 
-  private func testProductExecutable(named name: String) -> String? {
-    Bundle.allBundles
-      .first { $0.bundleURL.lastPathComponent == "SwiftTLATests.xctest" }
-      .map { $0.bundleURL.deletingLastPathComponent().appendingPathComponent(name).path }
-  }
+}

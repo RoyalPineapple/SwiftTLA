@@ -978,6 +978,14 @@ public enum ProcessFairness: Sendable {
     }
 }
 
+/// Scheduling policy for a sequential `Algorithm` body.
+///
+/// `.weak` preserves scalar control state and lowers to `WF(Next)`.
+public enum SequentialAlgorithmFairness: Sendable, Equatable {
+    case none
+    case weak
+}
+
 extension Var {
     public var algorithmLValue: AlgorithmLValue<T> {
         AlgorithmLValue(model: .root(name))
@@ -1228,15 +1236,15 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: FairnessDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .fairness(component.condition))]
+        [AlgorithmElement(model: .unsupported(.genericFairness))]
     }
 
     public static func buildExpression(_ component: AssumeDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .propertyBoundary)]
+        [AlgorithmElement(model: .unsupported(.algorithmAssume))]
     }
 
     public static func buildExpression(_ component: TheoremDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .propertyBoundary)]
+        [AlgorithmElement(model: .unsupported(.algorithmTheorem))]
     }
 
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
@@ -1302,17 +1310,26 @@ public enum DoBuilder {
 public struct Algorithm: Sendable, SpecComponent {
     internal let model: AlgorithmModel
 
-    public init(_ name: String, @AlgorithmBuilder _ body: () -> [AlgorithmElement]) {
-        model = AlgorithmModel(name: name, components: body().map(\.model))
+    public init(
+        _ name: String,
+        fairness: SequentialAlgorithmFairness = .none,
+        @AlgorithmBuilder _ body: () -> [AlgorithmElement]
+    ) {
+        model = AlgorithmModel(name: name, sequentialFairness: fairness, components: body().map(\.model))
     }
 
     public init(
         _ name: String,
+        fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
     ) {
         let scope = AlgorithmScope()
         let components = body(scope)
-        model = AlgorithmModel(name: name, components: scope.declarations.map(\.model) + components.map(\.model))
+        model = AlgorithmModel(
+            name: name,
+            sequentialFairness: fairness,
+            components: scope.declarations.map(\.model) + components.map(\.model)
+        )
     }
 
     internal init(model: AlgorithmModel) {
@@ -1437,13 +1454,7 @@ public func Procedure(
     _ name: String,
     @AlgorithmBuilder _ body: () -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    let components = body().map(\.model)
-    return AlgorithmElement(model: .procedure(.init(
-        name: name,
-        parameters: [],
-        locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } },
-        steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } }
-    )))
+    procedure(name: name, parameters: [], components: body())
 }
 
 public func Procedure<Value: TLAValueType>(
@@ -1483,8 +1494,7 @@ private func procedure(
     return AlgorithmElement(model: .procedure(.init(
         name: name,
         parameters: parameters,
-        locals: models.compactMap { if case .local(let value) = $0 { value } else { nil } },
-        steps: models.compactMap { if case .step(let value) = $0 { value } else { nil } }
+        components: models
     )))
 }
 
@@ -1492,31 +1502,45 @@ public func Procedure<First: TLAValueType, Second: TLAValueType>(
     _ name: String, parameters: First.Type, _ second: Second.Type,
     @AlgorithmBuilder _ body: (ProcedureParameter<First>, ProcedureParameter<Second>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    let components = body(.init(name: "parameter0"), .init(name: "parameter1")).map(\.model)
-    return AlgorithmElement(model: .procedure(.init(name: name, parameters: [
-        .init(root: "parameter0", initial: .value(First.defaultValue.tlaValue), swiftTypeName: String(reflecting: First.self)),
-        .init(root: "parameter1", initial: .value(Second.defaultValue.tlaValue), swiftTypeName: String(reflecting: Second.self))
-    ], locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } }, steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } })))
+    procedure(
+        name: name,
+        parameters: [
+            .init(root: "parameter0", initial: .value(First.defaultValue.tlaValue), swiftTypeName: String(reflecting: First.self)),
+            .init(root: "parameter1", initial: .value(Second.defaultValue.tlaValue), swiftTypeName: String(reflecting: Second.self))
+        ],
+        components: body(.init(name: "parameter0"), .init(name: "parameter1"))
+    )
 }
 
 public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType>(
     _ name: String, parameters: A.Type, _ b: B.Type, _ c: C.Type,
     @AlgorithmBuilder _ body: (ProcedureParameter<A>, ProcedureParameter<B>, ProcedureParameter<C>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    let components = body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2")).map(\.model)
-    return AlgorithmElement(model: .procedure(.init(name: name, parameters: [
-        .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)), .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)), .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self))
-    ], locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } }, steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } })))
+    procedure(
+        name: name,
+        parameters: [
+            .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)),
+            .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)),
+            .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self))
+        ],
+        components: body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2"))
+    )
 }
 
 public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType, D: TLAValueType>(
     _ name: String, parameters: A.Type, _ b: B.Type, _ c: C.Type, _ d: D.Type,
     @AlgorithmBuilder _ body: (ProcedureParameter<A>, ProcedureParameter<B>, ProcedureParameter<C>, ProcedureParameter<D>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    let components = body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2"), .init(name: "parameter3")).map(\.model)
-    return AlgorithmElement(model: .procedure(.init(name: name, parameters: [
-        .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)), .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)), .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self)), .init(root: "parameter3", initial: .value(D.defaultValue.tlaValue), swiftTypeName: String(reflecting: D.self))
-    ], locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } }, steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } })))
+    procedure(
+        name: name,
+        parameters: [
+            .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)),
+            .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)),
+            .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self)),
+            .init(root: "parameter3", initial: .value(D.defaultValue.tlaValue), swiftTypeName: String(reflecting: D.self))
+        ],
+        components: body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2"), .init(name: "parameter3"))
+    )
 }
 
 /// Binds a nondeterministically chosen member of a bounded formal set for one
@@ -2050,6 +2074,10 @@ internal enum AlgorithmValidator {
         if !model.processes.isEmpty, !model.sequentialSteps.isEmpty {
             diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: .algorithm))
         }
+        if model.sequentialFairness == .weak,
+           (!model.processes.isEmpty || model.sequentialSteps.isEmpty) {
+            diagnostics.append(AlgorithmDiagnostic(.invalidSequentialFairness, at: .algorithm))
+        }
         let sequentialLabels = model.sequentialSteps.map(\.label.name)
         if Set(sequentialLabels).count != sequentialLabels.count {
             diagnostics.append(AlgorithmDiagnostic(.duplicateLabel, at: .algorithm))
@@ -2067,14 +2095,12 @@ internal enum AlgorithmValidator {
                 validateName(invariant.name, at: .algorithm, diagnostics: &diagnostics)
             case .temporal(let temporal):
                 validateName(temporal.name, at: .algorithm, diagnostics: &diagnostics)
-            case .fairness:
+            case .unsupported:
                 break
             case .formalOperator(let definition):
                 validateName(definition.name, at: .algorithm, diagnostics: &diagnostics)
             case .stateConstraint:
                 break
-            case .propertyBoundary:
-                diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: .algorithm))
             case .step(let step):
                 validateSequential(step, labels: Set(model.sequentialSteps.map(\.label.name)), diagnostics: &diagnostics)
             case .local:
@@ -2123,8 +2149,10 @@ internal enum AlgorithmValidator {
                 validate(step, process: index, labels: Set(labels), diagnostics: &diagnostics)
             case .invariant(let invariant):
                 validateName(invariant.name, at: processAnchor, diagnostics: &diagnostics)
-            case .temporal, .fairness, .formalOperator, .stateConstraint, .propertyBoundary:
-                diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: processAnchor))
+            case .unsupported:
+                continue
+            case .temporal, .formalOperator, .stateConstraint:
+                diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
             case .shared, .process, .procedure:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
             }
