@@ -53,7 +53,7 @@ struct CoreSupportAdmissionTests {
   }
 
   private func evidenceReference() throws -> CoreEvidenceReference {
-    try .init(path: "run/comparison.json", sha256: String(repeating: "0", count: 64))
+    try .init(path: "run/core-decision.json", sha256: String(repeating: "0", count: 64))
   }
 
   private func correlation(caseID: String, gateRunID: UUID) throws -> CoreSupportCaseRunCorrelation {

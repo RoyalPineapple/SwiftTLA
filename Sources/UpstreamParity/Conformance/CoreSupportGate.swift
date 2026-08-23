@@ -533,8 +533,8 @@ public struct CoreSupportGate: Sendable {
     }
     guard let evidence else { return CaseObservation(reasons: [.missingEvidence]) }
     let requiredFiles = [
-      "run.json", "swift-run.json",
-      "tlc-run.json", "comparison.json", "tlc-process.json", "raw-artifacts.json", "graph-events.jsonl"
+      "run.json", "core-decision.json",
+      "tlc-process.json", "raw-artifacts.json", "graph-events.jsonl"
     ]
     guard requiredFiles.allSatisfy({ FileManager.default.fileExists(atPath: evidence.directory.appendingPathComponent($0).path) }) else {
       return CaseObservation(reasons: [.partialEvidence])
@@ -547,16 +547,10 @@ public struct CoreSupportGate: Sendable {
             let argumentsJSON = requestJSON["arguments"] as? [String]
       else { throw EvidenceError.invalidJSON }
       let runJSON = try object(named: "run.json", in: evidence.directory)
-      let comparisonJSON = try object(named: "comparison.json", in: evidence.directory)
-      let swiftLoaded = try canonicalRunEvidence(named: "swift-run.json", in: evidence.directory)
-      let tlcLoaded = try canonicalRunEvidence(named: "tlc-run.json", in: evidence.directory)
-      let swiftEvidence = swiftLoaded.evidence
-      let tlcEvidence = tlcLoaded.evidence
-      let swiftRun = swiftLoaded.run
-      let tlcRun = tlcLoaded.run
+      let decision = try CanonicalConformanceEvidence.read(from: evidence.directory)
       var reasons = Set<CoreSupportReasonCode>()
-      guard swiftEvidence.receiptContext.maximumStateLimit == declaredCase.maximumStateLimit,
-            tlcEvidence.receiptContext.maximumStateLimit == declaredCase.maximumStateLimit
+      guard decision.evidence.comparison.expectedReceipt.maximumStateLimit == declaredCase.maximumStateLimit,
+            decision.evidence.comparison.actualReceipt.maximumStateLimit == declaredCase.maximumStateLimit
       else { throw EvidenceError.invalidJSON }
       let expectedCase = try declaredCaseContract(declaredCase)
       if !caseMatches(caseJSON, declaredCase, expectedCase)
@@ -565,14 +559,14 @@ public struct CoreSupportGate: Sendable {
       }
       if !toolchainMatches(toolchainJSON, declaredCase) { reasons.insert(.toolchainDigestMismatch) }
       let correlation = try correlation(
-        caseID: declaredCase.id, gateRunID: gateRunID, process: processJSON,
-        run: runJSON, swift: swiftEvidence, tlc: tlcEvidence, comparison: comparisonJSON)
+        caseID: declaredCase.id, gateRunID: gateRunID,
+        process: processJSON, run: runJSON, decision: decision.evidence)
       guard let correlation else {
         reasons.insert(.foreignRun)
         return CaseObservation(reasons: reasons)
       }
-      let completeGraphs = canonicalRunsAreComplete(swiftRun, tlcRun, requireExhaustiveCompletion: true)
-      let matchingExactGraphs = canonicalRunsAgree(swiftRun, tlcRun)
+      let completeGraphs = canonicalRunsAreComplete(
+        decision.swiftRun, decision.tlcRun, requireExhaustiveCompletion: true)
       guard let processIsViolation = processLifecycle(
         processJSON, caseID: declaredCase.id, gateRunID: gateRunID
       ) else { throw EvidenceError.invalidJSON }
@@ -582,57 +576,62 @@ public struct CoreSupportGate: Sendable {
         isViolation: processIsViolation)
       let rawEvidence = try rawEvidenceMatchesCanonicalOutcome(
         in: evidence.directory, expectedCase: expectedCase, gateRunID: gateRunID,
-        isViolation: processIsViolation, tlc: tlcRun)
-      guard completeGraphs, matchingExactGraphs, rawManifest, rawEvidence
+        isViolation: processIsViolation, tlc: decision.tlcRun)
+      guard completeGraphs, rawManifest, rawEvidence
       else { throw EvidenceError.invalidJSON }
       let exitCode = runJSON["exitCode"] as? Int
       guard let exitCode else { throw EvidenceError.invalidJSON }
-      let computed = try comparisonMatchesCanonicalTruth(
-        swift: swiftEvidence, swiftRun: swiftRun,
-        tlc: tlcEvidence, tlcRun: tlcRun,
-        comparison: comparisonJSON)
       if exitCode == Int(CoreConformanceExitCode.failure.rawValue) {
         reasons.insert(.executionFailed)
       }
-      if exitCode != Int(CoreConformanceExitCode.exact.rawValue) || computed {
+      if exitCode != Int(CoreConformanceExitCode.exact.rawValue) || !decision.comparison.isConformant {
         reasons.insert(.nonExactComparison)
       }
-      let references = try references(in: evidence)
+      let references = try references(in: evidence, decision: decision.evidence)
       return CaseObservation(
         reasons: reasons, references: references, correlation: correlation)
     } catch {
       return CaseObservation(reasons: [.partialEvidence])
     }
   }
-  private func references(in evidence: CoreSupportCaseEvidence) throws -> [CoreEvidenceReference] {
-    try ["tlc-process.json", "run.json", "comparison.json"].map { file in
+  private func references(
+    in evidence: CoreSupportCaseEvidence,
+    decision: CanonicalConformanceEvidence
+  ) throws -> [CoreEvidenceReference] {
+    let retainedGraphRecords = [decision.swift.run] + decision.swift.chunks
+      + [decision.tlc.run] + decision.tlc.chunks
+    let graphReferences = try retainedGraphRecords.map {
+      try CoreEvidenceReference(
+        path: evidence.relativeDirectory + "/" + $0.path,
+        sha256: $0.sha256)
+    }
+    let attestationReferences = try [
+      "core-decision.json", "tlc-process.json", "run.json", "raw-artifacts.json", "graph-events.jsonl"
+    ].map { file in
       try CoreEvidenceReference(
         path: evidence.relativeDirectory + "/" + file,
         sha256: SHA256.hex(try Data(contentsOf: evidence.directory.appendingPathComponent(file))))
     }
+    return attestationReferences + graphReferences
   }
   private func correlation(
     caseID: String,
     gateRunID: UUID,
     process: [String: Any],
     run: [String: Any],
-    swift: CanonicalRunEvidence,
-    tlc: CanonicalRunEvidence,
-    comparison: [String: Any]
+    decision: CanonicalConformanceEvidence
   ) throws -> CoreSupportCaseRunCorrelation? {
     let expectedRunID = gateRunID.uuidString.lowercased()
     let processCorrelation = (process["request"] as? [String: Any])?["correlation"] as? [String: Any] ?? [:]
     let sources: [(String, [String: Any], String)] = [
       ("tlc", processCorrelation, "tlc"),
-      ("runner", run["correlation"] as? [String: Any] ?? [:], "runner"),
-      ("runner", comparison["correlation"] as? [String: Any] ?? [:], "runner")
+      ("runner", run["correlation"] as? [String: Any] ?? [:], "runner")
     ]
     guard sources.allSatisfy({ expected, object, _ in
       object["caseID"] as? String == caseID && object["engine"] as? String == expected
         && object["runID"] as? String == expectedRunID
     }),
-      swift.correlation.matches(caseID: caseID, runID: gateRunID, engine: .swift),
-      tlc.correlation.matches(caseID: caseID, runID: gateRunID, engine: .tlc)
+      decision.correlation.matches(caseID: caseID, runID: gateRunID, engine: .runner)
     else { return nil }
     return try CoreSupportCaseRunCorrelation(
       caseID: caseID, gateRunID: gateRunID, swiftRunID: gateRunID, tlcRunID: gateRunID,
@@ -644,11 +643,6 @@ public struct CoreSupportGate: Sendable {
       throw EvidenceError.invalidJSON
     }
     return object
-  }
-  private func canonicalRunEvidence(
-    named file: String, in directory: URL
-  ) throws -> (evidence: CanonicalRunEvidence, run: CanonicalRun) {
-    try CanonicalRunEvidence.read(from: directory.appendingPathComponent(file))
   }
   private struct CaseObservation {
     let reasons: Set<CoreSupportReasonCode>
