@@ -64,6 +64,10 @@ struct CoreConformanceCanonicalizationTests {
         let second = StateGraph.StateID(1)
         let firstCars: TLAValue = .record(["carA": .int(0), "carB": .int(1)])
         let secondCars: TLAValue = .record(["carA": .int(1), "carB": .int(1)])
+        let fixture = Var<Int>("fixture")
+        let compilationIdentity = try TLASpec("NormalizedFixture") {
+            Variable(fixture, 0)
+        }.compile().identity
         let exploration = ModelExplorationResult(
             graph: StateGraph(
                 specName: "NormalizedFixture",
@@ -75,7 +79,9 @@ struct CoreConformanceCanonicalizationTests {
                 ]
             ),
             initialStateIDs: [first],
-            result: .ok(statesCount: 2)
+            result: .ok(statesCount: 2),
+            compilationIdentity: compilationIdentity,
+            configuration: try .init(maximumStateLimit: 10)
         )
         let declaredCase = try CoreConformanceCase(
             id: "normalized-fixture",
@@ -99,9 +105,7 @@ struct CoreConformanceCanonicalizationTests {
         let run = try SwiftGraphAdapter().adapt(
             SwiftExplorationEvidence(
                 caseID: declaredCase.id,
-                exploration: exploration,
-                compiledModelIdentity: "fixture-model",
-                maximumStateLimit: 10
+                exploration: exploration
             ),
             for: declaredCase
         )

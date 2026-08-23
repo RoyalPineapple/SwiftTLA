@@ -8,13 +8,14 @@ struct DiningPhilosophersCorpusStateGraphTests {
     func generatedAlgorithmMatchesUpstreamStateCount() throws {
 
         let entry = Example.diningPhilosophersNP5
-        let graph = try ModelChecker(
-            spec: entry.spec,
+        let compilation = try entry.spec.compile()
+        let exploration = try ModelChecker(
+            compilation: compilation,
             configuration: try FiniteExplorationConfiguration(
                 maximumStateLimit: entry.maximumStateLimit
             )
-        ).exploreGraph()
+        ).explore()
 
-        #expect(graph.states.count == entry.expectedDistinct)
+        #expect(exploration.graph.states.count == entry.expectedDistinct)
     }
 }

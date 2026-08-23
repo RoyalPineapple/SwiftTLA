@@ -2,7 +2,18 @@ import Foundation
 
 internal struct AlgorithmModel: Sendable {
     let name: String
+    let sequentialFairness: SequentialAlgorithmFairness
     let components: [AlgorithmComponentModel]
+
+    init(
+        name: String,
+        sequentialFairness: SequentialAlgorithmFairness = .none,
+        components: [AlgorithmComponentModel]
+    ) {
+        self.name = name
+        self.sequentialFairness = sequentialFairness
+        self.components = components
+    }
 
     var processes: [AlgorithmProcessModel] {
         components.compactMap {
@@ -89,7 +100,7 @@ internal struct AlgorithmModel: Sendable {
                     names.insert(invariant.name)
                 case .temporal(let temporal):
                     names.insert(temporal.name)
-                case .fairness, .formalOperator, .stateConstraint, .propertyBoundary:
+                case .formalOperator, .stateConstraint, .unsupported:
                     continue
                 }
             }
@@ -172,15 +183,14 @@ internal struct AlgorithmModel: Sendable {
                         parameters: procedure.parameters.map {
                             .init(root: $0.root, initial: expression($0.initial), swiftTypeName: $0.swiftTypeName)
                         },
-                        locals: procedure.locals.map(state),
-                        steps: procedure.steps.map(step)
+                        components: procedure.components.map(component)
                     )
                 )
             case .invariant(let invariant):
                 return .invariant(.init(name: invariant.name, body: expression(invariant.body)))
             case .temporal(let declaration):
                 return .temporal(.init(name: declaration.name, expr: temporal(declaration.expr)))
-            case .fairness:
+            case .unsupported:
                 return value
             case .formalOperator(let definition):
                 return .formalOperator(
@@ -195,11 +205,14 @@ internal struct AlgorithmModel: Sendable {
             case .stateConstraint(let constraint): return .stateConstraint(expression(constraint))
             case .local(let declaration): return .local(state(declaration))
             case .step(let declaration): return .step(step(declaration))
-            case .propertyBoundary: return .propertyBoundary
             }
         }
 
-        return .init(name: name, components: components.map(component))
+        return .init(
+            name: name,
+            sequentialFairness: sequentialFairness,
+            components: components.map(component)
+        )
     }
 }
 
@@ -294,16 +307,12 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
                 procedureEnvironment = extended
                 return "parameter(\(name),\(initial))"
             }
-            let locals = procedure.locals.enumerated().map { index, local in
-                component(.local(local), procedureEnvironment, path: "\(path).locals[\(index)]")
+            let components = procedure.components.enumerated().map { index, child in
+                component(child, procedureEnvironment, path: "\(path).components[\(index)]")
             }.joined(separator: ",")
-            let steps = procedure.steps.enumerated().map { index, step in
-                component(.step(step), procedureEnvironment, path: "\(path).steps[\(index)]")
-            }.joined(separator: ",")
-            result = "procedure(\(procedure.name),[\(parameters.joined(separator: ","))],[\(locals)],[\(steps)])"
+            result = "procedure(\(procedure.name),[\(parameters.joined(separator: ","))],[\(components)])"
         case .invariant(let invariant): result = "invariant(\(invariant.name),\(state(invariant.body, environment)))"
         case .temporal(let temporal): result = "temporal(\(temporal.name),\(temporal.expr))"
-        case .fairness(let fairness): result = "fairness(\(fairness))"
         case .formalOperator(let definition):
             var definitionEnvironment = environment
             let parameters = definition.parameters.map { parameter -> String in
@@ -316,14 +325,14 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
             }
             result = "formalOperator(\(definition.name),[\(parameters.joined(separator: ","))],\(state(definition.body, definitionEnvironment)))"
         case .stateConstraint(let expression): result = "constraint(\(state(expression, environment)))"
-        case .propertyBoundary: result = "propertyBoundary"
+        case .unsupported(let construct): result = "unsupported(\(construct.rawValue))"
         }
         return record(path, result)
     }
     let components = model.components.enumerated().map { index, child in
         component(child, [:], path: "components[\(index)]")
     }.joined(separator: ",")
-    _ = record("algorithm", "algorithm(\(model.name),[\(components)])")
+    _ = record("algorithm", "algorithm(\(model.name),\(model.sequentialFairness),[\(components)])")
     return nodes.map { "\($0.path)\u{1F}\($0.value)" }.joined(separator: "\u{1E}")
 }
 
@@ -333,23 +342,44 @@ internal indirect enum AlgorithmComponentModel: Sendable {
     case procedure(AlgorithmProcedureModel)
     case invariant(NamedInvariant)
     case temporal(NamedTemporal)
-    case fairness(FairnessCondition)
     case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound declared beside the algorithm that it bounds.
     /// It is not a correctness property: excluded states are not explored.
     case stateConstraint(StateExpr)
+    case unsupported(DeclaredLanguageConstruct)
     case local(AlgorithmStateModel)
     case step(AlgorithmStepModel)
-    case propertyBoundary
 }
 
-/// One formal PlusCal procedure. The public builder does not expose this
-/// internal representation until its parser twin is available.
+/// One formal PlusCal procedure.
 internal struct AlgorithmProcedureModel: Sendable {
     let name: String
     let parameters: [AlgorithmProcedureParameterModel]
-    let locals: [AlgorithmStateModel]
-    let steps: [AlgorithmStepModel]
+    let components: [AlgorithmComponentModel]
+
+    var locals: [AlgorithmStateModel] {
+        components.compactMap {
+            guard case .local(let state) = $0 else { return nil }
+            return state
+        }
+    }
+
+    var steps: [AlgorithmStepModel] {
+        components.compactMap {
+            guard case .step(let step) = $0 else { return nil }
+            return step
+        }
+    }
+
+    init(
+        name: String,
+        parameters: [AlgorithmProcedureParameterModel],
+        components: [AlgorithmComponentModel]
+    ) {
+        self.name = name
+        self.parameters = parameters
+        self.components = components
+    }
 }
 
 internal struct AlgorithmProcedureParameterModel: Sendable {

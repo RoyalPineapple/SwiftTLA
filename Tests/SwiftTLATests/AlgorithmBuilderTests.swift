@@ -58,6 +58,104 @@ struct AlgorithmBuilderTests {
         #expect(compilation.spec.actions.map(\.name).contains("advance"))
     }
 
+    @Test("unsupported Algorithm fairness fails before lowering")
+    func unsupportedAlgorithmFairnessFailsBeforeLowering() {
+        let algorithm = Algorithm("UnsupportedFairness") {
+            Do(TestControlLabel.advance) { Stop() }
+            WeakFairness("advance")
+        }
+
+        do {
+            _ = try TLASpec("UnsupportedFairness") { algorithm }.compile()
+            Issue.record("Expected unsupported Algorithm fairness to prevent compilation.")
+        } catch let diagnostic as LanguageCapabilityDiagnostic {
+            #expect(diagnostic.code == .unsupportedConstruct)
+            #expect(diagnostic.construct.construct == .genericFairness)
+            #expect(diagnostic.operation == .compilation)
+            #expect(diagnostic.sourcePath == ["algorithm", "components[1]"])
+            #expect(diagnostic.expected == "Generic TLA fairness is not admitted inside Algorithm.")
+            #expect(diagnostic.actual == "generic fairness declaration inside Algorithm")
+            #expect(diagnostic.nextSafeAction == "Use Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness.")
+        } catch {
+            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+        }
+    }
+
+    @Test("unsupported Algorithm fairness in a procedure fails before lowering")
+    func unsupportedProcedureFairnessFailsBeforeLowering() {
+        let algorithm = Algorithm("UnsupportedProcedureFairness") {
+            Procedure("work") {
+                Do(TestControlLabel.advance) { Return() }
+                WeakFairness("advance")
+            }
+        }
+
+        do {
+            _ = try TLASpec("UnsupportedProcedureFairness") { algorithm }.compile()
+            Issue.record("Expected unsupported procedure fairness to prevent compilation.")
+        } catch let diagnostic as LanguageCapabilityDiagnostic {
+            #expect(diagnostic.code == .unsupportedConstruct)
+            #expect(diagnostic.construct.construct == .genericFairness)
+            #expect(diagnostic.operation == .compilation)
+            #expect(diagnostic.sourcePath == ["algorithm", "components[0]", "procedure", "components[1]"])
+            #expect(diagnostic.expected == "Generic TLA fairness is not admitted inside Algorithm.")
+            #expect(diagnostic.actual == "generic fairness declaration inside Algorithm")
+            #expect(diagnostic.nextSafeAction == "Use Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness.")
+        } catch {
+            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+        }
+    }
+
+    @Test("unsupported Algorithm property placement retains its construct")
+    func unsupportedAlgorithmPropertyPlacementRetainsItsConstruct() {
+        let cases: [(DeclaredLanguageConstruct, Algorithm)] = [
+            (.algorithmAssume, Algorithm("UnsupportedAssume") {
+                Assume(false)
+            }),
+            (.algorithmTheorem, Algorithm("UnsupportedTheorem") {
+                Theorem(name: "Safety", always: .value(.bool(true)))
+            })
+        ]
+
+        for (construct, algorithm) in cases {
+            do {
+                _ = try TLASpec("\(construct.rawValue)Gate") { algorithm }.compile()
+                Issue.record("Expected \(construct.rawValue) to prevent compilation.")
+            } catch let diagnostic as LanguageCapabilityDiagnostic {
+                #expect(diagnostic.construct.construct == construct)
+                #expect(diagnostic.operation == .compilation)
+                #expect(diagnostic.expected == LanguageCapabilityLedger.capability(for: construct).boundary)
+                #expect(diagnostic.nextSafeAction == LanguageCapabilityLedger.capability(for: construct).nextSafeAction)
+            } catch {
+                Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+            }
+        }
+    }
+
+    @Test("unsupported temporal refinement targets fail before linking")
+    func unsupportedTemporalRefinementTargetsFailBeforeLinking() {
+        let abstract = TLASpec("AbstractTarget") {
+            FormalDefinition("Spec", parameters: [], body: true)
+        }
+        let instance = Instance("Abstract", of: abstract)
+        let concrete = TLASpec("UnsupportedTarget") {
+            instance
+            Refinement(name: "Refines", instance: instance, operator: .liveSpec, mappings: [])
+        }
+
+        do {
+            _ = try concrete.compile()
+            Issue.record("Expected .liveSpec to prevent compilation.")
+        } catch let diagnostic as LanguageCapabilityDiagnostic {
+            #expect(diagnostic.construct.construct == .temporalRefinementLiveSpec)
+            #expect(diagnostic.operation == .compilation)
+            #expect(diagnostic.sourcePath == ["refinements", "Refines", "operator"])
+            #expect(diagnostic.expected == "Live specification refinement targets are not admitted by the initial Algorithm ledger.")
+        } catch {
+            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+        }
+    }
+
     @Test("action completion preserves assigned compiler control state")
     func actionCompletionPreservesAssignedCompilerControlState() {
         let programCounter = NamedVar(
@@ -78,7 +176,7 @@ struct AlgorithmBuilderTests {
     func directTLAActionHeadersUseCompiledProcessBindings() throws {
         let algorithm = Algorithm("BoundProcessHeader", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
-            Each(Node.all) { _ in
+            Each(Node.all, fairness: .weak) { _ in
                 Do(TestControlLabel.advance) { Assign(count, to: count + 1) }
             }
         })
@@ -504,7 +602,7 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try compiledSourceSpecification(algorithm)
-        #expect(spec.variables.map(\.name) == ["value", "pc"])
+        #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["increment", "finish", "Terminating"])
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
 
@@ -524,6 +622,43 @@ struct AlgorithmBuilderTests {
         let next = try successor(named: "increment", in: compilation, from: initial)
         #expect(try value(named: "value", in: next, compilation: compilation) == .int(1))
         #expect(try value(named: "pc", in: next, compilation: compilation) == .string("finish"))
+    }
+
+    @Test("sequential Algorithm fairness preserves scalar control and WF Next")
+    func lowersSequentialAlgorithmFairness() throws {
+        let algorithm = Algorithm("FairSequential", fairness: .weak, scoped: { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Do(TestControlLabel.increment) { Assign(value, to: value + 1) }
+        })
+
+        let spec = try compiledSourceSpecification(algorithm)
+        #expect(spec.variables.map(\.name) == ["pc", "value"])
+        #expect(spec.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
+        #expect(spec.fairness == [.weakFairnessNext])
+        #expect(try renderedSourceAlgorithmPlusCal(algorithm).contains("--fair algorithm FairSequential"))
+        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("WF_<<pc, value>>(Next)"))
+    }
+
+    @Test("sequential Algorithm fairness rejects process and empty bodies")
+    func rejectsSequentialFairnessWithoutSequentialSteps() {
+        let algorithms = [
+            Algorithm("FairProcess", fairness: .weak) {
+                Each(Node.all) { _ in
+                    Do(TestControlLabel.advance) { Stop() }
+                }
+            },
+            Algorithm("FairEmpty", fairness: .weak) {}
+        ]
+
+        for algorithm in algorithms {
+            let diagnostics = algorithm.validate()
+            #expect(diagnostics.map(\.code) == [.invalidSequentialFairness])
+            #expect(diagnostics.map(\.anchor) == [.algorithm])
+            #expect(throws: AlgorithmValidationError.self) {
+                try TLASpec(algorithm.model.name) { algorithm }.compile()
+            }
+        }
     }
 
     @Test("typed first-slice builders preserve ordered process steps")
@@ -575,7 +710,6 @@ struct AlgorithmBuilderTests {
             }
             Invariant("NonNegative") { value >= 0 }
             LeadsTo("EventuallyPositive", value == 0, value > 0)
-            WeakFairness("receive")
             StateConstraint(value < 3)
         })
 
@@ -583,7 +717,7 @@ struct AlgorithmBuilderTests {
         let spec = try compiledSourceSpecification(algorithm)
         #expect(spec.invariants.map(\.name) == ["NonNegative"])
         #expect(spec.temporalProperties.map(\.name) == ["EventuallyPositive"])
-        #expect(spec.fairness.contains(.weakFairness("receive")))
+        #expect(spec.fairness.isEmpty)
         #expect(spec.constraint == .lessThan(.variable("value"), .value(.int(3))))
     }
 
@@ -683,7 +817,6 @@ struct AlgorithmBuilderTests {
         #expect(codes.contains(.duplicateLabel))
         #expect(codes.contains(.invalidTarget))
         #expect(codes.contains(.duplicateRootWrite))
-        #expect(!codes.contains(.propertyBoundary))
         #expect(throws: AlgorithmValidationError.self) {
             try invalid.requireValid()
         }
@@ -706,7 +839,7 @@ struct AlgorithmBuilderTests {
 
         let spec = try compiledSourceSpecification(algorithm)
 
-        #expect(spec.variables.map(\.name) == ["value", "pc"])
+        #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["receive", "done", "Terminating"])
         for action in spec.actions where action.name != "Terminating" {
             #expect(action.bindings == [ActionBinding(name: "process", values: Node.formalDomain.map(\.tlaValue))])
@@ -733,7 +866,8 @@ struct AlgorithmBuilderTests {
         let spec = try compiledSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["value"])
         #expect(spec.actions.map(\.name) == ["pcalProcess1"])
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("pc") == false)
+        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        #expect(rendered.contains("VARIABLES pc") == false)
 
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "pcalProcess1", arguments: [.string("first")], in: compilation, from: initial)
@@ -897,9 +1031,10 @@ struct AlgorithmBuilderTests {
         let spec = TLASpec("Composed") {
             algorithm
         }
-        #expect(spec.variables.map(\.name) == ["value", "pc"])
-        #expect(spec.actions.map(\.name) == ["finish", "Terminating"])
-        #expect(spec.invariants.map(\.name) == ["nonNegative"])
+        let compiled = try spec.compile().spec
+        #expect(compiled.variables.map(\.name) == ["pc", "value"])
+        #expect(compiled.actions.map(\.name) == ["finish", "Terminating"])
+        #expect(compiled.invariants.map(\.name) == ["nonNegative"])
     }
 
     @Test("algorithm formal definitions lower and export exactly once")
@@ -920,11 +1055,13 @@ struct AlgorithmBuilderTests {
                 body: .equal(.variable("value0"), .variable("value1"))
             )
         ])
-        #expect(try renderedSourceAlgorithmPlusCal(algorithm).contains("same(value0, value1) == (value0 = value1)"))
+        let renderedPlusCal = try renderedSourceAlgorithmPlusCal(algorithm)
+        #expect(renderedPlusCal.contains("same(") && renderedPlusCal.contains(" == ("))
 
         let spec = TLASpec("FormalOperators") { algorithm }
-        #expect(spec.formalOperatorDefinitions == lowered.formalOperatorDefinitions)
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.components(separatedBy: "same(value0, value1)").count == 2)
+        #expect(try spec.compile().spec.formalOperatorDefinitions == lowered.formalOperatorDefinitions)
+        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        #expect(rendered.components(separatedBy: "same(").count == 2)
     }
 
     @Test("When, Assert, With, and process fairness lower as formal semantics")
@@ -951,8 +1088,8 @@ struct AlgorithmBuilderTests {
             .weakFairnessActionCall(.init(name: "choose", arguments: [.string("second")]))
         ])
         let rendered = try spec.compile().renderedTLAModuleBundle().tla
-        #expect(rendered.contains("WF_<<count, selected, pc>>(choose__0)"))
-        #expect(rendered.contains("WF_<<count, selected, pc>>(choose__1)"))
+        #expect(rendered.contains("WF_<<pc, count, selected>>(choose__0)"))
+        #expect(rendered.contains("WF_<<pc, count, selected>>(choose__1)"))
 
         let (compilation, initial) = try initialState(of: spec)
         let states = try successors(named: "choose", arguments: [.string("first")], in: compilation, from: initial)

@@ -207,7 +207,7 @@ public struct TLCGraphEventParser: Sendable {
             })
     }
 
-    public func parseCanonicalRun(_ data: Data, result: TLCProcessResult) throws -> CanonicalRun {
+    package func parseCanonicalRun(_ data: Data, result: TLCProcessResult) throws -> CanonicalRun {
         let stream = try parse(data)
         return try canonicalRun(stream, result: result)
     }

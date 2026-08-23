@@ -39,7 +39,7 @@ internal enum AlgorithmProcedureValidator {
                         diagnostics: &diagnostics
                     )
                 }
-            case .shared, .formalOperator, .invariant, .temporal, .fairness, .stateConstraint, .local, .propertyBoundary:
+            case .shared, .formalOperator, .invariant, .temporal, .stateConstraint, .unsupported, .local:
                 break
             }
         }
@@ -67,6 +67,15 @@ internal enum AlgorithmProcedureValidator {
         }
         for step in procedure.steps {
             validate(step, at: .step(process: index, label: step.label.name), labels: Set(labels), procedures: names, arities: arities, inProcedure: true, diagnostics: &diagnostics)
+        }
+        for component in procedure.components {
+            switch component {
+            case .local, .step, .unsupported:
+                continue
+            case .shared, .process, .procedure, .invariant, .temporal,
+                 .formalOperator, .stateConstraint:
+                diagnostics.append(.init(.invalidAlgorithmComponent, at: anchor))
+            }
         }
     }
 

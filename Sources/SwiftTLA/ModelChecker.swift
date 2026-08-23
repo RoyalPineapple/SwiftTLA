@@ -24,9 +24,7 @@ package struct ModelChecker {
     let configuration: FiniteExplorationConfiguration
     let permutationProductBudget: Int
 
-    private var maxStates: Int { configuration.maximumStateLimit }
-
-    init(
+    package init(
         compilation: CompiledSpecification,
         configuration: FiniteExplorationConfiguration,
         permutationProductBudget: Int = 100_000
@@ -52,7 +50,7 @@ package struct ModelChecker {
     }
     func exploreGraph() throws -> StateGraph { try explore().graph }
 
-    func explore() throws -> ModelExplorationResult { try runExploration() }
+    package func explore() throws -> ModelExplorationResult { try runExploration() }
 
     func checkLiveness() throws -> CheckResult {
         do {
@@ -114,12 +112,14 @@ package struct ModelChecker {
             layout: compilation.layout,
             checkDeadlock: self.spec.checkDeadlock,
             specificationName: self.spec.name,
-            maxStates: self.maxStates
+            configuration: configuration
         )
         return ModelExplorationResult(
             graph: exploration.graph,
             initialStateIDs: exploration.initialStateIDs,
-            result: bounded(exploration.result)
+            result: bounded(exploration.result),
+            compilationIdentity: compilation.identity,
+            configuration: configuration
         )
     }
 
@@ -137,7 +137,9 @@ package struct ModelChecker {
                 states: [:]
             ),
             initialStateIDs: [],
-            result: result
+            result: result,
+            compilationIdentity: compilation.identity,
+            configuration: configuration
         )
     }
 
@@ -161,7 +163,7 @@ private func compiledBFS(
     layout: CompiledLayout,
     checkDeadlock: Bool,
     specificationName: String,
-    maxStates: Int
+    configuration: FiniteExplorationConfiguration
 ) throws -> ModelExplorationResult {
     var queue: [CompiledState] = []
     var stateToID: [CompiledState: StateGraph.StateID] = [:]
@@ -213,11 +215,13 @@ private func compiledBFS(
     var head = 0
     var processed = 0
     while head < queue.count {
-        guard processed < maxStates else {
+        guard processed < configuration.maximumStateLimit else {
             return .init(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
-                result: .depthExceeded(statesCount: processed, limit: maxStates),
+                result: .depthExceeded(statesCount: processed, limit: configuration.maximumStateLimit),
+                compilationIdentity: runtime.compilation.identity,
+                configuration: configuration,
                 compiledStates: idToState
             )
         }
@@ -237,6 +241,8 @@ private func compiledBFS(
                         state: try current.projection(using: layout),
                         trace: try trace(to: current, initial: queue[0])
                     ),
+                    compilationIdentity: runtime.compilation.identity,
+                    configuration: configuration,
                     compiledStates: idToState
                 )
             }
@@ -248,6 +254,8 @@ private func compiledBFS(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
                 result: .deadlocked(state: try current.projection(using: layout)),
+                compilationIdentity: runtime.compilation.identity,
+                configuration: configuration,
                 compiledStates: idToState
             )
         }
@@ -288,6 +296,8 @@ private func compiledBFS(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
         result: .ok(statesCount: processed),
+        compilationIdentity: runtime.compilation.identity,
+        configuration: configuration,
         compiledStates: idToState
     )
 }

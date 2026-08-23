@@ -69,7 +69,10 @@ public enum CanonicalValue: Hashable, Sendable {
         case .constant(let value): self = .constant(value)
         case .set(let values): self = .set(try values.map(Self.init))
         case .tuple(let values): self = .tuple(try values.map(Self.init))
-        case .record(let fields): self = .record(try fields.mapValues(Self.init))
+        case .record(let fields):
+            self = .record(try Dictionary(uniqueKeysWithValues: fields.fields.map { field in
+                (field.name, try Self(field.value))
+            }))
         case .function(let entries):
             self = try .function(entries.map { try CanonicalFunctionEntry(key: Self($0.key), value: Self($0.value)) })
         }

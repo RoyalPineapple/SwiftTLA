@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import os
 import Testing
+import SwiftTLA
 import UpstreamParity
 
 func completeGraphStream(_ expectedCase: CoreConformanceCase) throws -> Data {

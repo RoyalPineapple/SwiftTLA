@@ -69,6 +69,32 @@ private func parserEnum(
         #expect(facts.actionBindingTypes[increment] == ["Node"])
     }
 
+    @Test("parser retains unsupported procedure declarations for compiler diagnostics")
+    func retainsUnsupportedProcedureDeclarationForCompilerDiagnostic() throws {
+        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        {
+            Algorithm("ProcedureCapability") {
+                Procedure("work") {
+                    Do(TestControlLabel.advance) { Return() }
+                    WeakFairness("advance")
+                }
+            }
+        }
+        """))
+
+        #expect(parsed.diagnostics.isEmpty)
+        do {
+            _ = try compile(parsed, named: "ProcedureCapability")
+            Issue.record("Expected unsupported procedure fairness to stop compilation.")
+        } catch let diagnostic as LanguageCapabilityDiagnostic {
+            #expect(diagnostic.construct.construct == .genericFairness)
+            #expect(diagnostic.operation == .compilation)
+            #expect(diagnostic.sourcePath == ["algorithm", "components[0]", "procedure", "components[1]"])
+        } catch {
+            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+        }
+    }
+
     @Test("Function mapping declarations retain their generated Swift type")
     func preservesFunctionMappingTypeForGeneratedSurface() throws {
         let source = """
@@ -209,8 +235,8 @@ private func parserEnum(
         #expect(parsed.invariants.map(\.name) == ["Nonnegative"])
     }
 
-    @Test("Algorithm parser rejects declarations it does not lower")
-    func rejectsUnsupportedAlgorithmDeclaration() throws {
+    @Test("Unknown Algorithm identifiers are rejected as unregistered")
+    func unknownAlgorithmIdentifierIsRejectedAsUnregistered() throws {
         let source = """
         {
             Algorithm("Unsupported") {
@@ -223,11 +249,101 @@ private func parserEnum(
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.actions.isEmpty)
-        #expect(
-            parsed.diagnostics.first?.message
-                == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. "
-                    + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties."
-        )
+        #expect(parsed.sourceAlgorithms.isEmpty)
+        let diagnostic = try #require(parsed.diagnostics.first?.capabilityDiagnostic)
+        #expect(diagnostic.code == .unsupportedConstruct)
+        #expect(diagnostic.construct == .unregistered(sourceName: "UnsupportedAlgorithmConstruct"))
+        #expect(diagnostic.operation == .sourceDecoding)
+        #expect(diagnostic.sourcePath == ["Algorithm", "UnsupportedAlgorithmConstruct"])
+        #expect(diagnostic.expected == "a registered Algorithm declaration with supported source decoding")
+        #expect(diagnostic.actual == "unregistered Algorithm declaration 'UnsupportedAlgorithmConstruct'")
+        #expect(diagnostic.nextSafeAction == "Use an admitted Algorithm declaration.")
+    }
+
+    @Test("Unknown Algorithm statement calls retain capability diagnostics at every nesting depth")
+    func unknownAlgorithmStatementCallsAreRejectedAsUnregisteredInNestedBodies() throws {
+        let cases = [
+            (
+                name: "UnknownInDo",
+                body: """
+                Do("step") {
+                    UnknownInDo()
+                }
+                """
+            ),
+            (
+                name: "UnknownInIf",
+                body: """
+                Do("step") {
+                    If(true) {
+                        UnknownInIf()
+                    }
+                }
+                """
+            ),
+            (
+                name: "UnknownInWith",
+                body: """
+                Do("step") {
+                    With([1]) { value in
+                        UnknownInWith()
+                    }
+                }
+                """
+            )
+        ]
+
+        for testCase in cases {
+            let source = """
+            {
+                Algorithm("Nested") {
+                    \(testCase.body)
+                }
+            }
+            """
+            let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+            #expect(parsed.sourceAlgorithms.isEmpty)
+            let diagnostic = try #require(parsed.diagnostics.first?.capabilityDiagnostic)
+            #expect(diagnostic.code == .unsupportedConstruct)
+            #expect(diagnostic.construct == .unregistered(sourceName: testCase.name))
+            #expect(diagnostic.operation == .sourceDecoding)
+            #expect(diagnostic.sourcePath == ["Algorithm", testCase.name])
+            #expect(diagnostic.sourceSpan.location != .unavailable)
+            #expect(diagnostic.expected == "a registered Algorithm declaration with supported source decoding")
+            #expect(diagnostic.actual == "unregistered Algorithm declaration '\(testCase.name)'")
+            #expect(diagnostic.nextSafeAction == "Use an admitted Algorithm declaration.")
+            #expect(!parsed.diagnostics.contains { $0.message.contains("Unsupported Algorithm declaration") })
+        }
+    }
+
+    @Test("Formal expression closures stay outside Algorithm capability admission")
+    func formalExpressionClosuresDoNotBecomeAlgorithmDeclarations() throws {
+        let source = """
+        {
+            Algorithm("FormalClosureBoundary") {
+                let count = SharedVar("count", initial: 0)
+                Do("advance") {
+                    let imported: Expr<Int> = ModuleCall("Instance", "Value", count)
+                    Assign(count, to: imported)
+                }
+                StateConstraint(All(in: SetExpr<Int>.literal(0, 1)) { value in value >= 0 })
+                Invariant("Bounded") {
+                    All(in: SetExpr<Int>.literal(0, 1)) { value in value >= count }
+                }
+                FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
+                    LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
+                        If(current == 0, then: true, else: recursion(current.expr - 1))
+                    }, in: { recursion in recursion(ballot.expr) })
+                }
+            }
+        }
+        """
+
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.sourceAlgorithms.map(\.model.name) == ["FormalClosureBoundary"])
     }
 
     @Test("Unsupported action source does not create a placeholder action")
@@ -330,7 +446,6 @@ private func parserEnum(
                         }
                     }
                 }
-                WeakFairnessNext()
             }
         }
         """
@@ -345,8 +460,7 @@ private func parserEnum(
         #expect(specification.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
         #expect(specification.fairness == [
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
-            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")])),
-            .weakFairnessNext
+            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")]))
         ])
     }
 
@@ -688,7 +802,8 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let compilation = try compile(parsed, named: "FunctionDomain")
         let successors = try #require(compilation.spec.variables.first { $0.name == "successors" })
-        #expect(parsed.machineSurfaceSwiftFacts(for: compilation).variableTypes["successors"] == "Function<Node, SetExpr<Node>>")
+        let successorsID = try #require(compilation.layout.variableID(named: successors.name))
+        #expect(parsed.machineSurfaceSwiftFacts(for: compilation).variableTypes[successorsID] == "Function<Node, SetExpr<Node>>")
         #expect(successors.initialSet?.description.contains("Cardinality") == true)
     }
 

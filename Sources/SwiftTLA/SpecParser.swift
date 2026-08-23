@@ -82,6 +82,7 @@ public final class ParserSession {
     /// Source bindings visible to the source expression currently being parsed.
     var sourceScope = TypedFacadeScope.empty
     var algorithmParseFailure: String?
+    var algorithmCapabilityDiagnostic: LanguageCapabilityDiagnostic?
 
     init(
         enumDefinitions: [ParserEnumDefinition] = []

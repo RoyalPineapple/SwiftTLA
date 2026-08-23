@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import Testing
+import SwiftTLA
 import UpstreamParity
 @Suite(.serialized)
 struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes complete canonical evidence")
@@ -214,7 +215,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
       bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
-      bundle: .fixture.bundle,
+      bundle: try TLCProcessRequest.fixture().bundle,
       graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
       traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
       replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
@@ -276,7 +277,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       .init(status: 1, stdout: "", stderr: "cannot replay")
     ])
     #expect(throws: TLCProcessError.self) {
-      _ = try TLCProcessAdapter(executor: executor).run(.fixture, replay: .required)
+      _ = try TLCProcessAdapter(executor: executor).run(try TLCProcessRequest.fixture(), replay: .required)
     }
   }
 

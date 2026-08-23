@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 public enum MultiCarElevator {
     public enum PersonID: String, CaseIterable, FiniteTLAValueDomain {

@@ -1,6 +1,5 @@
 import Foundation
-  case difference
-}
+
 public struct CoreFiniteBounds: Equatable, Codable, Sendable {
   public let summary: String
   public let limits: [String: Int]

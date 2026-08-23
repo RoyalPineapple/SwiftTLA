@@ -121,6 +121,7 @@ extension TLASpec {
 
 extension TLASpec {
   func loweredSourceModel() throws -> TLASpec {
+    try validateCapabilityAdmission()
     guard algorithmPhase == .source else { return self }
     var variables = variables
     var actions = actions
@@ -184,6 +185,40 @@ extension TLASpec {
     )
     lowered.algorithmPhase = .lowered
     return lowered
+  }
+
+  private func validateCapabilityAdmission() throws {
+    for algorithm in sourceAlgorithms {
+      try AlgorithmCapabilityValidator.validate(algorithm.model)
+    }
+    for refinement in refinements {
+      switch refinement.operator {
+      case .spec:
+        continue
+      case .liveSpec:
+        throw refinementCapabilityDiagnostic(.temporalRefinementLiveSpec, refinement: refinement)
+      case .liveSpecEquals:
+        throw refinementCapabilityDiagnostic(.temporalRefinementLiveSpecEquals, refinement: refinement)
+      }
+    }
+  }
+
+  private func refinementCapabilityDiagnostic(
+    _ construct: DeclaredLanguageConstruct,
+    refinement: RefinementDecl
+  ) -> LanguageCapabilityDiagnostic {
+    let capability = LanguageCapabilityLedger.capability(for: construct)
+    return .init(
+      code: .unsupportedConstruct,
+      construct: .declared(construct: construct, authoredName: construct.rawValue),
+      operation: .compilation,
+      source: refinement.name,
+      sourcePath: ["refinements", refinement.name, "operator"],
+      sourceSpan: .init(location: .unavailable, utf8Length: refinement.name.utf8.count),
+      expected: capability.boundary,
+      actual: "\(construct.rawValue) target",
+      nextSafeAction: capability.nextSafeAction
+    )
   }
 
   func authoredPlusCalModule(

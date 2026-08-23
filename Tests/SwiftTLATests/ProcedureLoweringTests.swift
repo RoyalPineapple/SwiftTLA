@@ -55,11 +55,13 @@ struct ProcedureLoweringTests {
                 .procedure(.init(
                     name: "work",
                     parameters: [.init(root: "workValue", initial: .int(0), swiftTypeName: "Int")],
-                    locals: [.init(root: "workOffset", initial: .int(1), swiftTypeName: "Int")],
-                    steps: [.init(label: .init(name: "enter"), statements: [
-                        .set(target: .root("output"), value: .add(.variable("workValue"), .variable("workOffset"))),
-                        .return
-                    ])]
+                    components: [
+                        .local(.init(root: "workOffset", initial: .int(1), swiftTypeName: "Int")),
+                        .step(.init(label: .init(name: "enter"), statements: [
+                            .set(target: .root("output"), value: .add(.variable("workValue"), .variable("workOffset"))),
+                            .return
+                        ]))
+                    ]
                 ))
             ]
         )
@@ -97,20 +99,18 @@ struct ProcedureLoweringTests {
                 .procedure(.init(
                     name: "outer",
                     parameters: [.init(root: "outerValue", initial: .int(0), swiftTypeName: "Int")],
-                    locals: [],
-                    steps: [.init(label: .init(name: "enter"), statements: [
+                    components: [.step(.init(label: .init(name: "enter"), statements: [
                         .call(target: "inner", arguments: [.variable("outerValue")]),
                         .return
-                    ])]
+                    ]))]
                 )),
                 .procedure(.init(
                     name: "inner",
                     parameters: [.init(root: "innerValue", initial: .int(0), swiftTypeName: "Int")],
-                    locals: [],
-                    steps: [.init(label: .init(name: "enter"), statements: [
+                    components: [.step(.init(label: .init(name: "enter"), statements: [
                         .set(target: .root("output"), value: .variable("innerValue")),
                         .return
-                    ])]
+                    ]))]
                 ))
             ]
         )
@@ -158,21 +158,17 @@ struct ProcedureLoweringTests {
                 .procedure(.init(
                     name: "outer",
                     parameters: [.init(root: "outerValue", initial: .int(0), swiftTypeName: "Int")],
-                    locals: [],
-                    steps: [.init(label: .init(name: "enter"), statements: [
+                    components: [.step(.init(label: .init(name: "enter"), statements: [
                         .call(target: "inner", arguments: [.variable("outerValue")])
-                    ]), .init(label: .init(name: "return"), statements: [
-                        .return
-                    ])]
+                    ])), .step(.init(label: .init(name: "return"), statements: [.return]))]
                 )),
                 .procedure(.init(
                     name: "inner",
                     parameters: [.init(root: "innerValue", initial: .int(0), swiftTypeName: "Int")],
-                    locals: [],
-                    steps: [.init(label: .init(name: "enter"), statements: [
+                    components: [.step(.init(label: .init(name: "enter"), statements: [
                         .set(target: .function(root: "seen", key: .variable("innerValue")), value: .variable("innerValue")),
                         .return
-                    ])]
+                    ]))]
                 ))
             ]
         )

@@ -235,8 +235,8 @@ struct CanonicalRunEvidence: Codable, Sendable {
       }
     }
     guard !states.isEmpty,
-          strictlySortedUnique(states.map(\.canonicalEncoding)),
-          strictlySortedUnique(initialStates.map(\.canonicalEncoding)),
+          strictlySortedUnique(states.map(\.key.canonicalEncoding)),
+          strictlySortedUnique(initialStates.map(\.key.canonicalEncoding)),
           Set(initialStates.map(\.key)).isSubset(of: Set(states.map(\.key)))
     else { throw CanonicalRunEvidenceError.invalidRecord }
     let canonicalGraph = try CanonicalGraph(initialStates: initialStates, states: states, edges: edges)

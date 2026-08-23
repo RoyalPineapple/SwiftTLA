@@ -531,6 +531,12 @@ public extension SpecParser.ParsedSpecComponents {
         specificationName: String,
         additionalInvariants: [NamedInvariant] = []
     ) throws -> CompiledSpecification {
+        if let diagnostic = diagnostics.first {
+            if let capabilityDiagnostic = diagnostic.capabilityDiagnostic {
+                throw capabilityDiagnostic
+            }
+            throw diagnostic
+        }
         let spec = TLASpec(
             name: specificationName,
             variables: variables.map(\.formal),

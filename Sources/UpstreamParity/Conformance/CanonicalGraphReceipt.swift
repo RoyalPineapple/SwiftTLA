@@ -1,7 +1,7 @@
 import Foundation
 
 /// A stable digest-backed summary of one finite canonical graph.
-struct CanonicalGraphReceipt: Hashable, Sendable {
+package struct CanonicalGraphReceipt: Hashable, Sendable {
   /// The completion state of a finite graph exploration.
   enum ExplorationStatus: String, Hashable, Sendable {
     case complete
@@ -136,7 +136,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     }
   }
 
-  static func graphRecordDigest(for graph: CanonicalGraph) -> String {
+  package static func graphRecordDigest(for graph: CanonicalGraph) -> String {
     digest(initialRecords(for: graph) + stateRecords(for: graph) + edgeRecords(for: graph))
   }
 

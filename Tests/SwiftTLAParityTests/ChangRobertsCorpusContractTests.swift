@@ -8,7 +8,12 @@ struct ChangRobertsCorpusContractTests {
     func generatedAlgorithmMatchesUpstreamStateCount() throws {
         let entry = Example.changRobertsN3
         #expect(entry.spec.temporalProperties.map(\.name) == ["Liveness"])
-        let states = try ModelChecker(compilation: try entry.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50_000)).exploreGraph().states
+        let compilation = try entry.spec.compile()
+        let exploration = try ModelChecker(
+            compilation: compilation,
+            configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50_000)
+        ).explore()
+        let states = exploration.graph.states
         #expect(states.count == entry.expectedDistinct)
     }
 

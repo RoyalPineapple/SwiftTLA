@@ -375,12 +375,17 @@ private func value(
     }
     let compilation = try spec.compile()
     let initial = try #require(try compilation.initialStateProjections().first)
-    let available = [
+    let available: [(action: String, arguments: [TLAValue])] = [
       (action: "advance", arguments: [.int(1)]),
       (action: "advance", arguments: [.int(2)])
     ]
 
-    #expect(try successors(compilation, from: initial).map { ($0.action, $0.arguments) } == available)
+    let discovered = try successors(compilation, from: initial)
+    #expect(discovered.count == available.count)
+    for (actual, expected) in zip(discovered, available) {
+      #expect(actual.action == expected.action)
+      #expect(actual.arguments == expected.arguments)
+    }
 
     let advanced = try successor(compilation, named: "advance", arguments: [.int(1)], from: initial)
     let action = try #require(compilation.layout.actionID(named: "advance"))
@@ -519,8 +524,9 @@ private func value(
       DeadlockCheck()
     }
     let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let xToken = try #require(TLAStateProjection.Token(validating: "x"))
     var val: TLAValue = .int(-1)
-    if case .deadlocked(let s) = result { val = s["x"] ?? .int(-1) }
+    if case .deadlocked(let state) = result { val = state.value(for: xToken) ?? .int(-1) }
     #expect(val == .int(2))
   }
 
@@ -683,8 +689,8 @@ private func value(
     let action = try #require(compilation.layout.actionID(named: "init"))
     let state = try #require(try compilation.initialStateProjections().first)
     let next = try #require(try compilation.successors(for: action, arguments: [], from: state).first)
-    let programCounter = try #require(TLAStateProjection.Token(validating: "programCounter"))
-    if next.value(for: programCounter) == nil {
+    let programCounterToken = try #require(TLAStateProjection.Token(validating: "programCounter"))
+    if next.value(for: programCounterToken) == nil {
       Issue.record("Expected programCounter in successor")
     }
   }

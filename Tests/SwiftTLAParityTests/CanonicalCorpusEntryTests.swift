@@ -32,10 +32,19 @@ struct CanonicalCorpusEntryTests {
             swiftConfiguration: .init(checks: [.init("Missing", kind: .invariant)]),
             plusCalConfiguration: .init()
         )
-        #expect(throws: CanonicalCorpusConfigurationError.unresolvedCheck(
-            entryID: "invalid", name: "Missing", kind: .invariant
-        )) {
+        do {
             try invalid.validateConfigurationReferences(in: BoulangerModel.spec.compile())
+            Issue.record("Expected the invalid corpus configuration to be rejected")
+        } catch let error as CanonicalCorpusConfigurationError {
+            guard case let .unresolvedCheck(entryID, name, kind) = error else {
+                Issue.record("Expected an unresolved corpus check, got \(error)")
+                return
+            }
+            #expect(entryID == "invalid")
+            #expect(name == "Missing")
+            #expect(kind.rawValue == CanonicalCorpusCheck.Kind.invariant.rawValue)
+        } catch {
+            Issue.record("Expected a corpus configuration error, got \(error)")
         }
     }
 }

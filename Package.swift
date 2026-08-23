@@ -92,7 +92,10 @@ let package = Package(
         // Fast semantic witnesses compile and run without the parity corpus.
         .testTarget(name: "SwiftTLATests", dependencies: [
             "SwiftTLA",
-            "SwiftTLAMacros"
+            "SwiftTLAMacros",
+            "SwiftTLAPlugin",
+            .product(name: "SwiftParser", package: "swift-syntax"),
+            .product(name: "SwiftSyntax", package: "swift-syntax")
         ], swiftSettings: settings),
         // Slower corpus, oracle, governance, and public-workflow tests.
         .testTarget(name: "SwiftTLAParityTests", dependencies: [

@@ -6,7 +6,6 @@ import SwiftTLAMacros
 /// The published algorithm accepts sequences over an arbitrary integer set.
 /// This finite model uses `-1...1` and sequences up to length three, while
 /// preserving the algorithm's state and one-element-at-a-time loop.
-@TLAModel
 public struct SumSequenceModel: Sendable {
     private enum Step: String, PlusCalLabel, CaseIterable {
         case a
@@ -15,7 +14,7 @@ public struct SumSequenceModel: Sendable {
     public static var spec: TLASpec {
         #spec("SumSequence") {
             Extends(.integers)
-            Algorithm("SumSequence", scoped: { scope in
+            Algorithm("SumSequence", fairness: .weak, scoped: { scope in
                 let sequence = scope.sharedVar("sequence", in: Sequences(
                     of: SetExpr<Int>.literal(-1, 0, 1),
                     lengths: 0...3
@@ -35,7 +34,6 @@ public struct SumSequenceModel: Sendable {
                 Invariant("DoneIndex") {
                     !Finished() || index == sequence.count + 1
                 }
-                WeakFairnessNext()
                 Eventually("EventuallyFinished", Finished())
             })
         }

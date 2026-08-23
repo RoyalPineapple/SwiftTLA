@@ -13,7 +13,7 @@ struct SymmetryReductionTests {
       Invariant("TypeOK") { x >= 1 && x <= 3 }
       Symmetry("x", [1, 2, 3] as Set<Int>)
     }
-    let mc = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
+    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
     let result = try mc.check()
     guard case .ok(let count) = result else {
       #expect(Bool(false))
@@ -37,7 +37,7 @@ struct SymmetryReductionTests {
       Symmetry("x", [1, 2] as Set<Int>)
       Symmetry("y", [10, 20] as Set<Int>)
     }
-    let mc = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
+    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
     let result = try mc.check()
     guard case .ok = result else {
       #expect(Bool(false))
@@ -53,7 +53,7 @@ struct SymmetryReductionTests {
       Action("inc") { x < 3 && x.becomes(x + 1) }
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
-    let mc = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
+    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
     let result = try mc.check()
     guard case .ok(let count) = result else {
       #expect(Bool(false))

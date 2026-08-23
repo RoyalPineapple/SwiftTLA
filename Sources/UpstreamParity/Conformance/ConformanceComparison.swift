@@ -289,7 +289,7 @@ private func remap(_ run: CanonicalRun, with mapping: ObservableNameMapping) -> 
             id: trace.id,
             steps: trace.steps.compactMap { step -> CanonicalTraceStep? in
                 guard let state = keyMap[step.state] else { return nil }
-                CanonicalTraceStep(
+                return CanonicalTraceStep(
                     state: state,
                     action: actualToExpectedActions[step.action] ?? step.action
                 )

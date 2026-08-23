@@ -17,7 +17,7 @@ struct CoreConformanceRunnerTests {
     let output = root.appendingPathComponent("evidence")
     let result = runner.run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .none,
       outputDirectory: output
@@ -46,8 +46,9 @@ struct CoreConformanceRunnerTests {
     #expect(correlation(in: comparison)["engine"] as? String == "runner")
     let expectedReceipt = try #require(comparison["expectedReceipt"] as? [String: Any])
     let actualReceipt = try #require(comparison["actualReceipt"] as? [String: Any])
-    #expect(expectedReceipt["compiledModelIdentity"] as? String == "fixture-model")
-    #expect(actualReceipt["compiledModelIdentity"] as? String == "fixture-model")
+    let fixtureIdentity = try fixtureCompilationIdentity().value
+    #expect(expectedReceipt["compiledModelIdentity"] as? String == fixtureIdentity)
+    #expect(actualReceipt["compiledModelIdentity"] as? String == fixtureIdentity)
     #expect(expectedReceipt["maximumStateLimit"] as? Int == 10)
     #expect(actualReceipt["maximumStateLimit"] as? Int == 10)
     #expect(
@@ -60,7 +61,7 @@ struct CoreConformanceRunnerTests {
         $0["category"] as? String == "edges"
       })
     #expect((edgeDifference["expected"] as? [[String: Any]])?.isEmpty == false)
-    #expect((edgeDifference["actual"] as? [[String: Any]])?.isEmpty == false)
+    #expect((edgeDifference["actual"] as? [[String: Any]])?.isEmpty == true)
     let comparisonReports = try json(at: output.appendingPathComponent("comparison-diagnostics.json"))
     let report = try #require((comparisonReports["reports"] as? [[String: Any]])?.first {
       $0["whatFailed"] as? String == "The labeled transition multisets differ."
@@ -82,7 +83,7 @@ struct CoreConformanceRunnerTests {
     let output = root.appendingPathComponent("failed-evidence")
     let result = runner.run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .none,
       outputDirectory: output
@@ -115,6 +116,37 @@ struct CoreConformanceRunnerTests {
       !(try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "secret"))
   }
+
+  @Test("runner receipts retain the explored state limit")
+  func receiptsUseExplorationConfiguration() throws {
+    let fileManager = FileManager.default
+    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? fileManager.removeItem(at: root) }
+    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = try temporaryRequest(in: root)
+    let runner = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: FixtureTLCExecutor(stream: try graphStream(for: request.expectedCase, runID: request.runID))
+      )
+    )
+    let output = root.appendingPathComponent("exploration-limit")
+
+    let result = runner.run(
+      case: request.expectedCase,
+      swiftExploration: { try swiftEvidence(for: request.expectedCase, maximumStateLimit: 3) },
+      tlcRequest: request,
+      replay: .none,
+      outputDirectory: output
+    )
+
+    #expect(result.exitCode == .semanticDifference)
+    let swift = try json(at: output.appendingPathComponent("swift-run.json"))
+    let comparison = try json(at: output.appendingPathComponent("comparison.json"))
+    #expect((swift["receiptContext"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
+    #expect((comparison["expectedReceipt"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
+    #expect((comparison["actualReceipt"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
+  }
+
   @Test("runner rejects Swift evidence bound to another declared case")
   func rejectsWrongSwiftCaseBinding() throws {
     let fileManager = FileManager.default
@@ -128,9 +160,7 @@ struct CoreConformanceRunnerTests {
       swiftExploration: {
         SwiftExplorationEvidence(
           caseID: "other-case",
-          exploration: swiftExploration(),
-          compiledModelIdentity: "fixture-model",
-          maximumStateLimit: 10
+          exploration: try swiftExploration()
         )
       },
       tlcRequest: request,
@@ -166,7 +196,7 @@ struct CoreConformanceRunnerTests {
       tlcAdapter: TLCProcessAdapter(executor: executor)
     ).run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .required,
       outputDirectory: output
@@ -200,7 +230,7 @@ struct CoreConformanceRunnerTests {
     let output = root.appendingPathComponent("wrong-tlc-run")
     let result = runner.run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .none,
       outputDirectory: output
@@ -228,9 +258,7 @@ struct CoreConformanceRunnerTests {
       swiftExploration: {
         SwiftExplorationEvidence(
           caseID: request.expectedCase.id,
-          exploration: swiftExploration(action: "Next"),
-          compiledModelIdentity: "fixture-model",
-          maximumStateLimit: 10
+          exploration: try swiftExploration(action: "Next")
         )
       },
       tlcRequest: request,
@@ -241,8 +269,14 @@ struct CoreConformanceRunnerTests {
     #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == stream)
     let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
     #expect(tlc["format"] as? String == "canonical-run-evidence")
-    #expect((tlc["states"] as? [String])?.count == 2)
-    #expect((tlc["edges"] as? [[String: Any]])?.count == 1)
+    let graph = try #require(tlc["graph"] as? [String: Any])
+    let chunks = try #require(graph["chunks"] as? [[String: Any]])
+    #expect(chunks.count == 1)
+    let graphRecords = try String(
+      contentsOf: output.appendingPathComponent("tlc-run.graph/000000.jsonl"), encoding: .utf8)
+      .split(separator: "\n")
+    #expect(graphRecords.filter { $0.hasPrefix("state:") }.count == 2)
+    #expect(graphRecords.filter { $0.hasPrefix("edge:") }.count == 1)
   }
 
   @Test("routine matching evidence retains receipts instead of canonical graph copies")
@@ -256,14 +290,12 @@ struct CoreConformanceRunnerTests {
     let result = CoreConformanceRunner(
       tlcAdapter: TLCProcessAdapter(
         executor: FixtureTLCExecutor(stream: try graphStream(for: request.expectedCase, runID: request.runID))
-    ).run(
+    )).run(
       case: request.expectedCase,
       swiftExploration: {
         SwiftExplorationEvidence(
           caseID: request.expectedCase.id,
-          exploration: swiftExploration(action: "Next"),
-          compiledModelIdentity: "fixture-model",
-          maximumStateLimit: 10
+          exploration: try swiftExploration(action: "Next")
         )
       },
       tlcRequest: request,
@@ -299,7 +331,7 @@ extension CoreConformanceRunnerTests {
           results: [violation, violation, replayFailure])))
       .run(
         case: request.expectedCase,
-        swiftExploration: { swiftEvidence(for: request.expectedCase) },
+        swiftExploration: { try swiftEvidence(for: request.expectedCase) },
         tlcRequest: request,
         replay: .required,
         outputDirectory: output
@@ -331,7 +363,7 @@ extension CoreConformanceRunnerTests {
     )
     let result = runner.run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .none,
       outputDirectory: output
@@ -367,7 +399,7 @@ extension CoreConformanceRunnerTests {
     )
     let result = runner.run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .required,
       outputDirectory: output
@@ -401,7 +433,7 @@ extension CoreConformanceRunnerTests {
       )
     ).run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .none,
       outputDirectory: output
@@ -431,7 +463,7 @@ extension CoreConformanceRunnerTests {
       )
     ).run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .required,
       outputDirectory: output
@@ -460,7 +492,7 @@ extension CoreConformanceRunnerTests {
     try Data("trace".utf8).write(to: secondaryStream)
     let result = CoreConformanceRunner().run(
       case: request.expectedCase,
-      swiftExploration: { swiftEvidence(for: request.expectedCase) },
+      swiftExploration: { try swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
       replay: .none,
       outputDirectory: output
@@ -499,9 +531,7 @@ extension CoreConformanceRunnerTests {
           swiftExploration: {
             SwiftExplorationEvidence(
               caseID: request.expectedCase.id,
-              exploration: exactSwiftExploration(),
-              compiledModelIdentity: "fixture-model",
-              maximumStateLimit: 10
+              exploration: try exactSwiftExploration()
             )
           },
           tlcRequest: request,
@@ -541,15 +571,19 @@ extension CoreConformanceRunnerTests {
     let exitCode = try #require(run["exitCode"] as? Int)
     #expect(exitCode == CoreConformanceExitCode.semanticDifference.rawValue)
   }
-  private func swiftEvidence(for declaredCase: CoreConformanceCase) -> SwiftExplorationEvidence {
+  private func swiftEvidence(
+    for declaredCase: CoreConformanceCase,
+    maximumStateLimit: Int = 10
+  ) throws -> SwiftExplorationEvidence {
     SwiftExplorationEvidence(
       caseID: declaredCase.id,
-      exploration: swiftExploration(),
-      compiledModelIdentity: "fixture-model",
-      maximumStateLimit: 10
+      exploration: try swiftExploration(maximumStateLimit: maximumStateLimit)
     )
   }
-  private func swiftExploration(action: String = "SwiftNext") -> ModelExplorationResult {
+  private func swiftExploration(
+    action: String = "SwiftNext",
+    maximumStateLimit: Int = 10
+  ) throws -> ModelExplorationResult {
     let first = StateGraph.StateID(0)
     let second = StateGraph.StateID(1)
     return ModelExplorationResult(
@@ -563,7 +597,9 @@ extension CoreConformanceRunnerTests {
         ]
       ),
       initialStateIDs: [first],
-      result: .ok(statesCount: 2)
+      result: .ok(statesCount: 2),
+      compilationIdentity: try fixtureCompilationIdentity(),
+      configuration: try .init(maximumStateLimit: maximumStateLimit)
     )
   }
   private func temporaryRequest(in root: URL) throws -> TLCProcessRequest {
@@ -741,7 +777,7 @@ private final class ResultBox: Sendable {
     storage.withLock { $0.append(value) }
   }
 }
-private func exactSwiftExploration() -> ModelExplorationResult {
+private func exactSwiftExploration() throws -> ModelExplorationResult {
   let first = StateGraph.StateID(0)
   let second = StateGraph.StateID(1)
   return ModelExplorationResult(
@@ -753,9 +789,11 @@ private func exactSwiftExploration() -> ModelExplorationResult {
         first: try fixtureProjection([("x", .int(1))]),
         second: try fixtureProjection([("x", .int(2))])
       ]
-    ),
-    initialStateIDs: [first],
-    result: .ok(statesCount: 2)
+      ),
+      initialStateIDs: [first],
+      result: .ok(statesCount: 2),
+      compilationIdentity: try fixtureCompilationIdentity(),
+      configuration: try .init(maximumStateLimit: 10)
   )
 }
 private func json(at url: URL) throws -> [String: Any] {
@@ -764,6 +802,13 @@ private func json(at url: URL) throws -> [String: Any] {
 
 private func fixtureProjection(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
   try projection(entries)
+}
+
+private func fixtureCompilationIdentity() throws -> CompilationIdentity {
+  let value = Var<Int>("fixture")
+  return try TLASpec("Fixture") {
+    Variable(value, 0)
+  }.compile().identity
 }
 private func correlation(in object: [String: Any]) -> [String: Any] {
   object["correlation"] as? [String: Any] ?? [:]

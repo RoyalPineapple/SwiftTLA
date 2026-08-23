@@ -257,6 +257,7 @@ extension ParserSession {
         public let expected: String
         public let actual: String
         public let nextSafeAction: String
+        public let capabilityDiagnostic: LanguageCapabilityDiagnostic?
 
         public init(
             message: String,
@@ -281,7 +282,8 @@ extension ParserSession {
             sourceSpan: SourceSpan,
             expected: String = "a supported SwiftTLA declaration or expression",
             actual: String = "",
-            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
+            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again.",
+            capabilityDiagnostic: LanguageCapabilityDiagnostic? = nil
         ) {
             self.message = message
             self.source = source
@@ -289,6 +291,19 @@ extension ParserSession {
             self.expected = expected
             self.actual = actual.isEmpty ? source.trimmingCharacters(in: .whitespacesAndNewlines) : actual
             self.nextSafeAction = nextSafeAction
+            self.capabilityDiagnostic = capabilityDiagnostic
+        }
+
+        public init(capability: LanguageCapabilityDiagnostic) {
+            self.init(
+                message: capability.headline,
+                source: capability.source,
+                sourceSpan: capability.sourceSpan,
+                expected: capability.expected,
+                actual: capability.actual,
+                nextSafeAction: capability.nextSafeAction,
+                capabilityDiagnostic: capability
+            )
         }
 
         public init<Node: SyntaxProtocol>(
@@ -312,8 +327,15 @@ extension ParserSession {
             )
         }
 
+        public var renderedMessage: String {
+            capabilityDiagnostic?.description ?? message
+        }
+
         public var description: String {
-            "What failed: \(message) Where: \(sourceSpan). Expected: \(expected). "
+            if let capabilityDiagnostic {
+                return capabilityDiagnostic.description
+            }
+            return "What failed: \(message) Where: \(sourceSpan). Expected: \(expected). "
                 + "Actual: \(actual). "
                 + "Next safe action: \(nextSafeAction)"
         }
@@ -1662,4 +1684,60 @@ extension ParserSession {
         }
     }
 
+}
+
+public struct LanguageCapabilityDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
+    public enum Code: String, Sendable, Hashable {
+        case unsupportedConstruct = "unsupported-language-capability"
+    }
+
+    public enum Operation: String, Sendable, Hashable {
+        case sourceDecoding = "source decoding"
+        case resultBuilderConstruction = "result-builder construction"
+        case compilation = "compilation"
+    }
+
+    public let code: Code
+    public let construct: LanguageConstructReference
+    public let operation: Operation
+    public let source: String
+    public let sourcePath: [String]
+    public let sourceSpan: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan
+    public let expected: String
+    public let actual: String
+    public let nextSafeAction: String
+
+    public init(
+        code: Code,
+        construct: LanguageConstructReference,
+        operation: Operation,
+        source: String,
+        sourcePath: [String] = [],
+        sourceSpan: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan,
+        expected: String,
+        actual: String,
+        nextSafeAction: String
+    ) {
+        self.code = code
+        self.construct = construct
+        self.operation = operation
+        self.source = source
+        self.sourcePath = sourcePath
+        self.sourceSpan = sourceSpan
+        self.expected = expected
+        self.actual = actual
+        self.nextSafeAction = nextSafeAction
+    }
+
+    public var headline: String {
+        "Language capability '\(construct.authoredName)' is not supported during \(operation.rawValue)."
+    }
+
+    public var description: String {
+        let path = sourcePath.isEmpty ? "source path unavailable" : sourcePath.joined(separator: ".")
+        return "Code: \(code.rawValue). What failed: \(headline) "
+            + "Construct: \(construct.authoredName). Operation: \(operation.rawValue). "
+            + "Where: \(path), \(sourceSpan). Expected: \(expected). Actual: \(actual). "
+            + "Next safe action: \(nextSafeAction)"
+    }
 }
