@@ -187,6 +187,69 @@ private func parserEnum(
         #expect(try compile(parsed, named: "MacroScope").spec.actions.map(\.name) == ["step", "Terminating"])
     }
 
+    @Test("Algorithm parser resolves enum cases through lexical and declared type scope")
+    func parsesScopedEnumCases() throws {
+        let source = """
+        {
+            Algorithm("EnumScope", scoped: { scope in
+                let phases = scope.sharedVar("phases", initial: Function<Node, Phase>.mapping { node in
+                    If(node == Node.one, then: .ready, else: .done)
+                })
+                Each(Worker.all, scoped: { _, scope in
+                    let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
+                    Do(TestControlLabel.step) {
+                        Await(phases[current] == .ready)
+                        Stop()
+                    }
+                })
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [
+                parserEnum(
+                    "Node",
+                    cases: ["one": .string("n1"), "two": .string("n2")],
+                    formalDomain: [.string("n1"), .string("n2")]
+                ),
+                parserEnum(
+                    "Worker",
+                    cases: ["one": .string("w1")],
+                    formalDomain: [.string("w1")]
+                ),
+                parserEnum(
+                    "Phase",
+                    cases: ["ready": .string("ready"), "done": .string("done")]
+                )
+            ]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        _ = try compile(parsed, named: "EnumScope")
+    }
+
+    @Test("Algorithm parser lowers tuple append inside a lexical binding")
+    func parsesTupleAppendInLet() throws {
+        let source = """
+        {
+            Algorithm("TupleAppend", scoped: { scope in
+                let values = scope.sharedVar("values", initial: TupleExpr<Int>())
+                Do(TestControlLabel.step) {
+                    Let(values.expr.appending(1)) { extended in
+                        Assert(extended.expr.count == 1)
+                    }
+                    Stop()
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        _ = try compile(parsed, named: "TupleAppend")
+    }
+
     @Test("Specification parser binds a typed local algorithm component")
     func bindsTypedLocalAlgorithmComponent() throws {
         let source = """

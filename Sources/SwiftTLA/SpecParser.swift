@@ -264,24 +264,7 @@ public final class ParserSession {
             if let resolved = constants.value(named: name) { return .value(resolved) }
             return .variable(name)
         }
-        if let memberAccess = expression.as(MemberAccessExprSyntax.self),
-           let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-           let definition = enumDefinition(named: baseRef.baseName.text) {
-            return definition.value(named: memberAccess.declName.baseName.text).map { .value($0) }
-        }
-        if let memberAccess = expression.as(MemberAccessExprSyntax.self),
-           memberAccess.base == nil {
-            let matches = enumDefinitions.compactMap {
-                $0.value(named: memberAccess.declName.baseName.text)
-            }
-            if matches.count == 1, let value = matches.first {
-                return .value(value)
-            }
-            if matches.count > 1 {
-                algorithmParseFailure = "Enum case '.\(memberAccess.declName.baseName.text)' is ambiguous in this scope."
-            }
-            return nil
-        }
+        if let enumCase = decodeEnumCase(expression) { return enumCase }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base,
            let selfExpr = decodeStateExpr(base) {
@@ -1021,6 +1004,11 @@ public final class ParserSession {
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
             else { return nil }
             return .intersection(base, other)
+        case "appending":
+            guard let elementSyntax = call.arguments.first?.expression,
+                  let element = decodeTypedFacadeValue(elementSyntax, scope: scope)
+            else { return nil }
+            return .tupleAppend(base, element)
         case "concatenating":
             guard let otherSyntax = call.arguments.first?.expression,
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
@@ -1100,7 +1088,8 @@ public final class ParserSession {
 
     func decodeTypedFacadeValue(
         _ expression: ExprSyntax,
-        scope: TypedFacadeScope
+        scope: TypedFacadeScope,
+        expectedEnumType: String? = nil
     ) -> StateExpr? {
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             let name = reference.baseName.text
@@ -1119,19 +1108,41 @@ public final class ParserSession {
            let value = literal.representedLiteralValue {
             return .value(.string(value))
         }
-        // A typed function selector can be an explicit finite-domain enum
-        // case (for example, `Process.p0`). Resolve it before the typed
-        // facade treats member access as a record field or a property.
-        if let member = expression.as(MemberAccessExprSyntax.self),
-           let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           let value = enumDefinition(named: type)?.value(named: member.declName.baseName.text) {
-            return .value(value)
+        if let enumCase = decodeEnumCase(expression, expectedType: expectedEnumType) {
+            return enumCase
         }
         if let decoded = decodeTypedFacadeExpr(expression, scope: scope) {
             return decoded
         }
         guard scope.isEmpty else { return nil }
         return decodeStateExpr(expression)
+    }
+
+    private func decodeEnumCase(
+        _ expression: ExprSyntax,
+        expectedType: String? = nil
+    ) -> StateExpr? {
+        guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
+        if member.base != nil {
+            guard let type = terminalTypeName(in: member.base),
+                  let value = enumDefinition(named: type)?.value(named: member.declName.baseName.text)
+            else { return nil }
+            return .value(value)
+        }
+        if let expectedType,
+           let value = enumDefinition(named: expectedType)?.value(named: member.declName.baseName.text) {
+            return .value(value)
+        }
+        let matches = enumDefinitions.compactMap {
+            $0.value(named: member.declName.baseName.text)
+        }
+        if matches.count == 1, let value = matches.first {
+            return .value(value)
+        }
+        if matches.count > 1 {
+            algorithmParseFailure = "Enum case '.\(member.declName.baseName.text)' is ambiguous in this scope."
+        }
+        return nil
     }
 
     func typedUpdateSelector(

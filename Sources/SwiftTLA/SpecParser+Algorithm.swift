@@ -797,10 +797,18 @@ extension ParserSession {
             return nil
         }
 
+        let declaredType = binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)
+        let expectedDeclarationType = kind == .shared ? "SharedVariable" : "LocalVariable"
+        let declaredValueType = declaredType?.name.text == expectedDeclarationType
+            ? declaredType?.genericArgumentClause?.arguments.first.flatMap { Self.terminalTypeName($0.argument) }
+            : nil
         let state: AlgorithmStateModel
         if let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-           let initial = decodeAlgorithmStateExpression(initialSyntax, scope: scope)
-                ?? decodeStateExpr(initialSyntax) {
+           let initial = decodeTypedFacadeValue(
+               initialSyntax,
+               scope: scope,
+               expectedEnumType: declaredValueType
+           ) ?? decodeStateExpr(initialSyntax) {
             state = AlgorithmStateModel(
                 root: declaredName,
                 initial: initial,
