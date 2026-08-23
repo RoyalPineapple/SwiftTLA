@@ -463,7 +463,10 @@ public final class ParserSession {
         return .setDifference(subsets, .setLiteral([.setLiteral([])]))
     }
 
-    private func decodeBoundedFunctionDomain(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeBoundedFunctionDomain(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Functions"
         else { return nil }
@@ -474,7 +477,7 @@ public final class ParserSession {
             return nil
         }
         guard let rangeSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
-              let range = decodeStateExpr(rangeSyntax)
+              let range = decodeTypedFacadeValue(rangeSyntax, scope: scope)
         else {
             algorithmParseFailure = "Functions could not decode its formal result domain."
             return nil
@@ -601,6 +604,9 @@ public final class ParserSession {
         }
         if let subsets = decodeBoundedSubsetDomain(expression, scope: scope) {
             return subsets
+        }
+        if let functions = decodeBoundedFunctionDomain(expression, scope: scope) {
+            return functions
         }
         // SwiftSyntax represents a parenthesized expression as a one-element
         // tuple. Keep decoding through the typed path so scoped facade values
@@ -1004,6 +1010,11 @@ public final class ParserSession {
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
             else { return nil }
             return .intersection(base, other)
+        case "isSubset":
+            guard let otherSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
+                  let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
+            else { return nil }
+            return .subset(base, other)
         case "appending":
             guard let elementSyntax = call.arguments.first?.expression,
                   let element = decodeTypedFacadeValue(elementSyntax, scope: scope)

@@ -935,6 +935,39 @@ private func parserEnum(
         #expect(successors.initialSet?.description.contains("Cardinality") == true)
     }
 
+    @Test("Algorithm parser decodes scoped function-set invariants")
+    func parsesScopedFunctionSetInvariant() throws {
+        let source = """
+        {
+            Algorithm("FunctionSetInvariant", scoped: { scope in
+                let values = scope.sharedVar("values", initial: Function<Node, Int>.mapping { _ in 0 })
+                let grouped = scope.sharedVar("grouped", initial: Function<Node, SetExpr<Node>>.mapping { _ in SetExpr<Node>() })
+                let members = scope.sharedVar("members", initial: SetExpr<Node>())
+                Do(TestControlLabel.done) { Stop() }
+                Invariant("TypeOK") {
+                    Functions(from: Node.all, to: SetExpr<Int>.literal(0, 1)).contains(values.expr)
+                        && members.isSubset(of: SetExpr<Node>.literal(.only))
+                        && Functions(
+                            from: Node.all,
+                            to: Subsets(of: SetExpr<Node>.literal(.only))
+                        ).contains(grouped.expr)
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum(
+                "Node",
+                cases: ["only": .string("only")],
+                formalDomain: [.string("only")]
+            )]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "FunctionSetInvariant").spec.invariants.map(\.name) == ["TypeOK"])
+    }
+
     @Test("parser retains a typed record-valued function comprehension")
     func parsesRecordFunctionComprehension() throws {
         let source = """
