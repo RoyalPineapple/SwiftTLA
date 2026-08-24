@@ -153,8 +153,7 @@ package struct TLALiveActionFailure<Action: Sendable & Equatable>: Sendable, Equ
         case evaluationFailed
         case decodeFailed
         case positionExhausted
-        /// The typed action produced more than one successor state.
-        case ambiguousSuccessors
+        case ambiguousAction
     }
 
     public let requestID: UUID
@@ -456,22 +455,27 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
                 current: before
             )
         }
-        // Live execution requires one deterministic successor: model
-        // nondeterminism must be resolved by the caller (parameterized
-        // actions or explicit successor selection) before the request is
-        // constructed. Never let successor array order pick the committed
-        // state.
-        if candidates.count > 1 {
+        let candidate: _GeneratedMachineStorage.State
+        do {
+            candidate = try _GeneratedMachineStorage.onlySuccessor(candidates)
+        } catch GeneratedMachineError.noMatchingSuccessor {
+            return rejected(.actionNotEnabled, action: action, requestID: requestID, current: before)
+        } catch GeneratedMachineError.ambiguousAction {
             return failed(
-                code: .ambiguousSuccessors,
+                code: .ambiguousAction,
                 message: "The action produced \(candidates.count) successor states; live execution requires a deterministic successor.",
                 action: action,
                 requestID: requestID,
                 current: before
             )
-        }
-        guard let candidate = candidates.first else {
-            return rejected(.actionNotEnabled, action: action, requestID: requestID, current: before)
+        } catch {
+            return failed(
+                code: .evaluationFailed,
+                message: String(describing: error),
+                action: action,
+                requestID: requestID,
+                current: before
+            )
         }
         do {
             try driver.decodeState(candidate)
