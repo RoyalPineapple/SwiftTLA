@@ -801,6 +801,14 @@ public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
   Expr(.operatorApplication(.reference(name, arity: 1), [.value(value.stateExpr)]))
 }
 
+public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
+  as _: Result.Type,
+  _ name: String,
+  _ value: Value
+) -> Expr<Result> {
+  FormalCall(name, value)
+}
+
 public func FormalCall<
   Result: TLAValueType,
   First: StateExprConvertible,
