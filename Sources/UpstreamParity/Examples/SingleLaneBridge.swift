@@ -61,7 +61,7 @@ public struct SingleLaneBridgeModel: Sendable {
                 (.leftTwo, 1)
                 ).raw
             }
-            Variable(computed: waiting) { TupleExpr<Car>().raw }
+            Variable(computed: waiting) { Expr<TupleExpr<Car>>(TupleExpr<Car>()).raw }
 
             Invariant("Invariants") {
                 All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { first in
