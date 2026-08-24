@@ -67,21 +67,7 @@ enum TLASpecVerifier {
             throw SimpleError("No variables in spec")
         }
 
-        var allInvariants = parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) }
-        for (variableName, swiftTypeName) in parsed.swiftVariableTypes().sorted(by: { $0.key < $1.key }) {
-            if let enumInfo = enumInfos.first(where: { $0.typeName == swiftTypeName }) {
-                let domainValues = TLAValue.sorted(enumInfo.domain)
-                let invariantName = "\(variableName)InDomain"
-                let body = StateExpr.in(.variable(variableName),
-                                         .setLiteral(domainValues.map { .value($0) }))
-                allInvariants.append(NamedInvariant(name: invariantName, body: body))
-            }
-        }
-
-        let compilation = try parsed.compile(
-            specificationName: source.name,
-            additionalInvariants: allInvariants.dropFirst(parsed.invariants.count).map { $0 }
-        )
+        let compilation = try parsed.compile(specificationName: source.name)
         let swiftFacts = parsed.machineSurfaceSwiftFacts(for: compilation)
 
         return MacroCompilation(
