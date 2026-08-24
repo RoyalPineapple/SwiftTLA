@@ -60,7 +60,7 @@ public struct SingleLaneBridgeModel: Sendable {
                 (.rightTwo, 8),
                 (.leftOne, 1),
                 (.leftTwo, 1)
-                )
+                ).raw
             }
             Variable(computed: waiting) { TupleExpr<Car>() }
 
