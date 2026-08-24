@@ -64,7 +64,7 @@ private struct TwoBucketsView: View {
 }
 
 private struct DuckDuckLeaderView: View {
-    @State private var machine = ChangRoberts()
+    @State private var machine: ChangRoberts?
     @State private var error: String?
     @State private var delivery: DuckDelivery?
     @State private var isDelivering = false
@@ -80,14 +80,19 @@ private struct DuckDuckLeaderView: View {
             title: "Duck, Duck, Leader",
             subtitle: "A message carrying the largest identifier completes the ring."
         ) {
-            DuckDuckLeaderScene(
-                nodes: ring,
-                state: machine.state,
-                delivery: delivery,
-                lastMove: lastMove,
-                messageStatus: messageStatus,
-                error: error
-            )
+            if let machine {
+                DuckDuckLeaderScene(
+                    nodes: ring,
+                    state: machine.state,
+                    delivery: delivery,
+                    lastMove: lastMove,
+                    messageStatus: messageStatus,
+                    error: error
+                )
+            } else {
+                StateCard(title: "Election unavailable", detail: "The generated machine could not start.", error: error)
+                    .frame(maxWidth: .infinity, minHeight: 430)
+            }
             DuckDuckLeaderControls(
                 isPlaying: isPlaying,
                 shuffle: shuffleSchedule,
@@ -95,6 +100,7 @@ private struct DuckDuckLeaderView: View {
                 togglePlayback: togglePlayback
             )
         }
+        .task { reset() }
     }
 
     private func shuffleSchedule() {
@@ -107,10 +113,15 @@ private struct DuckDuckLeaderView: View {
         isPlaying = false
         isDelivering = false
         deliveryOrder = ring
-        machine = ChangRoberts()
         delivery = nil
         lastMove = message
-        error = nil
+        do {
+            machine = try ChangRoberts.makeMachine()
+            error = nil
+        } catch let failure {
+            machine = nil
+            error = failure.localizedDescription
+        }
     }
 
     private func togglePlayback() {
@@ -122,12 +133,12 @@ private struct DuckDuckLeaderView: View {
         isPlaying = true
         let runID = simulationID
         Task { @MainActor in
-            while isPlaying && machine.state.leader == 0 && runID == simulationID {
+            while isPlaying && machine?.state.leader == 0 && runID == simulationID {
                 let delivered = await deliverNext(runID: runID)
                 if !delivered { break }
             }
-            if runID == simulationID, machine.state.leader != 0 {
-                lastMove = "ID \(machine.state.leader) completed the ring and is the leader."
+            if runID == simulationID, let leader = machine?.state.leader, leader != 0 {
+                lastMove = "ID \(leader) completed the ring and is the leader."
             }
             if runID == simulationID { isPlaying = false }
         }
@@ -137,6 +148,7 @@ private struct DuckDuckLeaderView: View {
     private func deliverNext(runID: UUID) async -> Bool {
         guard !isDelivering,
               runID == simulationID,
+              let machine,
               let node = deliveryOrder.first(where: { node in
                   machine.state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
               }),
@@ -176,7 +188,7 @@ private struct DuckDuckLeaderView: View {
                 return false
             }
             guard runID == simulationID else { return false }
-            machine = nextMachine
+            self.machine = nextMachine
             delivery = nil
             return true
         } catch let failure {
@@ -197,10 +209,11 @@ private struct DuckDuckLeaderView: View {
     }
 
     private var messageStatus: String {
-        if machine.state.leader != 0, !machine.state.messages.elements.isEmpty {
-            return "\(machine.state.messages.elements.count) older tokens remain in flight; the formal election is complete."
+        guard let state = machine?.state else { return "No formal tokens are available." }
+        if state.leader != 0, !state.messages.elements.isEmpty {
+            return "\(state.messages.elements.count) older tokens remain in flight; the formal election is complete."
         }
-        return "\(machine.state.messages.elements.count) formal tokens remain in flight."
+        return "\(state.messages.elements.count) formal tokens remain in flight."
     }
 
 }

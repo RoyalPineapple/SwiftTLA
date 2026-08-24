@@ -66,13 +66,13 @@ public enum GeneratedDemoTestSuite {
                 }
             }),
             result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Generated state", action: { () throws -> Void in
-                let machine = ChangRoberts()
+                let machine = try ChangRoberts.makeMachine()
                 guard machine.state.leader == 0, machine.state.messages.elements.count == 12 else {
                     throw GeneratedDemoSuiteError.unexpectedInitialState
                 }
             }),
             result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Typed delivery", action: { () throws -> Void in
-                var machine = ChangRoberts()
+                var machine = try ChangRoberts.makeMachine()
                 _ = try machine.send(.deliver(process: .six))
                 guard machine.state.messages.elements.contains(where: {
                     $0[ChangRoberts.MessageSchema.candidate] == 12 &&
@@ -83,7 +83,7 @@ public enum GeneratedDemoTestSuite {
                 }
             }),
             result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Enabled actions", action: { () throws -> Void in
-                let machine = ChangRoberts()
+                let machine = try ChangRoberts.makeMachine()
                 guard try machine.isEnabled(.deliver(process: .six)) else {
                     throw GeneratedDemoSuiteError.expectedActionUnavailable
                 }

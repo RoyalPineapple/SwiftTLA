@@ -7,7 +7,7 @@ struct ChangRobertsDemoTests {
     func exposesTypedMessages() throws {
         let builderSpec = ChangRoberts.spec
         #expect(try builderSpec.compile().renderedTLAModuleBundle().tla == try ChangRoberts.spec.compile().renderedTLAModuleBundle().tla)
-        var machine = ChangRoberts()
+        var machine = try ChangRoberts.makeMachine()
 
         #expect(machine.state.leader == 0)
         #expect(machine.state.messages.elements.count == 12)
