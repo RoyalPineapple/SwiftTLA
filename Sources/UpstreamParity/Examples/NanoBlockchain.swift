@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 public struct NanoBlockchainModel: Sendable {
     public static var spec: TLASpec {
