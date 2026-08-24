@@ -101,7 +101,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .rightOne,
                     to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                 ))
-                    && waiting.becomes(waiting.appending(Car.rightOne))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.rightOne))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
                     || (location.becomes(location.updating(
                         .rightOne,
@@ -118,7 +118,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .rightOne,
                     to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                 ))
-                    && waiting.becomes(waiting.appending(Car.rightOne))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.rightOne))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
                     || (location.becomes(location.updating(
                         .rightOne,
@@ -154,7 +154,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .rightTwo,
                     to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                 ))
-                    && waiting.becomes(waiting.appending(Car.rightTwo))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.rightTwo))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
                     || (location.becomes(location.updating(
                         .rightTwo,
@@ -171,7 +171,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .rightTwo,
                     to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                 ))
-                    && waiting.becomes(waiting.appending(Car.rightTwo))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.rightTwo))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
                     || (location.becomes(location.updating(
                         .rightTwo,
@@ -204,7 +204,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .leftOne,
                     to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                 ))
-                    && waiting.becomes(waiting.appending(Car.leftOne))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.leftOne))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
                     || (location.becomes(location.updating(
                         .leftOne,
@@ -221,7 +221,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .leftOne,
                     to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                 ))
-                    && waiting.becomes(waiting.appending(Car.leftOne))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.leftOne))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
                     || (location.becomes(location.updating(
                         .leftOne,
@@ -254,7 +254,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .leftTwo,
                     to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                 ))
-                    && waiting.becomes(waiting.appending(Car.leftTwo))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.leftTwo))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
                     || (location.becomes(location.updating(
                         .leftTwo,
@@ -271,7 +271,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .leftTwo,
                     to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                 ))
-                    && waiting.becomes(waiting.appending(Car.leftTwo))
+                    && waiting.becomes(Expr<TupleExpr<Car>>(waiting.stateExpr).appending(Car.leftTwo))
                 ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
                     || (location.becomes(location.updating(
                         .leftTwo,
