@@ -31,10 +31,10 @@ public struct SingleLaneBridgeModel: Sendable {
                 SetExpr<Int>.literal(4, 5).contains(position)
             }
             FormalDefinition("NextLocation", taking: Car.self, Int.self) { car, position in
-                If(
+                If<Int>(
                     FormalCall(as: Bool.self, "IsRight", car),
-                    then: If(position > 1, then: position - 1, else: 8),
-                    else: If(position < 8, then: position + 1, else: 1)
+                    then: If<Int>(position > 1, then: position - 1, else: 8),
+                    else: If<Int>(position < 8, then: position + 1, else: 1)
                 )
             }
             FormalDefinition("LocationAt", taking: Function<Car, Int>.self, Car.self) { locations, car in
