@@ -1,6 +1,7 @@
 import Foundation
 
 /// Storage for one generated Swift machine and its compiled specification.
+@_spi(GeneratedMachineImplementation)
 public struct _GeneratedMachineStorage: Sendable {
     /// An opaque state from this storage's compiled specification.
     public struct State: Hashable, Sendable {

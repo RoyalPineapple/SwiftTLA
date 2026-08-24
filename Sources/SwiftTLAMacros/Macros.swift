@@ -1,4 +1,4 @@
-import SwiftTLA
+@_exported @_spi(GeneratedMachineImplementation) import SwiftTLA
 
 /// Macro-generated surfaces may name Foundation types (for example
 /// `Foundation.UUID` request identifiers on the generated `Live` facade).
