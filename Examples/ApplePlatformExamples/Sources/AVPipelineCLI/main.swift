@@ -5,20 +5,20 @@ import AVPipeline
 @main
 struct AVPipelineCLI {
     static func main() async throws {
-        let capture = CaptureModel.Machine()
-        let pipeline = MediaPipelineModel.Machine()
+        var capture = try CaptureModel.makeMachine()
+        var pipeline = try MediaPipelineModel.makeMachine()
 
-        _ = try await capture.apply(.configure)
-        _ = try await capture.apply(.start)
-        _ = try await capture.apply(.stop)
-        _ = try await pipeline.apply(.beginCapture)
-        _ = try await pipeline.apply(.beginWriting)
-        _ = try await pipeline.apply(.finishWriting)
-        _ = try await pipeline.apply(.play)
-        _ = try await pipeline.apply(.stop)
+        _ = try capture.send(.configure)
+        _ = try capture.send(.start)
+        _ = try capture.send(.stop)
+        _ = try pipeline.send(.beginCapture)
+        _ = try pipeline.send(.beginWriting)
+        _ = try pipeline.send(.finishWriting)
+        _ = try pipeline.send(.play)
+        _ = try pipeline.send(.stop)
 
         print("AV pipeline typed machine checks passed.")
-        print("capture: \(await capture.state.phase.rawValue)")
-        print("pipeline: \(await pipeline.state.stage.rawValue)")
+        print("capture: \(capture.state.phase.rawValue)")
+        print("pipeline: \(pipeline.state.stage.rawValue)")
     }
 }

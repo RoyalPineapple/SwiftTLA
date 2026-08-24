@@ -4,76 +4,76 @@ import XCTest
 
 final class GeneratedAppleModelTests: XCTestCase {
     func testCaptureGeneratedLifecycle() async throws {
-        let machine = CaptureModel.Machine()
-        _ = try await machine.apply(.configure)
-        let configured = await machine.state
+        var machine = try CaptureModel.makeMachine()
+        _ = try machine.send(.configure)
+        let configured = machine.state
         XCTAssertEqual(configured.phase, .configured)
-        _ = try await machine.apply(.start)
-        let running = await machine.state
+        _ = try machine.send(.start)
+        let running = machine.state
         XCTAssertEqual(running.phase, .running)
-        _ = try await machine.apply(.stop)
-        let idle = await machine.state
+        _ = try machine.send(.stop)
+        let idle = machine.state
         XCTAssertEqual(idle.phase, .idle)
     }
 
     func testBluetoothGeneratedLifecycle() async throws {
-        let machine = BluetoothModel.Machine()
-        _ = try await machine.apply(.poweredOn)
-        _ = try await machine.apply(.startScan)
-        let scanning = await machine.state
+        var machine = try BluetoothModel.makeMachine()
+        _ = try machine.send(.poweredOn)
+        _ = try machine.send(.startScan)
+        let scanning = machine.state
         XCTAssertEqual(scanning.phase, .scanning)
-        _ = try await machine.apply(.stopScan)
-        let poweredOn = await machine.state
+        _ = try machine.send(.stopScan)
+        let poweredOn = machine.state
         XCTAssertEqual(poweredOn.phase, .poweredOn)
     }
 
     func testPeripheralGeneratedLifecycle() async throws {
-        let machine = PeripheralModel.Machine()
-        _ = try await machine.apply(.connected)
-        _ = try await machine.apply(.beginDiscovery)
-        _ = try await machine.apply(.finishDiscovery)
-        let ready = await machine.state
+        var machine = try PeripheralModel.makeMachine()
+        _ = try machine.send(.connected)
+        _ = try machine.send(.beginDiscovery)
+        _ = try machine.send(.finishDiscovery)
+        let ready = machine.state
         XCTAssertEqual(ready.phase, .ready)
-        _ = try await machine.apply(.disconnect)
-        let disconnected = await machine.state
+        _ = try machine.send(.disconnect)
+        let disconnected = machine.state
         XCTAssertEqual(disconnected.phase, .disconnected)
     }
 
     func testAVGeneratedLifecycles() async throws {
-        let writer = WriterModel.Machine()
-        _ = try await writer.apply(.start)
-        _ = try await writer.apply(.write)
-        _ = try await writer.apply(.pause)
-        _ = try await writer.apply(.resume)
-        _ = try await writer.apply(.finish)
-        let finishedWriter = await writer.state
+        var writer = try WriterModel.makeMachine()
+        _ = try writer.send(.start)
+        _ = try writer.send(.write)
+        _ = try writer.send(.pause)
+        _ = try writer.send(.resume)
+        _ = try writer.send(.finish)
+        let finishedWriter = writer.state
         XCTAssertEqual(finishedWriter.phase, .finished)
 
-        let player = PlayerModel.Machine()
-        _ = try await player.apply(.beginLoad)
-        _ = try await player.apply(.ready)
-        _ = try await player.apply(.play)
-        _ = try await player.apply(.pause)
-        _ = try await player.apply(.seek)
-        _ = try await player.apply(.play)
-        _ = try await player.apply(.finish)
-        let finishedPlayer = await player.state
+        var player = try PlayerModel.makeMachine()
+        _ = try player.send(.beginLoad)
+        _ = try player.send(.ready)
+        _ = try player.send(.play)
+        _ = try player.send(.pause)
+        _ = try player.send(.seek)
+        _ = try player.send(.play)
+        _ = try player.send(.finish)
+        let finishedPlayer = player.state
         XCTAssertEqual(finishedPlayer.phase, .finished)
 
-        let pipeline = MediaPipelineModel.Machine()
-        _ = try await pipeline.apply(.beginCapture)
-        _ = try await pipeline.apply(.beginWriting)
-        _ = try await pipeline.apply(.finishWriting)
-        _ = try await pipeline.apply(.play)
-        _ = try await pipeline.apply(.stop)
-        let idlePipeline = await pipeline.state
+        var pipeline = try MediaPipelineModel.makeMachine()
+        _ = try pipeline.send(.beginCapture)
+        _ = try pipeline.send(.beginWriting)
+        _ = try pipeline.send(.finishWriting)
+        _ = try pipeline.send(.play)
+        _ = try pipeline.send(.stop)
+        let idlePipeline = pipeline.state
         XCTAssertEqual(idlePipeline.stage, .idle)
 
-        let diskStore = DiskStoreModel.Machine()
-        _ = try await diskStore.apply(.write)
-        _ = try await diskStore.apply(.delete)
-        _ = try await diskStore.apply(.clear)
-        let readyDiskStore = await diskStore.state
+        var diskStore = try DiskStoreModel.makeMachine()
+        _ = try diskStore.send(.write)
+        _ = try diskStore.send(.delete)
+        _ = try diskStore.send(.clear)
+        let readyDiskStore = diskStore.state
         XCTAssertEqual(readyDiskStore.phase, .ready)
     }
 }

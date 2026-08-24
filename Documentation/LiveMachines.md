@@ -36,7 +36,7 @@ The position starts at zero and advances once for each committed action. It is o
 Typed code uses the generated `Live` façade.
 
 ```swift
-let typedOutcome = try await live.execute(.advance)
+let typedOutcome = try await live.send(.advance)
 ```
 
 Each request produces exactly one generated `Live.Outcome`:
