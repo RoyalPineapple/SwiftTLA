@@ -37,13 +37,13 @@ public struct TLCReferencePin: Equatable, Sendable {
         bridgeSourceSHA256: String,
         bridgeBinarySHA256: String
     ) throws {
-        guard tag == "v1.8.0", commit == "0894c3407f4717fec7cc18bde3bf3c857fa47333" else {
+        guard !tag.isEmpty, Self.isRevision(commit) else {
             throw CoreConformanceCaseError.invalidIdentifier("TLC release")
         }
-        guard javaDistribution == "Eclipse Temurin", javaVersion == "17.0.19+10" else {
+        guard !javaDistribution.isEmpty, !javaVersion.isEmpty else {
             throw CoreConformanceCaseError.invalidIdentifier("Java runtime")
         }
-        guard bridgeClass == "org.swifttla.conformance.LosslessStateWriter" else {
+        guard !bridgeClass.isEmpty else {
             throw CoreConformanceCaseError.invalidIdentifier("bridge class")
         }
         for (field, value) in [
@@ -51,18 +51,6 @@ public struct TLCReferencePin: Equatable, Sendable {
             ("bridgeSourceSHA256", bridgeSourceSHA256), ("bridgeBinarySHA256", bridgeBinarySHA256)
         ] where !Self.isSHA256(value) {
             throw CoreConformanceCaseError.invalidSHA256(field: field)
-        }
-        guard jarSHA256 == Self.lockedJarSHA256 else {
-            throw CoreConformanceCaseError.pinMismatch("TLC JAR digest")
-        }
-        guard Self.lockedJavaArchiveSHA256s.values.contains(javaArchiveSHA256) else {
-            throw CoreConformanceCaseError.pinMismatch("Java archive digest")
-        }
-        guard bridgeSourceSHA256 == Self.lockedBridgeSourceSHA256 else {
-            throw CoreConformanceCaseError.pinMismatch("bridge source digest")
-        }
-        guard bridgeBinarySHA256 == Self.lockedBridgeBinarySHA256 else {
-            throw CoreConformanceCaseError.pinMismatch("bridge binary digest")
         }
         self.tag = tag
         self.commit = commit
@@ -75,28 +63,6 @@ public struct TLCReferencePin: Equatable, Sendable {
         self.bridgeBinarySHA256 = bridgeBinarySHA256
     }
 
-    public static let fixture = Self()
-
-    private init() {
-        tag = "v1.8.0"
-        commit = "0894c3407f4717fec7cc18bde3bf3c857fa47333"
-        jarSHA256 = "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f"
-        javaDistribution = "Eclipse Temurin"
-        javaVersion = "17.0.19+10"
-        javaArchiveSHA256 = "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336"
-        bridgeClass = "org.swifttla.conformance.LosslessStateWriter"
-        bridgeSourceSHA256 = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee"
-        bridgeBinarySHA256 = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
-    }
-
-    public static let lockedJarSHA256 = "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f"
-    public static let lockedJavaArchiveSHA256s = [
-        "arm64": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
-        "x86_64": "03632d1fbf139ab3719a9f4b47dc206251449b87557143c822336dbf8c06560f"
-    ]
-    public static let lockedBridgeSourceSHA256 = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee"
-    public static let lockedBridgeBinarySHA256 = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
-    public static let lockedTLCBanner = "TLC2 Version 2026.08.11.125311 (rev: 0894c34)"
     public static let standardModuleNames: Set<String> = [
         "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
         "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
@@ -108,23 +74,26 @@ public struct TLCReferencePin: Equatable, Sendable {
     public func validate(_ artifacts: TLCReferenceArtifacts) throws {
         try Self.verify(artifacts.jar, expected: jarSHA256, name: "TLC JAR")
         guard artifacts.jarManifest.contains("Implementation-Title: TLA+ Tools"),
-              artifacts.jarManifest.contains("X-Git-Revision: 0894c3407f4717fec7cc18bde3bf3c857fa47333")
+              artifacts.jarManifest.contains("X-Git-Revision: \(commit)")
         else { throw CoreConformanceCaseError.pinMismatch("TLC JAR manifest") }
         guard artifacts.runtime.version == javaVersion,
               artifacts.runtime.vendor.contains("Eclipse Adoptium"),
               artifacts.runtime.properties["java.runtime.version"] == javaVersion,
               artifacts.runtime.properties["java.vendor"]?.contains("Eclipse Adoptium") == true
         else { throw CoreConformanceCaseError.pinMismatch("Java runtime") }
-        guard let expectedArchive = Self.lockedJavaArchiveSHA256s[artifacts.runtime.architecture],
-              expectedArchive == javaArchiveSHA256
-        else { throw CoreConformanceCaseError.pinMismatch("Java architecture") }
+        guard !artifacts.runtime.architecture.isEmpty else {
+            throw CoreConformanceCaseError.pinMismatch("Java architecture")
+        }
         try Self.verify(artifacts.javaArchive, expected: javaArchiveSHA256, name: "Java archive")
         try Self.verify(artifacts.bridgeBinary, expected: bridgeBinarySHA256, name: "bridge binary")
         try Self.verify(artifacts.bridgeSource, expected: bridgeSourceSHA256, name: "bridge source")
     }
 
     public func validateReportedTLCBanner(_ output: String) throws {
-        guard output.split(whereSeparator: \.isNewline).contains(Substring(Self.lockedTLCBanner)) else {
+        let revision = String(commit.prefix(7))
+        guard output.split(whereSeparator: \.isNewline).contains(where: {
+            $0.contains("TLC2 Version") && $0.contains("(rev: \(revision))")
+        }) else {
             throw CoreConformanceCaseError.pinMismatch("TLC banner")
         }
     }
@@ -140,6 +109,10 @@ public struct TLCReferencePin: Equatable, Sendable {
 
     static func isSHA256(_ value: String) -> Bool {
         value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil
+    }
+
+    static func isRevision(_ value: String) -> Bool {
+        value.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil
     }
 }
 

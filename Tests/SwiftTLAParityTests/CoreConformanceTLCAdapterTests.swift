@@ -6,7 +6,7 @@ import UpstreamParity
 @Suite(.serialized)
 struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCanonicalRun() throws {
-    let expectedCase = try fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(try toolchainPin())
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let result = TLCProcessResult(
       status: 0,
@@ -41,7 +41,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       replayInput: directory.appendingPathComponent("replay.json"),
       workingDirectory: directory.appendingPathComponent("work"),
       arguments: [],
-      expectedCase: try fixtureCase(.fixture),
+      expectedCase: try fixtureCase(try toolchainPin()),
       runID: UUID()
     )
 
@@ -66,7 +66,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
 
   @Test("TLC violations remain non-passing canonical outcomes")
   func preservesViolationOutcome() throws {
-    let expectedCase = try fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(try toolchainPin())
     let run = try TLCGraphEventParser(expectedCase: expectedCase).parseCanonicalRun(
       try completeGraphStream(expectedCase),
       result: TLCProcessResult(
@@ -81,7 +81,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
 
   @Test("a violation path cannot replace TLC's invariant diagnostic")
   func ignoresViolationInInputPath() throws {
-    let expectedCase = try fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(try toolchainPin())
     let run = try TLCGraphEventParser(expectedCase: expectedCase).parseCanonicalRun(
       try completeGraphStream(expectedCase),
       result: TLCProcessResult(
@@ -132,12 +132,12 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     }
   }
 
-  @Test("well-formed but unlocked digests fail pin validation")
-  func rejectsWrongPinnedDigests() throws {
-    let pin = TLCReferencePin.fixture
+  @Test("toolchain pin rejects malformed lock fields")
+  func rejectsMalformedToolchainFields() throws {
+    let pin = try toolchainPin()
     #expect(throws: CoreConformanceCaseError.self) {
       _ = try TLCReferencePin(
-        tag: pin.tag, commit: pin.commit, jarSHA256: String(repeating: "0", count: 64),
+        tag: pin.tag, commit: pin.commit, jarSHA256: String(repeating: "g", count: 64),
         javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
         javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
         bridgeSourceSHA256: pin.bridgeSourceSHA256, bridgeBinarySHA256: pin.bridgeBinarySHA256
@@ -145,10 +145,10 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     }
     #expect(throws: CoreConformanceCaseError.self) {
       _ = try TLCReferencePin(
-        tag: pin.tag, commit: pin.commit, jarSHA256: pin.jarSHA256,
+        tag: pin.tag, commit: "not-a-revision", jarSHA256: pin.jarSHA256,
         javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
         javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
-        bridgeSourceSHA256: String(repeating: "a", count: 64),
+        bridgeSourceSHA256: pin.bridgeSourceSHA256,
         bridgeBinarySHA256: pin.bridgeBinarySHA256
       )
     }
@@ -156,9 +156,9 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       _ = try TLCReferencePin(
         tag: pin.tag, commit: pin.commit, jarSHA256: pin.jarSHA256,
         javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
-        javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
+        javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: "",
         bridgeSourceSHA256: pin.bridgeSourceSHA256,
-        bridgeBinarySHA256: String(repeating: "b", count: 64)
+        bridgeBinarySHA256: pin.bridgeBinarySHA256
       )
     }
   }
@@ -178,19 +178,19 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       bridgeBinary: toolRoot.appendingPathComponent(
         "bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"),
       jarManifest:
-        "Implementation-Title: TLA+ Tools\\nX-Git-Revision: 0894c3407f4717fec7cc18bde3bf3c857fa47333\\n",
+        "Implementation-Title: TLA+ Tools\\nX-Git-Revision: 9787e65714c37d94eebab40774bff401bd9f616d\\n",
       runtime: TLCJavaRuntimeIdentity(
         version: "17.0.19+10", vendor: "Eclipse Adoptium", architecture: "arm64",
         properties: ["java.runtime.version": "17.0.19+10", "java.vendor": "Eclipse Adoptium"]
       )
     )
-    try TLCReferencePin.fixture.validate(artifacts)
+    try toolchainPin().validate(artifacts)
     let emptyManifest = TLCReferenceArtifacts(
       jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
       bridgeBinary: artifacts.bridgeBinary, jarManifest: "", runtime: artifacts.runtime
     )
     #expect(throws: CoreConformanceCaseError.pinMismatch("TLC JAR manifest")) {
-      try TLCReferencePin.fixture.validate(emptyManifest)
+      try toolchainPin().validate(emptyManifest)
     }
     let mismatchedRuntime = TLCReferenceArtifacts(
       jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
@@ -205,7 +205,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       )
     )
     #expect(throws: CoreConformanceCaseError.pinMismatch("Java runtime")) {
-      try TLCReferencePin.fixture.validate(mismatchedRuntime)
+      try toolchainPin().validate(mismatchedRuntime)
     }
   }
 
@@ -221,7 +221,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
       workingDirectory: URL(fileURLWithPath: "/tmp"),
       arguments: ["-workers", "1"],
-      expectedCase: try fixtureCase(.fixture, arguments: ["-workers", "1"]),
+      expectedCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1"]),
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
     )
     let command = try request.commandArguments(
@@ -359,7 +359,7 @@ extension CoreConformanceTLCAdapterTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let executable = directory.appendingPathComponent("environment.sh")
     try "#!/bin/sh\n"
-      .appending("printf 'TLC2 Version 2026.08.11.125311 (rev: 0894c34)\\n'\n")
+      .appending("printf 'TLC2 Version 2026.08.11.125311 (rev: 9787e65)\\n'\n")
       .appending("printf 'home=%s allowed=%s\\n' \"${HOME-unset}\" \"${CORE_CONFORMANCE_ALLOWED_VALUE-unset}\"\n")
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
@@ -374,7 +374,7 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser rejects malformed footer and unsupported callbacks")
   func rejectsMalformedStreams() throws {
-    let pin = TLCReferencePin.fixture
+    let pin = try toolchainPin()
     let expectedCase = try fixtureCase(pin)
     let stream = TLCGraphEventParser(expectedCase: expectedCase)
     #expect(throws: TLCGraphEventError.self) {
@@ -417,7 +417,7 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser accepts only TLC's exact actionless stuttering observation")
   func acceptsExactStutteringObservation() throws {
-    let expectedCase = try fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(try toolchainPin())
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let stream = try completeGraphStreamWithStutteringObservation(expectedCase)
     #expect(try parser.parse(stream).transitions.count == 1)
@@ -430,7 +430,7 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser retains only exact excluded predicate observations")
   func acceptsExcludedPredicateObservationsWithoutAddingGraphEdges() throws {
-    let expectedCase = try fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(try toolchainPin())
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let stream = try completeGraphStreamWithExcludedPredicateObservation(expectedCase)
     #expect(try parser.parse(stream).transitions.count == 1)
@@ -452,7 +452,7 @@ extension CoreConformanceTLCAdapterTests {
       wrapper: "Step__0", action: "Step", arguments: ["0"], indices: [0])
     let normalization = try CoreConformanceValueNormalization(
       binding: "cars", functionKeys: ["\"carA\"": "carA", "\"carB\"": "carB"])
-    let expected = try fixtureCase(.fixture, invocationMappings: [mapping], valueNormalizations: [normalization])
+    let expected = try fixtureCase(try toolchainPin(), invocationMappings: [mapping], valueNormalizations: [normalization])
     let parser = TLCGraphEventParser(expectedCase: expected)
     let stream = try functionRecordNormalizationStream(expected, actionLocation: "<Step(0) line 1, col 1 to line 1, col 2 of module Fixture>")
     let run = try parser.parseCanonicalRun(
@@ -475,7 +475,7 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser resolves a reduced TLC alias only through its retained fingerprint representative")
   func resolvesFingerprintAliasesFromSameStream() throws {
-    let expectedCase = try fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(try toolchainPin())
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let parsed = try parser.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true))
     #expect(parsed.transitions.count == 2)
@@ -519,7 +519,7 @@ extension CoreConformanceTLCAdapterTests {
 
   @Test("graph event parser rejects booleans for integers and numbers for booleans")
   func rejectsWrongJSONPrimitiveTypes() throws {
-    let expectedCase = try fixtureCase(.fixture)
+    let expectedCase = try fixtureCase(try toolchainPin())
     let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let mutations = [
       { (line: String) in line.replacingOccurrences(of: "\"version\":1", with: "\"version\":true")
@@ -597,6 +597,29 @@ extension CoreConformanceTLCAdapterTests {
       try wrongArguments.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
   }
+}
+
+private func toolchainPin() throws -> TLCReferencePin {
+  let root = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+  let data = try Data(contentsOf: root.appendingPathComponent("Verification/CoreConformance/toolchain.json"))
+  let lock = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+  let tlc = try #require(lock["tlc"] as? [String: Any])
+  let jar = try #require(tlc["jar"] as? [String: Any])
+  let java = try #require(lock["java"] as? [String: Any])
+  let archives = try #require(java["archives"] as? [String: Any])
+  let arm64 = try #require(archives["arm64"] as? [String: Any])
+  let bridge = try #require(lock["bridge"] as? [String: Any])
+  return try TLCReferencePin(
+    tag: try #require(tlc["tag"] as? String),
+    commit: try #require(tlc["commit"] as? String),
+    jarSHA256: try #require(jar["sha256"] as? String),
+    javaDistribution: try #require(java["distribution"] as? String),
+    javaVersion: try #require(java["version"] as? String),
+    javaArchiveSHA256: try #require(arm64["sha256"] as? String),
+    bridgeClass: try #require(bridge["class"] as? String),
+    bridgeSourceSHA256: try #require(bridge["sourceSha256"] as? String),
+    bridgeBinarySHA256: try #require(bridge["binarySha256"] as? String))
 }
 
 private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessRequest {

@@ -420,18 +420,21 @@ public struct CoreSupportCaseEvidence: Sendable {
 /// current only when every retained correlation names `gateRunID`.
 public struct CoreSupportGateInput: Sendable {
   public let gateRunID: UUID
+  public let referencePin: TLCReferencePin
   public let manifest: CoreConformanceCasesManifest
   public let surface: CoreSupportSurface
   public let evidence: [CoreSupportCaseEvidence]
   public let prerequisiteAvailable: Bool
   public init(
     gateRunID: UUID,
+    referencePin: TLCReferencePin,
     manifest: CoreConformanceCasesManifest,
     surface: CoreSupportSurface,
     evidence: [CoreSupportCaseEvidence],
     prerequisiteAvailable: Bool = true
   ) {
     self.gateRunID = gateRunID
+    self.referencePin = referencePin
     self.manifest = manifest
     self.surface = surface
     self.evidence = evidence
@@ -457,6 +460,7 @@ public struct CoreSupportGate: Sendable {
     let observations = manifestByID.mapValues { declaredCase in
       inspect(
         declaredCase,
+        referencePin: input.referencePin,
         evidence: evidenceByCaseID[declaredCase.id],
         gateRunID: input.gateRunID,
         prerequisiteAvailable: input.prerequisiteAvailable)
@@ -524,6 +528,7 @@ public struct CoreSupportGate: Sendable {
   }
   private func inspect(
     _ declaredCase: CoreConformanceCasesManifest.Entry,
+    referencePin: TLCReferencePin,
     evidence: CoreSupportCaseEvidence?,
     gateRunID: UUID,
     prerequisiteAvailable: Bool
@@ -552,12 +557,14 @@ public struct CoreSupportGate: Sendable {
       guard decision.evidence.comparison.expectedReceipt.maximumStateLimit == declaredCase.maximumStateLimit,
             decision.evidence.comparison.actualReceipt.maximumStateLimit == declaredCase.maximumStateLimit
       else { throw EvidenceError.invalidJSON }
-      let expectedCase = try declaredCaseContract(declaredCase)
+      let expectedCase = try declaredCaseContract(declaredCase, referencePin: referencePin)
       if !caseMatches(caseJSON, declaredCase, expectedCase)
         || argumentsJSON != declaredCase.arguments {
         reasons.insert(.manifestDigestMismatch)
       }
-      if !toolchainMatches(toolchainJSON, declaredCase) { reasons.insert(.toolchainDigestMismatch) }
+      if !toolchainMatches(toolchainJSON, declaredCase, referencePin: referencePin) {
+        reasons.insert(.toolchainDigestMismatch)
+      }
       let correlation = try correlation(
         caseID: declaredCase.id, gateRunID: gateRunID,
         process: processJSON, run: runJSON, decision: decision.evidence)

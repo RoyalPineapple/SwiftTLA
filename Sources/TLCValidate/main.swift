@@ -95,6 +95,24 @@ struct CoreConformanceToolchain: Decodable {
         let sha256: String
     }
 }
+
+private func referencePin(
+    from toolchain: CoreConformanceToolchain,
+    javaArchive: CoreConformanceToolchain.Artifact
+) throws -> TLCReferencePin {
+    try TLCReferencePin(
+        tag: toolchain.tlc.tag,
+        commit: toolchain.tlc.commit,
+        jarSHA256: toolchain.tlc.jar.sha256,
+        javaDistribution: toolchain.java.distribution,
+        javaVersion: toolchain.java.version,
+        javaArchiveSHA256: javaArchive.sha256,
+        bridgeClass: toolchain.bridge.class,
+        bridgeSourceSHA256: toolchain.bridge.sourceSha256,
+        bridgeBinarySHA256: toolchain.bridge.binarySha256
+    )
+}
+
 enum CoreConformanceCLIError: Error, CustomStringConvertible {
     case usage
     case missingEnvironment(String)
@@ -189,17 +207,7 @@ private func runCoreConformance(arguments: [String]) -> Never {
         guard let javaArchive = lock.java.archives[architecture] else {
             throw CoreConformanceCLIError.invalidManifest("no locked archive for \(architecture)")
         }
-        let pin = try TLCReferencePin(
-            tag: lock.tlc.tag,
-            commit: lock.tlc.commit,
-            jarSHA256: lock.tlc.jar.sha256,
-            javaDistribution: lock.java.distribution,
-            javaVersion: lock.java.version,
-            javaArchiveSHA256: javaArchive.sha256,
-            bridgeClass: lock.bridge.class,
-            bridgeSourceSHA256: lock.bridge.sourceSha256,
-            bridgeBinarySHA256: lock.bridge.binarySha256
-        )
+        let pin = try referencePin(from: lock, javaArchive: javaArchive)
         let toolDirectory = URL(fileURLWithPath: toolRoot)
         let jar = toolDirectory.appendingPathComponent("downloads/tla2tools.jar")
         let java = toolDirectory.appendingPathComponent("java-\(architecture)/Contents/Home/bin/java")
@@ -337,6 +345,17 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
     do {
         let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
         let manifest = try decode(CoreConformanceCasesManifest.self, at: URL(fileURLWithPath: casesPath))
+        let toolchain = try decode(
+            CoreConformanceToolchain.self,
+            at: projectRoot.appendingPathComponent("Verification/CoreConformance/toolchain.json"))
+        guard toolchain.schema == "TLCReferencePin" else {
+            throw CoreConformanceCLIError.invalidManifest("unsupported toolchain schema")
+        }
+        let architecture = try normalizedArchitecture()
+        guard let javaArchive = toolchain.java.archives[architecture] else {
+            throw CoreConformanceCLIError.invalidManifest("no locked archive for \(architecture)")
+        }
+        let referencePin = try referencePin(from: toolchain, javaArchive: javaArchive)
         let surface = try decode(
             CoreSupportSurface.self,
             at: governanceURL(
@@ -352,6 +371,7 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
         }
         report = try CoreSupportGate().evaluate(CoreSupportGateInput(
             gateRunID: options.gateRunID,
+            referencePin: referencePin,
             manifest: manifest,
             surface: surface,
             evidence: evidence,
