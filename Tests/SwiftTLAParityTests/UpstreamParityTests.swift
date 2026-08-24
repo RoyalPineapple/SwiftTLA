@@ -22,6 +22,21 @@ struct UpstreamParityTests {
         #expect(isSuccessful(result))
     }
 
+    @Test("NanoBlockchain direct formal model compiles without an unused chain operator")
+    func nanoBlockchainDirectFormalModelCompiles() throws {
+        let specification = NanoBlockchainModel.spec
+        #expect(specification.recursiveFuncs.isEmpty)
+        _ = try specification.compile()
+    }
+
+    @Test("SimpleAllocator binds each finite request through the three authored actions")
+    func simpleAllocatorUsesParameterizedActions() throws {
+        let specification = SimpleAllocatorModel.spec
+        #expect(specification.actions.map(\.name) == ["Request", "Allocate", "Return"])
+        #expect(specification.actions.allSatisfy { $0.bindings.map(\.values.count) == [3, 3] })
+        _ = try specification.compile()
+    }
+
     @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
     func nQueensMatchesTLC() throws {
         let result = try explore(Example.nQueensFour.spec, maximumStateLimit: 5_000)

@@ -1,106 +1,235 @@
 import SwiftTLA
-import SwiftTLAMacros
 
-@TLAModel
 public struct LamportMutexModel: Sendable {
+    public enum Node: Int, CaseIterable, FiniteDomainKey {
+        case one = 1
+        case two = 2
+
+        public static var defaultValue: Self { .one }
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.lamport-mutex.node")
+
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    public enum MessageKind: String, TLAValueType {
+        case request = "req"
+        case acknowledgement = "ack"
+        case release = "rel"
+
+        public static var defaultValue: Self { .request }
+    }
+
+    public struct MessageFields {
+        public let kind: MessageKind
+        public let clock: Int
+    }
+
+    public enum MessageSchema: TLARecordSchema {
+        public typealias Fields = MessageFields
+
+        public static let fieldNames: Set<String> = ["type", "clock"]
+        public static let defaultRecord: TLAValue = .record([
+            "type": MessageKind.request.tlaValue,
+            "clock": 0
+        ])
+
+        public static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
+            let key = field as AnyKeyPath
+            if key == \MessageFields.kind { return "type" }
+            if key == \MessageFields.clock { return "clock" }
+            return nil
+        }
+
+        public static let kind = field(\MessageFields.kind)
+        public static let clock = field(\MessageFields.clock)
+    }
+
+    private typealias Clock = Function<Node, Int>
+    private typealias Requests = Function<Node, Clock>
+    private typealias Acknowledgements = Function<Node, SetExpr<Node>>
+    private typealias MessageQueue = TupleExpr<Record<MessageSchema>>
+    private typealias NetworkPeers = Function<Node, MessageQueue>
+    private typealias Network = Function<Node, NetworkPeers>
+
     public static var spec: TLASpec {
-        let N = 2
-        let nodes = Array(1...N)
+        TLASpec("LamportMutex", scoped: specificationComponents)
+    }
 
-        func reqMsg(_ c: Int) -> StateExpr {
-            StateExpr.record(["type": .value(.string("req")), "clock": .value(.int(c))])
+    private static func requestMessage(_ clock: Expr<Int>) -> Expr<Record<MessageSchema>> {
+        Record<MessageSchema>.literal(
+            .init(MessageSchema.kind, .request),
+            .init(MessageSchema.clock, clock)
+        )
+    }
+
+    private static func acknowledgementMessage() -> Expr<Record<MessageSchema>> {
+        Record<MessageSchema>.literal(
+            .init(MessageSchema.kind, .acknowledgement),
+            .init(MessageSchema.clock, 0)
+        )
+    }
+
+    private static func releaseMessage() -> Expr<Record<MessageSchema>> {
+        Record<MessageSchema>.literal(
+            .init(MessageSchema.kind, .release),
+            .init(MessageSchema.clock, 0)
+        )
+    }
+
+    private static func queueHead(_ queue: Expr<MessageQueue>) -> Expr<Record<MessageSchema>> {
+        Expr(.tupleHead(queue.raw))
+    }
+
+    private static func queueTail(_ queue: Expr<MessageQueue>) -> Expr<MessageQueue> {
+        Expr(.tupleTail(queue.raw))
+    }
+
+    private static func specificationComponents(_ scope: SpecificationScope) -> [SpecComponent] {
+        let clock = scope.sharedVar("clock", initial: Clock.literal((.one, 1), (.two, 1)))
+        let noRequests = Clock.literal((.one, 0), (.two, 0))
+        let req = scope.sharedVar("req", initial: Requests.literal(
+            (.one, noRequests),
+            (.two, noRequests)
+        ))
+        let noAcknowledgements = SetExpr<Node>()
+        let ack = scope.sharedVar("ack", initial: Acknowledgements.literal(
+            (.one, noAcknowledgements),
+            (.two, noAcknowledgements)
+        ))
+        let emptyQueue = MessageQueue()
+        let noMessages = NetworkPeers.literal((.one, emptyQueue), (.two, emptyQueue))
+        let network = scope.sharedVar("network", initial: Network.literal(
+            (.one, noMessages),
+            (.two, noMessages)
+        ))
+        let crit = scope.sharedVar("crit", initial: SetExpr<Node>())
+
+        let mutex: SpecComponent = Invariant("Mutex") { crit.expr.cardinality <= 1 }
+        let boundedClock: SpecComponent = Constraint(clock[.one] <= 2 && clock[.two] <= 2)
+
+        let request: SpecComponent = Action("Request", parameters: [
+            ActionParameter("p", values: Node.finiteValues),
+            ActionParameter("q", values: Node.finiteValues)
+        ]) {
+            let p = Expr<Node>(.variable("p"))
+            let q = Expr<Node>(.variable("q"))
+            p != q
+                && req[p][p] == 0
+                && req.becomes(req.expr.updating(p, to: req[p].updating(p, to: clock[p])))
+                && network.becomes(network.expr.updating(
+                    p,
+                    to: network[p].updating(q, to: network[p][q].appending(requestMessage(Expr<Int>(p.raw))))
+                ))
+                && ack.becomes(ack.expr.updating(p, to: SetExpr<Node>.literal(p)))
+                && clock.stays && crit.stays
         }
-        let ackMsg: StateExpr = StateExpr.record(["type": .value(.string("ack")), "clock": .value(.int(0))])
-        let relMsg: StateExpr = StateExpr.record(["type": .value(.string("rel")), "clock": .value(.int(0))])
 
-        let dict: [TLAValue: TLAValue] = [
-            .int(1): TLAValue.function([.int(1): 0, .int(2): 0]),
-            .int(2): TLAValue.function([.int(1): 0, .int(2): 0])]
-
-        return #spec("LamportMutex") {
-            Extends(.integers)
-            let clock = Var<TLAValue>("clock")
-            let req = Var<TLAValue>("req")
-            let ack = Var<TLAValue>("ack")
-            let network = Var<TLAValue>("network")
-            let crit = Var<TLAValue>("crit")
-            Variable(clock, TLAValue.function([.int(1): 1, .int(2): 1]))
-            Variable(req, TLAValue.function(dict))
-            Variable(ack, TLAValue.function([.int(1): TLAValue.set([]), .int(2): TLAValue.set([])]))
-            Variable(network, TLAValue.function([
-                .int(1): TLAValue.function([.int(2): TLAValue.tuple([])]),
-                .int(2): TLAValue.function([.int(1): TLAValue.tuple([])])]))
-            Variable(crit, TLAValue.set([]))
-
-            Invariant("Mutex") { crit.stateExpr.cardinality <= 1 }
-            Constraint(clock.stateExpr.applying(1) <= 2 && clock.stateExpr.applying(2) <= 2)
-
-            for p in nodes {
-                let q = p == 1 ? 2 : 1
-                Action("Request_\(p)") {
-                    req.stateExpr.applying(p).applying(p) == 0
-                    && .assign(.named(req.name), req.stateExpr.updated(at: p,
-                        to: req.stateExpr.applying(p).updated(at: p, to: clock.stateExpr.applying(p))))
-                    && .assign(.named(network.name), network.stateExpr.updated(at: p,
-                        to: network.stateExpr.applying(p).updated(at: q,
-                            to: network.stateExpr.applying(p).applying(q).appending(reqMsg(p)))))
-                    && .assign(.named(ack.name), ack.stateExpr.updated(at: p, to: StateExpr.singleton(StateExpr.int(p))))
-                    && clock.stays && crit.stays
-                }
-                Action("ReceiveReq_\(p)_\(q)") {
-                    let m = network.stateExpr.applying(q).applying(p)
-                    m.count > 0 && StateExpr.recordAccess(m.head, "type") == "req"
-                    && .assign(.named(req.name), req.stateExpr.updated(at: p,
-                        to: req.stateExpr.applying(p).updated(at: q, to: StateExpr.recordAccess(m.head, "clock"))))
-                    && .assign(.named(clock.name), clock.stateExpr.updated(at: p,
-                        to: StateExpr.if(StateExpr.recordAccess(m.head, "clock") > clock.stateExpr.applying(p),
-                            then: StateExpr.recordAccess(m.head, "clock") + 1, else: clock.stateExpr.applying(p) + 1)))
-                    && .assign(.named(network.name), network.stateExpr
-                        .updated(at: q, to: network.stateExpr.applying(q).updated(at: p, to: m.tail))
-                        .updated(at: p, to: network.stateExpr.applying(p).updated(at: q,
-                            to: network.stateExpr.applying(p).applying(q).appending(ackMsg))))
-                    && ack.stays && crit.stays
-                }
-                Action("ReceiveAck_\(p)_\(q)") {
-                    let m = network.stateExpr.applying(q).applying(p)
-                    m.count > 0 && StateExpr.recordAccess(m.head, "type") == "ack"
-                    && .assign(.named(ack.name), ack.stateExpr.updated(at: p,
-                        to: ack.stateExpr.applying(p).union(StateExpr.singleton(StateExpr.int(q)))))
-                    && .assign(.named(network.name), network.stateExpr.updated(at: q,
-                        to: network.stateExpr.applying(q).updated(at: p, to: m.tail)))
-                    && clock.stays && req.stays && crit.stays
-                }
-                Action("Enter_\(p)") {
-                    ack.stateExpr.applying(p).cardinality == N
-                    && (req.stateExpr.applying(p).applying(q) == 0
-                        || req.stateExpr.applying(p).applying(p) < req.stateExpr.applying(p).applying(q)
-                        || (StateExpr.equal(req.stateExpr.applying(p).applying(p), req.stateExpr.applying(p).applying(q))
-                            && p < q))
-                    && .assign(.named(crit.name), crit.stateExpr.union(StateExpr.singleton(StateExpr.int(p))))
-                    && clock.stays && req.stays && ack.stays && network.stays
-                }
-                Action("Exit_\(p)") {
-                    StateExpr.in(StateExpr.value(.int(p)), StateExpr.variable("crit"))
-                    && .assign(.named(crit.name), .setDifference(crit.stateExpr, StateExpr.singleton(StateExpr.int(p))))
-                    && .assign(.named(network.name), network.stateExpr.updated(at: p,
-                        to: network.stateExpr.applying(p).updated(at: q,
-                            to: network.stateExpr.applying(p).applying(q).appending(relMsg))))
-                    && .assign(.named(req.name), req.stateExpr.updated(at: p,
-                        to: req.stateExpr.applying(p).updated(at: p, to: 0)))
-                    && .assign(.named(ack.name), ack.stateExpr.updated(at: p, to: StateExpr.setLiteral([])))
-                    && clock.stays
-                }
-                Action("ReceiveRel_\(p)_\(q)") {
-                    let m = network.stateExpr.applying(q).applying(p)
-                    m.count > 0 && StateExpr.recordAccess(m.head, "type") == "rel"
-                    && .assign(.named(req.name), req.stateExpr.updated(at: p,
-                        to: req.stateExpr.applying(p).updated(at: q, to: 0)))
-                    && .assign(.named(network.name), network.stateExpr.updated(at: q,
-                        to: network.stateExpr.applying(q).updated(at: p, to: m.tail)))
-                    && clock.stays && ack.stays && crit.stays
-                }
-            }
+        let receiveRequest: SpecComponent = Action("ReceiveReq", parameters: [
+            ActionParameter("p", values: Node.finiteValues),
+            ActionParameter("q", values: Node.finiteValues)
+        ]) {
+            let p = Expr<Node>(.variable("p"))
+            let q = Expr<Node>(.variable("q"))
+            let messages = network[q][p]
+            let message = queueHead(messages)
+            p != q
+                && messages.count > 0
+                && message[MessageSchema.kind] == .request
+                && req.becomes(req.expr.updating(p, to: req[p].updating(q, to: message[MessageSchema.clock])))
+                && clock.becomes(clock.expr.updating(
+                    p,
+                    to: If(
+                        message[MessageSchema.clock] > clock[p],
+                        then: message[MessageSchema.clock] + 1,
+                        else: clock[p] + 1
+                    )
+                ))
+                && network.becomes(network.expr
+                    .updating(q, to: network[q].updating(p, to: queueTail(messages)))
+                    .updating(p, to: network[p].updating(q, to: network[p][q].appending(acknowledgementMessage())))
+                )
+                && ack.stays && crit.stays
         }
+
+        let receiveAcknowledgement: SpecComponent = Action("ReceiveAck", parameters: [
+            ActionParameter("p", values: Node.finiteValues),
+            ActionParameter("q", values: Node.finiteValues)
+        ]) {
+            let p = Expr<Node>(.variable("p"))
+            let q = Expr<Node>(.variable("q"))
+            let messages = network[q][p]
+            let message = queueHead(messages)
+            p != q
+                && messages.count > 0
+                && message[MessageSchema.kind] == .acknowledgement
+                && ack.becomes(ack.expr.updating(p, to: ack[p].inserting(q)))
+                && network.becomes(network.expr.updating(q, to: network[q].updating(p, to: queueTail(messages))))
+                && clock.stays && req.stays && crit.stays
+        }
+
+        let enter: SpecComponent = Action("Enter", parameters: [
+            ActionParameter("p", values: Node.finiteValues),
+            ActionParameter("q", values: Node.finiteValues)
+        ]) {
+            let p = Expr<Node>(.variable("p"))
+            let q = Expr<Node>(.variable("q"))
+            p != q
+                && ack[p].cardinality == 2
+                && (
+                    req[p][q] == 0
+                        || req[p][p] < req[p][q]
+                        || (req[p][p] == req[p][q] && p < q)
+                )
+                && crit.becomes(crit.expr.inserting(p))
+                && clock.stays && req.stays && ack.stays && network.stays
+        }
+
+        let exit: SpecComponent = Action("Exit", parameters: [
+            ActionParameter("p", values: Node.finiteValues),
+            ActionParameter("q", values: Node.finiteValues)
+        ]) {
+            let p = Expr<Node>(.variable("p"))
+            let q = Expr<Node>(.variable("q"))
+            p != q
+                && crit.expr.contains(p)
+                && crit.becomes(crit.expr.removing(p))
+                && network.becomes(network.expr.updating(
+                    p,
+                    to: network[p].updating(q, to: network[p][q].appending(releaseMessage()))
+                ))
+                && req.becomes(req.expr.updating(p, to: req[p].updating(p, to: 0)))
+                && ack.becomes(ack.expr.updating(p, to: SetExpr<Node>()))
+                && clock.stays
+        }
+
+        let receiveRelease: SpecComponent = Action("ReceiveRel", parameters: [
+            ActionParameter("p", values: Node.finiteValues),
+            ActionParameter("q", values: Node.finiteValues)
+        ]) {
+            let p = Expr<Node>(.variable("p"))
+            let q = Expr<Node>(.variable("q"))
+            let messages = network[q][p]
+            let message = queueHead(messages)
+            p != q
+                && messages.count > 0
+                && message[MessageSchema.kind] == .release
+                && req.becomes(req.expr.updating(p, to: req[p].updating(q, to: 0)))
+                && network.becomes(network.expr.updating(q, to: network[q].updating(p, to: queueTail(messages))))
+                && clock.stays && ack.stays && crit.stays
+        }
+
+        return [
+            Extends(.integers),
+            mutex,
+            boundedClock,
+            request,
+            receiveRequest,
+            receiveAcknowledgement,
+            enter,
+            exit,
+            receiveRelease
+        ]
     }
 }
 
@@ -112,6 +241,6 @@ extension Example {
         upstreamCfg: "specifications/lamport_mutex/MCLamportMutex.cfg",
         expectedDistinct: 19,
         spec: LamportMutexModel.spec,
-        notes: "N=2, maxClock=2. Nested functions + sequences + @ self-ref. Constraint bounds clocks.",
+        notes: "N=2, maxClock=2. Typed finite nodes, records, functions, and parameterized actions.",
     )
 }

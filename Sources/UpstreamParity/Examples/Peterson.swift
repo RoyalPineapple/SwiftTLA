@@ -41,7 +41,7 @@ public struct PetersonModel: Sendable {
                         Skip()
                     }
                     Do(Step.a1) {
-                        Assign(c, to: c.stateExpr.updated(at: process, to: true))
+                        Assign(c, to: c.updating(process, to: true))
                     }
                     Do(Step.a2) {
                         Assign(turn, to: If(
@@ -63,7 +63,7 @@ public struct PetersonModel: Sendable {
                         Skip()
                     }
                     Do(Step.a4) {
-                        Assign(c, to: c.stateExpr.updated(at: process, to: false))
+                        Assign(c, to: c.updating(process, to: false))
                         Goto(Step.a0)
                     }
                 }

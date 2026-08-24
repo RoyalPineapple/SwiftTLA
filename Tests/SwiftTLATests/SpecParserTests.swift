@@ -122,6 +122,214 @@ private func parserEnum(
         #expect(surface.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
     }
 
+    @Test("Algorithm parser carries prior shared bindings into mapping initializers")
+    func parsesScopedSharedBindingInMappingInitializer() throws {
+        let source = """
+        {
+            Algorithm("MappingScope", scoped: { scope in
+                let enabled = scope.sharedVar("enabled", initial: true)
+                let values = scope.sharedVar("values", initial: Function<Node, Int>.mapping { _ in
+                    If(enabled == true, then: 1, else: 0)
+                })
+                Do(TestControlLabel.done) { Stop() }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "MappingScope").spec.variables.map(\.name) == ["pc", "enabled", "values"])
+    }
+
+    @Test("Algorithm parser carries shared bindings into Each bodies")
+    func parsesScopedSharedBindingInEachBody() throws {
+        let source = """
+        {
+            Algorithm("EachScope", scoped: { scope in
+                let enabled = scope.sharedVar("enabled", initial: true)
+                Each(Node.all) { _ in
+                    Do(TestControlLabel.step) {
+                        Await(enabled == true)
+                        Stop()
+                    }
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "EachScope").spec.actions.map(\.name) == ["step", "Terminating"])
+    }
+
+    @Test("Algorithm parser carries shared bindings into macro declarations")
+    func parsesScopedSharedBindingInMacroDeclaration() throws {
+        let source = """
+        {
+            Algorithm("MacroScope", scoped: { scope in
+                let enabled = scope.sharedVar("enabled", initial: true)
+                let waitUntilEnabled = Macro { (value: MacroParameter<Bool>) in
+                    Await(enabled == value.expr)
+                }
+                Do(TestControlLabel.step) { waitUntilEnabled(enabled) }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "MacroScope").spec.actions.map(\.name) == ["step", "Terminating"])
+    }
+
+    @Test("Algorithm parser resolves enum cases through lexical and declared type scope")
+    func parsesScopedEnumCases() throws {
+        let source = """
+        {
+            Algorithm("EnumScope", scoped: { scope in
+                let phases = scope.sharedVar("phases", initial: Function<Node, Phase>.mapping { node in
+                    If(node == Node.one, then: .ready, else: .done)
+                })
+                Each(Worker.all, scoped: { _, scope in
+                    let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
+                    Do(TestControlLabel.step) {
+                        Await(phases[current] == .ready)
+                        Stop()
+                    }
+                })
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [
+                parserEnum(
+                    "Node",
+                    cases: ["one": .string("n1"), "two": .string("n2")],
+                    formalDomain: [.string("n1"), .string("n2")]
+                ),
+                parserEnum(
+                    "Worker",
+                    cases: ["one": .string("w1")],
+                    formalDomain: [.string("w1")]
+                ),
+                parserEnum(
+                    "Phase",
+                    cases: ["ready": .string("ready"), "done": .string("done")]
+                )
+            ]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        _ = try compile(parsed, named: "EnumScope")
+    }
+
+    @Test("Algorithm parser lowers tuple append inside a lexical binding")
+    func parsesTupleAppendInLet() throws {
+        let source = """
+        {
+            Algorithm("TupleAppend", scoped: { scope in
+                let values = scope.sharedVar("values", initial: TupleExpr<Int>())
+                Do(TestControlLabel.step) {
+                    Let(values.expr.appending(1)) { extended in
+                        Assert(extended.expr.count == 1)
+                    }
+                    Stop()
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        _ = try compile(parsed, named: "TupleAppend")
+    }
+
+    @Test("Algorithm parser lowers tuple count from its bound value type")
+    func parsesTupleCount() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            Algorithm("TupleCount", scoped: { scope in
+                let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2))
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.step) {
+                    Assign(count, to: values.count)
+                    Stop()
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "TupleCount").renderedTLAModuleBundle().tla
+        #expect(module.contains("Len(values)"))
+    }
+
+    @Test("Algorithm parser lowers zero-based sequence count through its domain")
+    func parsesZeroBasedSequenceCount() throws {
+        let source = """
+        {
+            Algorithm("ZeroBasedCount", scoped: { scope in
+                let input = scope.sharedVar("input", in: ZeroBasedSequences(
+                    of: SetExpr<Int>.literal(1, 2),
+                    lengths: 1...2
+                ))
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.step) {
+                    Assign(count, to: input.count)
+                    Stop()
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "ZeroBasedCount").renderedTLAModuleBundle().tla
+        #expect(module.contains("Cardinality(DOMAIN input)"))
+        #expect(!module.contains("Len(input)"))
+    }
+
+    @Test("Algorithm parser preserves tuple type through With and quantifier bindings")
+    func parsesBoundTupleCounts() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            Algorithm("BoundTupleCount", scoped: { scope in
+                let pending = scope.sharedVar(
+                    "pending",
+                    initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
+                )
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.step) {
+                    With(pending) { tuple in
+                        Assign(count, to: tuple.expr.count)
+                    }
+                    Stop()
+                }
+                Invariant("TupleLengths") {
+                    ForAll(in: pending.expr) { tuple in
+                        tuple.expr.count == 1
+                    }
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "BoundTupleCount").renderedTLAModuleBundle().tla
+        #expect(module.contains("Len(__pcal_with)"))
+        #expect(module.contains("Len(tuple)"))
+    }
+
     @Test("Specification parser binds a typed local algorithm component")
     func bindsTypedLocalAlgorithmComponent() throws {
         let source = """
@@ -805,6 +1013,39 @@ private func parserEnum(
         let successorsID = try #require(compilation.layout.variableID(named: successors.name))
         #expect(parsed.machineSurfaceSwiftFacts(for: compilation).variableTypes[successorsID] == "Function<Node, SetExpr<Node>>")
         #expect(successors.initialSet?.description.contains("Cardinality") == true)
+    }
+
+    @Test("Algorithm parser decodes scoped function-set invariants")
+    func parsesScopedFunctionSetInvariant() throws {
+        let source = """
+        {
+            Algorithm("FunctionSetInvariant", scoped: { scope in
+                let values = scope.sharedVar("values", initial: Function<Node, Int>.mapping { _ in 0 })
+                let grouped = scope.sharedVar("grouped", initial: Function<Node, SetExpr<Node>>.mapping { _ in SetExpr<Node>() })
+                let members = scope.sharedVar("members", initial: SetExpr<Node>())
+                Do(TestControlLabel.done) { Stop() }
+                Invariant("TypeOK") {
+                    Functions(from: Node.all, to: SetExpr<Int>.literal(0, 1)).contains(values.expr)
+                        && members.isSubset(of: SetExpr<Node>.literal(.only))
+                        && Functions(
+                            from: Node.all,
+                            to: Subsets(of: SetExpr<Node>.literal(.only))
+                        ).contains(grouped.expr)
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(
+            try parseClosure(source),
+            enumDefinitions: [parserEnum(
+                "Node",
+                cases: ["only": .string("only")],
+                formalDomain: [.string("only")]
+            )]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try compile(parsed, named: "FunctionSetInvariant").spec.invariants.map(\.name) == ["TypeOK"])
     }
 
     @Test("parser retains a typed record-valued function comprehension")

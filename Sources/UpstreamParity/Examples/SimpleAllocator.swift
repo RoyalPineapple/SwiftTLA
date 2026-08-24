@@ -1,68 +1,95 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAModel
 public struct SimpleAllocatorModel: Sendable {
-    public static var spec: TLASpec {
-        let clients = ["c1", "c2", "c3"]
-        let nonemptySubsets: [TLAValue] = [
-            .set([.string("r1")]),
-            .set([.string("r2")]),
-            .set([.string("r1"), .string("r2")])
-        ]
-        let emptyFun = TLAValue.function([
-            .string("c1"): .set([]),
-            .string("c2"): .set([]),
-            .string("c3"): .set([])
-        ])
+    public enum Client: String, CaseIterable, FiniteTLAValueDomain {
+        case c1, c2, c3
 
-        func allocOf(_ c: String) -> StateExpr {
-            .functionApply(.variable("alloc"), .value(.string(c)))
+        public static var defaultValue: Self { .c1 }
+        public static let finiteValues = allCases
+    }
+
+    public enum Resource: String, CaseIterable, FiniteTLAValueDomain {
+        case r1, r2
+
+        public static var defaultValue: Self { .r1 }
+        public static let finiteValues = allCases
+    }
+
+    private enum RequestedResources: CaseIterable, FiniteTLAValueDomain {
+        case r1, r2, both
+
+        static var defaultValue: Self { .r1 }
+        static let finiteValues = allCases
+
+        var tlaValue: TLAValue {
+            switch self {
+            case .r1: SetExpr<Resource>(.r1).tlaValue
+            case .r2: SetExpr<Resource>(.r2).tlaValue
+            case .both: SetExpr<Resource>(.r1, .r2).tlaValue
+            }
         }
-        func unsatOf(_ c: String) -> StateExpr {
-            .functionApply(.variable("unsat"), .value(.string(c)))
+
+        init?(formalValue: TLAValue) {
+            switch formalValue {
+            case SetExpr<Resource>(.r1).tlaValue: self = .r1
+            case SetExpr<Resource>(.r2).tlaValue: self = .r2
+            case SetExpr<Resource>(.r1, .r2).tlaValue: self = .both
+            default: return nil
+            }
         }
-        let resources: StateExpr = .setLiteral([
-            .value(.string("r1")), .value(.string("r2"))
-        ])
-        let available = resources.subtracting(
-            allocOf("c1").union(allocOf("c2")).union(allocOf("c3"))
+    }
+
+    public static var spec: TLASpec {
+        let unsat = Var<Function<Client, SetExpr<Resource>>>("unsat")
+        let alloc = Var<Function<Client, SetExpr<Resource>>>("alloc")
+        let client = Expr<Client>(.variable("client"))
+        let resources = Expr<SetExpr<Resource>>(.variable("resources"))
+        let emptyAllocation = Function<Client, SetExpr<Resource>>.literal(
+            (.c1, SetExpr<Resource>()),
+            (.c2, SetExpr<Resource>()),
+            (.c3, SetExpr<Resource>())
+        )
+        let available = SetExpr<Resource>.literal(.r1, .r2).raw.subtracting(
+            alloc[.c1].raw.union(alloc[.c2]).union(alloc[.c3])
         )
 
         return #spec("SimpleAllocator") {
             Extends(.integers, .finiteSets)
-            let unsat = Var<TLAValue>("unsat")
-            let alloc = Var<TLAValue>("alloc")
-            Variable(unsat, emptyFun)
-            Variable(alloc, emptyFun)
+            Variable(computed: unsat) { emptyAllocation.raw }
+            Variable(computed: alloc) { emptyAllocation.raw }
 
-            for c in clients {
-                for (si, sVal) in nonemptySubsets.enumerated() {
-                    let subset = StateExpr.value(sVal)
-                    Action("Request_\(c)_S\(si)") {
-                        unsatOf(c).cardinality == 0 && allocOf(c).cardinality == 0
-                            && .assign(.named(unsat.name), unsat.stateExpr.updated(at: c, to: subset))
-                    }
-                    Action("Allocate_\(c)_S\(si)") {
-                        subset.cardinality > 0
-                            && subset.isSubset(of: available.intersection(unsatOf(c)))
-                            && .assign(.named(alloc.name), alloc.stateExpr.updated(at: c, to: allocOf(c).union(subset)))
-                            && .assign(.named(unsat.name), unsat.stateExpr.updated(at: c, to: unsatOf(c).subtracting(subset)))
-                    }
-                    Action("Return_\(c)_S\(si)") {
-                        subset.cardinality > 0 && subset.isSubset(of: allocOf(c))
-                            && .assign(.named(alloc.name), alloc.stateExpr.updated(at: c, to: allocOf(c).subtracting(subset)))
-                    }
-                }
+            Action("Request", parameters: [
+                ActionParameter("client", values: Client.finiteValues),
+                ActionParameter("resources", values: RequestedResources.finiteValues)
+            ]) {
+                unsat[client].isEmpty && alloc[client].isEmpty
+                    && unsat.becomes(unsat.updating(client, to: resources))
+            }
+            Action("Allocate", parameters: [
+                ActionParameter("client", values: Client.finiteValues),
+                ActionParameter("resources", values: RequestedResources.finiteValues)
+            ]) {
+                resources.cardinality > 0
+                    && resources.isSubset(of: available.intersection(unsat[client]))
+                    && alloc.becomes(alloc.updating(client, to: alloc[client].union(resources)))
+                    && unsat.becomes(unsat.updating(client, to: unsat[client].raw.subtracting(resources)))
+            }
+            Action("Return", parameters: [
+                ActionParameter("client", values: Client.finiteValues),
+                ActionParameter("resources", values: RequestedResources.finiteValues)
+            ]) {
+                resources.cardinality > 0 && resources.isSubset(of: alloc[client])
+                    && alloc.becomes(alloc.updating(client, to: alloc[client].raw.subtracting(resources)))
             }
 
             Invariant("TypeInvariant") {
-                unsatOf("c1").cardinality >= 0
+                unsat[.c1].cardinality >= 0
             }
             Invariant("ResourceMutex") {
-                allocOf("c1").intersection(allocOf("c2")).cardinality == 0
-                    && allocOf("c1").intersection(allocOf("c3")).cardinality == 0
-                    && allocOf("c2").intersection(allocOf("c3")).cardinality == 0
+                alloc[.c1].intersection(alloc[.c2]).cardinality == 0
+                    && alloc[.c1].intersection(alloc[.c3]).cardinality == 0
+                    && alloc[.c2].intersection(alloc[.c3]).cardinality == 0
             }
         }
     }

@@ -1,7 +1,6 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAModel
 public struct NanoBlockchainModel: Sendable {
     public static var spec: TLASpec {
         let nodes = ["n1", "n2"]
@@ -25,19 +24,6 @@ public struct NanoBlockchainModel: Sendable {
             Variable(lastHash, "NoHash")
             Variable(distributedLedger, initDL)
             Variable(received, initRecv)
-
-            DefineRecursive("PublicKeyOf", params: ["led", "h"]) {
-                let ledger = StateExpr.variable("led")
-                let blockHash = StateExpr.variable("h")
-                let sb = ledger.applying(blockHash)
-                let blk = StateExpr.recordAccess(sb, "block")
-                let btype = StateExpr.recordAccess(blk, "type")
-                StateExpr.ifThenElse(
-                    btype == "genesis" || btype == "open",
-                    StateExpr.recordAccess(blk, "account"),
-                    StateExpr.recursiveCall("PublicKeyOf",
-                        [ledger, StateExpr.recordAccess(blk, "previous")]))
-            }
 
             Invariant("TypeInvariant") {
                 StateExpr.in(lastHash.stateExpr, .setLiteral(
@@ -103,6 +89,6 @@ extension Example {
         upstreamCfg: "specifications/NanoBlockchain/MCNanoSmall.cfg",
         expectedDistinct: 24577,
         spec: NanoBlockchainModel.spec,
-        notes: "2 nodes, 3 hashes. Genesis + Create + Process blocks. DefineRecursive for chain walking.",
+        notes: "2 nodes, 3 hashes. Genesis and CreateSend transitions.",
     )
 }
