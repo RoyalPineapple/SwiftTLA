@@ -318,12 +318,13 @@ extension ParserSession {
             }
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let component = parseAlgorithmVariableDeclaration(
+               let parsedVariable = parseAlgorithmVariableDeclaration(
                     variable,
                     kind: .shared,
                     scope: sourceScope,
                     declarationScope: declarationScope
                ) {
+                let component = parsedVariable.component
                 components.append(component)
                 if case .shared(let state) = component,
                    state.isTuple {
@@ -333,7 +334,8 @@ extension ParserSession {
                     sourceScope = typedFacadeScope(
                         sourceScope,
                         binding: state.root,
-                        to: .variable(state.root)
+                        to: .variable(state.root),
+                        shape: parsedVariable.shape
                     )
                 }
                 continue
@@ -523,18 +525,19 @@ extension ParserSession {
         for item in closure.statements {
             if case .decl(let declaration) = item.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let component = parseAlgorithmVariableDeclaration(
+               let parsedVariable = parseAlgorithmVariableDeclaration(
                     variable,
                     kind: .local,
                     scope: procedureScope,
                     declarationScope: declarationScope
                ),
-               case .local(let local) = component {
-                components.append(component)
+               case .local(let local) = parsedVariable.component {
+                components.append(parsedVariable.component)
                 procedureScope = typedFacadeScope(
                     procedureScope,
                     binding: local.root,
-                    to: .variable(local.root)
+                    to: .variable(local.root),
+                    shape: parsedVariable.shape
                 )
                 continue
             }
@@ -707,13 +710,13 @@ extension ParserSession {
         for (index, statement) in closure.statements.enumerated() {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let component = parseAlgorithmVariableDeclaration(
+               let parsedVariable = parseAlgorithmVariableDeclaration(
                     variable,
                     kind: .local,
                     scope: processScope,
                     declarationScope: declarationScope
                ) {
-                guard case .local(let state) = component else { return nil }
+                guard case .local(let state) = parsedVariable.component else { return nil }
                 components.append(.local(.init(
                     root: state.root,
                     initial: state.initial,
@@ -723,7 +726,8 @@ extension ParserSession {
                 processScope = typedFacadeScope(
                     processScope,
                     binding: state.root,
-                    to: .variable(state.root)
+                    to: .variable(state.root),
+                    shape: parsedVariable.shape
                 )
                 continue
             }
@@ -783,7 +787,7 @@ extension ParserSession {
         kind: AlgorithmStateDeclarationKind,
         scope: TypedFacadeScope = .empty,
         declarationScope: String? = nil
-    ) -> AlgorithmComponentModel? {
+    ) -> (component: AlgorithmComponentModel, shape: TypedFacadeValueShape?)? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
               let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
@@ -803,6 +807,7 @@ extension ParserSession {
             ? declaredType?.genericArgumentClause?.arguments.first.flatMap { Self.terminalTypeName($0.argument) }
             : nil
         let state: AlgorithmStateModel
+        let shape: TypedFacadeValueShape?
         if let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
            let initial = decodeTypedFacadeValue(
                initialSyntax,
@@ -815,6 +820,7 @@ extension ParserSession {
                 swiftTypeName: algorithmInitialTypeName(initialSyntax),
                 isTuple: isTupleInitialValue(initialSyntax)
             )
+            shape = typedFacadeValueShape(initialSyntax, scope: scope)
         } else if kind == .local,
                   let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
                   let emptySet = initialSyntax.as(FunctionCallExprSyntax.self),
@@ -828,6 +834,7 @@ extension ParserSession {
                 initial: .value(.set([])),
                 swiftTypeName: "SetExpr<\(typeName)>"
             )
+            shape = typedFacadeValueShape(initialSyntax, scope: scope)
         } else if kind == .shared,
                   let rangeSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
                   let range = parseIntegerClosedRange(rangeSyntax) {
@@ -837,6 +844,7 @@ extension ParserSession {
                 initialSet: .setLiteral(range.map { .value(.int($0)) }),
                 swiftTypeName: "Int"
             )
+            shape = nil
         } else if kind == .shared,
                   let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
             guard let initialSet = decodeStateExpr(setSyntax),
@@ -856,11 +864,13 @@ extension ParserSession {
                 initialSet: initialSet,
                 swiftTypeName: typeName
             )
+            shape = typedFacadeValueShape(setSyntax, scope: scope)?.selectedElement
         } else {
             algorithmParseFailure = "\(kind.sourceName) declaration must use an explicit initial value or finite domain."
             return nil
         }
-        return kind == .shared ? .shared(state) : .local(state)
+        let component: AlgorithmComponentModel = kind == .shared ? .shared(state) : .local(state)
+        return (component, shape)
     }
 
     private func parseAlgorithmMacroDeclaration(
@@ -1209,6 +1219,9 @@ extension ParserSession {
             else { return nil }
             let sources = call.arguments.compactMap { algorithmWithSource($0.expression, scope: scope) }
             guard sources.count == call.arguments.count else { return nil }
+            let selectedShapes = call.arguments.map {
+                typedFacadeValueShape($0.expression, scope: scope)?.selectedElement
+            }
             let bindings = closureParameterNames(in: closure)
             switch (sources.count, bindings.count) {
             case (1, 1):
@@ -1217,7 +1230,12 @@ extension ParserSession {
                     closure.statements,
                     processParameter: processParameter,
                     macros: macros,
-                    scope: typedFacadeScope(scope, binding: bindings[0], to: .variable(replacement))
+                    scope: typedFacadeScope(
+                        scope,
+                        binding: bindings[0],
+                        to: .variable(replacement),
+                        shape: selectedShapes[0]
+                    )
                 ) else { return nil }
                 return .with(
                     variable: replacement,
@@ -1270,12 +1288,15 @@ extension ParserSession {
                         + "Next safe action: use independent With sources or a Pair."
                     return nil
                 }
-                let boundScope = typedFacadeScope(
-                    scope,
-                    bindings: bindings.enumerated().map { index, binding in
-                        (sourceName: binding, value: .variable("__pcal_with_\(index)"))
-                    }
-                )
+                var boundScope = scope
+                for (index, binding) in bindings.enumerated() {
+                    boundScope = typedFacadeScope(
+                        boundScope,
+                        binding: binding,
+                        to: .variable("__pcal_with_\(index)"),
+                        shape: selectedShapes[index]
+                    )
+                }
                 guard var boundBody = parseAlgorithmStatements(
                     closure.statements,
                     processParameter: processParameter,

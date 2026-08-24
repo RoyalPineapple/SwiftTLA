@@ -250,6 +250,86 @@ private func parserEnum(
         _ = try compile(parsed, named: "TupleAppend")
     }
 
+    @Test("Algorithm parser lowers tuple count from its bound value type")
+    func parsesTupleCount() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            Algorithm("TupleCount", scoped: { scope in
+                let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2))
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.step) {
+                    Assign(count, to: values.count)
+                    Stop()
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "TupleCount").renderedTLAModuleBundle().tla
+        #expect(module.contains("Len(values)"))
+    }
+
+    @Test("Algorithm parser lowers zero-based sequence count through its domain")
+    func parsesZeroBasedSequenceCount() throws {
+        let source = """
+        {
+            Algorithm("ZeroBasedCount", scoped: { scope in
+                let input = scope.sharedVar("input", in: ZeroBasedSequences(
+                    of: SetExpr<Int>.literal(1, 2),
+                    lengths: 1...2
+                ))
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.step) {
+                    Assign(count, to: input.count)
+                    Stop()
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "ZeroBasedCount").renderedTLAModuleBundle().tla
+        #expect(module.contains("Cardinality(DOMAIN input)"))
+        #expect(!module.contains("Len(input)"))
+    }
+
+    @Test("Algorithm parser preserves tuple type through With and quantifier bindings")
+    func parsesBoundTupleCounts() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            Algorithm("BoundTupleCount", scoped: { scope in
+                let pending = scope.sharedVar(
+                    "pending",
+                    initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
+                )
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.step) {
+                    With(pending) { tuple in
+                        Assign(count, to: tuple.expr.count)
+                    }
+                    Stop()
+                }
+                Invariant("TupleLengths") {
+                    ForAll(in: pending.expr) { tuple in
+                        tuple.expr.count == 1
+                    }
+                }
+            })
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "BoundTupleCount").renderedTLAModuleBundle().tla
+        #expect(module.contains("Len(__pcal_with)"))
+        #expect(module.contains("Len(tuple)"))
+    }
+
     @Test("Specification parser binds a typed local algorithm component")
     func bindsTypedLocalAlgorithmComponent() throws {
         let source = """

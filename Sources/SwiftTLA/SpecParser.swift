@@ -23,11 +23,23 @@ public struct ParserEnumDefinition: Sendable {
 }
 
 public final class ParserSession {
+    indirect enum TypedFacadeValueShape: Sendable {
+        case tuple
+        case zeroBasedSequence
+        case set(TypedFacadeValueShape)
+
+        var selectedElement: TypedFacadeValueShape? {
+            guard case .set(let element) = self else { return nil }
+            return element
+        }
+    }
+
     /// The lexical bindings visible while decoding one typed facade expression.
     struct TypedFacadeScope: Sendable {
         private struct Binding: Sendable {
             let sourceName: String
             let value: StateExpr
+            let shape: TypedFacadeValueShape?
         }
 
         static let empty = Self(bindings: [])
@@ -44,12 +56,24 @@ public final class ParserSession {
             bindings.last(where: { $0.sourceName == reference.baseName.text })?.value
         }
 
+        func shape(for reference: DeclReferenceExprSyntax) -> TypedFacadeValueShape? {
+            bindings.last(where: { $0.sourceName == reference.baseName.text })?.shape
+        }
+
         func extending(
             _ bindings: [(sourceName: String, value: StateExpr)]
         ) -> Self {
             Self(bindings: self.bindings + bindings.map {
-                Binding(sourceName: $0.sourceName, value: $0.value)
+                Binding(sourceName: $0.sourceName, value: $0.value, shape: nil)
             })
+        }
+
+        func extending(
+            sourceName: String,
+            value: StateExpr,
+            shape: TypedFacadeValueShape?
+        ) -> Self {
+            Self(bindings: bindings + [Binding(sourceName: sourceName, value: value, shape: shape)])
         }
 
     }
@@ -57,9 +81,10 @@ public final class ParserSession {
     func typedFacadeScope(
         _ scope: TypedFacadeScope,
         binding sourceName: String,
-        to value: StateExpr
+        to value: StateExpr,
+        shape: TypedFacadeValueShape? = nil
     ) -> TypedFacadeScope {
-        scope.extending([(sourceName: sourceName, value: value)])
+        scope.extending(sourceName: sourceName, value: value, shape: shape)
     }
 
     func typedFacadeScope(
@@ -697,7 +722,12 @@ public final class ParserSession {
            closureParameterNames(in: closure).count == 1,
            let predicate = decodeTypedFacadeValue(
             predicateSyntax,
-            scope: typedFacadeScope(scope, binding: parameter, to: .variable(parameter))
+            scope: typedFacadeScope(
+                scope,
+                binding: parameter,
+                to: .variable(parameter),
+                shape: typedFacadeValueShape(domainSyntax, scope: scope)?.selectedElement
+            )
            ) {
             return name == "Exists" ? .exists(domain, parameter, predicate) : .forAll(domain, parameter, predicate)
         }
@@ -863,6 +893,12 @@ public final class ParserSession {
            let base = decodeTypedFacadeValue(baseSyntax, scope: scope) {
             switch member.declName.baseName.text {
             case "raw", "stateExpr", "expr": return base
+            case "count":
+                switch typedFacadeValueShape(baseSyntax, scope: scope) {
+                case .tuple: return .tupleLength(base)
+                case .zeroBasedSequence: return .cardinality(.domain(base))
+                default: return nil
+                }
             case "cardinality": return .cardinality(base)
             case "range":
                 return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
@@ -1221,6 +1257,64 @@ public final class ParserSession {
             guard renderedArguments.count == arguments.count else { return nil }
             return "\(name)<\(renderedArguments.joined(separator: ", "))>"
         }
+    }
+
+    func typedFacadeValueShape(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope
+    ) -> TypedFacadeValueShape? {
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            return scope.shape(for: reference)
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           ["expr", "raw", "stateExpr"].contains(member.declName.baseName.text),
+           let base = member.base {
+            return typedFacadeValueShape(base, scope: scope)
+        }
+        guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+            switch reference.baseName.text {
+            case "Sequences", "SortedSequences": return .set(.tuple)
+            case "ZeroBasedSequences": return .set(.zeroBasedSequence)
+            default: break
+            }
+        }
+        if let type = typedFacadeType(call.calledExpression) {
+            return typedFacadeValueShape(type)
+        }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let type = typedFacadeType(member.base) {
+            return typedFacadeValueShape(type)
+        }
+        return nil
+    }
+
+    private func typedFacadeValueShape(_ type: TypedFacadeType) -> TypedFacadeValueShape? {
+        switch type.name {
+        case "TupleExpr": return .tuple
+        case "ZeroBasedSequence": return .zeroBasedSequence
+        case "SetExpr":
+            guard let argument = type.argument(at: 0),
+                  let element = typedFacadeValueShape(argument)
+            else { return nil }
+            return .set(element)
+        default: return nil
+        }
+    }
+
+    private func typedFacadeValueShape(_ type: TypeSyntax) -> TypedFacadeValueShape? {
+        let name: String
+        let arguments: [TypeSyntax]
+        if let identifier = type.as(IdentifierTypeSyntax.self) {
+            name = identifier.name.text
+            arguments = identifier.genericArgumentClause?.arguments.map(\.argument) ?? []
+        } else if let member = type.as(MemberTypeSyntax.self) {
+            name = member.name.text
+            arguments = member.genericArgumentClause?.arguments.map(\.argument) ?? []
+        } else {
+            return nil
+        }
+        return typedFacadeValueShape(.init(name: name, arguments: arguments))
     }
 
     /// Preserves a supported type's Swift spelling for generated Swift output.
