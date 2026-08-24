@@ -294,47 +294,28 @@ struct NestedAdapterConcurrencyTests {
     func nestedActorSharesCanonicalExecution() async throws {
         let actorLabel: NestedComposedCounter.Actor.Action = .advance
         var model = try NestedComposedCounter.makeMachine()
-        let live = try NestedComposedCounter.makeLive()
-        let actor = NestedComposedCounter.Actor(live: live)
+        let actor = try NestedComposedCounter.Actor()
 
         let expectedBefore = model.state
         #expect(actorLabel == .advance)
         #expect(expectedBefore.count == 0)
 
         let expected = try model.send(.advance)
-        let acted = try committed(try await actor.send(.advance))
+        let acted = try await actor.send(.advance)
 
         #expect(acted.before == expected.before)
         #expect(acted.after == expected.after)
-        #expect(try await actorState(actor).count == 1)
+        #expect((await actor.state).count == 1)
     }
 
     @Test("Nested actor commits overlapping executions without stale write-back")
     func nestedActorExecutesOverlappingTransitionsAtomically() async throws {
-        let actor = NestedComposedCounter.Actor(live: try NestedComposedCounter.makeLive())
+        let actor = try NestedComposedCounter.Actor()
         async let first = actor.send(.advance)
         async let second = actor.send(.advance)
         _ = try await (first, second)
 
-        #expect(try await actorState(actor).count == 2)
-    }
-
-    private func committed(
-        _ outcome: NestedComposedCounter.Live.Outcome
-    ) throws -> NestedComposedCounter.Transition {
-        switch outcome {
-        case .committed(let result): return result
-        case .rejected, .failed: throw GeneratedMachineError.noMatchingSuccessor
-        }
-    }
-
-    private func actorState(
-        _ actor: NestedComposedCounter.Actor
-    ) async throws -> NestedComposedCounter.State {
-        switch try await actor.current() {
-        case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
-        }
+        #expect((await actor.state).count == 2)
     }
 }
 
@@ -660,13 +641,8 @@ struct GeneratedStateMachineTests {
         var model = try ThreeParameterActionMachine.makeMachine()
         let expected = try model.send(.board(person: 2, elevator: 20, direction: 200))
 
-        let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
-        guard case .committed(let acted) = try await actor.send(
-            .board(person: 2, elevator: 20, direction: 200)
-        ) else {
-            Issue.record("Expected actor action to commit")
-            return
-        }
+        let actor = try ThreeParameterActionMachine.Actor()
+        let acted = try await actor.send(.board(person: 2, elevator: 20, direction: 200))
 
         #expect(acted.action == expected.action)
         #expect(acted.before.floor == expected.before.floor)
@@ -685,23 +661,12 @@ struct GeneratedStateMachineTests {
         }
         #expect(model.state == modelBefore)
 
-        let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
-        let actorBefore = try await actorState(actor)
-        let outcome = try await actor.send(.board(person: 2, elevator: 30, direction: 200))
-        if case .rejected = outcome {
-        } else {
-            Issue.record("Expected rejected actor action")
+        let actor = try ThreeParameterActionMachine.Actor()
+        let actorBefore = await actor.state
+        #expect(throws: GeneratedMachineError.self) {
+            try await actor.send(.board(person: 2, elevator: 30, direction: 200))
         }
-        #expect(try await actorState(actor) == actorBefore)
-    }
-
-    private func actorState(
-        _ actor: ThreeParameterActionMachine.Actor
-    ) async throws -> ThreeParameterActionMachine.State {
-        switch try await actor.current() {
-        case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
-        }
+        #expect(await actor.state == actorBefore)
     }
 
     @Test("Removed fixed-arity action syntax does not type check")

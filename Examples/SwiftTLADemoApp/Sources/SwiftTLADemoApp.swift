@@ -115,7 +115,7 @@ private struct DuckDuckLeaderView: View {
         lastMove = message
         error = nil
         Task { @MainActor in
-            do { actor = ChangRoberts.Actor(live: try ChangRoberts.makeLive()) }
+            do { actor = try ChangRoberts.Actor() }
             catch let failure { error = failure.localizedDescription }
         }
     }

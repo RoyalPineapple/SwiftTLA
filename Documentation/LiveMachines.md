@@ -1,62 +1,21 @@
 # Live Machines
 
-A generated `Live` value owns one runtime identity, one mutable state, and one commit order.
-
-A generated model value provides local value-based machine execution.
-
-## Create a typed runtime
-
-Create the runtime from its generated model.
+`Live` is an actor that owns one generated machine value. It serializes access
+to that value and exposes the same typed state and actions.
 
 ```swift
-let live = try Counter.makeLive()
+let live = try Counter.Live()
+let transition = try await live.send(.advance)
+
+assert(await live.state == transition.after)
+assert(try await live.isEnabled(.advance))
 ```
 
-Calling `await live.end()` is idempotent. It ends the runtime for its typed adapters and observers.
-
-## Inspect a live machine
-
-`Live` exposes a stable identity and an atomic typed snapshot.
+`@TLAActor` is the same adapter shape for application actors. It delegates to
+its generated `Live` value.
 
 ```swift
-switch try await live.current() {
-case .snapshot(let snapshot):
-    print(snapshot.identity)
-    print(snapshot.position)
-    print(snapshot.state)
-case .unavailable(let reason):
-    print(reason)
-}
+let actor = try CounterHost.Actor()
+let transition = try await actor.send(.advance)
+assert(await actor.state == transition.after)
 ```
-
-The position starts at zero and advances once for each committed action. It is ordered within this runtime identity.
-
-## Execute actions
-
-Typed code uses the generated `Live` façade.
-
-```swift
-let typedOutcome = try await live.send(.advance)
-```
-
-Each request produces exactly one generated `Live.Outcome`:
-
-- `committed` contains the request ID, typed action, and atomic before/after snapshots. The after position is one more than the before position.
-- `rejected` includes the current snapshot and a typed reason.
-- `failed` includes the current snapshot and a typed failure.
-
-Live execution commits one successor for each typed action. An action with multiple successors produces `ambiguousAction` and leaves the runtime at its current snapshot.
-
-## Create a generated actor
-
-Generated `Live` and `@TLAActor` values share one typed live runtime.
-
-```swift
-let live = try CounterHost.makeLive()
-let actor = CounterHost.Actor(live: live)
-```
-
-## Runtime scope
-
-Live-machine observation provides identity, atomic state, per-runtime order,
-bounded-loss reporting, resynchronization, and explicit runtime termination.

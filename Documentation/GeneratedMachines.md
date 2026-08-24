@@ -145,11 +145,9 @@ same generated `State` and `Action` values used by value and SwiftUI code.
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
 
 ```swift
-let live = try CounterHost.makeLive()
-let actor = CounterHost.Actor(live: live)
-let outcome = try await actor.send(.advance)
-guard case .committed(let transition) = outcome else { return }
-assert(transition.after.position.value == 1)
+let actor = try CounterHost.Actor()
+let transition = try await actor.send(.advance)
+assert(await actor.state == transition.after)
 ```
 
 ## Test a model integration

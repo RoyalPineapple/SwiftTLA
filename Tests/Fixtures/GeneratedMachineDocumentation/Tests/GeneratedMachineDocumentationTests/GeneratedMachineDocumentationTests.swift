@@ -18,19 +18,11 @@ struct GeneratedMachineDocumentationTests {
         #expect(machine.state == beforeFailure)
     }
 
-    @Test("nested actor binds the supplied live runtime")
+    @Test("nested actor delegates to the generated machine")
     func nestedActorExposesDocumentedBehavior() async throws {
-        let actorLive = try CounterHost.makeLive()
-        let actor = CounterHost.Actor(live: actorLive)
+        let actor = try CounterHost.Actor()
 
-        let actorIdentity = await actor.identity
-        #expect(actorIdentity == actorLive.identity)
-
-        let result = try await actor.send(.advance)
-        guard case .committed(let commit) = result else {
-            Issue.record("Expected the live actor request to commit")
-            return
-        }
-        #expect(commit.after.position.value == 1)
+        let transition = try await actor.send(.advance)
+        #expect(await actor.state == transition.after)
     }
 }

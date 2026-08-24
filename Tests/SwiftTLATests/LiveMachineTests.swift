@@ -21,34 +21,22 @@ private struct LiveCounter {
 struct LiveMachineTests {
     @Test("A model creates and executes its typed live machine")
     func typedActionCommitsTypedState() async throws {
-        let live = try LiveCounter.makeLive()
-
-        let outcome = try await live.execute(.advance)
-        guard case .committed(let transition) = outcome else {
-            Issue.record("Expected advance to commit")
-            return
-        }
+        let live = try LiveCounter.Live()
+        let transition = try await live.send(.advance)
         #expect(transition.before == .init(count: 0))
         #expect(transition.after == .init(count: 1))
 
-        guard case .snapshot(let snapshot) = try await live.current() else {
-            Issue.record("Expected an active live machine")
-            return
-        }
-        #expect(snapshot.state == transition.after)
-        #expect(snapshot.position == .init(value: 1))
+        #expect(await live.state == transition.after)
     }
 
     @Test("A disabled typed action leaves the live state unchanged")
     func typedRejectionPreservesState() async throws {
-        let live = try LiveCounter.makeLive()
-        _ = try await live.execute(.advance)
+        let live = try LiveCounter.Live()
+        _ = try await live.send(.advance)
 
-        guard case .rejected(let rejection) = try await live.execute(.advance) else {
-            Issue.record("Expected a disabled action rejection")
-            return
+        #expect(throws: GeneratedMachineError.self) {
+            try await live.send(.advance)
         }
-        #expect(rejection.reason == .actionNotEnabled)
-        #expect(rejection.current.state == .init(count: 1))
+        #expect(await live.state == .init(count: 1))
     }
 }

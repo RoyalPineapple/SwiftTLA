@@ -106,19 +106,18 @@ struct GeneratedMachineDocumentationTests {
         }
     }
 
-    @Test("Live-machine guide describes typed live factories")
-    func liveMachineGuideDescribesOneOwner() throws {
+    @Test("Live-machine guide describes one generated machine owner")
+    func liveMachineGuideDescribesGeneratedMachineOwnership() throws {
         let root = packageRoot()
         let live = try String(
             contentsOf: root.appendingPathComponent("Documentation/LiveMachines.md"),
             encoding: .utf8
         )
         for term in [
-            "makeLive()",
-            "Actor(live:)",
-            "non-cancellable",
-            "Runtime scope",
-            "Live.Outcome"
+            "Live()",
+            "Actor()",
+            "generated machine value",
+            "serializes access"
         ] {
             #expect(live.contains(term), "Live-machine guide is missing: \(term)")
         }

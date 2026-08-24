@@ -19,21 +19,12 @@ private struct AdapterCounter {
 
 @Suite("Generated live machines")
 struct LiveMachineAdapterTests {
-    @Test("Actor uses the model-owned runtime")
-    func actorUsesModelOwnedRuntime() async throws {
-        let live = try AdapterCounter.makeLive()
-        let actor = AdapterCounter.Actor(live: live)
+    @Test("Actor delegates to the generated live machine")
+    func actorDelegatesToGeneratedLiveMachine() async throws {
+        let actor = try AdapterCounter.Actor()
+        let transition = try await actor.send(.advance)
 
-        guard case .committed = try await actor.send(.advance) else {
-            Issue.record("Expected actor action to commit")
-            return
-        }
-        let actorIdentity = await actor.identity
-        #expect(actorIdentity == live.identity)
-        guard case .snapshot(let current) = try await live.current() else {
-            Issue.record("Expected runtime snapshot")
-            return
-        }
-        #expect(current.position == .init(value: 1))
+        #expect(transition.after == .init(count: 1))
+        #expect(await actor.state == transition.after)
     }
 }

@@ -25,7 +25,7 @@ struct ChangRobertsDemoTests {
 
     @Test("Chang–Roberts actor serializes a formal delivery")
     func actorExecutesTypedDelivery() async throws {
-        let actor = ChangRoberts.Actor(live: try ChangRoberts.makeLive())
+        let actor = try ChangRoberts.Actor()
         _ = try await actor.send(.deliver(process: .six))
 
         let state = await actor.state
