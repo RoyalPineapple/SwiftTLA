@@ -71,17 +71,17 @@ private func paxosSpec() -> TLASpec {
         }
 
         // Phase 1a: leader sends ballot
-        Action("Phase1a_0") { addMsg(msg1a(0)) && maxBal.stays && maxVBal.stays && maxVal.stays }
-        Action("Phase1a_1") { addMsg(msg1a(1)) && maxBal.stays && maxVBal.stays && maxVal.stays }
+        SwiftTLA.Action("Phase1a_0") { addMsg(msg1a(0)) && maxBal.stays && maxVBal.stays && maxVal.stays }
+        SwiftTLA.Action("Phase1a_1") { addMsg(msg1a(1)) && maxBal.stays && maxVBal.stays && maxVal.stays }
 
         // Phase 1b: acceptor responds
-        Action("Phase1b_a1_0") {
+        SwiftTLA.Action("Phase1b_a1_0") {
             StateExpr.in(msg1a(0), msgs.stateExpr) && 0 > maxBal.stateExpr.applying("a1")
                 && .assign(.named(maxBal.name), maxBal.stateExpr.updated(at: "a1", to: 0))
                 && addMsg(msg1b(0, maxVBal.stateExpr.applying("a1"), maxVal.stateExpr.applying("a1")))
                 && maxVBal.stays && maxVal.stays
         }
-        Action("Phase1b_a1_1") {
+        SwiftTLA.Action("Phase1b_a1_1") {
             StateExpr.in(msg1a(1), msgs.stateExpr) && 1 > maxBal.stateExpr.applying("a1")
                 && .assign(.named(maxBal.name), maxBal.stateExpr.updated(at: "a1", to: 1))
                 && addMsg(msg1b(1, maxVBal.stateExpr.applying("a1"), maxVal.stateExpr.applying("a1")))
@@ -89,26 +89,26 @@ private func paxosSpec() -> TLASpec {
         }
 
         // Phase 2a: leader proposes (3 actions: b0_v1, b1_v1)
-        Action("Phase2a_0_v1") {
+        SwiftTLA.Action("Phase2a_0_v1") {
             !StateExpr.in(msg2a(0, "v1"), msgs.stateExpr)
                 && addMsg(msg2a(0, "v1"))
                 && maxBal.stays && maxVBal.stays && maxVal.stays
         }
-        Action("Phase2a_1_v1") {
+        SwiftTLA.Action("Phase2a_1_v1") {
             !StateExpr.in(msg2a(1, "v1"), msgs.stateExpr)
                 && addMsg(msg2a(1, "v1"))
                 && maxBal.stays && maxVBal.stays && maxVal.stays
         }
 
         // Phase 2b: acceptor votes (2 actions: ballot 0 + ballot 1)
-        Action("Phase2b_a1_0") {
+        SwiftTLA.Action("Phase2b_a1_0") {
             StateExpr.in(msg2a(0, "v1"), msgs.stateExpr) && 0 >= maxBal.stateExpr.applying("a1")
                 && .assign(.named(maxBal.name), maxBal.stateExpr.updated(at: "a1", to: 0))
                 && .assign(.named(maxVBal.name), maxVBal.stateExpr.updated(at: "a1", to: 0))
                 && .assign(.named(maxVal.name), maxVal.stateExpr.updated(at: "a1", to: sv("v1")))
                 && addMsg(msg2b(0, "v1"))
         }
-        Action("Phase2b_a1_1") {
+        SwiftTLA.Action("Phase2b_a1_1") {
             StateExpr.in(msg2a(1, "v1"), msgs.stateExpr) && 1 >= maxBal.stateExpr.applying("a1")
                 && .assign(.named(maxBal.name), maxBal.stateExpr.updated(at: "a1", to: 1))
                 && .assign(.named(maxVBal.name), maxVBal.stateExpr.updated(at: "a1", to: 1))

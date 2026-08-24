@@ -27,13 +27,13 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
         return #spec("CoffeeCan") {
             Extends(.naturals)
             Variable(can, in: cans)
-            Action("PickSameColorBlack") {
+            SwiftTLA.Action("PickSameColorBlack") {
                 StateExpr.recordAccess(can.stateExpr, "black")
                     + StateExpr.recordAccess(can.stateExpr, "white") > 1
                     && StateExpr.recordAccess(can.stateExpr, "black") >= 2
                     && .assign(.named(can.name), can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
             }
-            Action("PickSameColorWhite") {
+            SwiftTLA.Action("PickSameColorWhite") {
                 StateExpr.recordAccess(can.stateExpr, "black")
                     + StateExpr.recordAccess(can.stateExpr, "white") > 1
                     && StateExpr.recordAccess(can.stateExpr, "white") >= 2
@@ -49,14 +49,14 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
                         )
                     )
             }
-            Action("PickDifferentColor") {
+            SwiftTLA.Action("PickDifferentColor") {
                 StateExpr.recordAccess(can.stateExpr, "black")
                     + StateExpr.recordAccess(can.stateExpr, "white") > 1
                     && StateExpr.recordAccess(can.stateExpr, "black") >= 1
                     && StateExpr.recordAccess(can.stateExpr, "white") >= 1
                     && .assign(.named(can.name), can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
             }
-            Action("Termination") {
+            SwiftTLA.Action("Termination") {
                 StateExpr.recordAccess(can.stateExpr, "black") + StateExpr.recordAccess(can.stateExpr, "white") == 1
             }
             Invariant("TypeInvariant") {

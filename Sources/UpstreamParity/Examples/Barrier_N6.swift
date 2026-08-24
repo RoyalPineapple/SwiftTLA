@@ -18,13 +18,13 @@ public struct BarrierModel: Sendable {
             let pc4 = scope.sharedVar("pc4", initial: BarrierPhase.b0)
             let pc5 = scope.sharedVar("pc5", initial: BarrierPhase.b0)
             let pc6 = scope.sharedVar("pc6", initial: BarrierPhase.b0)
-            Action("b0_1") { pc1 == BarrierPhase.b0 && pc1.becomes(BarrierPhase.b1) }
-            Action("b0_2") { pc2 == BarrierPhase.b0 && pc2.becomes(BarrierPhase.b1) }
-            Action("b0_3") { pc3 == BarrierPhase.b0 && pc3.becomes(BarrierPhase.b1) }
-            Action("b0_4") { pc4 == BarrierPhase.b0 && pc4.becomes(BarrierPhase.b1) }
-            Action("b0_5") { pc5 == BarrierPhase.b0 && pc5.becomes(BarrierPhase.b1) }
-            Action("b0_6") { pc6 == BarrierPhase.b0 && pc6.becomes(BarrierPhase.b1) }
-            Action("b1_release") {
+            SwiftTLA.Action("b0_1") { pc1 == BarrierPhase.b0 && pc1.becomes(BarrierPhase.b1) }
+            SwiftTLA.Action("b0_2") { pc2 == BarrierPhase.b0 && pc2.becomes(BarrierPhase.b1) }
+            SwiftTLA.Action("b0_3") { pc3 == BarrierPhase.b0 && pc3.becomes(BarrierPhase.b1) }
+            SwiftTLA.Action("b0_4") { pc4 == BarrierPhase.b0 && pc4.becomes(BarrierPhase.b1) }
+            SwiftTLA.Action("b0_5") { pc5 == BarrierPhase.b0 && pc5.becomes(BarrierPhase.b1) }
+            SwiftTLA.Action("b0_6") { pc6 == BarrierPhase.b0 && pc6.becomes(BarrierPhase.b1) }
+            SwiftTLA.Action("b1_release") {
                 pc1 == BarrierPhase.b1 && pc2 == BarrierPhase.b1 && pc3 == BarrierPhase.b1 && pc4 == BarrierPhase.b1 && pc5 == BarrierPhase.b1 && pc6 == BarrierPhase.b1
                     && pc1.becomes(BarrierPhase.b0) && pc2.becomes(BarrierPhase.b0) && pc3.becomes(BarrierPhase.b0)
                     && pc4.becomes(BarrierPhase.b0) && pc5.becomes(BarrierPhase.b0) && pc6.becomes(BarrierPhase.b0)

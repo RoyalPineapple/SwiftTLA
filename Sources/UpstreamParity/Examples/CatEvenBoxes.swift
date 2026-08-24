@@ -23,7 +23,7 @@ public struct CatEvenBoxesModel: Sendable {
                     && (direction == Direction.left || direction == Direction.right)
             }
 
-            Action("Next") {
+            SwiftTLA.Action("Next") {
                 ((catBox < 6 && catBox.becomes(catBox + 1)) || (catBox > 1 && catBox.becomes(catBox - 1)))
                     && ((direction == Direction.right && observedBox < 5 && observedBox.becomes(observedBox + 1))
                         || (direction == Direction.right && observedBox == 5 && direction.becomes(Direction.left))
@@ -56,7 +56,7 @@ public struct CatOddBoxesModel: Sendable {
                     && (direction == Direction.left || direction == Direction.right)
             }
 
-            Action("Next") {
+            SwiftTLA.Action("Next") {
                 ((catBox < 5 && catBox.becomes(catBox + 1)) || (catBox > 1 && catBox.becomes(catBox - 1)))
                     && ((direction == Direction.right && observedBox < 4 && observedBox.becomes(observedBox + 1))
                         || (direction == Direction.right && observedBox == 4 && direction.becomes(Direction.left))

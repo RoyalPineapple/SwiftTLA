@@ -59,14 +59,14 @@ public struct SimpleAllocatorModel: Sendable {
             Variable(computed: unsat) { emptyAllocation.raw }
             Variable(computed: alloc) { emptyAllocation.raw }
 
-            Action("Request", parameters: [
+            SwiftTLA.Action("Request", parameters: [
                 ActionParameter("client", values: Client.finiteValues),
                 ActionParameter("resources", values: RequestedResources.finiteValues)
             ]) {
                 unsat[client].isEmpty && alloc[client].isEmpty
                     && unsat.becomes(unsat.updating(client, to: resources))
             }
-            Action("Allocate", parameters: [
+            SwiftTLA.Action("Allocate", parameters: [
                 ActionParameter("client", values: Client.finiteValues),
                 ActionParameter("resources", values: RequestedResources.finiteValues)
             ]) {
@@ -78,7 +78,7 @@ public struct SimpleAllocatorModel: Sendable {
                         to: Expr<SetExpr<Resource>>(unsat[client].raw.subtracting(resources))
                     ))
             }
-            Action("Return", parameters: [
+            SwiftTLA.Action("Return", parameters: [
                 ActionParameter("client", values: Client.finiteValues),
                 ActionParameter("resources", values: RequestedResources.finiteValues)
             ]) {

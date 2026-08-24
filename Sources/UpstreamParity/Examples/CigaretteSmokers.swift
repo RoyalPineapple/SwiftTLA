@@ -10,24 +10,24 @@ public struct CigaretteSmokersModel: Sendable {
             let smokingP = scope.sharedVar("smokingP", initial: false)
             let smokingT = scope.sharedVar("smokingT", initial: false)
             let dealer = scope.sharedVar("dealer", in: 1...3)
-            Action("start_1") {
+            SwiftTLA.Action("start_1") {
                 dealer == 1 && smokingT.becomes(true) && dealer.becomes(0) && smokingM.stays && smokingP.stays
             }
-            Action("start_2") {
+            SwiftTLA.Action("start_2") {
                 dealer == 2 && smokingP.becomes(true) && dealer.becomes(0) && smokingM.stays && smokingT.stays
             }
-            Action("start_3") {
+            SwiftTLA.Action("start_3") {
                 dealer == 3 && smokingM.becomes(true) && dealer.becomes(0) && smokingP.stays && smokingT.stays
             }
-            Action("stop_m1") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(1) }
-            Action("stop_m2") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(2) }
-            Action("stop_m3") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(3) }
-            Action("stop_p1") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(1) }
-            Action("stop_p2") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(2) }
-            Action("stop_p3") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(3) }
-            Action("stop_t1") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(1) }
-            Action("stop_t2") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(2) }
-            Action("stop_t3") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(3) }
+            SwiftTLA.Action("stop_m1") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(1) }
+            SwiftTLA.Action("stop_m2") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(2) }
+            SwiftTLA.Action("stop_m3") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(3) }
+            SwiftTLA.Action("stop_p1") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(1) }
+            SwiftTLA.Action("stop_p2") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(2) }
+            SwiftTLA.Action("stop_p3") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(3) }
+            SwiftTLA.Action("stop_t1") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(1) }
+            SwiftTLA.Action("stop_t2") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(2) }
+            SwiftTLA.Action("stop_t3") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(3) }
             Invariant("AtMostOne") {
                 !(smokingM == true && smokingP == true)
                 !(smokingM == true && smokingT == true)

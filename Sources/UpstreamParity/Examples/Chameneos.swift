@@ -67,7 +67,7 @@ private func chameneosSpec() -> TLASpec {
             m.isIn(ids0)
         }
 
-        Action("Meet") {
+        SwiftTLA.Action("Meet") {
             ActionExpr.exists("cid", from: StateExpr.setLiteral((1...M).map { .value(.int($0)) })) { cid in
                 let mp = StateExpr.variable("meetingPlace")
                 let cham = StateExpr.variable("chameneoses")

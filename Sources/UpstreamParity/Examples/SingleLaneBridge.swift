@@ -91,7 +91,7 @@ public struct SingleLaneBridgeModel: Sendable {
                 }
             }
 
-            Action("MoveOutside_r1") {
+            SwiftTLA.Action("MoveOutside_r1") {
                 !FormalCall(
                     as: Bool.self,
                     "InBridge",
@@ -108,7 +108,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
             }
-            Action("MoveInside_r1") {
+            SwiftTLA.Action("MoveInside_r1") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.rightOne)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
@@ -125,7 +125,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
             }
-            Action("Enter_r1") {
+            SwiftTLA.Action("Enter_r1") {
                 let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
                 let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
                 waitingQueue.count > 0 && nextCar == Car.rightOne
@@ -146,7 +146,7 @@ public struct SingleLaneBridgeModel: Sendable {
                 waiting.becomes(Expr<TupleExpr<Car>>(.tupleTail(waiting.stateExpr)))
             }
 
-            Action("MoveOutside_r2") {
+            SwiftTLA.Action("MoveOutside_r2") {
                 !FormalCall(
                     as: Bool.self,
                     "InBridge",
@@ -163,7 +163,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
             }
-            Action("MoveInside_r2") {
+            SwiftTLA.Action("MoveInside_r2") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.rightTwo)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
@@ -180,7 +180,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
             }
-            Action("Enter_r2") {
+            SwiftTLA.Action("Enter_r2") {
                 let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
                 let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
                 waitingQueue.count > 0 && nextCar == Car.rightTwo
@@ -201,7 +201,7 @@ public struct SingleLaneBridgeModel: Sendable {
                 waiting.becomes(Expr<TupleExpr<Car>>(.tupleTail(waiting.stateExpr)))
             }
 
-            Action("MoveOutside_l1") {
+            SwiftTLA.Action("MoveOutside_l1") {
                 !FormalCall(as: Bool.self, "InBridge", FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne]))
                     && FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne]) != location[.leftOne]
                 (location.becomes(location.updating(
@@ -215,7 +215,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
             }
-            Action("MoveInside_l1") {
+            SwiftTLA.Action("MoveInside_l1") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.leftOne)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
@@ -232,7 +232,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
             }
-            Action("Enter_l1") {
+            SwiftTLA.Action("Enter_l1") {
                 let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
                 let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
                 waitingQueue.count > 0 && nextCar == Car.leftOne
@@ -253,7 +253,7 @@ public struct SingleLaneBridgeModel: Sendable {
                 waiting.becomes(Expr<TupleExpr<Car>>(.tupleTail(waiting.stateExpr)))
             }
 
-            Action("MoveOutside_l2") {
+            SwiftTLA.Action("MoveOutside_l2") {
                 !FormalCall(as: Bool.self, "InBridge", FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo]))
                     && FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo]) != location[.leftTwo]
                 (location.becomes(location.updating(
@@ -267,7 +267,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
             }
-            Action("MoveInside_l2") {
+            SwiftTLA.Action("MoveInside_l2") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.leftTwo)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
@@ -284,7 +284,7 @@ public struct SingleLaneBridgeModel: Sendable {
                         to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
             }
-            Action("Enter_l2") {
+            SwiftTLA.Action("Enter_l2") {
                 let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
                 let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
                 waitingQueue.count > 0 && nextCar == Car.leftTwo
