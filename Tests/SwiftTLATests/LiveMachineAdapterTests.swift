@@ -17,9 +17,9 @@ private struct AdapterCounter {
 
 }
 
-@Suite("Live adapters")
+@Suite("Generated live machines")
 struct LiveMachineAdapterTests {
-    @Test("Actor uses the model-owned live runtime")
+    @Test("Actor uses the model-owned runtime")
     func actorUsesModelOwnedRuntime() async throws {
         let live = try AdapterCounter.makeLive()
         let actor = AdapterCounter.Actor(live: live)
