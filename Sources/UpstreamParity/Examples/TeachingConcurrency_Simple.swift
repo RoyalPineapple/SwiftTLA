@@ -7,7 +7,6 @@ import SwiftTLAMacros
 /// process identifier. `Each` lowers to exactly that function-shaped state
 /// and its generated `pc` function; the Swift source does not unroll a
 /// separate action or program counter for every process.
-@TLAModel
 public struct TeachingSimpleN2Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case p0
@@ -63,7 +62,6 @@ public struct TeachingSimpleN2Model: Sendable {
     }
 }
 
-@TLAModel
 public struct TeachingSimpleN3Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case p0

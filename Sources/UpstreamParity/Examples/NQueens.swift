@@ -4,7 +4,6 @@ import SwiftTLAMacros
 /// The upstream N-Queens PlusCal algorithm, specialized to the published
 /// FourQueens TLC model. A tuple is one partial board: its index is the row
 /// and its value is the chosen column.
-@TLAModel
 public struct NQueensModel: Sendable {
     private enum Step: String, PlusCalLabel, CaseIterable {
         case nextQueen = "nxtQ"

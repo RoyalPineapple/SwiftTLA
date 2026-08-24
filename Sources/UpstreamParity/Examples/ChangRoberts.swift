@@ -6,7 +6,6 @@ import SwiftTLAMacros
 /// The three nodes own a generated program counter. `initiator` is the only
 /// nondeterministic initial value; `processState` is derived from it in the
 /// formal initial state. Every message is explicitly delivered clockwise.
-@TLAModel
 public struct ChangRobertsModel: Sendable {
     public enum Node: Int, FiniteDomainKey {
         case one = 1
