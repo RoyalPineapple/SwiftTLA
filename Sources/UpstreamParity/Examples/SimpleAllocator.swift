@@ -73,7 +73,10 @@ public struct SimpleAllocatorModel: Sendable {
                 resources.cardinality > 0
                     && resources.isSubset(of: available.intersection(unsat[client]))
                     && alloc.becomes(alloc.updating(client, to: alloc[client].union(resources)))
-                    && unsat.becomes(unsat.updating(client, to: unsat[client].raw.subtracting(resources)))
+                    && unsat.becomes(unsat.updating(
+                        client,
+                        to: Expr<SetExpr<Resource>>(unsat[client].raw.subtracting(resources))
+                    ))
             }
             Action("Return", parameters: [
                 ActionParameter("client", values: Client.finiteValues),

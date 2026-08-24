@@ -32,7 +32,7 @@ public struct SingleLaneBridgeModel: Sendable {
             }
             FormalDefinition("NextLocation", taking: Car.self, Int.self) { car, position in
                 If(
-                    FormalCall<Bool>("IsRight", car),
+                    FormalCall("IsRight", car) == true,
                     then: If(position > 1, then: Expr<Int>(position - 1), else: Expr<Int>(8)),
                     else: If(position < 8, then: Expr<Int>(position + 1), else: Expr<Int>(1))
                 )
