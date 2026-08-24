@@ -38,8 +38,7 @@ struct CounterHost {
 }
 
 func runActorAccess() async throws {
-    let live = try CounterHost.makeLive()
-    let actor = CounterHost.Actor(live: live)
+    let actor = try CounterHost.Actor()
     let result = try await actor.send(.advance)
 
     guard case .committed(let commit) = result else { return }
