@@ -31,10 +31,10 @@ public struct SingleLaneBridgeModel: Sendable {
                 SetExpr<Int>.literal(4, 5).contains(position)
             }
             FormalDefinition("NextLocation", taking: Car.self, Int.self) { car, position in
-                If<Int>(
-                    FormalCall(as: Bool.self, "IsRight", car),
-                    then: If<Int>(position > 1, then: position - 1, else: 8),
-                    else: If<Int>(position < 8, then: position + 1, else: 1)
+                If(
+                    FormalCall<Bool>("IsRight", car),
+                    then: If(position > 1, then: Expr<Int>(position - 1), else: Expr<Int>(8)),
+                    else: If(position < 8, then: Expr<Int>(position + 1), else: Expr<Int>(1))
                 )
             }
             FormalDefinition("LocationAt", taking: Function<Car, Int>.self, Car.self) { locations, car in
@@ -42,13 +42,13 @@ public struct SingleLaneBridgeModel: Sendable {
             }
             FormalDefinition("CarsOnBridge", taking: Function<Car, Int>.self) { locations in
                 SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo).filtering { car in
-                    FormalCall(as: Bool.self, "InBridge", locations[car])
+                    FormalCall<Bool>("InBridge", locations[car])
                 }
             }
             FormalDefinition("IsLeaving", taking: Car.self, Function<Car, Int>.self) { car, locations in
-                FormalCall(as: Bool.self, "IsRight", car)
+                FormalCall<Bool>("IsRight", car)
                     && FormalCall(as: Int.self, "NextLocation", car, locations[car]) == 6
-                    || !FormalCall(as: Bool.self, "IsRight", car)
+                    || !FormalCall<Bool>("IsRight", car)
                     && FormalCall(as: Int.self, "NextLocation", car, locations[car]) == 3
             }
 
@@ -131,8 +131,8 @@ public struct SingleLaneBridgeModel: Sendable {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
-                            FormalCall(as: Bool.self, "IsRight", car.expr)
-                                == FormalCall(as: Bool.self, "IsRight", Car.rightOne)
+                            FormalCall<Bool>("IsRight", car.expr)
+                                == FormalCall<Bool>("IsRight", Car.rightOne)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
@@ -184,8 +184,8 @@ public struct SingleLaneBridgeModel: Sendable {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
-                            FormalCall(as: Bool.self, "IsRight", car.expr)
-                                == FormalCall(as: Bool.self, "IsRight", Car.rightTwo)
+                            FormalCall<Bool>("IsRight", car.expr)
+                                == FormalCall<Bool>("IsRight", Car.rightTwo)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
@@ -234,8 +234,8 @@ public struct SingleLaneBridgeModel: Sendable {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
-                            FormalCall(as: Bool.self, "IsRight", car.expr)
-                                == FormalCall(as: Bool.self, "IsRight", Car.leftOne)
+                            FormalCall<Bool>("IsRight", car.expr)
+                                == FormalCall<Bool>("IsRight", Car.leftOne)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
@@ -284,8 +284,8 @@ public struct SingleLaneBridgeModel: Sendable {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
-                            FormalCall(as: Bool.self, "IsRight", car.expr)
-                                == FormalCall(as: Bool.self, "IsRight", Car.leftTwo)
+                            FormalCall<Bool>("IsRight", car.expr)
+                                == FormalCall<Bool>("IsRight", Car.leftTwo)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
