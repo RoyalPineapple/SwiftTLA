@@ -43,6 +43,11 @@ struct CameraApp: App {
 
                 filmstrip
                 controls
+                if let diagnostic = model.diagnostic {
+                    Text(diagnostic)
+                        .foregroundStyle(.red)
+                        .padding(8)
+                }
             }
             .background(.black)
             .frame(minWidth: 640, minHeight: 520)
@@ -334,17 +339,32 @@ final class CameraModel {
     private let disk = DiskStore(name: "camera")
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
+    var diagnostic: String?
 
     var phase: Int { machine?.state.phase ?? 0 }
 
     init() {
-        machine = try? CameraWorkflow.makeMachine()
+        do {
+            machine = try CameraWorkflow.makeMachine()
+        } catch {
+            diagnostic = String(describing: error)
+        }
     }
 
     private func send(_ action: CameraWorkflow.Action) -> Bool {
-        guard var machine, (try? machine.send(action)) != nil else { return false }
-        self.machine = machine
-        return true
+        guard var machine else {
+            diagnostic = "The camera model did not initialize."
+            return false
+        }
+        do {
+            try machine.send(action)
+            self.machine = machine
+            diagnostic = nil
+            return true
+        } catch {
+            diagnostic = String(describing: error)
+            return false
+        }
     }
 
     func takeSnapshot() async {
@@ -352,11 +372,11 @@ final class CameraModel {
             let data = try await capture.capturePhoto()
             roll.append(.photo(data))
             flashActive = true
-            try? await disk.write(name: "snap-\(Int(Date().timeIntervalSince1970)).jpg", data: data)
-            try? await Task.sleep(for: .milliseconds(120))
+            try await disk.write(name: "snap-\(Int(Date().timeIntervalSince1970)).jpg", data: data)
+            try await Task.sleep(for: .milliseconds(120))
             flashActive = false
         } catch {
-            print("Snapshot error: \(error)")
+            diagnostic = "Snapshot failed: \(error)"
         }
     }
 
@@ -408,7 +428,9 @@ final class CameraModel {
             capture.session.addOutput(output)
             movieOutput = output
             try await capture.start()
-        } catch { print("Camera error: \(error)") }
+        } catch {
+            diagnostic = "Camera setup failed: \(error)"
+        }
     }
 
     func live() async {
