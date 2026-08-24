@@ -854,7 +854,7 @@ extension ParserSession {
         loopValue: Int? = nil,
         collectionTypes: [String: SymmetricCollectionSourceTypes] = [:]
     ) {
-        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else {
+        guard let name = builderCallName(call.calledExpression) else {
             result.diagnostics.append(.init(
                 message: "Specification body contains an unsupported call.",
                 source: call
@@ -987,6 +987,22 @@ extension ParserSession {
                 source: call
             ))
         }
+    }
+
+    /// Recognizes specification builders by their SwiftSyntax shape. The
+    /// qualified formal-core `SwiftTLA.Action` spelling avoids collision with
+    /// a generated model's nested `Action` type.
+    private func builderCallName(_ expression: ExprSyntax) -> String? {
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "SwiftTLA",
+              member.declName.baseName.text == "Action"
+        else {
+            return nil
+        }
+        return "Action"
     }
 
     private func parseSymmetry(

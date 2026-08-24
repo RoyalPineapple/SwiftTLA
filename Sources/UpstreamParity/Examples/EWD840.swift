@@ -48,20 +48,20 @@ public struct EWD840Model: Sendable {
             let tpos = scope.sharedVar("tpos", in: 0...2)
             let tcolor = scope.sharedVar("tcolor", initial: Color.black)
 
-            Action("InitiateProbe") {
+            SwiftTLA.Action("InitiateProbe") {
                 tpos == 0 && (tcolor == Color.black || color[.zero] == Color.black)
                     && tpos.becomes(2) && tcolor.becomes(.white)
                     && color.becomes(color.updating(.zero, to: .white)) && active.stays
             }
 
-            Action("PassToken_1") {
+            SwiftTLA.Action("PassToken_1") {
                 tpos == 1 && (active[.one] == false || color[.one] == Color.black || tcolor == Color.black)
                     && tpos.becomes(0)
                     && ((color[.one] == Color.black && tcolor.becomes(.black))
                         || (color[.one] != Color.black && tcolor.stays))
                     && color.becomes(color.updating(.one, to: .white)) && active.stays
             }
-            Action("PassToken_2") {
+            SwiftTLA.Action("PassToken_2") {
                 tpos == 2 && (active[.two] == false || color[.two] == Color.black || tcolor == Color.black)
                     && tpos.becomes(1)
                     && ((color[.two] == Color.black && tcolor.becomes(.black))
@@ -69,27 +69,27 @@ public struct EWD840Model: Sendable {
                     && color.becomes(color.updating(.two, to: .white)) && active.stays
             }
 
-            Action("SendMsg_0_to_1") {
+            SwiftTLA.Action("SendMsg_0_to_1") {
                 active[.zero] == true && active.becomes(active.updating(.one, to: true))
                     && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
             }
-            Action("SendMsg_0_to_2") {
+            SwiftTLA.Action("SendMsg_0_to_2") {
                 active[.zero] == true && active.becomes(active.updating(.two, to: true))
                     && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
             }
-            Action("SendMsg_1_to_0") {
+            SwiftTLA.Action("SendMsg_1_to_0") {
                 active[.one] == true && active.becomes(active.updating(.zero, to: true))
                     && color.stays && tpos.stays && tcolor.stays
             }
-            Action("SendMsg_1_to_2") {
+            SwiftTLA.Action("SendMsg_1_to_2") {
                 active[.one] == true && active.becomes(active.updating(.two, to: true))
                     && color.becomes(color.updating(.one, to: .black)) && tpos.stays && tcolor.stays
             }
-            Action("SendMsg_2_to_0") {
+            SwiftTLA.Action("SendMsg_2_to_0") {
                 active[.two] == true && active.becomes(active.updating(.zero, to: true))
                     && color.stays && tpos.stays && tcolor.stays
             }
-            Action("SendMsg_2_to_1") {
+            SwiftTLA.Action("SendMsg_2_to_1") {
                 active[.two] == true && active.becomes(active.updating(.one, to: true))
                     && color.stays && tpos.stays && tcolor.stays
             }

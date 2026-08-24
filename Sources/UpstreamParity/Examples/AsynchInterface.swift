@@ -71,7 +71,7 @@ public struct AsynchInterfaceModel: Sendable {
                     && interface[InterfaceSchema.acknowledgement] >= 0 && interface[InterfaceSchema.acknowledgement] <= 1
             }
 
-            Action("Send") {
+            SwiftTLA.Action("Send") {
                 interface[InterfaceSchema.ready] == interface[InterfaceSchema.acknowledgement]
                     && (interface.becomes(Record<InterfaceSchema>.literal(
                         .init(InterfaceSchema.value, Data.d1),
@@ -90,7 +90,7 @@ public struct AsynchInterfaceModel: Sendable {
                     )))
             }
 
-            Action("Rcv") {
+            SwiftTLA.Action("Rcv") {
                 interface[InterfaceSchema.ready] != interface[InterfaceSchema.acknowledgement]
                     && interface.becomes(Record<InterfaceSchema>.literal(
                         .init(InterfaceSchema.value, interface[InterfaceSchema.value]),

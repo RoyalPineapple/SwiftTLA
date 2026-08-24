@@ -66,7 +66,7 @@ private func gameOfLifeSpec() -> TLASpec {
 
         // grid' = [p \in Pos |-> nextValue(p)]  — the upstream pattern
         let pVar = Var<Int>("p")
-        Action("Next") {
+        SwiftTLA.Action("Next") {
             grid.becomes(Expr<TLAValue>(StateExpr.functionLiteral(pVar, in: StateExpr.setLiteral(allTiles),
                 nextValue(at: pVar.stateExpr))))
         }

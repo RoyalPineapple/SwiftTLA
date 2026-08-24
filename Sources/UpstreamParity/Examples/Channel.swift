@@ -72,7 +72,7 @@ public struct ChannelModel: Sendable {
                     && channel[ChannelSchema.acknowledgement] >= 0 && channel[ChannelSchema.acknowledgement] <= 1
             }
 
-            Action("Send") {
+            SwiftTLA.Action("Send") {
                 channel[ChannelSchema.ready] == channel[ChannelSchema.acknowledgement]
                     && (channel.becomes(Record<ChannelSchema>.literal(
                         .init(ChannelSchema.value, Data.d1),
@@ -91,7 +91,7 @@ public struct ChannelModel: Sendable {
                     )))
             }
 
-            Action("Rcv") {
+            SwiftTLA.Action("Rcv") {
                 channel[ChannelSchema.ready] != channel[ChannelSchema.acknowledgement]
                     && channel.becomes(Record<ChannelSchema>.literal(
                         .init(ChannelSchema.value, channel[ChannelSchema.value]),

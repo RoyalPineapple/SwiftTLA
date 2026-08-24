@@ -6,7 +6,7 @@ public struct HourClockModel: Sendable {
     public static var spec: TLASpec {
         #spec("HourClock") { scope in
             let hr = scope.sharedVar("hr", in: 1...12)
-            Action("HCnxt") {
+            SwiftTLA.Action("HCnxt") {
                 (hr != 12 && hr.becomes(hr + 1)) ||
                 (hr == 12 && hr.becomes(1))
             }

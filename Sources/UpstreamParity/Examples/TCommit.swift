@@ -42,7 +42,7 @@ public struct TCommitModel: Sendable {
             && rmState[.two] != .committed
             && rmState[.three] != .committed
 
-        let prepare: SpecComponent = Action("Prepare", parameters: [
+        let prepare: SpecComponent = SwiftTLA.Action("Prepare", parameters: [
             ActionParameter("rm", values: ResourceManager.finiteValues)
         ]) {
             let rm = Expr<ResourceManager>(.variable("rm"))
@@ -50,7 +50,7 @@ public struct TCommitModel: Sendable {
                 && rmState.becomes(rmState.expr.updating(rm, to: .prepared))
         }
 
-        let decideCommit: SpecComponent = Action("DecideCommit", parameters: [
+        let decideCommit: SpecComponent = SwiftTLA.Action("DecideCommit", parameters: [
             ActionParameter("rm", values: ResourceManager.finiteValues)
         ]) {
             let rm = Expr<ResourceManager>(.variable("rm"))
@@ -59,7 +59,7 @@ public struct TCommitModel: Sendable {
                 && rmState.becomes(rmState.expr.updating(rm, to: .committed))
         }
 
-        let decideAbort: SpecComponent = Action("DecideAbort", parameters: [
+        let decideAbort: SpecComponent = SwiftTLA.Action("DecideAbort", parameters: [
             ActionParameter("rm", values: ResourceManager.finiteValues)
         ]) {
             let rm = Expr<ResourceManager>(.variable("rm"))

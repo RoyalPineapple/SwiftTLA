@@ -108,7 +108,7 @@ public struct LamportMutexModel: Sendable {
         let mutex: SpecComponent = Invariant("Mutex") { crit.expr.cardinality <= 1 }
         let boundedClock: SpecComponent = Constraint(clock[.one] <= 2 && clock[.two] <= 2)
 
-        let request: SpecComponent = Action("Request", parameters: [
+        let request: SpecComponent = SwiftTLA.Action("Request", parameters: [
             ActionParameter("p", values: Node.finiteValues),
             ActionParameter("q", values: Node.finiteValues)
         ]) {
@@ -125,7 +125,7 @@ public struct LamportMutexModel: Sendable {
                 && clock.stays && crit.stays
         }
 
-        let receiveRequest: SpecComponent = Action("ReceiveReq", parameters: [
+        let receiveRequest: SpecComponent = SwiftTLA.Action("ReceiveReq", parameters: [
             ActionParameter("p", values: Node.finiteValues),
             ActionParameter("q", values: Node.finiteValues)
         ]) {
@@ -152,7 +152,7 @@ public struct LamportMutexModel: Sendable {
                 && ack.stays && crit.stays
         }
 
-        let receiveAcknowledgement: SpecComponent = Action("ReceiveAck", parameters: [
+        let receiveAcknowledgement: SpecComponent = SwiftTLA.Action("ReceiveAck", parameters: [
             ActionParameter("p", values: Node.finiteValues),
             ActionParameter("q", values: Node.finiteValues)
         ]) {
@@ -168,7 +168,7 @@ public struct LamportMutexModel: Sendable {
                 && clock.stays && req.stays && crit.stays
         }
 
-        let enter: SpecComponent = Action("Enter", parameters: [
+        let enter: SpecComponent = SwiftTLA.Action("Enter", parameters: [
             ActionParameter("p", values: Node.finiteValues),
             ActionParameter("q", values: Node.finiteValues)
         ]) {
@@ -185,7 +185,7 @@ public struct LamportMutexModel: Sendable {
                 && clock.stays && req.stays && ack.stays && network.stays
         }
 
-        let exit: SpecComponent = Action("Exit", parameters: [
+        let exit: SpecComponent = SwiftTLA.Action("Exit", parameters: [
             ActionParameter("p", values: Node.finiteValues),
             ActionParameter("q", values: Node.finiteValues)
         ]) {
@@ -203,7 +203,7 @@ public struct LamportMutexModel: Sendable {
                 && clock.stays
         }
 
-        let receiveRelease: SpecComponent = Action("ReceiveRel", parameters: [
+        let receiveRelease: SpecComponent = SwiftTLA.Action("ReceiveRel", parameters: [
             ActionParameter("p", values: Node.finiteValues),
             ActionParameter("q", values: Node.finiteValues)
         ]) {

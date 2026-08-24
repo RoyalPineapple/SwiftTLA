@@ -115,7 +115,7 @@ public struct EWD998TerminationModel: Sendable {
             )
         }
 
-        let terminate: SpecComponent = Action("Terminate", parameters: [
+        let terminate: SpecComponent = SwiftTLA.Action("Terminate", parameters: [
                 ActionParameter("node", values: Node.finiteValues)
             ]) {
                 terminateAction(
@@ -125,7 +125,7 @@ public struct EWD998TerminationModel: Sendable {
                 )
         }
 
-        let receiveMessage: SpecComponent = Action("RcvMsg", parameters: [
+        let receiveMessage: SpecComponent = SwiftTLA.Action("RcvMsg", parameters: [
                 ActionParameter("node", values: Node.finiteValues)
             ]) {
                 let node = Expr<Node>(.variable("node"))
@@ -135,7 +135,7 @@ public struct EWD998TerminationModel: Sendable {
                     && terminationDetected.stays
         }
 
-        let sendMessage: SpecComponent = Action("SendMsg", parameters: [
+        let sendMessage: SpecComponent = SwiftTLA.Action("SendMsg", parameters: [
                 ActionParameter("sender", values: Node.finiteValues),
                 ActionParameter("receiver", values: Node.finiteValues)
             ]) {
@@ -147,7 +147,7 @@ public struct EWD998TerminationModel: Sendable {
                     && terminationDetected.stays
         }
 
-        let detectTermination: SpecComponent = Action("DetectTermination") {
+        let detectTermination: SpecComponent = SwiftTLA.Action("DetectTermination") {
             active[.zero] == false && active[.one] == false
                 && active[.two] == false && active[.three] == false
                 && pending[.zero] == 0 && pending[.one] == 0

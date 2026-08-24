@@ -31,7 +31,7 @@ public struct NanoBlockchainModel: Sendable {
             }
 
             for priv in privKeys {
-                Action("CreateGenesis_\(priv)") {
+                SwiftTLA.Action("CreateGenesis_\(priv)") {
                     lastHash == "NoHash"
                         && ActionExpr.exists("h", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { h in
                             let sb = StateExpr.record([
@@ -52,7 +52,7 @@ public struct NanoBlockchainModel: Sendable {
             }
 
             for (n, priv) in zip(nodes, privKeys) {
-                Action("CreateSend_\(n)") {
+                SwiftTLA.Action("CreateSend_\(n)") {
                     lastHash != "NoHash"
                         && ActionExpr.exists("prev", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { prev in
                             distributedLedger.stateExpr.applying(n).applying(prev) != noBlock

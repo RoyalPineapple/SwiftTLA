@@ -160,14 +160,14 @@ public enum MultiCarElevator {
                         != carField(.value(CarID.carB.tlaValue), "rider")
             }
 
-            Action("request", parameters: [
+            SwiftTLA.Action("request", parameters: [
                 ActionParameter("person", values: PersonID.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues)
             ]) {
                 !calls.contains(boundCall()) && calls.inserting(boundCall())
             }
-            Action("assign", parameters: [
+            SwiftTLA.Action("assign", parameters: [
                 ActionParameter("person", values: PersonID.finiteValues),
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues)
@@ -177,7 +177,7 @@ public enum MultiCarElevator {
                     && carField(.variable("car"), "rider") == "none"
                     && cars.becomes(updatingCar(.variable("car"), field: "rider", to: .variable("person")))
             }
-            Action("move", parameters: [
+            SwiftTLA.Action("move", parameters: [
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues)
@@ -187,7 +187,7 @@ public enum MultiCarElevator {
                     && cars.becomes(updatingCar(.variable("car"), field: "floor", to: .variable("floor")))
                     && lastMoveDoorClosed.becomes(true)
             }
-            Action("openDoor", parameters: [
+            SwiftTLA.Action("openDoor", parameters: [
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues)
@@ -195,7 +195,7 @@ public enum MultiCarElevator {
                 carField(.variable("car"), "doorsOpen") == false
                     && cars.becomes(updatingCar(.variable("car"), field: "doorsOpen", to: .value(.bool(true))))
             }
-            Action("board", parameters: [
+            SwiftTLA.Action("board", parameters: [
                 ActionParameter("person", values: PersonID.finiteValues),
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues)
@@ -208,7 +208,7 @@ public enum MultiCarElevator {
                         .init(CallSchema.direction, .up)
                     ))
             }
-            Action("closeDoor", parameters: [
+            SwiftTLA.Action("closeDoor", parameters: [
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues)
@@ -216,7 +216,7 @@ public enum MultiCarElevator {
                 carField(.variable("car"), "doorsOpen") == true
                     && cars.becomes(updatingCar(.variable("car"), field: "doorsOpen", to: .value(.bool(false))))
             }
-            Action("completeRide", parameters: [
+            SwiftTLA.Action("completeRide", parameters: [
                 ActionParameter("person", values: PersonID.finiteValues),
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues)
