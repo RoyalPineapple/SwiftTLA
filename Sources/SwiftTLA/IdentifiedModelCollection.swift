@@ -30,6 +30,8 @@ public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueTy
 
   public var count: Int { entries.count }
 
+  public var ids: [Element.ID] { insertionOrder }
+
   public subscript(id: Element.ID) -> Value? {
     entries[id]?.value
   }

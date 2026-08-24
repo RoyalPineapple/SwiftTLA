@@ -47,19 +47,18 @@ struct NestedComposableMacroConformanceTests {
         let observable = try await NestedComposedCounter.Observable(live: live)
         let actor = NestedComposedCounter.Actor(live: live)
 
-        let modelBefore = try await model.machineObservation()
+        let modelBefore = model.state
         _ = try model.send(.advance)
-        let modelAfter = try await model.machineObservation()
+        let modelAfter = model.state
         guard case .committed = try await observable.send(.advance),
               case .committed = try await actor.send(.advance)
         else {
             Issue.record("Expected nested adapter actions to commit")
             return
         }
-        #expect(modelBefore.state.count == 0)
-        #expect(modelAfter.state.count == 1)
-        #expect(modelBefore.availableActions == [.advance])
-        #expect(modelAfter.availableActions == [.advance])
+        #expect(modelBefore.count == 0)
+        #expect(modelAfter.count == 1)
+        #expect(try model.enabledActions() == [.advance])
         #expect(try #require(observable.state).count == 1)
         guard case .snapshot(let actorSnapshot) = try await actor.current() else {
             Issue.record("Expected actor snapshot")

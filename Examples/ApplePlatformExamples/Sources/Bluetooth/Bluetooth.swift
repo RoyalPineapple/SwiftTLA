@@ -154,7 +154,7 @@ public actor Bluetooth {
 
     public func stopScanning() async {
         if await machine.state.phase == .scanning {
-            _ = try? await machine.apply(.stopScan)
+            _ = try? await machine.send(.stopScan)
         }
         central.stopScan()
         scanContinuation?.finish()
@@ -162,7 +162,7 @@ public actor Bluetooth {
     }
 
     func updateState(_ state: CBManagerState) async {
-        let action: BluetoothModel.Machine.ActionLabel?
+        let action: BluetoothModel.Machine.Action?
         switch state {
         case .poweredOn: action = .poweredOn
         case .poweredOff: action = .poweredOff
@@ -171,7 +171,7 @@ public actor Bluetooth {
         case .unauthorized: action = .unauthorized
         default: action = nil
         }
-        if let action { _ = try? await machine.apply(action) }
+        if let action { _ = try? await machine.send(action) }
         if state == .poweredOn, let readyContinuation { readyContinuation.resume(); self.readyContinuation = nil }
         if state != .poweredOn { scanContinuation?.finish(); scanContinuation = nil }
     }

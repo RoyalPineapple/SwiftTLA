@@ -5,13 +5,13 @@ extension MacroExpander {
     static func generateLiveMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
         let hasActions = model.machineSurface.actions.isEmpty == false
-        let actionType = "ActionLabel"
+        let actionType = "Action"
 
         let typedExecute = """
-                public func execute(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
+                public func send(_ action: Action, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
                     switch await _runtime.execute(action, requestID: requestID) {
                     case .committed(let commit):
-                        return .committed(TransitionResult(
+                        return .committed(Transition(
                             action: action,
                             before: try State(storage: _storage, storageState: commit.before.state),
                             after: try State(storage: _storage, storageState: commit.after.state)
@@ -68,13 +68,11 @@ extension MacroExpander {
                 public enum RejectionReason: Sendable, Equatable, CustomStringConvertible {
                     case runtimeUnavailable(Unavailability)
                     case actionNotEnabled
-                    case identityRoutedActionRequiresID
 
                     public var description: String {
                         switch self {
                         case .runtimeUnavailable(let reason): return "The live machine cannot execute the request: \\(reason)"
                         case .actionNotEnabled: return "The requested action is not enabled in the current state."
-                        case .identityRoutedActionRequiresID: return "The requested action selects an identified collection member and must be routed through the model's identified action surface."
                         }
                     }
                 }
@@ -88,21 +86,21 @@ extension MacroExpander {
 
                 public struct Rejection: Sendable, Equatable {
                     public let requestID: Foundation.UUID
-                    public let action: ActionLabel
+                    public let action: Action
                     public let reason: RejectionReason
                     public let current: Snapshot
                 }
 
                 public struct Failure: Sendable, Equatable {
                     public let requestID: Foundation.UUID
-                    public let action: ActionLabel
+                    public let action: Action
                     public let code: FailureCode
                     public let message: String
                     public let current: Snapshot
                 }
 
                 public enum Outcome: Sendable, Equatable {
-                    case committed(TransitionResult)
+                    case committed(Transition)
                     case rejected(Rejection)
                     case failed(Failure)
                 }
@@ -135,14 +133,13 @@ extension MacroExpander {
                 }
 
                 private static func _rejection(
-                    _ value: _GeneratedMachineStorage.LiveRejection<ActionLabel>,
+                    _ value: _GeneratedMachineStorage.LiveRejection<Action>,
                     storage: _GeneratedMachineStorage
                 ) throws -> Rejection {
                     let reason: RejectionReason
                     switch value.reason {
                     case .runtimeUnavailable(let unavailability): reason = .runtimeUnavailable(Self._unavailability(unavailability))
                     case .actionNotEnabled: reason = .actionNotEnabled
-                    case .identityRoutedActionRequiresID: reason = .identityRoutedActionRequiresID
                     }
                     return try .init(
                         requestID: value.requestID,
@@ -153,7 +150,7 @@ extension MacroExpander {
                 }
 
                 private static func _failure(
-                    _ value: _GeneratedMachineStorage.LiveFailure<ActionLabel>,
+                    _ value: _GeneratedMachineStorage.LiveFailure<Action>,
                     storage: _GeneratedMachineStorage
                 ) throws -> Failure {
                     let code: FailureCode
@@ -176,23 +173,14 @@ extension MacroExpander {
         let liveDriver = hasActions ? """
             private static func _makeLiveRuntime(
                 storage: _GeneratedMachineStorage
-            ) throws -> _GeneratedMachineStorage.LiveRuntime<ActionLabel> {
+            ) throws -> _GeneratedMachineStorage.LiveRuntime<Action> {
                 guard let initial = try storage.initialStates().first else {
                     throw GeneratedMachineError.noInitialState
                 }
                 return storage.makeLive(
                     initial: initial,
                     successors: { state, action in
-                        return try storage.successors(
-                            actionOrdinal: Self._actionOrdinal(for: action),
-                            arguments: Self._actionArguments(for: action),
-                            from: state
-                        )
-                    },
-                    validateAction: { action in
-                        Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: action))
-                            ? .identityRoutedActionRequiresID
-                            : nil
+                        try Self._successors(for: action, from: state, storage: storage)
                     },
                     decodeState: { state in
                         _ = try State(storage: storage, storageState: state)
@@ -202,14 +190,13 @@ extension MacroExpander {
             """ : """
             private static func _makeLiveRuntime(
                 storage: _GeneratedMachineStorage
-            ) throws -> _GeneratedMachineStorage.LiveRuntime<ActionLabel> {
+            ) throws -> _GeneratedMachineStorage.LiveRuntime<Action> {
                 guard let initial = try storage.initialStates().first else {
                     throw GeneratedMachineError.noInitialState
                 }
                 return storage.makeLive(
                     initial: initial,
                     successors: { _, action in switch action {} },
-                    validateAction: { action in switch action {} },
                     decodeState: { _ in }
                 )
             }

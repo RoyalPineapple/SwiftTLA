@@ -19,7 +19,7 @@ extension MacroExpander {
         [
             DeclSyntax(stringLiteral: "public typealias State = \(modelTypeName).State"),
             DeclSyntax(stringLiteral: "public typealias Live = \(modelTypeName).Live"),
-            DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelTypeName).ActionLabel"),
+            DeclSyntax(stringLiteral: "public typealias Action = \(modelTypeName).Action"),
             DeclSyntax(stringLiteral: "public typealias Outcome = \(modelTypeName).Live.Outcome")
         ]
     }
@@ -37,7 +37,7 @@ extension MacroExpander {
     }
 
     static func generateNestedObservableMembers(modelTypeName: String) -> [DeclSyntax] {
-        let actionType = "ActionLabel"
+        let actionType = "Action"
         var declarations = commonAdapterAliases(modelTypeName: modelTypeName) + observableCallbacks()
         declarations += [
             DeclSyntax(stringLiteral: "@MainActor private let _live: Live"),
@@ -91,19 +91,19 @@ extension MacroExpander {
     ) -> [DeclSyntax] {
         let isolation = actorIsolated ? "@MainActor " : ""
         return [DeclSyntax(stringLiteral: """
-        \(isolation)public func apply(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
+        \(isolation)public func send(_ action: Action, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
             try await \(receiver).execute(action, requestID: requestID)
         }
         """)]
     }
 
     static func observableCallbacks() -> [DeclSyntax] {
-        [DeclSyntax(stringLiteral: "@MainActor public var onTransition: ((ActionLabel, State, State) async -> Void)?")]
+        [DeclSyntax(stringLiteral: "@MainActor public var onTransition: ((Action, State, State) async -> Void)?")]
     }
 
     static func observableReducerMethod() -> String {
         return """
-        @MainActor private func _reduce(_ event: _GeneratedMachineStorage.LiveEvent<ActionLabel>, subscription: _GeneratedMachineStorage.LiveSubscription<ActionLabel>) async {
+        @MainActor private func _reduce(_ event: _GeneratedMachineStorage.LiveEvent<Action>, subscription: _GeneratedMachineStorage.LiveSubscription<Action>) async {
             let contiguousCommit = _reducer.reduce(event)
             if case .loss = event { _ = await subscription.resynchronize() }
             guard let commit = contiguousCommit,

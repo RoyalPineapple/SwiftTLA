@@ -167,7 +167,7 @@ public struct _GeneratedMachineStorage: Sendable {
                     action: successor.action,
                     arguments: successor.arguments
                 )
-                let input = try compilation.generatedActionLabelInput(for: request)
+                let input = try compilation.generatedActionInput(for: request)
                 guard let action = try resolve(input.ordinal, .init(values: input.formalArguments)) else {
                     return nil
                 }
@@ -253,7 +253,6 @@ public extension _GeneratedMachineStorage {
     enum LiveRejectionReason: Sendable, Equatable {
         case runtimeUnavailable(TLALiveMachineUnavailableReason)
         case actionNotEnabled
-        case identityRoutedActionRequiresID
     }
 
     enum LiveFailureCode: String, Sendable, Equatable {
@@ -427,7 +426,6 @@ public extension _GeneratedMachineStorage {
             switch reason {
             case .runtimeUnavailable(let value): return .runtimeUnavailable(value)
             case .actionNotEnabled: return .actionNotEnabled
-            case .identityRoutedActionRequiresID: return .identityRoutedActionRequiresID
             }
         }
 
@@ -543,21 +541,12 @@ public extension _GeneratedMachineStorage {
     func makeLive<Action: Sendable & Equatable>(
         initial: State,
         successors: @escaping @Sendable (State, Action) throws -> [State],
-        validateAction: @escaping @Sendable (Action) -> LiveRejectionReason?,
         decodeState: @escaping @Sendable (State) throws -> Void
     ) -> LiveRuntime<Action> {
         .init(.create(
             initial: initial,
             driver: .init(
                 successors: successors,
-                validateAction: { action in
-                    guard let reason = validateAction(action) else { return nil }
-                    switch reason {
-                    case .runtimeUnavailable(let value): return .runtimeUnavailable(value)
-                    case .actionNotEnabled: return .actionNotEnabled
-                    case .identityRoutedActionRequiresID: return .identityRoutedActionRequiresID
-                    }
-                },
                 decodeState: decodeState
             )
         ))

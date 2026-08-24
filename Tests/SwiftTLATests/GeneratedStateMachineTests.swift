@@ -531,10 +531,10 @@ struct NestedAdapterConcurrencyTests {
             await callbackRecorder.record(before: before, after: after)
         }
 
-        let expectedBefore = try await model.machineObservation()
+        let expectedBefore = model.state
         #expect(observableLabel == .advance)
         #expect(actorLabel == .advance)
-        #expect(expectedBefore.state.count == 0)
+        #expect(expectedBefore.count == 0)
 
         let expected = try model.send(.advance)
         let observed = try committed(try await observable.send(.advance))

@@ -52,7 +52,7 @@ conditions. They are not supported behaviors and do not enlarge the positive
 scope.
 
 Generated behavior uses the application-facing typed surface. A fixture reads
-generated `State` and `TransitionResult` values. Formal tooling uses the
+generated `State` and `Transition` values. Formal tooling uses the
 compiler-owned state boundary.
 
 ### Annotation availability

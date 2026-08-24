@@ -6,7 +6,6 @@ public enum GeneratedMachineError: Error, Sendable {
     case noMatchingSuccessor
     case ambiguousAction
     case liveMachineUnavailable(String)
-    case identityRoutedActionRequiresID
     case invalidGeneratedActionOrdinal
     case invalidGeneratedVariableOrdinal
 }

@@ -72,17 +72,14 @@ enum MacroExpander {
 
         let ordinaryVariables = plan.variables.filter { $0.isSymmetricCollection == false }
 
-        decls.append(contentsOf: generateActionLabel(actions: plan.actions))
+        decls.append(contentsOf: generateAction(actions: plan.actions))
         decls.append(DeclSyntax(generateStateStruct(variables: ordinaryVariables, enumInfos: model.enumInfos)))
         decls.append(contentsOf: generateGeneratedMachineStorageMembers(
             isActor: isActor,
             hasActions: !plan.actions.isEmpty,
             actions: plan.actions,
             variables: plan.variables,
-            symmetricCollections: plan.symmetricCollections,
-            identityRoutedActions: Set(plan.actions.compactMap { action in
-                action.symmetricCollection == nil ? nil : action.formalName
-            })
+            symmetricCollections: plan.symmetricCollections
         ))
         if model.hasNestedLiveAdapter {
             decls.append(contentsOf: generateLiveMachineMembers(model: model))
@@ -92,10 +89,6 @@ enum MacroExpander {
             variables: ordinaryVariables,
             enumInfos: model.enumInfos
         ).map(DeclSyntax.init))
-        decls.append(contentsOf: generateActionMethods(
-            isActor: isActor,
-            actions: plan.actions
-        ))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         private static func _makeMachine(
@@ -170,10 +163,10 @@ enum MacroExpander {
         }
     }
 
-    static func generateActionLabel(actions: [MachineSurfacePlan.Action]) -> [DeclSyntax] {
+    static func generateAction(actions: [MachineSurfacePlan.Action]) -> [DeclSyntax] {
         guard actions.isEmpty == false else {
             return [
-                DeclSyntax(stringLiteral: "public enum ActionLabel: Hashable, Sendable {}")
+                DeclSyntax(stringLiteral: "public enum Action: Hashable, Sendable {}")
             ]
         }
         func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
@@ -200,6 +193,9 @@ enum MacroExpander {
         }
 
         let cases = actions.map { action in
+            if let collection = action.symmetricCollection {
+                return "case \(action.swiftIdentifier)(member: \(collection.elementType).ID)"
+            }
             let bindings = action.bindings.filter(\.isPublic)
             guard !bindings.isEmpty else { return "case \(action.swiftIdentifier)" }
             let parameters = bindings.map { "\($0.formalName): \($0.swiftType)" }.joined(separator: ", ")
@@ -207,10 +203,16 @@ enum MacroExpander {
         }.joined(separator: "\n    ")
 
         let actionOrdinalCases = actions.enumerated().map { ordinal, action in
-            "case .\(action.swiftIdentifier): return \(ordinal)"
+            let pattern = action.symmetricCollection == nil
+                ? ".\(action.swiftIdentifier)"
+                : ".\(action.swiftIdentifier)(member: _)"
+            return "case \(pattern): return \(ordinal)"
         }.joined(separator: "\n        ")
 
         let actionArgumentCases = actions.map { action in
+            if action.symmetricCollection != nil {
+                return "case .\(action.swiftIdentifier)(member: _): return []"
+            }
             let publicBindings = action.bindings.filter(\.isPublic)
             let arguments = action.bindings.map { binding in
                 binding.isPublic
@@ -223,7 +225,8 @@ enum MacroExpander {
             return "case \(pattern): return [\(arguments)]"
         }.joined(separator: "\n        ")
 
-        let labelCases = actions.enumerated().map { ordinal, action in
+        let labelCases = actions.enumerated().compactMap { ordinal, action -> String? in
+            guard action.symmetricCollection == nil else { return nil }
             let publicBindings = action.bindings.filter(\.isPublic)
             if action.bindings.isEmpty {
                 return "case \(ordinal) where arguments.isEmpty: return .\(action.swiftIdentifier)"
@@ -241,26 +244,26 @@ enum MacroExpander {
 
         return [
             DeclSyntax(stringLiteral: """
-        public enum ActionLabel: Hashable, Sendable {
+        public enum Action: Hashable, Sendable {
             \(cases)
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionOrdinal(for action: ActionLabel) -> Int {
+        private static func _actionOrdinal(for action: Action) -> Int {
             switch action {
             \(actionOrdinalCases)
             }
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionArguments(for action: ActionLabel) -> [any TLAValueConvertible] {
+        private static func _actionArguments(for action: Action) -> [any TLAValueConvertible] {
             switch action {
             \(actionArgumentCases)
             }
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionLabel(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> ActionLabel? {
+        private static func _action(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> Action? {
             switch ordinal {
             \(labelCases)
             default: return nil
@@ -403,81 +406,6 @@ extension MacroExpander {
             self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: \(type).self, in: storageState)
             """
         }.joined(separator: "\n")
-    }
-
-    static func generateActionMethods(
-        isActor: Bool = false,
-        actions: [MachineSurfacePlan.Action]
-    ) -> [DeclSyntax] {
-        let methods = actions.map { action -> DeclSyntax in
-            if action.bindings.isEmpty,
-               let collection = action.symmetricCollection {
-                let source = """
-                @discardableResult
-                \(isActor ? "fileprivate" : "public mutating") func \(action.swiftIdentifier)(id: \(collection.elementType).ID) throws -> TransitionResult {
-                    _ = try \(collection.formalName).entry(for: id)
-                    let storageState = try _stateWithLiveCollections()
-                    let before = _state
-                    let afterStorageState = try _storage.successor(
-                        actionOrdinal: Self._actionOrdinal(for: .\(action.swiftIdentifier)),
-                        arguments: Self._actionArguments(for: .\(action.swiftIdentifier)),
-                        from: storageState
-                    ) { candidate in
-                        try _storage.collectionChangesOnly(
-                            at: \(collection.storageOrdinal),
-                            selected: id,
-                            from: storageState,
-                            to: candidate
-                        )
-                    }
-                    let after = try State(storage: _storage, storageState: afterStorageState)
-                    guard let nextValue: \(collection.valueType) = try _storage.collectionValue(
-                        at: \(collection.storageOrdinal),
-                        for: id,
-                        as: \(collection.valueType).self,
-                        in: afterStorageState
-                    ) else {
-                        throw GeneratedMachineStateDiagnostic.typeMismatch(
-                            path: \(String(reflecting: collection.formalName)),
-                            expected: "\(collection.valueType)",
-                            actual: "no matching collection member"
-                        )
-                    }
-                    try \(collection.formalName).update(id: id, to: nextValue)
-                    _storageState = afterStorageState
-                    _state = after
-                    return TransitionResult(
-                        action: .\(action.swiftIdentifier),
-                        before: before,
-                        after: after
-                    )
-                }
-                """
-                return DeclSyntax(stringLiteral: source)
-            }
-            let bindings = action.bindings.filter(\.isPublic)
-            let parameters = bindings.map { binding in
-                "\(binding.formalName): \(binding.swiftType)"
-            }.joined(separator: ", ")
-            let labels = bindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
-            let methodName = isActor ? "_\(action.swiftIdentifier)" : "apply\(action.swiftIdentifier)"
-            if bindings.isEmpty {
-                let source = """
-                \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
-                    try apply(.\(action.swiftIdentifier))
-                }
-                """
-                return DeclSyntax(stringLiteral: source)
-            }
-            let modifier = isActor ? "fileprivate" : "public mutating"
-            let source = """
-            \(modifier) func \(methodName)(\(parameters)) throws -> TransitionResult {
-                try apply(.\(action.swiftIdentifier)\(labels.isEmpty ? "" : "(\(labels))"))
-            }
-            """
-            return DeclSyntax(stringLiteral: source)
-        }
-        return methods
     }
 
     static func generateCollectionRuntimeMembers(
