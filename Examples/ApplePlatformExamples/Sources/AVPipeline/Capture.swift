@@ -66,16 +66,16 @@ public enum Media {
             defer { session.commitConfiguration() }
             session.addInput(try AVCaptureDeviceInput(device: device))
             session.addOutput(photoOutput)
-            _ = try await machine.apply(.configure)
+            _ = try await machine.send(.configure)
         }
 
         public func start() async throws {
             guard await machine.state.phase == .configured else { throw MediaError.notConfigured }
-            _ = try await machine.apply(.start)
+            _ = try await machine.send(.start)
             session.startRunning()
         }
 
-        public func stop() async { _ = try? await machine.apply(.stop); session.stopRunning() }
+        public func stop() async { _ = try? await machine.send(.stop); session.stopRunning() }
 
         public func capturePhoto() async throws -> Data {
             guard await machine.state.phase == .running else { throw MediaError.notRunning }

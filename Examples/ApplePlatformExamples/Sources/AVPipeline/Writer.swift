@@ -49,22 +49,22 @@ extension Media {
         public func start() async throws {
             guard await machine.state.phase == .configured else { throw MediaError.notConfigured }
             writer.startWriting(); writer.startSession(atSourceTime: .zero)
-            _ = try await machine.apply(.start)
+            _ = try await machine.send(.start)
         }
         public func append(_ sample: CMSampleBuffer) async -> Bool {
             guard await machine.state.phase == .writing else { return false }
-            _ = try? await machine.apply(.write)
+            _ = try? await machine.send(.write)
             return input.append(sample)
         }
         public func drain(_ stream: AsyncStream<CMSampleBuffer>) async { for await sample in stream { if !(await append(sample)) { break } }; do { try await finish() } catch { await cancel() } }
-        public func pause() async { _ = try? await machine.apply(.pause) }
-        public func resume() async { _ = try? await machine.apply(.resume) }
+        public func pause() async { _ = try? await machine.send(.pause) }
+        public func resume() async { _ = try? await machine.send(.resume) }
         public func finish() async throws {
             let phase = await machine.state.phase
             guard phase == .configured || phase == .writing || phase == .paused else { throw MediaError.cannotFinish }
-            input.markAsFinished(); _ = try await machine.apply(.finish)
+            input.markAsFinished(); _ = try await machine.send(.finish)
             await withCheckedContinuation { continuation in writer.finishWriting { continuation.resume() } }
         }
-        public func cancel() async { _ = try? await machine.apply(.cancel); writer.cancelWriting() }
+        public func cancel() async { _ = try? await machine.send(.cancel); writer.cancelWriting() }
     }
 }

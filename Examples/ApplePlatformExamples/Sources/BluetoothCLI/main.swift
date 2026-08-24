@@ -7,17 +7,17 @@ struct BluetoothCLI {
         let arguments = Array(CommandLine.arguments.dropFirst())
         if arguments.contains("--exercise") {
             do {
-                let central = BluetoothModel.Machine()
-                _ = try await central.apply(.poweredOn)
-                _ = try await central.apply(.startScan)
-                _ = try await central.apply(.stopScan)
-                let peripheral = PeripheralModel.Machine()
-                _ = try await peripheral.apply(.connected)
-                _ = try await peripheral.apply(.beginDiscovery)
-                _ = try await peripheral.apply(.finishDiscovery)
+                var central = try BluetoothModel.makeMachine()
+                _ = try central.send(.poweredOn)
+                _ = try central.send(.startScan)
+                _ = try central.send(.stopScan)
+                var peripheral = try PeripheralModel.makeMachine()
+                _ = try peripheral.send(.connected)
+                _ = try peripheral.send(.beginDiscovery)
+                _ = try peripheral.send(.finishDiscovery)
                 print("Bluetooth typed machine checks passed.")
-                print("central: \(await central.state.phase.rawValue)")
-                print("peripheral: \(await peripheral.state.phase.rawValue)")
+                print("central: \(central.state.phase.rawValue)")
+                print("peripheral: \(peripheral.state.phase.rawValue)")
             } catch {
                 writeError("Bluetooth validation failed: \(error)")
             }

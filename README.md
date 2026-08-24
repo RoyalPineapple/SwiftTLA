@@ -89,7 +89,7 @@ The generated API gives your application typed state and action cases.
 var clock = try ClockModel.makeMachine(
     .init(hour: 16, minute: 19, second: 59)
 )
-let result = try clock.apply(.tick)
+let result = try clock.send(.tick)
 print(result.after)
 // State(hour: 16, minute: 20, second: 0)
 ```

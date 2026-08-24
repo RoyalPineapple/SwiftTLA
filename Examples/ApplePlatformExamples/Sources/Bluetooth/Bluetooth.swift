@@ -145,7 +145,7 @@ public actor Bluetooth {
 
     public func scan() async throws -> AsyncStream<Device> {
         guard await machine.state.phase == .poweredOn else { throw BleError.notReady }
-        _ = try await machine.apply(.startScan)
+        _ = try await machine.send(.startScan)
         let stream = AsyncStream<Device>.makeStream()
         scanContinuation = stream.continuation
         central.scanForPeripherals(withServices: nil)
