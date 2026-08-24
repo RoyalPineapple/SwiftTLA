@@ -418,7 +418,7 @@ extension MacroExpander {
                     _ = try \(collection.formalName).entry(for: id)
                     let storageState = try _stateWithLiveCollections()
                     let before = _state
-                    let afterStorageState = try _storage.apply(
+                    let afterStorageState = try _storage.successor(
                         actionOrdinal: Self._actionOrdinal(for: .\(action.swiftIdentifier)),
                         arguments: Self._actionArguments(for: .\(action.swiftIdentifier)),
                         from: storageState

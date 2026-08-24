@@ -196,6 +196,19 @@ public struct _GeneratedMachineStorage: Sendable {
         }
     }
 
+    package func successor(
+        actionOrdinal: Int,
+        arguments: [any TLAValueConvertible],
+        from state: State,
+        matching predicate: (State) throws -> Bool
+    ) throws -> State {
+        try Self.onlySuccessor(try successors(
+            actionOrdinal: actionOrdinal,
+            arguments: arguments,
+            from: state
+        ).filter(predicate))
+    }
+
     private func collectionValues(
         at variableOrdinal: Int,
         in state: State
