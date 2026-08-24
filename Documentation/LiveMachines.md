@@ -11,8 +11,8 @@ assert(await live.state == transition.after)
 assert(try await live.isEnabled(.advance))
 ```
 
-`@TLAActor` is the same adapter shape for application actors. It delegates to
-its generated `Live` value.
+`@TLAActor` is the same adapter shape for application actors. It owns its
+generated machine value.
 
 ```swift
 let actor = try CounterHost.Actor()

@@ -18,7 +18,7 @@ struct GeneratedMachineDocumentationTests {
         #expect(machine.state == beforeFailure)
     }
 
-    @Test("nested actor delegates to the generated machine")
+    @Test("nested actor owns the generated machine")
     func nestedActorExposesDocumentedBehavior() async throws {
         let actor = try CounterHost.Actor()
 

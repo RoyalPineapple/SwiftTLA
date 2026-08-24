@@ -30,5 +30,5 @@ assert(await live.state == transition.after)
 
 ## Generated actor
 
-Nested `@TLAActor` types own a generated `Live` value and forward typed state
-and actions to it.
+Nested `@TLAActor` types own a generated machine value. They serialize typed
+state and actions through actor isolation.

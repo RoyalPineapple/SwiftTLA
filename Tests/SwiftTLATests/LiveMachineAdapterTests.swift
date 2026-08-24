@@ -19,8 +19,8 @@ private struct AdapterCounter {
 
 @Suite("Generated live machines")
 struct LiveMachineAdapterTests {
-    @Test("Actor delegates to the generated live machine")
-    func actorDelegatesToGeneratedLiveMachine() async throws {
+    @Test("Actor owns the generated machine")
+    func actorOwnsGeneratedMachine() async throws {
         let actor = try AdapterCounter.Actor()
         let transition = try await actor.send(.advance)
 
