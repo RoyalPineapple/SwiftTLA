@@ -17,8 +17,7 @@ let package = Package(
                 .product(name: "SwiftTLADemos", package: "SwiftTLADemos")
             ],
             swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency"),
-                .unsafeFlags(["-warnings-as-errors"])
+                .enableExperimentalFeature("StrictConcurrency")
             ]
         )
     ]
