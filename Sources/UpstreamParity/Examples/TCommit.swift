@@ -1,12 +1,10 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 /// Lamport's transaction-commit protocol over three resource managers.
 ///
 /// The resource-manager state is one finite, typed formal function. The three
 /// parameterized actions retain the upstream transition relation without
 /// manufacturing a separate action for each manager in Swift.
-@TLAModel
 public struct TCommitModel: Sendable {
     public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
         case one = "r1"
@@ -29,52 +27,63 @@ public struct TCommitModel: Sendable {
         public static var defaultValue: Self { .working }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
-        case operate
+    public static var spec: TLASpec {
+        TLASpec("TCommit", scoped: specificationComponents)
     }
 
-    public static var spec: TLASpec {
-        #spec("TCommit") { scope in
-            Extends(.integers)
-            let rmState = scope.sharedVar("rmState", initial: Function<ResourceManager, ManagerState>.literal(
-                (.one, .working), (.two, .working), (.three, .working)
-            ))
+    private static func specificationComponents(_ scope: SpecificationScope) -> [SpecComponent] {
+        let rmState = scope.sharedVar("rmState", initial: Function<ResourceManager, ManagerState>.literal(
+            (.one, .working), (.two, .working), (.three, .working)
+        ))
+        let allPreparedOrCommitted = (rmState[.one] == .prepared || rmState[.one] == .committed)
+            && (rmState[.two] == .prepared || rmState[.two] == .committed)
+            && (rmState[.three] == .prepared || rmState[.three] == .committed)
+        let noneCommitted = rmState[.one] != .committed
+            && rmState[.two] != .committed
+            && rmState[.three] != .committed
 
-            Algorithm("TCommit") {
-                Each(ResourceManager.all) { rm in
-                    Do(Step.operate) {
-                        Either {
-                            When(rmState[rm] == .working)
-                            Assign(rmState, to: rmState.updating(rm, to: .prepared))
-                        } or: {
-                            Either {
-                                When(rmState[rm] == .prepared)
-                                When(rmState[.one] == .prepared || rmState[.one] == .committed)
-                                When(rmState[.two] == .prepared || rmState[.two] == .committed)
-                                When(rmState[.three] == .prepared || rmState[.three] == .committed)
-                                Assign(rmState, to: rmState.updating(rm, to: .committed))
-                            } or: {
-                                When(rmState[rm] == .working || rmState[rm] == .prepared)
-                                When(rmState[.one] != .committed)
-                                When(rmState[.two] != .committed)
-                                When(rmState[.three] != .committed)
-                                Assign(rmState, to: rmState.updating(rm, to: .aborted))
-                            }
-                        }
-                        Goto(Step.operate)
-                    }
-                }
-            }
-
-            Invariant("TCConsistent") {
-                !(rmState[.one] == .aborted && rmState[.two] == .committed)
-                    && !(rmState[.one] == .aborted && rmState[.three] == .committed)
-                    && !(rmState[.two] == .aborted && rmState[.one] == .committed)
-                    && !(rmState[.two] == .aborted && rmState[.three] == .committed)
-                    && !(rmState[.three] == .aborted && rmState[.one] == .committed)
-                    && !(rmState[.three] == .aborted && rmState[.two] == .committed)
-            }
+        let prepare: SpecComponent = Action("Prepare", parameters: [
+            ActionParameter("rm", values: ResourceManager.finiteValues)
+        ]) {
+            let rm = Expr<ResourceManager>(.variable("rm"))
+            rmState[rm] == .working
+                && rmState.becomes(rmState.expr.updating(rm, to: .prepared))
         }
+
+        let decideCommit: SpecComponent = Action("DecideCommit", parameters: [
+            ActionParameter("rm", values: ResourceManager.finiteValues)
+        ]) {
+            let rm = Expr<ResourceManager>(.variable("rm"))
+            rmState[rm] == .prepared
+                && allPreparedOrCommitted
+                && rmState.becomes(rmState.expr.updating(rm, to: .committed))
+        }
+
+        let decideAbort: SpecComponent = Action("DecideAbort", parameters: [
+            ActionParameter("rm", values: ResourceManager.finiteValues)
+        ]) {
+            let rm = Expr<ResourceManager>(.variable("rm"))
+            (rmState[rm] == .working || rmState[rm] == .prepared)
+                && noneCommitted
+                && rmState.becomes(rmState.expr.updating(rm, to: .aborted))
+        }
+
+        let consistency: SpecComponent = Invariant("TCConsistent") {
+            !(rmState[.one] == .aborted && rmState[.two] == .committed)
+                && !(rmState[.one] == .aborted && rmState[.three] == .committed)
+                && !(rmState[.two] == .aborted && rmState[.one] == .committed)
+                && !(rmState[.two] == .aborted && rmState[.three] == .committed)
+                && !(rmState[.three] == .aborted && rmState[.one] == .committed)
+                && !(rmState[.three] == .aborted && rmState[.two] == .committed)
+        }
+
+        return [
+            Extends(.integers),
+            consistency,
+            prepare,
+            decideCommit,
+            decideAbort
+        ]
     }
 }
 
