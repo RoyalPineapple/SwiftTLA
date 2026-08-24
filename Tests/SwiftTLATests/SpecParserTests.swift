@@ -2299,6 +2299,25 @@ private let cameraModeDefinition = parserEnum(
         #expect(parsed.actions[0].body == .assign(.named("mode"), .value(.string("live"))))
     }
 
+    @Test("qualified formal Action parses as an action declaration")
+    func parsesQualifiedFormalAction() throws {
+        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        {
+            SwiftTLA.Action("advance") {
+                count.becomes(count + 1)
+            }
+        }
+        """))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions == [
+            .init(
+                name: "advance",
+                body: .assign(.named("count"), .add(.variable("count"), .value(.int(1))))
+            )
+        ])
+    }
+
     @Test func parsesVariadicActionParametersInDeclarationOrder() throws {
         let source = """
         {
