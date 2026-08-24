@@ -9,12 +9,8 @@ extension MacroExpander {
             public actor Live {
                 private var _machine: \(typeName)
 
-                private init(machine: \(typeName)) {
-                    _machine = machine
-                }
-
                 public init() throws {
-                    self.init(machine: try \(typeName).makeMachine())
+                    _machine = try \(typeName).makeMachine()
                 }
 
                 public var state: State {

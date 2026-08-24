@@ -109,7 +109,6 @@ struct CounterView: View {
                     diagnostic = String(describing: error)
                 }
             }
-            .disabled(machine.map { (try? $0.isEnabled(.advance)) == false } ?? true)
 
             if diagnostic.isEmpty == false {
                 Text(diagnostic)
@@ -127,7 +126,8 @@ struct CounterView: View {
 ```
 
 The fixture uses an explicit throwing factory at its boundary. The view works
-only with generated state and actions.
+only with generated state and actions, and it presents a rejected action as
+application state.
 
 ## Advanced execution
 

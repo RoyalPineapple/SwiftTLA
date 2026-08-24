@@ -15,7 +15,9 @@ Swift source model
         ▼
 Generated Swift machine
  ├── State and Action
- ├── value, actor, and observation adapters
+ ├── value machine in SwiftUI `@State`
+ ├── `Live` actor around that value
+ ├── nested `@TLAActor` around that value
  └── bounded exploration and formal bundles
 ```
 
@@ -98,14 +100,22 @@ The generated state is ordinary Swift value state. A view renders it and sends
 typed actions; the machine keeps each transition atomic.
 
 ```swift
+@State private var transitionError = ""
+
 Button("Tick") {
-    try? clock.send(.tick)
+    do {
+        try clock.send(.tick)
+        transitionError = ""
+    } catch {
+        transitionError = String(describing: error)
+    }
 }
-.disabled((try? clock.isEnabled(.tick)) == false)
 ```
 
-Use the generated actor when the application needs shared asynchronous state.
-It owns the same generated machine value behind actor isolation.
+`clock` is the generated value stored by the view. A failed action is explicit
+application state, not a discarded error. Use the generated actor when the
+application needs shared asynchronous state; it stores the same generated
+machine value behind actor isolation.
 
 ## Add bounded assurance
 
