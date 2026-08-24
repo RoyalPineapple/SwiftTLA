@@ -40,7 +40,6 @@ struct LiveMachineRuntimeTests {
     ) -> TLALiveMachineTransitionDriver<CounterAction> {
         return TLALiveMachineTransitionDriver(
             successors: successors ?? realSuccessors(storage),
-            validateAction: { _ in nil },
             decodeState: decodeState
         )
     }

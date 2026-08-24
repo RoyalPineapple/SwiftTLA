@@ -19,12 +19,12 @@ private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
 requireSendable(ObservableHost.Observable.self)
 requireSendable(ObservableHost.Observable.State.self)
-requireSendable(ObservableHost.Observable.ActionLabel.self)
-requireSendable(ObservableHost.Observable.TransitionResult.self)
+requireSendable(ObservableHost.Observable.Action.self)
+requireSendable(ObservableHost.Observable.Transition.self)
 
 let live = try ObservableHost.makeLive()
 let observable = try await ObservableHost.Observable(live: live)
-guard case .committed(let result) = try await observable.apply(.advance) else {
+guard case .committed(let result) = try await observable.send(.advance) else {
   throw FixtureError.invalidTransition
 }
 
@@ -43,7 +43,7 @@ guard stateCount == 1 else {
 let beforeRejectedAction = observable.state
 let rejected: Bool
 do {
-  _ = try await observable.apply(.advance)
+  _ = try await observable.send(.advance)
   rejected = false
 } catch {
   rejected = true

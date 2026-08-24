@@ -99,7 +99,7 @@ struct LocalOperatorTests {
     #expect(!rendered.contains("LET RECURSIVE Count"))
 
     var model = try GeneratedTypedLocalRecursionModel.makeMachine()
-    #expect(try model.apply(.advance).after.counter == 1)
+    #expect(try model.send(.advance).after.counter == 1)
   }
 
   @Test("typed formal closures retain local recursion through #spec and Algorithm")
@@ -111,7 +111,7 @@ struct LocalOperatorTests {
     #expect(definition.body.description.contains("LET RECURSIVE SA"))
 
     var model = try GeneratedTypedFormalDefinitionAlgorithm.makeMachine()
-    #expect(try model.apply(.advance).after.counter == 1)
+    #expect(try model.send(.advance).after.counter == 1)
   }
 
   @Test("top-level typed formal definitions retain runtime and parser equality")
@@ -124,7 +124,7 @@ struct LocalOperatorTests {
     #expect(definition.body.description.contains("SA[value0]"))
 
     var model = try GeneratedTopLevelTypedFormalDefinitionModel.makeMachine()
-    #expect(try model.apply(.advance).after.counter == 1)
+    #expect(try model.send(.advance).after.counter == 1)
   }
 
   @Test("typed local recursion is parser-fidelitous and preserves ForAll and Exists")

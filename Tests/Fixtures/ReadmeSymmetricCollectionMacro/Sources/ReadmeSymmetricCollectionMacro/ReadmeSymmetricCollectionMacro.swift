@@ -27,7 +27,7 @@ struct DeviceContract {
 let device = Device(id: UUID())
 var contract = DeviceContract()
 contract.phases.insert(device)
-let result = try contract.beginConnect(id: device.id)
+let result = try contract.send(.beginConnect(member: device.id))
 
 guard case .function = contract.state.phases else {
     throw FixtureError.invalidState

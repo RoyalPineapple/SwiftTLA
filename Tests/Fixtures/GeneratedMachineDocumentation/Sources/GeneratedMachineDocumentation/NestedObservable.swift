@@ -46,6 +46,6 @@ func runObservable() async throws {
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    let result = try await observable.apply(.advance)
+    let result = try await observable.send(.advance)
     guard case .committed = result else { return }
 }

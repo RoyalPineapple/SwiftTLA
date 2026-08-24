@@ -28,7 +28,7 @@ struct LiveMachineAdapterTests {
         let actor = AdapterCounter.Actor(live: live)
         let observable = try await AdapterCounter.Observable(live: live)
 
-        guard case .committed = try await actor.apply(.advance) else {
+        guard case .committed = try await actor.send(.advance) else {
             Issue.record("Expected actor action to commit")
             return
         }
@@ -49,7 +49,7 @@ struct LiveMachineAdapterTests {
         let observable = try await AdapterCounter.Observable(live: live)
         let actor = AdapterCounter.Actor(live: live)
         await observable.cancelObservation()
-        _ = try await actor.apply(.advance)
+        _ = try await actor.send(.advance)
 
         guard case .snapshot(let current) = try await live.current() else {
             Issue.record("Expected runtime snapshot")

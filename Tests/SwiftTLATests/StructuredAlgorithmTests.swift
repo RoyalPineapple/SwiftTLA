@@ -79,7 +79,7 @@ struct StructuredAlgorithmTests {
     @Test("record-valued map updates survive #spec, lowering, and generated state")
     func generatedStateRetainsNestedTypedRecordUpdate() throws {
         var model = try StructuredCarModel.makeMachine()
-        let result = try model.apply(.open(process: .north))
+        let result = try model.send(.open(process: .north))
 
         #expect(result.before.cars[.north][StructuredCarModel.CarRecord.door] == .closed)
         #expect(result.after.cars[.north][StructuredCarModel.CarRecord.door] == .open)

@@ -4,18 +4,16 @@ import SwiftTLA
 
 struct GeneratedMachineDocumentationTests {
     @Test("bounded model preserves state when a disabled action is rejected")
-    func disabledActionRetainsSnapshot() async throws {
+    func disabledActionRetainsSnapshot() throws {
         var machine = try BoundedCounter.makeMachine()
-        let initial = try await machine.machineObservation()
-        let result = try machine.apply(.advance)
+        let result = try machine.send(.advance)
         let beforeFailure = machine.state
 
-        #expect(initial.state.value == 0)
-        #expect(initial.availableActions == [.advance])
         #expect(result.before.value == 0)
+        #expect(try machine.isEnabled(.advance) == false)
         #expect(result.after.value == 1)
         #expect(throws: GeneratedMachineError.self) {
-            try machine.apply(.advance)
+            try machine.send(.advance)
         }
         #expect(machine.state == beforeFailure)
     }
@@ -33,7 +31,7 @@ struct GeneratedMachineDocumentationTests {
         #expect(observable.identity == observableLive.identity)
         #expect(actorIdentity != observable.identity)
 
-        let result = try await actor.apply(.advance)
+        let result = try await actor.send(.advance)
         guard case .committed(let commit) = result else {
             Issue.record("Expected the live actor request to commit")
             return

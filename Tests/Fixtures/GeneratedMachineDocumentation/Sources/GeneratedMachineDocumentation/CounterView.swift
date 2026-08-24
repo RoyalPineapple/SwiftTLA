@@ -4,43 +4,39 @@ import SwiftTLA
 import SwiftUI
 
 struct CounterView: View {
-    @State private var live: CounterScreenModel.Live?
-    @State private var machine: CounterScreenModel.Observable?
+    @State private var machine: CounterScreenModel?
     @State private var diagnostic = ""
 
     var body: some View {
         VStack {
-            Text("Value: \(machine?.state.map { String($0.value) } ?? "-")")
+            Text("Value: \(machine.map { String($0.state.value) } ?? "-")")
             Button("Advance") {
-                Task { @MainActor in
-                    guard let machine else { return }
-                    do {
-                        switch try await machine.apply(.advance) {
-                        case .committed:
-                            diagnostic = ""
-                        case .rejected(let rejection):
-                            diagnostic = rejection.reason.description
-                        case .failed(let failure):
-                            diagnostic = failure.message
-                        }
-                    } catch {
-                        diagnostic = String(describing: error)
-                    }
+                do {
+                    guard var machine else { return }
+                    try machine.send(.advance)
+                    self.machine = machine
+                    diagnostic = ""
+                } catch {
+                    diagnostic = String(describing: error)
                 }
             }
+            .disabled(canAdvance == false)
             if !diagnostic.isEmpty {
                 Text(diagnostic)
             }
         }
         .task {
-            guard live == nil else { return }
+            guard machine == nil else { return }
             do {
-                let live = try CounterScreenModel.makeLive()
-                self.live = live
-                machine = try await CounterScreenModel.Observable(live: live)
+                machine = try CounterScreenModel.makeMachine()
             } catch {
                 diagnostic = String(describing: error)
             }
         }
+    }
+
+    private var canAdvance: Bool {
+        guard let machine else { return false }
+        return (try? machine.isEnabled(.advance)) == true
     }
 }

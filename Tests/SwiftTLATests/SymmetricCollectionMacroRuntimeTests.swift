@@ -359,32 +359,32 @@ struct SymmetricCollectionMacroRuntimeTests {
     }
   }
 
-  @Test("TLAModel generates ID-routed collection storage and its checked scope")
+  @Test("TLAModel generates typed collection actions and checked scopes")
   func macroGeneratesIdentifiedRuntime() throws {
     var model = try GeneratedSymmetricRuntime.makeMachine()
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device)
-    let result = try model.begin(id: device.id)
+    let result = try model.send(.begin(member: device.id))
 
     #expect(model.devices[device.id] == 1)
-    #expect(result.action == .begin)
+    #expect(result.action == .begin(member: device.id))
     #expect(GeneratedSymmetricRuntime.symmetricCollectionScopes == [
       SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
     ])
     #expect(GeneratedSymmetricRuntime.spec.actions.description.contains("42") == false)
     #expect(throws: GeneratedMachineError.self) {
-      try model.begin(id: 99)
+      try model.send(.begin(member: 99))
     }
   }
 
-  @Test("Generated ID routing evaluates expression-backed updates against live storage")
+  @Test("Generated collection actions evaluate expression-backed updates against live storage")
   func macroUpdatesLiveStorageForExpressionBackedActions() throws {
     var model = try GeneratedExpressionSymmetricRuntime.makeMachine()
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device, value: 4)
-    try model.advance(id: device.id)
+    try model.send(.advance(member: device.id))
 
     #expect(model.devices[device.id] == 5)
   }
@@ -400,13 +400,13 @@ struct SymmetricCollectionMacroRuntimeTests {
     model.devices.insert(peer, value: 4)
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.begin(id: wrongPhase.id)
+      try model.send(.begin(member: wrongPhase.id))
     }
     #expect(model.devices[wrongPhase.id] == 1)
     #expect(model.devices[eligible.id] == 0)
     #expect(model.devices[peer.id] == 4)
 
-    try model.begin(id: eligible.id)
+    try model.send(.begin(member: eligible.id))
     #expect(model.devices[eligible.id] == 1)
     #expect(model.devices[wrongPhase.id] == 1)
     #expect(model.devices[peer.id] == 4)
@@ -419,7 +419,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     for device in devices {
       model.devices.insert(device)
-      try model.begin(id: device.id)
+      try model.send(.begin(member: device.id))
     }
 
     #expect(model.devices.verificationScope == 2)
@@ -439,7 +439,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     model.devices.insert(device)
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.begin(id: device.id)
+      try model.send(.begin(member: device.id))
     }
     #expect(model.devices[device.id] == 0)
   }
@@ -473,12 +473,12 @@ struct SymmetricCollectionMacroRuntimeTests {
     model.devices.insert(peer, value: 4)
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.advance(id: rejected.id)
+      try model.send(.advance(member: rejected.id))
     }
     #expect(model.devices[rejected.id] == 0)
     #expect(model.devices[peer.id] == 4)
 
-    try model.advance(id: selected.id)
+    try model.send(.advance(member: selected.id))
     #expect(model.devices[selected.id] == 11)
     #expect(model.devices[peer.id] == 4)
   }
@@ -512,12 +512,12 @@ struct SymmetricCollectionMacroRuntimeTests {
     model.devices.insert(peer, value: 0)
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.advance(id: rejected.id)
+      try model.send(.advance(member: rejected.id))
     }
     #expect(model.devices[rejected.id] == 1)
     #expect(model.devices[peer.id] == 0)
 
-    try model.advance(id: selected.id)
+    try model.send(.advance(member: selected.id))
     #expect(model.devices[selected.id] == 22)
     #expect(model.devices[peer.id] == 0)
   }
@@ -530,7 +530,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       allowed.devices.insert(device)
     }
 
-    let allowedEvidence = try allowed.applyadvance()
+    let allowedEvidence = try allowed.send(.advance)
     #expect(allowed.phase == 1)
     #expect(allowedEvidence.before.phase == 0)
     #expect(allowedEvidence.after.phase == 1)
@@ -545,7 +545,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let rejectedSnapshot = rejected.state
     #expect(throws: GeneratedMachineError.self) {
-      try rejected.applyadvance()
+      try rejected.send(.advance)
     }
     #expect(rejected.state == rejectedSnapshot)
     #expect(rejected.phase == 0)
@@ -566,14 +566,14 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let rejectedSnapshot = model.state
     #expect(throws: GeneratedMachineError.self) {
-      try model.applyadvance()
+      try model.send(.advance)
     }
     #expect(model.state == rejectedSnapshot)
     #expect(model.phase == 0)
 
     let matching = StringMacroDevice(id: "matching")
     model.devices.insert(matching, value: 1)
-    let evidence = try model.applyadvance()
+    let evidence = try model.send(.advance)
 
     #expect(model.phase == 1)
     #expect(evidence.after.phase == 1)

@@ -276,7 +276,7 @@ private struct FoldGeneratedModel {
     func generatedMachineUsesTypedCollectionOperators() throws {
 
         var model = try TypedCollectionGeneratedModel.makeMachine()
-        let result = try model.apply(.keepEvenSquares)
+        let result = try model.send(.keepEvenSquares)
 
         #expect(Set(result.before.values.elements) == Set([1, 2, 3, 4]))
         #expect(Set(result.after.values.elements) == Set([4, 16]))
@@ -326,7 +326,7 @@ private struct FoldGeneratedModel {
     @Test("generated machines preserve formal fold behavior")
     func generatedMachineUsesFormalFold() throws {
         var model = try FoldGeneratedModel.makeMachine()
-        let result = try model.apply(.sum)
+        let result = try model.send(.sum)
 
         #expect(result.after.total == 6)
         #expect(try FoldGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("FoldFunction(LAMBDA"))
@@ -466,7 +466,7 @@ private struct FoldGeneratedModel {
         var model = try ZeroBasedSequenceGeneratedModel.makeMachine(
             .init(input: input, table: table)
         )
-        let result = try model.apply(.writeFirst)
+        let result = try model.send(.writeFirst)
         let tableValue = try #require(result.after.table.element(at: 0))
         let inputValue = try #require(result.after.input.element(at: 0))
         #expect(tableValue == inputValue)
@@ -510,7 +510,7 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(everyPositive.raw) == .bool(true))
 
         var model = try TypedQuantifierGeneratedModel.makeMachine()
-        let result = try model.apply(.findEven)
+        let result = try model.send(.findEven)
         #expect(result.after.result == true)
         #expect(try TypedQuantifierGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("\\E"))
     }

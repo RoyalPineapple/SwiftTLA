@@ -48,10 +48,10 @@ struct NestedComposableMacroConformanceTests {
         let actor = NestedComposedCounter.Actor(live: live)
 
         let modelBefore = try await model.machineObservation()
-        _ = try model.apply(.advance)
+        _ = try model.send(.advance)
         let modelAfter = try await model.machineObservation()
-        guard case .committed = try await observable.apply(.advance),
-              case .committed = try await actor.apply(.advance)
+        guard case .committed = try await observable.send(.advance),
+              case .committed = try await actor.send(.advance)
         else {
             Issue.record("Expected nested adapter actions to commit")
             return
@@ -71,9 +71,9 @@ struct NestedComposableMacroConformanceTests {
     @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
     @MainActor
     func threeParameterIdentityRemainsDistinctAcrossNestedSurfaces() async throws {
-        let first = EndToEndThreeParameterActionMachine.ActionLabel.board(person: 1, elevator: 10, direction: 100)
-        let selected = EndToEndThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
-        let available = try EndToEndThreeParameterActionMachine.makeMachine().availableActions()
+        let first = EndToEndThreeParameterActionMachine.Action.board(person: 1, elevator: 10, direction: 100)
+        let selected = EndToEndThreeParameterActionMachine.Action.board(person: 2, elevator: 20, direction: 200)
+        let available = try EndToEndThreeParameterActionMachine.makeMachine().enabledActions()
         let live = try ThreeParameterActionMachine.makeLive()
         let observable = try await ThreeParameterActionMachine.Observable(live: live)
         let actor = ThreeParameterActionMachine.Actor(live: live)
@@ -83,11 +83,11 @@ struct NestedComposableMacroConformanceTests {
         #expect(available.contains(first))
         #expect(available.contains(selected))
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let result = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
+        let result = try machine.send(.board(person: 2, elevator: 20, direction: 200))
         #expect(result.after.floor == 222)
-        guard case .committed(let observed) = try await observable.apply(
+        guard case .committed(let observed) = try await observable.send(
             .board(person: 2, elevator: 20, direction: 200)
-        ), case .committed(let acted) = try await actor.apply(
+        ), case .committed(let acted) = try await actor.send(
             .board(person: 2, elevator: 20, direction: 200)
         ) else {
             Issue.record("Expected nested adapter actions to commit")
@@ -114,8 +114,8 @@ struct NestedComposableMacroConformanceTests {
         requireSendable(NestedComposedCounter.self)
         requireSendable(NestedComposedCounter.Actor.self)
         requireSendable(NestedComposedCounter.Observable.self)
-        requireSendable(NestedComposedCounter.ActionLabel.self)
-        requireSendable(NestedComposedCounter.TransitionResult.self)
+        requireSendable(NestedComposedCounter.Action.self)
+        requireSendable(NestedComposedCounter.Transition.self)
         requireSendable(GeneratedSymmetricRuntime.self)
         requireSendable(TwoCarElevatorMachine.Observable.self)
 
