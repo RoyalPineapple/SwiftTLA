@@ -3,18 +3,14 @@ import SwiftTLAMacros
 
 @TLAModel
 struct Counter {
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 
-    enum Node: String, FiniteDomainKey {
+    enum Node: String, CaseIterable {
         case only
 
-        static var defaultValue: Self { .only }
-        static let formalDomain: [Node] = [.only]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "fixture.spec-expression-node")
 
-        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     struct CarFields {
@@ -39,12 +35,10 @@ struct Counter {
         static let doorsOpen = field(\CarFields.doorsOpen)
     }
 
-    enum CarID: String, FiniteTLAValueDomain {
+    enum CarID: String, CaseIterable {
         case one
         case two
 
-        static var defaultValue: Self { .one }
-        static let finiteValues: [CarID] = [.one, .two]
     }
 
     static var spec: TLASpec {

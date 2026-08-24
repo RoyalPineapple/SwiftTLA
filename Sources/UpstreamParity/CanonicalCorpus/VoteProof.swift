@@ -29,57 +29,9 @@ public struct VoteProofModel: Sendable {
         checkDeadlock: false
     )
 
-    public enum Value: String, FiniteDomainKey {
+    public enum Value: String, CaseIterable {
         case v1, v2
 
-        public static let formalDomain: [Self] = [.v1, .v2]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.byzpaxos.vote-proof.value")
-        public var tlaValue: TLAValue { .string(rawValue) }
-        public static var defaultValue: Self { .v1 }
-
-        public init?(formalValue: TLAValue) {
-            guard case .string(let rawValue) = formalValue else { return nil }
-            self.init(rawValue: rawValue)
-        }
-    }
-
-    public enum Acceptor: String, FiniteDomainKey {
-        case a1, a2, a3
-
-        public static let formalDomain: [Self] = [.a1, .a2, .a3]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.byzpaxos.vote-proof.acceptor")
-        public var tlaValue: TLAValue { .string(rawValue) }
-        public static var defaultValue: Self { .a1 }
-
-        public init?(formalValue: TLAValue) {
-            guard case .string(let rawValue) = formalValue else { return nil }
-            self.init(rawValue: rawValue)
-        }
-    }
-
-    private enum Step: String, PlusCalLabel, CaseIterable {
-        case acc
-    }
-
-    public static var spec: TLASpec {
-        #spec("VoteProof") {
-            Constant("Value", SetExpr<Value>(.v1, .v2))
-            Constant("Acceptor", SetExpr<Acceptor>(.a1, .a2, .a3))
-            Constant("Quorum", SetExpr<SetExpr<Acceptor>>(
-                SetExpr<Acceptor>(.a1, .a2),
-                SetExpr<Acceptor>(.a1, .a3),
-                SetExpr<Acceptor>(.a2, .a3),
-                SetExpr<Acceptor>(.a1, .a2, .a3)
-            ))
-            Constant("Ballot", SetExpr<Int>(0, 1, 2))
-            let consensusValue = SetExpr<Value>.literal(.v1, .v2)
-            let consensusChosen = FormalCall(as: SetExpr<Value>.self, "chosen")
-            let consensus = Instance(
-                "C",
-                of: ByzPaxosConsensus.module,
-                plusCalPhase: .postTranslation,
-                dependsOn: ["chosen"]
-            )
             consensus
             Refinement(
                 name: "Refines",

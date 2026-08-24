@@ -1,15 +1,13 @@
 import SwiftTLA
 
 public struct LamportMutexModel: Sendable {
-    public enum Node: Int, CaseIterable, FiniteDomainKey {
+    public enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.lamport-mutex.node")
+        public static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
     public enum MessageKind: String, TLAValueType {

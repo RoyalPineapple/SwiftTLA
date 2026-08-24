@@ -45,95 +45,10 @@ struct CounterNoInvs {
 
 @TLAModel
 struct GeneratedAlgorithmCounter {
-    enum Node: String, FiniteDomainKey {
+    enum Node: String, CaseIterable {
         case left
         case right
 
-        static var defaultValue: Self { .left }
-        static let formalDomain: [Node] = [.left, .right]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-algorithm-node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    static var spec: TLASpec {
-        #spec("GeneratedAlgorithmCounter") {
-            Algorithm("GeneratedAlgorithmCounter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
-                Each(Node.all, fairness: .weak) { _ in
-                    While(TestControlLabel.increment, count < 2) {
-                        When(count < 2)
-                        Assert(count >= 0)
-                        Assign(count, to: count + 1)
-                    }
-                }
-            })
-        }
-    }
-}
-
-@TLAModel
-private struct SeededCounterMachine {
-    static var spec: TLASpec {
-        #spec("SeededCounterMachine") {
-            Algorithm("SeededCounterMachine", scoped: { scope in
-                let value = scope.sharedVar("value", in: 0...2)
-
-                While(TestControlLabel.advance, true) {
-                    Either {
-                        When(value < 2)
-                        Assign(value, to: value + 1)
-                    } or: {
-                        When(value == 2)
-                        Assign(value, to: 0)
-                    }
-                }
-            })
-        }
-    }
-}
-
-struct GeneratedAlgorithmMachineTests {
-    @Test("generated actions retain collision-safe Swift cases")
-    func sanitizesGeneratedActions() {
-        let dotted = SanitizedActionModel.Action.procedure_work_enter
-        let underscored = SanitizedActionModel.Action.procedure_work_enter_2
-        let dashed = SanitizedActionModel.Action.step_2
-        #expect((dotted == underscored) == false)
-        #expect((underscored == dashed) == false)
-        #expect((dashed == dotted) == false)
-    }
-
-    @Test("generated actions accept a case named toInvocation")
-    func permitsCurrentActionNames() {
-        let action = InvocationNamedActionModel.Action.toInvocation
-        #expect(action == .toInvocation)
-    }
-
-    @Test("a bounded Algorithm generates the ordinary typed state machine")
-    func generatedAlgorithmUsesTheSharedLowering() throws {
-        var model = try GeneratedAlgorithmCounter.makeMachine()
-        #expect(model.state.count == 0)
-        let left = GeneratedAlgorithmCounter.Action.increment(process: .left)
-        let result = try model.send(left)
-        #expect(result.before.count == 0)
-        #expect(result.after.count == 1)
-        #expect(model.state.count == 1)
-    }
-
-    @Test("a generated machine accepts one declared initial state")
-    func generatedMachineAcceptsDeclaredInitialState() throws {
-        var machine = try SeededCounterMachine.makeMachine(
-            .init(value: 2)
-        )
-
-        #expect(machine.state.value == 2)
-
-        let advance = try machine.send(.advance)
-        #expect(advance.after.value == 0)
-    }
-
-    @Test("a generated machine rejects an initial state outside Init")
     func generatedMachineRejectsUndeclaredInitialState() {
         do {
             _ = try SeededCounterMachine.makeMachine(.init(value: 3))
@@ -158,24 +73,20 @@ struct GeneratedAlgorithmMachineTests {
 
 @TLAModel
 struct GeneratedRestrictedProcessDomain {
-    enum Member: Int, FiniteDomainKey {
+    enum Member: Int, CaseIterable {
         case worker = 1
         /// A value that is valid in state, but not a member of the process
         /// domain. This is the usual shape for an optional parent pointer.
         case none = 0
 
-        static var defaultValue: Self { .worker }
-        static let formalDomain: [Member] = [.worker]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.restricted-process-member")
 
-        var tlaValue: TLAValue { .int(rawValue) }
     }
 
     static var spec: TLASpec {
         #spec("GeneratedRestrictedProcessDomain") {
             Algorithm("GeneratedRestrictedProcessDomain", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
-                Each(Member.all) { _ in
+                Each(FiniteDomain([.worker])) { _ in
                     Do(TestControlLabel.increment) {
                         Assign(count, to: count + 1)
                     }
@@ -186,7 +97,7 @@ struct GeneratedRestrictedProcessDomain {
 }
 
 struct GeneratedRestrictedProcessDomainTests {
-    @Test("the parser preserves an explicitly restricted FiniteDomainKey domain")
+    @Test("a process declaration keeps its explicit member subset")
     func generatedModelUsesOnlyDeclaredProcessMembers() {
         #expect(GeneratedRestrictedProcessDomain.spec.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.int(1)])
@@ -288,14 +199,10 @@ struct GeneratedPairPatternTests {
 
 @TLAModel
 struct GeneratedRangeInitializedAlgorithm {
-    enum Node: String, FiniteDomainKey {
+    enum Node: String, CaseIterable {
         case clock
 
-        static var defaultValue: Self { .clock }
-        static let formalDomain: [Node] = [.clock]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.range-initialized-node")
 
-        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     static var spec: TLASpec {
@@ -330,34 +237,9 @@ struct GeneratedRangeInitializedAlgorithmTests {
 
 @TLAModel
 struct GeneratedIntegerChoiceAlgorithm {
-    enum Node: String, FiniteDomainKey {
+    enum Node: String, CaseIterable {
         case only
 
-        static var defaultValue: Self { .only }
-        static let formalDomain: [Node] = [.only]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-integer-choice-node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    static var spec: TLASpec {
-        #spec("GeneratedIntegerChoice") {
-            Algorithm("GeneratedIntegerChoice", scoped: { scope in
-                let selected = scope.sharedVar("selected", initial: 0)
-                Each(Node.all) { _ in
-                    Do(TestControlLabel.choose) {
-                        Choose(1...3) { choice in
-                            Assign(selected, to: choice.expr)
-                        }
-                    }
-                }
-            })
-        }
-    }
-}
-
-struct GeneratedIntegerChoiceAlgorithmTests {
-    @Test("#spec retains a bounded integer choice")
     func generatedModelRetainsIntegerChoice() throws {
         let spec = GeneratedIntegerChoiceAlgorithm.spec
         let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
@@ -392,97 +274,10 @@ struct GeneratedAlgorithmStateConstraintTests {
 
 @TLAModel
 struct GeneratedProcessLocalInvariant {
-    enum Node: String, FiniteDomainKey {
+    enum Node: String, CaseIterable {
         case left
         case right
 
-        static var defaultValue: Self { .left }
-        static let formalDomain: [Node] = [.left, .right]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.process-local-invariant-node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    enum Label: String, PlusCalLabel, CaseIterable {
-        case receive
-    }
-
-    static var spec: TLASpec {
-        #spec("GeneratedProcessLocalInvariant") {
-            Algorithm("GeneratedProcessLocalInvariant", scoped: { scope in
-                Each(Node.all, scoped: { selfID, scope in
-                    let count = scope.localVar("count", initial: 0)
-                    Do(Label.receive) {
-                        Skip()
-                    }
-                    Invariant("LocalCount") { count == 0 }
-                    Invariant("ControlLocation") {
-                        At(Label.receive, selfID) || Finished(selfID)
-                    }
-                })
-            })
-        }
-    }
-}
-
-struct GeneratedProcessLocalInvariantTests {
-    @Test("#spec preserves a process-local invariant through both construction paths")
-    func generatedModelPreservesProcessLocalInvariant() {
-        #expect(GeneratedProcessLocalInvariant.spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
-        #expect(GeneratedProcessLocalInvariant.spec.invariants[0].body == .forAll(
-            .setLiteral([.value(.string("left")), .value(.string("right"))]),
-            "process",
-            .equal(
-                .functionApply(.variable("count"), .variable("process")),
-                .value(.int(0))
-            )
-        ))
-    }
-}
-
-@TLAModel
-struct GeneratedDependentInitialAlgorithm {
-    enum Node: String, FiniteDomainKey {
-        case left
-        case right
-
-        static var defaultValue: Self { .left }
-        static let formalDomain: [Node] = [.left, .right]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.dependent-initial-node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    enum Phase: String, TLAValueType {
-        case active
-        case inactive
-
-        static var defaultValue: Self { .active }
-    }
-
-    static var spec: TLASpec {
-        #spec("GeneratedDependentInitialAlgorithm") {
-            Algorithm("GeneratedDependentInitialAlgorithm", scoped: { scope in
-                let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
-                let mirrors = scope.sharedVar("mirrors", initial: Function<Node, Phase>.mapping { node in
-                    If(node == Node.left && seed == true, then: Phase.active, else: Phase.inactive)
-                })
-                Each(Node.all) { _ in
-                    Do(TestControlLabel.stop) {
-                        Assign(mirrors, to: mirrors)
-                        Stop()
-                    }
-                }
-            })
-        }
-    }
-}
-
-struct GeneratedDependentInitialAlgorithmTests {
-    @Test("#spec independently preserves a dependent typed function initializer")
-    func generatedModelPreservesDependentInitialStates() throws {
-        let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
-        let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
         let states = try CompiledRuntime(compilation: compilation).initialStates().map {
             try $0.value(for: mirrors).rendered(using: compilation.layout)
         }

@@ -268,42 +268,9 @@ enum RollItem: Identifiable {
 
 @TLAModel
 struct CameraWorkflow {
-    private enum ReadyProcess: String, FiniteDomainKey { case readyEvent
-        static var defaultValue: Self { .readyEvent }
-        static let formalDomain: [Self] = [.readyEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.ready")
-        var tlaValue: TLAValue { .string(rawValue) }
+    private enum ReadyProcess: String, CaseIterable { case readyEvent
     }
-    private enum RecordProcess: String, FiniteDomainKey { case recordEvent
-        static var defaultValue: Self { .recordEvent }
-        static let formalDomain: [Self] = [.recordEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.record")
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-    private enum StopProcess: String, FiniteDomainKey { case stopEvent
-        static var defaultValue: Self { .stopEvent }
-        static let formalDomain: [Self] = [.stopEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.stop")
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-    private enum PlayProcess: String, FiniteDomainKey { case playEvent
-        static var defaultValue: Self { .playEvent }
-        static let formalDomain: [Self] = [.playEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.play")
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-    private enum LiveProcess: String, FiniteDomainKey { case liveEvent
-        static var defaultValue: Self { .liveEvent }
-        static let formalDomain: [Self] = [.liveEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.live")
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-    private enum Step: String, PlusCalLabel, CaseIterable { case ready, record, stop, play, live }
-
-    static var spec: TLASpec {
-        #spec("CameraWorkflow") {
-            Algorithm("CameraWorkflow", scoped: { scope in
-                let phase = scope.sharedVar("phase", initial: 0)
+    private enum RecordProcess: String, CaseIterable { case recordEvent
                 Each(ReadyProcess.all) { _ in
                     Do(Step.ready) { When(phase == 0); Assign(phase, to: 1); Goto(Step.ready) }
                 }

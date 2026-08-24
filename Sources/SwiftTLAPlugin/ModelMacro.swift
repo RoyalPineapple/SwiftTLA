@@ -15,12 +15,12 @@ struct ParsedEnumInfo {
     /// The values that belong to the formal domain. This is intentionally
     /// separate from all Swift cases: a useful formal type can include a
     /// sentinel such as `.none` without making it a process or map key.
-    let formalDomain: [TLAValue]
+    let finiteValues: [TLAValue]
 
-    init(typeName: String, cases: [(String, TLAValue)], formalDomain: [TLAValue]? = nil) {
+    init(typeName: String, cases: [(String, TLAValue)], finiteValues: [TLAValue]? = nil) {
         self.typeName = typeName
         self.cases = cases
-        self.formalDomain = formalDomain ?? cases.map(\.1)
+        self.finiteValues = finiteValues ?? cases.map(\.1)
     }
     var domain: Set<TLAValue> { Set(cases.map(\.value)) }
 }
@@ -161,14 +161,9 @@ enum TLASpecVerifier {
                 $0.type.as(IdentifierTypeSyntax.self)?.name.text
             }
 
-            guard inheritedNames.contains("TLAValueType")
-                || inheritedNames.contains("FiniteTLAValueDomain")
-                || inheritedNames.contains("FiniteDomainKey")
-            else { continue }
-
             let intBacked = inheritedNames.contains("Int")
             let stringBacked = inheritedNames.contains("String")
-            guard intBacked || stringBacked else { continue }
+            guard inheritedNames.contains("CaseIterable"), intBacked || stringBacked else { continue }
 
             var cases: [(name: String, value: TLAValue)] = []
             var idx = 0
@@ -194,47 +189,11 @@ enum TLASpecVerifier {
 
             result.append(ParsedEnumInfo(
                 typeName: enumDecl.name.text,
-                cases: cases,
-                formalDomain: formalDomain(in: enumDecl, cases: cases)
+                cases: cases
             ))
         }
         return result
     }
-
-    /// Reads the finite domain declaration from source so macro parsing has
-    /// the same process/key members as the runtime builder. The Swift enum
-    /// may have additional values for optional fields or sentinels.
-    private static func formalDomain(
-        in enumDecl: EnumDeclSyntax,
-        cases: [(name: String, value: TLAValue)]
-    ) -> [TLAValue] {
-        guard let binding = enumDecl.memberBlock.members.lazy.compactMap({ member -> PatternBindingSyntax? in
-            guard let declaration = member.decl.as(VariableDeclSyntax.self),
-                  declaration.modifiers.contains(where: { $0.name.text == "static" })
-            else { return nil }
-            return declaration.bindings.first { binding in
-                binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "formalDomain"
-            }
-        }).first,
-        let initializer = binding.initializer?.value
-        else { return cases.map(\.value) }
-
-        if initializer.as(DeclReferenceExprSyntax.self)?.baseName.text == "allCases"
-            || initializer.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "allCases" {
-            return cases.map(\.value)
-        }
-
-        guard let array = initializer.as(ArrayExprSyntax.self) else {
-            return cases.map(\.value)
-        }
-        let values = array.elements.compactMap { element -> TLAValue? in
-            let name = element.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
-                ?? element.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-            return cases.first { $0.name == name }?.value
-        }
-        return values.isEmpty ? cases.map(\.value) : values
-    }
-
 }
 
 struct SimpleError: Error, CustomStringConvertible {
@@ -244,7 +203,17 @@ struct SimpleError: Error, CustomStringConvertible {
 
 // MARK: - Macros
 
-public struct ModelMacro: MemberMacro, ExtensionMacro {
+public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingAttributesFor member: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [AttributeSyntax] {
+        guard isFiniteRawEnum(member) else { return [] }
+        return ["@_TLAFiniteEnum"]
+    }
+
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
         guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
             return []
@@ -267,6 +236,51 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         return MacroExpander.generate(model: parsed)
+    }
+}
+
+private func isFiniteRawEnum(_ declaration: some DeclSyntaxProtocol) -> Bool {
+    guard let enumDeclaration = declaration.as(EnumDeclSyntax.self),
+          let inheritance = enumDeclaration.inheritanceClause
+    else { return false }
+    let inheritedNames = Set(inheritance.inheritedTypes.compactMap {
+        $0.type.as(IdentifierTypeSyntax.self)?.name.text
+    })
+    return inheritedNames.contains("CaseIterable")
+        && (inheritedNames.contains("String") || inheritedNames.contains("Int"))
+        && enumDeclaration.memberBlock.members.contains(where: { $0.decl.as(EnumCaseDeclSyntax.self) != nil })
+}
+
+public struct FiniteEnumMacro: MemberMacro, ExtensionMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingMembersOf declaration: some DeclGroupSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        guard let enumDeclaration = declaration.as(EnumDeclSyntax.self),
+              let firstCase = enumDeclaration.memberBlock.members.lazy.compactMap({
+                  $0.decl.as(EnumCaseDeclSyntax.self)?.elements.first?.name.text
+              }).first
+        else {
+            throw SimpleError("A SwiftTLA finite enum must declare at least one case")
+        }
+        return [
+            "static var defaultValue: Self { .\(raw: firstCase) }",
+            "static var finiteValues: [Self] { Array(allCases) }"
+        ]
+    }
+
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingExtensionsOf type: some TypeSyntaxProtocol,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext
+    ) throws -> [ExtensionDeclSyntax] {
+        guard let extensionDeclaration = "extension \(type): FiniteTLAValueDomain {}".as(ExtensionDeclSyntax.self) else {
+            return []
+        }
+        return [extensionDeclaration]
     }
 }
 

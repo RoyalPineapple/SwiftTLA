@@ -223,7 +223,7 @@ private struct ElevatorBankView: View {
     }
 
     private func riderSummary(_ state: ElevatorBank.State) -> String {
-        let riders = ElevatorBank.Rider.formalDomain.filter { $0 != .none }
+        let riders = ElevatorBank.Rider.finiteValues.filter { $0 != .none }
         return riders.map { rider in
             let passenger = state.riders[rider]
             return "\(rider.rawValue.capitalized): \(passenger[ElevatorBank.RiderSchema.phase].rawValue), floor \(passenger[ElevatorBank.RiderSchema.floor].rawValue) → \(passenger[ElevatorBank.RiderSchema.destination].rawValue)"
@@ -566,7 +566,7 @@ private struct ElevatorFloorBoard: View {
     }
 
     private func waitingRiders(at floor: ElevatorBank.Floor) -> [ElevatorBank.Rider] {
-        ElevatorBank.Rider.formalDomain.filter { rider in
+        ElevatorBank.Rider.finiteValues.filter { rider in
             rider != .none
                 && state.riders[rider][ElevatorBank.RiderSchema.phase] == .waiting
                 && state.riders[rider][ElevatorBank.RiderSchema.floor] == floor

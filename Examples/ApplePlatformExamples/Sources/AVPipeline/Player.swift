@@ -4,20 +4,16 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct PlayerModel {
-    public enum Phase: String, CaseIterable, FiniteDomainKey {
+    public enum Phase: String, CaseIterable {
         case unloaded, loading, ready, playing, paused, finished
-        public static var defaultValue: Self { .unloaded }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.player-phase")
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum BeginLoadProcess: String, FiniteDomainKey { case beginLoadEvent; static var defaultValue: Self { .beginLoadEvent }; static let formalDomain: [Self] = [.beginLoadEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.player.begin-load"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum ReadyProcess: String, FiniteDomainKey { case readyEvent; static var defaultValue: Self { .readyEvent }; static let formalDomain: [Self] = [.readyEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.player.ready"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum PlayProcess: String, FiniteDomainKey { case playEvent; static var defaultValue: Self { .playEvent }; static let formalDomain: [Self] = [.playEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.player.play"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum PauseProcess: String, FiniteDomainKey { case pauseEvent; static var defaultValue: Self { .pauseEvent }; static let formalDomain: [Self] = [.pauseEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.player.pause"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum SeekProcess: String, FiniteDomainKey { case seekEvent; static var defaultValue: Self { .seekEvent }; static let formalDomain: [Self] = [.seekEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.player.seek"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum FinishProcess: String, FiniteDomainKey { case finishEvent; static var defaultValue: Self { .finishEvent }; static let formalDomain: [Self] = [.finishEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.player.finish"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum Step: String, PlusCalLabel, CaseIterable { case beginLoad, ready, play, pause, seek, finish }
+    private enum BeginLoadProcess: String, CaseIterable { case beginLoadEvent }
+    private enum ReadyProcess: String, CaseIterable { case readyEvent }
+    private enum PlayProcess: String, CaseIterable { case playEvent }
+    private enum PauseProcess: String, CaseIterable { case pauseEvent }
+    private enum SeekProcess: String, CaseIterable { case seekEvent }
+    private enum FinishProcess: String, CaseIterable { case finishEvent }
+    private enum Step: String, CaseIterable { case beginLoad, ready, play, pause, seek, finish }
     public static var spec: TLASpec {
         #spec("PlayerModel") {
             Algorithm("PlayerModel", scoped: { scope in

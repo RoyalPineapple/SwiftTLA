@@ -76,7 +76,7 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
   }
 
   public init<Value>(_ field: TLAField<Schema, Value>, _ value: ProcessIdentifier<Value>)
-  where Value: FiniteDomainKey {
+  where Value: FiniteTLAValueDomain {
     self.name = field.name
     self.value = field.value(value.stateExpr)
   }
@@ -225,7 +225,7 @@ public func InjectiveSequence<Element: TLAValueType>(
 /// The bounded formal function space from one finite domain to a finite set
 /// of values. `Functions(from:to:)` is a TLA+ function set, not a Swift
 /// dictionary or closure evaluated by the application.
-public func Functions<Domain: FiniteDomainKey, Range: TLAValueType>(
+public func Functions<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
   from domain: FiniteDomain<Domain>,
   to values: Expr<SetExpr<Range>>
 ) -> Expr<SetExpr<Function<Domain, Range>>> {
@@ -644,7 +644,7 @@ extension Expr {
     Expr<SetExpr<Element>>(.union(raw, .setLiteral([.value(element.tlaValue)])))
   }
 
-  public func inserting<Element: FiniteDomainKey>(
+  public func inserting<Element: FiniteTLAValueDomain>(
     _ element: ProcessIdentifier<Element>
   ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
     Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.stateExpr])))
@@ -666,7 +666,7 @@ extension Expr {
     Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.stateExpr])))
   }
 
-  public func removing<Element: FiniteDomainKey>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
+  public func removing<Element: FiniteTLAValueDomain>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
   where T == SetExpr<Element> {
     Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.stateExpr])))
   }
@@ -682,7 +682,7 @@ extension Expr {
   }
 
   /// Tests membership of the current PlusCal process identifier.
-  public func contains<Element: FiniteDomainKey>(_ element: ProcessIdentifier<Element>) -> StateExpr
+  public func contains<Element: FiniteTLAValueDomain>(_ element: ProcessIdentifier<Element>) -> StateExpr
   where T == SetExpr<Element> {
     .in(element.stateExpr, raw)
   }
@@ -754,7 +754,7 @@ extension Expr {
   }
 
   /// Reads a finite function at the current member of a PlusCal process family.
-  public subscript<Domain: FiniteDomainKey, Range: TLAValueType>(_ index: ProcessIdentifier<Domain>) -> Expr<
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: ProcessIdentifier<Domain>) -> Expr<
     Range
   > where T == Function<Domain, Range> {
     Expr<Range>(.functionApply(raw, index.stateExpr))
@@ -817,19 +817,19 @@ extension Expr {
       .except(raw, index.raw, update(Expr<Range>(.functionApply(raw, index.raw))).raw))
   }
 
-  public func updating<Domain: FiniteDomainKey, Range: TLAValueType>(
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: ProcessIdentifier<Domain>, to value: Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(.except(raw, index.stateExpr, value.raw))
   }
 
-  public func updating<Domain: FiniteDomainKey, Range: TLAValueType>(
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: ProcessIdentifier<Domain>, to value: Range
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     updating(index, to: Expr<Range>(.value(value.tlaValue)))
   }
 
-  public func updating<Domain: FiniteDomainKey, Range: TLAValueType>(
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: WithValue<Domain>, _ update: (Expr<Range>) -> Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(

@@ -9,17 +9,13 @@ import SwiftTLAMacros
 /// the transition runtime; a view only chooses which enabled delivery to make.
 @TLAModel
 public struct ChangRoberts {
-    public enum Node: String, CaseIterable, FiniteDomainKey {
+    public enum Node: String, CaseIterable {
         case one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve
 
-        public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.chang-roberts.node")
 
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case deliver
     }
 

@@ -7,16 +7,14 @@ import SwiftTLAMacros
 /// nondeterministic initial value; `processState` is derived from it in the
 /// formal initial state. Every message is explicitly delivered clockwise.
 public struct ChangRobertsModel: Sendable {
-    public enum Node: Int, FiniteDomainKey {
+    public enum Node: Int, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain: [Self] = [.one, .two, .three]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.chang-roberts.node")
+        public static let finiteValues: [Self] = [.one, .two, .three]
 
-        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
     public enum ProcessState: String, TLAValueType {
@@ -27,7 +25,7 @@ public struct ChangRobertsModel: Sendable {
         public static var defaultValue: Self { .candidate }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case n0
         case n1
     }

@@ -13,8 +13,13 @@ import SwiftTLA
 /// execution, and typed live-machine members when the model contains a nested
 /// live adapter.
 @attached(member, names: arbitrary)
+@attached(memberAttribute)
 @attached(extension, conformances: TLAModelType, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
+
+@attached(member, names: named(defaultValue), named(finiteValues))
+@attached(extension, conformances: FiniteTLAValueDomain, names: arbitrary)
+public macro _TLAFiniteEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "FiniteEnumMacro")
 
 /// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.
 ///

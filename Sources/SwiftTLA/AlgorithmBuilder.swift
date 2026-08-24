@@ -1,12 +1,14 @@
 // swiftlint:disable identifier_name
 
-public protocol PlusCalLabel: CaseIterable, RawRepresentable, Hashable, Sendable where RawValue == String {}
-
-public struct FiniteDomain<Value: FiniteDomainKey>: Sendable {
+public struct FiniteDomain<Value: FiniteTLAValueDomain>: Sendable {
     fileprivate let values: [Value]
 
     public init() {
-        values = Value.formalDomain
+        values = Value.finiteValues
+    }
+
+    public init(_ values: [Value]) {
+        self.values = values
     }
 
     public var members: [Value] {
@@ -20,7 +22,7 @@ extension FiniteDomain: Sequence {
     }
 }
 
-extension FiniteDomainKey {
+extension FiniteTLAValueDomain {
     public static var all: FiniteDomain<Self> {
         FiniteDomain()
     }
@@ -62,7 +64,7 @@ extension FiniteDomain {
     }
 }
 
-public struct ProcessIdentifier<Value: FiniteDomainKey>: StateExprConvertible, Sendable {
+public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: StateExprConvertible, Sendable {
     fileprivate let expression: StateExpr
 
     public var stateExpr: StateExpr {
@@ -138,7 +140,7 @@ extension WithValue {
         Expr<Field>(field.recordAccess(stateExpr))
     }
 
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: WithValue<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
@@ -149,19 +151,19 @@ extension Expr {
     ///
     /// This keeps a scoped formal choice in the typed DSL; it is not a
     /// host-language dictionary lookup.
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: WithValue<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
     where T == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(raw, index.stateExpr))
     }
 
     /// Reads a finite function using process-local formal state.
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
     where T == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(raw, index.stateExpr))
     }
 }
 
-extension Function where Domain: FiniteDomainKey {
+extension Function where Domain: FiniteTLAValueDomain {
     /// Builds a total finite formal function from a concrete typed value.
     public static func mapping(
         _ body: (WithValue<Domain>) -> Range
@@ -231,7 +233,7 @@ extension MacroParameter where Value == Int {
     }
 }
 
-extension MacroParameter where Value: FiniteDomainKey {
+extension MacroParameter where Value: FiniteTLAValueDomain {
     public static func == (lhs: MacroParameter, rhs: Value) -> StateExpr {
         .equal(lhs.stateExpr, rhs.tlaValue.stateExpr)
     }
@@ -272,7 +274,7 @@ public struct StatementMacro: Sendable {
 
     /// Expands a macro using the current process identifier as its formal
     /// argument. The expansion stays in its surrounding atomic `Do` block.
-    public func callAsFunction<Value: FiniteDomainKey>(_ argument: ProcessIdentifier<Value>) -> [StepStatement] {
+    public func callAsFunction<Value: FiniteTLAValueDomain>(_ argument: ProcessIdentifier<Value>) -> [StepStatement] {
         expand([argument.stateExpr])
     }
 
@@ -426,7 +428,7 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
     /// Views this process-local declaration as the total function over its
     /// process family. Use it for an algorithm property about all local
     /// values, such as `Range(ops)`, not for a current-process read.
-    public func family<Process: FiniteDomainKey>(
+    public func family<Process: FiniteTLAValueDomain>(
         for _: Process.Type
     ) -> Expr<Function<Process, Value>> {
         Expr(.processLocalFamily(name))
@@ -552,7 +554,7 @@ extension SharedVariable {
 
 }
 
-extension SharedVariable where Value: FiniteDomainKey {
+extension SharedVariable where Value: FiniteTLAValueDomain {
     public static func == (_ lhs: SharedVariable, _ rhs: ProcessIdentifier<Value>) -> StateExpr {
         .equal(lhs.stateExpr, rhs.stateExpr)
     }
@@ -647,19 +649,19 @@ extension SharedVariable {
     }
 
     /// Reads a finite function at the current PlusCal process identifier.
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
 
     /// Reads a finite function using a process-local formal key.
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
 
     /// Reads a finite function using a typed statement-macro parameter.
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: MacroParameter<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: MacroParameter<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
@@ -669,7 +671,7 @@ extension SharedVariable {
         Expr<Range>(.functionApply(stateExpr, index.raw))
     }
 
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: WithValue<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
@@ -685,7 +687,7 @@ extension SharedVariable {
     }
 
     /// Updates a finite function at the current PlusCal process identifier.
-    public func updating<Domain: FiniteDomainKey, Range>(
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: ProcessIdentifier<Domain>,
         _ update: (Expr<Range>) -> Expr<Range>
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
@@ -696,14 +698,14 @@ extension SharedVariable {
     }
 
     /// Replaces a finite function value at the current PlusCal process identifier.
-    public func updating<Domain: FiniteDomainKey, Range>(
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: ProcessIdentifier<Domain>,
         to value: Expr<Range>
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
     }
 
-    public func updating<Domain: FiniteDomainKey, Range>(
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: ProcessIdentifier<Domain>,
         to value: Range
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
@@ -711,7 +713,7 @@ extension SharedVariable {
     }
 
     /// Replaces a finite function value using a process-local formal key.
-    public func updating<Domain: FiniteDomainKey, Range>(
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: LocalVariable<Domain>,
         to value: Expr<Range>
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
@@ -719,7 +721,7 @@ extension SharedVariable {
     }
 
     /// Replaces a finite function value using a typed statement-macro parameter.
-    public func updating<Domain: FiniteDomainKey, Range>(
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: MacroParameter<Domain>,
         to value: Expr<Range>
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
@@ -727,7 +729,7 @@ extension SharedVariable {
     }
 
     /// Replaces a finite function value using a typed statement-macro parameter.
-    public func updating<Domain: FiniteDomainKey, Range>(
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: MacroParameter<Domain>,
         to value: Range
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
@@ -743,7 +745,7 @@ extension SharedVariable {
         )
     }
 
-    public func updating<Domain: FiniteDomainKey, Range>(
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: WithValue<Domain>,
         _ update: (Expr<Range>) -> Expr<Range>
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
@@ -792,12 +794,12 @@ extension SharedVariable {
 
     /// Inserts the current identifier of a finite PlusCal process into a
     /// shared formal set.
-    public func inserting<Element: FiniteDomainKey>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
+    public func inserting<Element: FiniteTLAValueDomain>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
     where Value == SetExpr<Element> {
         Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
     }
 
-    public func inserting<Element: FiniteDomainKey>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
+    public func inserting<Element: FiniteTLAValueDomain>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
     where Value == SetExpr<Element> {
         Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
     }
@@ -858,7 +860,7 @@ extension LocalVariable {
     }
 
     /// Reads a finite function at the current PlusCal process identifier.
-    public subscript<Domain: FiniteDomainKey, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
@@ -1353,7 +1355,7 @@ public struct Algorithm: Sendable, SpecComponent {
 /// Declares one independently scheduled process for every member of `domain`.
 ///
 /// `Each` is concurrent: its bodies do not run as a sequential Swift loop.
-public func Each<Value: FiniteDomainKey>(
+public func Each<Value: FiniteTLAValueDomain>(
     _ domain: FiniteDomain<Value>,
     fairness: ProcessFairness = .none,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
@@ -1361,7 +1363,7 @@ public func Each<Value: FiniteDomainKey>(
     process(domain, fairness: fairness.model, body)
 }
 
-public func Each<Value: FiniteDomainKey>(
+public func Each<Value: FiniteTLAValueDomain>(
     _ domain: FiniteDomain<Value>,
     fairness: ProcessFairness = .none,
     @AlgorithmBuilder scoped body: (ProcessIdentifier<Value>, ProcessScope) -> [AlgorithmElement]
@@ -1377,7 +1379,7 @@ public func Each<Value: FiniteDomainKey>(
     )))
 }
 
-private func process<Value: FiniteDomainKey>(
+private func process<Value: FiniteTLAValueDomain>(
     _ domain: FiniteDomain<Value>,
     fairness: AlgorithmFairness,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
@@ -1399,10 +1401,10 @@ private func process<Value: FiniteDomainKey>(
 ///
 /// All statements in the body read the same pre-state and produce one
 /// transition. The label is the program-counter destination for `Goto`.
-public func Do<Name: PlusCalLabel>(
+public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
     _ label: Name,
     @DoBuilder _ body: () -> [StepStatement]
-) -> AlgorithmElement {
+) -> AlgorithmElement where Name.RawValue == String {
     AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
 }
 
@@ -1410,11 +1412,11 @@ public func Do<Name: PlusCalLabel>(
 ///
 /// Each execution of the body is one atomic transition. When `condition` is
 /// false, control advances to the next `Do` or `While` block.
-public func While<Name: PlusCalLabel>(
+public func While<Name: CaseIterable & RawRepresentable & Sendable>(
     _ label: Name,
     _ condition: some StateExprConvertible,
     @DoBuilder _ body: () -> [StepStatement]
-) -> AlgorithmElement {
+) -> AlgorithmElement where Name.RawValue == String {
     AlgorithmElement(model: .step(AlgorithmStepModel(
         label: AlgorithmLabelModel(name: label.rawValue),
         statements: body().map(\.model),
@@ -1765,7 +1767,7 @@ public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprC
 ///
 /// This is the typed Swift spelling of a bounded TLA+ `\\A value \\in Type`
 /// predicate. It is useful for properties over a PlusCal process family.
-public func All<Value: FiniteDomainKey>(
+public func All<Value: FiniteTLAValueDomain>(
     _ domain: FiniteDomain<Value>,
     file: StaticString = #fileID,
     line: UInt = #line,
@@ -1790,7 +1792,7 @@ public func Finished() -> StateExpr {
 /// True when one member of a process family has reached `Done`.
 /// The program counter remains lowerer-owned; this avoids raw string-keyed
 /// inspection of generated control state.
-public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> StateExpr {
+public func Finished<Value: FiniteTLAValueDomain>(_ process: WithValue<Value>) -> StateExpr {
     .equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.done)
@@ -1798,7 +1800,7 @@ public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> Sta
 }
 
 /// True when the current `Each` process has reached `Done`.
-public func Finished<Value: FiniteDomainKey>(_ process: ProcessIdentifier<Value>) -> StateExpr {
+public func Finished<Value: FiniteTLAValueDomain>(_ process: ProcessIdentifier<Value>) -> StateExpr {
     .equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.done)
@@ -1809,10 +1811,10 @@ public func Finished<Value: FiniteDomainKey>(_ process: ProcessIdentifier<Value>
 ///
 /// This is the typed way to state properties about algorithm control flow.
 /// The generated program counter remains an implementation detail.
-public func At<Label: PlusCalLabel, Value: FiniteDomainKey>(
+public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: FiniteTLAValueDomain>(
     _ label: Label,
     _ process: WithValue<Value>
-) -> StateExpr {
+) -> StateExpr where Label.RawValue == String {
     .equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.init(label.rawValue))
@@ -1820,10 +1822,10 @@ public func At<Label: PlusCalLabel, Value: FiniteDomainKey>(
 }
 
 /// True when the current `Each` process is at a named PlusCal label.
-public func At<Label: PlusCalLabel, Value: FiniteDomainKey>(
+public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: FiniteTLAValueDomain>(
     _ label: Label,
     _ process: ProcessIdentifier<Value>
-) -> StateExpr {
+) -> StateExpr where Label.RawValue == String {
     .equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.init(label.rawValue))
@@ -1863,7 +1865,7 @@ public func With<Value: TLAValueType>(
 
 /// Binds one member of a finite Swift domain. This is the most direct Swift
 /// spelling of PlusCal `with (value \in Type)`.
-public func With<Value: FiniteDomainKey>(
+public func With<Value: FiniteTLAValueDomain>(
     _ source: FiniteDomain<Value>,
     file: StaticString = #fileID,
     line: UInt = #line,
@@ -1975,7 +1977,7 @@ public func Either(
     StepStatement(model: .either(first().map(\.model), second().map(\.model)))
 }
 
-public func Choose<Value: FiniteDomainKey>(
+public func Choose<Value: FiniteTLAValueDomain>(
     _ domain: FiniteDomain<Value>,
     file: StaticString = #fileID,
     line: UInt = #line,
@@ -1989,7 +1991,7 @@ public func Choose<Value: FiniteDomainKey>(
 
 /// Binds an ordered pair of values from finite domains. This lowers to nested
 /// PlusCal choices, so the second binder is scoped inside the first.
-public func Choose<First: FiniteDomainKey, Second: FiniteDomainKey>(
+public func Choose<First: FiniteTLAValueDomain, Second: FiniteTLAValueDomain>(
     _ firstDomain: FiniteDomain<First>,
     _ secondDomain: FiniteDomain<Second>,
     file: StaticString = #fileID,
@@ -2049,7 +2051,7 @@ public func Choose(
     ))
 }
 
-public func Goto<Label: PlusCalLabel>(_ label: Label) -> StepStatement {
+public func Goto<Label: CaseIterable & RawRepresentable & Sendable>(_ label: Label) -> StepStatement where Label.RawValue == String {
     StepStatement(model: .goto(AlgorithmLabelModel(name: label.rawValue)))
 }
 

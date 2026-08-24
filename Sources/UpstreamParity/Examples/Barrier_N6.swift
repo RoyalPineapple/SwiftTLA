@@ -6,7 +6,6 @@ public struct BarrierModel: Sendable {
     public enum BarrierPhase: String, TLAValueType {
         case b0, b1
 
-        public static var defaultValue: Self { .b0 }
     }
 
     public static var spec: TLASpec {

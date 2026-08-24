@@ -8,7 +8,6 @@
 import SwiftSyntaxMacros
 
 public protocol TLAValueType: TLAValueConvertible, StateExprConvertible, Sendable {
-  static var defaultValue: Self { get }
   init?(formalValue: TLAValue)
 }
 extension Int: TLAValueType {
@@ -34,7 +33,6 @@ extension String: TLAValueType {
 }
 
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
-  public var tlaValue: TLAValue { .int(rawValue) }
   public init?(formalValue: TLAValue) {
     guard case .int(let value) = formalValue else { return nil }
     self.init(rawValue: value)
@@ -48,7 +46,6 @@ where Self: RawRepresentable, Self.RawValue == Int, Self: CustomStringConvertibl
 }
 
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
-  public var tlaValue: TLAValue { .string(rawValue) }
   public init?(formalValue: TLAValue) {
     guard case .string(let value) = formalValue else { return nil }
     self.init(rawValue: value)

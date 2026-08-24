@@ -4,20 +4,16 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct CaptureModel {
-    public enum Phase: String, CaseIterable, FiniteDomainKey {
+    public enum Phase: String, CaseIterable {
         case idle, configured, running, interrupted
-        public static var defaultValue: Self { .idle }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture-phase")
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum ConfigureProcess: String, FiniteDomainKey { case configureEvent; static var defaultValue: Self { .configureEvent }; static let formalDomain: [Self] = [.configureEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.configure"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum StartProcess: String, FiniteDomainKey { case startEvent; static var defaultValue: Self { .startEvent }; static let formalDomain: [Self] = [.startEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.start"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum StopProcess: String, FiniteDomainKey { case stopEvent; static var defaultValue: Self { .stopEvent }; static let formalDomain: [Self] = [.stopEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.stop"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum InterruptProcess: String, FiniteDomainKey { case interruptEvent; static var defaultValue: Self { .interruptEvent }; static let formalDomain: [Self] = [.interruptEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.interrupt"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum ResumeProcess: String, FiniteDomainKey { case resumeEvent; static var defaultValue: Self { .resumeEvent }; static let formalDomain: [Self] = [.resumeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture.resume"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum Step: String, PlusCalLabel, CaseIterable { case configure, start, stop, interrupt, resume }
+    private enum ConfigureProcess: String, CaseIterable { case configureEvent }
+    private enum StartProcess: String, CaseIterable { case startEvent }
+    private enum StopProcess: String, CaseIterable { case stopEvent }
+    private enum InterruptProcess: String, CaseIterable { case interruptEvent }
+    private enum ResumeProcess: String, CaseIterable { case resumeEvent }
+    private enum Step: String, CaseIterable { case configure, start, stop, interrupt, resume }
 
     public static var spec: TLASpec {
         #spec("CaptureModel") {

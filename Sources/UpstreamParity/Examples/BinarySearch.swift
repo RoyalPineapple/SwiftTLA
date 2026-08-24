@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// nondecreasing sequences. The `While` body is the source's one labeled
 /// atomic step, including its two scoped `with` bindings.
 public struct BinarySearchModel: Sendable {
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a
     }
 

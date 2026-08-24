@@ -1,11 +1,9 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-enum CarID: String, FiniteTLAValueDomain {
+enum CarID: String, CaseIterable {
   case carA, carB
 
-  static var defaultValue: Self { .carA }
-  static let finiteValues = [Self.carA, .carB]
 }
 
 struct CarFields {

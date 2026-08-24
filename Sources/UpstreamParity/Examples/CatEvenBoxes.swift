@@ -7,7 +7,6 @@ public struct CatEvenBoxesModel: Sendable {
         case left
         case right
 
-        public static var defaultValue: Self { .left }
     }
 
     public static var spec: TLASpec {
@@ -40,7 +39,6 @@ public struct CatOddBoxesModel: Sendable {
         case left
         case right
 
-        public static var defaultValue: Self { .left }
     }
 
     public static var spec: TLASpec {

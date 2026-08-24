@@ -7,26 +7,14 @@ import SwiftTLAMacros
 /// PlusCal-shaped processes. Messages are a typed formal record set, not a
 /// Swift dictionary or a raw string-keyed state value.
 public struct TwoPhaseModel: Sendable {
-    public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
+    public enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
         case one = "r1"
         case two = "r2"
         case three = "r3"
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.twoPhase.resourceManager")
+        public static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    public enum Coordinator: String, CaseIterable, FiniteDomainKey {
-        case transactionManager
-
-        public static var defaultValue: Self { .transactionManager }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.twoPhase.coordinator")
-
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     public enum ResourceManagerState: String, TLAValueType {
@@ -79,11 +67,11 @@ public struct TwoPhaseModel: Sendable {
         public static let resourceManager = field(\MessageFields.resourceManager)
     }
 
-    private enum ResourceManagerStep: String, PlusCalLabel, CaseIterable {
+    private enum ResourceManagerStep: String, CaseIterable {
         case resourceManagerOperate
     }
 
-    private enum CoordinatorStep: String, PlusCalLabel, CaseIterable {
+    private enum CoordinatorStep: String, CaseIterable {
         case coordinatorOperate
     }
 

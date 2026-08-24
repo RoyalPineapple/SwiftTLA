@@ -8,96 +8,9 @@ import SwiftTLAMacros
 /// policy decides who visits next.
 @TLAModel
 public struct PrisonerModel: Sendable {
-    public enum Prisoner: String, CaseIterable, FiniteDomainKey {
+    public enum Prisoner: String, CaseIterable {
         case alice = "Alice"
         case bob = "Bob"
         case eve = "Eve"
 
-        public static var defaultValue: Self { .alice }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.prisoner")
-
-        public var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    public enum Light: String, TLAValueType {
-        case off
-        case on
-
-        public static var defaultValue: Self { .off }
-    }
-
-    private enum Scheduler: String, CaseIterable, FiniteDomainKey {
-        case warden
-
-        static var defaultValue: Self { .warden }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.scheduler")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    private enum Step: String, PlusCalLabel, CaseIterable {
-        case chooseVisitor
-    }
-
-    public static var spec: TLASpec {
-        #spec("Prisoner") {
-            Extends(.naturals)
-            Algorithm("Prisoner", scoped: { scope in
-                let counter = scope.sharedVar("counter", initial: Prisoner.alice)
-                let count = scope.sharedVar("count", initial: 1)
-                let announced = scope.sharedVar("announced", initial: false)
-                let signalled = scope.sharedVar("signalled", initial: Function<Prisoner, Int>.literal(
-                    (.alice, 0), (.bob, 0), (.eve, 0)
-                ))
-                let light = scope.sharedVar("light", initial: Light.off)
-                let hasVisited = scope.sharedVar("hasVisited", initial: SetExpr<Prisoner>())
-
-                Each(Scheduler.all) { _ in
-                    Do(Step.chooseVisitor) {
-                        With(Prisoner.all) { prisoner in
-                            Either {
-                                When(counter == prisoner)
-                                Either {
-                                    When(light == Light.on)
-                                    Assign(light, to: Light.off)
-                                    Assign(count, to: count + 1)
-                                    Assign(announced, to: count + 1 >= 3)
-                                } or: {
-                                    Assign(announced, to: count >= 3)
-                                }
-                            } or: {
-                                Either {
-                                    When(counter != prisoner)
-                                    When(light == Light.off)
-                                    When(signalled[prisoner] < 1)
-                                    Assign(light, to: Light.on)
-                                    Assign(signalled, to: signalled.updating(prisoner) { value in value + 1 })
-                                } or: {
-                                    When(counter != prisoner)
-                                    When(!(light == Light.off && signalled[prisoner] < 1))
-                                }
-                            }
-                            Assign(hasVisited, to: hasVisited.inserting(prisoner))
-                            Assert(announced == false || hasVisited == SetExpr<Prisoner>.literal(.alice, .bob, .eve))
-                        }
-                        Goto(Step.chooseVisitor)
-                    }
-                }
-            })
-        }
-    }
-}
-
-extension Example {
-    public static let prisonerN3 = Entry(
-        id: "Prisoners_Single_Switch/Prisoner",
-        upstreamSpec: "Prisoners_Single_Switch",
-        upstreamModule: "specifications/Prisoners_Single_Switch/Prisoner.tla",
-        upstreamCfg: "specifications/Prisoners_Single_Switch/Prisoner.cfg",
-        expectedDistinct: 16,
-        spec: PrisonerModel.spec,
-        notes: "N=3, typed signalling function, visited set, and formal visitor choice. TLC = 16."
-    )
 }

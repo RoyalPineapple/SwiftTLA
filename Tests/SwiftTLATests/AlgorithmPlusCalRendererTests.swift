@@ -4,29 +4,23 @@ import SwiftTLAMacros
 
 @Suite("PlusCal Algorithm renderer")
 struct AlgorithmPlusCalRendererTests {
-    private enum ProcessStep: String, PlusCalLabel, CaseIterable {
+    private enum ProcessStep: String, CaseIterable {
         case `repeat`
         case done
     }
 
-    private enum ProcedureStep: String, PlusCalLabel, CaseIterable {
+    private enum ProcedureStep: String, CaseIterable {
         case enter
         case start
         case finished
     }
 
-    private enum Node: String, FiniteDomainKey {
+    private enum Node: String, FiniteTLAValueDomain {
         case left
         case right
 
         static var defaultValue: Self { .left }
-        static let formalDomain: [Node] = [.left, .right]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal-renderer.node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    @Test("rejects residual anonymous formal lambdas")
+        static let finiteValues: [Node] = [.left, .right]
     func rejectsResidualAnonymousFormalLambdas() {
         #expect(StateExpr.plusCalExpression(from: .variable("count"), using: { $0 }) != nil)
         #expect(StateExpr.plusCalExpression(from: .operatorApplication(

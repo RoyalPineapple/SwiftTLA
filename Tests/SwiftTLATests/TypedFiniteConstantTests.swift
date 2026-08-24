@@ -21,16 +21,12 @@ private struct TypedFiniteConstantGeneratedModel {
 
 @TLAModel
 private struct VoteProofShapedConstantGeneratedModel {
-    enum Value: String, FiniteTLAValueDomain {
+    enum Value: String, CaseIterable {
         case v1, v2
-        static var defaultValue: Self { .v1 }
-        static let finiteValues: [Self] = [.v1, .v2]
     }
 
-    enum Acceptor: String, FiniteTLAValueDomain {
+    enum Acceptor: String, CaseIterable {
         case a1, a2, a3
-        static var defaultValue: Self { .a1 }
-        static let finiteValues: [Self] = [.a1, .a2, .a3]
     }
 
     static var spec: TLASpec {

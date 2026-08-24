@@ -5,7 +5,7 @@ import SwiftTLAMacros
 /// FourQueens TLC model. A tuple is one partial board: its index is the row
 /// and its value is the chosen column.
 public struct NQueensModel: Sendable {
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case nextQueen = "nxtQ"
     }
 

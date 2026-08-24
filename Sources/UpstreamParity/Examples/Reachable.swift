@@ -8,20 +8,16 @@ import SwiftTLAMacros
 /// static formal choice, then runs the published work-list algorithm.
 @TLAModel
 public struct ReachableModel: Sendable {
-    public enum Node: Int, FiniteDomainKey {
+    public enum Node: Int, CaseIterable {
         case one = 1
         case two = 2
         case three = 3
         case four = 4
 
-        public static var defaultValue: Self { .one }
-        public static let formalDomain: [Self] = [.one, .two, .three, .four]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.reachable.node")
 
-        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a
     }
 

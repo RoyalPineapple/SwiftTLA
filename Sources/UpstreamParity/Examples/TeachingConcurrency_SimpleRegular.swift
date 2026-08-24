@@ -8,18 +8,12 @@ import SwiftTLAMacros
 /// write/write/read steps; this is not a sequential Swift simulation.
 @TLAModel
 public struct TeachingSimpleRegularN8Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteDomainKey {
+    public enum Process: Int, CaseIterable {
         case p0, p1, p2, p3, p4, p5, p6, p7
 
-        public static var defaultValue: Self { .p0 }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.teaching-concurrency.simple-regular.n8.process"
-        )
-        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a1
         case a2
         case b

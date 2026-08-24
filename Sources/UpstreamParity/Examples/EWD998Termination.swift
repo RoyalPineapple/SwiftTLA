@@ -6,59 +6,14 @@ import SwiftTLA
 /// Parameterized actions replace the old raw existential action bodies, so the
 /// same authoring surface drives the parser, builder, and generated machine.
 public struct EWD998TerminationModel: Sendable {
-    public enum Node: Int, CaseIterable, FiniteDomainKey {
+    public enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case zero = 0
         case one = 1
         case two = 2
         case three = 3
 
         public static var defaultValue: Self { .zero }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.ewd998.node")
-
-        public var tlaValue: TLAValue { .int(rawValue) }
-    }
-
-    public static var spec: TLASpec {
-        TLASpec("AsyncTerminationDetection", scoped: specificationComponents)
-    }
-
-    private static func terminateAction(
-        active: SharedVariable<Function<Node, Bool>>,
-        pending: SharedVariable<Function<Node, Int>>,
-        terminationDetected: SharedVariable<Bool>
-    ) -> ActionExpr {
-        let node = Expr<Node>(.variable("node"))
-        let nodeIsActive: StateExpr = active[node] == true
-        let zeroInactive: StateExpr = active[.zero] == false
-        let oneInactive: StateExpr = active[.one] == false
-        let twoInactive: StateExpr = active[.two] == false
-        let threeInactive: StateExpr = active[.three] == false
-        let firstTwoNodesInactive: StateExpr = .and(zeroInactive, oneInactive)
-        let firstThreeNodesInactive: StateExpr = .and(firstTwoNodesInactive, twoInactive)
-        let allNodesInactive: StateExpr = .and(firstThreeNodesInactive, threeInactive)
-        let zeroPending: StateExpr = pending[.zero] == 0
-        let onePending: StateExpr = pending[.one] == 0
-        let twoPending: StateExpr = pending[.two] == 0
-        let threePending: StateExpr = pending[.three] == 0
-        let firstTwoPending: StateExpr = .and(zeroPending, onePending)
-        let firstThreePending: StateExpr = .and(firstTwoPending, twoPending)
-        let noPendingMessages: StateExpr = .and(firstThreePending, threePending)
-        let terminationIsDetectable: StateExpr = .and(allNodesInactive, noPendingMessages)
-        let zeroActive: StateExpr = .notEqual(active[.zero].raw, .value(.bool(false)))
-        let oneActive: StateExpr = .notEqual(active[.one].raw, .value(.bool(false)))
-        let twoActive: StateExpr = .notEqual(active[.two].raw, .value(.bool(false)))
-        let threeActive: StateExpr = .notEqual(active[.three].raw, .value(.bool(false)))
-        let zeroHasPendingMessages: StateExpr = .notEqual(pending[.zero].raw, .value(.int(0)))
-        let oneHasPendingMessages: StateExpr = .notEqual(pending[.one].raw, .value(.int(0)))
-        let twoHasPendingMessages: StateExpr = .notEqual(pending[.two].raw, .value(.int(0)))
-        let threeHasPendingMessages: StateExpr = .notEqual(pending[.three].raw, .value(.int(0)))
-        let firstTwoActive: StateExpr = .or(zeroActive, oneActive)
-        let firstThreeActive: StateExpr = .or(firstTwoActive, twoActive)
-        let anyNodeActive: StateExpr = .or(firstThreeActive, threeActive)
-        let zeroOrOnePending: StateExpr = .or(zeroHasPendingMessages, oneHasPendingMessages)
-        let firstThreePendingWork: StateExpr = .or(zeroOrOnePending, twoHasPendingMessages)
-        let anyPendingWork: StateExpr = .or(firstThreePendingWork, threeHasPendingMessages)
+        public static let finiteValues = allCases
         let activeOrPendingWorkRemains: StateExpr = .or(anyNodeActive, anyPendingWork)
         let detectTermination: ActionExpr = .and(.guard_(terminationIsDetectable), terminationDetected.becomes(true))
         let preserveTerminationStatus: ActionExpr = .and(.guard_(activeOrPendingWorkRemains), terminationDetected.stays)

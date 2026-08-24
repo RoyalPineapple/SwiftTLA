@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// This finite model uses `-1...1` and sequences up to length three, while
 /// preserving the algorithm's state and one-element-at-a-time loop.
 public struct SumSequenceModel: Sendable {
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a
     }
 

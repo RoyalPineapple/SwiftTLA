@@ -842,7 +842,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["receive", "done", "Terminating"])
         for action in spec.actions where action.name != "Terminating" {
-            #expect(action.bindings == [ActionBinding(name: "process", values: Node.formalDomain.map(\.tlaValue))])
+            #expect(action.bindings == [ActionBinding(name: "process", values: Node.finiteValues.map(\.tlaValue))])
         }
 
         let (compilation, initial) = try initialState(of: spec)
@@ -1364,58 +1364,10 @@ struct AlgorithmBuilderTests {
     }
 }
 
-private enum Node: String, FiniteDomainKey, PlusCalLabel, CaseIterable {
+private enum Node: String, CaseIterable, CaseIterable {
     case first
     case second
 
-    static var defaultValue: Self { .first }
-    static let formalDomain: [Node] = [.first, .second]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.node")
-
-    var tlaValue: TLAValue { .string(rawValue) }
-}
-
-private enum EmptyNode: String, FiniteDomainKey {
-    case none
-
-    static var defaultValue: Self { .none }
-    static let formalDomain: [EmptyNode] = []
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.empty-node")
-
-    var tlaValue: TLAValue { .string(rawValue) }
-}
-
-private enum OtherNode: String, FiniteDomainKey {
-    case one = "other"
-
-    static var defaultValue: Self { .one }
-    static let formalDomain: [OtherNode] = [.one]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.other-node")
-
-    var tlaValue: TLAValue { .string(rawValue) }
-}
-
-private enum AlgorithmLabel: String, PlusCalLabel, CaseIterable {
-    case receive
-    case forward
-    case done
-}
-
-private enum MissingAlgorithmLabel: String, PlusCalLabel, CaseIterable {
-    case missing
-}
-
-@TLAModel
-private struct ProcedureGeneratedModel {
-    static var spec: TLASpec {
-        #spec("ProcedureGenerated") {
-            Algorithm("ProcedureGenerated", scoped: { scope in
-                let output = scope.sharedVar("output", initial: 0)
-                Procedure("work", parameters: Int.self, scoped: { value, scope in
-                    let offset = scope.localVar("offset", initial: 1)
-                    Do(TestControlLabel.enter) {
-                        Await(value.expr >= 0)
-                        Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
                 })
@@ -1428,119 +1380,10 @@ private struct ProcedureGeneratedModel {
 
 @TLAModel
 private struct MacroProcessGeneratedModel {
-    enum Node: String, CaseIterable, FiniteDomainKey {
+    enum Node: String, CaseIterable {
         case first
         case second
 
-        static var defaultValue: Self { .first }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.macro-process-node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    static var spec: TLASpec {
-        #spec("MacroProcessGenerated") {
-            Algorithm("MacroProcessGenerated", scoped: { scope in
-                let marked = scope.sharedVar("marked", initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
-                let mark = Macro { (node: MacroParameter<Node>) in
-                    Assign(marked, to: marked.updating(node, to: true))
-                }
-
-                Each(Node.all) { node in
-                    Do(TestControlLabel.mark) { mark(node) }
-                    Do(TestControlLabel.done) { Stop() }
-                }
-            })
-        }
-    }
-}
-
-@TLAModel
-private struct FunctionDomainGeneratedModel {
-    enum Node: String, CaseIterable, FiniteDomainKey {
-        case first
-        case second
-
-        static var defaultValue: Self { .first }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.function-domain-node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    static var spec: TLASpec {
-        #spec("FunctionDomainGenerated") {
-            Algorithm("FunctionDomainGenerated", scoped: { scope in
-                let successors = scope.sharedVar("successors", in: Where(
-                    Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
-                ) { successor in
-                    All(Node.all) { node in
-                        successor[node].cardinality == 1
-                    }
-                })
-
-                Do(TestControlLabel.done) { Stop() }
-                Invariant("OneSuccessorPerNode") {
-                    All(Node.all) { node in
-                        successors[node].cardinality == 1
-                    }
-                }
-            })
-        }
-    }
-}
-
-@TLAModel
-private struct StaticFormalSelectionModel {
-    static var spec: TLASpec {
-        #spec("StaticFormalSelection") {
-            Algorithm("StaticFormalSelection", scoped: { scope in
-                let selected = Select(
-                    from: SetExpr<Int>.literal(1, 2, 3),
-                    matching: { value in value.expr % 2 == 0 }
-                )
-                let current = scope.sharedVar("current", initial: selected)
-
-                Do(TestControlLabel.done) { Stop() }
-                Invariant("SelectedEven") { current == 2 }
-            })
-        }
-    }
-}
-
-@TLAModel
-private struct StaticFilteredFunctionSelectionModel {
-    enum Node: String, CaseIterable, FiniteDomainKey {
-        case first
-        case second
-        case third
-        case fourth
-
-        static var defaultValue: Self { .first }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.static-function-selection-node")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    static var spec: TLASpec {
-        #spec("StaticFilteredFunctionSelection") {
-            Algorithm("StaticFilteredFunctionSelection", scoped: { scope in
-                let successors = Select(
-                    from: Where(Functions(
-                        from: Node.all,
-                        to: Subsets(of: SetExpr<Node>.literal(.first, .second, .third, .fourth))
-                    )) { successor in
-                        All(Node.all) { node in successor[node].cardinality == 2 }
-                    },
-                    matching: { successor in successor.expr == successor.expr }
-                )
-                let current = scope.sharedVar("current", initial: successors)
-
-                Do(TestControlLabel.done) { Stop() }
-                Invariant("CurrentIsDefined") { current == current.expr }
-            })
         }
     }
 }

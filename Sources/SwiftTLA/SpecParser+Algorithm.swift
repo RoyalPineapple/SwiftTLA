@@ -1472,7 +1472,7 @@ extension ParserSession {
         guard let access = expression.as(MemberAccessExprSyntax.self),
               access.declName.baseName.text == "all",
               let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              let values = enumDefinition(named: type)?.formalDomain, !values.isEmpty
+              let values = enumDefinition(named: type)?.finiteValues, !values.isEmpty
         else { return nil }
         return (type, values)
     }

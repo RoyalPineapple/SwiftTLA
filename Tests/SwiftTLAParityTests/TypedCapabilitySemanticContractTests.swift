@@ -2,7 +2,7 @@ import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
 
-private enum TypedCapabilityContractLabel: String, PlusCalLabel, CaseIterable {
+private enum TypedCapabilityContractLabel: String, CaseIterable {
     case advance
 }
 
