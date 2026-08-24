@@ -56,8 +56,8 @@ public struct SimpleAllocatorModel: Sendable {
 
         return #spec("SimpleAllocator") {
             Extends(.integers, .finiteSets)
-            Variable(unsat, emptyAllocation)
-            Variable(alloc, emptyAllocation)
+            Variable(computed: unsat) { emptyAllocation.raw }
+            Variable(computed: alloc) { emptyAllocation.raw }
 
             Action("Request", parameters: [
                 ActionParameter("client", values: Client.finiteValues),
