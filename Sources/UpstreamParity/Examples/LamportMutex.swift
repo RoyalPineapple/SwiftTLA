@@ -8,6 +8,7 @@ public struct LamportMutexModel: Sendable {
         public static var defaultValue: Self { .one }
         public static let finiteValues = allCases
 
+        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
     public enum MessageKind: String, TLAValueType {

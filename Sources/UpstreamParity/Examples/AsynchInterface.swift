@@ -7,11 +7,14 @@ import SwiftTLAMacros
 /// the authored model and generated state machine share their names and types.
 @TLAModel
 public struct AsynchInterfaceModel: Sendable {
-    public enum Data: String, CaseIterable {
+    public enum Data: String, CaseIterable, FiniteTLAValueDomain {
         case d1
         case d2
         case d3
 
+        public static var defaultValue: Self { .d1 }
+        public static let finiteValues = allCases
+        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     public struct InterfaceFields {

@@ -7,10 +7,13 @@ struct Counter {
         case advance
     }
 
-    enum Node: String, CaseIterable {
+    enum Node: String, FiniteTLAValueDomain {
         case only
 
+        static var defaultValue: Self { .only }
+        static let finiteValues: [Node] = [.only]
 
+        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     struct CarFields {
@@ -35,10 +38,12 @@ struct Counter {
         static let doorsOpen = field(\CarFields.doorsOpen)
     }
 
-    enum CarID: String, CaseIterable {
+    enum CarID: String, FiniteTLAValueDomain {
         case one
         case two
 
+        static var defaultValue: Self { .one }
+        static let finiteValues: [CarID] = [.one, .two]
     }
 
     static var spec: TLASpec {

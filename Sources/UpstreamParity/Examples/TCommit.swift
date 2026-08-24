@@ -13,6 +13,21 @@ public struct TCommitModel: Sendable {
 
         public static var defaultValue: Self { .one }
         public static let finiteValues = allCases
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum ManagerState: String, TLAValueType {
+        case working
+        case prepared
+        case committed
+        case aborted
+
+        public static var defaultValue: Self { .working }
+    }
+
+    public static var spec: TLASpec {
+        TLASpec("TCommit", scoped: specificationComponents)
     }
 
     private static func specificationComponents(_ scope: SpecificationScope) -> [SpecComponent] {

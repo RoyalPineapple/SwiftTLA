@@ -21,6 +21,11 @@ struct AlgorithmPlusCalRendererTests {
 
         static var defaultValue: Self { .left }
         static let finiteValues: [Node] = [.left, .right]
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    @Test("rejects residual anonymous formal lambdas")
     func rejectsResidualAnonymousFormalLambdas() {
         #expect(StateExpr.plusCalExpression(from: .variable("count"), using: { $0 }) != nil)
         #expect(StateExpr.plusCalExpression(from: .operatorApplication(

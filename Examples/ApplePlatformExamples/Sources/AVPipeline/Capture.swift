@@ -4,15 +4,18 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct CaptureModel {
-    public enum Phase: String, CaseIterable {
+    public enum Phase: String, CaseIterable, FiniteTLAValueDomain {
         case idle, configured, running, interrupted
+        public static var defaultValue: Self { .idle }
+        public static let finiteValues = allCases
+        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum ConfigureProcess: String, CaseIterable { case configureEvent }
-    private enum StartProcess: String, CaseIterable { case startEvent }
-    private enum StopProcess: String, CaseIterable { case stopEvent }
-    private enum InterruptProcess: String, CaseIterable { case interruptEvent }
-    private enum ResumeProcess: String, CaseIterable { case resumeEvent }
+    private enum ConfigureProcess: String, FiniteTLAValueDomain { case configureEvent; static var defaultValue: Self { .configureEvent }; static let finiteValues: [Self] = [.configureEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum StartProcess: String, FiniteTLAValueDomain { case startEvent; static var defaultValue: Self { .startEvent }; static let finiteValues: [Self] = [.startEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum StopProcess: String, FiniteTLAValueDomain { case stopEvent; static var defaultValue: Self { .stopEvent }; static let finiteValues: [Self] = [.stopEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum InterruptProcess: String, FiniteTLAValueDomain { case interruptEvent; static var defaultValue: Self { .interruptEvent }; static let finiteValues: [Self] = [.interruptEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum ResumeProcess: String, FiniteTLAValueDomain { case resumeEvent; static var defaultValue: Self { .resumeEvent }; static let finiteValues: [Self] = [.resumeEvent]; var tlaValue: TLAValue { .string(rawValue) } }
     private enum Step: String, CaseIterable { case configure, start, stop, interrupt, resume }
 
     public static var spec: TLASpec {

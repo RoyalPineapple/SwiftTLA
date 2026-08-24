@@ -18,8 +18,10 @@ import SwiftTLA
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 @attached(member, names: named(defaultValue), named(finiteValues))
-@attached(extension, conformances: FiniteTLAValueDomain, names: arbitrary)
 public macro _TLAFiniteEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "FiniteEnumMacro")
+
+@attached(member, names: named(defaultValue))
+public macro _TLAValueEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "ValueEnumMacro")
 
 /// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.
 ///

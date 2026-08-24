@@ -29,9 +29,37 @@ public struct VoteProofModel: Sendable {
         checkDeadlock: false
     )
 
-    public enum Value: String, CaseIterable {
+    public enum Value: String, CaseIterable, FiniteTLAValueDomain {
         case v1, v2
+    }
 
+    public enum Acceptor: String, CaseIterable, FiniteTLAValueDomain {
+        case a1, a2, a3
+    }
+
+    private enum Step: String, CaseIterable {
+        case acc
+    }
+
+    public static var spec: TLASpec {
+        #spec("VoteProof") {
+            Constant("Value", SetExpr<Value>(.v1, .v2))
+            Constant("Acceptor", SetExpr<Acceptor>(.a1, .a2, .a3))
+            Constant("Quorum", SetExpr<SetExpr<Acceptor>>(
+                SetExpr<Acceptor>(.a1, .a2),
+                SetExpr<Acceptor>(.a1, .a3),
+                SetExpr<Acceptor>(.a2, .a3),
+                SetExpr<Acceptor>(.a1, .a2, .a3)
+            ))
+            Constant("Ballot", SetExpr<Int>(0, 1, 2))
+            let consensusValue = SetExpr<Value>.literal(.v1, .v2)
+            let consensusChosen = FormalCall(as: SetExpr<Value>.self, "chosen")
+            let consensus = Instance(
+                "C",
+                of: ByzPaxosConsensus.module,
+                plusCalPhase: .postTranslation,
+                dependsOn: ["chosen"]
+            )
             consensus
             Refinement(
                 name: "Refines",

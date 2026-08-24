@@ -15,6 +15,7 @@ public struct DiningPhilosophersModel: Sendable {
         public static var defaultValue: Self { .one }
         public static let finiteValues: [Self] = [.one, .two, .three, .four, .five]
 
+        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
     public struct ForkFields {

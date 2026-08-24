@@ -15,6 +15,7 @@ public struct ChangRobertsModel: Sendable {
         public static var defaultValue: Self { .one }
         public static let finiteValues: [Self] = [.one, .two, .three]
 
+        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
     public enum ProcessState: String, TLAValueType {

@@ -45,9 +45,17 @@ struct SymmetryParserFidelityTests {
 
 @TLAModel
 private struct GeneratedSymmetryModel {
-    enum Transaction: String, CaseIterable {
+    enum Transaction: String, FiniteTLAValueDomain {
         case t1, t2
 
+        static var defaultValue: Self { .t1 }
+        static let finiteValues: [Self] = [.t1, .t2]
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedSymmetry") { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Symmetry("TxId", Set(Transaction.all))
             Invariant("TypeOK") { value >= 0 }
         }
     }

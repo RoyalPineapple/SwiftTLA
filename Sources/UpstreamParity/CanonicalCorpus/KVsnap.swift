@@ -38,10 +38,41 @@ public struct KVsnapModel: Sendable {
         )
     )
 
-    public enum Key: String, CaseIterable {
+    public enum Key: String, CaseIterable, FiniteTLAValueDomain {
         case k1, k2
 
+        public var tlaValue: TLAValue { .constant(rawValue) }
+
+        public init?(formalValue: TLAValue) {
+            guard case .constant(let rawValue) = formalValue else { return nil }
+            self.init(rawValue: rawValue)
         }
+    }
+
+    public enum Transaction: String, CaseIterable, FiniteTLAValueDomain {
+        case t1, t2, t3
+
+        public var tlaValue: TLAValue { .constant(rawValue) }
+
+        public init?(formalValue: TLAValue) {
+            guard case .constant(let rawValue) = formalValue else { return nil }
+            self.init(rawValue: rawValue)
+        }
+    }
+
+    public enum NoValue: String, TLAValueType {
+        case noVal = "NoVal"
+
+        public var tlaValue: TLAValue { .constant(rawValue) }
+
+        public init?(formalValue: TLAValue) {
+            guard case .constant(let rawValue) = formalValue else { return nil }
+            self.init(rawValue: rawValue)
+        }
+    }
+
+    public enum OperationKind: String, TLAValueType {
+        case read, write
     }
 
     public typealias Value = OneOf<Transaction, NoValue>

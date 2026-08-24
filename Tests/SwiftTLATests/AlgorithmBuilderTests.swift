@@ -1364,10 +1364,55 @@ struct AlgorithmBuilderTests {
     }
 }
 
-private enum Node: String, CaseIterable, CaseIterable {
+private enum Node: String, FiniteTLAValueDomain, CaseIterable {
     case first
     case second
 
+    static var defaultValue: Self { .first }
+    static let finiteValues: [Node] = [.first, .second]
+
+    var tlaValue: TLAValue { .string(rawValue) }
+}
+
+private enum EmptyNode: String, FiniteTLAValueDomain {
+    case none
+
+    static var defaultValue: Self { .none }
+    static let finiteValues: [EmptyNode] = []
+
+    var tlaValue: TLAValue { .string(rawValue) }
+}
+
+private enum OtherNode: String, FiniteTLAValueDomain {
+    case one = "other"
+
+    static var defaultValue: Self { .one }
+    static let finiteValues: [OtherNode] = [.one]
+
+    var tlaValue: TLAValue { .string(rawValue) }
+}
+
+private enum AlgorithmLabel: String, CaseIterable {
+    case receive
+    case forward
+    case done
+}
+
+private enum MissingAlgorithmLabel: String, CaseIterable {
+    case missing
+}
+
+@TLAModel
+private struct ProcedureGeneratedModel {
+    static var spec: TLASpec {
+        #spec("ProcedureGenerated") {
+            Algorithm("ProcedureGenerated", scoped: { scope in
+                let output = scope.sharedVar("output", initial: 0)
+                Procedure("work", parameters: Int.self, scoped: { value, scope in
+                    let offset = scope.localVar("offset", initial: 1)
+                    Do(TestControlLabel.enter) {
+                        Await(value.expr >= 0)
+                        Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
                 })
@@ -1380,10 +1425,116 @@ private enum Node: String, CaseIterable, CaseIterable {
 
 @TLAModel
 private struct MacroProcessGeneratedModel {
-    enum Node: String, CaseIterable {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
 
+        static var defaultValue: Self { .first }
+        static let finiteValues = allCases
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("MacroProcessGenerated") {
+            Algorithm("MacroProcessGenerated", scoped: { scope in
+                let marked = scope.sharedVar("marked", initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
+                let mark = Macro { (node: MacroParameter<Node>) in
+                    Assign(marked, to: marked.updating(node, to: true))
+                }
+
+                Each(Node.all) { node in
+                    Do(TestControlLabel.mark) { mark(node) }
+                    Do(TestControlLabel.done) { Stop() }
+                }
+            })
+        }
+    }
+}
+
+@TLAModel
+private struct FunctionDomainGeneratedModel {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case first
+        case second
+
+        static var defaultValue: Self { .first }
+        static let finiteValues = allCases
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("FunctionDomainGenerated") {
+            Algorithm("FunctionDomainGenerated", scoped: { scope in
+                let successors = scope.sharedVar("successors", in: Where(
+                    Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
+                ) { successor in
+                    All(Node.all) { node in
+                        successor[node].cardinality == 1
+                    }
+                })
+
+                Do(TestControlLabel.done) { Stop() }
+                Invariant("OneSuccessorPerNode") {
+                    All(Node.all) { node in
+                        successors[node].cardinality == 1
+                    }
+                }
+            })
+        }
+    }
+}
+
+@TLAModel
+private struct StaticFormalSelectionModel {
+    static var spec: TLASpec {
+        #spec("StaticFormalSelection") {
+            Algorithm("StaticFormalSelection", scoped: { scope in
+                let selected = Select(
+                    from: SetExpr<Int>.literal(1, 2, 3),
+                    matching: { value in value.expr % 2 == 0 }
+                )
+                let current = scope.sharedVar("current", initial: selected)
+
+                Do(TestControlLabel.done) { Stop() }
+                Invariant("SelectedEven") { current == 2 }
+            })
+        }
+    }
+}
+
+@TLAModel
+private struct StaticFilteredFunctionSelectionModel {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case first
+        case second
+        case third
+        case fourth
+
+        static var defaultValue: Self { .first }
+        static let finiteValues = allCases
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("StaticFilteredFunctionSelection") {
+            Algorithm("StaticFilteredFunctionSelection", scoped: { scope in
+                let successors = Select(
+                    from: Where(Functions(
+                        from: Node.all,
+                        to: Subsets(of: SetExpr<Node>.literal(.first, .second, .third, .fourth))
+                    )) { successor in
+                        All(Node.all) { node in successor[node].cardinality == 2 }
+                    },
+                    matching: { successor in successor.expr == successor.expr }
+                )
+                let current = scope.sharedVar("current", initial: successors)
+
+                Do(TestControlLabel.done) { Stop() }
+                Invariant("CurrentIsDefined") { current == current.expr }
+            })
         }
     }
 }

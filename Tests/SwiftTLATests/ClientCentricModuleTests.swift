@@ -55,4 +55,10 @@ struct ClientCentricModuleTests {
     static var defaultValue: Self { .key }
     static let finiteValues: [Self] = [.key]
   }
+
+  private enum TestValue: String, FiniteTLAValueDomain {
+    case none
+    static var defaultValue: Self { .none }
+    static let finiteValues: [Self] = [.none]
+  }
 }

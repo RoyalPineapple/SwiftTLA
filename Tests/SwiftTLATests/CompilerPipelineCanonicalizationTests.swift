@@ -12,6 +12,84 @@ private enum CompilerPipelineNode: String, FiniteTLAValueDomain, CaseIterable {
 
     static var defaultValue: Self { .first }
     static let finiteValues: [Self] = [.first, .second]
+
+    var tlaValue: TLAValue { .string(rawValue) }
+}
+
+@TLAModel
+private struct CompilerPipelineGeneratedModel {
+    static var spec: TLASpec {
+        #spec("CompilerPipelineGeneratedModel") {
+            Algorithm("CompilerPipelineGeneratedModel", scoped: { scope in
+                let counter = scope.sharedVar("counter", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(counter, to: counter + 1)
+                }
+            })
+        }
+    }
+}
+
+@TLAModel
+private struct CompilerPipelineExplicitFormalNameModel {
+    static var spec: TLASpec {
+        #spec("CompilerPipelineExplicitFormalName") {
+            Algorithm("CompilerPipelineExplicitFormalName", scoped: { scope in
+                let counter = scope.sharedVar("counter", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(counter, to: counter + 1)
+                }
+            })
+        }
+    }
+}
+
+@TLAModel
+private struct CompilerPipelineAlgorithmModel {
+    static var spec: TLASpec {
+        #spec("CompilerPipelineAlgorithmModel") {
+            Algorithm("CompilerPipelineAlgorithmModel", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(count, to: count + 1)
+                }
+            })
+        }
+    }
+}
+
+@TLAModel
+private struct CompilerPipelineInitializationModel {
+    static var spec: TLASpec {
+        #spec("CompilerPipelineInitializationModel") {
+            Algorithm("CompilerPipelineInitializationModel", scoped: { scope in
+                let seed = scope.sharedVar("seed", initial: 0)
+                let computed = scope.sharedVar("computed", initial: seed + 1)
+                let choice = scope.sharedVar("choice", in: SetExpr<Int>.literal(1, 2))
+                Do(TestControlLabel.done) {
+                    Assign(computed, to: computed)
+                    Assign(choice, to: choice)
+                }
+            })
+        }
+    }
+}
+
+private struct CompilerPipelineCollectionModel {
+    static var spec: TLASpec {
+        #spec("CompilerPipelineCollectionModel") {
+            let devices = SymmetricCollectionVar<CompilerPipelineMember, Int>("devices")
+            SymmetricCollection(devices, verificationScope: 2, initial: 0)
+            CollectionAction("advance", on: devices) { member in
+                devices[member] == 0 && devices.update(member, to: 1)
+            }
+        }
+    }
+}
+
+@Suite("Compiler pipeline canonicalization")
+struct CompilerPipelineCanonicalizationTests {
+    @Test("equivalent source models retain stable binder names")
     func equivalentSourceModelsRetainStableBinderNames() throws {
         func sourceModel() -> TLASpec {
             TLASpec("StableBinders") {

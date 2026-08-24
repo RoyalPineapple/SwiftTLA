@@ -4,15 +4,18 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct WriterModel {
-    public enum Phase: String, CaseIterable {
+    public enum Phase: String, CaseIterable, FiniteTLAValueDomain {
         case configured, writing, paused, finished, cancelled
+        public static var defaultValue: Self { .configured }
+        public static let finiteValues = allCases
+        public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum StartProcess: String, CaseIterable { case startEvent }
-    private enum WriteProcess: String, CaseIterable { case writeEvent }
-    private enum PauseProcess: String, CaseIterable { case pauseEvent }
-    private enum ResumeProcess: String, CaseIterable { case resumeEvent }
-    private enum FinishProcess: String, CaseIterable { case finishEvent }
-    private enum CancelProcess: String, CaseIterable { case cancelEvent }
+    private enum StartProcess: String, FiniteTLAValueDomain { case startEvent; static var defaultValue: Self { .startEvent }; static let finiteValues: [Self] = [.startEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum WriteProcess: String, FiniteTLAValueDomain { case writeEvent; static var defaultValue: Self { .writeEvent }; static let finiteValues: [Self] = [.writeEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum PauseProcess: String, FiniteTLAValueDomain { case pauseEvent; static var defaultValue: Self { .pauseEvent }; static let finiteValues: [Self] = [.pauseEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum ResumeProcess: String, FiniteTLAValueDomain { case resumeEvent; static var defaultValue: Self { .resumeEvent }; static let finiteValues: [Self] = [.resumeEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum FinishProcess: String, FiniteTLAValueDomain { case finishEvent; static var defaultValue: Self { .finishEvent }; static let finiteValues: [Self] = [.finishEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum CancelProcess: String, FiniteTLAValueDomain { case cancelEvent; static var defaultValue: Self { .cancelEvent }; static let finiteValues: [Self] = [.cancelEvent]; var tlaValue: TLAValue { .string(rawValue) } }
     private enum Step: String, CaseIterable { case start, write, pause, resume, finish, cancel }
     public static var spec: TLASpec {
         #spec("WriterModel") {

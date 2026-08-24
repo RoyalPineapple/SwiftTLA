@@ -1313,11 +1313,14 @@ private func parserEnum(
     }
 }
 
-private enum ParserNode: String, CaseIterable {
+private enum ParserNode: String, FiniteTLAValueDomain {
     case left
     case right
 
+    static var defaultValue: Self { .left }
+    static let finiteValues: [ParserNode] = [.left, .right]
 
+    var tlaValue: TLAValue { .string(rawValue) }
 }
 
 // MARK: - StateExpr: literals
@@ -2563,15 +2566,19 @@ private let cameraModeDefinition = parserEnum(
 
 }
 
-private enum TestPersonID: String, CaseIterable {
+private enum TestPersonID: String, FiniteTLAValueDomain {
     case alice, bob
+    static var defaultValue: Self { .alice }
+    static let finiteValues = [Self.alice, .bob]
 }
 
 @TLAModel
 private struct DefinePhaseGeneratedModel {
-    enum Mode: String, CaseIterable {
+    enum Mode: String, FiniteTLAValueDomain {
         case define
 
+        static var defaultValue: Self { .define }
+        static let finiteValues = [Self.define]
     }
 
     static var spec: TLASpec {
@@ -2616,16 +2623,22 @@ private struct FormalDefinitionFidelityMacro {
 
 @TLAModel
 private struct TypedFacadeEnumDomainMacro {
-    enum PersonID: String, CaseIterable {
+    enum PersonID: String, FiniteTLAValueDomain {
         case alice, bob
+        static var defaultValue: Self { .alice }
+        static let finiteValues = [Self.alice, .bob]
     }
 
-    enum CarID: String, CaseIterable {
+    enum CarID: String, FiniteTLAValueDomain {
         case carA, carB
+        static var defaultValue: Self { .carA }
+        static let finiteValues = [Self.carA, .carB]
     }
 
-    enum Direction: String, CaseIterable {
+    enum Direction: String, FiniteTLAValueDomain {
         case up, down
+        static var defaultValue: Self { .up }
+        static let finiteValues = [Self.up, .down]
     }
 
     static var spec: TLASpec {
@@ -2643,12 +2656,16 @@ private struct TypedFacadeEnumDomainMacro {
     }
 }
 
-private enum TestCarID: String, CaseIterable {
+private enum TestCarID: String, FiniteTLAValueDomain {
     case carA, carB
+    static var defaultValue: Self { .carA }
+    static let finiteValues = [Self.carA, .carB]
 }
 
-private enum TestDirection: String, CaseIterable {
+private enum TestDirection: String, FiniteTLAValueDomain {
     case up, down
+    static var defaultValue: Self { .up }
+    static let finiteValues = [Self.up, .down]
 }
 
 private struct TestCarFields {

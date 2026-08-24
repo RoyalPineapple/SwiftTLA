@@ -268,9 +268,37 @@ enum RollItem: Identifiable {
 
 @TLAModel
 struct CameraWorkflow {
-    private enum ReadyProcess: String, CaseIterable { case readyEvent
+    private enum ReadyProcess: String, FiniteTLAValueDomain { case readyEvent
+        static var defaultValue: Self { .readyEvent }
+        static let finiteValues: [Self] = [.readyEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum RecordProcess: String, CaseIterable { case recordEvent
+    private enum RecordProcess: String, FiniteTLAValueDomain { case recordEvent
+        static var defaultValue: Self { .recordEvent }
+        static let finiteValues: [Self] = [.recordEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum StopProcess: String, FiniteTLAValueDomain { case stopEvent
+        static var defaultValue: Self { .stopEvent }
+        static let finiteValues: [Self] = [.stopEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent
+        static var defaultValue: Self { .playEvent }
+        static let finiteValues: [Self] = [.playEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum LiveProcess: String, FiniteTLAValueDomain { case liveEvent
+        static var defaultValue: Self { .liveEvent }
+        static let finiteValues: [Self] = [.liveEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum Step: String, CaseIterable { case ready, record, stop, play, live }
+
+    static var spec: TLASpec {
+        #spec("CameraWorkflow") {
+            Algorithm("CameraWorkflow", scoped: { scope in
+                let phase = scope.sharedVar("phase", initial: 0)
                 Each(ReadyProcess.all) { _ in
                     Do(Step.ready) { When(phase == 0); Assign(phase, to: 1); Goto(Step.ready) }
                 }

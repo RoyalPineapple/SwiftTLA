@@ -9,26 +9,34 @@ private func parseExpression(_ source: String) throws -> ExprSyntax {
     try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
 }
 
-private enum InvalidLiteralDomain: String, CaseIterable {
+private enum InvalidLiteralDomain: String, CaseIterable, FiniteTLAValueDomain {
     case first
     case second
 
+    static var defaultValue: Self { .first }
+    static let finiteValues = allCases
 }
 
-private enum EmptyFiniteDomain: String, CaseIterable {
+private enum EmptyFiniteDomain: String, FiniteTLAValueDomain {
     case placeholder
 
+    static var defaultValue: Self { .placeholder }
+    static let finiteValues: [Self] = []
 }
 
-private enum DuplicateFiniteDomain: String, CaseIterable {
+private enum DuplicateFiniteDomain: String, FiniteTLAValueDomain {
     case first
 
+    static var defaultValue: Self { .first }
+    static let finiteValues: [Self] = [.first, .first]
 }
 
-private enum PartialFiniteDomain: String, CaseIterable {
+private enum PartialFiniteDomain: String, FiniteTLAValueDomain {
     case first
     case second
 
+    static var defaultValue: Self { .first }
+    static let finiteValues: [Self] = [.first]
 }
 
 private struct InvalidLiteralFields {

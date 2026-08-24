@@ -8,9 +8,12 @@ import SwiftTLAMacros
 /// write/write/read steps; this is not a sequential Swift simulation.
 @TLAModel
 public struct TeachingSimpleRegularN8Model: Sendable {
-    public enum Process: Int, CaseIterable {
+    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case p0, p1, p2, p3, p4, p5, p6, p7
 
+        public static var defaultValue: Self { .p0 }
+        public static let finiteValues = allCases
+        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {

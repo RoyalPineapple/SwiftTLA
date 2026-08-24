@@ -4,15 +4,18 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct PlayerModel {
-    public enum Phase: String, CaseIterable {
+    public enum Phase: String, CaseIterable, FiniteTLAValueDomain {
         case unloaded, loading, ready, playing, paused, finished
+        public static var defaultValue: Self { .unloaded }
+        public static let finiteValues = allCases
+        public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum BeginLoadProcess: String, CaseIterable { case beginLoadEvent }
-    private enum ReadyProcess: String, CaseIterable { case readyEvent }
-    private enum PlayProcess: String, CaseIterable { case playEvent }
-    private enum PauseProcess: String, CaseIterable { case pauseEvent }
-    private enum SeekProcess: String, CaseIterable { case seekEvent }
-    private enum FinishProcess: String, CaseIterable { case finishEvent }
+    private enum BeginLoadProcess: String, FiniteTLAValueDomain { case beginLoadEvent; static var defaultValue: Self { .beginLoadEvent }; static let finiteValues: [Self] = [.beginLoadEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum ReadyProcess: String, FiniteTLAValueDomain { case readyEvent; static var defaultValue: Self { .readyEvent }; static let finiteValues: [Self] = [.readyEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent; static var defaultValue: Self { .playEvent }; static let finiteValues: [Self] = [.playEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum PauseProcess: String, FiniteTLAValueDomain { case pauseEvent; static var defaultValue: Self { .pauseEvent }; static let finiteValues: [Self] = [.pauseEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum SeekProcess: String, FiniteTLAValueDomain { case seekEvent; static var defaultValue: Self { .seekEvent }; static let finiteValues: [Self] = [.seekEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum FinishProcess: String, FiniteTLAValueDomain { case finishEvent; static var defaultValue: Self { .finishEvent }; static let finiteValues: [Self] = [.finishEvent]; var tlaValue: TLAValue { .string(rawValue) } }
     private enum Step: String, CaseIterable { case beginLoad, ready, play, pause, seek, finish }
     public static var spec: TLASpec {
         #spec("PlayerModel") {

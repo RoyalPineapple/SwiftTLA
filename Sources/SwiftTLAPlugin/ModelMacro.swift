@@ -210,8 +210,29 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
         providingAttributesFor member: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [AttributeSyntax] {
-        guard isFiniteRawEnum(member) else { return [] }
-        return ["@_TLAFiniteEnum"]
+        guard let enumDeclaration = member.as(EnumDeclSyntax.self),
+              let inheritance = enumDeclaration.inheritanceClause
+        else { return [] }
+        let inheritedNames = Set(inheritance.inheritedTypes.compactMap {
+            $0.type.as(IdentifierTypeSyntax.self)?.name.text
+        })
+        let memberNames = Set(enumDeclaration.memberBlock.members.compactMap {
+            if let variable = $0.decl.as(VariableDeclSyntax.self) {
+                return variable.bindings.compactMap {
+                    $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text
+                }.first
+            }
+            return nil
+        })
+        if inheritedNames.contains("FiniteTLAValueDomain"),
+           !memberNames.contains("defaultValue"),
+           !memberNames.contains("finiteValues") {
+            return ["@_TLAFiniteEnum"]
+        }
+        if inheritedNames.contains("TLAValueType"), !memberNames.contains("defaultValue") {
+            return ["@_TLAValueEnum"]
+        }
+        return []
     }
 
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
@@ -239,19 +260,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
     }
 }
 
-private func isFiniteRawEnum(_ declaration: some DeclSyntaxProtocol) -> Bool {
-    guard let enumDeclaration = declaration.as(EnumDeclSyntax.self),
-          let inheritance = enumDeclaration.inheritanceClause
-    else { return false }
-    let inheritedNames = Set(inheritance.inheritedTypes.compactMap {
-        $0.type.as(IdentifierTypeSyntax.self)?.name.text
-    })
-    return inheritedNames.contains("CaseIterable")
-        && (inheritedNames.contains("String") || inheritedNames.contains("Int"))
-        && enumDeclaration.memberBlock.members.contains(where: { $0.decl.as(EnumCaseDeclSyntax.self) != nil })
-}
-
-public struct FiniteEnumMacro: MemberMacro, ExtensionMacro {
+public struct FiniteEnumMacro: MemberMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -265,24 +274,27 @@ public struct FiniteEnumMacro: MemberMacro, ExtensionMacro {
             throw SimpleError("A SwiftTLA finite enum must declare at least one case")
         }
         return [
-            "static var defaultValue: Self { .\(raw: firstCase) }",
-            "static var finiteValues: [Self] { Array(allCases) }"
+            "public static var defaultValue: Self { .\(raw: firstCase) }",
+            "public static var finiteValues: [Self] { Array(allCases) }"
         ]
     }
 
+}
+
+public struct ValueEnumMacro: MemberMacro {
     public static func expansion(
         of node: AttributeSyntax,
-        attachedTo declaration: some DeclGroupSyntax,
-        providingExtensionsOf type: some TypeSyntaxProtocol,
-        conformingTo protocols: [TypeSyntax],
+        providingMembersOf declaration: some DeclGroupSyntax,
         in context: some MacroExpansionContext
-    ) throws -> [ExtensionDeclSyntax] {
-        guard let extensionDeclaration = ("""
-            extension \(type.trimmed): FiniteTLAValueDomain {}
-            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else {
-            return []
+    ) throws -> [DeclSyntax] {
+        guard let enumDeclaration = declaration.as(EnumDeclSyntax.self),
+              let firstCase = enumDeclaration.memberBlock.members.lazy.compactMap({
+                  $0.decl.as(EnumCaseDeclSyntax.self)?.elements.first?.name.text
+              }).first
+        else {
+            throw SimpleError("A SwiftTLA value enum must declare at least one case")
         }
-        return [extensionDeclaration]
+        return ["public static var defaultValue: Self { .\(raw: firstCase) }"]
     }
 }
 

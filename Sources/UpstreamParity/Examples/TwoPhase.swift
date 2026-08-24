@@ -15,6 +15,16 @@ public struct TwoPhaseModel: Sendable {
         public static var defaultValue: Self { .one }
         public static let finiteValues = allCases
 
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum Coordinator: String, CaseIterable, FiniteTLAValueDomain {
+        case transactionManager
+
+        public static var defaultValue: Self { .transactionManager }
+        public static let finiteValues = allCases
+
+        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     public enum ResourceManagerState: String, TLAValueType {

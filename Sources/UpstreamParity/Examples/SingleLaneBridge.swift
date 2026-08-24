@@ -10,6 +10,13 @@ public struct SingleLaneBridgeModel: Sendable {
 
         public static var defaultValue: Self { .rightOne }
         public static let finiteValues = allCases
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public static var spec: TLASpec {
+        #spec("SingleLaneBridge") {
+            Extends(.naturals, .sequences)
             Constant("CarsRight", SetExpr<Car>(.rightOne, .rightTwo))
             Constant("CarsLeft", SetExpr<Car>(.leftOne, .leftTwo))
             Constant("Bridge", SetExpr<Int>(4, 5))

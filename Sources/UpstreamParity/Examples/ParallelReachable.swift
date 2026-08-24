@@ -12,6 +12,15 @@ public struct ParallelReachableModel: Sendable {
 
         public static var defaultValue: Self { .one }
         public static let finiteValues: [Self] = [.one, .two, .three, .four]
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    public enum Worker: Int, FiniteTLAValueDomain {
+        case one = 1, two = 2
+
+        public static var defaultValue: Self { .one }
+        public static let finiteValues: [Self] = [.one, .two]
+        public var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {

@@ -15,6 +15,25 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
         public static var defaultValue: Self { .one }
         public static let finiteValues = allCases
 
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum TransactionManager: String, CaseIterable, FiniteTLAValueDomain {
+        case primary = "tm"
+
+        public static var defaultValue: Self { .primary }
+        public static let finiteValues = allCases
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum BackupTransactionManager: String, CaseIterable, FiniteTLAValueDomain {
+        case backup = "btm"
+
+        public static var defaultValue: Self { .backup }
+        public static let finiteValues = allCases
+
+        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     public enum ResourceManagerState: String, TLAValueType {
