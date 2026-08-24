@@ -83,7 +83,10 @@ public struct SimpleAllocatorModel: Sendable {
                 ActionParameter("resources", values: RequestedResources.finiteValues)
             ]) {
                 resources.cardinality > 0 && resources.isSubset(of: alloc[client])
-                    && alloc.becomes(alloc.updating(client, to: alloc[client].raw.subtracting(resources)))
+                    && alloc.becomes(alloc.updating(
+                        client,
+                        to: Expr<SetExpr<Resource>>(alloc[client].raw.subtracting(resources))
+                    ))
             }
 
             Invariant("TypeInvariant") {
