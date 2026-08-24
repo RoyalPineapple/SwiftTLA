@@ -161,9 +161,13 @@ enum TLASpecVerifier {
                 $0.type.as(IdentifierTypeSyntax.self)?.name.text
             }
 
+            guard inheritedNames.contains("TLAValueType")
+                || inheritedNames.contains("FiniteTLAValueDomain")
+            else { continue }
+
             let intBacked = inheritedNames.contains("Int")
             let stringBacked = inheritedNames.contains("String")
-            guard inheritedNames.contains("CaseIterable"), intBacked || stringBacked else { continue }
+            guard intBacked || stringBacked else { continue }
 
             var cases: [(name: String, value: TLAValue)] = []
             var idx = 0
@@ -189,10 +193,42 @@ enum TLASpecVerifier {
 
             result.append(ParsedEnumInfo(
                 typeName: enumDecl.name.text,
-                cases: cases
+                cases: cases,
+                finiteValues: finiteValues(in: enumDecl, cases: cases)
             ))
         }
         return result
+    }
+
+    private static func finiteValues(
+        in enumDecl: EnumDeclSyntax,
+        cases: [(name: String, value: TLAValue)]
+    ) -> [TLAValue] {
+        guard let binding = enumDecl.memberBlock.members.lazy.compactMap({ member -> PatternBindingSyntax? in
+            guard let declaration = member.decl.as(VariableDeclSyntax.self),
+                  declaration.modifiers.contains(where: { $0.name.text == "static" })
+            else { return nil }
+            return declaration.bindings.first { binding in
+                binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "finiteValues"
+            }
+        }).first,
+        let initializer = binding.initializer?.value
+        else { return cases.map(\.value) }
+
+        if initializer.as(DeclReferenceExprSyntax.self)?.baseName.text == "allCases"
+            || initializer.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "allCases" {
+            return cases.map(\.value)
+        }
+
+        guard let array = initializer.as(ArrayExprSyntax.self) else {
+            return cases.map(\.value)
+        }
+        let values = array.elements.compactMap { element -> TLAValue? in
+            let name = element.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
+                ?? element.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+            return cases.first { $0.name == name }?.value
+        }
+        return values.isEmpty ? cases.map(\.value) : values
     }
 }
 
