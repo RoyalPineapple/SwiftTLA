@@ -184,17 +184,22 @@ struct LiveMachineRuntimeTests {
         #expect(await machine.current() == .snapshot(before))
     }
 
-    @Test("Multiple formal successors fail without commit while a deterministic successor still commits")
-    func ambiguousSuccessorsFailWithoutCommitAndDeterministicSuccessorCommits() async throws {
+    @Test("Generated actions require one successor")
+    func ambiguousActionFailsWithoutCommitAndDeterministicActionCommits() async throws {
         let fixture = try Self.makeFixture { storage in
             let firstCandidate = try storage.initialState { try storage.value(at: 0, in: $0) == 1 }
             let secondCandidate = try storage.initialState { try storage.value(at: 0, in: $0) == 2 }
+            do {
+                _ = try _GeneratedMachineStorage.onlySuccessor([firstCandidate, secondCandidate])
+                Issue.record("Expected an ambiguous action")
+            } catch GeneratedMachineError.ambiguousAction {
+            }
             return Self.transitionDriver(
                 storage: storage,
                 successors: { state, action in
-                if case .step(_) = action {
-                    return [firstCandidate, secondCandidate]
-                }
+                    if case .step(_) = action {
+                        return [firstCandidate, secondCandidate]
+                    }
                     return try Self.realSuccessors(storage)(state, action)
                 }
             )
@@ -207,11 +212,11 @@ struct LiveMachineRuntimeTests {
         let ambiguousOutcome = await machine.execute(.step(1), requestID: ambiguousRequestID)
 
         guard case .failed(let failure) = ambiguousOutcome else {
-            Issue.record("Expected an ambiguous-successors failure, found \(ambiguousOutcome)")
+            Issue.record("Expected an ambiguous-action failure, found \(ambiguousOutcome)")
             return
         }
         #expect(failure.requestID == ambiguousRequestID)
-        #expect(failure.code == .ambiguousSuccessors)
+        #expect(failure.code == .ambiguousAction)
         #expect(failure.message.contains("2 successor"))
         #expect(failure.current == before)
         #expect(await machine.current() == .snapshot(before))

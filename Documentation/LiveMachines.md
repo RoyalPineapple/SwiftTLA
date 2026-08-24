@@ -45,7 +45,7 @@ Each request produces exactly one generated `Live.Outcome`:
 - `rejected` includes the current snapshot and a typed reason.
 - `failed` includes the current snapshot and a typed failure.
 
-Live execution selects one successor for each typed action. A multiple-successor result produces `ambiguousSuccessors` and leaves the runtime at its current snapshot.
+Live execution commits one successor for each typed action. An action with multiple successors produces `ambiguousAction` and leaves the runtime at its current snapshot.
 
 ## Create generated adapters
 

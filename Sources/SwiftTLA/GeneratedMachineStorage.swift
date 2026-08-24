@@ -141,22 +141,17 @@ public struct _GeneratedMachineStorage: Sendable {
             .map { State($0.state) }
     }
 
-    /// Applies the first compiled successor for one generated action call.
+    /// Applies the only compiled successor for one generated action call.
     public func apply(
         actionOrdinal: Int,
         arguments: [any TLAValueConvertible],
-        from state: State,
-        selecting successor: (State) throws -> Bool = { _ in true }
+        from state: State
     ) throws -> State {
-        for after in try successors(
+        try Self.onlySuccessor(try successors(
             actionOrdinal: actionOrdinal,
             arguments: arguments,
             from: state
-        ) {
-            guard try successor(after) else { continue }
-            return after
-        }
-        throw GeneratedMachineError.noMatchingSuccessor
+        ))
     }
 
     /// Resolves the generated actions enabled in one stored state.
@@ -191,6 +186,14 @@ public struct _GeneratedMachineStorage: Sendable {
             ordinal: actionOrdinal,
             formalArguments: arguments.map(\.tlaValue)
         )
+    }
+
+    package static func onlySuccessor(_ candidates: [State]) throws -> State {
+        switch candidates.count {
+        case 0: throw GeneratedMachineError.noMatchingSuccessor
+        case 1: return candidates[0]
+        default: throw GeneratedMachineError.ambiguousAction
+        }
     }
 
     private func collectionValues(
@@ -244,7 +247,7 @@ public extension _GeneratedMachineStorage {
         case evaluationFailed
         case decodeFailed
         case positionExhausted
-        case ambiguousSuccessors
+        case ambiguousAction
     }
 
     struct LiveRejection<Action: Sendable & Equatable>: Sendable, Equatable {
@@ -420,7 +423,7 @@ public extension _GeneratedMachineStorage {
             case .evaluationFailed: return .evaluationFailed
             case .decodeFailed: return .decodeFailed
             case .positionExhausted: return .positionExhausted
-            case .ambiguousSuccessors: return .ambiguousSuccessors
+            case .ambiguousAction: return .ambiguousAction
             }
         }
 

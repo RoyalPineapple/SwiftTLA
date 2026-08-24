@@ -40,7 +40,7 @@ Generated `Live.Outcome` is exhaustive:
 - `rejected` contains the current snapshot and a validation or lifecycle reason.
 - `failed` contains the current snapshot and a failure reason.
 
-Accepted requests complete as `committed` or `failed`. Live execution requires one formal successor and reports `ambiguousSuccessors` when the evaluator finds more than one.
+Accepted requests complete as `committed` or `failed`. A live action reports `ambiguousAction` when it produces more than one successor.
 
 Positions begin at zero and have meaning only within one runtime identity. `Live.current()` returns an atomic typed snapshot with the state and available actions for that position.
 

@@ -83,7 +83,7 @@ extension MacroExpander {
                     case evaluationFailed
                     case decodeFailed
                     case positionExhausted
-                    case ambiguousSuccessors
+                    case ambiguousAction
                 }
 
                 public struct Rejection: Sendable, Equatable {
@@ -161,7 +161,7 @@ extension MacroExpander {
                     case .evaluationFailed: code = .evaluationFailed
                     case .decodeFailed: code = .decodeFailed
                     case .positionExhausted: code = .positionExhausted
-                    case .ambiguousSuccessors: code = .ambiguousSuccessors
+                    case .ambiguousAction: code = .ambiguousAction
                     }
                     return try .init(
                         requestID: value.requestID,

@@ -4,6 +4,7 @@ public enum GeneratedMachineError: Error, Sendable {
     case ambiguousInitialState
     case invalidInitialState
     case noMatchingSuccessor
+    case ambiguousAction
     case liveMachineUnavailable(String)
     case identityRoutedActionRequiresID
     case invalidGeneratedActionOrdinal
