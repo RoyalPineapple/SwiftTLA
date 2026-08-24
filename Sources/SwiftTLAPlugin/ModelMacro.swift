@@ -277,7 +277,9 @@ public struct FiniteEnumMacro: MemberMacro, ExtensionMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
-        guard let extensionDeclaration = "extension \(type): FiniteTLAValueDomain {}".as(ExtensionDeclSyntax.self) else {
+        guard let extensionDeclaration = ("""
+            extension \(type.trimmed): FiniteTLAValueDomain {}
+            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else {
             return []
         }
         return [extensionDeclaration]
