@@ -56,7 +56,7 @@ extension MacroExpander {
             }
             return """
             case \(actionCase):
-                return try _storage.successors(
+                return try storage.successors(
                     actionOrdinal: Self._actionOrdinal(for: action),
                     arguments: \(arguments),
                     from: storageState
@@ -91,6 +91,7 @@ extension MacroExpander {
             }
             """
         }.joined(separator: "\n                ")
+        let enabledActionsBinding = collectionActions.isEmpty ? "let" : "var"
         var members: [DeclSyntax] = [
             DeclSyntax(stringLiteral: """
             public var state: State {
@@ -134,8 +135,8 @@ extension MacroExpander {
                 """),
                 DeclSyntax(stringLiteral: """
                 public func enabledActions() throws -> [Action] {
-                    var actions = try _storage.availableActions(in: _stateWithLiveCollections()) { ordinal, arguments in
-                        try Self._action(actionAt: ordinal, arguments: arguments)
+                    \(enabledActionsBinding) actions = try _storage.availableActions(in: _stateWithLiveCollections()) { ordinal, arguments in
+                        Self._action(actionAt: ordinal, arguments: arguments)
                     }
                     \(collectionActions)
                     return actions
