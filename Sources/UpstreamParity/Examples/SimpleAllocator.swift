@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 public struct SimpleAllocatorModel: Sendable {
     public enum Client: String, CaseIterable, FiniteTLAValueDomain {
