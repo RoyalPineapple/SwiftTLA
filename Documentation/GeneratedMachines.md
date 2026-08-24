@@ -28,10 +28,6 @@ import SwiftTLAMacros
 
 @TLAModel
 struct BoundedCounter {
-    enum Process: String, CaseIterable {
-        case only
-    }
-
     enum Step: String, CaseIterable {
         case advance
     }
@@ -40,12 +36,10 @@ struct BoundedCounter {
         #spec("BoundedCounter") {
             Algorithm("BoundedCounter") {
                 let value = SharedVar("value", initial: 0)
-                Each(Process.all) { _ in
-                    Do(Step.advance) {
-                        When(value < 1)
-                        Assign(value, to: value + 1)
-                        Stop()
-                    }
+                Do(Step.advance) {
+                    When(value < 1)
+                    Assign(value, to: value + 1)
+                    Stop()
                 }
             }
         }

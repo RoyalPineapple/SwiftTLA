@@ -22,10 +22,6 @@ labeled atomic step.
 ```swift
 @TLAModel
 struct Counter {
-    enum Process: Int, CaseIterable {
-        case worker = 1
-    }
-
     enum Step: String, CaseIterable {
         case advance
     }
@@ -35,14 +31,9 @@ struct Counter {
             Algorithm("Counter") {
                 let count = SharedVar(initial: 0)
 
-                Each(Process.all) { _ in
-                    let attempts = LocalVar(initial: 0)
-
-                    Do(Step.advance) {
-                        When(count < 1)
-                        Assign(count, to: count + 1)
-                        Assign(attempts, to: attempts + 1)
-                    }
+                Do(Step.advance) {
+                    When(count < 1)
+                    Assign(count, to: count + 1)
                 }
             }
         }
