@@ -31,17 +31,20 @@ public struct MediaPipelineModel {
             })
         }
     }
-    @TLAActor public actor Machine {}
 }
 
 public actor MediaContract {
-    private let machine = MediaPipelineModel.Machine()
-    public let capture = Media.Capture()
+    private var machine: MediaPipelineModel
+    public let capture: Media.Capture
     public let writer: Media.Writer
     public let player: Media.Player
+
     public init(outputURL: URL) throws {
+        machine = try MediaPipelineModel.makeMachine()
+        capture = try Media.Capture()
         writer = try Media.Writer(url: outputURL, fileType: .mp4, outputSettings: [:])
-        player = Media.Player(url: outputURL)
+        player = try Media.Player(url: outputURL)
     }
-    public func stage() async -> MediaPipelineModel.Stage { await machine.state.stage }
+
+    public func stage() async -> MediaPipelineModel.Stage { machine.state.stage }
 }

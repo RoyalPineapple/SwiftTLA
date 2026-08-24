@@ -32,7 +32,6 @@ public struct CaptureModel {
         }
     }
 
-    @TLAActor public actor Machine {}
 }
 
 private final class CaptureVideoDelegate: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -47,37 +46,44 @@ public enum Media {
         func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) { Task { await actor?.didCapture(photo, error) } }
     }
 
-    /// AVFoundation effects are here; the generated machine owns the lifecycle.
+    /// AVFoundation effects are here; the generated value machine owns the lifecycle.
     public actor Capture {
-        private let machine = CaptureModel.Machine()
+        private var machine: CaptureModel
         /// AVFoundation owns this reference. The actor owns all lifecycle calls.
         public nonisolated(unsafe) let session = AVCaptureSession()
         private let delegate = CapturePhotoDelegate()
         private let photoOutput = AVCapturePhotoOutput()
         private var photoCont: CheckedContinuation<Data, Error>?
 
-        public init() { delegate.actor = self }
-        public func phase() async -> CaptureModel.Phase { await machine.state.phase }
+        public init() throws {
+            machine = try CaptureModel.makeMachine()
+            delegate.actor = self
+        }
+
+        public func phase() async -> CaptureModel.Phase { machine.state.phase }
 
         public func configure(device: AVCaptureDevice) async throws {
-            guard await machine.state.phase == .idle else { throw MediaError.cannotConfigure }
+            guard try machine.isEnabled(.configure) else { throw MediaError.cannotConfigure }
             session.beginConfiguration()
             defer { session.commitConfiguration() }
             session.addInput(try AVCaptureDeviceInput(device: device))
             session.addOutput(photoOutput)
-            _ = try await machine.send(.configure)
+            _ = try machine.send(.configure)
         }
 
         public func start() async throws {
-            guard await machine.state.phase == .configured else { throw MediaError.notConfigured }
-            _ = try await machine.send(.start)
+            guard try machine.isEnabled(.start) else { throw MediaError.notConfigured }
+            _ = try machine.send(.start)
             session.startRunning()
         }
 
-        public func stop() async { _ = try? await machine.send(.stop); session.stopRunning() }
+        public func stop() async throws {
+            _ = try machine.send(.stop)
+            session.stopRunning()
+        }
 
         public func capturePhoto() async throws -> Data {
-            guard await machine.state.phase == .running else { throw MediaError.notRunning }
+            guard machine.state.phase == .running else { throw MediaError.notRunning }
             return try await withCheckedThrowingContinuation { continuation in
                 photoCont = continuation
                 photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: delegate)
@@ -85,7 +91,7 @@ public enum Media {
         }
 
         public func stream() async -> AsyncStream<CMSampleBuffer> {
-            guard await machine.state.phase == .running else { return AsyncStream { $0.finish() } }
+            guard machine.state.phase == .running else { return AsyncStream { $0.finish() } }
             return AsyncStream { continuation in
                 let output = AVCaptureVideoDataOutput()
                 output.setSampleBufferDelegate(CaptureVideoDelegate(continuation: continuation), queue: DispatchQueue(label: "video"))
