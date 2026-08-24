@@ -22,14 +22,11 @@ labeled atomic step.
 ```swift
 @TLAModel
 struct Counter {
-    enum Process: Int, FiniteDomainKey {
+    enum Process: Int, CaseIterable {
         case worker = 1
-
-        static let formalDomain: [Self] = [.worker]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "docs.counter.process")
     }
 
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 
@@ -62,7 +59,7 @@ and parity fixtures. They are not a second application authoring style.
 rendering and bounded checking. Generated machines compile internally before
 they create typed state. A `CompilationDiagnostic` names the failed stage and
 safe next action.
-`SwiftTLA` before you make a broader behavior claim.
+Use bounded exploration before you make a broader behavior claim.
 
 ## Topics
 

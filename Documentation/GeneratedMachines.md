@@ -28,16 +28,11 @@ import SwiftTLAMacros
 
 @TLAModel
 struct BoundedCounter {
-    enum Process: String, FiniteDomainKey {
+    enum Process: String, CaseIterable {
         case only
-
-        static let formalDomain: [Process] = [.only]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "documentation.counter.process")
-
-        var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 
@@ -142,10 +137,9 @@ only with generated state and actions.
 
 ## Advanced execution
 
-`Live` and nested `@TLAActor` share a machine when an application needs
-asynchronous coordination. They use the enclosing model's generated `State`
-and `Action` values and send actions through their own isolation boundary.
-They are not required for ordinary SwiftUI use.
+`Live` and nested `@TLAActor` wrap the generated machine when an application
+needs asynchronous coordination. They serialize `send(_:)` and expose the
+same generated `State` and `Action` values used by value and SwiftUI code.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`

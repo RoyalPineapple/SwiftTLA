@@ -8,7 +8,7 @@ compiler receives that source model once.
 ```swift
 @TLAModel
 struct Counter {
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 
@@ -29,8 +29,8 @@ struct Counter {
 }
 ```
 
-Use a named `SharedVar` or `LocalVar` declaration. Use a `PlusCalLabel` enum
-for a finite set of control locations. Use typed expressions in `When`,
+Use a named `SharedVar` or `LocalVar` declaration. Use a `CaseIterable` string
+enum for a finite set of action labels. Use typed expressions in `When`,
 `Assign`, `With`, `Choose`, and property builders.
 
 ## Choose builders by source scope
