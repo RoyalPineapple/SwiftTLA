@@ -8,7 +8,7 @@ struct ElevatorBankDemoTests {
         let builderSpec = ElevatorBank.spec
         #expect(try builderSpec.compile().renderedTLAModuleBundle().tla == try ElevatorBank.spec.compile().renderedTLAModuleBundle().tla)
 
-        var machine = ElevatorBank()
+        var machine = try ElevatorBank.makeMachine()
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.floor] == .one)
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.door] == .closed)
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.rider] == .none)

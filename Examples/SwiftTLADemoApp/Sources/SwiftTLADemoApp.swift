@@ -39,26 +39,47 @@ private struct DemoHomeView: View {
 }
 
 private struct TwoBucketsView: View {
-    @State private var machine = TwoBuckets()
+    @State private var machine: TwoBuckets?
     @State private var error: String?
 
     var body: some View {
         DemoScreen(title: "Two Buckets", subtitle: "Measure exactly 4 gallons.") {
-            TwoBucketsScene(state: machine.state, error: error)
-            TwoBucketsControls(
-                fillThree: { perform(.fillThree) },
-                emptyThree: { perform(.emptyThree) },
-                pourThreeIntoFive: { perform(.pourThreeIntoFive) },
-                pourFiveIntoThree: { perform(.pourFiveIntoThree) },
-                fillFive: { perform(.fillFive) },
-                emptyFive: { perform(.emptyFive) },
-                reset: { machine = TwoBuckets() }
-            )
+            if let machine {
+                TwoBucketsScene(state: machine.state, error: error)
+                TwoBucketsControls(
+                    fillThree: { perform(.fillThree) },
+                    emptyThree: { perform(.emptyThree) },
+                    pourThreeIntoFive: { perform(.pourThreeIntoFive) },
+                    pourFiveIntoThree: { perform(.pourFiveIntoThree) },
+                    fillFive: { perform(.fillFive) },
+                    emptyFive: { perform(.emptyFive) },
+                    reset: reset
+                )
+            } else {
+                StateCard(title: "Machine unavailable", detail: "The generated machine could not start.", error: error)
+                    .frame(maxWidth: .infinity, minHeight: 430)
+            }
+        }
+        .task { reset() }
+    }
+
+    private func reset() {
+        do {
+            machine = try TwoBuckets.makeMachine()
+            error = nil
+        } catch let failure {
+            machine = nil
+            error = failure.localizedDescription
         }
     }
 
     private func perform(_ action: TwoBuckets.Action) {
-        do { _ = try machine.send(action); error = nil }
+        guard var machine else { return }
+        do {
+            _ = try machine.send(action)
+            self.machine = machine
+            error = nil
+        }
         catch let failure { error = failure.localizedDescription }
     }
 }
@@ -219,7 +240,7 @@ private struct DuckDuckLeaderView: View {
 }
 
 private struct ElevatorBankView: View {
-    @State private var machine = ElevatorBank()
+    @State private var machine: ElevatorBank?
     @State private var error: String?
 
     var body: some View {
@@ -227,12 +248,28 @@ private struct ElevatorBankView: View {
             title: "Elevator Bank",
             subtitle: "Two riders, two cars, and doors that make every handoff explicit."
         ) {
-            ElevatorBankScene(state: machine.state, riderSummary: riderSummary(machine.state), error: error)
-            ElevatorBankControls(
-                operateCarA: { operate(.operate(process: .carA)) },
-                operateCarB: { operate(.operate(process: .carB)) },
-                reset: { machine = ElevatorBank() }
-            )
+            if let machine {
+                ElevatorBankScene(state: machine.state, riderSummary: riderSummary(machine.state), error: error)
+                ElevatorBankControls(
+                    operateCarA: { operate(.operate(process: .carA)) },
+                    operateCarB: { operate(.operate(process: .carB)) },
+                    reset: reset
+                )
+            } else {
+                StateCard(title: "Machine unavailable", detail: "The generated machine could not start.", error: error)
+                    .frame(maxWidth: .infinity, minHeight: 430)
+            }
+        }
+        .task { reset() }
+    }
+
+    private func reset() {
+        do {
+            machine = try ElevatorBank.makeMachine()
+            error = nil
+        } catch let failure {
+            machine = nil
+            error = failure.localizedDescription
         }
     }
 
@@ -245,7 +282,12 @@ private struct ElevatorBankView: View {
     }
 
     private func operate(_ action: ElevatorBank.Action) {
-        do { _ = try machine.send(action); error = nil }
+        guard var machine else { return }
+        do {
+            _ = try machine.send(action)
+            self.machine = machine
+            error = nil
+        }
         catch let failure { error = failure.localizedDescription }
     }
 }
