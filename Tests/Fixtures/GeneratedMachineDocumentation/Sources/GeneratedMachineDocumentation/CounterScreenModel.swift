@@ -33,19 +33,4 @@ struct CounterScreenModel {
             })
         }
     }
-
-    @TLAObservable
-    final class Observable {}
-}
-
-@MainActor
-func runObservable() async throws {
-    let live = try CounterScreenModel.makeLive()
-    let observable = try await CounterScreenModel.Observable(live: live)
-    observable.onTransition = { _, before, after in
-        assert(before.value == 0)
-        assert(after.value == 1)
-    }
-    let result = try await observable.apply(.advance)
-    guard case .committed = result else { return }
 }

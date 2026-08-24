@@ -15,42 +15,21 @@ private struct AdapterCounter {
     @TLAActor
     actor Actor {}
 
-    @TLAObservable
-    final class Observable {}
 }
 
-@Suite("Live adapters")
+@Suite("Generated live machines")
 struct LiveMachineAdapterTests {
-    @Test("Actor and observable use the model-owned live runtime")
-    @MainActor
-    func adaptersShareOneRuntime() async throws {
+    @Test("Actor uses the model-owned runtime")
+    func actorUsesModelOwnedRuntime() async throws {
         let live = try AdapterCounter.makeLive()
         let actor = AdapterCounter.Actor(live: live)
-        let observable = try await AdapterCounter.Observable(live: live)
 
-        guard case .committed = try await actor.apply(.advance) else {
+        guard case .committed = try await actor.send(.advance) else {
             Issue.record("Expected actor action to commit")
             return
         }
-
-        for _ in 0..<20 where observable.current?.position != .init(value: 1) {
-            await Task.yield()
-        }
         let actorIdentity = await actor.identity
         #expect(actorIdentity == live.identity)
-        #expect(observable.identity == live.identity)
-        #expect(observable.state == .init(count: 1))
-    }
-
-    @Test("Cancelling an observable leaves its model runtime active")
-    @MainActor
-    func observableCancellationIsSubscriptionOnly() async throws {
-        let live = try AdapterCounter.makeLive()
-        let observable = try await AdapterCounter.Observable(live: live)
-        let actor = AdapterCounter.Actor(live: live)
-        await observable.cancelObservation()
-        _ = try await actor.apply(.advance)
-
         guard case .snapshot(let current) = try await live.current() else {
             Issue.record("Expected runtime snapshot")
             return

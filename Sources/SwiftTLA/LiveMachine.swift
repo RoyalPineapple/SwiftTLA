@@ -103,13 +103,11 @@ package struct TLALiveActionRejection<Action: Sendable & Equatable>: Sendable, E
     public enum Reason: Sendable, Equatable, CustomStringConvertible {
         case runtimeUnavailable(TLALiveMachineUnavailableReason)
         case actionNotEnabled
-        case identityRoutedActionRequiresID
 
         public var code: String {
             switch self {
             case .runtimeUnavailable(let reason): return "runtimeUnavailable.\(reason.code)"
             case .actionNotEnabled: return "actionNotEnabled"
-            case .identityRoutedActionRequiresID: return "identityRoutedActionRequiresID"
             }
         }
 
@@ -119,8 +117,6 @@ package struct TLALiveActionRejection<Action: Sendable & Equatable>: Sendable, E
                 return "The runtime cannot execute the request: \(reason)"
             case .actionNotEnabled:
                 return "The requested action is not enabled in the current state."
-            case .identityRoutedActionRequiresID:
-                return "The requested action selects an identified collection member and must be routed through the model's identified action surface."
             }
         }
     }
@@ -215,16 +211,13 @@ package enum TLALiveActionOutcome<Action: Sendable & Equatable>: Sendable, Equat
 /// The typed transition behavior of a live runtime.
 package struct TLALiveMachineTransitionDriver<Action: Sendable & Equatable>: Sendable {
     public let successors: @Sendable (_GeneratedMachineStorage.State, Action) throws -> [_GeneratedMachineStorage.State]
-    public let validateAction: @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?
     public let decodeState: @Sendable (_GeneratedMachineStorage.State) throws -> Void
 
     public init(
         successors: @escaping @Sendable (_GeneratedMachineStorage.State, Action) throws -> [_GeneratedMachineStorage.State],
-        validateAction: @escaping @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?,
         decodeState: @escaping @Sendable (_GeneratedMachineStorage.State) throws -> Void
     ) {
         self.successors = successors
-        self.validateAction = validateAction
         self.decodeState = decodeState
     }
 }
@@ -440,9 +433,6 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
             return rejected(.runtimeUnavailable(.endedByOwner), action: action, requestID: requestID, current: makeSnapshot())
         }
         let before = makeSnapshot()
-        if let reason = driver.validateAction(action) {
-            return rejected(reason, action: action, requestID: requestID, current: before)
-        }
         let candidates: [_GeneratedMachineStorage.State]
         do {
             candidates = try driver.successors(state, action)

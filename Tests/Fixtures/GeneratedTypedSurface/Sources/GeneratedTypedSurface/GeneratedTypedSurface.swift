@@ -15,12 +15,12 @@ struct GeneratedTypedSurface {
 private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
 requireSendable(GeneratedTypedSurface.State.self)
-requireSendable(GeneratedTypedSurface.ActionLabel.self)
-requireSendable(GeneratedTypedSurface.TransitionResult.self)
+requireSendable(GeneratedTypedSurface.Action.self)
+requireSendable(GeneratedTypedSurface.Transition.self)
 
 var machine = GeneratedTypedSurface()
-let action: GeneratedTypedSurface.ActionLabel = .advance
-let result = try machine.apply(action)
+let action: GeneratedTypedSurface.Action = .advance
+let result = try machine.send(action)
 
 guard result.action == action,
       result.before.value == 0,

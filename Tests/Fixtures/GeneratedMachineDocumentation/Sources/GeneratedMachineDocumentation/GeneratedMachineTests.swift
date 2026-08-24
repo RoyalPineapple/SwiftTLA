@@ -2,18 +2,17 @@
 
 import SwiftTLA
 
-func runGeneratedMachineTesting() async throws {
+func runGeneratedMachineTesting() throws {
     var machine = try BoundedCounter.makeMachine()
-    let initial = try await machine.machineObservation()
-    let result = try machine.apply(.advance)
+    let result = try machine.send(.advance)
     let beforeFailure = machine.state
 
-    assert(initial.state.value == 0)
-    assert(initial.availableActions == [.advance])
+    assert(result.before.value == 0)
+    assert(try machine.isEnabled(.advance) == false)
     assert(result.after.value == 1)
 
     do {
-        _ = try machine.apply(.advance)
+        _ = try machine.send(.advance)
         assertionFailure("Expected an unavailable action")
     } catch is GeneratedMachineError {
         assert(machine.state == beforeFailure)

@@ -73,7 +73,7 @@ struct Counter {
 }
 
 var counter = Counter()
-let result = try counter.apply(.advance)
+let result = try counter.send(.advance)
 guard result.after.value == 1,
       result.after.cars[.one][Counter.CarSchema.floor] == 2 else {
     throw FixtureError.invalidTransition

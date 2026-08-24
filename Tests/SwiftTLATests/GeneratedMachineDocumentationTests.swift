@@ -92,11 +92,11 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
 
-        for term in ["TransitionResult", "MachineObservation", "ActionLabel", "State", "makeLive()"] {
+        for term in ["Transition", "Action", "State", "send(_:)", "isEnabled(_:)"] {
             #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
             #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
         }
-        for macro in ["TLAModel", "TLAActor", "TLAObservable"] {
+        for macro in ["TLAModel", "TLAActor"] {
             #expect(macroDocc.contains(macro), "Macro DocC is missing macro: \(macro)")
         }
 
@@ -147,13 +147,12 @@ struct GeneratedMachineDocumentationTests {
     ]
 
     private let requiredContractTerms = [
-        "Generated `MachineObservation`",
-        "`availableActions()`",
-        "`apply(_:)`",
-        "A nested `@TLAObservable` adapter is main-actor isolated",
-        "Adapters\nshare the enclosing model's typed `Live` runtime",
-        "reduces a contiguous committed update",
-        "Generated `synchronousMachineObservation()`"
+        "Generated `State`",
+        "Generated `Action`",
+        "Generated `Transition`",
+        "`enabledActions()`",
+        "`isEnabled(_:)`",
+        "`send(_:)`"
     ]
 
     private var fixtureSources: [String: String] {
@@ -163,8 +162,6 @@ struct GeneratedMachineDocumentationTests {
             "generated-machine-direct-action":
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/DirectAction.swift",
             "generated-machine-actor": "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift",
-            "generated-machine-nested-observable":
-                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/NestedObservable.swift",
             "generated-machine-testing":
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/GeneratedMachineTests.swift",
             "generated-machine-swiftui": "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/CounterView.swift"
@@ -175,10 +172,9 @@ struct GeneratedMachineDocumentationTests {
         [
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`@TLAActor`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAActor"),
-            ("`@TLAObservable`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAObservable"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/TLAStateProjection.swift", "public enum GeneratedMachineError"),
-            ("Generated `ActionLabel`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum ActionLabel"),
-            ("Generated `TransitionResult`", "Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift", "public struct TransitionResult"),
+            ("Generated `Action`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum Action"),
+            ("Generated `Transition`", "Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift", "public struct Transition"),
         ]
     }
 

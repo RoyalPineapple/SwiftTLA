@@ -30,7 +30,7 @@ struct MacroCompilation {
     let compilation: CompiledSpecification
     let machineSurface: MachineSurfacePlan
     let enumInfos: [ParsedEnumInfo]
-    let hasNestedLiveAdapter: Bool
+    let hasNestedActor: Bool
 
     var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
 }
@@ -89,7 +89,7 @@ enum TLASpecVerifier {
             compilation: compilation,
             machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
             enumInfos: enumInfos,
-            hasNestedLiveAdapter: hasNestedLiveAdapter(in: memberList)
+            hasNestedActor: hasNestedActor(in: memberList)
         )
     }
 
@@ -286,36 +286,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested(let model):
-            return MacroExpander.generateNestedAdapterMembers(
-                kind: .actor,
-                canonicalModelTypeName: model.name.text
-            )
-        case .invalid:
-            return []
-        }
-    }
-}
-
-public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
-    public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
-        switch adapterNestingMode(for: declaration, at: node, in: context) {
-        case .nested:
-            guard let ext = ("""
-                @MainActor extension \(type.trimmed): Sendable {}
-                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-            return [ext]
-        case .invalid:
-            return []
-        }
-    }
-
-    public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
-        switch adapterNestingMode(for: declaration, at: node, in: context) {
-        case .nested(let model):
-            return MacroExpander.generateNestedAdapterMembers(
-                kind: .observable,
-                canonicalModelTypeName: model.name.text
-            )
+            return MacroExpander.generateNestedActorMembers(modelTypeName: model.name.text)
         case .invalid:
             return []
         }
@@ -391,7 +362,7 @@ private func adapterNestingMode(
     }
     context.diagnose(Diagnostic(
         node: Syntax(attribute),
-        message: AdapterNestingDiagnostic(message: "@TLAActor and @TLAObservable require an enclosing @TLAModel; put the formal spec on that model")
+        message: AdapterNestingDiagnostic(message: "@TLAActor requires an enclosing @TLAModel; put the formal spec on that model")
     ))
     return .invalid
 }
@@ -417,7 +388,7 @@ private func hasTLAModelAttribute(_ attributes: AttributeListSyntax) -> Bool {
     }
 }
 
-private func hasNestedLiveAdapter(in declaration: some DeclGroupSyntax) -> Bool {
+private func hasNestedActor(in declaration: some DeclGroupSyntax) -> Bool {
     let members: MemberBlockItemListSyntax
     if let value = declaration.as(StructDeclSyntax.self) {
         members = value.memberBlock.members
@@ -428,10 +399,10 @@ private func hasNestedLiveAdapter(in declaration: some DeclGroupSyntax) -> Bool 
     } else {
         return false
     }
-    return hasNestedLiveAdapter(in: members)
+    return hasNestedActor(in: members)
 }
 
-private func hasNestedLiveAdapter(in members: MemberBlockItemListSyntax) -> Bool {
+private func hasNestedActor(in members: MemberBlockItemListSyntax) -> Bool {
     members.contains { member in
         let attributes: AttributeListSyntax?
         if let value = member.decl.as(StructDeclSyntax.self) {
@@ -446,7 +417,6 @@ private func hasNestedLiveAdapter(in members: MemberBlockItemListSyntax) -> Bool
         return attributes?.contains { element in
             guard let attribute = element.as(AttributeSyntax.self) else { return false }
             return attribute.hasTerminalName("TLAActor")
-                || attribute.hasTerminalName("TLAObservable")
         } == true
     }
 }

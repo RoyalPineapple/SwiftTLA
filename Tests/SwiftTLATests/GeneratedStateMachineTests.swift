@@ -5,32 +5,10 @@ import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
 
-private actor CallbackValue<Value: Sendable> {
-    private var stored: Value
-
-    init(_ value: Value) {
-        stored = value
-    }
-
-    func set(_ value: Value) {
-        stored = value
-    }
-
-    func value() -> Value {
-        stored
-    }
-}
-
-private extension CallbackValue where Value == Int {
-    func increment() {
-        stored += 1
-    }
-}
-
 @TLAModel
-private struct SanitizedActionLabelModel {
+private struct SanitizedActionModel {
     static var spec: TLASpec {
-        #spec("SanitizedActionLabelModel") {
+        #spec("SanitizedActionModel") {
             let value = Var<Int>("value")
             Variable(value, 0)
             Action("procedure.work.enter") { value.becomes(1) }
@@ -116,19 +94,19 @@ private struct SeededCounterMachine {
 }
 
 struct GeneratedAlgorithmMachineTests {
-    @Test("generated action labels retain collision-safe Swift cases")
-    func sanitizesGeneratedActionLabels() {
-        let dotted = SanitizedActionLabelModel.ActionLabel.procedure_work_enter
-        let underscored = SanitizedActionLabelModel.ActionLabel.procedure_work_enter_2
-        let dashed = SanitizedActionLabelModel.ActionLabel.step_2
+    @Test("generated actions retain collision-safe Swift cases")
+    func sanitizesGeneratedActions() {
+        let dotted = SanitizedActionModel.Action.procedure_work_enter
+        let underscored = SanitizedActionModel.Action.procedure_work_enter_2
+        let dashed = SanitizedActionModel.Action.step_2
         #expect((dotted == underscored) == false)
         #expect((underscored == dashed) == false)
         #expect((dashed == dotted) == false)
     }
 
-    @Test("generated action labels do not reserve deleted formal-invocation names")
+    @Test("generated actions accept a case named toInvocation")
     func permitsCurrentActionNames() {
-        let action = InvocationNamedActionModel.ActionLabel.toInvocation
+        let action = InvocationNamedActionModel.Action.toInvocation
         #expect(action == .toInvocation)
     }
 
@@ -136,8 +114,8 @@ struct GeneratedAlgorithmMachineTests {
     func generatedAlgorithmUsesTheSharedLowering() throws {
         var model = try GeneratedAlgorithmCounter.makeMachine()
         #expect(model.state.count == 0)
-        let left = GeneratedAlgorithmCounter.ActionLabel.increment(process: .left)
-        let result = try model.apply(left)
+        let left = GeneratedAlgorithmCounter.Action.increment(process: .left)
+        let result = try model.send(left)
         #expect(result.before.count == 0)
         #expect(result.after.count == 1)
         #expect(model.state.count == 1)
@@ -151,7 +129,7 @@ struct GeneratedAlgorithmMachineTests {
 
         #expect(machine.state.value == 2)
 
-        let advance = try machine.apply(.advance)
+        let advance = try machine.send(.advance)
         #expect(advance.after.value == 0)
     }
 
@@ -240,7 +218,7 @@ struct GeneratedSequentialMachineTests {
     func generatedSequentialAlgorithmAdvancesTypedState() throws {
 
         var model = try GeneratedSequentialCounter.makeMachine()
-        let result = try model.apply(.increment)
+        let result = try model.send(.increment)
         #expect(result.after.count == 1)
     }
 }
@@ -266,7 +244,7 @@ struct GeneratedSimultaneousSwapTests {
     func generatedMachineSwapsValues() throws {
         var model = try GeneratedSimultaneousSwap.makeMachine()
 
-        let result = try model.apply(.swap)
+        let result = try model.send(.swap)
 
         #expect(result.before.left == 1)
         #expect(result.before.right == 2)
@@ -302,7 +280,7 @@ struct GeneratedPairPatternTests {
     func generatedMachineAppliesPairPatternBindings() throws {
 
         var model = try GeneratedPairPattern.makeMachine()
-        let result = try model.apply(.choose)
+        let result = try model.send(.choose)
 
         #expect([1, 2].contains(result.after.selected))
     }
@@ -517,76 +495,38 @@ struct GeneratedDependentInitialAlgorithmTests {
 }
 
 struct NestedAdapterConcurrencyTests {
-    @Test("Nested adapters observe and execute through their canonical model")
-    @MainActor
-    func nestedAdaptersShareCanonicalObservation() async throws {
-        let observableLabel: NestedComposedCounter.Observable.ActionLabel = .advance
-        let actorLabel: NestedComposedCounter.Actor.ActionLabel = .advance
+    @Test("Nested actor executes through its canonical model")
+    func nestedActorSharesCanonicalExecution() async throws {
+        let actorLabel: NestedComposedCounter.Actor.Action = .advance
         var model = try NestedComposedCounter.makeMachine()
         let live = try NestedComposedCounter.makeLive()
-        let observable = try await NestedComposedCounter.Observable(live: live)
         let actor = NestedComposedCounter.Actor(live: live)
-        let callbackRecorder = NestedCallbackRecorder()
-        observable.onTransition = { _, before, after in
-            await callbackRecorder.record(before: before, after: after)
-        }
 
-        let expectedBefore = try await model.machineObservation()
-        #expect(observableLabel == .advance)
+        let expectedBefore = model.state
         #expect(actorLabel == .advance)
-        #expect(expectedBefore.state.count == 0)
-        #expect(expectedBefore.availableActions == [.advance])
+        #expect(expectedBefore.count == 0)
 
-        let expected = try model.apply(.advance)
-        let observed = try committed(try await observable.apply(.advance))
-        let acted = try committed(try await actor.apply(.advance))
+        let expected = try model.send(.advance)
+        let acted = try committed(try await actor.send(.advance))
 
-        #expect(observed.before == expected.before)
-        #expect(observed.after == expected.after)
         #expect(acted.before == expected.before)
         #expect(acted.after == expected.after)
-        #expect(try #require(observable.state).count == 1)
         #expect(try await actorState(actor).count == 1)
-        #expect(await callbackRecorder.transitions.count == 1)
-        #expect(await callbackRecorder.transitions.first?.0 == expected.before)
-        #expect(await callbackRecorder.transitions.first?.1 == expected.after)
     }
 
     @Test("Nested actor commits overlapping executions without stale write-back")
     func nestedActorExecutesOverlappingTransitionsAtomically() async throws {
         let actor = NestedComposedCounter.Actor(live: try NestedComposedCounter.makeLive())
-        async let first = actor.apply(.advance)
-        async let second = actor.apply(.advance)
+        async let first = actor.send(.advance)
+        async let second = actor.send(.advance)
         _ = try await (first, second)
 
         #expect(try await actorState(actor).count == 2)
     }
 
-    @Test("Nested observable rejects disabled execution without notification")
-    @MainActor
-    func nestedObservableSuppressesCallbackAfterFailedExecution() async throws {
-        let observable = try await NestedComposedCounter.Observable(live: try NestedComposedCounter.makeLive())
-        let recorder = NestedCallbackRecorder()
-        observable.onTransition = { _, before, after in
-            await recorder.record(before: before, after: after)
-        }
-
-        _ = try committed(try await observable.apply(.advance))
-        _ = try committed(try await observable.apply(.advance))
-        let beforeFailure = observable.state
-        let outcome = try await observable.apply(.advance)
-        if case .rejected = outcome {
-        } else {
-            Issue.record("Expected unavailable observable action")
-        }
-
-        #expect(observable.state == beforeFailure)
-        #expect(await recorder.transitions.count == 2)
-    }
-
     private func committed(
         _ outcome: NestedComposedCounter.Live.Outcome
-    ) throws -> NestedComposedCounter.TransitionResult {
+    ) throws -> NestedComposedCounter.Transition {
         switch outcome {
         case .committed(let result): return result
         case .rejected, .failed: throw GeneratedMachineError.noMatchingSuccessor
@@ -682,8 +622,6 @@ struct TwoCarElevatorMachine {
         }
     }
 
-    @TLAObservable
-    final class Observable {}
 }
 
 @TLAModel
@@ -701,9 +639,6 @@ struct ThreeParameterActionMachine {
             }
         }
     }
-
-    @TLAObservable
-    final class Observable {}
 
     @TLAActor
     actor Actor {}
@@ -754,19 +689,8 @@ struct NestedComposedCounter {
         }
     }
 
-    @TLAObservable
-    final class Observable {}
-
     @TLAActor
     actor Actor {}
-}
-
-private actor NestedCallbackRecorder {
-    private(set) var transitions: [(NestedComposedCounter.State, NestedComposedCounter.State)] = []
-
-    func record(before: NestedComposedCounter.State, after: NestedComposedCounter.State) {
-        transitions.append((before, after))
-    }
 }
 
 // MARK: - Tests for generated verification methods
@@ -780,43 +704,17 @@ struct GeneratedStateMachineTests {
         #expect(result.status == 0, Comment(rawValue: result.output))
     }
 
-    private struct BoardCallback: Sendable {
-        let person: Int
-        let elevator: Int
-        let direction: Int
-        let before: ThreeParameterActionMachine.State
-        let after: ThreeParameterActionMachine.State
-    }
-
-    @Test("Observable parameterized action applies its selected finite-domain argument")
-    @MainActor
-    func observableParameterizedAction() async throws {
-        let elevator = try await TwoCarElevatorMachine.Observable(live: try TwoCarElevatorMachine.makeLive())
-        let callbackID = CallbackValue<Int?>(nil)
-        elevator.onTransition = { action, _, _ in
-            guard case .moveElevator(let id) = action else { return }
-            await callbackID.set(id)
-        }
-        guard case .committed = try await elevator.apply(.moveElevator(id: 2)) else {
-            Issue.record("Expected moveElevator to commit")
-            return
-        }
-        #expect(try #require(elevator.state).floor == 1)
-        let capturedID = await callbackID.value()
-        #expect(capturedID == 2)
-    }
-
-    @Test("Model macro generates a parameterized action method")
+    @Test("Model macro generates a parameterized action")
     func modelParameterizedAction() throws {
         var elevator = try TwoCarElevatorMachine.makeMachine()
-        _ = try elevator.applymoveElevator(id: 1)
+        _ = try elevator.send(.moveElevator(member: 1))
         #expect(elevator.floor == 1)
     }
 
-    @Test("Model macro forwards every list parameter to the runtime invocation")
-    func modelMacroForwardsEveryVariadicParameter() throws {
+    @Test("Generated actions retain every declared parameter")
+    func generatedActionsRetainEveryDeclaredParameter() throws {
         var enabled = try ThreeParameterActionMachine.makeMachine()
-        _ = try enabled.applyboard(person: 2, elevator: 20, direction: 200)
+        _ = try enabled.send(.board(person: 2, elevator: 20, direction: 200))
         #expect(enabled.floor == 1)
         #expect(ThreeParameterActionMachine.spec.actions[0].bindings.map(\.name) == [
             "person", "elevator", "direction"
@@ -825,7 +723,7 @@ struct GeneratedStateMachineTests {
         var invalidMiddleParameter = try ThreeParameterActionMachine.makeMachine()
         let before = invalidMiddleParameter.state
         #expect(throws: GeneratedMachineError.self) {
-            try invalidMiddleParameter.apply(.board(person: 2, elevator: 30, direction: 200))
+            try invalidMiddleParameter.send(.board(person: 2, elevator: 30, direction: 200))
         }
         #expect(invalidMiddleParameter.floor == 0)
         #expect(invalidMiddleParameter.state == before)
@@ -878,14 +776,16 @@ struct GeneratedStateMachineTests {
         #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
 
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let initialActions = try machine.availableActions()
-        let expectedActions: [EndToEndThreeParameterActionMachine.ActionLabel] = [
+        let initialActions = try machine.enabledActions()
+        let expectedActions: [EndToEndThreeParameterActionMachine.Action] = [
             .board(person: 1, elevator: 10, direction: 100), .board(person: 1, elevator: 10, direction: 200),
             .board(person: 1, elevator: 20, direction: 100), .board(person: 1, elevator: 20, direction: 200),
             .board(person: 2, elevator: 10, direction: 100), .board(person: 2, elevator: 10, direction: 200),
             .board(person: 2, elevator: 20, direction: 100), .board(person: 2, elevator: 20, direction: 200)
         ]
         #expect(initialActions == expectedActions)
+        #expect(try machine.isEnabled(.board(person: 2, elevator: 20, direction: 200)))
+        #expect(try machine.isEnabled(.board(person: 2, elevator: 30, direction: 200)) == false)
 
         let wrappers = try builder.compile().renderedTLAModuleBundle().tla.split(separator: "\n").filter { $0.hasPrefix("board__") }
         #expect(wrappers == [
@@ -918,125 +818,81 @@ struct GeneratedStateMachineTests {
 
         var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = generatedMachine.state
-        let evidence = try generatedMachine.apply(.board(person: 2, elevator: 20, direction: 200))
+        let evidence = try generatedMachine.send(.board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.after.floor == 222)
         #expect(throws: GeneratedMachineError.self) {
-            try generatedMachine.apply(.board(person: 2, elevator: 30, direction: 200))
+            try generatedMachine.send(.board(person: 2, elevator: 30, direction: 200))
         }
         #expect(generatedMachine.state.floor == 222)
         #expect(before.floor == 0)
     }
 
-    @Test("Canonical generated machine preserves typed labels, evidence, and failed snapshots")
-    func canonicalGeneratedMachineUsesCheckedThreeArgumentInvocations() throws {
+    @Test("Canonical generated machine preserves typed actions, transitions, and failed snapshots")
+    func canonicalGeneratedMachineUsesCheckedThreeArgumentActions() throws {
         var machine = try ThreeParameterActionMachine.makeMachine()
-        let label = ThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
-        let evidence = try machine.apply(label)
+        let action = ThreeParameterActionMachine.Action.board(person: 2, elevator: 20, direction: 200)
+        let evidence = try machine.send(action)
 
-        #expect(evidence.action == label)
+        #expect(evidence.action == action)
         #expect(evidence.before.floor == 0)
         #expect(evidence.after.floor == 1)
 
         let before = machine.state
         #expect(throws: GeneratedMachineError.self) {
-            try machine.apply(.board(person: 2, elevator: 30, direction: 200))
+            try machine.send(.board(person: 2, elevator: 30, direction: 200))
         }
         #expect(machine.state == before)
     }
 
-    @Test("Canonical generated execution preserves the complete parameterized invocation")
-    func canonicalGeneratedExecutionPreservesParameterizedInvocationEvidence() async throws {
+    @Test("Canonical generated execution publishes complete parameterized transitions")
+    func canonicalGeneratedExecutionPreservesParameterizedTransition() throws {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let before = try await machine.machineObservation()
+        let before = machine.state
 
-        let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
-        let after = try await machine.machineObservation()
+        let evidence = try machine.send(.board(person: 2, elevator: 20, direction: 200))
+        let after = machine.state
 
         #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.before.floor == 0)
         #expect(evidence.after.floor == 222)
-        #expect(before.state.floor == 0)
-        #expect(after.state.floor == 222)
+        #expect(before.floor == 0)
+        #expect(after.floor == 222)
     }
 
-    @Test("Observable and actor adapters return the canonical three-argument transition evidence")
-    @MainActor
-    func observableAndActorMatchCanonicalThreeArgumentEvidence() async throws {
+    @Test("Actor returns the canonical three-argument transition")
+    func actorMatchesCanonicalThreeArgumentTransition() async throws {
         var model = try ThreeParameterActionMachine.makeMachine()
-        let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
-
-        let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
-        let callback = CallbackValue<BoardCallback?>(nil)
-        observable.onTransition = { action, before, after in
-            guard case .board(let person, let elevator, let direction) = action else { return }
-            await callback.set(.init(
-                person: person,
-                elevator: elevator,
-                direction: direction,
-                before: before,
-                after: after
-            ))
-        }
-        guard case .committed(let observed) = try await observable.apply(
-            .board(person: 2, elevator: 20, direction: 200)
-        ) else {
-            Issue.record("Expected observable action to commit")
-            return
-        }
+        let expected = try model.send(.board(person: 2, elevator: 20, direction: 200))
 
         let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
-        guard case .committed(let acted) = try await actor.apply(
+        guard case .committed(let acted) = try await actor.send(
             .board(person: 2, elevator: 20, direction: 200)
         ) else {
             Issue.record("Expected actor action to commit")
             return
         }
 
-        #expect(observed.action == expected.action)
-        #expect(observed.before.floor == expected.before.floor)
-        #expect(observed.after.floor == expected.after.floor)
         #expect(acted.action == expected.action)
         #expect(acted.before.floor == expected.before.floor)
         #expect(acted.after.floor == expected.after.floor)
-        let callbackValue = await callback.value()
-        #expect(callbackValue?.person == 2)
-        #expect(callbackValue?.elevator == 20)
-        #expect(callbackValue?.direction == 200)
-        #expect(callbackValue?.before.floor == expected.before.floor)
-        #expect(callbackValue?.after.floor == expected.after.floor)
     }
 
-    @Test("Rejected generated labels preserve model, observable, and actor state")
-    @MainActor
-    func rejectedActionsDoNotMutateOrNotify() async throws {
+    @Test("Rejected generated labels preserve model and actor state")
+    func rejectedActionsDoNotMutate() async throws {
         var model = try ThreeParameterActionMachine.makeMachine()
         let modelBefore = model.state
         do {
-            _ = try model.apply(.board(person: 2, elevator: 30, direction: 200))
+            _ = try model.send(.board(person: 2, elevator: 30, direction: 200))
             Issue.record("Expected rejected model action")
         } catch {
             #expect(error is GeneratedMachineError)
         }
         #expect(model.state == modelBefore)
 
-        let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
-        let callbackCount = CallbackValue(0)
-        observable.onTransition = { _, _, _ in await callbackCount.increment() }
-        let observableBefore = observable.state
-        do {
-            _ = try await observable.apply(.board(person: 2, elevator: 30, direction: 200))
-            Issue.record("Expected rejected observable action")
-        } catch {
-            #expect(error is GeneratedMachineError)
-        }
-        #expect(observable.state == observableBefore)
-        let observedCallbackCount = await callbackCount.value()
-        #expect(observedCallbackCount == 0)
-
         let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
         let actorBefore = try await actorState(actor)
-        let outcome = try await actor.apply(.board(person: 2, elevator: 30, direction: 200))
+        let outcome = try await actor.send(.board(person: 2, elevator: 30, direction: 200))
         if case .rejected = outcome {
         } else {
             Issue.record("Expected rejected actor action")

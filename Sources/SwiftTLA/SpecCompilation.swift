@@ -184,7 +184,7 @@ public struct CompiledSpecification: Sendable {
         arguments == request.arguments
     }
 
-    package func generatedActionLabelInput(
+    package func generatedActionInput(
         for request: CompiledActionRequest
     ) throws -> (ordinal: Int, formalArguments: [TLAValue]) {
         guard let action = layout.actions.first(where: { $0.id == request.action }) else {

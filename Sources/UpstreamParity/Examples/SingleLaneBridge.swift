@@ -126,9 +126,11 @@ public struct SingleLaneBridgeModel: Sendable {
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
             }
             Action("Enter_r1") {
-                waiting.count > 0 && Expr<Car>(waiting.head) == Car.rightOne
+                let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
+                let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
+                waitingQueue.count > 0 && nextCar == Car.rightOne
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
-                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.rightOne)
@@ -179,9 +181,11 @@ public struct SingleLaneBridgeModel: Sendable {
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
             }
             Action("Enter_r2") {
-                waiting.count > 0 && Expr<Car>(waiting.head) == Car.rightTwo
+                let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
+                let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
+                waitingQueue.count > 0 && nextCar == Car.rightTwo
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
-                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.rightTwo)
@@ -229,9 +233,11 @@ public struct SingleLaneBridgeModel: Sendable {
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
             }
             Action("Enter_l1") {
-                waiting.count > 0 && Expr<Car>(waiting.head) == Car.leftOne
+                let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
+                let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
+                waitingQueue.count > 0 && nextCar == Car.leftOne
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
-                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.leftOne)
@@ -279,9 +285,11 @@ public struct SingleLaneBridgeModel: Sendable {
                     )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
             }
             Action("Enter_l2") {
-                waiting.count > 0 && Expr<Car>(waiting.head) == Car.leftTwo
+                let waitingQueue = Expr<TupleExpr<Car>>(waiting.stateExpr)
+                let nextCar = Expr<Car>(.tupleHead(waiting.stateExpr))
+                waitingQueue.count > 0 && nextCar == Car.leftTwo
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
-                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
                         && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.leftTwo)

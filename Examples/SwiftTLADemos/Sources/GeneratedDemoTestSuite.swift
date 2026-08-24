@@ -73,7 +73,7 @@ public enum GeneratedDemoTestSuite {
             }),
             result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Typed delivery", action: { () throws -> Void in
                 var machine = ChangRoberts()
-                _ = try machine.apply(.deliver(process: .six))
+                _ = try machine.send(.deliver(process: .six))
                 guard machine.state.messages.elements.contains(where: {
                     $0[ChangRoberts.MessageSchema.candidate] == 12 &&
                     $0[ChangRoberts.MessageSchema.from] == .six &&
@@ -84,7 +84,7 @@ public enum GeneratedDemoTestSuite {
             }),
             result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Enabled actions", action: { () throws -> Void in
                 let machine = ChangRoberts()
-                guard try machine.availableActions().contains(.deliver(process: .six)) else {
+                guard try machine.isEnabled(.deliver(process: .six)) else {
                     throw GeneratedDemoSuiteError.expectedActionUnavailable
                 }
             })

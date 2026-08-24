@@ -53,7 +53,7 @@ state slots.
 ```swift
 let compilation = try Counter.spec.compile()
 let machine = try Counter.makeMachine()
-let transition = try machine.apply(.advance)
+let transition = try machine.send(.advance)
 let bundle = try compilation.renderedTLAModuleBundle()
 ```
 
@@ -64,9 +64,10 @@ order.
 
 ## Use typed generated APIs
 
-Generated `State`, `ActionLabel`, `TransitionResult`, `Live`, actor, and
-observable types form the application API. A generated action label carries
-the action type and argument types selected by the source model.
+Generated `State`, `Action`, and `Transition` form the normal application API.
+`Live`, actor, and observable types support advanced shared execution. A
+generated action carries the action type and argument types selected by the
+source model.
 
 ## Declare modules and refinement structurally
 

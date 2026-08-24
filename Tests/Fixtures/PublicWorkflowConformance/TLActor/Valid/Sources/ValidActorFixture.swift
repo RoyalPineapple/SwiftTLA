@@ -21,6 +21,6 @@ struct ValidActorFixture {
   static func main() async throws {
     let live = try ValidActorHost.makeLive()
     let actor = ValidActorHost.Actor(live: live)
-    _ = try await actor.apply(.increment)
+    _ = try await actor.send(.increment)
   }
 }

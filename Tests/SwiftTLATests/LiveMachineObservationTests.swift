@@ -29,7 +29,6 @@ struct LiveMachineObservationTests {
                 let count: Int = try storage.value(at: 0, in: state)
                 return [try storage.replacing(value: count + 1, at: 0, in: state)]
             },
-            validateAction: { _ in nil },
             decodeState: { _ in }
         )
         return .init(

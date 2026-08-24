@@ -47,20 +47,14 @@ Each request produces exactly one generated `Live.Outcome`:
 
 Live execution commits one successor for each typed action. An action with multiple successors produces `ambiguousAction` and leaves the runtime at its current snapshot.
 
-## Create generated adapters
+## Create a generated actor
 
-Generated `Live`, `@TLAActor`, and `@TLAObservable` values share one typed live runtime.
+Generated `Live` and `@TLAActor` values share one typed live runtime.
 
 ```swift
 let live = try CounterHost.makeLive()
 let actor = CounterHost.Actor(live: live)
-let observable = try await CounterHost.Observable(live: live)
 ```
-
-The observable adapter derives its typed cache from observation events. Its
-`status` is `attaching`, `current`, `recovering`, `terminated`, or
-`invalidEvent`. Its typed callbacks run for contiguous committed updates that
-it decodes.
 
 ## Runtime scope
 

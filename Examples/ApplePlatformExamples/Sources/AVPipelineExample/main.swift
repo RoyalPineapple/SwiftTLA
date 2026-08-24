@@ -324,14 +324,12 @@ struct CameraWorkflow {
         }
     }
 
-    @TLAObservable
-    final class Machine {}
 }
 
 @MainActor
 @Observable
 final class CameraModel {
-    private let machine = CameraWorkflow.Machine()
+    private var machine: CameraWorkflow?
     let capture = Media.Capture()
     var roll: [RollItem] = []
     var flashActive = false
@@ -342,42 +340,16 @@ final class CameraModel {
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
 
-    var phase: Int { machine.state.phase }
+    var phase: Int { machine?.state.phase ?? 0 }
 
     init() {
-        machine.onTransition = { [weak self] action, _, _ in
-            guard let self else { return }
-            switch action {
-            case .ready:
-                guard let device = AVCaptureDevice.default(for: .video) else { return }
-                do {
-                    try await self.capture.configure(device: device)
-                    let output = AVCaptureMovieFileOutput()
-                    self.capture.session.addOutput(output)
-                    self.movieOutput = output
-                    try await self.capture.start()
-                } catch { print("Camera error: \(error)") }
-            case .record:
-                guard let movieOutput = self.movieOutput else { return }
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
-                self.recordedURL = url
-                movieOutput.startRecording(to: url, recordingDelegate: self.recordDelegate)
-            case .stop:
-                self.movieOutput?.stopRecording()
-                if let url = self.recordedURL { self.roll.append(.video(url)) }
-            case .play:
-                guard let url = self.recordedURL else { return }
-                let player = AVPlayer(url: url)
-                self.currentPlayer = player
-                player.play()
-                NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
-                    Task { try? await self?.machine._live() }
-                }
-            case .live:
-                self.currentPlayer?.pause()
-                self.currentPlayer = nil
-            }
-        }
+        machine = try? CameraWorkflow.makeMachine()
+    }
+
+    private func send(_ action: CameraWorkflow.Action) -> Bool {
+        guard var machine, (try? machine.send(action)) != nil else { return false }
+        self.machine = machine
+        return true
     }
 
     func takeSnapshot() async {
@@ -394,13 +366,29 @@ final class CameraModel {
     }
 
     func toggleRecording() async {
-        if phase == 2 { _ = try? await machine._stop() }
-        else if phase == 1 { _ = try? await machine._record() }
+        if phase == 2 {
+            guard send(.stop) else { return }
+            movieOutput?.stopRecording()
+            if let url = recordedURL { roll.append(.video(url)) }
+        } else if phase == 1 {
+            guard send(.record) else { return }
+            guard let movieOutput else { return }
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
+            recordedURL = url
+            movieOutput.startRecording(to: url, recordingDelegate: recordDelegate)
+        }
     }
 
     func playRecording(url: URL? = nil) async {
         recordedURL = url ?? recordedURL
-        if phase == 1 { _ = try? await machine._play() }
+        guard phase == 1, let url = recordedURL else { return }
+        guard send(.play) else { return }
+        let player = AVPlayer(url: url)
+        currentPlayer = player
+        player.play()
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
+            Task { await self?.live() }
+        }
     }
 
     func delete(_ item: RollItem) {
@@ -416,8 +404,23 @@ final class CameraModel {
             return recordedURL.map { $0 == url } ?? false
         }
     }
-    func ready() async { _ = try? await machine._ready() }
-    func live() async { _ = try? await machine._live() }
+    func ready() async {
+        guard send(.ready),
+              let device = AVCaptureDevice.default(for: .video) else { return }
+        do {
+            try await capture.configure(device: device)
+            let output = AVCaptureMovieFileOutput()
+            capture.session.addOutput(output)
+            movieOutput = output
+            try await capture.start()
+        } catch { print("Camera error: \(error)") }
+    }
+
+    func live() async {
+        guard send(.live) else { return }
+        currentPlayer?.pause()
+        currentPlayer = nil
+    }
 }
 
 private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {

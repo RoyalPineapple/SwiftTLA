@@ -9,9 +9,9 @@ import SwiftTLA
 
 /// Generates a typed model machine from the declaration's `TLASpec`.
 ///
-/// The generated surface includes `State`, `ActionLabel`, `TransitionResult`,
-/// execution methods, and typed live-machine members when the model contains
-/// a nested live adapter.
+/// The generated surface includes `State`, `Action`, `Transition`, direct
+/// execution, and typed live-machine members when the model contains a nested
+/// live adapter.
 @attached(member, names: arbitrary)
 @attached(extension, conformances: TLAModelType, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
@@ -23,15 +23,6 @@ public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelM
 @attached(member, names: arbitrary)
 @attached(extension, conformances: TLAModelType, names: arbitrary)
 public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAActorMacro")
-
-/// Requires a nested type and generates a main-actor observable adapter for
-/// its enclosing `@TLAModel`.
-///
-/// A nested adapter calls its typed `onTransition` callback after a successful
-/// transition commits.
-@attached(member, names: arbitrary)
-@attached(extension, conformances: Sendable, names: arbitrary)
-public macro TLAObservable() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAObservableMacro")
 
 /// Declares a formal specification body for `@TLAModel`.
 ///

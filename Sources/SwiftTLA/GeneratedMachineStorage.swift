@@ -167,7 +167,7 @@ public struct _GeneratedMachineStorage: Sendable {
                     action: successor.action,
                     arguments: successor.arguments
                 )
-                let input = try compilation.generatedActionLabelInput(for: request)
+                let input = try compilation.generatedActionInput(for: request)
                 guard let action = try resolve(input.ordinal, .init(values: input.formalArguments)) else {
                     return nil
                 }
@@ -253,7 +253,6 @@ public extension _GeneratedMachineStorage {
     enum LiveRejectionReason: Sendable, Equatable {
         case runtimeUnavailable(TLALiveMachineUnavailableReason)
         case actionNotEnabled
-        case identityRoutedActionRequiresID
     }
 
     enum LiveFailureCode: String, Sendable, Equatable {
@@ -291,75 +290,6 @@ public extension _GeneratedMachineStorage {
         case failed(LiveFailure<Action>)
     }
 
-    enum LiveEvent<Action: Sendable & Equatable>: Sendable, Equatable {
-        case snapshot(LiveSnapshot, attached: Bool)
-        case update(LiveCommit<Action>)
-        case loss(LiveObservationLoss)
-        case terminated(LiveTermination)
-    }
-
-    enum LiveAttachment<Action: Sendable & Equatable>: Sendable {
-        case attached(LiveSubscription<Action>)
-        case unavailable(TLALiveMachineUnavailableReason)
-    }
-
-    struct LiveObservationLoss: Sendable, Equatable {
-        public let identity: TLALiveMachineIdentity
-        public let lastContiguousPosition: TLALiveMachinePosition
-        public let latestKnownPosition: TLALiveMachinePosition
-    }
-
-    struct LiveTermination: Sendable, Equatable {
-        public let identity: TLALiveMachineIdentity
-        public let finalPosition: TLALiveMachinePosition
-        public let reason: TLALiveMachineUnavailableReason
-    }
-
-    enum LiveResynchronization: Sendable, Equatable {
-        case resumed(at: TLALiveMachinePosition)
-        case terminated(LiveTermination)
-        case cancelled
-    }
-
-    final class LiveSubscription<Action: Sendable & Equatable>: AsyncSequence, Sendable {
-        public typealias Element = LiveEvent<Action>
-
-        private let base: TLALiveMachineObservationSubscription<Action>
-
-        fileprivate init(_ base: TLALiveMachineObservationSubscription<Action>) {
-            self.base = base
-        }
-
-        public struct AsyncIterator: AsyncIteratorProtocol, Sendable {
-            private var base: TLALiveMachineObservationSubscription<Action>.AsyncIterator
-
-            fileprivate init(_ base: TLALiveMachineObservationSubscription<Action>.AsyncIterator) {
-                self.base = base
-            }
-
-            public mutating func next() async -> LiveEvent<Action>? {
-                guard let event = await base.next() else { return nil }
-                return LiveRuntime<Action>.convert(event)
-            }
-        }
-
-        public func makeAsyncIterator() -> AsyncIterator {
-            .init(base.makeAsyncIterator())
-        }
-
-        public func resynchronize() async -> LiveResynchronization {
-            switch await base.resynchronize() {
-            case .resumed(let position): return .resumed(at: position)
-            case .terminated(let termination): return .terminated(LiveRuntime<Action>.convert(termination))
-            case .cancelled: return .cancelled
-            }
-        }
-
-        public func cancel() async {
-            await base.cancel()
-        }
-    }
-
     final class LiveRuntime<Action: Sendable & Equatable>: Sendable {
         public let identity: TLALiveMachineIdentity
         private let owner: TLALiveMachineOwner<Action>
@@ -386,13 +316,6 @@ public extension _GeneratedMachineStorage {
             }
         }
 
-        public func observe() async -> LiveAttachment<Action> {
-            switch await handle.observe() {
-            case .attached(let subscription): return .attached(.init(subscription))
-            case .unavailable(let reason): return .unavailable(reason)
-            }
-        }
-
         public func end() async {
             await owner.end()
         }
@@ -413,21 +336,10 @@ public extension _GeneratedMachineStorage {
             .init(requestID: failure.requestID, action: failure.action, code: convert(failure.code), message: failure.message, current: convert(failure.current))
         }
 
-        fileprivate static func convert(_ event: TLALiveMachineObservationEvent<Action>) -> LiveEvent<Action> {
-            switch event {
-            case .snapshot(let snapshot, let reason):
-                return .snapshot(convert(snapshot), attached: reason == .attached)
-            case .update(let commit): return .update(convert(commit))
-            case .loss(let loss): return .loss(convert(loss))
-            case .terminated(let termination): return .terminated(convert(termination))
-            }
-        }
-
         fileprivate static func convert(_ reason: TLALiveActionRejection<Action>.Reason) -> LiveRejectionReason {
             switch reason {
             case .runtimeUnavailable(let value): return .runtimeUnavailable(value)
             case .actionNotEnabled: return .actionNotEnabled
-            case .identityRoutedActionRequiresID: return .identityRoutedActionRequiresID
             }
         }
 
@@ -440,124 +352,17 @@ public extension _GeneratedMachineStorage {
             }
         }
 
-        fileprivate static func convert(_ loss: TLALiveMachineObservationLoss) -> LiveObservationLoss {
-            .init(identity: loss.identity, lastContiguousPosition: loss.lastContiguousPosition, latestKnownPosition: loss.latestKnownPosition)
-        }
-
-        fileprivate static func convert(_ termination: TLALiveMachineTermination) -> LiveTermination {
-            .init(identity: termination.identity, finalPosition: termination.finalPosition, reason: termination.reason)
-        }
-    }
-
-    enum LiveAdapterStatus: Sendable, Equatable {
-        case attaching
-        case current(TLALiveMachinePosition)
-        case recovering(LiveObservationLoss)
-        case terminated(LiveTermination)
-        case invalidEvent(String)
-    }
-
-    struct LiveAdapterSnapshot<Value: Sendable & Equatable>: Sendable, Equatable {
-        public let identity: TLALiveMachineIdentity
-        public let position: TLALiveMachinePosition
-        public let state: Value
-    }
-
-    @MainActor
-    final class LiveObservableReducer<Value: Sendable & Equatable, Action: Sendable & Equatable>: Sendable {
-        public private(set) var status: LiveAdapterStatus = .attaching
-        public private(set) var current: LiveAdapterSnapshot<Value>?
-
-        private let identity: TLALiveMachineIdentity
-        private let decode: @Sendable (State) throws -> Value
-
-        public init(
-            identity: TLALiveMachineIdentity,
-            decode: @escaping @Sendable (State) throws -> Value
-        ) {
-            self.identity = identity
-            self.decode = decode
-        }
-
-        @discardableResult
-        public func reduce(_ event: LiveEvent<Action>) -> LiveCommit<Action>? {
-            switch event {
-            case .snapshot(let snapshot, _):
-                guard validate(snapshot) else { return nil }
-                do {
-                    current = .init(identity: identity, position: snapshot.position, state: try decode(snapshot.state))
-                    status = .current(snapshot.position)
-                } catch {
-                    current = nil
-                    status = .invalidEvent("The runtime snapshot could not decode as generated State: \(error)")
-                }
-                return nil
-            case .update(let commit):
-                guard validate(commit.before), validate(commit.after) else { return nil }
-                guard case .current(let position) = status, position == commit.before.position,
-                      commit.after.position == commit.before.position.next else {
-                    current = nil
-                    status = .invalidEvent("The runtime update was not contiguous with the adapter cache.")
-                    return nil
-                }
-                do {
-                    current = .init(identity: identity, position: commit.after.position, state: try decode(commit.after.state))
-                    status = .current(commit.after.position)
-                    return commit
-                } catch {
-                    current = nil
-                    status = .invalidEvent("The committed runtime state could not decode as generated State: \(error)")
-                    return nil
-                }
-            case .loss(let loss):
-                guard loss.identity == identity else {
-                    current = nil
-                    status = .invalidEvent("The observation loss belongs to a different runtime identity.")
-                    return nil
-                }
-                current = nil
-                status = .recovering(loss)
-                return nil
-            case .terminated(let termination):
-                guard termination.identity == identity else {
-                    current = nil
-                    status = .invalidEvent("The termination belongs to a different runtime identity.")
-                    return nil
-                }
-                current = nil
-                status = .terminated(termination)
-                return nil
-            }
-        }
-
-        private func validate(_ snapshot: LiveSnapshot) -> Bool {
-            guard snapshot.identity == identity else {
-                current = nil
-                status = .invalidEvent("The observation belongs to a different runtime identity.")
-                return false
-            }
-            return true
-        }
     }
 
     func makeLive<Action: Sendable & Equatable>(
         initial: State,
         successors: @escaping @Sendable (State, Action) throws -> [State],
-        validateAction: @escaping @Sendable (Action) -> LiveRejectionReason?,
         decodeState: @escaping @Sendable (State) throws -> Void
     ) -> LiveRuntime<Action> {
         .init(.create(
             initial: initial,
             driver: .init(
                 successors: successors,
-                validateAction: { action in
-                    guard let reason = validateAction(action) else { return nil }
-                    switch reason {
-                    case .runtimeUnavailable(let value): return .runtimeUnavailable(value)
-                    case .actionNotEnabled: return .actionNotEnabled
-                    case .identityRoutedActionRequiresID: return .identityRoutedActionRequiresID
-                    }
-                },
                 decodeState: decodeState
             )
         ))

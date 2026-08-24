@@ -9,8 +9,8 @@ same model from Swift.
 and guarded application boundary. The `SwiftTLAMacros` module contains the
 macros that generate typed machines from a `TLASpec` declaration.
 
-Application code reads generated `State`, `ActionLabel`, and
-`TransitionResult` values. It does not read a raw formal state map.
+Application code reads generated `State`, `Action`, and `Transition` values.
+It does not read a raw formal state map.
 
 ## Compile the source model
 
@@ -21,7 +21,7 @@ bounded exploration, and rendered bundles use this compiled meaning.
 ```swift
 let compilation = try Counter.spec.compile()
 var machine = try Counter.makeMachine()
-try machine.apply(.advance)
+try machine.send(.advance)
 ```
 
 `CompiledSpecification` contains the compiled declaration plan, its

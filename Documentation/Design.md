@@ -73,21 +73,21 @@ successful `CompiledSpecification` is complete for its declared model.
 ## Execute generated Swift
 
 `@TLAModel` generates the application-facing API. Application code uses
-typed state and typed action labels.
+typed state and typed actions.
 
 ```swift
 var machine = try Counter.makeMachine()
-let transition = try machine.apply(.advance)
+let transition = try machine.send(.advance)
 let state = transition.after
 ```
 
-The generated machine converts an `ActionLabel` to a private compiled action
+The generated machine converts an `Action` to a private compiled action
 request. The private runtime executes compiled action identities and
 slot-backed state. Application code does not use action names, runtime IDs,
 slots, or formal state maps.
 
-Generated `Live`, `@TLAActor`, and `@TLAObservable` APIs use the same typed
-state and action labels. See [Generated Machines](GeneratedMachines.md) and
+Generated `Live` and `@TLAActor` APIs use the same typed state and actions.
+See [Generated Machines](GeneratedMachines.md) and
 [Live Machines](LiveMachines.md).
 
 ## Render formal bundles

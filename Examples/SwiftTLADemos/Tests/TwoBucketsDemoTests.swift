@@ -6,27 +6,17 @@ struct TwoBucketsDemoTests {
     func exposesPuzzleMoves() throws {
         var machine = TwoBuckets()
 
-        #expect(try machine.availableActions() == [
-            .fillThree,
-            .fillFive
-        ])
+        #expect(try machine.isEnabled(.fillThree))
+        #expect(try machine.isEnabled(.fillFive))
+        #expect(try machine.isEnabled(.emptyThree) == false)
 
-        _ = try machine.apply(.fillThree)
+        _ = try machine.send(.fillThree)
         #expect(machine.state.three == 3)
         #expect(machine.state.five == 0)
 
-        _ = try machine.apply(.pourThreeIntoFive)
+        _ = try machine.send(.pourThreeIntoFive)
         #expect(machine.state.three == 0)
         #expect(machine.state.five == 3)
     }
 
-    @Test("two buckets provides a generated observable adapter")
-    @MainActor
-    func providesObservableAdapter() async throws {
-        let live = try TwoBuckets.makeLive()
-        let machine = try await TwoBuckets.Observable(live: live)
-        _ = try await machine.apply(.fillFive)
-
-        #expect(machine.state.five == 5)
-    }
 }

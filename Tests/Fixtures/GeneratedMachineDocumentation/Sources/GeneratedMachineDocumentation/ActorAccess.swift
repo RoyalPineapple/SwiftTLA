@@ -41,7 +41,7 @@ struct CounterHost {
 func runActorAccess() async throws {
     let live = try CounterHost.makeLive()
     let actor = CounterHost.Actor(live: live)
-    let result = try await actor.apply(.advance)
+    let result = try await actor.send(.advance)
 
     guard case .committed(let commit) = result else { return }
     assert(commit.after.position.value == 1)

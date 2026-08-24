@@ -12,9 +12,6 @@ public struct P4GeneratedCounter {
         }
     }
 
-    @TLAObservable
-    public final class Observable {}
-
     @TLAActor
     public actor Actor {}
 }
@@ -29,9 +26,6 @@ public struct P4GeneratedCounterIntentionalMismatch {
             Invariant("withinBounds") { value >= 0 && value <= 1 }
         }
     }
-
-    @TLAObservable
-    public final class Observable {}
 
     @TLAActor
     public actor Actor {}

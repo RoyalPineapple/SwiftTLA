@@ -117,6 +117,4 @@ public struct ChangRoberts {
     @TLAActor
     public actor Actor {}
 
-    @TLAObservable
-    public final class Observable {}
 }

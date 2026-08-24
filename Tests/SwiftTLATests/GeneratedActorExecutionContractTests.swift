@@ -36,7 +36,7 @@ struct GeneratedActorExecutionContractTests {
     func actorMatchesCanonicalSchedule() async throws {
         var canonical = try DuckDuckLeaderCanonical.makeMachine()
         let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
-        let schedule: [DuckDuckLeaderCanonical.ActionLabel] = [
+        let schedule: [DuckDuckLeaderCanonical.Action] = [
             .pass(from: 1, to: 2, round: 1),
             .pass(from: 2, to: 1, round: 2),
             .pass(from: 1, to: 2, round: 3)
@@ -45,8 +45,8 @@ struct GeneratedActorExecutionContractTests {
         #expect(try await state(of: actor) == canonical.state)
 
         for label in schedule {
-            let expected = try canonical.apply(label)
-            let actual = try committed(try await actor.apply(label))
+            let expected = try canonical.send(label)
+            let actual = try committed(try await actor.send(label))
 
             #expect(actual.action == label)
             #expect(actual.action == expected.action)
@@ -62,9 +62,9 @@ struct GeneratedActorExecutionContractTests {
     @Test("actor rejects unavailable invocations without mutation")
     func unavailableActionPreservesActorSnapshot() async throws {
         let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
-        let unavailable = DuckDuckLeaderCanonical.Actor.ActionLabel.pass(from: 2, to: 1, round: 1)
+        let unavailable = DuckDuckLeaderCanonical.Actor.Action.pass(from: 2, to: 1, round: 1)
         let before = try await state(of: actor)
-        let outcome = try await actor.apply(unavailable)
+        let outcome = try await actor.send(unavailable)
         if case .rejected = outcome {
         } else {
             Issue.record("Expected unavailable actor action")
@@ -76,14 +76,14 @@ struct GeneratedActorExecutionContractTests {
     @Test("actor serializes concurrent duplicate submissions")
     func concurrentSubmissionsMatchActualCanonicalEvidence() async throws {
         let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
-        let label = DuckDuckLeaderCanonical.Actor.ActionLabel.pass(from: 1, to: 2, round: 1)
+        let label = DuckDuckLeaderCanonical.Actor.Action.pass(from: 1, to: 2, round: 1)
 
         async let first = submit(actor, label: label)
         async let second = submit(actor, label: label)
         let submissions = await [first, second]
 
         var canonical = try DuckDuckLeaderCanonical.makeMachine()
-        let expected = try canonical.apply(.pass(from: 1, to: 2, round: 1))
+        let expected = try canonical.send(.pass(from: 1, to: 2, round: 1))
         let successful = submissions.compactMap(\.evidence)
         let rejected = submissions.filter(\.isRejected)
 
@@ -100,10 +100,10 @@ struct GeneratedActorExecutionContractTests {
 
     private func submit(
         _ actor: DuckDuckLeaderCanonical.Actor,
-        label: DuckDuckLeaderCanonical.Actor.ActionLabel
+        label: DuckDuckLeaderCanonical.Actor.Action
     ) async -> Submission {
         do {
-            switch try await actor.apply(label) {
+            switch try await actor.send(label) {
             case .committed(let evidence):
                 return .applied(.init(
                     action: evidence.action,
@@ -129,7 +129,7 @@ struct GeneratedActorExecutionContractTests {
 
     private func committed(
         _ outcome: DuckDuckLeaderCanonical.Actor.Outcome
-    ) throws -> DuckDuckLeaderCanonical.TransitionResult {
+    ) throws -> DuckDuckLeaderCanonical.Transition {
         switch outcome {
         case .committed(let result): return result
         case .rejected, .failed: throw GeneratedMachineError.noMatchingSuccessor
@@ -153,7 +153,7 @@ struct GeneratedActorExecutionContractTests {
     }
 
     private struct Evidence: Sendable {
-        let action: DuckDuckLeaderCanonical.Actor.ActionLabel
+        let action: DuckDuckLeaderCanonical.Actor.Action
         let before: DuckDuckLeaderCanonical.Actor.State
         let after: DuckDuckLeaderCanonical.Actor.State
     }

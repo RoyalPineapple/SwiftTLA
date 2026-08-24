@@ -44,7 +44,7 @@ Missing or changed bytes do not silently reuse an older result.
 |---|---|---|
 | Parser and builder | The same bounded counter produces exact initial/reachable states, labeled/enabled transitions, properties, deadlocks, failures, and diagnostics. | One integer variable and two reachable states. A source/configuration mismatch must remain a `difference`. |
 | Generated behavior | The builder and generated counter agree on the initial state, two reachable states, the `advance` transition, `withinBounds`, and the terminal deadlock. | `maxStates: 2`. Intentional transition mismatch, evaluation failure, and evaluation unavailability must remain visible differences. |
-| Annotations | Valid and invalid external packages for `@TLAModel`, `@TLAActor`, and `@TLAObservable` run with their declared Xcode schemes. | Each valid package must build; each invalid package must fail with the declared `withinBounds` invariant diagnostic. These fixtures do not prove every model accepted by those annotations. |
+| Annotations | Valid and invalid external packages for `@TLAModel` and `@TLAActor` run with their declared Xcode schemes. | Each valid package must build; each invalid package must fail with the declared `withinBounds` invariant diagnostic. These fixtures do not prove every model accepted by those annotations. |
 | Public library platform | The root `SwiftTLA` product builds through the `SwiftTLA-Package` scheme on macOS. | The recorded command builds only the public `SwiftTLA` library target for the declared macOS destination. The root package declares macOS support, so this check makes no iOS, Mac Catalyst, tvOS, watchOS, demo, capture, playback, or writer claim. A failed destination is a difference; a missing tool or destination is unavailable. Success applies only to the recorded package tree, command, Xcode toolchain, SDK, and destination. |
 
 The mismatch and failure cases prove that the runner detects those declared
@@ -52,7 +52,7 @@ conditions. They are not supported behaviors and do not enlarge the positive
 scope.
 
 Generated behavior uses the application-facing typed surface. A fixture reads
-generated `State` and `TransitionResult` values. Formal tooling uses the
+generated `State` and `Transition` values. Formal tooling uses the
 compiler-owned state boundary.
 
 ### Annotation availability
@@ -61,7 +61,6 @@ compiler-owned state boundary.
 |---|---|
 | `@TLAModel` | Release-facing fixture pair exists; current local evidence is diagnostic and hosted evidence is a candidate for the exact fixture only. |
 | `@TLAActor` | Same bounded fixture disposition; the actor runtime proof is also diagnostic. |
-| `@TLAObservable` | Same bounded fixture disposition. |
 
 There are no report-derived, generally admitted entries for these workflows.
 Public material can describe the exact validation cases above. It must not

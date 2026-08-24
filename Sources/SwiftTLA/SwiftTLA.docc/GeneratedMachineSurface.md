@@ -1,20 +1,21 @@
 # Generated machine surface
 
-`@TLAModel` generates the typed schema, formal behavior, and `Live` runtime façade for a machine.
+`@TLAModel` generates a typed Swift state machine from one compiled model.
 
 ## Generated types
 
 Each generated model exposes these `Sendable` value types:
 
 - `State`: typed values for declared variables.
-- `ActionLabel`: a typed action identity and typed parameters.
-- `TransitionResult`: typed action, state before, and state after for direct value-model execution.
-- `MachineObservation`: typed state and currently available typed action labels.
+- `Action`: a typed action identity and typed parameters.
+- `Transition`: typed action, state before, and state after for one successful transition.
 
 
 ## Direct value-model execution
 
-`apply(_:)`, `machineObservation()`, and `TransitionResult` provide direct value-model execution. `machineObservation()` returns typed `State` and `ActionLabel` values.
+`send(_:)` applies one typed action. `isEnabled(_:)` checks whether one typed action
+is currently permitted. Both methods can throw. `state` contains the complete current
+typed state.
 
 ## Create a live runtime
 
@@ -28,10 +29,10 @@ let live = try Counter.makeLive()
 
 ## Typed control
 
-Use a generated label with `Live.execute(_:)`.
+Use a generated action with `Live.send(_:)`.
 
 ```swift
-let typedOutcome = await live.execute(.advance)
+let typedOutcome = await live.send(.advance)
 ```
 
 Generated `Live.Outcome` is exhaustive:
@@ -42,8 +43,8 @@ Generated `Live.Outcome` is exhaustive:
 
 Accepted requests complete as `committed` or `failed`. A live action reports `ambiguousAction` when it produces more than one successor.
 
-Positions begin at zero and have meaning only within one runtime identity. `Live.current()` returns an atomic typed snapshot with the state and available actions for that position.
+Positions begin at zero and have meaning only within one runtime identity. `Live.current()` returns an atomic typed snapshot with the state and enabled actions for that position.
 
-## Generated adapters
+## Generated actor
 
-Nested `@TLAActor` and `@TLAObservable` types accept the enclosing model's typed `Live` value with `init(live:)`. The actor forwards control to that runtime. The main-actor observable adapter reduces subscription events into its typed cache. It records `recovering` after loss and `terminated` after runtime termination.
+Nested `@TLAActor` types accept the enclosing model's typed `Live` value with `init(live:)`. The actor forwards control to that runtime.
