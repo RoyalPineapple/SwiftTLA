@@ -1,7 +1,6 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAModel
 public struct SingleLaneBridgeModel: Sendable {
     public enum Car: String, CaseIterable, FiniteDomainKey {
         case rightOne = "r1"
@@ -62,7 +61,7 @@ public struct SingleLaneBridgeModel: Sendable {
                 (.leftTwo, 1)
                 ).raw
             }
-            Variable(computed: waiting) { TupleExpr<Car>() }
+            Variable(computed: waiting) { TupleExpr<Car>().raw }
 
             Invariant("Invariants") {
                 All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { first in

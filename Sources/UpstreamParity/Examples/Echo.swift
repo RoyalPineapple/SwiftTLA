@@ -7,7 +7,6 @@ import SwiftTLAMacros
 /// A record is the message on the network. The `inbox` finite function gives
 /// every node its own set of messages, while each `Each(Node.all)` body is an
 /// independently scheduled PlusCal process.
-@TLAModel
 public struct EchoModel: Sendable {
     public enum Node: String, TLAValueType, FiniteDomainKey {
         case a, b, c

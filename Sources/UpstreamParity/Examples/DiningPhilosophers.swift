@@ -4,7 +4,6 @@ import SwiftTLAMacros
 // Dining Philosophers — Chandy-Misra solution. NP=5.
 // Upstream: specifications/DiningPhilosophers/DiningPhilosophers.tla
 
-@TLAModel
 public struct DiningPhilosophersModel: Sendable {
     public enum Philosopher: Int, FiniteDomainKey {
         case one = 1
