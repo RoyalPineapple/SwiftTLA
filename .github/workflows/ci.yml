@@ -73,6 +73,10 @@ jobs:
         working-directory: Examples/ApplePlatformExamples
         run: xcodebuild test -scheme ApplePlatformExamples-Package -destination 'platform=macOS' -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1
 
+      - name: Build SwiftUI demo app
+        working-directory: Examples/SwiftTLADemoApp
+        run: xcodebuild build -scheme SwiftTLADemoApp-Package -destination 'platform=macOS' -jobs 1
+
   canonical-corpus-export:
     runs-on: macos-14
     timeout-minutes: 15

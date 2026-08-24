@@ -64,8 +64,7 @@ private struct TwoBucketsView: View {
 }
 
 private struct DuckDuckLeaderView: View {
-    @State private var actor: ChangRoberts.Actor?
-    @State private var state = ChangRoberts().state
+    @State private var machine = ChangRoberts()
     @State private var error: String?
     @State private var delivery: DuckDelivery?
     @State private var isDelivering = false
@@ -83,7 +82,7 @@ private struct DuckDuckLeaderView: View {
         ) {
             DuckDuckLeaderScene(
                 nodes: ring,
-                state: state,
+                state: machine.state,
                 delivery: delivery,
                 lastMove: lastMove,
                 messageStatus: messageStatus,
@@ -96,7 +95,6 @@ private struct DuckDuckLeaderView: View {
                 togglePlayback: togglePlayback
             )
         }
-        .task { if actor == nil { reset() } }
     }
 
     private func shuffleSchedule() {
@@ -109,15 +107,10 @@ private struct DuckDuckLeaderView: View {
         isPlaying = false
         isDelivering = false
         deliveryOrder = ring
-        actor = nil
-        state = ChangRoberts().state
+        machine = ChangRoberts()
         delivery = nil
         lastMove = message
         error = nil
-        Task { @MainActor in
-            do { actor = try ChangRoberts.Actor() }
-            catch let failure { error = failure.localizedDescription }
-        }
     }
 
     private func togglePlayback() {
@@ -129,12 +122,12 @@ private struct DuckDuckLeaderView: View {
         isPlaying = true
         let runID = simulationID
         Task { @MainActor in
-            while isPlaying && state.leader == 0 && runID == simulationID {
+            while isPlaying && machine.state.leader == 0 && runID == simulationID {
                 let delivered = await deliverNext(runID: runID)
                 if !delivered { break }
             }
-            if runID == simulationID, state.leader != 0 {
-                lastMove = "ID \(state.leader) completed the ring and is the leader."
+            if runID == simulationID, machine.state.leader != 0 {
+                lastMove = "ID \(machine.state.leader) completed the ring and is the leader."
             }
             if runID == simulationID { isPlaying = false }
         }
@@ -144,17 +137,17 @@ private struct DuckDuckLeaderView: View {
     private func deliverNext(runID: UUID) async -> Bool {
         guard !isDelivering,
               runID == simulationID,
-              let actor,
               let node = deliveryOrder.first(where: { node in
-                  state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
+                  machine.state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
               }),
-              let message = state.messages.elements.first(where: { $0[ChangRoberts.MessageSchema.to] == node })
+              let message = machine.state.messages.elements.first(where: { $0[ChangRoberts.MessageSchema.to] == node })
         else { return false }
 
         isDelivering = true
         defer { isDelivering = false }
         do {
-            let result = try await actor.send(.deliver(process: node))
+            var nextMachine = machine
+            let result = try nextMachine.send(.deliver(process: node))
             guard runID == simulationID else { return false }
             let forwarded = result.after.messages.elements.first {
                 $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&
@@ -169,13 +162,21 @@ private struct DuckDuckLeaderView: View {
             delivery = animation
             lastMove = moveDescription(for: animation)
             error = nil
-            try? await Task.sleep(for: .milliseconds(50))
+            do {
+                try await Task.sleep(for: .milliseconds(50))
+            } catch {
+                return false
+            }
             withAnimation(.easeInOut(duration: 0.8)) {
                 delivery?.progress = 1
             }
-            try? await Task.sleep(for: .milliseconds(850))
+            do {
+                try await Task.sleep(for: .milliseconds(850))
+            } catch {
+                return false
+            }
             guard runID == simulationID else { return false }
-            state = result.after
+            machine = nextMachine
             delivery = nil
             return true
         } catch let failure {
@@ -196,10 +197,10 @@ private struct DuckDuckLeaderView: View {
     }
 
     private var messageStatus: String {
-        if state.leader != 0, !state.messages.elements.isEmpty {
-            return "\(state.messages.elements.count) older tokens remain in flight; the formal election is complete."
+        if machine.state.leader != 0, !machine.state.messages.elements.isEmpty {
+            return "\(machine.state.messages.elements.count) older tokens remain in flight; the formal election is complete."
         }
-        return "\(state.messages.elements.count) formal tokens remain in flight."
+        return "\(machine.state.messages.elements.count) formal tokens remain in flight."
     }
 
 }
