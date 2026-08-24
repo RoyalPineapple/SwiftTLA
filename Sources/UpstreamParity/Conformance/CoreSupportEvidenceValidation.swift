@@ -315,10 +315,10 @@ extension CoreSupportGate {
     let data = try Data(contentsOf: url)
     guard String(data: data, encoding: .utf8) != nil,
           !data.starts(with: [0xEF, 0xBB, 0xBF]), data.last == 10
-    else { throw EvidenceValidationError.invalidCanonicalRecord }
+    else { throw CanonicalConformanceEvidenceError.invalidRecord }
     let lines = data.split(separator: 10, omittingEmptySubsequences: false)
     guard lines.last?.isEmpty == true, lines.count > 2 else {
-      throw EvidenceValidationError.invalidCanonicalRecord
+      throw CanonicalConformanceEvidenceError.invalidRecord
     }
 
     var body = Data()
@@ -334,7 +334,7 @@ extension CoreSupportGate {
             object["caseId"] as? String == expectedCase.id,
             let type = object["type"] as? String,
             let callback = object["callback"] as? String
-      else { throw EvidenceValidationError.invalidCanonicalRecord }
+      else { throw CanonicalConformanceEvidenceError.invalidRecord }
 
       if type == "footer" {
         guard index == lines.count - 2,
@@ -347,7 +347,7 @@ extension CoreSupportGate {
               object["lastBodySeq"] as? Int == index - 1,
               object["bodySha256"] as? String == SHA256.hex(body),
               let recordedCounts = object["counts"] as? [String: Int], recordedCounts == counts
-        else { throw EvidenceValidationError.invalidCanonicalRecord }
+        else { throw CanonicalConformanceEvidenceError.invalidRecord }
         continue
       }
 
@@ -361,12 +361,12 @@ extension CoreSupportGate {
               callback == "writer.header",
               let provenance = object["provenance"] as? [String: Any],
               replayProvenanceMatches(provenance, expectedCase: expectedCase)
-        else { throw EvidenceValidationError.invalidCanonicalRecord }
+        else { throw CanonicalConformanceEvidenceError.invalidRecord }
       case "initial":
         guard Set(object.keys) == ["schema", "version", "type", "callback", "seq", "runId", "caseId", "state"],
               callback == "writeState.initial",
               let state = parsePhaseState(object["state"]), initialState == nil
-        else { throw EvidenceValidationError.invalidCanonicalRecord }
+        else { throw CanonicalConformanceEvidenceError.invalidRecord }
         initialState = state
       case "transition":
         guard Set(object.keys) == [
@@ -382,26 +382,26 @@ extension CoreSupportGate {
               let flags = object["stateFlags"] as? [String: Any],
               Set(flags.keys) == ["raw", "seen", "notInModel"], flags["raw"] as? Int != nil,
               flags["seen"] as? Bool != nil, flags["notInModel"] as? Bool != nil
-        else { throw EvidenceValidationError.invalidCanonicalRecord }
+        else { throw CanonicalConformanceEvidenceError.invalidRecord }
         if callback == "writeState.action" {
           guard object["reachable"] as? String == "reachable",
                 object["visualization"] as? String == "none", object["predicateLocation"] is NSNull
-          else { throw EvidenceValidationError.invalidCanonicalRecord }
+          else { throw CanonicalConformanceEvidenceError.invalidRecord }
           transitions.append(CanonicalEdge(source: source.key, action: actionName, target: target.key))
         } else {
           guard callback == "writeState.actionPredicate",
                 object["reachable"] as? String == "excluded",
                 object["visualization"] as? String == "none",
                 !(object["predicateLocation"] as? String ?? "").isEmpty
-          else { throw EvidenceValidationError.invalidCanonicalRecord }
+          else { throw CanonicalConformanceEvidenceError.invalidRecord }
         }
       default:
-        throw EvidenceValidationError.invalidCanonicalRecord
+        throw CanonicalConformanceEvidenceError.invalidRecord
       }
     }
     guard counts["header"] == 1, counts["initial"] == 1, counts["transition", default: 0] > 0,
           counts.count == 3, let initialState, !transitions.isEmpty
-    else { throw EvidenceValidationError.invalidCanonicalRecord }
+    else { throw CanonicalConformanceEvidenceError.invalidRecord }
     return ReplayPhaseTrace(initialState: initialState, transitions: transitions)
   }
 
