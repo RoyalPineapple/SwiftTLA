@@ -27,7 +27,7 @@ extension MacroExpander {
     static func typedAdapterExecution(receiver: String) -> [DeclSyntax] {
         return [DeclSyntax(stringLiteral: """
         public func send(_ action: Action, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
-            try await \(receiver).execute(action, requestID: requestID)
+            try await \(receiver).send(action, requestID: requestID)
         }
         """)]
     }
