@@ -363,7 +363,7 @@ final class CameraModel {
             return false
         }
         do {
-            try machine.send(action)
+            _ = try machine.send(action)
             self.machine = machine
             diagnostic = nil
             return true

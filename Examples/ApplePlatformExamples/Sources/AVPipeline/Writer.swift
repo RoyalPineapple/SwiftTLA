@@ -59,13 +59,6 @@ extension Media {
             return input.append(sample)
         }
 
-        public func drain(_ stream: AsyncStream<CMSampleBuffer>) async throws {
-            for await sample in stream {
-                if try await append(sample) == false { break }
-            }
-            try await finish()
-        }
-
         public func pause() async throws { _ = try machine.send(.pause) }
         public func resume() async throws { _ = try machine.send(.resume) }
 
