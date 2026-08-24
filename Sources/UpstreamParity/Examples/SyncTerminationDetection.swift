@@ -30,34 +30,34 @@ public struct SyncTerminationDetectionModel: Sendable {
             ))
             let terminationDetected = scope.sharedVar("terminationDetected", initial: false)
 
-            Action("Terminate_0") {
+            SwiftTLA.Action("Terminate_0") {
                 active[.zero] == true && active.becomes(active.updating(.zero, to: false)) && terminationDetected.stays
             }
-            Action("Terminate_1") {
+            SwiftTLA.Action("Terminate_1") {
                 active[.one] == true && active.becomes(active.updating(.one, to: false)) && terminationDetected.stays
             }
-            Action("Terminate_2") {
+            SwiftTLA.Action("Terminate_2") {
                 active[.two] == true && active.becomes(active.updating(.two, to: false)) && terminationDetected.stays
             }
-            Action("Wakeup_0_to_1") {
+            SwiftTLA.Action("Wakeup_0_to_1") {
                 active[.zero] == true && active.becomes(active.updating(.one, to: true)) && terminationDetected.stays
             }
-            Action("Wakeup_0_to_2") {
+            SwiftTLA.Action("Wakeup_0_to_2") {
                 active[.zero] == true && active.becomes(active.updating(.two, to: true)) && terminationDetected.stays
             }
-            Action("Wakeup_1_to_0") {
+            SwiftTLA.Action("Wakeup_1_to_0") {
                 active[.one] == true && active.becomes(active.updating(.zero, to: true)) && terminationDetected.stays
             }
-            Action("Wakeup_1_to_2") {
+            SwiftTLA.Action("Wakeup_1_to_2") {
                 active[.one] == true && active.becomes(active.updating(.two, to: true)) && terminationDetected.stays
             }
-            Action("Wakeup_2_to_0") {
+            SwiftTLA.Action("Wakeup_2_to_0") {
                 active[.two] == true && active.becomes(active.updating(.zero, to: true)) && terminationDetected.stays
             }
-            Action("Wakeup_2_to_1") {
+            SwiftTLA.Action("Wakeup_2_to_1") {
                 active[.two] == true && active.becomes(active.updating(.one, to: true)) && terminationDetected.stays
             }
-            Action("DetectTermination") {
+            SwiftTLA.Action("DetectTermination") {
                 active[.zero] == false && active[.one] == false && active[.two] == false
                     && terminationDetected.becomes(true) && active.stays
             }

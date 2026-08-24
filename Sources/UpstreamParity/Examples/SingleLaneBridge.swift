@@ -143,7 +143,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .rightOne,
                     to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                 ))
-                waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
+                waiting.becomes(Expr<TupleExpr<Car>>(.tupleTail(waiting.stateExpr)))
             }
 
             Action("MoveOutside_r2") {
@@ -198,7 +198,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .rightTwo,
                     to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                 ))
-                waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
+                waiting.becomes(Expr<TupleExpr<Car>>(.tupleTail(waiting.stateExpr)))
             }
 
             Action("MoveOutside_l1") {
@@ -250,7 +250,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .leftOne,
                     to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                 ))
-                waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
+                waiting.becomes(Expr<TupleExpr<Car>>(.tupleTail(waiting.stateExpr)))
             }
 
             Action("MoveOutside_l2") {
@@ -302,7 +302,7 @@ public struct SingleLaneBridgeModel: Sendable {
                     .leftTwo,
                     to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                 ))
-                waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
+                waiting.becomes(Expr<TupleExpr<Car>>(.tupleTail(waiting.stateExpr)))
             }
         }
     }
