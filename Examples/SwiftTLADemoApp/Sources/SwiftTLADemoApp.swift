@@ -39,46 +39,27 @@ private struct DemoHomeView: View {
 }
 
 private struct TwoBucketsView: View {
-    @State private var machine: TwoBuckets.Observable?
+    @State private var machine = TwoBuckets()
     @State private var error: String?
 
     var body: some View {
-        Group {
-            if let machine {
-                DemoScreen(title: "Two Buckets", subtitle: "Measure exactly 4 gallons.") {
-                    TwoBucketsScene(state: machine.state, error: error)
-                    TwoBucketsControls(
-                        fillThree: { perform(machine, .fillThree) },
-                        emptyThree: { perform(machine, .emptyThree) },
-                        pourThreeIntoFive: { perform(machine, .pourThreeIntoFive) },
-                        pourFiveIntoThree: { perform(machine, .pourFiveIntoThree) },
-                        fillFive: { perform(machine, .fillFive) },
-                        emptyFive: { perform(machine, .emptyFive) },
-                        reset: start
-                    )
-                }
-            } else {
-                ProgressView()
-            }
-        }
-        .task { if machine == nil { start() } }
-    }
-
-    private func start() {
-        Task { @MainActor in
-            do {
-                machine = try await TwoBuckets.Observable(live: try TwoBuckets.makeLive())
-                error = nil
-            }
-            catch let failure { error = failure.localizedDescription }
+        DemoScreen(title: "Two Buckets", subtitle: "Measure exactly 4 gallons.") {
+            TwoBucketsScene(state: machine.state, error: error)
+            TwoBucketsControls(
+                fillThree: { perform(.fillThree) },
+                emptyThree: { perform(.emptyThree) },
+                pourThreeIntoFive: { perform(.pourThreeIntoFive) },
+                pourFiveIntoThree: { perform(.pourFiveIntoThree) },
+                fillFive: { perform(.fillFive) },
+                emptyFive: { perform(.emptyFive) },
+                reset: { machine = TwoBuckets() }
+            )
         }
     }
 
-    private func perform(_ machine: TwoBuckets.Observable, _ action: TwoBuckets.ActionLabel) {
-        Task { @MainActor in
-            do { _ = try await machine.apply(action); error = nil }
-            catch let failure { error = failure.localizedDescription }
-        }
+    private func perform(_ action: TwoBuckets.Action) {
+        do { _ = try machine.send(action); error = nil }
+        catch let failure { error = failure.localizedDescription }
     }
 }
 
@@ -173,7 +154,7 @@ private struct DuckDuckLeaderView: View {
         isDelivering = true
         defer { isDelivering = false }
         do {
-            let result = try await actor.apply(.deliver(process: node))
+            let result = try await actor.send(.deliver(process: node))
             guard runID == simulationID else { return false }
             let forwarded = result.after.messages.elements.first {
                 $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&
@@ -224,28 +205,21 @@ private struct DuckDuckLeaderView: View {
 }
 
 private struct ElevatorBankView: View {
-    @State private var machine: ElevatorBank.Observable?
+    @State private var machine = ElevatorBank()
     @State private var error: String?
 
     var body: some View {
-        Group {
-            if let machine {
-                DemoScreen(
-                    title: "Elevator Bank",
-                    subtitle: "Two riders, two cars, and doors that make every handoff explicit."
-                ) {
-                    ElevatorBankScene(state: machine.state, riderSummary: riderSummary(machine.state), error: error)
-                    ElevatorBankControls(
-                        operateCarA: { operate(machine, .carA) },
-                        operateCarB: { operate(machine, .carB) },
-                        reset: start
-                    )
-                }
-            } else {
-                ProgressView()
-            }
+        DemoScreen(
+            title: "Elevator Bank",
+            subtitle: "Two riders, two cars, and doors that make every handoff explicit."
+        ) {
+            ElevatorBankScene(state: machine.state, riderSummary: riderSummary(machine.state), error: error)
+            ElevatorBankControls(
+                operateCarA: { operate(.operate(process: .carA)) },
+                operateCarB: { operate(.operate(process: .carB)) },
+                reset: { machine = ElevatorBank() }
+            )
         }
-        .task { if machine == nil { start() } }
     }
 
     private func riderSummary(_ state: ElevatorBank.State) -> String {
@@ -256,21 +230,9 @@ private struct ElevatorBankView: View {
         }.joined(separator: "\n")
     }
 
-    private func start() {
-        Task { @MainActor in
-            do {
-                machine = try await ElevatorBank.Observable(live: try ElevatorBank.makeLive())
-                error = nil
-            }
-            catch let failure { error = failure.localizedDescription }
-        }
-    }
-
-    private func operate(_ machine: ElevatorBank.Observable, _ action: ElevatorBank.ActionLabel) {
-        Task { @MainActor in
-            do { _ = try await machine.apply(action); error = nil }
-            catch let failure { error = failure.localizedDescription }
-        }
+    private func operate(_ action: ElevatorBank.Action) {
+        do { _ = try machine.send(action); error = nil }
+        catch let failure { error = failure.localizedDescription }
     }
 }
 
@@ -449,11 +411,11 @@ private struct GeneratedSurfaceSummary: View {
             HStack(alignment: .top, spacing: 18) {
                 GeneratedSurfaceItem(
                     title: "Typed machine",
-                    detail: "Each model exposes State, ActionLabel, and TransitionResult."
+                    detail: "Each model exposes State, Action, and Transition."
                 )
                 GeneratedSurfaceItem(
                     title: "Native adapters",
-                    detail: "The bucket and elevator scenes use Observable. The ring uses Actor."
+                    detail: "The bucket and elevator scenes use their generated values. The ring uses Actor."
                 )
                 GeneratedSurfaceItem(
                     title: "Verification suite",

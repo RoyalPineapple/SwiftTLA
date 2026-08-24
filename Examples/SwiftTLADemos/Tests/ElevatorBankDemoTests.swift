@@ -14,22 +14,22 @@ struct ElevatorBankDemoTests {
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.rider] == .none)
         #expect(machine.state.riders[.alice][ElevatorBank.RiderSchema.phase] == .waiting)
 
-        _ = try machine.apply(.operate(process: .carA))
+        _ = try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.door] == .open)
 
-        _ = try machine.apply(.operate(process: .carA))
+        _ = try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.door] == .closed)
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.rider] == .alice)
         #expect(machine.state.riders[.alice][ElevatorBank.RiderSchema.phase] == .onboard)
 
-        _ = try machine.apply(.operate(process: .carA))
+        _ = try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.floor] == .two)
-        _ = try machine.apply(.operate(process: .carA))
+        _ = try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.floor] == .three)
 
-        _ = try machine.apply(.operate(process: .carA))
+        _ = try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.door] == .open)
-        _ = try machine.apply(.operate(process: .carA))
+        _ = try machine.send(.operate(process: .carA))
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.rider] == .none)
         #expect(machine.state.riders[.alice][ElevatorBank.RiderSchema.phase] == .arrived)
     }

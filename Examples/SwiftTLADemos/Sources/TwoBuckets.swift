@@ -5,7 +5,7 @@ import SwiftTLAMacros
 ///
 /// Each operation has one singleton process. This preserves the formal model's
 /// independent scheduling while exposing a clean Swift action surface such as
-/// `try machine.apply(.fillThree)`.
+/// `try machine.send(.fillThree)`.
 @TLAModel
 public struct TwoBuckets {
     private enum FillThreeProcess: String, FiniteDomainKey {
