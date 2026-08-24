@@ -42,7 +42,7 @@ public struct SingleLaneBridgeModel: Sendable {
             }
             FormalDefinition("CarsOnBridge", taking: Function<Car, Int>.self) { locations in
                 SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo).filtering { car in
-                    FormalCall(as: Bool.self, "InBridge", locations[car])
+                    FormalCall(as: Bool.self, "InBridge", locations[car]).raw
                 }
             }
             FormalDefinition("IsLeaving", taking: Car.self, Function<Car, Int>.self) { car, locations in
