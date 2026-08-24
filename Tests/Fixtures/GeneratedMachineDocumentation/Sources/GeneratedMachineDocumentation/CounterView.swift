@@ -20,7 +20,6 @@ struct CounterView: View {
                     diagnostic = String(describing: error)
                 }
             }
-            .disabled(canAdvance == false)
             if !diagnostic.isEmpty {
                 Text(diagnostic)
             }
@@ -35,8 +34,4 @@ struct CounterView: View {
         }
     }
 
-    private var canAdvance: Bool {
-        guard let machine else { return false }
-        return (try? machine.isEnabled(.advance)) == true
-    }
 }
