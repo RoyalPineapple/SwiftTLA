@@ -24,10 +24,11 @@ struct SingleLaneBridgeCorpusDomainTests {
             "MoveOutside_l2", "MoveInside_l2", "Enter_l2",
         ])
         #expect(compilation.spec.formalOperatorDefinitions.map(\.name) == [
-            "IsRight", "InBridge", "NextLocation", "LocationAt", "CarsOnBridge",
+            "IsRight", "InBridge", "NextLocation", "LocationAt", "CarsOnBridge", "IsLeaving",
         ])
         #expect(compilation.description.variables.map(\.name) == [
             "Location", "WaitingBeforeBridge",
         ])
+        #expect(compilation.spec.variables.last?.initExpr == .value(.tuple([])))
     }
 }

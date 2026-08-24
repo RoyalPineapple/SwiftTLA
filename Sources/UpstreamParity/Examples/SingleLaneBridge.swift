@@ -45,6 +45,12 @@ public struct SingleLaneBridgeModel: Sendable {
                     FormalCall(as: Bool.self, "InBridge", locations[car])
                 }
             }
+            FormalDefinition("IsLeaving", taking: Car.self, Function<Car, Int>.self) { car, locations in
+                FormalCall(as: Bool.self, "IsRight", car)
+                    && FormalCall(as: Int.self, "NextLocation", car, locations[car]) == 6
+                    || !FormalCall(as: Bool.self, "IsRight", car)
+                    && FormalCall(as: Int.self, "NextLocation", car, locations[car]) == 3
+            }
 
             let location = Var<Function<Car, Int>>("Location")
             let waiting = Var<TupleExpr<Car>>("WaitingBeforeBridge")
@@ -56,202 +62,239 @@ public struct SingleLaneBridgeModel: Sendable {
                 (.leftTwo, 1)
                 )
             }
-            Variable(waiting, TupleExpr<Car>())
+            Variable(computed: waiting) { TupleExpr<Car>() }
 
             Invariant("Invariants") {
-                let allCars = SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                All(in: allCars, and: allCars) { first, second in
-                    first == second
-                        || !(FormalCall(
+                All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { first in
+                    All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { second in
+                        first == second
+                            || !(FormalCall(
+                                as: Bool.self,
+                                "InBridge",
+                                FormalCall(as: Int.self, "LocationAt", location, first.expr)
+                            ) && FormalCall(as: Int.self, "LocationAt", location, first.expr)
+                                == FormalCall(as: Int.self, "LocationAt", location, second.expr))
+                    }
+                }
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).cardinality < 3
+                All(in: SetExpr<Car>.literal(.rightOne, .rightTwo)) { right in
+                    All(in: SetExpr<Car>.literal(.leftOne, .leftTwo)) { left in
+                        !(FormalCall(
                             as: Bool.self,
                             "InBridge",
-                            FormalCall(as: Int.self, "LocationAt", location, first.expr)
-                        ) && FormalCall(as: Int.self, "LocationAt", location, first.expr)
-                            == FormalCall(as: Int.self, "LocationAt", location, second.expr))
-                }
-                carsOnBridge.cardinality < 3
-                All(
-                    in: SetExpr<Car>.literal(.rightOne, .rightTwo),
-                    and: SetExpr<Car>.literal(.leftOne, .leftTwo)
-                ) { right, left in
-                    !(FormalCall(
-                        as: Bool.self,
-                        "InBridge",
-                        FormalCall(as: Int.self, "LocationAt", location, right.expr)
-                    ) && FormalCall(
-                        as: Bool.self,
-                        "InBridge",
-                        FormalCall(as: Int.self, "LocationAt", location, left.expr)
-                    ))
+                            FormalCall(as: Int.self, "LocationAt", location, right.expr)
+                        ) && FormalCall(
+                            as: Bool.self,
+                            "InBridge",
+                            FormalCall(as: Int.self, "LocationAt", location, left.expr)
+                        ))
+                    }
                 }
             }
 
             Action("MoveOutside_r1") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.rightOne, location[.rightOne])
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.rightOne) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.rightOne) && next == 3
-                !FormalCall(as: Bool.self, "InBridge", next) && next != location[.rightOne]
-                (location.becomes(location.updating(.rightOne, to: next))
+                !FormalCall(
+                    as: Bool.self,
+                    "InBridge",
+                    FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
+                ) && FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne]) != location[.rightOne]
+                (location.becomes(location.updating(
+                    .rightOne,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.rightOne.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.rightOne, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
+                    || (location.becomes(location.updating(
+                        .rightOne,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
             }
             Action("MoveInside_r1") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.rightOne, location[.rightOne])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.rightOne) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.rightOne) && next == 3
-                carsOnBridge.contains(.rightOne)
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.rightOne)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                        FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                        FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                            != FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                     }
-                (location.becomes(location.updating(.rightOne, to: next))
+                (location.becomes(location.updating(
+                    .rightOne,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.rightOne.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.rightOne, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
+                    || (location.becomes(location.updating(
+                        .rightOne,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightOne, location))
             }
             Action("Enter_r1") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.rightOne, location[.rightOne])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let head = Expr<Car>(waiting.head)
-                waiting.count > 0 && head == Car.rightOne
-                carsOnBridge.isEmpty
-                    || (!carsOnBridge.contains(head)
-                        && All(in: carsOnBridge) { car in
+                waiting.count > 0 && Expr<Car>(waiting.head) == Car.rightOne
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.rightOne)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                            FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                            FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                                != FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                         })
-                location.becomes(location.updating(.rightOne, to: next))
+                location.becomes(location.updating(
+                    .rightOne,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
+                ))
                 waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
             }
 
             Action("MoveOutside_r2") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.rightTwo, location[.rightTwo])
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.rightTwo) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.rightTwo) && next == 3
-                !FormalCall(as: Bool.self, "InBridge", next) && next != location[.rightTwo]
-                (location.becomes(location.updating(.rightTwo, to: next))
+                !FormalCall(
+                    as: Bool.self,
+                    "InBridge",
+                    FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
+                ) && FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo]) != location[.rightTwo]
+                (location.becomes(location.updating(
+                    .rightTwo,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.rightTwo.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.rightTwo, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
+                    || (location.becomes(location.updating(
+                        .rightTwo,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
             }
             Action("MoveInside_r2") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.rightTwo, location[.rightTwo])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.rightTwo) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.rightTwo) && next == 3
-                carsOnBridge.contains(.rightTwo)
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.rightTwo)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                        FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                        FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                            != FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                     }
-                (location.becomes(location.updating(.rightTwo, to: next))
+                (location.becomes(location.updating(
+                    .rightTwo,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.rightTwo.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.rightTwo, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
+                    || (location.becomes(location.updating(
+                        .rightTwo,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.rightTwo, location))
             }
             Action("Enter_r2") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.rightTwo, location[.rightTwo])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let head = Expr<Car>(waiting.head)
-                waiting.count > 0 && head == Car.rightTwo
-                carsOnBridge.isEmpty
-                    || (!carsOnBridge.contains(head)
-                        && All(in: carsOnBridge) { car in
+                waiting.count > 0 && Expr<Car>(waiting.head) == Car.rightTwo
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.rightTwo)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                            FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                            FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                                != FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                         })
-                location.becomes(location.updating(.rightTwo, to: next))
+                location.becomes(location.updating(
+                    .rightTwo,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
+                ))
                 waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
             }
 
             Action("MoveOutside_l1") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.leftOne, location[.leftOne])
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.leftOne) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.leftOne) && next == 3
-                !FormalCall(as: Bool.self, "InBridge", next) && next != location[.leftOne]
-                (location.becomes(location.updating(.leftOne, to: next))
+                !FormalCall(as: Bool.self, "InBridge", FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne]))
+                    && FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne]) != location[.leftOne]
+                (location.becomes(location.updating(
+                    .leftOne,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.leftOne.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.leftOne, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
+                    || (location.becomes(location.updating(
+                        .leftOne,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
             }
             Action("MoveInside_l1") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.leftOne, location[.leftOne])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.leftOne) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.leftOne) && next == 3
-                carsOnBridge.contains(.leftOne)
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.leftOne)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                        FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                        FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                            != FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                     }
-                (location.becomes(location.updating(.leftOne, to: next))
+                (location.becomes(location.updating(
+                    .leftOne,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.leftOne.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.leftOne, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
+                    || (location.becomes(location.updating(
+                        .leftOne,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftOne, location))
             }
             Action("Enter_l1") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.leftOne, location[.leftOne])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let head = Expr<Car>(waiting.head)
-                waiting.count > 0 && head == Car.leftOne
-                carsOnBridge.isEmpty
-                    || (!carsOnBridge.contains(head)
-                        && All(in: carsOnBridge) { car in
+                waiting.count > 0 && Expr<Car>(waiting.head) == Car.leftOne
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.leftOne)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                            FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                            FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                                != FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                         })
-                location.becomes(location.updating(.leftOne, to: next))
+                location.becomes(location.updating(
+                    .leftOne,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
+                ))
                 waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
             }
 
             Action("MoveOutside_l2") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.leftTwo, location[.leftTwo])
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.leftTwo) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.leftTwo) && next == 3
-                !FormalCall(as: Bool.self, "InBridge", next) && next != location[.leftTwo]
-                (location.becomes(location.updating(.leftTwo, to: next))
+                !FormalCall(as: Bool.self, "InBridge", FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo]))
+                    && FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo]) != location[.leftTwo]
+                (location.becomes(location.updating(
+                    .leftTwo,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.leftTwo.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.leftTwo, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
+                    || (location.becomes(location.updating(
+                        .leftTwo,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
             }
             Action("MoveInside_l2") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.leftTwo, location[.leftTwo])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let leaving = FormalCall(as: Bool.self, "IsRight", Car.leftTwo) && next == 6
-                    || !FormalCall(as: Bool.self, "IsRight", Car.leftTwo) && next == 3
-                carsOnBridge.contains(.leftTwo)
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.leftTwo)
                     && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                        FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                        FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                            != FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                     }
-                (location.becomes(location.updating(.leftTwo, to: next))
+                (location.becomes(location.updating(
+                    .leftTwo,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
+                ))
                     && waiting.becomes(Expr<TupleExpr<Car>>(waiting.appending(Car.leftTwo.stateExpr)))
-                ).when(leaving)
-                    || (location.becomes(location.updating(.leftTwo, to: next)) && waiting.stays).when(!leaving)
+                ).when(FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
+                    || (location.becomes(location.updating(
+                        .leftTwo,
+                        to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
+                    )) && waiting.stays).when(!FormalCall(as: Bool.self, "IsLeaving", Car.leftTwo, location))
             }
             Action("Enter_l2") {
-                let next: Expr<Int> = FormalCall("NextLocation", Car.leftTwo, location[.leftTwo])
-                let carsOnBridge: Expr<SetExpr<Car>> = FormalCall("CarsOnBridge", location)
-                let head = Expr<Car>(waiting.head)
-                waiting.count > 0 && head == Car.leftTwo
-                carsOnBridge.isEmpty
-                    || (!carsOnBridge.contains(head)
-                        && All(in: carsOnBridge) { car in
+                waiting.count > 0 && Expr<Car>(waiting.head) == Car.leftTwo
+                FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
+                    || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(Expr<Car>(waiting.head))
+                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.leftTwo)
                         }
                         && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
-                            FormalCall(as: Int.self, "LocationAt", location, car.expr) != next
+                            FormalCall(as: Int.self, "LocationAt", location, car.expr)
+                                != FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                         })
-                location.becomes(location.updating(.leftTwo, to: next))
+                location.becomes(location.updating(
+                    .leftTwo,
+                    to: FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
+                ))
                 waiting.becomes(Expr<TupleExpr<Car>>(waiting.tail))
             }
         }
