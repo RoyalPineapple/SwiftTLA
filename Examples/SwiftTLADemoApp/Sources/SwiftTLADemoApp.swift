@@ -471,7 +471,7 @@ private struct GeneratedSurfaceSummary: View {
                 )
                 GeneratedSurfaceItem(
                     title: "Native adapters",
-                    detail: "The bucket and elevator scenes use their generated values. The ring uses Actor."
+                    detail: "Scenes hold generated values. Actors provide serialized access when needed."
                 )
                 GeneratedSurfaceItem(
                     title: "Verification suite",
