@@ -22,6 +22,13 @@ struct UpstreamParityTests {
         #expect(isSuccessful(result))
     }
 
+    @Test("NanoBlockchain direct formal model compiles without an unused chain operator")
+    func nanoBlockchainDirectFormalModelCompiles() throws {
+        let specification = NanoBlockchainModel.spec
+        #expect(specification.recursiveFuncs.isEmpty)
+        _ = try specification.compile()
+    }
+
     @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
     func nQueensMatchesTLC() throws {
         let result = try explore(Example.nQueensFour.spec, maximumStateLimit: 5_000)
