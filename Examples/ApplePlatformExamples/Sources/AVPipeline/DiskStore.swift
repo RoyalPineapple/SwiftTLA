@@ -25,17 +25,31 @@ public struct DiskStoreModel {
             })
         }
     }
-    @TLAActor public actor Machine {}
 }
 
 public actor DiskStore {
-    private let machine = DiskStoreModel.Machine()
+    private var machine: DiskStoreModel
     private let dir: URL
-    public init(name: String) {
+
+    public init(name: String) throws {
+        machine = try DiskStoreModel.makeMachine()
         dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/SwiftTLA/\(name)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }
-    public func write(name: String, data: Data) async throws { _ = try await machine.send(.write); try data.write(to: dir.appendingPathComponent(name)) }
-    public func delete(name: String) async { _ = try? await machine.send(.delete); try? FileManager.default.removeItem(at: dir.appendingPathComponent(name)) }
-    public func clear() async { _ = try? await machine.send(.clear); try? FileManager.default.removeItem(at: dir); try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
+
+    public func write(name: String, data: Data) async throws {
+        _ = try machine.send(.write)
+        try data.write(to: dir.appendingPathComponent(name))
+    }
+
+    public func delete(name: String) async throws {
+        _ = try machine.send(.delete)
+        try FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+    }
+
+    public func clear() async throws {
+        _ = try machine.send(.clear)
+        try FileManager.default.removeItem(at: dir)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
 }

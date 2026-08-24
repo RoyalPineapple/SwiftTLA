@@ -52,7 +52,6 @@ public struct PeripheralModel {
         }
     }
 
-    @TLAActor public actor Machine {}
 }
 
 private final class DeviceDelegate: NSObject, CBPeripheralDelegate {
@@ -63,35 +62,46 @@ private final class DeviceDelegate: NSObject, CBPeripheralDelegate {
 }
 
 /// UUID identity and CoreBluetooth callbacks live here. The formal lifecycle
-/// lives exclusively in the generated `PeripheralModel.Machine`.
+/// lives exclusively in the generated `PeripheralModel` value.
 public actor Device: Identifiable {
     public nonisolated let id: UUID
     private let peripheral: CBPeripheral?
     private let delegate = DeviceDelegate()
-    private let machine = PeripheralModel.Machine()
+    private var machine: PeripheralModel
     private var servicesContinuation: CheckedContinuation<[CBService], Error>?
+    private var diagnostic: String?
 
-    init(peripheral: CBPeripheral) {
+    init(peripheral: CBPeripheral) throws {
         id = peripheral.identifier
         self.peripheral = peripheral
+        machine = try PeripheralModel.makeMachine()
         peripheral.delegate = delegate
         delegate.owner = self
     }
 
     public var name: String? { peripheral?.name }
 
-    func connected() async {
-        _ = try? await machine.send(.connected)
+    func connected() async throws {
+        _ = try machine.send(.connected)
     }
 
     public func discoverServices(_ uuids: [CBUUID]? = nil) async throws -> [CBService] {
-        guard let peripheral, await machine.state.phase == .connected else { throw BleError.notReady }
-        _ = try await machine.send(.beginDiscovery)
+        if let diagnostic { throw BleError.transitionFailed(diagnostic) }
+        guard let peripheral, machine.state.phase == .connected else { throw BleError.notReady }
+        _ = try machine.send(.beginDiscovery)
         return try await withCheckedThrowingContinuation { servicesContinuation = $0; peripheral.discoverServices(uuids) }
     }
 
     func finishedDiscoveringServices(_ error: (any Error)?) async {
-        _ = try? await machine.send(.finishDiscovery)
+        do {
+            _ = try machine.send(.finishDiscovery)
+            diagnostic = nil
+        } catch {
+            diagnostic = String(describing: error)
+            servicesContinuation?.resume(throwing: error)
+            servicesContinuation = nil
+            return
+        }
         if let error { servicesContinuation?.resume(throwing: error) }
         else { servicesContinuation?.resume(returning: peripheral?.services ?? []) }
         servicesContinuation = nil

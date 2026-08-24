@@ -25,9 +25,10 @@ struct BluetoothCLI {
         }
 
         let duration = scanDuration(arguments: arguments)
-        let central = Bluetooth()
+        let central: Bluetooth
 
         do {
+            central = try Bluetooth()
             try await central.ready()
         } catch {
             writeError("Bluetooth did not become ready: \(error)")
@@ -55,7 +56,11 @@ struct BluetoothCLI {
             // Task cancellation is equivalent to stopping the scan.
         }
 
-        await central.stopScanning()
+        do {
+            try await central.stopScanning()
+        } catch {
+            writeError("Bluetooth scan could not stop: \(error)")
+        }
         printer.cancel()
     }
 

@@ -30,7 +30,11 @@ struct CameraApp: App {
                                 .padding(12)
                             }
                     } else {
-                        CameraPreviewView(session: model.capture.session)
+                        if let capture = model.capture {
+                            CameraPreviewView(session: capture.session)
+                        } else {
+                            Color.black
+                        }
                     }
 
                     if let preview = model.selectedPhoto {
@@ -330,13 +334,13 @@ struct CameraWorkflow {
 @Observable
 final class CameraModel {
     private var machine: CameraWorkflow?
-    let capture = Media.Capture()
+    private(set) var capture: Media.Capture?
     var roll: [RollItem] = []
     var flashActive = false
     var selectedPhoto: Data?
     var recordedURL: URL?
     var currentPlayer: AVPlayer?
-    private let disk = DiskStore(name: "camera")
+    private var disk: DiskStore?
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
     var diagnostic: String?
@@ -346,6 +350,8 @@ final class CameraModel {
     init() {
         do {
             machine = try CameraWorkflow.makeMachine()
+            capture = try Media.Capture()
+            disk = try DiskStore(name: "camera")
         } catch {
             diagnostic = String(describing: error)
         }
@@ -357,7 +363,7 @@ final class CameraModel {
             return false
         }
         do {
-            try machine.send(action)
+            _ = try machine.send(action)
             self.machine = machine
             diagnostic = nil
             return true
@@ -368,6 +374,10 @@ final class CameraModel {
     }
 
     func takeSnapshot() async {
+        guard let capture, let disk else {
+            diagnostic = "The camera model did not initialize."
+            return
+        }
         do {
             let data = try await capture.capturePhoto()
             roll.append(.photo(data))
@@ -421,6 +431,7 @@ final class CameraModel {
     }
     func ready() async {
         guard send(.ready),
+              let capture,
               let device = AVCaptureDevice.default(for: .video) else { return }
         do {
             try await capture.configure(device: device)

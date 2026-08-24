@@ -101,7 +101,6 @@ public struct BluetoothModel {
         }
     }
 
-    @TLAActor public actor Machine {}
 }
 
 private final class BleDelegate: NSObject, CBCentralManagerDelegate {
@@ -110,43 +109,54 @@ private final class BleDelegate: NSObject, CBCentralManagerDelegate {
         Task { await owner?.updateState(central.state) }
     }
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
-        Task { await owner?.didDiscover(Device(peripheral: peripheral)) }
+        Task {
+            do {
+                await owner?.didDiscover(try Device(peripheral: peripheral))
+            } catch {
+                await owner?.record(error)
+            }
+        }
     }
 }
 
 /// A thin CoreBluetooth shim. All lifecycle decisions are made by the
-/// generated `BluetoothModel.Machine`; this actor only owns framework objects,
+/// generated `BluetoothModel`; this actor only owns framework objects,
 /// continuations, and UUID-to-peripheral identity.
 public actor Bluetooth {
-    private let machine = BluetoothModel.Machine()
-    private let delegate = BleDelegate()
-    private var central: CBCentralManager!
+    private var machine: BluetoothModel
+    private let delegate: BleDelegate
+    private let central: CBCentralManager
     private var readyContinuation: CheckedContinuation<Void, Error>?
     private var scanContinuation: AsyncStream<Device>.Continuation?
+    public private(set) var diagnostic: String?
 
-    public init() {
-        central = CBCentralManager()
-        central.delegate = delegate
+    public init() throws {
+        machine = try BluetoothModel.makeMachine()
+        let delegate = BleDelegate()
+        self.delegate = delegate
+        central = CBCentralManager(delegate: delegate, queue: nil)
         delegate.owner = self
     }
 
     public func ready() async throws {
-        if await machine.state.phase == .poweredOn { return }
+        if let diagnostic { throw BleError.transitionFailed(diagnostic) }
+        if machine.state.phase == .poweredOn { return }
         try await withCheckedThrowingContinuation { readyContinuation = $0 }
     }
 
     public func scan() async throws -> AsyncStream<Device> {
-        guard await machine.state.phase == .poweredOn else { throw BleError.notReady }
-        _ = try await machine.send(.startScan)
+        if let diagnostic { throw BleError.transitionFailed(diagnostic) }
+        guard machine.state.phase == .poweredOn else { throw BleError.notReady }
+        _ = try machine.send(.startScan)
         let stream = AsyncStream<Device>.makeStream()
         scanContinuation = stream.continuation
         central.scanForPeripherals(withServices: nil)
         return stream.stream
     }
 
-    public func stopScanning() async {
-        if await machine.state.phase == .scanning {
-            _ = try? await machine.send(.stopScan)
+    public func stopScanning() async throws {
+        if machine.state.phase == .scanning {
+            _ = try machine.send(.stopScan)
         }
         central.stopScan()
         scanContinuation?.finish()
@@ -154,7 +164,7 @@ public actor Bluetooth {
     }
 
     func updateState(_ state: CBManagerState) async {
-        let action: BluetoothModel.Machine.Action?
+        let action: BluetoothModel.Action?
         switch state {
         case .poweredOn: action = .poweredOn
         case .poweredOff: action = .poweredOff
@@ -163,12 +173,28 @@ public actor Bluetooth {
         case .unauthorized: action = .unauthorized
         default: action = nil
         }
-        if let action { _ = try? await machine.send(action) }
+        if let action {
+            do {
+                _ = try machine.send(action)
+                diagnostic = nil
+            } catch {
+                record(error)
+                return
+            }
+        }
         if state == .poweredOn, let readyContinuation { readyContinuation.resume(); self.readyContinuation = nil }
         if state != .poweredOn { scanContinuation?.finish(); scanContinuation = nil }
     }
 
     func didDiscover(_ device: Device) { scanContinuation?.yield(device) }
+
+    func record(_ error: Error) {
+        diagnostic = String(describing: error)
+        readyContinuation?.resume(throwing: error)
+        readyContinuation = nil
+        scanContinuation?.finish()
+        scanContinuation = nil
+    }
 }
 
-public enum BleError: Error { case notReady }
+public enum BleError: Error { case notReady, transitionFailed(String) }

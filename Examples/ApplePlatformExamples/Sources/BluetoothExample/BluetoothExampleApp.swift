@@ -26,6 +26,12 @@ struct BLEScannerApp: App {
                     .padding(.vertical, 2)
                 }
 
+                if let diagnostic = model.diagnostic {
+                    Text(diagnostic)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
+                }
+
                 HStack {
                     Button(model.isScanning ? "Stop" : "Scan") {
                         Task { await model.toggleScan() }
@@ -57,16 +63,17 @@ struct DiscoveredDevice: Identifiable {
 final class BLEModel: ObservableObject {
     @Published var devices: [DiscoveredDevice] = []
     @Published var isScanning = false
-    private let ble = Bluetooth()
+    @Published var diagnostic: String?
+    private var ble: Bluetooth?
     private var scanTask: Task<Void, Never>?
     private var seen = Set<UUID>()
 
     func ready() async {
         do {
-            try await ble.ready()
-            print("BLE ready")
+            try await bluetooth().ready()
+            diagnostic = nil
         } catch {
-            print("BLE ready error: \(error)")
+            diagnostic = "Bluetooth setup failed: \(error)"
         }
     }
 
@@ -81,10 +88,11 @@ final class BLEModel: ObservableObject {
     private func startScanning() async {
         let stream: AsyncStream<Device>
         do {
-            stream = try await ble.scan()
+            stream = try await bluetooth().scan()
             isScanning = true
+            diagnostic = nil
         } catch {
-            print("BLE scan error: \(error)")
+            diagnostic = "Bluetooth scan failed: \(error)"
             return
         }
         scanTask = Task { [weak self] in
@@ -100,8 +108,23 @@ final class BLEModel: ObservableObject {
     }
 
     private func stopScanning() async {
-        await ble.stopScanning()
+        do {
+            if let ble {
+                try await ble.stopScanning()
+            }
+            diagnostic = nil
+        } catch {
+            diagnostic = "Bluetooth scan could not stop: \(error)"
+            return
+        }
         scanTask?.cancel()
         isScanning = false
+    }
+
+    private func bluetooth() throws -> Bluetooth {
+        if let ble { return ble }
+        let ble = try Bluetooth()
+        self.ble = ble
+        return ble
     }
 }

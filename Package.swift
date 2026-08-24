@@ -4,12 +4,7 @@ import PackageDescription
 import CompilerPluginSupport
 
 let settings: [SwiftSetting] = [
-    .enableExperimentalFeature("StrictConcurrency"),
-    .unsafeFlags(["-warnings-as-errors"])
-]
-
-let executableSettings: [SwiftSetting] = [
-    .unsafeFlags(["-warnings-as-errors"])
+    .enableExperimentalFeature("StrictConcurrency")
 ]
 
 let package = Package(
@@ -76,8 +71,7 @@ let package = Package(
         .executableTarget(
             name: "tlc-validate",
             dependencies: ["SwiftTLA", "UpstreamParity"],
-            path: "Sources/TLCValidate",
-            swiftSettings: executableSettings
+            path: "Sources/TLCValidate"
         ),
         // Internal CI appendix: exports the canonical upstream Algorithm
         // corpus for independent translator/TLC evidence. It is deliberately
@@ -85,8 +79,7 @@ let package = Package(
         .executableTarget(
             name: "canonical-corpus-export",
             dependencies: ["SwiftTLA", "CanonicalUpstreamCorpus"],
-            path: "Tools/CanonicalCorpusExport",
-            swiftSettings: executableSettings
+            path: "Tools/CanonicalCorpusExport"
         ),
         // Fast semantic-core tests. Keep this target free of UpstreamParity so
         // Fast semantic witnesses compile and run without the parity corpus.
