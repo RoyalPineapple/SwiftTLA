@@ -93,7 +93,9 @@ public struct TwoPhaseModel: Sendable {
             Extends(.integers)
             Algorithm("TwoPhase", scoped: { scope in
                 let resourceManagerState = scope.sharedVar("resourceManagerState", initial: Function<ResourceManager, ResourceManagerState>.literal(
-                    (.one, .working), (.two, .working), (.three, .working)
+                    (ResourceManager.one, ResourceManagerState.working),
+                    (ResourceManager.two, ResourceManagerState.working),
+                    (ResourceManager.three, ResourceManagerState.working)
                 ))
                 let transactionManagerState = scope.sharedVar("transactionManagerState", initial: TransactionManagerState.initial)
                 let prepared = scope.sharedVar("prepared", initial: SetExpr<ResourceManager>())
@@ -102,29 +104,29 @@ public struct TwoPhaseModel: Sendable {
                 Each(ResourceManager.all) { resourceManager in
                     Do(ResourceManagerStep.resourceManagerOperate) {
                         Either {
-                            When(resourceManagerState[resourceManager] == .working)
-                            Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .prepared))
+                            When(resourceManagerState[resourceManager] == ResourceManagerState.working)
+                            Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: ResourceManagerState.prepared))
                             Assign(messages, to: messages.inserting(Record<MessageSchema>.literal(
-                                .init(MessageSchema.kind, .prepared),
+                                .init(MessageSchema.kind, MessageKind.prepared),
                                 .init(MessageSchema.resourceManager, resourceManager)
                             )))
                         } or: {
                             Either {
-                                When(resourceManagerState[resourceManager] == .working)
-                                Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .aborted))
+                                When(resourceManagerState[resourceManager] == ResourceManagerState.working)
+                                Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: ResourceManagerState.aborted))
                             } or: {
                                 Either {
                                     When(messages.contains(Record<MessageSchema>.literal(
-                                        .init(MessageSchema.kind, .commit),
-                                        .init(MessageSchema.resourceManager, .one)
+                                        .init(MessageSchema.kind, MessageKind.commit),
+                                        .init(MessageSchema.resourceManager, ResourceManager.one)
                                     )))
-                                    Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .committed))
+                                    Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: ResourceManagerState.committed))
                                 } or: {
                                     When(messages.contains(Record<MessageSchema>.literal(
-                                        .init(MessageSchema.kind, .abort),
-                                        .init(MessageSchema.resourceManager, .one)
+                                        .init(MessageSchema.kind, MessageKind.abort),
+                                        .init(MessageSchema.resourceManager, ResourceManager.one)
                                     )))
-                                    Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .aborted))
+                                    Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: ResourceManagerState.aborted))
                                 }
                             }
                         }
@@ -138,7 +140,7 @@ public struct TwoPhaseModel: Sendable {
                             With(ResourceManager.all) { resourceManager in
                                 When(transactionManagerState == TransactionManagerState.initial)
                                 When(messages.contains(Record<MessageSchema>.literal(
-                                    .init(MessageSchema.kind, .prepared),
+                                    .init(MessageSchema.kind, MessageKind.prepared),
                                     .init(MessageSchema.resourceManager, resourceManager)
                                 )))
                                 Assign(prepared, to: prepared.inserting(resourceManager))
@@ -149,15 +151,15 @@ public struct TwoPhaseModel: Sendable {
                                 When(prepared.cardinality == 3)
                                 Assign(transactionManagerState, to: TransactionManagerState.committed)
                                 Assign(messages, to: messages.inserting(Record<MessageSchema>.literal(
-                                    .init(MessageSchema.kind, .commit),
-                                    .init(MessageSchema.resourceManager, .one)
+                                    .init(MessageSchema.kind, MessageKind.commit),
+                                    .init(MessageSchema.resourceManager, ResourceManager.one)
                                 )))
                             } or: {
                                 When(transactionManagerState == TransactionManagerState.initial)
                                 Assign(transactionManagerState, to: TransactionManagerState.aborted)
                                 Assign(messages, to: messages.inserting(Record<MessageSchema>.literal(
-                                    .init(MessageSchema.kind, .abort),
-                                    .init(MessageSchema.resourceManager, .one)
+                                    .init(MessageSchema.kind, MessageKind.abort),
+                                    .init(MessageSchema.resourceManager, ResourceManager.one)
                                 )))
                             }
                         }
