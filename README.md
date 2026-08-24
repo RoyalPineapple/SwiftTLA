@@ -104,8 +104,8 @@ Button("Tick") {
 .disabled((try? clock.isEnabled(.tick)) == false)
 ```
 
-Use the generated actor or observable adapter when the application needs
-shared asynchronous state. Each adapter wraps the same generated machine.
+Use the generated actor when the application needs shared asynchronous state.
+It owns the same generated machine value behind actor isolation.
 
 ## Add bounded assurance
 
@@ -121,7 +121,7 @@ order: concurrent tasks, retries, cancellation, sync, background work,
 permissions, protocols, and distributed systems.
 
 Use generated `State` and action cases for value-based state. For shared
-running state, use the generated live, actor, or observable surface. See
+running state, use the generated `Live` or nested actor surface. See
 [Generated Machines](Documentation/GeneratedMachines.md) and
 [Live Machines](Documentation/LiveMachines.md).
 
