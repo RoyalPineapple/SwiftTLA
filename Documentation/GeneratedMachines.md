@@ -142,10 +142,10 @@ only with generated state and actions.
 
 ## Advanced execution
 
-`Live`, nested `@TLAActor`, and nested `@TLAObservable` share a machine when
-an application needs asynchronous coordination. They use the enclosing
-model's generated `State` and `Action` values and send actions through their
-own isolation boundary. They are not required for ordinary SwiftUI use.
+`Live` and nested `@TLAActor` share a machine when an application needs
+asynchronous coordination. They use the enclosing model's generated `State`
+and `Action` values and send actions through their own isolation boundary.
+They are not required for ordinary SwiftUI use.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
@@ -207,7 +207,7 @@ come from that one compilation.
 | Generated `state` | Reads the complete current generated state. |
 | Generated `send(_:)` | Applies one typed action or throws. |
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |
-| `Live`, `@TLAActor`, `@TLAObservable` | Advanced shared execution surfaces. |
+| `Live`, `@TLAActor` | Advanced shared execution surfaces. |
 
 ## Claim sources
 

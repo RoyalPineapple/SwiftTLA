@@ -219,10 +219,6 @@ extension MacroExpander {
                     await _runtime.end()
                 }
 
-                fileprivate func _observe() async -> _GeneratedMachineStorage.LiveAttachment<\(actionType)> {
-                    await _runtime.observe()
-                }
-
                 public func current() async throws -> CurrentResult {
                     switch await _runtime.current() {
                     case .snapshot(let snapshot):

@@ -251,9 +251,7 @@ public struct PublicWorkflowConformanceRunner: Sendable {
       ("TLAModel-valid", "TLAModel", "Valid", "PublicWorkflowTLAModelValid", true),
       ("TLAModel-invalid", "TLAModel", "Invalid", "PublicWorkflowTLAModelInvalid", false),
       ("TLAActor-valid", "TLActor", "Valid", "PublicWorkflowTLAActorValid", true),
-      ("TLAActor-invalid", "TLActor", "Invalid", "PublicWorkflowTLAActorInvalid", false),
-      ("TLAObservable-valid", "TLAObservable", "Valid", "PublicWorkflowTLAObservableValid", true),
-      ("TLAObservable-invalid", "TLAObservable", "Invalid", "PublicWorkflowTLAObservableInvalid", false)
+      ("TLAActor-invalid", "TLActor", "Invalid", "PublicWorkflowTLAActorInvalid", false)
     ]
     var unavailable = false
     var differed = false

@@ -24,15 +24,6 @@ public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelM
 @attached(extension, conformances: TLAModelType, names: arbitrary)
 public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAActorMacro")
 
-/// Requires a nested type and generates a main-actor observable adapter for
-/// its enclosing `@TLAModel`.
-///
-/// A nested adapter calls its typed `onTransition` callback after a successful
-/// transition commits.
-@attached(member, names: arbitrary)
-@attached(extension, conformances: Sendable, names: arbitrary)
-public macro TLAObservable() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAObservableMacro")
-
 /// Declares a formal specification body for `@TLAModel`.
 ///
 /// `#spec` is the compile-time boundary for the PlusCal-shaped authoring DSL.

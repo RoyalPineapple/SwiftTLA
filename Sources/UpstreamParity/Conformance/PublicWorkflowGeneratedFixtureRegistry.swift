@@ -85,9 +85,6 @@ struct P4GeneratedCounterFixture: Sendable {
     }
   }
 
-  @TLAObservable
-  final class Observable {}
-
   @TLAActor
   actor Actor {}
 }
@@ -102,9 +99,6 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
       Invariant("withinBounds") { value >= 0 && value <= 1 }
     }
   }
-
-  @TLAObservable
-  final class Observable {}
 
   @TLAActor
   actor Actor {}

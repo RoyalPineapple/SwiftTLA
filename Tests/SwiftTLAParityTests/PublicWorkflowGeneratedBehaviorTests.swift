@@ -6,30 +6,21 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct PublicWorkflowGeneratedBehaviorTests {
-  @Test("public workflow fixture executes through nested generated adapters")
-  @MainActor
-    func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
+  @Test("public workflow fixture executes through generated state and actor")
+    func generatedStateAndActorMatchTheCanonicalCounter() async throws {
     var model = try P4GeneratedCounter.makeMachine()
-    let observable = try await P4GeneratedCounter.Observable(live: try P4GeneratedCounter.makeLive())
     let actor = P4GeneratedCounter.Actor(live: try P4GeneratedCounter.makeLive())
 
-    let modelEvidence = try model.apply(.advance)
-    guard case .committed(let observableEvidence) = try await observable.apply(.advance) else {
-      Issue.record("Expected observable action to commit")
-      return
-    }
-    guard case .committed(let actorEvidence) = try await actor.apply(.advance) else {
+    let modelEvidence = try model.send(.advance)
+    guard case .committed(let actorEvidence) = try await actor.send(.advance) else {
       Issue.record("Expected actor action to commit")
       return
     }
 
     #expect(modelEvidence.action == .advance)
-    #expect(observableEvidence.action == .advance)
     #expect(actorEvidence.action == .advance)
     #expect(modelEvidence.before.value == 0)
     #expect(modelEvidence.after.value == 1)
-    #expect(observableEvidence.before == modelEvidence.before)
-    #expect(observableEvidence.after == modelEvidence.after)
     #expect(actorEvidence.before == modelEvidence.before)
     #expect(actorEvidence.after == modelEvidence.after)
   }

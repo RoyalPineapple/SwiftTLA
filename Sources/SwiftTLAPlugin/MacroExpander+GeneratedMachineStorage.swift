@@ -50,7 +50,7 @@ extension MacroExpander {
                 let bindings = action.bindings.filter(\.isPublic)
                 actionCase = bindings.isEmpty
                     ? ".\(action.swiftIdentifier)"
-                    : ".\(action.swiftIdentifier)(\(bindings.map { "\($0.formalName): let \($0.formalName)" }.joined(separator: ", ")))"
+                    : ".\(action.swiftIdentifier)(\(bindings.map { "\($0.formalName): _" }.joined(separator: ", ")))"
                 arguments = "Self._actionArguments(for: action)"
                 selection = ""
             }

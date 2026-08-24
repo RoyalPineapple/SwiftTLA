@@ -22,8 +22,8 @@ struct OuterModel {
       }
     }
 
-    @TLAObservable
-    final class AmbiguousAdapter {}
+    @TLAActor
+    actor AmbiguousAdapter {}
   }
 }
 

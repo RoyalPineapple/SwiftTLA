@@ -81,7 +81,7 @@ enum MacroExpander {
             variables: plan.variables,
             symmetricCollections: plan.symmetricCollections
         ))
-        if model.hasNestedLiveAdapter {
+        if model.hasNestedActor {
             decls.append(contentsOf: generateLiveMachineMembers(model: model))
         }
         decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))

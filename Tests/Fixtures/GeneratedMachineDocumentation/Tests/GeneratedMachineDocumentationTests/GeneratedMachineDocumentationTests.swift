@@ -18,18 +18,13 @@ struct GeneratedMachineDocumentationTests {
         #expect(machine.state == beforeFailure)
     }
 
-    @Test("nested adapters bind the supplied live runtime")
-    @MainActor
-    func nestedAdaptersExposeDocumentedBehavior() async throws {
+    @Test("nested actor binds the supplied live runtime")
+    func nestedActorExposesDocumentedBehavior() async throws {
         let actorLive = try CounterHost.makeLive()
         let actor = CounterHost.Actor(live: actorLive)
-        let observableLive = try CounterScreenModel.makeLive()
-        let observable = try await CounterScreenModel.Observable(live: observableLive)
 
         let actorIdentity = await actor.identity
         #expect(actorIdentity == actorLive.identity)
-        #expect(observable.identity == observableLive.identity)
-        #expect(actorIdentity != observable.identity)
 
         let result = try await actor.send(.advance)
         guard case .committed(let commit) = result else {
@@ -37,6 +32,5 @@ struct GeneratedMachineDocumentationTests {
             return
         }
         #expect(commit.after.position.value == 1)
-        #expect(observable.status == .attaching || observable.status == .current(.init(value: 0)))
     }
 }

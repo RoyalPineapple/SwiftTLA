@@ -252,6 +252,4 @@ public struct ElevatorBank {
         }
     }
 
-    @TLAObservable
-    public final class Observable {}
 }

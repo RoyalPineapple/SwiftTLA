@@ -39,27 +39,23 @@ struct NestedComposableMacroConformanceTests {
         }
     }
 
-    @Test("Nested model and adapters expose matching typed observations")
-    @MainActor
-    func nestedSurfacesShareCanonicalExecution() async throws {
+    @Test("Nested model and actor expose matching typed execution")
+    func nestedModelAndActorShareCanonicalExecution() async throws {
         var model = try NestedComposedCounter.makeMachine()
         let live = try NestedComposedCounter.makeLive()
-        let observable = try await NestedComposedCounter.Observable(live: live)
         let actor = NestedComposedCounter.Actor(live: live)
 
         let modelBefore = model.state
         _ = try model.send(.advance)
         let modelAfter = model.state
-        guard case .committed = try await observable.send(.advance),
-              case .committed = try await actor.send(.advance)
+        guard case .committed = try await actor.send(.advance)
         else {
-            Issue.record("Expected nested adapter actions to commit")
+            Issue.record("Expected nested actor action to commit")
             return
         }
         #expect(modelBefore.count == 0)
         #expect(modelAfter.count == 1)
         #expect(try model.enabledActions() == [.advance])
-        #expect(try #require(observable.state).count == 1)
         guard case .snapshot(let actorSnapshot) = try await actor.current() else {
             Issue.record("Expected actor snapshot")
             return
@@ -67,14 +63,12 @@ struct NestedComposableMacroConformanceTests {
         #expect(actorSnapshot.state.count == 1)
     }
 
-    @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
-    @MainActor
+    @Test("Three-parameter invocation identity survives canonical and nested actor execution")
     func threeParameterIdentityRemainsDistinctAcrossNestedSurfaces() async throws {
         let first = EndToEndThreeParameterActionMachine.Action.board(person: 1, elevator: 10, direction: 100)
         let selected = EndToEndThreeParameterActionMachine.Action.board(person: 2, elevator: 20, direction: 200)
         let available = try EndToEndThreeParameterActionMachine.makeMachine().enabledActions()
         let live = try ThreeParameterActionMachine.makeLive()
-        let observable = try await ThreeParameterActionMachine.Observable(live: live)
         let actor = ThreeParameterActionMachine.Actor(live: live)
 
         #expect(first != selected)
@@ -84,15 +78,12 @@ struct NestedComposableMacroConformanceTests {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let result = try machine.send(.board(person: 2, elevator: 20, direction: 200))
         #expect(result.after.floor == 222)
-        guard case .committed(let observed) = try await observable.send(
-            .board(person: 2, elevator: 20, direction: 200)
-        ), case .committed(let acted) = try await actor.send(
+        guard case .committed(let acted) = try await actor.send(
             .board(person: 2, elevator: 20, direction: 200)
         ) else {
             Issue.record("Expected nested adapter actions to commit")
             return
         }
-        #expect(observed.action == .board(person: 2, elevator: 20, direction: 200))
         #expect(acted.action == .board(person: 2, elevator: 20, direction: 200))
     }
 
@@ -102,7 +93,7 @@ struct NestedComposableMacroConformanceTests {
         let result = try runSwift(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
-        #expect(result.output.contains("@TLAActor and @TLAObservable require an enclosing @TLAModel"))
+        #expect(result.output.contains("@TLAActor requires an enclosing @TLAModel"))
         #expect(result.output.contains("Adapter must be enclosed by exactly one @TLAModel"))
         #expect(result.output.contains("Nested adapters require an enclosing @TLAModel struct"))
     }
@@ -112,11 +103,9 @@ struct NestedComposableMacroConformanceTests {
     func generatedMacroSurfacesAreSendable() throws {
         requireSendable(NestedComposedCounter.self)
         requireSendable(NestedComposedCounter.Actor.self)
-        requireSendable(NestedComposedCounter.Observable.self)
         requireSendable(NestedComposedCounter.Action.self)
         requireSendable(NestedComposedCounter.Transition.self)
         requireSendable(GeneratedSymmetricRuntime.self)
-        requireSendable(TwoCarElevatorMachine.Observable.self)
 
         for ownedDirectory in ["Sources", "Tests"] {
             let directory = packageRoot().appendingPathComponent(ownedDirectory)
@@ -160,14 +149,6 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
     }
 
-    @Test("Model-owned observable executes typed transitions under strict concurrency")
-    func modelOwnedObservableExecutesAsSendable() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/StandaloneObservableSendable")
-        let result = try runSwift(["run", "--package-path", fixture.path])
-
-        #expect(result.status == 0)
-    }
-
     @Test("External clients compile against generated typed application surfaces")
     func generatedTypedSurfaceCompilesExternally() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/GeneratedTypedSurface")
@@ -195,31 +176,12 @@ struct NestedComposableMacroConformanceTests {
         )
     }
 
-    @Test("External nested observable cannot expose raw generated state")
-    func nestedObservableRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
-        try assertExternalSurfaceIsForbidden(
-            fixture: "InvalidNestedObservableRawSurface",
-            typeName: "NestedObservableSurface.Observable",
-            stateDiagnostic: "has no member 'tlaSnapshot'"
-        )
-    }
-
     @Test("Standalone actor declaration is rejected")
     func standaloneActorDeclarationDoesNotCompileExternally() throws {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidStandaloneActorRawSurface",
             typeName: "StandaloneActorSurface",
-            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel",
-            requiresGeneratedSurfaceRejection: false
-        )
-    }
-
-    @Test("Standalone observable declaration is rejected")
-    func standaloneObservableDeclarationDoesNotCompileExternally() throws {
-        try assertExternalSurfaceIsForbidden(
-            fixture: "InvalidStandaloneObservableRawSurface",
-            typeName: "StandaloneObservableSurface",
-            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel",
+            stateDiagnostic: "@TLAActor requires an enclosing @TLAModel",
             requiresGeneratedSurfaceRejection: false
         )
     }

@@ -45,6 +45,6 @@ Accepted requests complete as `committed` or `failed`. A live action reports `am
 
 Positions begin at zero and have meaning only within one runtime identity. `Live.current()` returns an atomic typed snapshot with the state and enabled actions for that position.
 
-## Generated adapters
+## Generated actor
 
-Nested `@TLAActor` and `@TLAObservable` types accept the enclosing model's typed `Live` value with `init(live:)`. The actor forwards control to that runtime. The main-actor observable adapter reduces subscription events into its typed cache. It records `recovering` after loss and `terminated` after runtime termination.
+Nested `@TLAActor` types accept the enclosing model's typed `Live` value with `init(live:)`. The actor forwards control to that runtime.
