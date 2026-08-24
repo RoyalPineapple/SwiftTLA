@@ -10,19 +10,18 @@ import SwiftTLAMacros
 /// without changing its formal representation.
 @TLAModel
 public struct DijkstraMutexModel: Sendable {
-    public enum Process: String, CaseIterable, FiniteDomainKey {
+    public enum Process: String, CaseIterable, FiniteTLAValueDomain {
         case one = "p1"
         case two = "p2"
         case three = "p3"
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.dijkstra-mutex.process")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Label: String, PlusCalLabel, CaseIterable {
+    private enum Label: String, CaseIterable {
         case li0 = "Li0"
         case li1 = "Li1"
         case li2 = "Li2"

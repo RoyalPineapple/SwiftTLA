@@ -2,15 +2,14 @@ import SwiftTLA
 import SwiftTLAMacros
 
 public struct SingleLaneBridgeModel: Sendable {
-    public enum Car: String, CaseIterable, FiniteDomainKey {
+    public enum Car: String, CaseIterable, FiniteTLAValueDomain {
         case rightOne = "r1"
         case rightTwo = "r2"
         case leftOne = "l1"
         case leftTwo = "l2"
 
         public static var defaultValue: Self { .rightOne }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.single-lane-bridge.car")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }

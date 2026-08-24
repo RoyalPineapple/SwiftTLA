@@ -3,16 +3,15 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct HourClock2Model: Sendable {
-    public enum Step: String, PlusCalLabel, CaseIterable {
+    public enum Step: String, CaseIterable {
         case HCnxt2
     }
 
-    public enum ClockProcess: String, CaseIterable, FiniteDomainKey {
+    public enum ClockProcess: String, CaseIterable, FiniteTLAValueDomain {
         case clock
 
         public static var defaultValue: Self { .clock }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.hour-clock2.process")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }

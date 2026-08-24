@@ -5,20 +5,17 @@ import SwiftTLAMacros
 /// collection. `l2` explicitly returns to `l0`, mirroring the source loop.
 @TLAModel
 public struct LockModel: Sendable {
-    public enum Process: Int, CaseIterable, FiniteDomainKey {
+    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.locks-auxiliary-vars.lock.process"
-        )
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case l0
         case l1
         case cs

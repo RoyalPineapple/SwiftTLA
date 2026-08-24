@@ -15,12 +15,12 @@ struct ParsedEnumInfo {
     /// The values that belong to the formal domain. This is intentionally
     /// separate from all Swift cases: a useful formal type can include a
     /// sentinel such as `.none` without making it a process or map key.
-    let formalDomain: [TLAValue]
+    let finiteValues: [TLAValue]
 
-    init(typeName: String, cases: [(String, TLAValue)], formalDomain: [TLAValue]? = nil) {
+    init(typeName: String, cases: [(String, TLAValue)], finiteValues: [TLAValue]? = nil) {
         self.typeName = typeName
         self.cases = cases
-        self.formalDomain = formalDomain ?? cases.map(\.1)
+        self.finiteValues = finiteValues ?? cases.map(\.1)
     }
     var domain: Set<TLAValue> { Set(cases.map(\.value)) }
 }
@@ -163,7 +163,6 @@ enum TLASpecVerifier {
 
             guard inheritedNames.contains("TLAValueType")
                 || inheritedNames.contains("FiniteTLAValueDomain")
-                || inheritedNames.contains("FiniteDomainKey")
             else { continue }
 
             let intBacked = inheritedNames.contains("Int")
@@ -195,16 +194,13 @@ enum TLASpecVerifier {
             result.append(ParsedEnumInfo(
                 typeName: enumDecl.name.text,
                 cases: cases,
-                formalDomain: formalDomain(in: enumDecl, cases: cases)
+                finiteValues: finiteValues(in: enumDecl, cases: cases)
             ))
         }
         return result
     }
 
-    /// Reads the finite domain declaration from source so macro parsing has
-    /// the same process/key members as the runtime builder. The Swift enum
-    /// may have additional values for optional fields or sentinels.
-    private static func formalDomain(
+    private static func finiteValues(
         in enumDecl: EnumDeclSyntax,
         cases: [(name: String, value: TLAValue)]
     ) -> [TLAValue] {
@@ -213,7 +209,7 @@ enum TLASpecVerifier {
                   declaration.modifiers.contains(where: { $0.name.text == "static" })
             else { return nil }
             return declaration.bindings.first { binding in
-                binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "formalDomain"
+                binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "finiteValues"
             }
         }).first,
         let initializer = binding.initializer?.value
@@ -234,7 +230,6 @@ enum TLASpecVerifier {
         }
         return values.isEmpty ? cases.map(\.value) : values
     }
-
 }
 
 struct SimpleError: Error, CustomStringConvertible {
@@ -244,7 +239,38 @@ struct SimpleError: Error, CustomStringConvertible {
 
 // MARK: - Macros
 
-public struct ModelMacro: MemberMacro, ExtensionMacro {
+public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingAttributesFor member: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [AttributeSyntax] {
+        guard let enumDeclaration = member.as(EnumDeclSyntax.self),
+              let inheritance = enumDeclaration.inheritanceClause
+        else { return [] }
+        let inheritedNames = Set(inheritance.inheritedTypes.compactMap {
+            $0.type.as(IdentifierTypeSyntax.self)?.name.text
+        })
+        let memberNames = Set(enumDeclaration.memberBlock.members.compactMap {
+            if let variable = $0.decl.as(VariableDeclSyntax.self) {
+                return variable.bindings.compactMap {
+                    $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text
+                }.first
+            }
+            return nil
+        })
+        if inheritedNames.contains("FiniteTLAValueDomain"),
+           !memberNames.contains("defaultValue"),
+           !memberNames.contains("finiteValues") {
+            return ["@_TLAFiniteEnum"]
+        }
+        if inheritedNames.contains("TLAValueType"), !memberNames.contains("defaultValue") {
+            return ["@_TLAValueEnum"]
+        }
+        return []
+    }
+
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
         guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
             return []
@@ -267,6 +293,44 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         return MacroExpander.generate(model: parsed)
+    }
+}
+
+public struct FiniteEnumMacro: MemberMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingMembersOf declaration: some DeclGroupSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        guard let enumDeclaration = declaration.as(EnumDeclSyntax.self),
+              let firstCase = enumDeclaration.memberBlock.members.lazy.compactMap({
+                  $0.decl.as(EnumCaseDeclSyntax.self)?.elements.first?.name.text
+              }).first
+        else {
+            throw SimpleError("A SwiftTLA finite enum must declare at least one case")
+        }
+        return [
+            "public static var defaultValue: Self { .\(raw: firstCase) }",
+            "public static var finiteValues: [Self] { Array(allCases) }"
+        ]
+    }
+
+}
+
+public struct ValueEnumMacro: MemberMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingMembersOf declaration: some DeclGroupSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        guard let enumDeclaration = declaration.as(EnumDeclSyntax.self),
+              let firstCase = enumDeclaration.memberBlock.members.lazy.compactMap({
+                  $0.decl.as(EnumCaseDeclSyntax.self)?.elements.first?.name.text
+              }).first
+        else {
+            throw SimpleError("A SwiftTLA value enum must declare at least one case")
+        }
+        return ["public static var defaultValue: Self { .\(raw: firstCase) }"]
     }
 }
 

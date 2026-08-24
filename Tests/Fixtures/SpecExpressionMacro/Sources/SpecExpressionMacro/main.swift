@@ -3,16 +3,15 @@ import SwiftTLAMacros
 
 @TLAModel
 struct Counter {
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 
-    enum Node: String, FiniteDomainKey {
+    enum Node: String, FiniteTLAValueDomain {
         case only
 
         static var defaultValue: Self { .only }
-        static let formalDomain: [Node] = [.only]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "fixture.spec-expression-node")
+        static let finiteValues: [Node] = [.only]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }

@@ -21,7 +21,8 @@ them as templates for new work.
 
 ## Typed authoring rules
 
-- Give every finite domain a named `FiniteDomainKey` enum.
+- Give every finite domain a named `CaseIterable` raw-value enum. The model
+  macro derives its finite formal domain.
 - Use `TLARecordSchema`, `Record<Schema>`, `TLAField`, and
   `Function<Domain, Range>` for structured state.
 - Keep formal string names behind validated variables, fields, and domains.

@@ -6,15 +6,14 @@ import SwiftTLA
 /// Parameterized actions replace the old raw existential action bodies, so the
 /// same authoring surface drives the parser, builder, and generated machine.
 public struct EWD998TerminationModel: Sendable {
-    public enum Node: Int, CaseIterable, FiniteDomainKey {
+    public enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case zero = 0
         case one = 1
         case two = 2
         case three = 3
 
         public static var defaultValue: Self { .zero }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.ewd998.node")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .int(rawValue) }
     }

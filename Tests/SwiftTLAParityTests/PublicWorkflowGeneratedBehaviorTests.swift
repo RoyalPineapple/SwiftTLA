@@ -9,13 +9,10 @@ struct PublicWorkflowGeneratedBehaviorTests {
   @Test("public workflow fixture executes through generated state and actor")
     func generatedStateAndActorMatchTheCanonicalCounter() async throws {
     var model = try P4GeneratedCounter.makeMachine()
-    let actor = P4GeneratedCounter.Actor(live: try P4GeneratedCounter.makeLive())
+    let actor = try P4GeneratedCounter.Actor()
 
     let modelEvidence = try model.send(.advance)
-    guard case .committed(let actorEvidence) = try await actor.send(.advance) else {
-      Issue.record("Expected actor action to commit")
-      return
-    }
+    let actorEvidence = try await actor.send(.advance)
 
     #expect(modelEvidence.action == .advance)
     #expect(actorEvidence.action == .advance)

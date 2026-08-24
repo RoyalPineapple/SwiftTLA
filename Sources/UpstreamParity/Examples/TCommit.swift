@@ -6,14 +6,13 @@ import SwiftTLA
 /// parameterized actions retain the upstream transition relation without
 /// manufacturing a separate action for each manager in Swift.
 public struct TCommitModel: Sendable {
-    public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
+    public enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
         case one = "r1"
         case two = "r2"
         case three = "r3"
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.tcommit.resourceManager")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }

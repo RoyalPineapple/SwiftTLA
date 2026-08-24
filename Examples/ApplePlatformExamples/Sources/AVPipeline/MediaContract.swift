@@ -6,19 +6,18 @@ import SwiftTLAMacros
 /// are explicit formal stages; AVFoundation remains a thin effect layer.
 @TLAModel
 public struct MediaPipelineModel {
-    public enum Stage: String, CaseIterable, FiniteDomainKey {
+    public enum Stage: String, CaseIterable, FiniteTLAValueDomain {
         case idle, capturing, writing, readyToPlay, playing
         public static var defaultValue: Self { .idle }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline-stage")
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum BeginCaptureProcess: String, FiniteDomainKey { case beginCaptureEvent; static var defaultValue: Self { .beginCaptureEvent }; static let formalDomain: [Self] = [.beginCaptureEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.begin-capture"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum BeginWritingProcess: String, FiniteDomainKey { case beginWritingEvent; static var defaultValue: Self { .beginWritingEvent }; static let formalDomain: [Self] = [.beginWritingEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.begin-writing"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum FinishWritingProcess: String, FiniteDomainKey { case finishWritingEvent; static var defaultValue: Self { .finishWritingEvent }; static let formalDomain: [Self] = [.finishWritingEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.finish-writing"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum PlayProcess: String, FiniteDomainKey { case playEvent; static var defaultValue: Self { .playEvent }; static let formalDomain: [Self] = [.playEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.play"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum StopProcess: String, FiniteDomainKey { case stopEvent; static var defaultValue: Self { .stopEvent }; static let formalDomain: [Self] = [.stopEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.stop"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum Step: String, PlusCalLabel, CaseIterable { case beginCapture, beginWriting, finishWriting, play, stop }
+    private enum BeginCaptureProcess: String, FiniteTLAValueDomain { case beginCaptureEvent; static var defaultValue: Self { .beginCaptureEvent }; static let finiteValues: [Self] = [.beginCaptureEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum BeginWritingProcess: String, FiniteTLAValueDomain { case beginWritingEvent; static var defaultValue: Self { .beginWritingEvent }; static let finiteValues: [Self] = [.beginWritingEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum FinishWritingProcess: String, FiniteTLAValueDomain { case finishWritingEvent; static var defaultValue: Self { .finishWritingEvent }; static let finiteValues: [Self] = [.finishWritingEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent; static var defaultValue: Self { .playEvent }; static let finiteValues: [Self] = [.playEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum StopProcess: String, FiniteTLAValueDomain { case stopEvent; static var defaultValue: Self { .stopEvent }; static let finiteValues: [Self] = [.stopEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum Step: String, CaseIterable { case beginCapture, beginWriting, finishWriting, play, stop }
     public static var spec: TLASpec {
         #spec("MediaPipelineModel") {
             Algorithm("MediaPipelineModel", scoped: { scope in

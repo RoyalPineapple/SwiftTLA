@@ -8,67 +8,61 @@ import SwiftTLAMacros
 /// `try machine.send(.fillThree)`.
 @TLAModel
 public struct TwoBuckets {
-    private enum FillThreeProcess: String, FiniteDomainKey {
+    private enum FillThreeProcess: String, FiniteTLAValueDomain {
         case fillThree
 
         static var defaultValue: Self { .fillThree }
-        static let formalDomain: [Self] = [.fillThree]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.fill-three")
+        static let finiteValues: [Self] = [.fillThree]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum FillFiveProcess: String, FiniteDomainKey {
+    private enum FillFiveProcess: String, FiniteTLAValueDomain {
         case fillFive
 
         static var defaultValue: Self { .fillFive }
-        static let formalDomain: [Self] = [.fillFive]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.fill-five")
+        static let finiteValues: [Self] = [.fillFive]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum EmptyThreeProcess: String, FiniteDomainKey {
+    private enum EmptyThreeProcess: String, FiniteTLAValueDomain {
         case emptyThree
 
         static var defaultValue: Self { .emptyThree }
-        static let formalDomain: [Self] = [.emptyThree]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.empty-three")
+        static let finiteValues: [Self] = [.emptyThree]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum EmptyFiveProcess: String, FiniteDomainKey {
+    private enum EmptyFiveProcess: String, FiniteTLAValueDomain {
         case emptyFive
 
         static var defaultValue: Self { .emptyFive }
-        static let formalDomain: [Self] = [.emptyFive]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.empty-five")
+        static let finiteValues: [Self] = [.emptyFive]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum PourThreeIntoFiveProcess: String, FiniteDomainKey {
+    private enum PourThreeIntoFiveProcess: String, FiniteTLAValueDomain {
         case pourThreeIntoFive
 
         static var defaultValue: Self { .pourThreeIntoFive }
-        static let formalDomain: [Self] = [.pourThreeIntoFive]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.pour-three-into-five")
+        static let finiteValues: [Self] = [.pourThreeIntoFive]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum PourFiveIntoThreeProcess: String, FiniteDomainKey {
+    private enum PourFiveIntoThreeProcess: String, FiniteTLAValueDomain {
         case pourFiveIntoThree
 
         static var defaultValue: Self { .pourFiveIntoThree }
-        static let formalDomain: [Self] = [.pourFiveIntoThree]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.two-buckets.pour-five-into-three")
+        static let finiteValues: [Self] = [.pourFiveIntoThree]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case fillThree
         case fillFive
         case emptyThree

@@ -8,19 +8,16 @@ import SwiftTLAMacros
 /// and its generated `pc` function; the Swift source does not unroll a
 /// separate action or program counter for every process.
 public struct TeachingSimpleN2Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteDomainKey {
+    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case p0
         case p1
 
         public static var defaultValue: Self { .p0 }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.teaching-concurrency.simple.n2.process"
-        )
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a
         case b
     }
@@ -63,20 +60,17 @@ public struct TeachingSimpleN2Model: Sendable {
 }
 
 public struct TeachingSimpleN3Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteDomainKey {
+    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case p0
         case p1
         case p2
 
         public static var defaultValue: Self { .p0 }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.teaching-concurrency.simple.n3.process"
-        )
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a
         case b
     }

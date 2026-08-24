@@ -842,7 +842,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["receive", "done", "Terminating"])
         for action in spec.actions where action.name != "Terminating" {
-            #expect(action.bindings == [ActionBinding(name: "process", values: Node.formalDomain.map(\.tlaValue))])
+            #expect(action.bindings == [ActionBinding(name: "process", values: Node.finiteValues.map(\.tlaValue))])
         }
 
         let (compilation, initial) = try initialState(of: spec)
@@ -1364,44 +1364,41 @@ struct AlgorithmBuilderTests {
     }
 }
 
-private enum Node: String, FiniteDomainKey, PlusCalLabel, CaseIterable {
+private enum Node: String, FiniteTLAValueDomain, CaseIterable {
     case first
     case second
 
     static var defaultValue: Self { .first }
-    static let formalDomain: [Node] = [.first, .second]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.node")
+    static let finiteValues: [Node] = [.first, .second]
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
-private enum EmptyNode: String, FiniteDomainKey {
+private enum EmptyNode: String, FiniteTLAValueDomain {
     case none
 
     static var defaultValue: Self { .none }
-    static let formalDomain: [EmptyNode] = []
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.empty-node")
+    static let finiteValues: [EmptyNode] = []
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
-private enum OtherNode: String, FiniteDomainKey {
+private enum OtherNode: String, FiniteTLAValueDomain {
     case one = "other"
 
     static var defaultValue: Self { .one }
-    static let formalDomain: [OtherNode] = [.one]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.other-node")
+    static let finiteValues: [OtherNode] = [.one]
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
-private enum AlgorithmLabel: String, PlusCalLabel, CaseIterable {
+private enum AlgorithmLabel: String, CaseIterable {
     case receive
     case forward
     case done
 }
 
-private enum MissingAlgorithmLabel: String, PlusCalLabel, CaseIterable {
+private enum MissingAlgorithmLabel: String, CaseIterable {
     case missing
 }
 
@@ -1428,13 +1425,12 @@ private struct ProcedureGeneratedModel {
 
 @TLAModel
 private struct MacroProcessGeneratedModel {
-    enum Node: String, CaseIterable, FiniteDomainKey {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
 
         static var defaultValue: Self { .first }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.macro-process-node")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
@@ -1458,13 +1454,12 @@ private struct MacroProcessGeneratedModel {
 
 @TLAModel
 private struct FunctionDomainGeneratedModel {
-    enum Node: String, CaseIterable, FiniteDomainKey {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
 
         static var defaultValue: Self { .first }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.function-domain-node")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
@@ -1511,15 +1506,14 @@ private struct StaticFormalSelectionModel {
 
 @TLAModel
 private struct StaticFilteredFunctionSelectionModel {
-    enum Node: String, CaseIterable, FiniteDomainKey {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
         case third
         case fourth
 
         static var defaultValue: Self { .first }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.static-function-selection-node")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }

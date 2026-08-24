@@ -9,21 +9,18 @@ import SwiftTLAMacros
 /// parameterless `Choose()` macro, a guarded `when`, and a scoped `with`.
 @TLAModel
 public struct ConsensusModel: Sendable {
-    public enum Value: String, CaseIterable, FiniteDomainKey {
+    public enum Value: String, CaseIterable, FiniteTLAValueDomain {
         case one = "v1"
         case two = "v2"
         case three = "v3"
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.byzpaxos.consensus.value"
-        )
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case choose = "lbl"
     }
 

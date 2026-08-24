@@ -7,25 +7,23 @@ import SwiftTLAMacros
 /// nodes into the shared frontier one at a time. The separate `a`, `b`, and
 /// `c` steps deliberately mirror the published PlusCal labels.
 public struct ParallelReachableModel: Sendable {
-    public enum Node: Int, FiniteDomainKey {
+    public enum Node: Int, FiniteTLAValueDomain {
         case one = 1, two = 2, three = 3, four = 4
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain: [Self] = [.one, .two, .three, .four]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.parallel-reachable.node")
+        public static let finiteValues: [Self] = [.one, .two, .three, .four]
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public enum Worker: Int, FiniteDomainKey {
+    public enum Worker: Int, FiniteTLAValueDomain {
         case one = 1, two = 2
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain: [Self] = [.one, .two]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.parallel-reachable.worker")
+        public static let finiteValues: [Self] = [.one, .two]
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a, b, c
     }
 

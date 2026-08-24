@@ -6,7 +6,7 @@ import SwiftTLA
 /// model imports `ZSequences` as a real module, and configures that module's
 /// `Nat` operator with the same finite bound used for model checking.
 public enum LeastCircularSubstringModel {
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case l3 = "L3"
         case l5 = "L5"
         case l6 = "L6"

@@ -22,7 +22,7 @@ an authored declaration. It does not allocate a runtime slot or render text.
 ```swift
 @TLAModel
 struct Counter {
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 

@@ -16,39 +16,44 @@ extension CoreSupportGate {
       && object["operatingSystem"] as? String == expected.operatingSystem
       && object["architecture"] as? String == expected.architecture
       && (object["environment"] as? [String: String]) == expected.environment
-      && pinMatches(object["pin"] as? [String: Any])
+      && pinMatches(object["pin"] as? [String: Any], expected: expected.pin)
       && governanceMatches(object["governance"] as? [String: Any], declared.governance)
       && invocationMappingsMatch(object["invocationMappings"], declared: expected.invocationMappings)
       && valueNormalizationsMatch(object["valueNormalizations"], declared: expected.valueNormalizations)
   }
 
-  func toolchainMatches(_ object: [String: Any], _ declared: CoreConformanceCasesManifest.Entry) -> Bool {
+  func toolchainMatches(
+    _ object: [String: Any], _ declared: CoreConformanceCasesManifest.Entry,
+    referencePin: TLCReferencePin
+  ) -> Bool {
     !declared.governance.semanticCitations.isEmpty
-      && pinMatches(object["declaredPin"] as? [String: Any])
-      && pinMatches(object["referencePin"] as? [String: Any])
-      && referenceArtifactsMatch(object["referenceArtifacts"] as? [String: Any])
+      && pinMatches(object["declaredPin"] as? [String: Any], expected: referencePin)
+      && pinMatches(object["referencePin"] as? [String: Any], expected: referencePin)
+      && referenceArtifactsMatch(object["referenceArtifacts"] as? [String: Any], pin: referencePin)
   }
 
-  func pinMatches(_ pin: [String: Any]?) -> Bool {
+  func pinMatches(_ pin: [String: Any]?, expected: TLCReferencePin) -> Bool {
     guard let pin else { return false }
-    return pin["tag"] as? String == "v1.8.0"
-      && pin["commit"] as? String == "0894c3407f4717fec7cc18bde3bf3c857fa47333"
-      && pin["jarSHA256"] as? String == TLCReferencePin.lockedJarSHA256
-      && pin["javaDistribution"] as? String == TLCReferencePin.fixture.javaDistribution
-      && pin["javaVersion"] as? String == TLCReferencePin.fixture.javaVersion
-      && pin["bridgeClass"] as? String == TLCReferencePin.fixture.bridgeClass
-      && pin["bridgeSourceSHA256"] as? String == TLCReferencePin.lockedBridgeSourceSHA256
-      && pin["bridgeBinarySHA256"] as? String == TLCReferencePin.lockedBridgeBinarySHA256
-      && TLCReferencePin.lockedJavaArchiveSHA256s.values.contains(pin["javaArchiveSHA256"] as? String ?? "")
+    return pin["tag"] as? String == expected.tag
+      && pin["commit"] as? String == expected.commit
+      && pin["jarSHA256"] as? String == expected.jarSHA256
+      && pin["javaDistribution"] as? String == expected.javaDistribution
+      && pin["javaVersion"] as? String == expected.javaVersion
+      && pin["bridgeClass"] as? String == expected.bridgeClass
+      && pin["bridgeSourceSHA256"] as? String == expected.bridgeSourceSHA256
+      && pin["bridgeBinarySHA256"] as? String == expected.bridgeBinarySHA256
+      && pin["javaArchiveSHA256"] as? String == expected.javaArchiveSHA256
   }
 
-  func declaredCaseContract(_ declared: CoreConformanceCasesManifest.Entry) throws -> CoreConformanceCase {
+  func declaredCaseContract(
+    _ declared: CoreConformanceCasesManifest.Entry, referencePin: TLCReferencePin
+  ) throws -> CoreConformanceCase {
     try CoreConformanceCase(
       id: declared.id, moduleSHA256: declared.moduleSHA256, cfgSHA256: declared.cfgSHA256,
       arguments: declared.arguments, argumentsSHA256: declared.argumentsSHA256,
       workers: declared.workers, fingerprintPolynomial: declared.fingerprintPolynomial,
       deadlock: declared.deadlock, operatingSystem: "macos", architecture: "arm64", environment: [:],
-      pin: .fixture, governance: declared.governance,
+      pin: referencePin, governance: declared.governance,
       invocationMappings: try declared.invocationMappings.map { mapping in
         try CoreConformanceInvocationMapping(
           wrapper: mapping.wrapper, action: mapping.action,
@@ -98,7 +103,7 @@ extension CoreSupportGate {
     return limits == governance.finiteBounds.limits
   }
 
-  func referenceArtifactsMatch(_ object: [String: Any]?) -> Bool {
+  func referenceArtifactsMatch(_ object: [String: Any]?, pin: TLCReferencePin) -> Bool {
     guard let object,
           let jar = object["jar"] as? String, !jar.isEmpty,
           let javaArchive = object["javaArchive"] as? String, !javaArchive.isEmpty,
@@ -106,13 +111,13 @@ extension CoreSupportGate {
           let bridgeBinary = object["bridgeBinary"] as? String, !bridgeBinary.isEmpty,
           let manifest = object["jarManifest"] as? String,
           manifest.contains("Implementation-Title: TLA+ Tools"),
-          manifest.contains("X-Git-Revision: 0894c3407f4717fec7cc18bde3bf3c857fa47333"),
+          manifest.contains("X-Git-Revision: \(pin.commit)"),
           let runtime = object["runtime"] as? [String: Any],
-          runtime["version"] as? String == TLCReferencePin.fixture.javaVersion,
+          runtime["version"] as? String == pin.javaVersion,
           (runtime["vendor"] as? String)?.contains("Eclipse Adoptium") == true,
           runtime["architecture"] as? String == "arm64",
           let properties = runtime["properties"] as? [String: String],
-          properties["java.runtime.version"] == TLCReferencePin.fixture.javaVersion,
+          properties["java.runtime.version"] == pin.javaVersion,
           properties["java.vendor"]?.contains("Eclipse Adoptium") == true
     else { return false }
     return true

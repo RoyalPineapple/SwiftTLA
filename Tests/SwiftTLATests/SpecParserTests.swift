@@ -22,9 +22,9 @@ private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
 private func parserEnum(
     _ typeName: String,
     cases: TLARecord = .init([]),
-    formalDomain: [TLAValue]? = nil
+    finiteValues: [TLAValue]? = nil
 ) -> ParserEnumDefinition {
-    .init(typeName: typeName, cases: cases, formalDomain: formalDomain)
+    .init(typeName: typeName, cases: cases, finiteValues: finiteValues)
 }
 
 @Suite(.serialized) struct AlgorithmBuilderParsingTests {
@@ -53,7 +53,7 @@ private func parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -110,7 +110,7 @@ private func parserEnum(
         """
         let parsed = SpecParser.parseSpecClosure(
             try parseClosure(source),
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -137,7 +137,7 @@ private func parserEnum(
         """
         let parsed = SpecParser.parseSpecClosure(
             try parseClosure(source),
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -161,7 +161,7 @@ private func parserEnum(
         """
         let parsed = SpecParser.parseSpecClosure(
             try parseClosure(source),
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -211,12 +211,12 @@ private func parserEnum(
                 parserEnum(
                     "Node",
                     cases: ["one": .string("n1"), "two": .string("n2")],
-                    formalDomain: [.string("n1"), .string("n2")]
+                    finiteValues: [.string("n1"), .string("n2")]
                 ),
                 parserEnum(
                     "Worker",
                     cases: ["one": .string("w1")],
-                    formalDomain: [.string("w1")]
+                    finiteValues: [.string("w1")]
                 ),
                 parserEnum(
                     "Phase",
@@ -416,7 +416,7 @@ private func parserEnum(
 
         let parsed = SpecParser.parseSpecClosure(
             try parseClosure(source),
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("only")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
 
         #expect(parsed.diagnostics.count == 1)
@@ -660,7 +660,7 @@ private func parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -725,7 +725,7 @@ private func parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [parserEnum("Worker", formalDomain: [.string("left"), .string("right")])]
+            enumDefinitions: [parserEnum("Worker", finiteValues: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -809,7 +809,7 @@ private func parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -1040,7 +1040,7 @@ private func parserEnum(
             enumDefinitions: [parserEnum(
                 "Node",
                 cases: ["only": .string("only")],
-                formalDomain: [.string("only")]
+                finiteValues: [.string("only")]
             )]
         )
 
@@ -1068,7 +1068,7 @@ private func parserEnum(
             closure,
             enumDefinitions: [
                 parserEnum("Door", cases: ["closed": .string("closed")]),
-                parserEnum("Car", formalDomain: [.string("north"), .string("south")])
+                parserEnum("Car", finiteValues: [.string("north"), .string("south")])
             ]
         )
 
@@ -1100,7 +1100,7 @@ private func parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [parserEnum("Acceptor", formalDomain: [.string("a1"), .string("a2")])]
+            enumDefinitions: [parserEnum("Acceptor", finiteValues: [.string("a1"), .string("a2")])]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -1214,7 +1214,7 @@ private func parserEnum(
             closure,
             enumDefinitions: [
                 parserEnum("Step", cases: ["resourceManager": .string("RS")]),
-                parserEnum("Node", formalDomain: [.string("left"), .string("right")])
+                parserEnum("Node", finiteValues: [.string("left"), .string("right")])
             ]
         )
 
@@ -1241,7 +1241,7 @@ private func parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
+            enumDefinitions: [parserEnum("Node", finiteValues: [.string("left"), .string("right")])]
         )
         let runtime = TLASpec("Counter") {
             Algorithm("Counter") {
@@ -1313,13 +1313,12 @@ private func parserEnum(
     }
 }
 
-private enum ParserNode: String, FiniteDomainKey {
+private enum ParserNode: String, FiniteTLAValueDomain {
     case left
     case right
 
     static var defaultValue: Self { .left }
-    static let formalDomain: [ParserNode] = [.left, .right]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.parser-node")
+    static let finiteValues: [ParserNode] = [.left, .right]
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
@@ -1550,7 +1549,7 @@ private enum ParserNode: String, FiniteDomainKey {
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [parserEnum("Key", formalDomain: [.string("k1"), .string("k2")])]
+            enumDefinitions: [parserEnum("Key", finiteValues: [.string("k1"), .string("k2")])]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")

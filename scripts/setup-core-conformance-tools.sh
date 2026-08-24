@@ -111,20 +111,6 @@ read_lock() {
 import json
 import sys
 
-expected = {
-    "schema": "TLCReferencePin",
-    "tlc.tag": "v1.8.0",
-    "tlc.commit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
-    "tlc.jar.sha256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
-    "java.distribution": "Eclipse Temurin",
-    "java.version": "17.0.19+10",
-    "java.archives.arm64.sha256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
-    "java.archives.x86_64.sha256": "03632d1fbf139ab3719a9f4b47dc206251449b87557143c822336dbf8c06560f",
-    "bridge.class": "org.swifttla.conformance.LosslessStateWriter",
-    "bridge.sourceSha256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
-    "bridge.binarySha256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64",
-}
-
 with open(sys.argv[1], encoding="utf-8") as source:
     lock = json.load(source)
 
@@ -134,18 +120,26 @@ def get(path):
         value = value[component]
     return value
 
-for path, value in expected.items():
-    if get(path) != value:
-        raise SystemExit(
-            "toolchain lock does not match the accepted TLC reference pin: " + path
-        )
+required = [
+    "tlc.tag", "tlc.commit", "tlc.jar.url", "tlc.jar.sha256",
+    "java.distribution", "java.version",
+    "java.archives.arm64.url", "java.archives.arm64.sha256",
+    "java.archives.x86_64.url", "java.archives.x86_64.sha256",
+    "bridge.class", "bridge.source", "bridge.sourceSha256", "bridge.binarySha256",
+]
+if lock.get("schema") != "TLCReferencePin":
+    raise SystemExit("unsupported toolchain schema")
+for path in required:
+    value = get(path)
+    if not isinstance(value, str) or not value:
+        raise SystemExit("toolchain lock has an invalid value: " + path)
 
 for path in sys.argv[2:]:
     print(get(path))
 PY
 }
 
-if ! LOCK_VALUES="$(read_lock tlc.jar.url tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source)"; then
+if ! LOCK_VALUES="$(read_lock tlc.jar.url tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source bridge.sourceSha256 bridge.binarySha256)"; then
     fail "${LOCK_VALUES:-toolchain lock does not match the accepted TLC reference pin}"
 fi
 
@@ -160,6 +154,8 @@ TLC_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '2p')"
 JAVA_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '3p')"
 JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '4p')"
 BRIDGE_SOURCE_RELATIVE="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
+BRIDGE_SOURCE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
+BRIDGE_BINARY_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
 BRIDGE_SOURCE="$PROJECT_ROOT/$BRIDGE_SOURCE_RELATIVE"
 [ -f "$BRIDGE_SOURCE" ] || fail "bridge source is missing: $BRIDGE_SOURCE_RELATIVE"
 
@@ -202,7 +198,7 @@ seed_from_cache "$CACHE_ROOT/tla2tools-1.8.0.jar" "$TLC_SHA256" "$TLC_JAR"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 download_locked "$TLC_URL" "$TLC_SHA256" "$TLC_JAR"
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
-[ "$(sha256 "$BRIDGE_SOURCE")" = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee" ] || fail "bridge source digest mismatch"
+[ "$(sha256 "$BRIDGE_SOURCE")" = "$BRIDGE_SOURCE_SHA256" ] || fail "bridge source digest mismatch"
 
 python3 - "$TLC_JAR" "$TOOLCHAIN" <<'PY'
 import json
@@ -231,12 +227,12 @@ fi
 [ -x "$JAVA_HOME/bin/javac" ] || fail "locked Temurin archive does not contain javac"
 
 BRIDGE_CLASS="$TOOL_ROOT/bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"
-if [ ! -f "$BRIDGE_CLASS" ] || [ "$(sha256 "$BRIDGE_CLASS")" != "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" ]; then
+if [ ! -f "$BRIDGE_CLASS" ] || [ "$(sha256 "$BRIDGE_CLASS")" != "$BRIDGE_BINARY_SHA256" ]; then
     rm -rf "$TOOL_ROOT/bridge-classes"
     mkdir -p "$TOOL_ROOT/bridge-classes"
     "$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "$BRIDGE_SOURCE"
 fi
-[ "$(sha256 "$BRIDGE_CLASS")" = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" ] || fail "bridge binary digest mismatch"
+[ "$(sha256 "$BRIDGE_CLASS")" = "$BRIDGE_BINARY_SHA256" ] || fail "bridge binary digest mismatch"
 
 if [ -f "$CASES_FILE" ]; then
     INPUT_ROOT="$TOOL_ROOT/inputs"

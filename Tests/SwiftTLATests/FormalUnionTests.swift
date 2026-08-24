@@ -2,31 +2,29 @@ import Testing
 import SwiftTLA
 import SwiftTLAMacros
 
-private enum UnionMember: String, FiniteDomainKey {
+private enum UnionMember: String, FiniteTLAValueDomain {
     case first
     case second
 
     static var defaultValue: Self { .first }
-    static let formalDomain: [UnionMember] = [.first, .second]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.formal-union-member")
+    static let finiteValues: [UnionMember] = [.first, .second]
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
 @TLAModel
 private struct GeneratedFormalUnionAlgorithm {
-    enum Node: String, CaseIterable, FiniteDomainKey {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
 
         static var defaultValue: Self { .first }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-formal-union-node")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Label: String, PlusCalLabel, CaseIterable {
+    private enum Label: String, CaseIterable {
         case inspect
         case collect
         case finish

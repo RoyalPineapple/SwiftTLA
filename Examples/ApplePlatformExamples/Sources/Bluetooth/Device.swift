@@ -5,38 +5,33 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct PeripheralModel {
-    public enum Phase: String, CaseIterable, FiniteDomainKey {
+    public enum Phase: String, CaseIterable, FiniteTLAValueDomain {
         case disconnected, connected, discovering, ready
         public static var defaultValue: Self { .disconnected }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-phase")
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum ConnectProcess: String, FiniteDomainKey { case connectEvent
+    private enum ConnectProcess: String, FiniteTLAValueDomain { case connectEvent
         static var defaultValue: Self { .connectEvent }
-        static let formalDomain: [Self] = [.connectEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-connect")
+        static let finiteValues: [Self] = [.connectEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum BeginDiscoveryProcess: String, FiniteDomainKey { case beginDiscoveryEvent
+    private enum BeginDiscoveryProcess: String, FiniteTLAValueDomain { case beginDiscoveryEvent
         static var defaultValue: Self { .beginDiscoveryEvent }
-        static let formalDomain: [Self] = [.beginDiscoveryEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-begin-discovery")
+        static let finiteValues: [Self] = [.beginDiscoveryEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum FinishDiscoveryProcess: String, FiniteDomainKey { case finishDiscoveryEvent
+    private enum FinishDiscoveryProcess: String, FiniteTLAValueDomain { case finishDiscoveryEvent
         static var defaultValue: Self { .finishDiscoveryEvent }
-        static let formalDomain: [Self] = [.finishDiscoveryEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-finish-discovery")
+        static let finiteValues: [Self] = [.finishDiscoveryEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum DisconnectProcess: String, FiniteDomainKey { case disconnectEvent
+    private enum DisconnectProcess: String, FiniteTLAValueDomain { case disconnectEvent
         static var defaultValue: Self { .disconnectEvent }
-        static let formalDomain: [Self] = [.disconnectEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-disconnect")
+        static let finiteValues: [Self] = [.disconnectEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, PlusCalLabel, CaseIterable { case connected, beginDiscovery, finishDiscovery, disconnect }
+    private enum Step: String, CaseIterable { case connected, beginDiscovery, finishDiscovery, disconnect }
 
     public static var spec: TLASpec {
         #spec("PeripheralModel") {

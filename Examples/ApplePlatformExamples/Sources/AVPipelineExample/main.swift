@@ -268,37 +268,32 @@ enum RollItem: Identifiable {
 
 @TLAModel
 struct CameraWorkflow {
-    private enum ReadyProcess: String, FiniteDomainKey { case readyEvent
+    private enum ReadyProcess: String, FiniteTLAValueDomain { case readyEvent
         static var defaultValue: Self { .readyEvent }
-        static let formalDomain: [Self] = [.readyEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.ready")
+        static let finiteValues: [Self] = [.readyEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum RecordProcess: String, FiniteDomainKey { case recordEvent
+    private enum RecordProcess: String, FiniteTLAValueDomain { case recordEvent
         static var defaultValue: Self { .recordEvent }
-        static let formalDomain: [Self] = [.recordEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.record")
+        static let finiteValues: [Self] = [.recordEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum StopProcess: String, FiniteDomainKey { case stopEvent
+    private enum StopProcess: String, FiniteTLAValueDomain { case stopEvent
         static var defaultValue: Self { .stopEvent }
-        static let formalDomain: [Self] = [.stopEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.stop")
+        static let finiteValues: [Self] = [.stopEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum PlayProcess: String, FiniteDomainKey { case playEvent
+    private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent
         static var defaultValue: Self { .playEvent }
-        static let formalDomain: [Self] = [.playEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.play")
+        static let finiteValues: [Self] = [.playEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum LiveProcess: String, FiniteDomainKey { case liveEvent
+    private enum LiveProcess: String, FiniteTLAValueDomain { case liveEvent
         static var defaultValue: Self { .liveEvent }
-        static let formalDomain: [Self] = [.liveEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.live")
+        static let finiteValues: [Self] = [.liveEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, PlusCalLabel, CaseIterable { case ready, record, stop, play, live }
+    private enum Step: String, CaseIterable { case ready, record, stop, play, live }
 
     static var spec: TLASpec {
         #spec("CameraWorkflow") {

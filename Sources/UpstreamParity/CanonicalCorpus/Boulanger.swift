@@ -12,16 +12,15 @@ public struct BoulangerModel: Sendable {
         plusCalConfiguration: .init(checks: [.init("StateConstraint", kind: .constraint)])
     )
 
-    public enum Process: Int, FiniteDomainKey {
+    public enum Process: Int, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain: [Self] = [.one, .two]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.boulanger.process")
+        public static let finiteValues: [Self] = [.one, .two]
     }
 
-    private enum Label: String, PlusCalLabel, CaseIterable {
+    private enum Label: String, CaseIterable {
         case ncs, e1, e2, e3, e4, w1, w2, cs, exit
     }
 

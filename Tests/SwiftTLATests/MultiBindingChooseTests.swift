@@ -37,11 +37,10 @@ struct MultiBindingChooseTests {
 
 @TLAModel
 private struct MultiBindingChooseModel {
-    enum Node: Int, CaseIterable, FiniteDomainKey {
+    enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case only = 0
         static var defaultValue: Self { .only }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.multi-binding-choose.node")
+        static let finiteValues = allCases
     }
 
     static var spec: TLASpec {

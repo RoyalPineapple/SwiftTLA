@@ -9,12 +9,12 @@ import Foundation
 public struct ParserEnumDefinition: Sendable {
     public let typeName: String
     public let cases: TLARecord
-    public let formalDomain: [TLAValue]
+    public let finiteValues: [TLAValue]
 
-    public init(typeName: String, cases: TLARecord, formalDomain: [TLAValue]? = nil) {
+    public init(typeName: String, cases: TLARecord, finiteValues: [TLAValue]? = nil) {
         self.typeName = typeName
         self.cases = cases
-        self.formalDomain = formalDomain ?? cases.fields.map(\.value)
+        self.finiteValues = finiteValues ?? cases.fields.map(\.value)
     }
 
     public func value(named name: String) -> TLAValue? {
@@ -986,7 +986,7 @@ public final class ParserSession {
            let literalType = typedFacadeType(access.base),
            literalType.name == "Function",
            let domainType = literalType.terminalArgumentName(at: 0),
-           let domain = enumDefinition(named: domainType)?.formalDomain,
+           let domain = enumDefinition(named: domainType)?.finiteValues,
            let closure = call.trailingClosure,
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
@@ -1448,7 +1448,7 @@ public final class ParserSession {
         scope: TypedFacadeScope
     ) -> StateExpr? {
         guard let domainType,
-              let domain = enumDefinition(named: domainType)?.formalDomain,
+              let domain = enumDefinition(named: domainType)?.finiteValues,
               !domain.isEmpty
         else { return nil }
         var pairs: [StateExpr] = []

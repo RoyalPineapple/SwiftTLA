@@ -29,35 +29,15 @@ public struct VoteProofModel: Sendable {
         checkDeadlock: false
     )
 
-    public enum Value: String, FiniteDomainKey {
+    public enum Value: String, CaseIterable, FiniteTLAValueDomain {
         case v1, v2
-
-        public static let formalDomain: [Self] = [.v1, .v2]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.byzpaxos.vote-proof.value")
-        public var tlaValue: TLAValue { .string(rawValue) }
-        public static var defaultValue: Self { .v1 }
-
-        public init?(formalValue: TLAValue) {
-            guard case .string(let rawValue) = formalValue else { return nil }
-            self.init(rawValue: rawValue)
-        }
     }
 
-    public enum Acceptor: String, FiniteDomainKey {
+    public enum Acceptor: String, CaseIterable, FiniteTLAValueDomain {
         case a1, a2, a3
-
-        public static let formalDomain: [Self] = [.a1, .a2, .a3]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.byzpaxos.vote-proof.acceptor")
-        public var tlaValue: TLAValue { .string(rawValue) }
-        public static var defaultValue: Self { .a1 }
-
-        public init?(formalValue: TLAValue) {
-            guard case .string(let rawValue) = formalValue else { return nil }
-            self.init(rawValue: rawValue)
-        }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case acc
     }
 

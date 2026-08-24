@@ -8,17 +8,16 @@ import SwiftTLAMacros
 /// the upstream PlusCal translator creates.
 @TLAModel
 public struct BakeryN2Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteDomainKey {
+    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.bakery.n2.process")
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case ncs
         case e1
         case e2

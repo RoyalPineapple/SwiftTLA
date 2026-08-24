@@ -5,17 +5,16 @@ import SwiftTLAMacros
 
 @TLAModel
 struct CounterScreenModel {
-    enum Process: String, FiniteDomainKey {
+    enum Process: String, FiniteTLAValueDomain {
         case only
 
         static var defaultValue: Self { .only }
-        static let formalDomain: [Process] = [.only]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "documentation.observable.process")
+        static let finiteValues: [Process] = [.only]
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 

@@ -42,25 +42,16 @@ struct NestedComposableMacroConformanceTests {
     @Test("Nested model and actor expose matching typed execution")
     func nestedModelAndActorShareCanonicalExecution() async throws {
         var model = try NestedComposedCounter.makeMachine()
-        let live = try NestedComposedCounter.makeLive()
-        let actor = NestedComposedCounter.Actor(live: live)
+        let actor = try NestedComposedCounter.Actor()
 
         let modelBefore = model.state
         _ = try model.send(.advance)
         let modelAfter = model.state
-        guard case .committed = try await actor.send(.advance)
-        else {
-            Issue.record("Expected nested actor action to commit")
-            return
-        }
+        _ = try await actor.send(.advance)
         #expect(modelBefore.count == 0)
         #expect(modelAfter.count == 1)
         #expect(try model.enabledActions() == [.advance])
-        guard case .snapshot(let actorSnapshot) = try await actor.current() else {
-            Issue.record("Expected actor snapshot")
-            return
-        }
-        #expect(actorSnapshot.state.count == 1)
+        #expect((await actor.state).count == 1)
     }
 
     @Test("Three-parameter invocation identity survives canonical and nested actor execution")
@@ -68,8 +59,7 @@ struct NestedComposableMacroConformanceTests {
         let first = EndToEndThreeParameterActionMachine.Action.board(person: 1, elevator: 10, direction: 100)
         let selected = EndToEndThreeParameterActionMachine.Action.board(person: 2, elevator: 20, direction: 200)
         let available = try EndToEndThreeParameterActionMachine.makeMachine().enabledActions()
-        let live = try ThreeParameterActionMachine.makeLive()
-        let actor = ThreeParameterActionMachine.Actor(live: live)
+        let actor = try ThreeParameterActionMachine.Actor()
 
         #expect(first != selected)
         #expect(Set(available).count == 8)
@@ -78,12 +68,7 @@ struct NestedComposableMacroConformanceTests {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let result = try machine.send(.board(person: 2, elevator: 20, direction: 200))
         #expect(result.after.floor == 222)
-        guard case .committed(let acted) = try await actor.send(
-            .board(person: 2, elevator: 20, direction: 200)
-        ) else {
-            Issue.record("Expected nested adapter actions to commit")
-            return
-        }
+        let acted = try await actor.send(.board(person: 2, elevator: 20, direction: 200))
         #expect(acted.action == .board(person: 2, elevator: 20, direction: 200))
     }
 

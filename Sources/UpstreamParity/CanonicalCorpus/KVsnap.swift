@@ -38,13 +38,10 @@ public struct KVsnapModel: Sendable {
         )
     )
 
-    public enum Key: String, FiniteDomainKey {
+    public enum Key: String, CaseIterable, FiniteTLAValueDomain {
         case k1, k2
 
-        public static let formalDomain: [Self] = [.k1, .k2]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.key-value-store.key")
         public var tlaValue: TLAValue { .constant(rawValue) }
-        public static var defaultValue: Self { .k1 }
 
         public init?(formalValue: TLAValue) {
             guard case .constant(let rawValue) = formalValue else { return nil }
@@ -52,13 +49,10 @@ public struct KVsnapModel: Sendable {
         }
     }
 
-    public enum Transaction: String, FiniteDomainKey {
+    public enum Transaction: String, CaseIterable, FiniteTLAValueDomain {
         case t1, t2, t3
 
-        public static let formalDomain: [Self] = [.t1, .t2, .t3]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.key-value-store.transaction")
         public var tlaValue: TLAValue { .constant(rawValue) }
-        public static var defaultValue: Self { .t1 }
 
         public init?(formalValue: TLAValue) {
             guard case .constant(let rawValue) = formalValue else { return nil }
@@ -70,7 +64,6 @@ public struct KVsnapModel: Sendable {
         case noVal = "NoVal"
 
         public var tlaValue: TLAValue { .constant(rawValue) }
-        public static var defaultValue: Self { .noVal }
 
         public init?(formalValue: TLAValue) {
             guard case .constant(let rawValue) = formalValue else { return nil }
@@ -80,14 +73,6 @@ public struct KVsnapModel: Sendable {
 
     public enum OperationKind: String, TLAValueType {
         case read, write
-
-        public var tlaValue: TLAValue { .string(rawValue) }
-        public static var defaultValue: Self { .read }
-
-        public init?(formalValue: TLAValue) {
-            guard case .string(let rawValue) = formalValue else { return nil }
-            self.init(rawValue: rawValue)
-        }
     }
 
     public typealias Value = OneOf<Transaction, NoValue>
@@ -121,7 +106,7 @@ public struct KVsnapModel: Sendable {
         public static let value = field(\OperationFields.value)
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case start = "START"
         case read = "READ"
         case update = "UPDATE"

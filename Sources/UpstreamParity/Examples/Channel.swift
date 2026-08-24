@@ -8,14 +8,13 @@ import SwiftTLAMacros
 /// typed view of the same model used for parity checking.
 @TLAModel
 public struct ChannelModel: Sendable {
-    public enum Data: String, CaseIterable, FiniteDomainKey {
+    public enum Data: String, CaseIterable, FiniteTLAValueDomain {
         case d1
         case d2
         case d3
 
         public static var defaultValue: Self { .d1 }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.channel.data")
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 

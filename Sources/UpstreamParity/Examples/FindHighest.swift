@@ -8,7 +8,7 @@ import SwiftTLAMacros
 /// bounds directly in SwiftTLA instead of hiding them in host-language data.
 @TLAModel
 public struct FindHighestModel: Sendable {
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case lb
     }
 

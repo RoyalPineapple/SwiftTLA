@@ -9,67 +9,62 @@ import SwiftTLAMacros
 /// rider phases; a view renders its typed state.
 @TLAModel
 public struct ElevatorBank {
-    public enum Floor: Int, CaseIterable, FiniteDomainKey {
+    public enum Floor: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.floor")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public enum CarID: String, CaseIterable, FiniteDomainKey {
+    public enum CarID: String, CaseIterable, FiniteTLAValueDomain {
         case carA
         case carB
 
         public static var defaultValue: Self { .carA }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.car")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     /// `none` is a formal sentinel for an empty car. It is deliberately part
     /// of the finite rider domain so the car record stays total and typed.
-    public enum Rider: String, CaseIterable, FiniteDomainKey {
+    public enum Rider: String, CaseIterable, FiniteTLAValueDomain {
         case none
         case alice
         case bob
 
         public static var defaultValue: Self { .none }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.rider")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum Door: String, CaseIterable, FiniteDomainKey {
+    public enum Door: String, CaseIterable, FiniteTLAValueDomain {
         case closed
         case open
 
         public static var defaultValue: Self { .closed }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.door")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum RiderPhase: String, CaseIterable, FiniteDomainKey {
+    public enum RiderPhase: String, CaseIterable, FiniteTLAValueDomain {
         case waiting
         case onboard
         case arrived
 
         public static var defaultValue: Self { .waiting }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "demos.elevator.rider-phase")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case operate
     }
 

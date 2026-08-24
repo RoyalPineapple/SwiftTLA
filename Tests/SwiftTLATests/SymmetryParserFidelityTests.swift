@@ -20,7 +20,7 @@ struct SymmetryParserFidelityTests {
                 .init(
                     typeName: "Transaction",
                     cases: .init([]),
-                    formalDomain: [.string("t1"), .string("t2")]
+                    finiteValues: [.string("t1"), .string("t2")]
                 )
             ]
         )
@@ -45,12 +45,11 @@ struct SymmetryParserFidelityTests {
 
 @TLAModel
 private struct GeneratedSymmetryModel {
-    enum Transaction: String, FiniteDomainKey {
+    enum Transaction: String, FiniteTLAValueDomain {
         case t1, t2
 
         static var defaultValue: Self { .t1 }
-        static let formalDomain: [Self] = [.t1, .t2]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.symmetry-parser.transaction")
+        static let finiteValues: [Self] = [.t1, .t2]
     }
 
     static var spec: TLASpec {

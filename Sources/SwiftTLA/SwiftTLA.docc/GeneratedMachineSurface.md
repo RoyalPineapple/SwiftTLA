@@ -17,34 +17,18 @@ Each generated model exposes these `Sendable` value types:
 is currently permitted. Both methods can throw. `state` contains the complete current
 typed state.
 
-## Create a live runtime
+## Live machine
 
-Create a typed live runtime from the generated model:
-
-```swift
-let live = try Counter.makeLive()
-```
-
-`Live.end()` is explicit and idempotent. A generated `Live` value owns one runtime identity and its actor-owned state.
-
-## Typed control
-
-Use a generated action with `Live.send(_:)`.
+`Live` is an actor that owns one generated machine value. It serializes
+`send(_:)` and exposes the machine's typed state and actions.
 
 ```swift
-let typedOutcome = await live.send(.advance)
+let live = try Counter.Live()
+let transition = try await live.send(.advance)
+assert(await live.state == transition.after)
 ```
-
-Generated `Live.Outcome` is exhaustive:
-
-- `committed` contains atomic before and after snapshots and advances the runtime position once.
-- `rejected` contains the current snapshot and a validation or lifecycle reason.
-- `failed` contains the current snapshot and a failure reason.
-
-Accepted requests complete as `committed` or `failed`. A live action reports `ambiguousAction` when it produces more than one successor.
-
-Positions begin at zero and have meaning only within one runtime identity. `Live.current()` returns an atomic typed snapshot with the state and enabled actions for that position.
 
 ## Generated actor
 
-Nested `@TLAActor` types accept the enclosing model's typed `Live` value with `init(live:)`. The actor forwards control to that runtime.
+Nested `@TLAActor` types own a generated machine value. They serialize typed
+state and actions through actor isolation.

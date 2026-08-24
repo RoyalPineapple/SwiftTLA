@@ -5,7 +5,7 @@ import SwiftTLAMacros
 /// statement macros (`Lock`, `Unlock`, `Wait`, and `Signal`) as its source.
 @TLAModel
 public struct BarriersN6Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteDomainKey {
+    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
@@ -14,15 +14,12 @@ public struct BarriersN6Model: Sendable {
         case six = 6
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.barriers.n6.process"
-        )
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12
     }
 

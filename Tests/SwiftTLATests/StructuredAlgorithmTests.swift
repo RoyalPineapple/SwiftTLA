@@ -6,24 +6,22 @@ import SwiftTLAMacros
 /// atomic action updates one nested field, and generated state stays typed.
 @TLAModel
 private struct StructuredCarModel {
-    enum Car: String, CaseIterable, FiniteDomainKey {
+    enum Car: String, CaseIterable, FiniteTLAValueDomain {
         case north
         case south
 
         static var defaultValue: Self { .north }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.structured-car")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    enum Door: String, CaseIterable, FiniteDomainKey {
+    enum Door: String, CaseIterable, FiniteTLAValueDomain {
         case closed
         case open
 
         static var defaultValue: Self { .closed }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.structured-door")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }

@@ -50,17 +50,15 @@ struct ClientCentricModuleTests {
     #expect(Set(values) == [.int(1), .int(2)])
   }
 
-  private enum TestKey: String, FiniteDomainKey {
+  private enum TestKey: String, FiniteTLAValueDomain {
     case key = "k"
     static var defaultValue: Self { .key }
-    static let formalDomain: [Self] = [.key]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.clientCentric.key")
+    static let finiteValues: [Self] = [.key]
   }
 
-  private enum TestValue: String, FiniteDomainKey {
+  private enum TestValue: String, FiniteTLAValueDomain {
     case none
     static var defaultValue: Self { .none }
-    static let formalDomain: [Self] = [.none]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.clientCentric.value")
+    static let finiteValues: [Self] = [.none]
   }
 }

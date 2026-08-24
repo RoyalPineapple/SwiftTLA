@@ -8,11 +8,10 @@ import SwiftTLAMacros
 /// every node its own set of messages, while each `Each(Node.all)` body is an
 /// independently scheduled PlusCal process.
 public struct EchoModel: Sendable {
-    public enum Node: String, TLAValueType, FiniteDomainKey {
+    public enum Node: String, TLAValueType, FiniteTLAValueDomain {
         case a, b, c
 
-        public static let formalDomain: [Self] = [.a, .b, .c]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.echo.node")
+        public static let finiteValues: [Self] = [.a, .b, .c]
         public static var defaultValue: Self { .a }
     }
 
@@ -48,7 +47,7 @@ public struct EchoModel: Sendable {
         public static let sender = field(\MessageFields.sender)
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case n0, n1, n2
     }
 

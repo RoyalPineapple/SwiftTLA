@@ -1,6 +1,6 @@
 @testable import SwiftTLA
 
-enum TestControlLabel: String, PlusCalLabel, CaseIterable {
+enum TestControlLabel: String, CaseIterable {
     case acquire
     case advance
     case changed

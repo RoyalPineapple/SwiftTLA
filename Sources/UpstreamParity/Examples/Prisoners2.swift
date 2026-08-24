@@ -7,29 +7,27 @@ import SwiftTLAMacros
 /// shared switch state and per-prisoner signal counts are typed formal values.
 @TLAModel
 public struct PrisonersModel: Sendable {
-    public enum NonCounterPrisoner: String, CaseIterable, FiniteDomainKey {
+    public enum NonCounterPrisoner: String, CaseIterable, FiniteTLAValueDomain {
         case two = "p2"
         case three = "p3"
         case four = "p4"
 
         public static var defaultValue: Self { .two }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.non-counter-prisoner")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Scheduler: String, CaseIterable, FiniteDomainKey {
+    private enum Scheduler: String, CaseIterable, FiniteTLAValueDomain {
         case warden
 
         static var defaultValue: Self { .warden }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.scheduler")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case chooseVisitor
     }
 

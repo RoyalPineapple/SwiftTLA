@@ -1595,7 +1595,7 @@ extension ParserSession {
               member.declName.baseName.text == "finiteValues",
               let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
         else { return nil }
-        return enumDefinition(named: type)?.formalDomain
+        return enumDefinition(named: type)?.finiteValues
     }
 
     func parseInvariant(

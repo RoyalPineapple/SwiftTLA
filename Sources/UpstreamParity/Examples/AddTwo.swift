@@ -10,7 +10,7 @@ import SwiftTLAMacros
 /// gate rather than added to the finite graph-count catalogue.
 @TLAModel
 public struct AddTwoModel: Sendable {
-    private enum Label: String, PlusCalLabel, CaseIterable {
+    private enum Label: String, CaseIterable {
         case increase
     }
 

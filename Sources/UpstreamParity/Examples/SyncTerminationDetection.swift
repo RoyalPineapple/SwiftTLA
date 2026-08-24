@@ -4,14 +4,13 @@ import SwiftTLAMacros
 /// The three-node bounded termination detector from EWD 840.
 @TLAModel
 public struct SyncTerminationDetectionModel: Sendable {
-    public enum Node: Int, CaseIterable, FiniteDomainKey {
+    public enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case zero = 0
         case one = 1
         case two = 2
 
         public static var defaultValue: Self { .zero }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.sync-termination.node")
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .int(rawValue) }
     }
 

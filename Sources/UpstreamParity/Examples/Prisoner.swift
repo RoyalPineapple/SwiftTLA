@@ -8,14 +8,13 @@ import SwiftTLAMacros
 /// policy decides who visits next.
 @TLAModel
 public struct PrisonerModel: Sendable {
-    public enum Prisoner: String, CaseIterable, FiniteDomainKey {
+    public enum Prisoner: String, CaseIterable, FiniteTLAValueDomain {
         case alice = "Alice"
         case bob = "Bob"
         case eve = "Eve"
 
         public static var defaultValue: Self { .alice }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.prisoner")
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
@@ -27,17 +26,16 @@ public struct PrisonerModel: Sendable {
         public static var defaultValue: Self { .off }
     }
 
-    private enum Scheduler: String, CaseIterable, FiniteDomainKey {
+    private enum Scheduler: String, CaseIterable, FiniteTLAValueDomain {
         case warden
 
         static var defaultValue: Self { .warden }
-        static let formalDomain = allCases
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.scheduler")
+        static let finiteValues = allCases
 
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case chooseVisitor
     }
 

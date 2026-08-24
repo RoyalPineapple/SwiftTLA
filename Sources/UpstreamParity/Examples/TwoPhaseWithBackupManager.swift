@@ -7,40 +7,31 @@ import SwiftTLAMacros
 /// keeps that bounded configuration and expresses its three fair process groups,
 /// typed state functions, and `Prepare`, `Decide`, and `Fail` statement macros.
 public struct TwoPhaseWithBackupManagerModel: Sendable {
-    public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
+    public enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
         case one = "rm1"
         case two = "rm2"
         case three = "rm3"
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.two-phase-with-backup.resource-manager"
-        )
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum TransactionManager: String, CaseIterable, FiniteDomainKey {
+    public enum TransactionManager: String, CaseIterable, FiniteTLAValueDomain {
         case primary = "tm"
 
         public static var defaultValue: Self { .primary }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.two-phase-with-backup.transaction-manager"
-        )
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum BackupTransactionManager: String, CaseIterable, FiniteDomainKey {
+    public enum BackupTransactionManager: String, CaseIterable, FiniteTLAValueDomain {
         case backup = "btm"
 
         public static var defaultValue: Self { .backup }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(
-            rawValue: "upstream.two-phase-with-backup.backup-transaction-manager"
-        )
+        public static let finiteValues = allCases
 
         public var tlaValue: TLAValue { .string(rawValue) }
     }
@@ -64,7 +55,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
         public static var defaultValue: Self { .initial }
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case resourceManager = "RS"
         case transactionStart = "TS"
         case transactionCommit = "TC"

@@ -4,17 +4,16 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct DiskStoreModel {
-    public enum Phase: String, CaseIterable, FiniteDomainKey {
+    public enum Phase: String, CaseIterable, FiniteTLAValueDomain {
         case ready
         public static var defaultValue: Self { .ready }
-        public static let formalDomain = allCases
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.disk-store-phase")
+        public static let finiteValues = allCases
         public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum WriteProcess: String, FiniteDomainKey { case writeEvent; static var defaultValue: Self { .writeEvent }; static let formalDomain: [Self] = [.writeEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.disk-store.write"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum DeleteProcess: String, FiniteDomainKey { case deleteEvent; static var defaultValue: Self { .deleteEvent }; static let formalDomain: [Self] = [.deleteEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.disk-store.delete"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum ClearProcess: String, FiniteDomainKey { case clearEvent; static var defaultValue: Self { .clearEvent }; static let formalDomain: [Self] = [.clearEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.disk-store.clear"); var tlaValue: TLAValue { .string(rawValue) } }
-    private enum Step: String, PlusCalLabel, CaseIterable { case write, delete, clear }
+    private enum WriteProcess: String, FiniteTLAValueDomain { case writeEvent; static var defaultValue: Self { .writeEvent }; static let finiteValues: [Self] = [.writeEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum DeleteProcess: String, FiniteTLAValueDomain { case deleteEvent; static var defaultValue: Self { .deleteEvent }; static let finiteValues: [Self] = [.deleteEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum ClearProcess: String, FiniteTLAValueDomain { case clearEvent; static var defaultValue: Self { .clearEvent }; static let finiteValues: [Self] = [.clearEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum Step: String, CaseIterable { case write, delete, clear }
     public static var spec: TLASpec {
         #spec("DiskStoreModel") {
             Algorithm("DiskStoreModel", scoped: { scope in

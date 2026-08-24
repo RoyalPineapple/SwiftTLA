@@ -1,24 +1,22 @@
 # SwiftTLA
 
-**SwiftTLA brings formal programming into Swift.**
+**SwiftTLA declares how an application is allowed to change state.**
 
-**SwiftTLA generates typed Swift state machines and explores reachable behavior within a declared finite configuration.**
+Define explicit state, permitted actions, and rules that must hold. SwiftTLA
+generates a typed Swift machine your application can run. The same model can
+also explore bounded behavior and render TLA+/PlusCal for independent TLC
+comparison.
 
-Define a system's state, actions, algorithms, invariants, and temporal
-properties in Swift. SwiftTLA compiles that source model into a machine that
-your app can run. The same compilation supplies bounded exploration and
-TLA+/PlusCal bundles for TLC.
-
-**One specification. Production behavior. Formal evidence.**
+**One model. Typed application state. Bounded formal evidence.**
 
 ```text
 Swift source model
         │
         ▼
-Compiled specification
- ├── Generated Swift machine
- ├── Model checker
- └── TLA+ and PlusCal bundles
+Generated Swift machine
+ ├── State and Action
+ ├── value, actor, and observation adapters
+ └── bounded exploration and formal bundles
 ```
 
 ## Write the system rules
@@ -33,7 +31,7 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct ClockModel: Sendable {
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case tick
     }
 
@@ -94,14 +92,27 @@ print(result.after)
 // State(hour: 16, minute: 20, second: 0)
 ```
 
-## Validate the same specification
+## Use the machine in SwiftUI
+
+The generated state is ordinary Swift value state. A view renders it and sends
+typed actions; the machine keeps each transition atomic.
+
+```swift
+Button("Tick") {
+    try? clock.send(.tick)
+}
+.disabled((try? clock.isEnabled(.tick)) == false)
+```
+
+Use the generated actor when the application needs shared asynchronous state.
+It owns the same generated machine value behind actor isolation.
+
+## Add bounded assurance
 
 The same compiled specification renders the TLA+ and PlusCal bundles. Core
-conformance explores the compiled machine and compares its canonical graph
-with the TLC graph. Each declared hosted run retains the exact graphs,
-`core-decision.json`, the TLC process record, and their provenance. A graph
-receipt summarizes the completed exploration. Exact graph comparison decides
-the finite case.
+conformance explores the compiled machine and compares its complete bounded
+graph with TLC. See [Core graph conformance](Documentation/CoreGraphConformance.md)
+for the retained audit evidence and precise claim.
 
 ## Use it where state order matters
 
@@ -110,7 +121,7 @@ order: concurrent tasks, retries, cancellation, sync, background work,
 permissions, protocols, and distributed systems.
 
 Use generated `State` and action cases for value-based state. For shared
-running state, use the generated live, actor, or observable surface. See
+running state, use the generated `Live` or nested actor surface. See
 [Generated Machines](Documentation/GeneratedMachines.md) and
 [Live Machines](Documentation/LiveMachines.md).
 

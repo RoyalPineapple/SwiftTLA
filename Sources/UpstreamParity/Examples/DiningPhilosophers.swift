@@ -5,7 +5,7 @@ import SwiftTLAMacros
 // Upstream: specifications/DiningPhilosophers/DiningPhilosophers.tla
 
 public struct DiningPhilosophersModel: Sendable {
-    public enum Philosopher: Int, FiniteDomainKey {
+    public enum Philosopher: Int, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
@@ -13,8 +13,7 @@ public struct DiningPhilosophersModel: Sendable {
         case five = 5
 
         public static var defaultValue: Self { .one }
-        public static let formalDomain: [Self] = [.one, .two, .three, .four, .five]
-        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.dining-philosophers.philosopher")
+        public static let finiteValues: [Self] = [.one, .two, .three, .four, .five]
 
         public var tlaValue: TLAValue { .int(rawValue) }
     }
@@ -41,7 +40,7 @@ public struct DiningPhilosophersModel: Sendable {
         public static let clean = field(\ForkFields.clean)
     }
 
-    private enum Step: String, PlusCalLabel, CaseIterable {
+    private enum Step: String, CaseIterable {
         case loop = "Loop"
         case think = "Think"
         case eat = "Eat"

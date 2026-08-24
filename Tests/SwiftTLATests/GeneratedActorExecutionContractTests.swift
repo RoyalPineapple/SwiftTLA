@@ -35,18 +35,18 @@ struct GeneratedActorExecutionContractTests {
     @Test("actor preserves canonical arbitrary-length evidence")
     func actorMatchesCanonicalSchedule() async throws {
         var canonical = try DuckDuckLeaderCanonical.makeMachine()
-        let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
+        let actor = try DuckDuckLeaderCanonical.Actor()
         let schedule: [DuckDuckLeaderCanonical.Action] = [
             .pass(from: 1, to: 2, round: 1),
             .pass(from: 2, to: 1, round: 2),
             .pass(from: 1, to: 2, round: 3)
         ]
 
-        #expect(try await state(of: actor) == canonical.state)
+        #expect(await actor.state == canonical.state)
 
         for label in schedule {
             let expected = try canonical.send(label)
-            let actual = try committed(try await actor.send(label))
+            let actual = try await actor.send(label)
 
             #expect(actual.action == label)
             #expect(actual.action == expected.action)
@@ -54,28 +54,26 @@ struct GeneratedActorExecutionContractTests {
             #expect(actual.before.turn == expected.before.turn)
             #expect(actual.after.leader == expected.after.leader)
             #expect(actual.after.turn == expected.after.turn)
-            #expect(try await state(of: actor).leader == expected.after.leader)
-            #expect(try await state(of: actor).turn == expected.after.turn)
+            #expect((await actor.state).leader == expected.after.leader)
+            #expect((await actor.state).turn == expected.after.turn)
         }
     }
 
     @Test("actor rejects unavailable invocations without mutation")
     func unavailableActionPreservesActorSnapshot() async throws {
-        let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
+        let actor = try DuckDuckLeaderCanonical.Actor()
         let unavailable = DuckDuckLeaderCanonical.Actor.Action.pass(from: 2, to: 1, round: 1)
-        let before = try await state(of: actor)
-        let outcome = try await actor.send(unavailable)
-        if case .rejected = outcome {
-        } else {
-            Issue.record("Expected unavailable actor action")
+        let before = await actor.state
+        #expect(throws: GeneratedMachineError.self) {
+            try await actor.send(unavailable)
         }
 
-        #expect(try await state(of: actor) == before)
+        #expect(await actor.state == before)
     }
 
     @Test("actor serializes concurrent duplicate submissions")
     func concurrentSubmissionsMatchActualCanonicalEvidence() async throws {
-        let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
+        let actor = try DuckDuckLeaderCanonical.Actor()
         let label = DuckDuckLeaderCanonical.Actor.Action.pass(from: 1, to: 2, round: 1)
 
         async let first = submit(actor, label: label)
@@ -85,7 +83,7 @@ struct GeneratedActorExecutionContractTests {
         var canonical = try DuckDuckLeaderCanonical.makeMachine()
         let expected = try canonical.send(.pass(from: 1, to: 2, round: 1))
         let successful = submissions.compactMap(\.evidence)
-        let rejected = submissions.filter(\.isRejected)
+        let rejected = submissions.filter(\.isUnexpected)
 
         #expect(successful.count == 1)
         #expect(rejected.count == 1)
@@ -94,8 +92,8 @@ struct GeneratedActorExecutionContractTests {
         #expect(successful[0].before.turn == expected.before.turn)
         #expect(successful[0].after.leader == expected.after.leader)
         #expect(successful[0].after.turn == expected.after.turn)
-        #expect(try await state(of: actor).leader == expected.after.leader)
-        #expect(try await state(of: actor).turn == expected.after.turn)
+        #expect((await actor.state).leader == expected.after.leader)
+        #expect((await actor.state).turn == expected.after.turn)
     }
 
     private func submit(
@@ -103,42 +101,19 @@ struct GeneratedActorExecutionContractTests {
         label: DuckDuckLeaderCanonical.Actor.Action
     ) async -> Submission {
         do {
-            switch try await actor.send(label) {
-            case .committed(let evidence):
-                return .applied(.init(
-                    action: evidence.action,
-                    before: evidence.before,
-                    after: evidence.after
-                ))
-            case .rejected:
-                return .rejected
-            case .failed:
-                return .unexpected
-            }
+            let evidence = try await actor.send(label)
+            return .applied(.init(
+                action: evidence.action,
+                before: evidence.before,
+                after: evidence.after
+            ))
         } catch {
             return .unexpected
         }
     }
 
-    private func state(of actor: DuckDuckLeaderCanonical.Actor) async throws -> DuckDuckLeaderCanonical.State {
-        switch try await actor.current() {
-        case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
-        }
-    }
-
-    private func committed(
-        _ outcome: DuckDuckLeaderCanonical.Actor.Outcome
-    ) throws -> DuckDuckLeaderCanonical.Transition {
-        switch outcome {
-        case .committed(let result): return result
-        case .rejected, .failed: throw GeneratedMachineError.noMatchingSuccessor
-        }
-    }
-
     private enum Submission: Sendable {
         case applied(Evidence)
-        case rejected
         case unexpected
 
         var evidence: Evidence? {
@@ -146,10 +121,11 @@ struct GeneratedActorExecutionContractTests {
             return evidence
         }
 
-        var isRejected: Bool {
-            if case .rejected = self { return true }
+        var isUnexpected: Bool {
+            if case .unexpected = self { return true }
             return false
         }
+
     }
 
     private struct Evidence: Sendable {

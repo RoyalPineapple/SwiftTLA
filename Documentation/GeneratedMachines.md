@@ -28,16 +28,7 @@ import SwiftTLAMacros
 
 @TLAModel
 struct BoundedCounter {
-    enum Process: String, FiniteDomainKey {
-        case only
-
-        static let formalDomain: [Process] = [.only]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "documentation.counter.process")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    enum Step: String, PlusCalLabel, CaseIterable {
+    enum Step: String, CaseIterable {
         case advance
     }
 
@@ -45,12 +36,10 @@ struct BoundedCounter {
         #spec("BoundedCounter") {
             Algorithm("BoundedCounter") {
                 let value = SharedVar("value", initial: 0)
-                Each(Process.all) { _ in
-                    Do(Step.advance) {
-                        When(value < 1)
-                        Assign(value, to: value + 1)
-                        Stop()
-                    }
+                Do(Step.advance) {
+                    When(value < 1)
+                    Assign(value, to: value + 1)
+                    Stop()
                 }
             }
         }
@@ -142,20 +131,18 @@ only with generated state and actions.
 
 ## Advanced execution
 
-`Live` and nested `@TLAActor` share a machine when an application needs
-asynchronous coordination. They use the enclosing model's generated `State`
-and `Action` values and send actions through their own isolation boundary.
-They are not required for ordinary SwiftUI use.
+`Live` and nested `@TLAActor` each own a generated machine value when an
+application needs asynchronous coordination. They serialize `send(_:)` and
+expose the same generated `State` and `Action` values used by value and SwiftUI
+code.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
 
 ```swift
-let live = try CounterHost.makeLive()
-let actor = CounterHost.Actor(live: live)
-let outcome = try await actor.send(.advance)
-guard case .committed(let transition) = outcome else { return }
-assert(transition.after.position.value == 1)
+let actor = try CounterHost.Actor()
+let transition = try await actor.send(.advance)
+assert(await actor.state == transition.after)
 ```
 
 ## Test a model integration

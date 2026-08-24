@@ -6,13 +6,12 @@ private struct CompilerPipelineMember: Identifiable, Sendable {
     let id: Int
 }
 
-private enum CompilerPipelineNode: String, FiniteDomainKey, PlusCalLabel, CaseIterable {
+private enum CompilerPipelineNode: String, FiniteTLAValueDomain, CaseIterable {
     case first
     case second
 
     static var defaultValue: Self { .first }
-    static let formalDomain: [Self] = [.first, .second]
-    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.compiler-pipeline.node")
+    static let finiteValues: [Self] = [.first, .second]
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
