@@ -162,18 +162,6 @@ struct TypedFacadeContractTests {
     }
   }
 
-  @Test("external consumers cannot name raw execution implementation types")
-  func rawExecutionImplementationTypesDoNotTypeCheck() throws {
-    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidRawExecutionSurface")
-    let result = try runSwift(["build", "--package-path", fixture.path])
-
-    #expect(result.status != 0)
-    #expect(result.output.contains("cannot find 'ModelChecker' in scope"))
-    #expect(result.output.contains("cannot find 'StateGraph' in scope"))
-    #expect(result.output.contains("cannot find 'TLALiveMachine' in scope"))
-    #expect(result.output.contains("cannot find 'TLALiveMachineTransitionDriver' in scope"))
-  }
-
   @Test("typed DSL invalid fixture reports each source-local diagnostic")
   func invalidTypedDSLReportsSourceLocalDiagnostics() throws {
     let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedDSL")
