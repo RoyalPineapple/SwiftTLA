@@ -132,6 +132,7 @@ struct GeneratedMachineDocumentationTests {
         "Generate a machine",
         "State, actions, and transitions",
         "SwiftUI",
+        "Effects and presentation data",
         "Advanced execution",
         "Test a model integration",
         "Formal verification",
