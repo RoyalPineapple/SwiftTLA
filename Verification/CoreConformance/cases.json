@@ -37,26 +37,7 @@
         "actions": {
           "HCnxt": "HCnxt"
         }
-      },
-      "semanticCitations": [
-        "specifications/SpecifyingSystems/HourClock/HourClock.tla: HCini, HCnxt, HC",
-        "specifications/SpecifyingSystems/HourClock/HourClock.cfg: SPECIFICATION HC, INVARIANT HCini"
-      ],
-      "governance": {
-        "finiteBounds": {
-          "summary": "HourClock has one integer variable over 1...12, 12 reachable states, and 12 labeled transitions.",
-          "limits": {
-            "states": 12,
-            "transitions": 12,
-            "variables": 1
-          }
-        },
-        "semanticCitations": [
-          "specifications/SpecifyingSystems/HourClock/HourClock.tla: HCini, HCnxt, HC",
-          "specifications/SpecifyingSystems/HourClock/HourClock.cfg: SPECIFICATION HC, INVARIANT HCini"
-        ]
-      },
-      "expectedArtifacts": "Verification/CoreConformance/baselines/hour-clock"
+      }
     },
     {
       "id": "die-hard-type-ok",
@@ -99,27 +80,7 @@
           "SmallToBig": "SmallToBig",
           "BigToSmall": "BigToSmall"
         }
-      },
-      "semanticCitations": [
-        "specifications/DieHard/DieHard.tla: TypeOK, Init, FillSmallJug, FillBigJug, EmptySmallJug, EmptyBigJug, SmallToBig, BigToSmall, Spec",
-        "Verification/CoreConformance/fixtures/die-hard-type-ok/DieHard.cfg: SPECIFICATION Spec, INVARIANT TypeOK"
-      ],
-      "governance": {
-        "finiteBounds": {
-          "summary": "DieHard has two bounded jug variables (0...5 and 0...3) with a retained 16-state exact finite graph.",
-          "limits": {
-            "bigCapacity": 5,
-            "smallCapacity": 3,
-            "states": 16,
-            "variables": 2
-          }
-        },
-        "semanticCitations": [
-          "specifications/DieHard/DieHard.tla: TypeOK, Init, FillSmallJug, FillBigJug, EmptySmallJug, EmptyBigJug, SmallToBig, BigToSmall, Spec",
-          "Verification/CoreConformance/fixtures/die-hard-type-ok/DieHard.cfg: SPECIFICATION Spec, INVARIANT TypeOK"
-        ]
-      },
-      "expectedArtifacts": "Verification/CoreConformance/baselines/die-hard-type-ok"
+      }
     },
     {
       "id": "multicar-elevator",
@@ -1295,32 +1256,7 @@
             "\"carB\"": "carB"
           }
         }
-      ],
-      "semanticCitations": [
-        "Sources/UpstreamParity/Examples/MultiCarElevator.swift: bounded builder fixture and ordered ActionParameter declarations",
-        "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla: generated wrapper operators and Next",
-        "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.cfg: bounded safety configuration"
-      ],
-      "governance": {
-        "finiteBounds": {
-          "summary": "Bounded MultiCarElevator: two people, two cars, floors 0...2, two directions, 3,276 reachable states, and explicit ordered three-argument action wrappers.",
-          "limits": {
-            "people": 2,
-            "cars": 2,
-            "floors": 3,
-            "directions": 2,
-            "states": 3276,
-            "variables": 3,
-            "wrappers": 80
-          }
-        },
-        "semanticCitations": [
-          "Sources/UpstreamParity/Examples/MultiCarElevator.swift: bounded builder fixture and ordered ActionParameter declarations",
-          "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla: generated wrapper operators and Next",
-          "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.cfg: bounded safety configuration"
-        ]
-      },
-      "expectedArtifacts": "Verification/CoreConformance/baselines/multicar-elevator"
+      ]
     }
   ]
 }

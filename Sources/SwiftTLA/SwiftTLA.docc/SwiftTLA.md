@@ -75,10 +75,10 @@ source-faithful PlusCal spelling. Change that typed model construct.
 Compilation produces an executable formal model. It does not prove every
 possible TLA+ module or every behavior outside the configured finite bounds.
 For a declared finite case, core conformance records exact SwiftTLA and TLC
-graphs in `core-decision.json`; the decision reloads and compares those records
-before admission. Read <doc:GeneratedMachineSurface> for the generated-machine
+graphs in `core-decision.json`; the decision reloads and compares those records.
+Read <doc:GeneratedMachineSurface> for the generated-machine
 contract, `Documentation/CoreGraphConformance.md` for the comparison record,
-and `Documentation/CoreSupport.md` for admission. Public-workflow evidence is
+and `Documentation/CoreGraphConformance.md` for exact comparison. Public-workflow evidence is
 separately scoped diagnostic or candidate validation.
 
 ## Topics

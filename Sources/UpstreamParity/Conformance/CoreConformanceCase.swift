@@ -129,7 +129,6 @@ public struct CoreConformanceCase: Equatable, Sendable {
     public let architecture: String
     public let environment: [String: String]
     public let pin: TLCReferencePin
-    public let governance: CoreConformanceCaseGovernance?
     public let invocationMappings: [CoreConformanceInvocationMapping]
     public let valueNormalizations: [CoreConformanceValueNormalization]
 
@@ -146,7 +145,6 @@ public struct CoreConformanceCase: Equatable, Sendable {
         architecture: String,
         environment: [String: String],
         pin: TLCReferencePin,
-        governance: CoreConformanceCaseGovernance? = nil,
         invocationMappings: [CoreConformanceInvocationMapping] = [],
         valueNormalizations: [CoreConformanceValueNormalization] = []
     ) throws {
@@ -169,7 +167,6 @@ public struct CoreConformanceCase: Equatable, Sendable {
         self.architecture = architecture
         self.environment = environment
         self.pin = pin
-        self.governance = governance
         self.invocationMappings = invocationMappings
         self.valueNormalizations = valueNormalizations
     }
@@ -267,10 +264,6 @@ func tlaLocationArgumentIdentity(_ argument: String) -> String {
 }
 
 /// The source-controlled declaration for a finite conformance case.
-///
-/// This is deliberately separate from `CoreConformanceCase`: the latter is
-/// the runtime launch contract, while this type retains the governance facts
-/// that make a launch eligible for support evidence.
 public struct CoreConformanceCasesManifest: Decodable, Sendable {
     public static let schema = "CoreConformanceCases"
     public static let relation = "exactFiniteTLCGraph"
@@ -305,15 +298,11 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
         public let identityMapping: IdentityMapping
         public let invocationMappings: [InvocationMapping]
         public let valueNormalizations: [ValueNormalization]
-        public let semanticCitations: [String]
-        public let governance: CoreConformanceCaseGovernance
-        public let expectedArtifacts: String
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case id, swiftSpec, module, configuration, imports, moduleSHA256, cfgSHA256
             case arguments, argumentsSHA256, workers, fingerprintPolynomial, maximumStateLimit, deadlock, replay
-            case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations, semanticCitations, governance
-            case expectedArtifacts
+            case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations
         }
 
         public init(from decoder: Decoder) throws {
@@ -338,18 +327,14 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
             identityMapping = try container.decode(IdentityMapping.self, forKey: .identityMapping)
             invocationMappings = try container.decodeIfPresent([InvocationMapping].self, forKey: .invocationMappings) ?? []
             valueNormalizations = try container.decodeIfPresent([ValueNormalization].self, forKey: .valueNormalizations) ?? []
-            semanticCitations = try container.decode([String].self, forKey: .semanticCitations)
-            governance = try container.decode(CoreConformanceCaseGovernance.self, forKey: .governance)
-            expectedArtifacts = try container.decode(String.self, forKey: .expectedArtifacts)
             try validate()
         }
 
         public func validate() throws {
             guard !id.isEmpty, !swiftSpec.isEmpty, !module.isEmpty, !configuration.isEmpty,
                   Set(imports).count == imports.count, imports.allSatisfy({ !$0.isEmpty }),
-                  !replay.isEmpty, !expectedArtifacts.isEmpty, !upstream.repository.isEmpty,
-                  !upstream.commit.isEmpty, !fixtures.module.isEmpty, !fixtures.configuration.isEmpty,
-                  !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
+                  !replay.isEmpty, !upstream.repository.isEmpty,
+                  !upstream.commit.isEmpty, !fixtures.module.isEmpty, !fixtures.configuration.isEmpty else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
             }
             let computedArgumentsDigest = try CoreConformanceCase.argumentsDigest(arguments)

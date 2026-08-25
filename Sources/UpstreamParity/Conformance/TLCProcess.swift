@@ -633,7 +633,7 @@ private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
 }
 
 private func conformanceCaseJSON(_ declaredCase: CoreConformanceCase) -> [String: Any] {
-  var record: [String: Any] = [
+  let record: [String: Any] = [
     "id": declaredCase.id,
     "moduleSHA256": declaredCase.moduleSHA256,
     "cfgSHA256": declaredCase.cfgSHA256,
@@ -661,15 +661,6 @@ private func conformanceCaseJSON(_ declaredCase: CoreConformanceCase) -> [String
       ]
     }
   ]
-  if let governance = declaredCase.governance {
-    record["governance"] = [
-      "finiteBounds": [
-        "summary": governance.finiteBounds.summary,
-        "limits": governance.finiteBounds.limits
-      ],
-      "semanticCitations": governance.semanticCitations
-    ]
-  }
   return record
 }
 

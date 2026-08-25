@@ -36,8 +36,8 @@ require 'git -C "$baseline_path" rev-parse --verify HEAD'
 require 'git ls-tree HEAD "$baseline_path"'
 require 'Pinned core-conformance baseline is unavailable'
 require 'Pinned core-conformance baseline does not match the repository checkout'
-require "make core-support-gate"
-require ".build/core-support-gate"
+require "make core-conformance"
+require ".build/core-conformance-evidence"
 require "if: always()"
 require "actions/upload-artifact@v6"
 require 'case "$status" in'
@@ -47,12 +47,12 @@ require "2)"
 require "CORE_CONFORMANCE_EXIT"
 require "enforcement_exit=0"
 require "enforcement_exit=2"
-require "exact external verifier or evidence was unavailable"
+require "Core conformance could not complete"
 require "exit 1"
 require "exit 2"
 forbid "validate_upstream_parity.sh"
 forbid "swift test --filter UpstreamParity"
-forbid "make core-conformance"
+forbid "make core-support-gate"
 forbid "pull_request:"
 forbid "curl "
 forbid "wget "

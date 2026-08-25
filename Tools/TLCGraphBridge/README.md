@@ -28,10 +28,8 @@ archive for local reproducibility. It is not a distribution mechanism. If a
 fresh machine cannot retrieve or provide the exact pinned artifacts, setup
 fails instead of accepting a changed artifact.
 
-Use `make core-conformance` for graph comparison, `make core-support-gate` for
-the bounded support decision, and `make ci-local` for the full local gate. The
-bridge spike below is a focused schema/provenance transport check, not a
-complete graph-comparison or support-admission command.
+Use `make core-conformance` for exact graph comparison. The bridge spike below
+is a focused schema and provenance transport check, not a complete comparison.
 
 Run the bounded spike with:
 

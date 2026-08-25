@@ -14,7 +14,7 @@ if args.first == "public-workflow" {
 guard let name = args.first else {
     fputs("""
     Usage: tlc-validate <command>
-      core-conformance run|gate ...
+      core-conformance run ...
       temporal-symmetry run|gate ...
       public-workflow ...
     """, stderr)
@@ -122,9 +122,7 @@ enum CoreConformanceCLIError: Error, CustomStringConvertible {
     case outputExists(String)
     case unsupportedSwiftSpec(String)
     case invalidReplayPolicy(String)
-    case invalidGateRunID(String)
-    case invalidPrerequisite(String)
-    case unableToWriteReport(String)
+    case invalidRunID(String)
     var description: String {
         switch self {
         case .usage:
@@ -143,21 +141,14 @@ enum CoreConformanceCLIError: Error, CustomStringConvertible {
             return "unsupported Swift core-conformance spec: \(id)"
         case .invalidReplayPolicy(let policy):
             return "invalid core-conformance replay policy: \(policy)"
-        case .invalidGateRunID(let value):
-            return "invalid core-support gate run ID: \(value)"
-        case .invalidPrerequisite(let value):
-            return "invalid core-support prerequisite status: \(value)"
-        case .unableToWriteReport(let path):
-            return "unable to write core-support admission report: \(path)"
+        case .invalidRunID(let value):
+            return "invalid core-conformance run ID: \(value)"
         }
     }
 }
 private func runCoreConformance(arguments: [String]) -> Never {
     guard let command = arguments.first else {
         failCoreConformance(CoreConformanceCLIError.usage)
-    }
-    if command == "gate" {
-        runCoreSupportGate(arguments: Array(arguments.dropFirst()))
     }
     guard command == "run" else {
         failCoreConformance(CoreConformanceCLIError.usage)
@@ -278,7 +269,7 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 workingDirectory: runRoot,
                 arguments: entry.arguments,
                 expectedCase: caseDefinition,
-                runID: options.gateRunID ?? UUID(),
+                runID: options.runID ?? UUID(),
                 referencePin: pin,
                 referenceArtifacts: referenceArtifacts
             )
@@ -329,125 +320,6 @@ private func runCoreConformance(arguments: [String]) -> Never {
         exit(exitCode)
     } catch { failCoreConformance(error) }
 }
-private func runCoreSupportGate(arguments: [String]) -> Never {
-    let options: CoreSupportGateOptions
-    do {
-        options = try parseCoreSupportGateOptions(arguments)
-    } catch {
-        failCoreConformance(error)
-    }
-    let environment = ProcessInfo.processInfo.environment
-    let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-    let reportURL = URL(fileURLWithPath: options.report).standardizedFileURL
-    let report: CoreSupportAdmission
-    let registersLoaded: Bool
-    let requestedSupportIsAdmitted: Bool
-    do {
-        let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
-        let manifest = try decode(CoreConformanceCasesManifest.self, at: URL(fileURLWithPath: casesPath))
-        let toolchain = try decode(
-            CoreConformanceToolchain.self,
-            at: projectRoot.appendingPathComponent("Verification/CoreConformance/toolchain.json"))
-        guard toolchain.schema == "TLCReferencePin" else {
-            throw CoreConformanceCLIError.invalidManifest("unsupported toolchain schema")
-        }
-        let architecture = try normalizedArchitecture()
-        guard let javaArchive = toolchain.java.archives[architecture] else {
-            throw CoreConformanceCLIError.invalidManifest("no locked archive for \(architecture)")
-        }
-        let referencePin = try referencePin(from: toolchain, javaArchive: javaArchive)
-        let surface = try decode(
-            CoreSupportSurface.self,
-            at: governanceURL(
-                environment["CORE_CONFORMANCE_SUPPORT_SURFACE"],
-                projectRoot: projectRoot,
-                defaultPath: "Verification/CoreConformance/support-surface.json"))
-        let evidenceRoot = URL(fileURLWithPath: options.evidence).standardizedFileURL
-        let evidence = manifest.cases.map {
-            CoreSupportCaseEvidence(
-                caseID: $0.id,
-                directory: evidenceRoot.appendingPathComponent($0.id, isDirectory: true),
-                relativeDirectory: $0.id)
-        }
-        report = try CoreSupportGate().evaluate(CoreSupportGateInput(
-            gateRunID: options.gateRunID,
-            referencePin: referencePin,
-            manifest: manifest,
-            surface: surface,
-            evidence: evidence,
-            prerequisiteAvailable: options.prerequisiteAvailable))
-        registersLoaded = true
-        requestedSupportIsAdmitted = !surface.entries.filter {
-            $0.requestedStatus == .requested
-        }.isEmpty && surface.entries.filter {
-            $0.requestedStatus == .requested
-        }.allSatisfy { entry in
-            report.entries.first(where: { $0.supportID == entry.id })?.decision == .admitted
-        }
-    } catch {
-        do {
-            report = try invalidRegisterReport(gateRunID: options.gateRunID)
-        } catch {
-            failCoreConformance(error)
-        }
-        registersLoaded = false
-        requestedSupportIsAdmitted = false
-        fputs("core-support-gate: register loading failed: \(error)\n", stderr)
-    }
-    do {
-        try ConformanceEvidence.writePrettyCanonical(report, to: reportURL)
-    } catch {
-        failCoreConformance(CoreConformanceCLIError.unableToWriteReport(reportURL.path))
-    }
-    for entry in report.entries {
-        let reasons = entry.reasonCodes.map(\.rawValue).joined(separator: ",")
-        print("core-support-gate \(entry.supportID): \(entry.decision.rawValue) \(reasons)")
-    }
-    print("core-support-gate: \(report.finalExitClass.rawValue) \(reportURL.path)")
-    exit(coreSupportGateExitCode(
-        report: report,
-        registersLoaded: registersLoaded,
-        requestedSupportIsAdmitted: requestedSupportIsAdmitted,
-        prerequisiteAvailable: options.prerequisiteAvailable,
-        conformanceExitCode: options.conformanceExitCode))
-}
-/// Exit 1 is reserved for a complete, current evidence evaluation that blocks
-/// requested support. Setup, execution, governance, and evidence failures use
-/// exit 2 so automation cannot mistake them for a semantic disagreement.
-private func coreSupportGateExitCode(
-    report: CoreSupportAdmission,
-    registersLoaded: Bool,
-    requestedSupportIsAdmitted: Bool,
-    prerequisiteAvailable: Bool,
-    conformanceExitCode: Int32
-) -> Int32 {
-    let systemReasons: Set<CoreSupportReasonCode> = [
-        .invalidRegister,
-        .missingPrerequisite,
-        .missingEvidence,
-        .partialEvidence,
-        .foreignRun,
-        .manifestDigestMismatch,
-        .toolchainDigestMismatch,
-        .executionFailed
-    ]
-    let hasSystemFailure = report.entries.contains { entry in
-        !systemReasons.isDisjoint(with: Set(entry.reasonCodes))
-    }
-    guard registersLoaded,
-          prerequisiteAvailable,
-          conformanceExitCode != CoreConformanceExitCode.failure.rawValue,
-          !hasSystemFailure
-    else {
-        return CoreConformanceExitCode.failure.rawValue
-    }
-    if report.finalExitClass == .success, requestedSupportIsAdmitted {
-        return conformanceExitCode == CoreConformanceExitCode.exact.rawValue
-          ? CoreConformanceExitCode.exact.rawValue
-          : CoreConformanceExitCode.failure.rawValue
-    }
-    return CoreConformanceExitCode.semanticDifference.rawValue
-}
 private func failCoreConformance(_ error: Error) -> Never {
     fputs("core-conformance: \(error)\n", stderr)
     exit(CoreConformanceExitCode.failure.rawValue)
@@ -457,14 +329,6 @@ private func governanceURL(_ configuredPath: String?, projectRoot: URL, defaultP
         return URL(fileURLWithPath: configuredPath).standardizedFileURL
     }
     return projectRoot.appendingPathComponent(defaultPath)
-}
-private func invalidRegisterReport(gateRunID: UUID) throws -> CoreSupportAdmission {
-    let entry = try CoreSupportAdmissionEntry(
-        supportID: "governance-register",
-        decision: .blocked,
-        reasonCodes: [.invalidRegister],
-        mandatoryCaseIDs: ["governance-register"])
-    return try CoreSupportAdmission(gateRunID: gateRunID, entries: [entry])
 }
 private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
     case usage

@@ -65,26 +65,26 @@ jobs:
       - name: Validate focused workflow contract
         run: Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
 
-      - name: Run mandatory core-support gate
+      - name: Run exact core conformance
         id: conformance
         run: |
           set +e
-          make core-support-gate
+          make core-conformance
           status=$?
 
           mkdir -p .build/core-conformance-ci
           printf '%s\n' "$status" > .build/core-conformance-ci/exit-code
           case "$status" in
             0)
-              echo "Core support gate passed (exit 0)."
+              echo "Exact core conformance passed (exit 0)."
               echo "enforcement_exit=0" >> "$GITHUB_OUTPUT"
               ;;
             1)
-              echo "::error::Core support gate blocked admission (exit 1)."
+              echo "::error::Core graphs differ (exit 1)."
               echo "enforcement_exit=1" >> "$GITHUB_OUTPUT"
               ;;
             2)
-              echo "::error::Core support gate could not evaluate because its exact external verifier or evidence was unavailable (exit 2)."
+              echo "::error::Core conformance could not complete (exit 2)."
               echo "enforcement_exit=2" >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -100,7 +100,7 @@ jobs:
         with:
           name: core-conformance-${{ github.run_id }}
           path: |
-            .build/core-support-gate
+            .build/core-conformance-evidence
             .build/core-conformance-ci
           if-no-files-found: warn
 
