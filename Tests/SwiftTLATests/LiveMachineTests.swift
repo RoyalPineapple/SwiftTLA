@@ -13,8 +13,6 @@ private struct LiveCounter {
         }
     }
 
-    @TLAActor
-    actor Actor {}
 }
 
 @Suite("Live machine")
