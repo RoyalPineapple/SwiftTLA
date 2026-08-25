@@ -1,10 +1,11 @@
 import SwiftUI
 import Bluetooth
 import CoreBluetooth
+import Observation
 
 @main
 struct BLEScannerApp: App {
-    @StateObject private var controller = BLEController()
+    @State private var controller = BLEController()
 
     var body: some Scene {
         WindowGroup {
@@ -60,10 +61,11 @@ struct DiscoveredDevice: Identifiable {
 }
 
 @MainActor
-final class BLEController: ObservableObject {
-    @Published var devices: [DiscoveredDevice] = []
-    @Published var isScanning = false
-    @Published var diagnostic: String?
+@Observable
+final class BLEController {
+    var devices: [DiscoveredDevice] = []
+    var isScanning = false
+    var diagnostic: String?
     private var ble: Bluetooth?
     private var scanTask: Task<Void, Never>?
     private var seen = Set<UUID>()
