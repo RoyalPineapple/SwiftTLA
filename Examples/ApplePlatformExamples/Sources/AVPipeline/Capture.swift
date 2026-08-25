@@ -60,7 +60,7 @@ public enum Media {
             delegate.actor = self
         }
 
-        public func phase() async -> CaptureModel.Phase { machine.state.phase }
+        public var state: CaptureModel.State { machine.state }
 
         public func configure(device: AVCaptureDevice) async throws {
             guard try machine.isEnabled(.configure) else { throw MediaError.cannotConfigure }

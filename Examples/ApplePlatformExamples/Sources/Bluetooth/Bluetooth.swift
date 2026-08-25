@@ -138,6 +138,8 @@ public actor Bluetooth {
         delegate.owner = self
     }
 
+    public var state: BluetoothModel.State { machine.state }
+
     public func ready() async throws {
         if let diagnostic { throw BleError.transitionFailed(diagnostic) }
         if machine.state.phase == .poweredOn { return }

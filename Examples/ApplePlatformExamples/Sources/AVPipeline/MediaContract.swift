@@ -46,5 +46,5 @@ public actor MediaContract {
         player = try Media.Player(url: outputURL)
     }
 
-    public func stage() async -> MediaPipelineModel.Stage { machine.state.stage }
+    public var state: MediaPipelineModel.State { machine.state }
 }

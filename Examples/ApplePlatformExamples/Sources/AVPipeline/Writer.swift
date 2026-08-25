@@ -46,7 +46,7 @@ extension Media {
             writer.add(input)
         }
 
-        public func phase() async -> WriterModel.Phase { machine.state.phase }
+        public var state: WriterModel.State { machine.state }
 
         public func start() async throws {
             guard try machine.isEnabled(.start) else { throw MediaError.notConfigured }
