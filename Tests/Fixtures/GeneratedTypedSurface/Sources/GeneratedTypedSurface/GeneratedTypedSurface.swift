@@ -3,11 +3,19 @@ import SwiftTLAMacros
 
 @TLAModel
 struct GeneratedTypedSurface {
+  enum Step: String, CaseIterable {
+    case advance
+  }
+
   static var spec: TLASpec {
-    TLASpec("GeneratedTypedSurface") {
-      let value = Var<Int>("value")
-      Variable(value, 0)
-      Action("advance") { value.becomes(value + 1).when(value < 1) }
+    #spec("GeneratedTypedSurface") {
+      Algorithm("GeneratedTypedSurface", scoped: { scope in
+        let value = scope.sharedVar("value", initial: 0)
+        Do(Step.advance) {
+          When(value < 1)
+          Assign(value, to: value + 1)
+        }
+      })
     }
   }
 }
@@ -18,7 +26,7 @@ requireSendable(GeneratedTypedSurface.State.self)
 requireSendable(GeneratedTypedSurface.Action.self)
 requireSendable(GeneratedTypedSurface.Transition.self)
 
-var machine = GeneratedTypedSurface()
+var machine = try GeneratedTypedSurface.makeMachine()
 let action: GeneratedTypedSurface.Action = .advance
 let result = try machine.send(action)
 

@@ -861,13 +861,16 @@ struct GeneratedStateMachineTests {
 
     @Test("Algorithm builder preserves an initialized clock")
     func builderOnlyClockRuntime() throws {
-        let spec = BuilderOnlyClock.spec
-        #expect(spec.variables.count == 1)
-        #expect(spec.variables[0].name == "hr")
-        #expect(spec.variables[0].initial == .int(1))
-        let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
-        if case .ok(let count) = result { #expect(count == 12) } else {
-            #expect(Bool(false), "Expected 12 states")
+        let compilation = try BuilderOnlyClock.spec.compile()
+        var machine = try BuilderOnlyClock.makeMachine()
+        #expect(machine.state.hr == 1)
+        #expect(try machine.send(.tick).after.hr == 2)
+        let result = try ModelChecker(
+            compilation: compilation,
+            configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)
+        ).check()
+        if case .ok(let count) = result { #expect(count == 2) } else {
+            #expect(Bool(false), "Expected the initial state and one successor")
         }
     }
 

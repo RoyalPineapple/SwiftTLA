@@ -64,6 +64,15 @@ jobs:
       - uses: actions/checkout@v5
       - run: swift build --target SwiftTLA -j 1
 
+  public-api:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - run: >-
+          ./scripts/local-validation.sh swiftpm-test
+          'SwiftTLATests\.(GeneratedStateMachineTests|GeneratedActorExecutionContractTests|NestedComposableMacroConformanceTests|GeneratedMachineDocumentationTests)'
+
   apple-platform-examples:
     runs-on: macos-15
     timeout-minutes: 15
