@@ -8,67 +8,16 @@ if args.first == "core-conformance" {
 if args.first == "temporal-symmetry" {
     runTemporalSymmetry(arguments: Array(args.dropFirst()))
 }
-if args.first == "public-workflow" {
-    runPublicWorkflow(arguments: Array(args.dropFirst()))
-}
 guard let name = args.first else {
     fputs("""
     Usage: tlc-validate <command>
       core-conformance run ...
       temporal-symmetry run ...
-      public-workflow ...
     """, stderr)
     exit(1)
 }
 fputs("tlc-validate: unknown command \(name)\n", stderr)
 exit(1)
-private struct PublicWorkflowOptions {
-    let output: String
-    let hostedCI: Bool
-}
-
-private func runPublicWorkflow(arguments: [String]) -> Never {
-    do {
-        let options = try parsePublicWorkflowOptions(arguments)
-        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let result = try PublicWorkflowConformanceRunner().run(.init(
-            projectRoot: root,
-            outputRoot: URL(fileURLWithPath: options.output),
-            hostedCI: options.hostedCI))
-        for check in result.report.checks {
-            print("public-workflow \(check.id): \(check.status.rawValue) \(check.actualOutcome?.rawValue ?? "unavailable")")
-        }
-        print("public-workflow: \(result.report.finalExitClass.rawValue) \(result.reportURL.path)")
-        switch result.report.finalExitClass {
-        case .success: exit(0)
-        case .blocked: exit(1)
-        case .unavailable: exit(2)
-        }
-    } catch {
-        fputs("public-workflow: \(error)\n", stderr)
-        exit(2)
-    }
-}
-
-private func parsePublicWorkflowOptions(_ arguments: [String]) throws -> PublicWorkflowOptions {
-    var output = ".build/public-workflow-support-gate"
-    var hostedCI = false
-    var index = 0
-    while index < arguments.count {
-        switch arguments[index] {
-        case "--output":
-            guard index + 1 < arguments.count else { throw CoreConformanceCLIError.usage }
-            output = arguments[index + 1]
-            index += 2
-        case "--hosted-ci":
-            hostedCI = true
-            index += 1
-        default:
-            throw CoreConformanceCLIError.usage
-        }
-    }
-    return PublicWorkflowOptions(output: output, hostedCI: hostedCI)
-}
 struct CoreConformanceToolchain: Decodable {
     let schema: String
     let tlc: TLC
