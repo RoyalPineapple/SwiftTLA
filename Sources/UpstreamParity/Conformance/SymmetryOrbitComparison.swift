@@ -2,7 +2,6 @@ import Foundation
 
 public enum SymmetryOrbitDifferenceKind: String, Codable, Sendable {
   case rawStateSet
-  case reducedRepresentative
   case quotientTransition
   case invariantOutcome
   case deadlockOutcome
@@ -120,10 +119,6 @@ public struct SymmetryOrbitComparator: Sendable {
     let tlcReducedQuotient = quotientTransitions(input.tlcReducedRun, derivation: derivation)
 
     var differences: [SymmetryOrbitDifference] = []
-    if swiftRepresentatives != tlcRepresentatives {
-      differences.append(try SymmetryOrbitDifference(
-        kind: .reducedRepresentative, detail: "Swift and TLC reduced representatives differ by orbit"))
-    }
     if expectedQuotient != tlcRawQuotient || expectedQuotient != swiftReducedQuotient
       || expectedQuotient != tlcReducedQuotient {
       differences.append(try SymmetryOrbitDifference(

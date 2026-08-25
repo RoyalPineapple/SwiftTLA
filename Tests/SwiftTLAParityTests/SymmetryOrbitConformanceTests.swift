@@ -26,6 +26,17 @@ struct SymmetryOrbitConformanceTests {
     #expect(comparison.rawTransitionWitnesses.count == 2)
   }
 
+  @Test("Different executable representatives of the same orbit agree")
+  func differentExecutableRepresentativesAgree() throws {
+    let input = try fixture(reducedStates: [state("A")], tlcReducedStates: [state("B")])
+    guard case .exact(let comparison) = try SymmetryOrbitComparator().compare(input) else {
+      Issue.record("Expected exact orbit comparison")
+      return
+    }
+    #expect(comparison.orbits[0].swiftExecutableRepresentative == state("A").key.canonicalEncoding)
+    #expect(comparison.orbits[0].tlcExecutableRepresentative == state("B").key.canonicalEncoding)
+  }
+
   @Test("Raw state-set differences produce structured comparison differences")
   func rawStateSetDifferenceIsStructured() throws {
     let rawStates = [state("A"), state("B")]
@@ -148,8 +159,12 @@ struct SymmetryOrbitConformanceTests {
       invariantOutcome: .satisfied, deadlockOutcome: .notApplicable)
   }
 
-  private func fixture(reducedStates: [CanonicalState]) throws -> SymmetryOrbitComparisonInput {
+  private func fixture(
+    reducedStates: [CanonicalState],
+    tlcReducedStates: [CanonicalState]? = nil
+  ) throws -> SymmetryOrbitComparisonInput {
     let rawStates = [state("A"), state("B")]
+    let tlcReducedStates = tlcReducedStates ?? reducedStates
     let correlation = try TemporalSymmetryCaseRunCorrelation(
       caseID: "scope-2", runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     return try SymmetryOrbitComparisonInput(
@@ -159,9 +174,9 @@ struct SymmetryOrbitConformanceTests {
       swiftRaw: try exploration(.swift, false, correlation.swiftRunID, states: rawStates),
       swiftReduced: try exploration(.swift, true, UUID(), states: reducedStates),
       tlcRaw: try exploration(.tlc, false, correlation.tlcRunID, states: rawStates),
-      tlcReduced: try exploration(.tlc, true, UUID(), states: reducedStates),
+      tlcReduced: try exploration(.tlc, true, UUID(), states: tlcReducedStates),
       swiftRawRun: try run(states: rawStates), swiftReducedRun: try run(states: reducedStates),
-      tlcRawRun: try run(states: rawStates), tlcReducedRun: try run(states: reducedStates),
+      tlcRawRun: try run(states: rawStates), tlcReducedRun: try run(states: tlcReducedStates),
       configurationEvidence: try evidence("config.json"), quotientEvidence: try evidence("quotient.json"),
       permutations: [try SymmetryPermutation(constantMapping: ["A": "A", "B": "B"]),
                      try SymmetryPermutation(constantMapping: ["A": "B", "B": "A"])])

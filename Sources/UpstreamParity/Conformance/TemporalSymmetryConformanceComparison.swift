@@ -387,11 +387,12 @@ public struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
       throw ConformanceGovernanceError.invalidField(record: caseID, field: "configuration equivalence")
     }
     let rawStateIDs = Set(orbits.flatMap(\.members))
-    let representatives = Set(orbits.map(\.semanticRepresentative))
+    let swiftRepresentatives = Set(orbits.map(\.swiftExecutableRepresentative))
+    let tlcRepresentatives = Set(orbits.map(\.tlcExecutableRepresentative))
     let orbitPartitionMatches = Set(swiftRaw.stateIDs) == rawStateIDs
       && Set(tlcRaw.stateIDs) == rawStateIDs
-      && Set(swiftReduced.stateIDs) == representatives
-      && Set(tlcReduced.stateIDs) == representatives
+      && Set(swiftReduced.stateIDs) == swiftRepresentatives
+      && Set(tlcReduced.stateIDs) == tlcRepresentatives
     let expectedRawWitnesses = Set(swiftRaw.transitions + tlcRaw.transitions)
     guard Set(rawTransitionWitnesses) == expectedRawWitnesses, !quotientTransitions.isEmpty,
           Set(quotientTransitions).count == quotientTransitions.count,
@@ -461,13 +462,19 @@ public struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
   }
 
   private func reducedRelation(_ exploration: SymmetryExploration) -> Set<SymmetryQuotientTransition>? {
-    let representatives = Set(orbits.map(\.semanticRepresentative))
+    let representatives = Dictionary(uniqueKeysWithValues: orbits.map { orbit in
+      let executable = exploration.engine == .swift
+        ? orbit.swiftExecutableRepresentative
+        : orbit.tlcExecutableRepresentative
+      return (executable, orbit.semanticRepresentative)
+    })
     let mapped = exploration.transitions.compactMap { transition -> SymmetryQuotientTransition? in
-      guard representatives.contains(transition.sourceStateID), representatives.contains(transition.targetStateID) else {
+      guard let source = representatives[transition.sourceStateID],
+            let target = representatives[transition.targetStateID] else {
         return nil
       }
       return try? SymmetryQuotientTransition(
-        sourceRepresentative: transition.sourceStateID, action: transition.action, targetRepresentative: transition.targetStateID)
+        sourceRepresentative: source, action: transition.action, targetRepresentative: target)
     }
     guard mapped.count == exploration.transitions.count else { return nil }
     return Set(mapped)
