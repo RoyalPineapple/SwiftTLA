@@ -450,7 +450,9 @@ final class CameraController {
             capture.session.addOutput(output)
             movieOutput = output
             try await capture.start()
-            _ = send(.ready)
+            if send(.ready) == false {
+                try await capture.stop()
+            }
         } catch {
             diagnostic = "Camera setup failed: \(error)"
         }
