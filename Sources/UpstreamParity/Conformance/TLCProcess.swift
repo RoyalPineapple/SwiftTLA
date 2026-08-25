@@ -167,7 +167,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
         ))
       }
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
-        path: bundle.root.name + ".tla", reason: sanitized(error.localizedDescription)
+        path: bundle.root.name + ".tla", reason: redactingSecrets(in: error.localizedDescription)
       ))
     }
   }
@@ -203,7 +203,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     } catch {
       try? FileManager.default.removeItem(at: input)
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
-        path: input.path, reason: sanitized(error.localizedDescription)
+        path: input.path, reason: redactingSecrets(in: error.localizedDescription)
       ))
     }
   }
@@ -230,7 +230,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
       return TLAModuleBundle.external(root: rootFile, imports: importedFiles)
     } catch {
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
-        path: root.path, reason: sanitized(error.localizedDescription)
+        path: root.path, reason: redactingSecrets(in: error.localizedDescription)
       ))
     }
   }
@@ -566,7 +566,7 @@ package struct TLCProcessAdapter: Sendable {
       if let result = results[phase] {
         record[phase.rawValue] = processJSON(result)
       } else if let failure = failures[phase] {
-        record[phase.rawValue] = ["executionError": sanitized(failure.message)]
+        record[phase.rawValue] = ["executionError": redactingSecrets(in: failure.message)]
       } else {
         record[phase.rawValue] = NSNull()
       }
@@ -575,8 +575,14 @@ package struct TLCProcessAdapter: Sendable {
   }
 
   private func retain(_ result: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
-    try ConformanceEvidence.writeText(sanitized(result.stdout), to: directory.appendingPathComponent(phase.stdoutLog))
-    try ConformanceEvidence.writeText(sanitized(result.stderr), to: directory.appendingPathComponent(phase.stderrLog))
+    try ConformanceEvidence.writeText(
+      redactingSecrets(in: result.stdout),
+      to: directory.appendingPathComponent(phase.stdoutLog)
+    )
+    try ConformanceEvidence.writeText(
+      redactingSecrets(in: result.stderr),
+      to: directory.appendingPathComponent(phase.stderrLog)
+    )
   }
 
   private func retain(
@@ -585,11 +591,17 @@ package struct TLCProcessAdapter: Sendable {
     in directory: URL
   ) throws {
     if let stdout = failure.partialStdout, let stderr = failure.partialStderr {
-      try ConformanceEvidence.writeText(sanitized(stdout), to: directory.appendingPathComponent(phase.stdoutLog))
-      try ConformanceEvidence.writeText(sanitized(stderr), to: directory.appendingPathComponent(phase.stderrLog))
+      try ConformanceEvidence.writeText(
+        redactingSecrets(in: stdout),
+        to: directory.appendingPathComponent(phase.stdoutLog)
+      )
+      try ConformanceEvidence.writeText(
+        redactingSecrets(in: stderr),
+        to: directory.appendingPathComponent(phase.stderrLog)
+      )
     } else {
       try ConformanceEvidence.writeText(
-        sanitized(failure.message),
+        redactingSecrets(in: failure.message),
         to: directory.appendingPathComponent("tlc.\(phase.rawValue).failure.log")
       )
     }
@@ -612,11 +624,6 @@ func processJSON(_ result: TLCProcessResult) -> [String: Any] {
 
 private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
   [
-    "correlation": [
-      "caseID": request.caseID,
-      "runID": request.runID.uuidString.lowercased(),
-      "engine": CoreConformanceEngine.tlc.rawValue
-    ],
     "case": conformanceCaseJSON(request.expectedCase),
     "toolchain": toolchainJSON(request),
     "arguments": request.arguments,

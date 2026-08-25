@@ -4,7 +4,7 @@ import SwiftTLA
 import Testing
 import UpstreamParity
 struct CoreConformanceRunnerTests {
-  @Test("runner retains separate engine evidence and reports same-count edge differences")
+  @Test("runner retains complete graphs and reports same-count edge differences")
   func retainsIndependentRunsAtomically() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -24,12 +24,13 @@ struct CoreConformanceRunnerTests {
     )
     #expect(result.exitCode == .semanticDifference)
     #expect(result.comparison?.differences.contains { $0.category == .edges } == true)
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.graph/000000.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.graph/000000.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("core-decision.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
+    let swiftCompletion = try graphCompletion(
+      at: output.appendingPathComponent("swift-graph.jsonl"))
+    let tlcCompletion = try graphCompletion(
+      at: output.appendingPathComponent("tlc-graph.jsonl"))
+    #expect(swiftCompletion["eligible"] as? Bool == true)
+    #expect(tlcCompletion["eligible"] as? Bool == true)
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     let processRequest = try #require(process["request"] as? [String: Any])
     #expect((processRequest["case"] as? [String: Any])?["id"] as? String == request.expectedCase.id)
@@ -37,10 +38,7 @@ struct CoreConformanceRunnerTests {
     #expect((processRequest["toolchain"] as? [String: Any])?["declaredPin"] != nil)
     #expect((processRequest["bundle"] as? [String: Any])?["root"] as? String == "Fixture")
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
-    let swift = try json(at: output.appendingPathComponent("swift-run.json"))
-    let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
-    #expect(correlation(in: swift)["engine"] as? String == "swift")
-    #expect(correlation(in: tlc)["engine"] as? String == "tlc")
+    #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
     let comparison = try #require(result.comparison)
     let report = try #require(comparison.failureReports.first {
       $0.whatFailed == "The labeled transition multisets differ."
@@ -68,9 +66,8 @@ struct CoreConformanceRunnerTests {
     )
     #expect(result.exitCode == .failure)
     #expect(result.evidenceDirectory == output)
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-graph.jsonl").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("diagnostic.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
     #expect(
       fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.stdout.log").path))
@@ -189,8 +186,8 @@ struct CoreConformanceRunnerTests {
     #expect(diagnostic["phase"] as? String == "tlc-parsing")
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
   }
-  @Test("runner replaces stale raw output and serializes one canonical run")
-  func replacesStaleRawOutputAndRetainsCanonicalRun() throws {
+  @Test("runner replaces stale raw output and retains one complete TLC graph")
+  func replacesStaleRawOutputAndRetainsCompleteGraph() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
@@ -215,20 +212,15 @@ struct CoreConformanceRunnerTests {
     )
     #expect(result.exitCode == .exact)
     #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == stream)
-    let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
-    #expect(tlc["format"] as? String == "canonical-run-evidence")
-    let graph = try #require(tlc["graph"] as? [String: Any])
-    let chunks = try #require(graph["chunks"] as? [[String: Any]])
-    #expect(chunks.count == 1)
-    let graphRecords = try String(
-      contentsOf: output.appendingPathComponent("tlc-run.graph/000000.jsonl"), encoding: .utf8)
-      .split(separator: "\n")
-    #expect(graphRecords.filter { $0.hasPrefix("state:") }.count == 2)
-    #expect(graphRecords.filter { $0.hasPrefix("edge:") }.count == 1)
+    let tlcGraph = output.appendingPathComponent("tlc-graph.jsonl")
+    #expect(try graphCompletion(at: tlcGraph)["eligible"] as? Bool == true)
+    let graphRecords = try graphRecords(at: tlcGraph)
+    #expect(graphRecords.filter { $0["type"] as? String == "state" }.count == 2)
+    #expect(graphRecords.filter { $0["type"] as? String == "edge" }.count == 1)
   }
 
-  @Test("matching evidence retains and verifies the exact canonical decision")
-  func retainsVerifiableCanonicalDecision() throws {
+  @Test("matching evidence retains both complete graphs and one exact comparison")
+  func retainsExactComparison() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
@@ -252,12 +244,15 @@ struct CoreConformanceRunnerTests {
     )
 
     #expect(result.exitCode == .exact)
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("core-decision.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.graph/000000.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.graph/000000.jsonl").path))
+    let swiftCompletion = try graphCompletion(
+      at: output.appendingPathComponent("swift-graph.jsonl"))
+    let tlcCompletion = try graphCompletion(
+      at: output.appendingPathComponent("tlc-graph.jsonl"))
+    #expect(swiftCompletion["eligible"] as? Bool == true)
+    #expect(tlcCompletion["eligible"] as? Bool == true)
+    #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "exact")
   }
 }
 
@@ -450,7 +445,6 @@ extension CoreConformanceRunnerTests {
     #expect(evidence != output)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("existing.txt").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("diagnostic.json").path))
-    #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("run.json").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("tlc-process.json").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("graph-events.jsonl").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("graph-events.trace.jsonl").path))
@@ -494,9 +488,8 @@ extension CoreConformanceRunnerTests {
       results.values.first { $0.exitCode == .failure }?.evidenceDirectory)
     #expect(losingEvidence != output)
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("diagnostic.json").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("run.json").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("swift-run.json").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-run.json").path))
+    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("swift-graph.jsonl").path))
+    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-graph.jsonl").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-process.json").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.trace.stdout.log").path))
@@ -512,12 +505,9 @@ extension CoreConformanceRunnerTests {
     #expect(
       (try String(contentsOf: losingEvidence.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "primary invocation"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
-    let run = try json(at: output.appendingPathComponent("run.json"))
-    let exitCode = try #require(run["exitCode"] as? Int)
-    #expect(exitCode == CoreConformanceExitCode.semanticDifference.rawValue)
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-graph.jsonl").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-graph.jsonl").path))
+    #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
   }
   private func swiftEvidence(
     for declaredCase: CoreConformanceCase,
@@ -748,6 +738,16 @@ private func json(at url: URL) throws -> [String: Any] {
   try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
 }
 
+private func graphRecords(at url: URL) throws -> [[String: Any]] {
+  try Data(contentsOf: url).split(separator: 0x0a).map {
+    try #require(JSONSerialization.jsonObject(with: Data($0)) as? [String: Any])
+  }
+}
+
+private func graphCompletion(at url: URL) throws -> [String: Any] {
+  try #require(graphRecords(at: url).last)
+}
+
 private func fixtureProjection(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
   try projection(entries)
 }
@@ -757,9 +757,6 @@ private func fixtureCompilationIdentity() throws -> CompilationIdentity {
   return try TLASpec("Fixture") {
     Variable(value, 0)
   }.compile().identity
-}
-private func correlation(in object: [String: Any]) -> [String: Any] {
-  object["correlation"] as? [String: Any] ?? [:]
 }
 private func graphStream(for declaredCase: CoreConformanceCase, runID: UUID) throws -> Data {
   let first = state(fingerprint: "1", value: "1")

@@ -26,9 +26,9 @@ struct CanonicalGraphRecordsTests {
     #expect(CanonicalGraphRecords.digest(for: forward) != CanonicalGraphRecords.digest(for: changed))
   }
 
-  @Test("canonical run evidence verifies its sorted graph chunks")
-  func canonicalRunEvidenceUsesVerifiedChunks() throws {
-    let states = (0...CanonicalGraphRecords.recordsPerChunk).map {
+  @Test("canonical graph stream declares completion and exact counts")
+  func graphStreamDeclaresCompletion() throws {
+    let states = (0...3).map {
       state(counter: $0, values: [.integer($0)])
     }
     let initial = try #require(states.first)
@@ -45,22 +45,33 @@ struct CanonicalGraphRecordsTests {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    let url = root.appendingPathComponent("swift-run.json")
-    try CanonicalRunEvidence.write(
-      run,
-      correlation: .init(caseID: "chunked", runID: UUID(), engine: .swift),
-      to: url
+    let url = root.appendingPathComponent("swift-graph.jsonl")
+    try CanonicalGraphRecords.write(run, to: url)
+
+    let data = try Data(contentsOf: url)
+    let streamRecords = try records(in: data)
+    #expect(streamRecords.map { $0["type"] as? String } == [
+      "header", "initial", "state", "state", "state", "state", "edge", "complete"
+    ])
+    let completion = try #require(streamRecords.last)
+    #expect(completion["eligible"] as? Bool == true)
+    #expect(completion["initialStateCount"] as? Int == 1)
+    #expect(completion["stateCount"] as? Int == 4)
+    #expect(completion["edgeCount"] as? Int == 1)
+
+    let truncated = streamRecords.dropLast()
+    #expect(truncated.last?["type"] as? String != "complete")
+
+    let incomplete = try CanonicalRun(
+      graph: run.graph,
+      observableActions: run.observableActions,
+      outcome: .incomplete(reason: "state limit reached")
     )
-
-    let loaded = try CanonicalRunEvidence.read(from: url)
-    #expect(loaded.run == run)
-    #expect(loaded.evidence.graph.chunks.count == 2)
-
-    let firstChunk = root.appendingPathComponent("swift-run.graph/000000.jsonl")
-    try Data("changed".utf8).write(to: firstChunk, options: .atomic)
-    #expect(throws: CanonicalRunEvidenceError.self) {
-      try CanonicalRunEvidence.read(from: url)
-    }
+    let incompleteURL = root.appendingPathComponent("incomplete-graph.jsonl")
+    try CanonicalGraphRecords.write(incomplete, to: incompleteURL)
+    let incompleteRecords = try records(in: Data(contentsOf: incompleteURL))
+    #expect(incompleteRecords.last?["eligible"] as? Bool == false)
+    #expect((incompleteRecords.last?["outcome"] as? [String: String])?["kind"] == "incomplete")
   }
 
   private func state(counter: Int, values: [CanonicalValue]) -> CanonicalState {
@@ -74,4 +85,11 @@ struct CanonicalGraphRecordsTests {
   ) throws -> CanonicalGraph {
     try CanonicalGraph(initialStates: [first], states: [first, second], edges: edges)
   }
+
+  private func records(in data: Data) throws -> [[String: Any]] {
+    try data.split(separator: 0x0a).map {
+      try #require(JSONSerialization.jsonObject(with: Data($0)) as? [String: Any])
+    }
+  }
+
 }

@@ -256,28 +256,16 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       "raw": SHA256.hex(Data(rawBundle.cfg.utf8)),
       "reduced": SHA256.hex(Data(reducedBundle.cfg.utf8))
     ], to: configurationURL)
-    let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.json")
-    let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.json")
-    let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.json")
-    let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.json")
+    let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.jsonl")
+    let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.jsonl")
+    let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.jsonl")
+    let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.jsonl")
     let configurationDigest = SHA256.hex(try Data(contentsOf: configurationURL))
     let swiftReducedRunID = UUID()
-    try CanonicalRunEvidence.write(
-      swiftRaw,
-      correlation: .init(caseID: declaredCase.id, runID: correlation.swiftRunID, engine: .swift),
-      to: rawSwiftURL)
-    try CanonicalRunEvidence.write(
-      swiftReduced,
-      correlation: .init(caseID: declaredCase.id, runID: swiftReducedRunID, engine: .swift),
-      to: reducedSwiftURL)
-    try CanonicalRunEvidence.write(
-      rawTLC,
-      correlation: .init(caseID: declaredCase.id, runID: correlation.tlcRunID, engine: .tlc),
-      to: rawTLCURL)
-    try CanonicalRunEvidence.write(
-      reducedTLC,
-      correlation: .init(caseID: declaredCase.id, runID: reducedRunID, engine: .tlc),
-      to: reducedTLCURL)
+    try CanonicalGraphRecords.write(swiftRaw, to: rawSwiftURL)
+    try CanonicalGraphRecords.write(swiftReduced, to: reducedSwiftURL)
+    try CanonicalGraphRecords.write(rawTLC, to: rawTLCURL)
+    try CanonicalGraphRecords.write(reducedTLC, to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
       caseID: declaredCase.id, configuration: declaredCase.configuration, correlation: correlation,
       swiftRaw: try symmetryExploration(.swift, false, correlation.swiftRunID, swiftRaw, configurationDigest, rawSwiftURL, projectRoot),

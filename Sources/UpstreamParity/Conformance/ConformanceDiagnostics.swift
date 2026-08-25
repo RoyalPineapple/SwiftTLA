@@ -59,7 +59,7 @@ extension ConformanceDifference {
   /// A concrete explanation of this exact graph difference.
   ///
   /// In core conformance, `expected` is TLC and `actual` is SwiftTLA.
-  /// `tlc-run.json` and `swift-run.json` contain the complete graph records.
+  /// `tlc-graph.jsonl` and `swift-graph.jsonl` contain the complete graph records.
   public var failureReport: ConformanceFailureReport {
     switch self {
     case .mapping(let messages):
@@ -76,7 +76,7 @@ extension ConformanceDifference {
         where: "canonical initial states",
         expected: expected,
         actual: actual,
-        next: "Inspect the first differing state in tlc-run.json and swift-run.json, then compare the Init predicates."
+        next: "Inspect the first differing state in tlc-graph.jsonl and swift-graph.jsonl, then compare the Init predicates."
       )
     case .states(let expected, let actual):
       return setDifferenceReport(
@@ -84,7 +84,7 @@ extension ConformanceDifference {
         where: "canonical state space",
         expected: expected,
         actual: actual,
-        next: "Inspect the first differing state in tlc-run.json and swift-run.json, then compare the action guards and assignments that can reach it."
+        next: "Inspect the first differing state in tlc-graph.jsonl and swift-graph.jsonl, then compare the action guards and assignments that can reach it."
       )
     case .edges(let expected, let actual):
       return edgeDifferenceReport(expected: expected, actual: actual)
@@ -96,7 +96,7 @@ extension ConformanceDifference {
         whereItFailed: "finite conformance outcome",
         expected: "TLC outcome: \(describe(expected))",
         actual: "SwiftTLA outcome: \(describe(actual))",
-        nextSafeAction: "Inspect tlc-run.json and swift-run.json outcomes and their retained traces before changing the model."
+        nextSafeAction: "Inspect tlc-graph.jsonl and swift-graph.jsonl outcomes and their retained traces before changing the model."
       )
     case .errors(let expected, let actual):
       return .init(
@@ -112,7 +112,7 @@ extension ConformanceDifference {
         whereItFailed: "canonical trace evidence",
         expected: describe(expected),
         actual: describe(actual),
-        nextSafeAction: "Inspect the first differing trace step in tlc-run.json and swift-run.json before changing the model."
+        nextSafeAction: "Inspect the first differing trace step in tlc-graph.jsonl and swift-graph.jsonl before changing the model."
       )
     }
   }
@@ -142,14 +142,17 @@ extension TLCProcessError {
         actual: "The process exceeded \(request.timeout) seconds and was terminated.",
         nextSafeAction: "Inspect the retained stdout and stderr, then reduce the declared finite bounds or raise the case timeout deliberately.",
         evidence: evidence,
-        toolOutput: [.init(stream: "stdout", content: sanitized(stdout)), .init(stream: "stderr", content: sanitized(stderr))]
+        toolOutput: [
+          .init(stream: "stdout", content: redactingSecrets(in: stdout)),
+          .init(stream: "stderr", content: redactingSecrets(in: stderr))
+        ]
       )
     case .failedToStart(let message):
       return .init(
         whatFailed: "TLC could not start.",
         whereItFailed: "TLC primary invocation for case \(request.caseID)",
         expected: "The configured Java executable and TLC class path launch TLC.",
-        actual: sanitized(message),
+        actual: redactingSecrets(in: message),
         nextSafeAction: "Verify the Java executable, TLC JAR, bridge classes, and working directory in the retained invocation snapshot.",
         evidence: evidence
       )
@@ -228,7 +231,7 @@ private func edgeDifferenceReport(
       whatFailed: "The labeled transition multisets differ.", whereItFailed: "canonical transition relation",
       expected: "TLC and SwiftTLA retain the same transition occurrences.",
       actual: "The occurrence counts differ, but no stable witness was available.",
-      nextSafeAction: "Inspect the retained edges in tlc-run.json and swift-run.json."
+      nextSafeAction: "Inspect the retained edges in tlc-graph.jsonl and swift-graph.jsonl."
     )
   }
   return .init(
@@ -236,7 +239,7 @@ private func edgeDifferenceReport(
     whereItFailed: "action \(witness.action) from \(witness.source.canonicalEncoding) to \(witness.target.canonicalEncoding)",
     expected: "TLC permits this transition \(expected[witness, default: 0]) time(s).",
     actual: "SwiftTLA permits this transition \(actual[witness, default: 0]) time(s).",
-    nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc-run.json and swift-run.json."
+    nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc-graph.jsonl and swift-graph.jsonl."
   )
 }
 
@@ -252,7 +255,7 @@ private func observationDifferenceReport(
     whereItFailed: witness.map { "canonical state \($0.canonicalEncoding)" } ?? "canonical state observations",
     expected: describe(expectedObservation),
     actual: describe(actualObservation),
-    nextSafeAction: "Compare the enabled action guards at the named state in tlc-run.json and swift-run.json."
+    nextSafeAction: "Compare the enabled action guards at the named state in tlc-graph.jsonl and swift-graph.jsonl."
   )
 }
 
@@ -265,7 +268,10 @@ private func processFailureReport(
     expected: expected, actual: actual,
     nextSafeAction: "Inspect the retained TLC \(phase) stdout and stderr, then correct the trace configuration or the emitted module bundle.",
     evidence: toolEvidence(for: request),
-    toolOutput: [.init(stream: "stdout", content: sanitized(outputs.stdout)), .init(stream: "stderr", content: sanitized(outputs.stderr))]
+    toolOutput: [
+      .init(stream: "stdout", content: redactingSecrets(in: outputs.stdout)),
+      .init(stream: "stderr", content: redactingSecrets(in: outputs.stderr))
+    ]
   )
 }
 
@@ -275,12 +281,12 @@ private func executionFailureReport(
 ) -> ConformanceFailureReport {
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
-    expected: expected, actual: sanitized(error.message),
+    expected: expected, actual: redactingSecrets(in: error.message),
     nextSafeAction: "Inspect the retained invocation snapshot and TLC output before retrying.",
     evidence: toolEvidence(for: request),
     toolOutput: [
-      error.partialStdout.map { .init(stream: "stdout", content: sanitized($0)) },
-      error.partialStderr.map { .init(stream: "stderr", content: sanitized($0)) }
+      error.partialStdout.map { .init(stream: "stdout", content: redactingSecrets(in: $0)) },
+      error.partialStderr.map { .init(stream: "stderr", content: redactingSecrets(in: $0)) }
     ].compactMap { $0 }
   )
 }
