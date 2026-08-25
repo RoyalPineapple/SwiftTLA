@@ -949,7 +949,7 @@ public extension TLASpec {
                 )
             }
             if let collection = semantics.symmetricCollections.first(where: { $0.variable == variable.id }) {
-                return "\(name) = [member \\in \(collection.domainSymbol) |-> \(try initialValue.rendered(using: layout))]"
+                return "\(name) = [member \\in \(collection.domainSymbol) |-> \(try collection.initial.rendered(using: layout))]"
             }
             if let set = initializer.lazySet { return "\(name) \\in \(try renderer.state(set))" }
             if let set = initializer.initialSet { return "\(name) \\in \(try renderer.state(set))" }

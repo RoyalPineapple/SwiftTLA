@@ -210,7 +210,8 @@ package struct TLCTemporalAdapter: Sendable {
     if let graphRequest = input.completeGraphRequest {
       guard graphRequest.runID != input.request.runID,
             graphRequest.caseID == input.request.caseID,
-            graphRequest.bundle.root == input.request.bundle.root,
+            graphRequest.bundle.root.name == input.request.bundle.root.name,
+            graphRequest.bundle.root.tla == input.request.bundle.root.tla,
             graphRequest.arguments == input.request.arguments,
             graphRequest.expectedCase.pin == input.request.expectedCase.pin,
             graphRequest.expectedCase.workers == input.request.expectedCase.workers,

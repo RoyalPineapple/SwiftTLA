@@ -41,7 +41,9 @@ struct TemporalSymmetryConformanceRunnerTests {
 
       #expect(raw.states.count == 1 << scope)
       #expect(reduced.states.count == scope + 1)
-      #expect(try compilation.renderedTLAModuleBundle(usesSymmetryReduction: false).cfg.contains("SYMMETRY") == false)
+      let rawBundle = try compilation.renderedTLAModuleBundle(usesSymmetryReduction: false)
+      #expect(rawBundle.cfg.contains("SYMMETRY") == false)
+      #expect(rawBundle.tla.contains("Init == chosen = [member \\in ChosenKeys |-> 0]"))
       #expect(try compilation.renderedTLAModuleBundle(usesSymmetryReduction: true).cfg.contains("SYMMETRY"))
     }
   }

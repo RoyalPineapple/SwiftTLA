@@ -132,7 +132,8 @@ struct CompiledLowerer {
                 .init(
                     variable: try variable(at: "variables.\(collection.name).declaration"),
                     members: collection.metadata.members,
-                    domainSymbol: collection.metadata.domainSymbol
+                    domainSymbol: collection.metadata.domainSymbol,
+                    initial: .init(formal: collection.metadata.initial)
                 )
             }
         )
