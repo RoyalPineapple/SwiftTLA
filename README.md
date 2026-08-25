@@ -128,6 +128,7 @@ struct ClockView: View {
             }
         }
         .task {
+            guard machine == nil else { return }
             do {
                 machine = try ClockModel.makeMachine()
             } catch {
