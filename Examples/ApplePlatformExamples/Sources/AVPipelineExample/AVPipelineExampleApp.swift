@@ -53,6 +53,7 @@ struct CameraApp: App {
             .background(.black)
             .frame(minWidth: 640, minHeight: 520)
             .task {
+                guard machine == nil else { return }
                 do {
                     machine = try CameraWorkflow.makeMachine()
                     effects.recordingDidFinish = { url, error in

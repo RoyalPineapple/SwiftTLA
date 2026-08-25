@@ -52,6 +52,7 @@ struct BLEScannerApp: App {
             }
             .frame(minWidth: 400, minHeight: 300)
             .task {
+                guard machine == nil else { return }
                 do {
                     machine = try BluetoothModel.makeMachine()
                     effects.eventReceived = { action in _ = send(action) }
