@@ -139,7 +139,7 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(effects.isStopping || (phase != .live && phase != .recording))
+                .disabled(effects.isStopping || (isEnabled(.record) == false && phase != .recording))
             }
         }
         .padding(.vertical, 10)
@@ -148,6 +148,11 @@ struct CameraApp: App {
     }
 
     private var phase: CameraWorkflow.Phase { machine?.state.phase ?? .starting }
+
+    private func isEnabled(_ action: CameraWorkflow.Action) -> Bool {
+        guard let machine else { return false }
+        return (try? machine.isEnabled(action)) == true
+    }
 
     private func send(_ action: CameraWorkflow.Action) -> Bool {
         guard var machine else {
