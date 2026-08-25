@@ -27,11 +27,7 @@ struct CameraApp: App {
                                 .padding(12)
                             }
                     } else {
-                        if let capture = effects.capture {
-                            CameraPreviewView(session: capture.session)
-                        } else {
-                            Color.black
-                        }
+                        CameraPreviewView(session: effects.session)
                     }
 
                     if let preview = effects.selectedPhoto {
@@ -350,7 +346,7 @@ enum RollItem: Identifiable {
 @MainActor
 @Observable
 final class CameraEffects {
-    private(set) var capture: Media.Capture?
+    private let capture = CameraCapture()
     var roll: [RollItem] = []
     var flashActive = false
     var selectedPhoto: Data?
@@ -364,10 +360,10 @@ final class CameraEffects {
     var playbackDidFinish: (() -> Void)?
 
     var canRecord: Bool { movieOutput != nil }
+    var session: AVCaptureSession { capture.session }
 
     init() {
         do {
-            capture = try Media.Capture()
             try FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
             recordDelegate.owner = self
         } catch {
@@ -376,10 +372,6 @@ final class CameraEffects {
     }
 
     func takeSnapshot() async {
-        guard let capture else {
-            diagnostic = "The camera did not initialize."
-            return
-        }
         do {
             let data = try await capture.capturePhoto()
             let name = "snap-\(Int(Date().timeIntervalSince1970)).jpg"
@@ -456,17 +448,14 @@ final class CameraEffects {
         }
     }
     func ready() async -> Bool {
-        guard let capture,
-              let device = AVCaptureDevice.default(for: .video) else {
+        guard let device = AVCaptureDevice.default(for: .video) else {
             diagnostic = "No video capture device is available."
             return false
         }
         do {
-            try await capture.configure(device: device)
             let output = AVCaptureMovieFileOutput()
-            capture.session.addOutput(output)
+            try await capture.configureAndStart(device: device, recordingOutput: output)
             movieOutput = output
-            try await capture.start()
             return true
         } catch {
             diagnostic = "Camera setup failed: \(error)"

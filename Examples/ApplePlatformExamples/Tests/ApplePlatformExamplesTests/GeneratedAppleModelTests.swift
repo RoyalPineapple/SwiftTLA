@@ -4,19 +4,6 @@ import CoreBluetooth
 import XCTest
 
 final class GeneratedAppleModelTests: XCTestCase {
-    func testCaptureGeneratedLifecycle() async throws {
-        var machine = try CaptureModel.makeMachine()
-        _ = try machine.send(.configure)
-        let configured = machine.state
-        XCTAssertEqual(configured.phase, .configured)
-        _ = try machine.send(.start)
-        let running = machine.state
-        XCTAssertEqual(running.phase, .running)
-        _ = try machine.send(.stop)
-        let idle = machine.state
-        XCTAssertEqual(idle.phase, .idle)
-    }
-
     func testBluetoothGeneratedLifecycle() async throws {
         var machine = try BluetoothModel.makeMachine()
         _ = try machine.send(.poweredOn)
