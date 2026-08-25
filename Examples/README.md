@@ -7,7 +7,7 @@ Each example has three layers:
 
 1. A SwiftTLA specification defines the state, allowed transitions, and
    formal properties.
-2. A generated machine, `Live`, or nested actor owns the executable state and
+2. A generated machine or generated `Actor` owns the executable state and
    applies those transitions.
 3. A thin application adapter receives platform events, invokes generated
    actions, and renders generated state.

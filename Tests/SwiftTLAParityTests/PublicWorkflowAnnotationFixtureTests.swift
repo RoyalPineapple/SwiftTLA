@@ -99,20 +99,6 @@ struct PublicWorkflowAnnotationFixtureTests {
 
   }
 
-  @Test("actor runtime proof is local diagnostic evidence until CI retains it")
-  func actorRuntimeProofIsDiagnosticOnly() throws {
-    let inventory = try loadInventory()
-    let actor = try #require(inventory.annotations.first { $0.name == "@TLAActor" })
-    let runtimeProof = try #require(actor.runtimeProof)
-    let fixture = try #require(actor.positiveFixture)
-
-    #expect(runtimeProof.command == "swift run")
-    #expect(runtimeProof.evidence == "localDiagnosticOnly")
-
-    let result = try runSwiftRun(in: fixtureRoot.appendingPathComponent(fixture))
-    #expect(result.status == 0, "@TLAActor runtime fixture failed:\n\(result.output)")
-  }
-
   @Test("unimplemented annotations cannot be treated as release support")
   func unimplementedAnnotationsAreExplicitlyNarrowed() throws {
     let inventory = try loadInventory()

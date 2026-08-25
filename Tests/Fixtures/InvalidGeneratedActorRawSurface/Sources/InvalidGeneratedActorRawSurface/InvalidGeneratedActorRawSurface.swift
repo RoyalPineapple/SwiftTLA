@@ -1,10 +1,10 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAActor
-actor StandaloneActorSurface {
+@TLAModel
+struct GeneratedActorSurface {
   static var spec: TLASpec {
-    TLASpec("StandaloneActorSurface") {
+    TLASpec("GeneratedActorSurface") {
       let value = Var<Int>("value")
       Variable(value, 0)
       Action("advance") { value.becomes(value + 1).when(value < 1) }
@@ -12,7 +12,7 @@ actor StandaloneActorSurface {
   }
 }
 
-func rejectRawState(_ machine: StandaloneActorSurface) async {
+func rejectRawState(_ machine: GeneratedActorSurface.Actor) async {
   _ = await machine.tlaSnapshot()
-  _ = StandaloneActorSurface.TransitionEvidence.self
+  _ = GeneratedActorSurface.Actor.TransitionEvidence.self
 }

@@ -81,7 +81,7 @@ enum MacroExpander {
             variables: plan.variables,
             symmetricCollections: plan.symmetricCollections
         ))
-        decls.append(contentsOf: generateLiveMachineMembers(model: model))
+        decls.append(contentsOf: generateActorMembers(model: model))
         decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
         decls.append(contentsOf: generateVariableProperties(
             variables: ordinaryVariables,

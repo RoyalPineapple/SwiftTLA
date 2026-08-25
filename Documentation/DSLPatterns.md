@@ -65,8 +65,8 @@ order.
 ## Use typed generated APIs
 
 Generated `State`, `Action`, and `Transition` form the normal application API.
-`Live` and nested actors support advanced shared execution. A generated action
-carries the action type and argument types selected by the source model.
+The generated `Actor` supports shared execution. A generated action carries
+the action type and argument types selected by the source model.
 
 ## Declare modules and refinement structurally
 

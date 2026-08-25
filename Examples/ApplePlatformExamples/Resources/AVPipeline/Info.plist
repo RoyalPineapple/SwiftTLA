@@ -17,7 +17,7 @@
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSCameraUsageDescription</key>
-    <string>This app uses the camera to demonstrate Media.Capture @TLAActor verification.</string>
+    <string>This app uses the camera to demonstrate generated machine verification.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

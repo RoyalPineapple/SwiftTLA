@@ -318,35 +318,6 @@ public struct ValueEnumMacro: MemberMacro {
     }
 }
 
-public struct TLAActorMacro: MemberMacro, ExtensionMacro {
-    public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
-        switch adapterNestingMode(for: declaration, at: node, in: context) {
-        case .nested:
-            guard let ext = ("""
-                extension \(type.trimmed) {}
-                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-            return [ext]
-        case .invalid:
-            return []
-        }
-    }
-
-    public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
-        switch adapterNestingMode(for: declaration, at: node, in: context) {
-        case .nested(let model):
-            return MacroExpander.generateNestedActorMembers(modelTypeName: model.name.text)
-        case .invalid:
-            return []
-        }
-    }
-}
-
-private struct AdapterNestingDiagnostic: DiagnosticMessage {
-    let message: String
-    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-adapter-nesting")
-    let severity: DiagnosticSeverity = .error
-}
-
 private struct ModelStoredStateDiagnostic: DiagnosticMessage {
     let message = "@TLAModel models cannot declare instance stored properties; model state belongs in the static specification"
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-instance-stored-state")
@@ -380,73 +351,6 @@ private func isInstanceStoredBinding(_ binding: PatternBindingSyntax) -> Bool {
     }
 }
 
-private enum AdapterNestingMode {
-    case nested(StructDeclSyntax)
-    case invalid
-}
-
-private func adapterNestingMode(
-    for declaration: some DeclGroupSyntax,
-    at attribute: AttributeSyntax,
-    in context: some MacroExpansionContext
-) -> AdapterNestingMode {
-    let ancestors = enclosingModelDeclarations(in: context)
-    if ancestors.count > 1 {
-        context.diagnose(Diagnostic(
-            node: Syntax(attribute),
-            message: AdapterNestingDiagnostic(message: "Adapter must be enclosed by exactly one @TLAModel")
-        ))
-        return .invalid
-    }
-    if let model = ancestors.first {
-        guard let structModel = model.as(StructDeclSyntax.self) else {
-            context.diagnose(Diagnostic(
-                node: Syntax(attribute),
-                message: AdapterNestingDiagnostic(message: "Nested adapters require an enclosing @TLAModel struct")
-            ))
-            return .invalid
-        }
-        return .nested(structModel)
-    }
-    context.diagnose(Diagnostic(
-        node: Syntax(attribute),
-        message: AdapterNestingDiagnostic(message: "@TLAActor requires an enclosing @TLAModel; put the formal spec on that model")
-    ))
-    return .invalid
-}
-
-private func enclosingModelDeclarations(in context: some MacroExpansionContext) -> [DeclGroupSyntax] {
-    var enclosing: [DeclGroupSyntax] = []
-    for node in context.lexicalContext {
-        if let candidate = node.as(StructDeclSyntax.self), hasTLAModelAttribute(candidate.attributes) {
-            enclosing.append(candidate)
-        } else if let candidate = node.as(ClassDeclSyntax.self), hasTLAModelAttribute(candidate.attributes) {
-            enclosing.append(candidate)
-        } else if let candidate = node.as(ActorDeclSyntax.self), hasTLAModelAttribute(candidate.attributes) {
-            enclosing.append(candidate)
-        }
-    }
-    return enclosing
-}
-
-private func hasTLAModelAttribute(_ attributes: AttributeListSyntax) -> Bool {
-    attributes.contains { element in
-        guard let attribute = element.as(AttributeSyntax.self) else { return false }
-        return attribute.hasTerminalName("TLAModel")
-    }
-}
-
-private extension AttributeSyntax {
-    func hasTerminalName(_ expectedName: String) -> Bool {
-        if let identifier = attributeName.as(IdentifierTypeSyntax.self) {
-            return identifier.name.text == expectedName
-        }
-        if let member = attributeName.as(MemberTypeSyntax.self) {
-            return member.name.text == expectedName
-        }
-        return false
-    }
-}
 
 private struct ParserDiagnosticMessage: DiagnosticMessage {
     let message: String

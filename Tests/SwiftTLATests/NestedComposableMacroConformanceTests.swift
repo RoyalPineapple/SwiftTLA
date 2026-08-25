@@ -54,8 +54,8 @@ struct NestedComposableMacroConformanceTests {
         #expect((await actor.state).count == 1)
     }
 
-    @Test("Three-parameter invocation identity survives canonical and nested actor execution")
-    func threeParameterIdentityRemainsDistinctAcrossNestedSurfaces() async throws {
+    @Test("Three-parameter invocation identity survives value and actor execution")
+    func threeParameterIdentityRemainsDistinctAcrossExecutionSurfaces() async throws {
         let first = EndToEndThreeParameterActionMachine.Action.board(person: 1, elevator: 10, direction: 100)
         let selected = EndToEndThreeParameterActionMachine.Action.board(person: 2, elevator: 20, direction: 200)
         let available = try EndToEndThreeParameterActionMachine.makeMachine().enabledActions()
@@ -70,17 +70,6 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.after.floor == 222)
         let acted = try await actor.send(.board(person: 2, elevator: 20, direction: 200))
         #expect(acted.action == .board(person: 2, elevator: 20, direction: 200))
-    }
-
-    @Test("Invalid nested macro composition emits enclosure diagnostics")
-    func invalidNestedMacroCompositionDoesNotTypeCheck() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidNestedMacroComposition")
-        let result = try runSwift(["build", "--package-path", fixture.path])
-
-        #expect(result.status != 0)
-        #expect(result.output.contains("@TLAActor requires an enclosing @TLAModel"))
-        #expect(result.output.contains("Adapter must be enclosed by exactly one @TLAModel"))
-        #expect(result.output.contains("Nested adapters require an enclosing @TLAModel struct"))
     }
 
     @Test("Generated macro surfaces are structurally Sendable without unchecked conformance")
@@ -152,22 +141,12 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.output.contains("TransitionEvidence"))
     }
 
-    @Test("External nested actor cannot expose raw generated state")
-    func nestedActorRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
+    @Test("Generated actor cannot expose raw state")
+    func generatedActorRawStateDoesNotCompileExternally() throws {
         try assertExternalSurfaceIsForbidden(
-            fixture: "InvalidNestedActorRawSurface",
-            typeName: "NestedActorSurface.Actor",
+            fixture: "InvalidGeneratedActorRawSurface",
+            typeName: "GeneratedActorSurface.Actor",
             stateDiagnostic: "has no member 'tlaSnapshot'"
-        )
-    }
-
-    @Test("Standalone actor declaration is rejected")
-    func standaloneActorDeclarationDoesNotCompileExternally() throws {
-        try assertExternalSurfaceIsForbidden(
-            fixture: "InvalidStandaloneActorRawSurface",
-            typeName: "StandaloneActorSurface",
-            stateDiagnostic: "@TLAActor requires an enclosing @TLAModel",
-            requiresGeneratedSurfaceRejection: false
         )
     }
 

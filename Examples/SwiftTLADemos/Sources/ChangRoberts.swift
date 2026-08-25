@@ -113,7 +113,4 @@ public struct ChangRoberts {
         }
     }
 
-    @TLAActor
-    public actor Actor {}
-
 }

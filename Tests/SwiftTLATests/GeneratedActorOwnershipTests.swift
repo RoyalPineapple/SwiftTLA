@@ -11,14 +11,10 @@ private struct AdapterCounter {
             Action("advance") { count.becomes(count + 1).when(count < 1) }
         }
     }
-
-    @TLAActor
-    actor Actor {}
-
 }
 
-@Suite("Generated live machines")
-struct LiveMachineAdapterTests {
+@Suite("Generated actor machine")
+struct GeneratedActorOwnershipTests {
     @Test("Actor owns the generated machine")
     func actorOwnsGeneratedMachine() async throws {
         let actor = try AdapterCounter.Actor()

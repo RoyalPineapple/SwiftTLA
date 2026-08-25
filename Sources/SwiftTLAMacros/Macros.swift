@@ -1,7 +1,6 @@
 import SwiftTLA
 
-/// Macro-generated surfaces may name Foundation types (for example
-/// `Foundation.UUID` request identifiers on the generated `Live` facade).
+/// Macro-generated surfaces may name Foundation types.
 /// Every `@TLAModel` file imports this module to resolve its macros, so
 /// re-exporting Foundation guarantees expansions resolve without the model
 /// file importing Foundation itself. Attached macros cannot add imports.
@@ -10,8 +9,7 @@ import SwiftTLA
 /// Generates a typed model machine from the declaration's `TLASpec`.
 ///
 /// The generated surface includes `State`, `Action`, `Transition`, direct
-/// execution, and typed live-machine members when the model contains a nested
-/// live adapter.
+/// execution, and a typed actor that owns the generated machine value.
 @attached(member, names: arbitrary)
 @attached(memberAttribute)
 @attached(extension, conformances: TLAModelType, names: arbitrary)
@@ -22,14 +20,6 @@ public macro _TLAFiniteEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "
 
 @attached(member, names: named(defaultValue))
 public macro _TLAValueEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "ValueEnumMacro")
-
-/// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.
-///
-/// A nested adapter exposes the enclosing model's typed state and transition
-/// result through type aliases.
-@attached(member, names: arbitrary)
-@attached(extension, conformances: TLAModelType, names: arbitrary)
-public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAActorMacro")
 
 /// Declares a formal specification body for `@TLAModel`.
 ///

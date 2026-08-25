@@ -16,8 +16,7 @@ Swift source model
 Generated Swift machine
  ├── State and Action
  ├── value machine in SwiftUI `@State`
- ├── `Live` actor around that value
- ├── nested `@TLAActor` around that value
+ ├── generated `Actor` around that value
  └── bounded exploration and formal bundles
 ```
 
@@ -158,9 +157,9 @@ order: concurrent tasks, retries, cancellation, sync, background work,
 permissions, protocols, and distributed systems.
 
 Use generated `State` and action cases for value-based state. For shared
-running state, use the generated `Live` or nested actor surface. See
+running state, use the generated `Actor`. See
 [Generated Machines](Documentation/GeneratedMachines.md) and
-[Live Machines](Documentation/LiveMachines.md).
+[Actor Machines](Documentation/ActorMachines.md).
 
 ## Learn more
 

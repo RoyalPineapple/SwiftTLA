@@ -416,8 +416,6 @@ struct ThreeParameterActionMachine {
         }
     }
 
-    @TLAActor
-    actor Actor {}
 }
 
 @TLAModel
@@ -465,8 +463,6 @@ struct NestedComposedCounter {
         }
     }
 
-    @TLAActor
-    actor Actor {}
 }
 
 // MARK: - Tests for generated verification methods

@@ -33,8 +33,6 @@ struct CounterHost {
         }
     }
 
-    @TLAActor
-    actor Actor {}
 }
 
 func runActorAccess() async throws {

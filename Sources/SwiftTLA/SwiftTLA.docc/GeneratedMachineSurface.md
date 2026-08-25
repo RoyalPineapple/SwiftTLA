@@ -17,18 +17,13 @@ Each generated model exposes these `Sendable` value types:
 is currently permitted. Both methods can throw. `state` contains the complete current
 typed state.
 
-## Live machine
+## Generated actor
 
-`Live` is an actor that owns one generated machine value. It serializes
+`Actor` owns one generated machine value. It serializes
 `send(_:)` and exposes the machine's typed state and actions.
 
 ```swift
-let live = try Counter.Live()
-let transition = try await live.send(.advance)
-assert(await live.state == transition.after)
+let actor = try Counter.Actor()
+let transition = try await actor.send(.advance)
+assert(await actor.state == transition.after)
 ```
-
-## Generated actor
-
-Nested `@TLAActor` types own a generated machine value. They serialize typed
-state and actions through actor isolation.

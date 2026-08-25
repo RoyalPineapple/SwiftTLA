@@ -27,8 +27,6 @@ struct DuckDuckLeaderCanonical {
         }
     }
 
-    @TLAActor
-    actor Actor {}
 }
 
 struct GeneratedActorExecutionContractTests {

@@ -2,11 +2,11 @@ import SwiftSyntax
 import SwiftTLA
 
 extension MacroExpander {
-    static func generateLiveMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
+    static func generateActorMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
         return [
             DeclSyntax(stringLiteral: """
-            public actor Live {
+            public actor Actor {
                 private var _machine: \(typeName)
 
                 public init() throws {

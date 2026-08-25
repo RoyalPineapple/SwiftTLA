@@ -3,7 +3,7 @@
 Examples must use SwiftTLA as the behavioral source of truth.
 
 - Put formal state, legal transitions, and invariants in a `TLASpec`.
-- Use a generated machine, `Live`, or a nested actor for executable state.
+- Use a generated machine or generated `Actor` for executable state.
 - Keep SwiftUI and Apple framework code as thin event and rendering adapters.
 - Do not duplicate formal state in `@State`, delegates, view models, timers,
   or ad-hoc schedulers.

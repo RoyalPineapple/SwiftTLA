@@ -249,9 +249,7 @@ public struct PublicWorkflowConformanceRunner: Sendable {
     _ = try ConformanceEvidence.createDirectory(output, beneath: root)
     let fixtures = [
       ("TLAModel-valid", "TLAModel", "Valid", "PublicWorkflowTLAModelValid", true),
-      ("TLAModel-invalid", "TLAModel", "Invalid", "PublicWorkflowTLAModelInvalid", false),
-      ("TLAActor-valid", "TLActor", "Valid", "PublicWorkflowTLAActorValid", true),
-      ("TLAActor-invalid", "TLActor", "Invalid", "PublicWorkflowTLAActorInvalid", false)
+      ("TLAModel-invalid", "TLAModel", "Invalid", "PublicWorkflowTLAModelInvalid", false)
     ]
     var unavailable = false
     var differed = false

@@ -85,8 +85,6 @@ struct P4GeneratedCounterFixture: Sendable {
     }
   }
 
-  @TLAActor
-  actor Actor {}
 }
 
 @TLAModel
@@ -99,9 +97,6 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
       Invariant("withinBounds") { value >= 0 && value <= 1 }
     }
   }
-
-  @TLAActor
-  actor Actor {}
 
   static func intentionalMismatchActionOutcome(
     compilation: CompiledSpecification,
