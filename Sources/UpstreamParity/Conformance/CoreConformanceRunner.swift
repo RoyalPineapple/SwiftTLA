@@ -151,17 +151,9 @@ package struct CoreConformanceRunner: Sendable {
       let swiftEvidence = try swiftExploration()
       let swiftRun = try swiftAdapter.adapt(
         swiftEvidence, for: declaredCase, actionNames: swiftActionNames)
-      let receiptContext = CanonicalRunEvidence.ReceiptContext(
-        compiledModelIdentity: swiftEvidence.exploration.compilationIdentity.value,
-        configurationIdentity: declaredCase.cfgSHA256,
-        symmetrySchemaIdentity: "none",
-        observableNameMappingIdentity: actionMappingReceiptIdentity(swiftActionNames),
-        maximumStateLimit: swiftEvidence.exploration.configuration.maximumStateLimit
-      )
       try CanonicalConformanceEvidence.writeSwiftRun(
         swiftRun,
         correlation: correlations.swift,
-        receiptContext: receiptContext,
         to: createdStaging
       )
       phase = .tlcExecution
@@ -175,7 +167,6 @@ package struct CoreConformanceRunner: Sendable {
       try CanonicalConformanceEvidence.writeTLCRun(
         tlcRun,
         correlation: correlations.tlc,
-        receiptContext: receiptContext,
         to: createdStaging
       )
       phase = .comparison
@@ -412,13 +403,6 @@ extension CoreConformanceRunner {
       phase: phase
     )
   }
-  private func actionMappingReceiptIdentity(_ mapping: [String: String]) -> String? {
-    guard !mapping.isEmpty else { return nil }
-    let records = mapping.sorted { canonicalBytes($0.key, $1.key) }.map {
-      "action:\(encodedBytes($0.key))->\(encodedBytes($0.value))"
-    }
-    return SHA256.hex(Data(records.joined(separator: "\n").utf8))
-  }
   private func expectedWork(for phase: CoreConformancePhase) -> String {
     switch phase {
     case .preflight: "A fresh output location and a launch binding that matches the declared case."
@@ -435,7 +419,7 @@ extension CoreConformanceRunner {
     case .swiftAdaptation: "Inspect swift-run.json and the declared Swift model before changing the formal source."
     case .tlcExecution: "Inspect the retained TLC invocation, stdout, and stderr before retrying."
     case .tlcParsing: "Inspect graph-events.jsonl and the TLC module/configuration before rerunning."
-    case .comparison: "Inspect core-decision.json, tlc-run.json, and swift-run.json before changing a guard or update."
+    case .comparison: "Inspect the exact graph differences, tlc-run.json, and swift-run.json."
     case .publication: "Inspect the staging and destination paths; preserve the failure evidence before retrying publication."
     }
   }

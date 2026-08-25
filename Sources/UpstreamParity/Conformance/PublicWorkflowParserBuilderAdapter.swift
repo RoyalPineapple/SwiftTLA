@@ -195,7 +195,7 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
 
   /// Runs one exported manifest. `projectRoot` is explicit so callers can move
   /// the corpus to SwiftTLA-Validation without relying on this repository's path.
-  /// The result is diagnostic until a hosted-CI artifact receipt admits it.
+  /// The result is diagnostic until hosted CI admits it.
   @discardableResult
   public func run(
     manifestURL: URL,

@@ -2,8 +2,8 @@ import Testing
 @testable import UpstreamParity
 
 struct CoreConformanceComparisonTests {
-    @Test("complete canonical runs produce matching receipts before exact comparison")
-    func emitsComparableReceipts() throws {
+    @Test("identical complete canonical runs compare exactly")
+    func comparesIdenticalRuns() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])
         let second = CanonicalState(bindings: ["counter": .integer(2)])
         let graph = try CanonicalGraph(
@@ -17,22 +17,13 @@ struct CoreConformanceComparisonTests {
             outcome: .exhaustiveSuccess
         )
 
-        let comparison = exactFiniteTLCGraph(
-            expected: run,
-            actual: run,
-            compiledModelIdentity: "model",
-            configurationIdentity: "configuration",
-            symmetrySchemaIdentity: "none",
-            maximumStateLimit: 10
-        )
+        let comparison = exactFiniteTLCGraph(expected: run, actual: run)
 
         #expect(comparison.isConformant)
-        #expect(comparison.expectedReceipt == comparison.actualReceipt)
-        #expect(comparison.expectedReceipt?.supportsExactConformance == true)
     }
 
-    @Test("declared observable mappings contribute to comparable receipts")
-    func recordsDeclaredMappingIdentity() throws {
+    @Test("declared observable mappings compare structurally")
+    func appliesDeclaredMapping() throws {
         let expectedState = CanonicalState(bindings: ["counter": .integer(1)])
         let actualState = CanonicalState(bindings: ["swiftCounter": .integer(1)])
         let expectedGraph = try CanonicalGraph(
@@ -64,19 +55,9 @@ struct CoreConformanceComparisonTests {
             actions: [:]
         )
 
-        let comparison = exactFiniteTLCGraph(
-            expected: expected,
-            actual: actual,
-            mapping: mapping,
-            compiledModelIdentity: "model",
-            configurationIdentity: "configuration",
-            symmetrySchemaIdentity: "none",
-            maximumStateLimit: 10
-        )
+        let comparison = exactFiniteTLCGraph(expected: expected, actual: actual, mapping: mapping)
 
         #expect(comparison.isConformant)
-        #expect(comparison.expectedReceipt?.observableNameMappingIdentity == mapping.canonicalIdentity)
-        #expect(comparison.expectedReceipt == comparison.actualReceipt)
     }
 
     @Test("same state count with a changed edge is semantic non-conformance")

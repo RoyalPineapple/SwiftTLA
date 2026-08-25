@@ -14,8 +14,6 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
     let conformant: Bool
     let differencesSHA256: String
     let differenceCategories: [ConformanceDifferenceCategory]
-    let expectedReceipt: CanonicalGraphReceipt
-    let actualReceipt: CanonicalGraphReceipt
   }
 
   package struct Loaded: Sendable {
@@ -36,19 +34,17 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
   static func writeSwiftRun(
     _ run: CanonicalRun,
     correlation: CoreConformanceCorrelation,
-    receiptContext: CanonicalRunEvidence.ReceiptContext,
     to directory: URL
   ) throws {
-    try writeRun(run, correlation: correlation, receiptContext: receiptContext, named: "swift-run.json", to: directory)
+    try writeRun(run, correlation: correlation, named: "swift-run.json", to: directory)
   }
 
   static func writeTLCRun(
     _ run: CanonicalRun,
     correlation: CoreConformanceCorrelation,
-    receiptContext: CanonicalRunEvidence.ReceiptContext,
     to directory: URL
   ) throws {
-    try writeRun(run, correlation: correlation, receiptContext: receiptContext, named: "tlc-run.json", to: directory)
+    try writeRun(run, correlation: correlation, named: "tlc-run.json", to: directory)
   }
 
   static func write(
@@ -63,30 +59,14 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
       runID: correlations.runner.runID
     )
 
-    let exact = exactFiniteTLCGraph(
-      expected: retained.tlc.run,
-      actual: retained.swift.run,
-      compiledModelIdentity: retained.context.compiledModelIdentity,
-      configurationIdentity: retained.context.configurationIdentity,
-      symmetrySchemaIdentity: retained.context.symmetrySchemaIdentity,
-      maximumStateLimit: retained.context.maximumStateLimit,
-      observableNameMappingIdentity: retained.context.observableNameMappingIdentity
-    )
-    guard let expectedReceipt = exact.expectedReceipt,
-          let actualReceipt = exact.actualReceipt else {
-      throw CanonicalConformanceEvidenceError.invalidRecord
-    }
+    let exact = exactFiniteTLCGraph(expected: retained.tlc.run, actual: retained.swift.run)
 
     let evidence = Self(
       format: Self.format,
       correlation: .init(correlations.runner),
       swift: try runReference(for: swiftURL, beneath: directory),
       tlc: try runReference(for: tlcURL, beneath: directory),
-      comparison: try Comparison(
-        exact,
-        expectedReceipt: expectedReceipt,
-        actualReceipt: actualReceipt
-      )
+      comparison: try Comparison(exact)
     )
     try ConformanceEvidence.writePrettyCanonical(
       evidence,
@@ -118,25 +98,8 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
       runID: evidence.correlation.runID
     )
 
-    let context = retained.context
-    let exact = exactFiniteTLCGraph(
-      expected: retained.tlc.run,
-      actual: retained.swift.run,
-      compiledModelIdentity: context.compiledModelIdentity,
-      configurationIdentity: context.configurationIdentity,
-      symmetrySchemaIdentity: context.symmetrySchemaIdentity,
-      maximumStateLimit: context.maximumStateLimit,
-      observableNameMappingIdentity: context.observableNameMappingIdentity
-    )
-    guard let expectedReceipt = exact.expectedReceipt,
-          let actualReceipt = exact.actualReceipt else {
-      throw CanonicalConformanceEvidenceError.invalidRecord
-    }
-    let verifiedComparison = try Comparison(
-      exact,
-      expectedReceipt: expectedReceipt,
-      actualReceipt: actualReceipt
-    )
+    let exact = exactFiniteTLCGraph(expected: retained.tlc.run, actual: retained.swift.run)
+    let verifiedComparison = try Comparison(exact)
     guard verifiedComparison == evidence.comparison else {
       throw CanonicalConformanceEvidenceError.invalidRecord
     }
@@ -151,14 +114,12 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
   private static func writeRun(
     _ run: CanonicalRun,
     correlation: CoreConformanceCorrelation,
-    receiptContext: CanonicalRunEvidence.ReceiptContext,
     named name: String,
     to directory: URL
   ) throws {
     try CanonicalRunEvidence.write(
       run,
       correlation: correlation,
-      receiptContext: receiptContext,
       to: directory.appendingPathComponent(name)
     )
   }
@@ -169,8 +130,7 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
     runID: UUID
   ) throws -> (
     swift: (evidence: CanonicalRunEvidence, run: CanonicalRun),
-    tlc: (evidence: CanonicalRunEvidence, run: CanonicalRun),
-    context: CanonicalRunEvidence.ReceiptContext
+    tlc: (evidence: CanonicalRunEvidence, run: CanonicalRun)
   ) {
     let swift = try CanonicalRunEvidence.read(
       from: directory.appendingPathComponent("swift-run.json")
@@ -179,11 +139,10 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
       from: directory.appendingPathComponent("tlc-run.json")
     )
     guard swift.evidence.correlation.matches(caseID: caseID, runID: runID, engine: .swift),
-          tlc.evidence.correlation.matches(caseID: caseID, runID: runID, engine: .tlc),
-          swift.evidence.receiptContext == tlc.evidence.receiptContext else {
+          tlc.evidence.correlation.matches(caseID: caseID, runID: runID, engine: .tlc) else {
       throw CanonicalConformanceEvidenceError.invalidRecord
     }
-    return (swift, tlc, swift.evidence.receiptContext)
+    return (swift, tlc)
   }
 
   private static func runReference(for runURL: URL, beneath directory: URL) throws -> RunReference {
@@ -221,11 +180,7 @@ package struct CanonicalConformanceEvidence: Codable, Sendable {
 }
 
 extension CanonicalConformanceEvidence.Comparison: Equatable {
-  fileprivate init(
-    _ comparison: ExactFiniteTLCComparison,
-    expectedReceipt: CanonicalGraphReceipt,
-    actualReceipt: CanonicalGraphReceipt
-  ) throws {
+  fileprivate init(_ comparison: ExactFiniteTLCComparison) throws {
     let data = try JSONSerialization.data(
       withJSONObject: comparisonDifferencesJSON(comparison),
       options: [.sortedKeys]
@@ -233,8 +188,6 @@ extension CanonicalConformanceEvidence.Comparison: Equatable {
     conformant = comparison.isConformant
     differencesSHA256 = SHA256.hex(data)
     differenceCategories = comparison.differences.map(\.category)
-    self.expectedReceipt = expectedReceipt
-    self.actualReceipt = actualReceipt
   }
 }
 

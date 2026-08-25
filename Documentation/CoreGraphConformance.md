@@ -49,13 +49,9 @@ tlc-run.json   + tlc-run.graph/*.jsonl
 ```
 
 `core-decision.json` references each run and graph chunk by SHA-256. It also
-records the run correlation, comparison categories, difference digest, and
-both graph receipts. The reader verifies the references, reconstructs both
-runs, repeats the exact comparison, and verifies the recorded summary.
-
-A receipt summarizes one completed graph exploration. Receipt equality does
-not admit a case. The exact state and edge records decide the comparison and
-locate the first difference.
+records the run correlation, comparison categories, and difference digest.
+The reader verifies the references, reconstructs both runs, repeats the exact
+comparison, and verifies the recorded summary.
 
 When a run fails, first inspect its `core-decision.json`, then the canonical
 graphs and `logs/` in that case's evidence directory. A graph mismatch is
@@ -74,8 +70,8 @@ support claims evaluated by the gate. Each requested entry names its declared
 cases. Admission requires complete current evidence and exact canonical graph
 agreement for every named case.
 
-A comparison mismatch retains its canonical runs, graph chunks, receipts, and
-command record. The exact records reproduce the first difference. The gate
+A comparison mismatch retains its canonical runs, graph chunks, and command
+record. The exact records reproduce the first difference. The gate
 reports `.nonExactComparison` and blocks the requested entry.
 
 The admission report is written to

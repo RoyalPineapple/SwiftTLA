@@ -62,14 +62,6 @@ extension ConformanceDifference {
   /// `tlc-run.json` and `swift-run.json` contain the complete graph records.
   public var failureReport: ConformanceFailureReport {
     switch self {
-    case .receipt(let expectedDigest, let actualDigest):
-      return .init(
-        whatFailed: "The canonical graph receipts differ.",
-        whereItFailed: "finite graph receipt",
-        expected: "TLC receipt: \(expectedDigest)",
-        actual: "SwiftTLA receipt: \(actualDigest)",
-        nextSafeAction: "Read the first exact graph difference."
-      )
     case .mapping(let messages):
       return .init(
         whatFailed: "The declared observable-name mapping is not a total bijection.",

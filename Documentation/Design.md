@@ -111,8 +111,8 @@ values, state slots, and action identities.
 
 Core conformance runs SwiftTLA exploration and TLC against the same rendered
 bundle. Both sides produce a canonical graph. Exact graph comparison decides
-the declared finite case. A graph receipt identifies a completed exploration;
-the retained canonical records provide the difference explanation.
+the declared finite case. Deterministic graph records retain the complete
+states and labeled edges and provide the difference explanation.
 
 See [Core graph conformance](CoreGraphConformance.md) and
 [Upstream parity](UpstreamParity.md).

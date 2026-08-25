@@ -81,8 +81,7 @@ evaluates mapped initial states and concrete edges against the abstract model.
 
 Core conformance explores compiled specifications with declared finite limits
 and compares canonical SwiftTLA and TLC graphs for declared finite cases. The
-exact comparison explains a mismatch; the graph receipt identifies the
-completed exploration.
+exact comparison explains a mismatch from retained state and edge records.
 
 ## Own one concern per component
 

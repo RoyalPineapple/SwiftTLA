@@ -95,35 +95,6 @@ struct CoreConformanceRunnerTests {
         "secret"))
   }
 
-  @Test("runner receipts retain the explored state limit")
-  func receiptsUseExplorationConfiguration() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let runner = CoreConformanceRunner(
-      tlcAdapter: TLCProcessAdapter(
-        executor: FixtureTLCExecutor(stream: try graphStream(for: request.expectedCase, runID: request.runID))
-      )
-    )
-    let output = root.appendingPathComponent("exploration-limit")
-
-    let result = runner.run(
-      case: request.expectedCase,
-      swiftExploration: { try swiftEvidence(for: request.expectedCase, maximumStateLimit: 3) },
-      tlcRequest: request,
-      replay: .none,
-      outputDirectory: output
-    )
-
-    #expect(result.exitCode == .semanticDifference)
-    let swift = try json(at: output.appendingPathComponent("swift-run.json"))
-    #expect((swift["receiptContext"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
-    let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
-    #expect((tlc["receiptContext"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
-  }
-
   @Test("runner rejects Swift evidence bound to another declared case")
   func rejectsWrongSwiftCaseBinding() throws {
     let fileManager = FileManager.default
