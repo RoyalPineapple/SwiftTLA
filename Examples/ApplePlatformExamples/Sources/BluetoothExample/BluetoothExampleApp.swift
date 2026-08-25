@@ -35,12 +35,12 @@ struct BLEScannerApp: App {
                 }
 
                 HStack {
-                    Button(phase == .scanning ? "Stop" : "Scan") {
+                    Button(scanAction == .stopScan ? "Stop" : "Scan") {
                         toggleScan()
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(phase == .scanning ? .red : .accentColor)
-                    .disabled(phase != .poweredOn && phase != .scanning)
+                    .tint(scanAction == .stopScan ? .red : .accentColor)
+                    .disabled(scanAction == nil)
 
                     Spacer()
 
@@ -62,7 +62,12 @@ struct BLEScannerApp: App {
         }
     }
 
-    private var phase: BluetoothModel.Phase { machine?.state.phase ?? .unknown }
+    private var scanAction: BluetoothModel.Action? {
+        guard let machine, let actions = try? machine.enabledActions() else { return nil }
+        if actions.contains(.stopScan) { return .stopScan }
+        if actions.contains(.startScan) { return .startScan }
+        return nil
+    }
 
     private func send(_ action: BluetoothModel.Action) -> Bool {
         guard var machine else {
@@ -81,12 +86,14 @@ struct BLEScannerApp: App {
     }
 
     private func toggleScan() {
-        if phase == .scanning {
-            guard send(.stopScan) else { return }
+        guard let scanAction, send(scanAction) else { return }
+        switch scanAction {
+        case .stopScan:
             effects.stopScanning()
-        } else if phase == .poweredOn {
-            guard send(.startScan) else { return }
+        case .startScan:
             effects.startScanning()
+        default:
+            return
         }
     }
 }
