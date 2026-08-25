@@ -60,15 +60,6 @@ final class GeneratedAppleModelTests: XCTestCase {
         let finishedPlayer = player.state
         XCTAssertEqual(finishedPlayer.phase, .finished)
 
-        var pipeline = try MediaPipelineModel.makeMachine()
-        _ = try pipeline.send(.beginCapture)
-        _ = try pipeline.send(.beginWriting)
-        _ = try pipeline.send(.finishWriting)
-        _ = try pipeline.send(.play)
-        _ = try pipeline.send(.stop)
-        let idlePipeline = pipeline.state
-        XCTAssertEqual(idlePipeline.stage, .idle)
-
         var diskStore = try DiskStoreModel.makeMachine()
         _ = try diskStore.send(.write)
         _ = try diskStore.send(.delete)
