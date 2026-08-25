@@ -78,8 +78,7 @@ For a declared finite case, core conformance records exact SwiftTLA and TLC
 graphs in `core-decision.json`; the decision reloads and compares those records.
 Read <doc:GeneratedMachineSurface> for the generated-machine
 contract, `Documentation/CoreGraphConformance.md` for the comparison record,
-and `Documentation/CoreGraphConformance.md` for exact comparison. Public-workflow evidence is
-separately scoped diagnostic or candidate validation.
+and `Documentation/PublicAPIValidation.md` for direct generated-API checks.
 
 ## Topics
 
