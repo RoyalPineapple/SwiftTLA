@@ -5,14 +5,14 @@ import Observation
 
 @main
 struct CameraApp: App {
-    @State private var controller = CameraController()
+    @State private var effects = CameraEffects()
     @State private var machine: CameraWorkflow?
 
     var body: some Scene {
         WindowGroup {
             VStack(spacing: 0) {
                 ZStack {
-                    if phase == .playing, let player = controller.currentPlayer {
+                    if phase == .playing, let player = effects.currentPlayer {
                         VideoPlayerView(player: player)
                             .overlay(alignment: .topTrailing) {
                                 Button {
@@ -27,16 +27,16 @@ struct CameraApp: App {
                                 .padding(12)
                             }
                     } else {
-                        if let capture = controller.capture {
+                        if let capture = effects.capture {
                             CameraPreviewView(session: capture.session)
                         } else {
                             Color.black
                         }
                     }
 
-                    if let preview = controller.selectedPhoto {
-                        PhotoDetailView(data: preview) { controller.selectedPhoto = nil }
-                    } else if phase == .live, controller.flashActive {
+                    if let preview = effects.selectedPhoto {
+                        PhotoDetailView(data: preview) { effects.selectedPhoto = nil }
+                    } else if phase == .live, effects.flashActive {
                         Rectangle().fill(.white).transition(.opacity)
                     }
                 }
@@ -44,7 +44,7 @@ struct CameraApp: App {
 
                 filmstrip
                 controls
-                if let diagnostic = controller.diagnostic {
+                if let diagnostic = effects.diagnostic {
                     Text(diagnostic)
                         .foregroundStyle(.red)
                         .padding(8)
@@ -55,13 +55,13 @@ struct CameraApp: App {
             .task {
                 do {
                     machine = try CameraWorkflow.makeMachine()
-                    controller.recordingDidFinish = { url, error in
+                    effects.recordingDidFinish = { url, error in
                         recordingDidFinish(url: url, error: error)
                     }
-                    controller.playbackDidFinish = { Task { await live() } }
+                    effects.playbackDidFinish = { Task { await live() } }
                     await ready()
                 } catch {
-                    controller.diagnostic = "Camera workflow failed to initialize: \(error)"
+                    effects.diagnostic = "Camera workflow failed to initialize: \(error)"
                 }
             }
         }
@@ -71,13 +71,13 @@ struct CameraApp: App {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    ForEach(controller.roll) { item in
-                        let selected = controller.isSelected(item)
+                    ForEach(effects.roll) { item in
+                        let selected = effects.isSelected(item)
                         ThumbnailView(item: item, size: CGSize(width: 72, height: 54))
                             .id(item.id)
                             .onTapGesture {
                                 switch item {
-                                case .photo(let data): controller.selectedPhoto = data
+                                case .photo(let data): effects.selectedPhoto = data
                                 case .video(let url): Task { await playRecording(url: url) }
                                 }
                             }
@@ -86,7 +86,7 @@ struct CameraApp: App {
                                     .stroke(selected ? .yellow : .clear, lineWidth: 2)
                             )
                             .overlay(alignment: .topTrailing) {
-                                DeleteButton { controller.delete(item) }
+                                DeleteButton { effects.delete(item) }
                             }
                     }
                 }
@@ -94,8 +94,8 @@ struct CameraApp: App {
             }
             .frame(height: 62)
             .background(.black.opacity(0.8))
-            .onChange(of: controller.roll.count) {
-                if let last = controller.roll.last {
+            .onChange(of: effects.roll.count) {
+                if let last = effects.roll.last {
                     proxy.scrollTo(last.id, anchor: .trailing)
                 }
             }
@@ -104,9 +104,9 @@ struct CameraApp: App {
 
     var controls: some View {
         HStack(spacing: 30) {
-            if phase == .playing || controller.selectedPhoto != nil {
+            if phase == .playing || effects.selectedPhoto != nil {
                 Button(action: {
-                    controller.selectedPhoto = nil
+                    effects.selectedPhoto = nil
                     Task { await live() }
                 }) {
                     Image(systemName: "camera.fill")
@@ -118,7 +118,7 @@ struct CameraApp: App {
                 .buttonStyle(.plain)
             } else {
                 Button(action: {
-                    Task { await controller.takeSnapshot() }
+                    Task { await effects.takeSnapshot() }
                 }) {
                     ZStack {
                         Circle().stroke(.white, lineWidth: 4).frame(width: 64, height: 64)
@@ -139,7 +139,7 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(controller.isStopping || (phase != .live && phase != .recording))
+                .disabled(effects.isStopping || (phase != .live && phase != .recording))
             }
         }
         .padding(.vertical, 10)
@@ -151,52 +151,52 @@ struct CameraApp: App {
 
     private func send(_ action: CameraWorkflow.Action) -> Bool {
         guard var machine else {
-            controller.diagnostic = "Camera workflow did not initialize."
+            effects.diagnostic = "Camera workflow did not initialize."
             return false
         }
         do {
             _ = try machine.send(action)
             self.machine = machine
-            controller.diagnostic = nil
+            effects.diagnostic = nil
             return true
         } catch {
-            controller.diagnostic = String(describing: error)
+            effects.diagnostic = String(describing: error)
             return false
         }
     }
 
     private func ready() async {
-        guard await controller.ready() else { return }
+        guard await effects.ready() else { return }
         guard send(.ready) else { return }
     }
 
     private func toggleRecording() async {
         if phase == .recording {
-            await controller.stopRecording()
-        } else if phase == .live, controller.canStartRecording {
+            await effects.stopRecording()
+        } else if phase == .live, effects.canStartRecording {
             guard send(.record) else { return }
-            controller.startRecording()
+            effects.startRecording()
         }
     }
 
     private func recordingDidFinish(url: URL, error: Error?) {
         if let error {
             guard send(.recordingFailed) else { return }
-            controller.diagnostic = "Recording failed: \(error)"
+            effects.diagnostic = "Recording failed: \(error)"
             return
         }
         guard send(.recordingSucceeded) else { return }
-        controller.recordingSucceeded(at: url)
+        effects.recordingSucceeded(at: url)
     }
 
     private func playRecording(url: URL) async {
         guard phase == .live, send(.play) else { return }
-        await controller.playRecording(url: url)
+        await effects.playRecording(url: url)
     }
 
     private func live() async {
         guard send(.live) else { return }
-        controller.stopPlayback()
+        effects.stopPlayback()
     }
 }
 
@@ -339,7 +339,7 @@ enum RollItem: Identifiable {
 
 @MainActor
 @Observable
-final class CameraController {
+final class CameraEffects {
     private(set) var capture: Media.Capture?
     var roll: [RollItem] = []
     var flashActive = false
@@ -466,7 +466,7 @@ final class CameraController {
 }
 
 private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
-    weak var owner: CameraController?
+    weak var owner: CameraEffects?
 
     func fileOutput(_: AVCaptureFileOutput, didFinishRecordingTo url: URL,
                     from _: [AVCaptureConnection], error: Error?) {

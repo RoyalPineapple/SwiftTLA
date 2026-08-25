@@ -5,13 +5,13 @@ import Observation
 
 @main
 struct BLEScannerApp: App {
-    @State private var controller = BLEController()
+    @State private var effects = BluetoothEffects()
     @State private var machine: BluetoothModel?
 
     var body: some Scene {
         WindowGroup {
             VStack(spacing: 0) {
-                List(controller.devices) { device in
+                List(effects.devices) { device in
                     HStack {
                         Circle()
                             .fill(.blue)
@@ -28,7 +28,7 @@ struct BLEScannerApp: App {
                     .padding(.vertical, 2)
                 }
 
-                if let diagnostic = controller.diagnostic {
+                if let diagnostic = effects.diagnostic {
                     Text(diagnostic)
                         .foregroundStyle(.red)
                         .padding(.horizontal)
@@ -44,7 +44,7 @@ struct BLEScannerApp: App {
 
                     Spacer()
 
-                    Text("\(controller.devices.count) device(s)")
+                    Text("\(effects.devices.count) device(s)")
                         .foregroundStyle(.secondary)
                         .font(.caption)
                 }
@@ -54,9 +54,9 @@ struct BLEScannerApp: App {
             .task {
                 do {
                     machine = try BluetoothModel.makeMachine()
-                    controller.eventReceived = { action in _ = send(action) }
+                    effects.eventReceived = { action in _ = send(action) }
                 } catch {
-                    controller.diagnostic = "Bluetooth workflow failed to initialize: \(error)"
+                    effects.diagnostic = "Bluetooth workflow failed to initialize: \(error)"
                 }
             }
         }
@@ -66,16 +66,16 @@ struct BLEScannerApp: App {
 
     private func send(_ action: BluetoothModel.Action) -> Bool {
         guard var machine else {
-            controller.diagnostic = "Bluetooth workflow did not initialize."
+            effects.diagnostic = "Bluetooth workflow did not initialize."
             return false
         }
         do {
             _ = try machine.send(action)
             self.machine = machine
-            controller.diagnostic = nil
+            effects.diagnostic = nil
             return true
         } catch {
-            controller.diagnostic = String(describing: error)
+            effects.diagnostic = String(describing: error)
             return false
         }
     }
@@ -83,10 +83,10 @@ struct BLEScannerApp: App {
     private func toggleScan() {
         if phase == .scanning {
             guard send(.stopScan) else { return }
-            controller.stopScanning()
+            effects.stopScanning()
         } else if phase == .poweredOn {
             guard send(.startScan) else { return }
-            controller.startScanning()
+            effects.startScanning()
         }
     }
 }
@@ -99,7 +99,7 @@ struct DiscoveredDevice: Identifiable {
 
 @MainActor
 @Observable
-final class BLEController {
+final class BluetoothEffects {
     var devices: [DiscoveredDevice] = []
     var diagnostic: String?
     var eventReceived: ((BluetoothModel.Action) -> Void)? {
@@ -142,7 +142,7 @@ final class BLEController {
 }
 
 private final class BLEDelegate: NSObject, CBCentralManagerDelegate {
-    weak var owner: BLEController?
+    weak var owner: BluetoothEffects?
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in owner?.report(central.state) }
