@@ -103,6 +103,19 @@ public struct BluetoothModel {
 
 }
 
+public extension BluetoothModel.Action {
+    init?(managerState: CBManagerState) {
+        switch managerState {
+        case .poweredOn: self = .poweredOn
+        case .poweredOff: self = .poweredOff
+        case .resetting: self = .resetting
+        case .unsupported: self = .unsupported
+        case .unauthorized: self = .unauthorized
+        default: return nil
+        }
+    }
+}
+
 private final class BleDelegate: NSObject, CBCentralManagerDelegate {
     weak var owner: Bluetooth?
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -166,16 +179,7 @@ public actor Bluetooth {
     }
 
     func updateState(_ state: CBManagerState) async {
-        let action: BluetoothModel.Action?
-        switch state {
-        case .poweredOn: action = .poweredOn
-        case .poweredOff: action = .poweredOff
-        case .resetting: action = .resetting
-        case .unsupported: action = .unsupported
-        case .unauthorized: action = .unauthorized
-        default: action = nil
-        }
-        if let action {
+        if let action = BluetoothModel.Action(managerState: state) {
             do {
                 _ = try machine.send(action)
                 diagnostic = nil

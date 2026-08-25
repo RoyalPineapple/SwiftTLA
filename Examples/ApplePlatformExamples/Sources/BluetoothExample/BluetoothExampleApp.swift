@@ -6,6 +6,7 @@ import Observation
 @main
 struct BLEScannerApp: App {
     @State private var controller = BLEController()
+    @State private var machine: BluetoothModel?
 
     var body: some Scene {
         WindowGroup {
@@ -34,11 +35,12 @@ struct BLEScannerApp: App {
                 }
 
                 HStack {
-                    Button(controller.isScanning ? "Stop" : "Scan") {
-                        Task { await controller.toggleScan() }
+                    Button(phase == .scanning ? "Stop" : "Scan") {
+                        toggleScan()
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(controller.isScanning ? .red : .accentColor)
+                    .tint(phase == .scanning ? .red : .accentColor)
+                    .disabled(phase != .poweredOn && phase != .scanning)
 
                     Spacer()
 
@@ -49,7 +51,42 @@ struct BLEScannerApp: App {
                 .padding()
             }
             .frame(minWidth: 400, minHeight: 300)
-            .task { await controller.ready() }
+            .task {
+                do {
+                    machine = try BluetoothModel.makeMachine()
+                    controller.eventReceived = { action in _ = send(action) }
+                } catch {
+                    controller.diagnostic = "Bluetooth workflow failed to initialize: \(error)"
+                }
+            }
+        }
+    }
+
+    private var phase: BluetoothModel.Phase { machine?.state.phase ?? .unknown }
+
+    private func send(_ action: BluetoothModel.Action) -> Bool {
+        guard var machine else {
+            controller.diagnostic = "Bluetooth workflow did not initialize."
+            return false
+        }
+        do {
+            _ = try machine.send(action)
+            self.machine = machine
+            controller.diagnostic = nil
+            return true
+        } catch {
+            controller.diagnostic = String(describing: error)
+            return false
+        }
+    }
+
+    private func toggleScan() {
+        if phase == .scanning {
+            guard send(.stopScan) else { return }
+            controller.stopScanning()
+        } else if phase == .poweredOn {
+            guard send(.startScan) else { return }
+            controller.startScanning()
         }
     }
 }
@@ -64,69 +101,59 @@ struct DiscoveredDevice: Identifiable {
 @Observable
 final class BLEController {
     var devices: [DiscoveredDevice] = []
-    var isScanning = false
     var diagnostic: String?
-    private var ble: Bluetooth?
-    private var scanTask: Task<Void, Never>?
+    var eventReceived: ((BluetoothModel.Action) -> Void)? {
+        didSet { report(central.state) }
+    }
+
+    private let delegate: BLEDelegate
+    private let central: CBCentralManager
     private var seen = Set<UUID>()
 
-    func ready() async {
-        do {
-            try await bluetooth().ready()
-            diagnostic = nil
-        } catch {
-            diagnostic = "Bluetooth setup failed: \(error)"
-        }
+    init() {
+        let delegate = BLEDelegate()
+        self.delegate = delegate
+        central = CBCentralManager(delegate: delegate, queue: nil)
+        delegate.owner = self
     }
 
-    func toggleScan() async {
-        if isScanning {
-            await stopScanning()
-        } else {
-            await startScanning()
-        }
+    func startScanning() {
+        central.scanForPeripherals(withServices: nil)
+        diagnostic = nil
     }
 
-    private func startScanning() async {
-        let stream: AsyncStream<Device>
-        do {
-            stream = try await bluetooth().scan()
-            isScanning = true
-            diagnostic = nil
-        } catch {
-            diagnostic = "Bluetooth scan failed: \(error)"
-            return
-        }
-        scanTask = Task { [weak self] in
-            for await device in stream {
-                guard let self else { return }
-                let id = device.id
-                guard seen.insert(id).inserted else { continue }
-                let name = await device.name ?? "Unknown"
-                let item = DiscoveredDevice(id: id.uuidString, name: name, identifier: id)
-                devices.append(item)
-            }
-        }
+    func stopScanning() {
+        central.stopScan()
+        diagnostic = nil
     }
 
-    private func stopScanning() async {
-        do {
-            if let ble {
-                try await ble.stopScanning()
-            }
-            diagnostic = nil
-        } catch {
-            diagnostic = "Bluetooth scan could not stop: \(error)"
-            return
-        }
-        scanTask?.cancel()
-        isScanning = false
+    fileprivate func report(_ state: CBManagerState) {
+        if let action = BluetoothModel.Action(managerState: state) { eventReceived?(action) }
     }
 
-    private func bluetooth() throws -> Bluetooth {
-        if let ble { return ble }
-        let ble = try Bluetooth()
-        self.ble = ble
-        return ble
+    fileprivate func discovered(_ peripheral: CBPeripheral) {
+        guard seen.insert(peripheral.identifier).inserted else { return }
+        devices.append(.init(
+            id: peripheral.identifier.uuidString,
+            name: peripheral.name ?? "Unknown",
+            identifier: peripheral.identifier
+        ))
+    }
+}
+
+private final class BLEDelegate: NSObject, CBCentralManagerDelegate {
+    weak var owner: BLEController?
+
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        Task { @MainActor in owner?.report(central.state) }
+    }
+
+    func centralManager(
+        _ central: CBCentralManager,
+        didDiscover peripheral: CBPeripheral,
+        advertisementData: [String: Any],
+        rssi: NSNumber
+    ) {
+        Task { @MainActor in owner?.discovered(peripheral) }
     }
 }
