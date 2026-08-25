@@ -20,10 +20,13 @@ typed state.
 ## Generated actor
 
 `Actor` owns one generated machine value. It serializes
-`send(_:)` and exposes the machine's typed state and actions.
+`send(_:)` and exposes the machine's typed initial state, state, and actions.
 
 ```swift
 let actor = try Counter.Actor()
 let transition = try await actor.send(.advance)
 assert(await actor.state == transition.after)
+
+let seeded = try Counter.Actor(.init(count: 4))
+assert(await seeded.state.count == 4)
 ```
