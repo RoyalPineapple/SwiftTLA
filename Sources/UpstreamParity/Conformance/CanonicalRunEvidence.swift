@@ -21,14 +21,6 @@ struct CanonicalRunEvidence: Codable, Sendable {
     }
   }
 
-  struct ReceiptContext: Codable, Equatable, Sendable {
-    let compiledModelIdentity: String
-    let configurationIdentity: String
-    let symmetrySchemaIdentity: String
-    let observableNameMappingIdentity: String?
-    let maximumStateLimit: Int
-  }
-
   struct Graph: Codable, Sendable {
     struct Chunk: Codable, Sendable {
       let file: String
@@ -96,7 +88,6 @@ struct CanonicalRunEvidence: Codable, Sendable {
 
   let format: String
   let correlation: Correlation
-  let receiptContext: ReceiptContext
   let schema: String
   let graph: Graph
   let observableActions: [String]
@@ -107,12 +98,10 @@ struct CanonicalRunEvidence: Codable, Sendable {
   private init(
     run: CanonicalRun,
     correlation: CoreConformanceCorrelation,
-    receiptContext: ReceiptContext,
     graph: Graph
   ) {
     format = Self.format
     self.correlation = .init(correlation)
-    self.receiptContext = receiptContext
     schema = run.schema.rawValue
     self.graph = graph
     observableActions = run.observableActions.sorted()
@@ -129,39 +118,26 @@ struct CanonicalRunEvidence: Codable, Sendable {
   static func write(
     _ run: CanonicalRun,
     correlation: CoreConformanceCorrelation,
-    receiptContext: ReceiptContext,
     to url: URL
   ) throws {
-    let receipt = CanonicalGraphReceipt(
-      run: run,
-      compiledModelIdentity: receiptContext.compiledModelIdentity,
-      configurationIdentity: receiptContext.configurationIdentity,
-      symmetrySchemaIdentity: receiptContext.symmetrySchemaIdentity,
-      observableNameMappingIdentity: receiptContext.observableNameMappingIdentity,
-      maximumStateLimit: receiptContext.maximumStateLimit
-    )
     let directoryName = url.deletingPathExtension().lastPathComponent + ".graph"
     let directory = url.deletingLastPathComponent().appendingPathComponent(directoryName, isDirectory: true)
     if FileManager.default.fileExists(atPath: directory.path) {
       try FileManager.default.removeItem(at: directory)
     }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let chunks = CanonicalGraphReceipt.graphRecordChunks(for: run.graph)
-    guard chunks.count == receipt.graphChunkDigests.count else {
-      throw CanonicalRunEvidenceError.invalidRecord
-    }
-    let manifest = try zip(chunks, receipt.graphChunkDigests).enumerated().map { index, pair in
+    let chunks = CanonicalGraphRecords.chunks(for: run.graph)
+    let manifest = try chunks.enumerated().map { index, records in
       let file = String(format: "%06d.jsonl", index)
-      let data = Data(pair.0.joined(separator: "\n").utf8)
-      guard SHA256.hex(data) == pair.1 else { throw CanonicalRunEvidenceError.invalidRecord }
+      let data = Data(records.joined(separator: "\n").utf8)
+      let digest = SHA256.hex(data)
       try data.write(to: directory.appendingPathComponent(file), options: .atomic)
-      return Graph.Chunk(file: file, digest: pair.1, recordCount: pair.0.count)
+      return Graph.Chunk(file: file, digest: digest, recordCount: records.count)
     }
     let evidence = Self(
       run: run,
       correlation: correlation,
-      receiptContext: receiptContext,
-      graph: .init(digest: receipt.graphDigest, chunks: manifest)
+      graph: .init(digest: CanonicalGraphRecords.digest(for: run.graph), chunks: manifest)
     )
     try ConformanceEvidence.writePrettyCanonical(evidence, to: url)
   }
@@ -200,17 +176,9 @@ struct CanonicalRunEvidence: Codable, Sendable {
       return records
     }
     let run = try canonicalRun(records: chunkRecords.flatMap { $0 })
-    let receipt = CanonicalGraphReceipt(
-      run: run,
-      compiledModelIdentity: receiptContext.compiledModelIdentity,
-      configurationIdentity: receiptContext.configurationIdentity,
-      symmetrySchemaIdentity: receiptContext.symmetrySchemaIdentity,
-      observableNameMappingIdentity: receiptContext.observableNameMappingIdentity,
-      maximumStateLimit: receiptContext.maximumStateLimit
-    )
-    guard receipt.graphDigest == graph.digest,
-          receipt.graphChunkDigests == graph.chunks.map(\.digest),
-          CanonicalGraphReceipt.graphRecordChunks(for: run.graph) == chunkRecords
+    guard CanonicalGraphRecords.digest(for: run.graph) == graph.digest,
+          chunkRecords.map(CanonicalGraphRecords.digest) == graph.chunks.map(\.digest),
+          CanonicalGraphRecords.chunks(for: run.graph) == chunkRecords
     else { throw CanonicalRunEvidenceError.invalidRecord }
     return run
   }

@@ -36,9 +36,8 @@ documentation, diagnostics, and reviews use these terms.
 | render | Convert compiled declarations to TLA+ or PlusCal text. | compile, export |
 | serialize | Encode boundary data such as JSON, graph records, or manifests. | render |
 | exploration | A bounded traversal of a compiled machine graph. | checking |
-| canonical graph | Deterministically ordered states and labeled edges. | receipt |
-| receipt | A digest-bearing summary of one completed graph exploration. | graph, evidence |
-| evidence | Retained inputs, commands, outputs, graphs, and receipts from a check. | result |
+| canonical graph | Deterministically ordered states and labeled edges. | evidence |
+| evidence | Retained inputs, commands, outputs, and graphs from a check. | result |
 | admission | A policy decision from declared evidence. | conformance |
 | conformance | An exact SwiftTLA and TLC graph comparison for one finite case. | admission |
 

@@ -127,7 +127,7 @@ package struct TLCTemporalAdapter: Sendable {
       let run = capture.run
       let propertyGraph = capture.graph
       let graph = completeGraph?.graph ?? propertyGraph
-      let graphID = CanonicalGraphReceipt.graphRecordDigest(for: graph.graph)
+      let graphID = CanonicalGraphRecords.digest(for: graph.graph)
       let initialStateIDs = graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
       let tlcEvidence = try ConformanceEvidence.reference(
         for: input.outputDirectory.appendingPathComponent("tlc-process.json"),

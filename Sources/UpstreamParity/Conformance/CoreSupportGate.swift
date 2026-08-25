@@ -554,9 +554,6 @@ public struct CoreSupportGate: Sendable {
       let runJSON = try object(named: "run.json", in: evidence.directory)
       let decision = try CanonicalConformanceEvidence.read(from: evidence.directory)
       var reasons = Set<CoreSupportReasonCode>()
-      guard decision.evidence.comparison.expectedReceipt.maximumStateLimit == declaredCase.maximumStateLimit,
-            decision.evidence.comparison.actualReceipt.maximumStateLimit == declaredCase.maximumStateLimit
-      else { throw EvidenceError.invalidJSON }
       let expectedCase = try declaredCaseContract(declaredCase, referencePin: referencePin)
       if !caseMatches(caseJSON, declaredCase, expectedCase)
         || argumentsJSON != declaredCase.arguments {
