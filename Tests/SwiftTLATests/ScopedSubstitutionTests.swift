@@ -87,14 +87,15 @@ struct ScopedSubstitutionTests {
 
     let result = StateExpr.substituteVariable("target", with: .variable("element"), in: expression)
 
-    #expect(result == .foldFunction(
+    let expected: StateExpr = .foldFunction(
       FormalLambda(
         parameters: ["element_1", "accumulator"],
         body: .add(.variable("element"), .variable("element_1"))
       ),
       initial: .int(0),
       sequence: .tupleLiteral([.int(1)])
-    ))
+    )
+    #expect(result == expected)
   }
 
   @Test("Local operator parameters are scoped independently")
