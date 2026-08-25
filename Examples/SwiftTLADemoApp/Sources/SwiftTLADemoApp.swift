@@ -40,7 +40,6 @@ private struct DemoHomeView: View {
 
 private struct TwoBucketsView: View {
     @State private var machine: TwoBuckets?
-    @State private var enabledActions: Set<TwoBuckets.Action> = []
     @State private var error: String?
 
     var body: some View {
@@ -54,7 +53,7 @@ private struct TwoBucketsView: View {
                     pourFiveIntoThree: { perform(.pourFiveIntoThree) },
                     fillFive: { perform(.fillFive) },
                     emptyFive: { perform(.emptyFive) },
-                    enabledActions: enabledActions,
+                    enabledActions: availableActions,
                     reset: reset
                 )
             } else {
@@ -68,13 +67,10 @@ private struct TwoBucketsView: View {
     private func reset() {
         do {
             let machine = try TwoBuckets.makeMachine()
-            let enabledActions = try Set(machine.enabledActions())
             self.machine = machine
-            self.enabledActions = enabledActions
             error = nil
         } catch let failure {
             machine = nil
-            enabledActions = []
             error = failure.localizedDescription
         }
     }
@@ -83,12 +79,15 @@ private struct TwoBucketsView: View {
         guard var machine else { return }
         do {
             _ = try machine.send(action)
-            let enabledActions = try Set(machine.enabledActions())
             self.machine = machine
-            self.enabledActions = enabledActions
             error = nil
         }
         catch let failure { error = failure.localizedDescription }
+    }
+
+    private var availableActions: Set<TwoBuckets.Action> {
+        guard let machine else { return [] }
+        return (try? Set(machine.enabledActions())) ?? []
     }
 }
 
@@ -249,7 +248,6 @@ private struct DuckDuckLeaderView: View {
 
 private struct ElevatorBankView: View {
     @State private var machine: ElevatorBank?
-    @State private var enabledActions: Set<ElevatorBank.Action> = []
     @State private var error: String?
 
     var body: some View {
@@ -262,7 +260,7 @@ private struct ElevatorBankView: View {
                 ElevatorBankControls(
                     operateCarA: { operate(.operate(process: .carA)) },
                     operateCarB: { operate(.operate(process: .carB)) },
-                    enabledActions: enabledActions,
+                    enabledActions: availableActions,
                     reset: reset
                 )
             } else {
@@ -276,13 +274,10 @@ private struct ElevatorBankView: View {
     private func reset() {
         do {
             let machine = try ElevatorBank.makeMachine()
-            let enabledActions = try Set(machine.enabledActions())
             self.machine = machine
-            self.enabledActions = enabledActions
             error = nil
         } catch let failure {
             machine = nil
-            enabledActions = []
             error = failure.localizedDescription
         }
     }
@@ -299,12 +294,15 @@ private struct ElevatorBankView: View {
         guard var machine else { return }
         do {
             _ = try machine.send(action)
-            let enabledActions = try Set(machine.enabledActions())
             self.machine = machine
-            self.enabledActions = enabledActions
             error = nil
         }
         catch let failure { error = failure.localizedDescription }
+    }
+
+    private var availableActions: Set<ElevatorBank.Action> {
+        guard let machine else { return [] }
+        return (try? Set(machine.enabledActions())) ?? []
     }
 }
 
