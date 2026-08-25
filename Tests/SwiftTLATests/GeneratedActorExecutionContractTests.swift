@@ -10,7 +10,7 @@ struct ParameterizedActorModel {
             let turn = Var<Int>("turn")
             Variable(leader, 1)
             Variable(turn, 0)
-            Action("pass", parameters: [
+            SwiftTLA.Action("pass", parameters: [
                 ActionParameter("from", values: [1, 2]),
                 ActionParameter("to", values: [1, 2]),
                 ActionParameter("round", values: [1, 2, 3])
@@ -56,9 +56,9 @@ struct GeneratedActorExecutionContractTests {
     @Test("disabled typed action leaves actor state unchanged")
     func disabledTypedActionLeavesActorStateUnchanged() async throws {
         let actor = try ParameterizedActorModel.Actor()
-        let unavailable = ParameterizedActorModel.Actor.Action.pass(from: 2, to: 1, round: 1)
+        let unavailable = ParameterizedActorModel.Action.pass(from: 2, to: 1, round: 1)
         let before = await actor.state
-        #expect(throws: GeneratedMachineError.self) {
+        await #expect(throws: GeneratedMachineError.self) {
             try await actor.send(unavailable)
         }
 
@@ -68,7 +68,7 @@ struct GeneratedActorExecutionContractTests {
     @Test("concurrent duplicate actions commit once")
     func concurrentDuplicateActionsCommitOnce() async throws {
         let actor = try ParameterizedActorModel.Actor()
-        let action = ParameterizedActorModel.Actor.Action.pass(from: 1, to: 2, round: 1)
+        let action = ParameterizedActorModel.Action.pass(from: 1, to: 2, round: 1)
 
         async let first = submit(actor, action: action)
         async let second = submit(actor, action: action)
@@ -89,7 +89,7 @@ struct GeneratedActorExecutionContractTests {
 
     private func submit(
         _ actor: ParameterizedActorModel.Actor,
-        action: ParameterizedActorModel.Actor.Action
+        action: ParameterizedActorModel.Action
     ) async -> Submission {
         do {
             let evidence = try await actor.send(action)
@@ -120,8 +120,8 @@ struct GeneratedActorExecutionContractTests {
     }
 
     private struct Evidence: Sendable {
-        let action: ParameterizedActorModel.Actor.Action
-        let before: ParameterizedActorModel.Actor.State
-        let after: ParameterizedActorModel.Actor.State
+        let action: ParameterizedActorModel.Action
+        let before: ParameterizedActorModel.State
+        let after: ParameterizedActorModel.State
     }
 }

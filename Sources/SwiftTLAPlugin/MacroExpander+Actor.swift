@@ -4,6 +4,20 @@ import SwiftTLA
 extension MacroExpander {
     static func generateActorMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
+        let actionMembers = model.machineSurface.actions.isEmpty ? "" : """
+
+                public func isEnabled(_ action: Action) throws -> Bool {
+                    try machine.isEnabled(action)
+                }
+
+                public func enabledActions() throws -> [Action] {
+                    try machine.enabledActions()
+                }
+
+                public func send(_ action: Action) throws -> Transition {
+                    try machine.send(action)
+                }
+                """
         return [
             DeclSyntax(stringLiteral: """
             public actor Actor {
@@ -21,17 +35,7 @@ extension MacroExpander {
                     machine.state
                 }
 
-                public func isEnabled(_ action: Action) throws -> Bool {
-                    try machine.isEnabled(action)
-                }
-
-                public func enabledActions() throws -> [Action] {
-                    try machine.enabledActions()
-                }
-
-                public func send(_ action: Action) throws -> Transition {
-                    try machine.send(action)
-                }
+                \(actionMembers)
             }
             """)
         ]

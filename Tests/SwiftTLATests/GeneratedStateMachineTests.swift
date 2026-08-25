@@ -11,9 +11,9 @@ private struct SanitizedActionModel {
         #spec("SanitizedActionModel") {
             let value = Var<Int>("value")
             Variable(value, 0)
-            Action("procedure.work.enter") { value.becomes(1) }
-            Action("procedure_work_enter") { value.becomes(2) }
-            Action("step-2") { value.becomes(3) }
+            SwiftTLA.Action("procedure.work.enter") { value.becomes(1) }
+            SwiftTLA.Action("procedure_work_enter") { value.becomes(2) }
+            SwiftTLA.Action("step-2") { value.becomes(3) }
         }
     }
 }
@@ -24,7 +24,7 @@ private struct InvocationNamedActionModel {
         #spec("InvocationNamedActionModel") {
             let value = Var<Int>("value")
             Variable(value, 0)
-            Action("toInvocation") { value.becomes(1) }
+            SwiftTLA.Action("toInvocation") { value.becomes(1) }
         }
     }
 }
@@ -37,18 +37,96 @@ struct CounterNoInvs {
         TLASpec("CounterNoInvs") {
             let x = Var<Int>("x")
             Variable(x, 0)
-            Action("inc") { x.becomes(x + 1).when(x < 3) }
-            Action("dec") { x.becomes(x - 1).when(x > 0) }
+            SwiftTLA.Action("inc") { x.becomes(x + 1).when(x < 3) }
+            SwiftTLA.Action("dec") { x.becomes(x - 1).when(x > 0) }
         }
     }
 }
 
 @TLAModel
 struct GeneratedAlgorithmCounter {
-    enum Node: String, CaseIterable {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case left
         case right
 
+        static var defaultValue: Self { .left }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedAlgorithmCounter") {
+            Algorithm("GeneratedAlgorithmCounter", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
+                Each(Node.all, fairness: .weak) { _ in
+                    While(TestControlLabel.increment, count < 2) {
+                        When(count < 2)
+                        Assert(count >= 0)
+                        Assign(count, to: count + 1)
+                    }
+                }
+            })
+        }
+    }
+}
+
+@TLAModel
+private struct SeededCounterMachine {
+    static var spec: TLASpec {
+        #spec("SeededCounterMachine") {
+            Algorithm("SeededCounterMachine", scoped: { scope in
+                let value = scope.sharedVar("value", in: 0...2)
+
+                While(TestControlLabel.advance, true) {
+                    Either {
+                        When(value < 2)
+                        Assign(value, to: value + 1)
+                    } or: {
+                        When(value == 2)
+                        Assign(value, to: 0)
+                    }
+                }
+            })
+        }
+    }
+}
+
+struct GeneratedAlgorithmMachineTests {
+    @Test("generated actions retain collision-safe Swift cases")
+    func sanitizesGeneratedActions() {
+        let dotted = SanitizedActionModel.Action.procedure_work_enter
+        let underscored = SanitizedActionModel.Action.procedure_work_enter_2
+        let dashed = SanitizedActionModel.Action.step_2
+        #expect((dotted == underscored) == false)
+        #expect((underscored == dashed) == false)
+        #expect((dashed == dotted) == false)
+    }
+
+    @Test("generated actions accept a case named toInvocation")
+    func permitsCurrentActionNames() {
+        #expect(InvocationNamedActionModel.Action.toInvocation == .toInvocation)
+    }
+
+    @Test("a bounded Algorithm generates the ordinary typed state machine")
+    func generatedAlgorithmUsesTheSharedLowering() throws {
+        var machine = try GeneratedAlgorithmCounter.makeMachine()
+        #expect(machine.state.count == 0)
+        let action = GeneratedAlgorithmCounter.Action.increment(process: .left)
+        let result = try machine.send(action)
+        #expect(result.before.count == 0)
+        #expect(result.after.count == 1)
+        #expect(machine.state.count == 1)
+    }
+
+    @Test("a generated machine accepts one declared initial state")
+    func generatedMachineAcceptsDeclaredInitialState() throws {
+        var machine = try SeededCounterMachine.makeMachine(.init(value: 2))
+
+        #expect(machine.state.value == 2)
+        #expect(try machine.send(.advance).after.value == 0)
+    }
+
+    @Test("a generated machine rejects an initial state outside Init")
     func generatedMachineRejectsUndeclaredInitialState() {
         do {
             _ = try SeededCounterMachine.makeMachine(.init(value: 3))
@@ -73,20 +151,19 @@ struct GeneratedAlgorithmCounter {
 
 @TLAModel
 struct GeneratedRestrictedProcessDomain {
-    enum Member: Int, CaseIterable {
+    enum Member: Int, CaseIterable, FiniteTLAValueDomain {
         case worker = 1
-        /// A value that is valid in state, but not a member of the process
-        /// domain. This is the usual shape for an optional parent pointer.
-        case none = 0
 
-
+        static var defaultValue: Self { .worker }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .int(rawValue) }
     }
 
     static var spec: TLASpec {
         #spec("GeneratedRestrictedProcessDomain") {
             Algorithm("GeneratedRestrictedProcessDomain", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
-                Each(FiniteDomain([.worker])) { _ in
+                Each(Member.all) { _ in
                     Do(TestControlLabel.increment) {
                         Assign(count, to: count + 1)
                     }
@@ -199,10 +276,12 @@ struct GeneratedPairPatternTests {
 
 @TLAModel
 struct GeneratedRangeInitializedAlgorithm {
-    enum Node: String, CaseIterable {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case clock
 
-
+        static var defaultValue: Self { .clock }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     static var spec: TLASpec {
@@ -237,9 +316,32 @@ struct GeneratedRangeInitializedAlgorithmTests {
 
 @TLAModel
 struct GeneratedIntegerChoiceAlgorithm {
-    enum Node: String, CaseIterable {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case only
 
+        static var defaultValue: Self { .only }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedIntegerChoice") {
+            Algorithm("GeneratedIntegerChoice", scoped: { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
+                Each(Node.all) { _ in
+                    Do(TestControlLabel.choose) {
+                        Choose(1...3) { choice in
+                            Assign(selected, to: choice.expr)
+                        }
+                    }
+                }
+            })
+        }
+    }
+}
+
+struct GeneratedIntegerChoiceAlgorithmTests {
+    @Test("#spec retains a bounded integer choice")
     func generatedModelRetainsIntegerChoice() throws {
         let spec = GeneratedIntegerChoiceAlgorithm.spec
         let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
@@ -274,10 +376,87 @@ struct GeneratedAlgorithmStateConstraintTests {
 
 @TLAModel
 struct GeneratedProcessLocalInvariant {
-    enum Node: String, CaseIterable {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case left
         case right
 
+        static var defaultValue: Self { .left }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Label: String, CaseIterable {
+        case receive
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedProcessLocalInvariant") {
+            Algorithm("GeneratedProcessLocalInvariant", scoped: { scope in
+                Each(Node.all, scoped: { selfID, scope in
+                    let count = scope.localVar("count", initial: 0)
+                    Do(Label.receive) {
+                        Skip()
+                    }
+                    Invariant("LocalCount") { count == 0 }
+                    Invariant("ControlLocation") {
+                        At(Label.receive, selfID) || Finished(selfID)
+                    }
+                })
+            })
+        }
+    }
+}
+
+struct GeneratedProcessLocalInvariantTests {
+    @Test("#spec preserves a process-local invariant through both construction paths")
+    func generatedModelPreservesProcessLocalInvariant() {
+        #expect(GeneratedProcessLocalInvariant.spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
+    }
+}
+
+@TLAModel
+struct GeneratedDependentInitialAlgorithm {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case left
+        case right
+
+        static var defaultValue: Self { .left }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Phase: String, CaseIterable, FiniteTLAValueDomain {
+        case active
+        case inactive
+
+        static var defaultValue: Self { .active }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedDependentInitialAlgorithm") {
+            Algorithm("GeneratedDependentInitialAlgorithm", scoped: { scope in
+                let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
+                let mirrors = scope.sharedVar("mirrors", initial: Function<Node, Phase>.mapping { node in
+                    If(node == Node.left && seed == true, then: Phase.active, else: Phase.inactive)
+                })
+                Each(Node.all) { _ in
+                    Do(TestControlLabel.stop) {
+                        Assign(mirrors, to: mirrors)
+                        Stop()
+                    }
+                }
+            })
+        }
+    }
+}
+
+struct GeneratedDependentInitialAlgorithmTests {
+    @Test("#spec preserves a dependent typed function initializer")
+    func generatedModelPreservesDependentInitialStates() throws {
+        let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
+        let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
         let states = try CompiledRuntime(compilation: compilation).initialStates().map {
             try $0.value(for: mirrors).rendered(using: compilation.layout)
         }
@@ -292,7 +471,7 @@ struct GeneratedProcessLocalInvariant {
 struct NestedAdapterConcurrencyTests {
     @Test("Nested actor executes through its canonical model")
     func nestedActorSharesCanonicalExecution() async throws {
-        let actorLabel: NestedComposedCounter.Actor.Action = .advance
+        let actorLabel: NestedComposedCounter.Action = .advance
         var model = try NestedComposedCounter.makeMachine()
         let actor = try NestedComposedCounter.Actor()
 
@@ -327,8 +506,8 @@ struct HourClock {
         TLASpec("HourClock") {
             let hr = Var<Int>("hr")
             Variable(hr, 1)
-            Action("Tick") { hr.becomes(hr + 1).when(hr < 12) }
-            Action("Reset") { (hr == 12) && hr.becomes(1) }
+            SwiftTLA.Action("Tick") { hr.becomes(hr + 1).when(hr < 12) }
+            SwiftTLA.Action("Reset") { (hr == 12) && hr.becomes(1) }
             Invariant("TypeOK") { hr >= 1 && hr <= 12 }
         }
     }
@@ -342,7 +521,7 @@ struct CounterWithInv {
         TLASpec("CounterWithInv") {
             let x = Var<Int>("x")
             Variable(x, 0)
-            Action("inc") { x.becomes(x + 1).when(x < 5) }
+            SwiftTLA.Action("inc") { x.becomes(x + 1).when(x < 5) }
             Invariant("nonNeg") { x >= 0 }
         }
     }
@@ -358,8 +537,8 @@ struct MultiVar {
             let b = Var<Int>("b")
             Variable(a, 0)
             Variable(b, 0)
-            Action("incA") { a.becomes(a + 1).when(a < 2) }
-            Action("incB") { b.becomes(b + 1).when(b < 2) }
+            SwiftTLA.Action("incA") { a.becomes(a + 1).when(a < 2) }
+            SwiftTLA.Action("incB") { b.becomes(b + 1).when(b < 2) }
             Invariant("sumLE4") { (a + b) <= 4 }
         }
     }
@@ -392,7 +571,7 @@ struct TwoCarElevatorMachine {
         TLASpec("TwoCarElevatorMachine") {
             let floor = Var<Int>("floor")
             Variable(floor, 0)
-            Action("moveElevator", parameters: [ActionParameter("id", values: [1, 2])]) {
+            SwiftTLA.Action("moveElevator", parameters: [ActionParameter("id", values: [1, 2])]) {
                 floor.becomes(1)
             }
         }
@@ -406,7 +585,7 @@ struct ThreeParameterActionMachine {
         TLASpec("ThreeParameterActionMachine") {
             let floor = Var<Int>("floor")
             Variable(floor, 0)
-            Action("board", parameters: [
+            SwiftTLA.Action("board", parameters: [
                 ActionParameter("person", values: [1, 2]),
                 ActionParameter("elevator", values: [10, 20]),
                 ActionParameter("direction", values: [100, 200])
@@ -427,7 +606,7 @@ struct EndToEndThreeParameterActionMachine {
             let elevator = Expr<Int>(.variable("elevator"))
             let direction = Expr<Int>(.variable("direction"))
             Variable(floor, 0)
-            Action("board", parameters: [
+            SwiftTLA.Action("board", parameters: [
                 ActionParameter("person", values: [1, 2]),
                 ActionParameter("elevator", values: [10, 20]),
                 ActionParameter("direction", values: [100, 200])
@@ -444,7 +623,7 @@ struct NondeterministicConstrainedMachine {
         TLASpec("NondeterministicConstrainedMachine") {
             let value = Var<Int>("value")
             Variable(value, 0)
-            Action("choose") {
+            SwiftTLA.Action("choose") {
                 choose(value, from: StateExpr.set([1, 2, 3]))
             }
             Constraint(value <= 2)
@@ -459,7 +638,7 @@ struct NestedComposedCounter {
         TLASpec("NestedComposedCounter") {
             let count = Var<Int>("count")
             Variable(count, 0)
-            Action("advance") { count.becomes(count + 1).when(count < 2) }
+            SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }
         }
     }
 
@@ -479,7 +658,7 @@ struct GeneratedStateMachineTests {
     @Test("Model macro generates a parameterized action")
     func modelParameterizedAction() throws {
         var elevator = try TwoCarElevatorMachine.makeMachine()
-        _ = try elevator.send(.moveElevator(member: 1))
+        _ = try elevator.send(.moveElevator(id: 1))
         #expect(elevator.floor == 1)
     }
 
@@ -659,7 +838,7 @@ struct GeneratedStateMachineTests {
 
         let actor = try ThreeParameterActionMachine.Actor()
         let actorBefore = await actor.state
-        #expect(throws: GeneratedMachineError.self) {
+        await #expect(throws: GeneratedMachineError.self) {
             try await actor.send(.board(person: 2, elevator: 30, direction: 200))
         }
         #expect(await actor.state == actorBefore)

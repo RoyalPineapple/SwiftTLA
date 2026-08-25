@@ -215,7 +215,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
       bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
-      bundle: try TLCProcessRequest.fixture().bundle,
+      bundle: fixtureBundle(),
       graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
       traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
       replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
@@ -258,14 +258,14 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       artifacts: artifacts
     )
     #expect(throws: CoreConformanceCaseError.pinMismatch("execution TLC JAR")) {
-      try substitutedJar.validateReferenceBinding(pin: .fixture, artifacts: artifacts)
+      try substitutedJar.validateReferenceBinding(pin: try testReferencePin(), artifacts: artifacts)
     }
     let substitutedBridge = try requestWithReferenceArtifacts(
       jar: artifacts.jar, bridgeClasses: URL(fileURLWithPath: "/tmp/substituted-bridge"),
       artifacts: artifacts
     )
     #expect(throws: CoreConformanceCaseError.pinMismatch("execution bridge class")) {
-      try substitutedBridge.validateReferenceBinding(pin: .fixture, artifacts: artifacts)
+      try substitutedBridge.validateReferenceBinding(pin: try testReferencePin(), artifacts: artifacts)
     }
   }
 
@@ -623,18 +623,21 @@ private func toolchainPin() throws -> TLCReferencePin {
 }
 
 private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessRequest {
-  let fixture = try TLCProcessRequest.fixture()
   return TLCProcessRequest(
-    javaExecutable: fixture.javaExecutable,
-    jar: fixture.jar,
-    bridgeClasses: fixture.bridgeClasses,
-    bundle: fixture.bundle,
+    javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
+    jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
+    bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
+    bundle: fixtureBundle(),
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("counterexample.json"),
     replayInput: directory.appendingPathComponent("counterexample.json"),
     workingDirectory: directory.appendingPathComponent("work"),
-    arguments: fixture.arguments,
-    expectedCase: fixture.expectedCase,
-    runID: fixture.runID
+    arguments: ["-workers", "1", "-fp", "1"],
+    expectedCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1", "-fp", "1"]),
+    runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001"))
   )
+}
+
+private func fixtureBundle() -> TLAModuleBundle {
+  .external(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec"))
 }

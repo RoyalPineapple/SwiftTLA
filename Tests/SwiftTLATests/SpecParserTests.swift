@@ -2609,7 +2609,7 @@ private struct FormalDefinitionFidelityMacro {
             let value = Var<Int>("value")
             Variable(value, 0)
             FormalDefinition("Refines", parameters: [], body: true)
-            Action("stay") { value.stays }
+            SwiftTLA.Action("stay") { value.stays }
         }
     }
 }
@@ -2645,7 +2645,7 @@ private struct TypedFacadeEnumDomainMacro {
         TLASpec("TypedFacadeEnumDomainMacro") {
             let floor = Var<Int>("floor")
             Variable(floor, 0)
-            Action("move", parameters: [
+            SwiftTLA.Action("move", parameters: [
                 ActionParameter("person", values: PersonID.finiteValues),
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues)

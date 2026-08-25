@@ -21,7 +21,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: actions(in: compilation),
+          actions: try actions(in: compilation),
           apply: { state, action in
             generatedActionResult(compilation, action: action, in: state)
           },
@@ -32,7 +32,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: actions(in: compilation),
+          actions: try actions(in: compilation),
           apply: { state, action in
             P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(compilation: compilation, action: action, in: state)
           },
@@ -43,7 +43,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: actions(in: compilation),
+          actions: try actions(in: compilation),
           apply: { _, _ in
             .evaluationFailed(
               .init(code: .evaluationError, message: "fixture failure"))
@@ -55,7 +55,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: try compilation.initialStateProjections(),
-          actions: actions(in: compilation),
+          actions: try actions(in: compilation),
           apply: { _, _ in
             .evaluationUnavailable(
               .init(code: .evaluatorUnavailable, message: "fixture unavailable"))
@@ -67,9 +67,9 @@ enum PublicWorkflowGeneratedFixtureRegistry {
     }
   }
 
-  private static func actions(in compilation: CompiledSpecification) -> [PublicWorkflowGeneratedAction] {
-    compilation.compiledActions.map {
-      .init(id: $0.id, renderedName: $0.renderedName)
+  private static func actions(in compilation: CompiledSpecification) throws -> [PublicWorkflowGeneratedAction] {
+    try MachineSurfacePlan(compilation: compilation).actions.map {
+      .init(id: $0.id, renderedName: $0.formalName)
     }
   }
 }

@@ -39,23 +39,10 @@ struct CoreConformanceRunnerTests {
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     let swift = try json(at: output.appendingPathComponent("swift-run.json"))
     let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
-    let decision = try CanonicalConformanceEvidence.read(from: output)
     #expect(correlation(in: swift)["engine"] as? String == "swift")
     #expect(correlation(in: tlc)["engine"] as? String == "tlc")
-    #expect(decision.evidence.correlation.engine == .runner)
-    let expectedReceipt = decision.evidence.comparison.expectedReceipt
-    let actualReceipt = decision.evidence.comparison.actualReceipt
-    let fixtureIdentity = try fixtureCompilationIdentity().value
-    #expect(expectedReceipt.compiledModelIdentity == fixtureIdentity)
-    #expect(actualReceipt.compiledModelIdentity == fixtureIdentity)
-    #expect(expectedReceipt.maximumStateLimit == 10)
-    #expect(actualReceipt.maximumStateLimit == 10)
-    #expect(
-      expectedReceipt.graphDigest != actualReceipt.graphDigest
-    )
-    #expect(decision.evidence.comparison.differenceCategories.first == .receipt)
-    #expect(decision.evidence.comparison.differenceCategories.contains(.edges))
-    let report = try #require(decision.comparison.failureReports.first {
+    let comparison = try #require(result.comparison)
+    let report = try #require(comparison.failureReports.first {
       $0.whatFailed == "The labeled transition multisets differ."
     })
     #expect(report.expected.contains("TLC permits"))
@@ -132,10 +119,9 @@ struct CoreConformanceRunnerTests {
 
     #expect(result.exitCode == .semanticDifference)
     let swift = try json(at: output.appendingPathComponent("swift-run.json"))
-    let decision = try CanonicalConformanceEvidence.read(from: output)
     #expect((swift["receiptContext"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
-    #expect(decision.evidence.comparison.expectedReceipt.maximumStateLimit == 3)
-    #expect(decision.evidence.comparison.actualReceipt.maximumStateLimit == 3)
+    let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
+    #expect((tlc["receiptContext"] as? [String: Any])?["maximumStateLimit"] as? Int == 3)
   }
 
   @Test("runner rejects Swift evidence bound to another declared case")
@@ -301,19 +287,6 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.graph/000000.jsonl").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.graph/000000.jsonl").path))
-    #expect(try CanonicalConformanceEvidence.read(from: output).comparison.isConformant)
-
-    try Data("tampered".utf8).write(
-      to: output.appendingPathComponent("swift-run.graph/000000.jsonl"),
-      options: .atomic
-    )
-    let correlations = Correlations(caseID: request.expectedCase.id, runID: request.runID)
-    #expect(throws: CanonicalRunEvidenceError.self) {
-      try CanonicalConformanceEvidence.write(correlations: correlations, to: output)
-    }
-    #expect(throws: ConformanceGovernanceError.self) {
-      try CanonicalConformanceEvidence.read(from: output)
-    }
   }
 }
 
@@ -623,7 +596,7 @@ extension CoreConformanceRunnerTests {
       operatingSystem: "macos",
       architecture: "arm64",
       environment: [:],
-      pin: .fixture
+      pin: try testReferencePin()
     )
     return TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),

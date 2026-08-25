@@ -9,7 +9,7 @@ private struct ActorCounter {
         TLASpec("ActorCounter") {
             let count = Var<Int>("count")
             Variable(count, 0)
-            Action("advance") { count.becomes(count + 1).when(count < 1) }
+            SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 1) }
         }
     }
 }
@@ -30,7 +30,7 @@ struct GeneratedActorTests {
         let actor = try ActorCounter.Actor()
         _ = try await actor.send(.advance)
 
-        #expect(throws: GeneratedMachineError.self) {
+        await #expect(throws: GeneratedMachineError.self) {
             try await actor.send(.advance)
         }
         #expect(await actor.state == .init(count: 1))

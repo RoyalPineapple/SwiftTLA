@@ -95,7 +95,7 @@ struct CoreConformanceCanonicalizationTests {
             operatingSystem: "macos",
             architecture: "arm64",
             environment: [:],
-            pin: .fixture,
+            pin: try testReferencePin(),
             valueNormalizations: [
                 try CoreConformanceValueNormalization(
                     binding: "cars", functionKeys: ["\"carA\"": "carA", "\"carB\"": "carB"])
@@ -119,7 +119,7 @@ struct CoreConformanceCanonicalizationTests {
         #expect(Set(run.graph.states.values) == Set([expectedFirst, expectedSecond]))
         #expect(run.graph.initialStateKeys == Set([expectedFirst.key]))
         #expect(run.graph.edgeOccurrences == [
-            .init(source: expectedFirst.key, action: "move", target: expectedSecond.key): 1
+            CanonicalEdge(source: expectedFirst.key, action: "move", target: expectedSecond.key): 1
         ])
         #expect(run.graph.observations[expectedFirst.key]?.enabledActions == ["move"])
     }

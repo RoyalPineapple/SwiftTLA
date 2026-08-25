@@ -139,17 +139,20 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     }
 
     package struct Action: Sendable, Equatable {
+        package let id: ActionID
         package let formalName: String
         package let swiftIdentifier: String
         package let bindings: [Binding]
         package let symmetricCollection: SymmetricCollection?
 
         package init(
+            id: ActionID,
             formalName: String,
             swiftIdentifier: String,
             bindings: [Binding],
             symmetricCollection: SymmetricCollection?
         ) {
+            self.id = id
             self.formalName = formalName
             self.swiftIdentifier = swiftIdentifier
             self.bindings = bindings
@@ -236,11 +239,15 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         let symmetricCollectionsByVariableID = Dictionary(
             uniqueKeysWithValues: symmetricCollectionPairs
         )
-        let actionIdentifiers = Self.generatedActionIdentifiers(compilation.layout.actions.map(\.declaration.name))
-        let actions = try zip(compilation.layout.actions, actionIdentifiers).map { layout, identifier in
+        let executableActions = compilation.layout.actions.filter {
+            $0.declaration.name != CompilerControlSymbol.terminatingAction.rawValue
+        }
+        let actionIdentifiers = Self.generatedActionIdentifiers(executableActions.map(\.declaration.name))
+        let actions = try zip(executableActions, actionIdentifiers).map { layout, identifier in
             let action = compilation.spec.actions[layout.id.ordinal]
             let bindingTypes = swiftFacts.actionBindingTypes[layout.id] ?? []
             return Action(
+                id: layout.id,
                 formalName: layout.declaration.name,
                 swiftIdentifier: identifier,
                 bindings: try action.bindings.enumerated().map { index, binding in

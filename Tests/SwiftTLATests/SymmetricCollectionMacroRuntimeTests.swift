@@ -115,7 +115,7 @@ public struct GeneratedAllSatisfyPredicateRuntime {
       let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
       Variable(phase, 0)
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
-      Action("advance") {
+      SwiftTLA.Action("advance") {
         devices.allSatisfy { $0 == 0 } && phase.becomes(1)
       }
     }
@@ -130,7 +130,7 @@ public struct GeneratedContainsPredicateRuntime {
       let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
       Variable(phase, 0)
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
-      Action("advance") {
+      SwiftTLA.Action("advance") {
         devices.contains(where: { $0 == 1 }) && phase.becomes(1)
       }
     }
@@ -384,7 +384,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device, value: 4)
-    try model.send(.advance(member: device.id))
+    _ = try model.send(.advance(member: device.id))
 
     #expect(model.devices[device.id] == 5)
   }
@@ -406,7 +406,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(model.devices[eligible.id] == 0)
     #expect(model.devices[peer.id] == 4)
 
-    try model.send(.begin(member: eligible.id))
+    _ = try model.send(.begin(member: eligible.id))
     #expect(model.devices[eligible.id] == 1)
     #expect(model.devices[wrongPhase.id] == 1)
     #expect(model.devices[peer.id] == 4)
@@ -419,7 +419,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     for device in devices {
       model.devices.insert(device)
-      try model.send(.begin(member: device.id))
+      _ = try model.send(.begin(member: device.id))
     }
 
     #expect(model.devices.verificationScope == 2)
@@ -478,7 +478,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(model.devices[rejected.id] == 0)
     #expect(model.devices[peer.id] == 4)
 
-    try model.send(.advance(member: selected.id))
+    _ = try model.send(.advance(member: selected.id))
     #expect(model.devices[selected.id] == 11)
     #expect(model.devices[peer.id] == 4)
   }
@@ -517,7 +517,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(model.devices[rejected.id] == 1)
     #expect(model.devices[peer.id] == 0)
 
-    try model.send(.advance(member: selected.id))
+    _ = try model.send(.advance(member: selected.id))
     #expect(model.devices[selected.id] == 22)
     #expect(model.devices[peer.id] == 0)
   }

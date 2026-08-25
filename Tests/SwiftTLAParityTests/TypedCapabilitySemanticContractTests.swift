@@ -40,7 +40,7 @@ struct TypedCapabilitySemanticContractTests {
             operatingSystem: "macos",
             architecture: "arm64",
             environment: [:],
-            pin: .fixture
+            pin: try testReferencePin()
         )
         let evidence = SwiftExplorationEvidence(
             caseID: matchingCase.id,

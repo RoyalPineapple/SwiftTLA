@@ -153,7 +153,7 @@ struct CoreConformanceFixtureContractTests {
       operatingSystem: "macos",
       architecture: "arm64",
       environment: [:],
-      pin: .fixture
+      pin: try testReferencePin()
     )
   }
 

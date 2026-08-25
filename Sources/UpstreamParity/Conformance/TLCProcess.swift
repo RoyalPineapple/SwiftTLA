@@ -282,28 +282,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
       == rhs.resolvingSymlinksInPath().standardizedFileURL
   }
 
-  package static func fixture() throws -> Self {
-    try Self(
-      javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
-      jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
-      bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
-      bundle: .external(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
-      graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
-      traceOutput: URL(fileURLWithPath: "/tmp/counterexample.json"),
-      replayInput: URL(fileURLWithPath: "/tmp/counterexample.json"),
-      workingDirectory: URL(fileURLWithPath: "/tmp"),
-      arguments: ["-workers", "1", "-fp", "1"],
-      expectedCase: CoreConformanceCase(
-        id: "fixture", moduleSHA256: String(repeating: "c", count: 64),
-        cfgSHA256: String(repeating: "d", count: 64),
-        arguments: ["-workers", "1", "-fp", "1"],
-        argumentsSHA256: try CoreConformanceCase.argumentsDigest(["-workers", "1", "-fp", "1"]),
-        workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
-        architecture: "arm64", environment: [:], pin: .fixture
-      ),
-      runID: UUID(uuid: (0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 1))
-    )
-  }
 }
 
 package struct TLCProcessResult: Equatable, Sendable {

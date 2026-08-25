@@ -7,7 +7,7 @@ public struct P4GeneratedCounter {
         #spec("P4GeneratedCounter") {
             let value = Var<Int>("value")
             Variable(value, 0)
-            Action("advance") { value.becomes(value + 1).when(value < 1) }
+            SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 1) }
             Invariant("withinBounds") { value >= 0 && value <= 1 }
         }
     }
@@ -20,7 +20,7 @@ public struct P4GeneratedCounterIntentionalMismatch {
         #spec("P4GeneratedCounterIntentionalMismatch") {
             let value = Var<Int>("value")
             Variable(value, 0)
-            Action("advance") { value.becomes(value + 1).when(value < 1) }
+            SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 1) }
             Invariant("withinBounds") { value >= 0 && value <= 1 }
         }
     }
