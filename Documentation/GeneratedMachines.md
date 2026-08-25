@@ -133,7 +133,8 @@ application state.
 
 `Actor` owns a generated machine value when an application needs asynchronous
 coordination. It serializes `send(_:)` and exposes the same generated `State`
-and `Action` values used by value and SwiftUI code.
+and `Action` values used by value and SwiftUI code. Its initializer accepts the
+same typed initial state as `makeMachine(_:)`.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
@@ -142,6 +143,9 @@ and `Action` values used by value and SwiftUI code.
 let actor = try CounterHost.Actor()
 let transition = try await actor.send(.advance)
 assert(await actor.state == transition.after)
+
+let seeded = try CounterHost.Actor(.init(value: 0))
+assert(await seeded.state.value == 0)
 ```
 
 ## Test a model integration
@@ -194,7 +198,6 @@ come from that one compilation.
 | Generated `send(_:)` | Applies one typed action or throws. |
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |
 | Generated `Actor` | Serializes access to one generated machine value. |
-| Generated `Actor` | Shared execution surface. |
 
 ## Claim sources
 

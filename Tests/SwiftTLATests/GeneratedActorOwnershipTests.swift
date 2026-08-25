@@ -23,4 +23,13 @@ struct GeneratedActorOwnershipTests {
         #expect(transition.after == .init(count: 1))
         #expect(await actor.state == transition.after)
     }
+
+    @Test("Actor uses the generated typed initial state")
+    func actorUsesTypedInitialState() async throws {
+        let actor = try AdapterCounter.Actor(.init(count: 1))
+
+        #expect(await actor.state == .init(count: 1))
+        let advanceIsEnabled = try await actor.isEnabled(.advance)
+        #expect(advanceIsEnabled == false)
+    }
 }

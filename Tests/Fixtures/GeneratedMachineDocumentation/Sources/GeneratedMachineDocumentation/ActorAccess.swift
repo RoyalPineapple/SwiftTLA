@@ -38,7 +38,9 @@ struct CounterHost {
 func runActorAccess() async throws {
     let actor = try CounterHost.Actor()
     let result = try await actor.send(.advance)
+    let seeded = try CounterHost.Actor(.init(value: 0))
 
     guard case .committed(let commit) = result else { return }
     assert(commit.after.position.value == 1)
+    assert(await seeded.state.value == 0)
 }

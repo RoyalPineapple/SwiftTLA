@@ -7,26 +7,30 @@ extension MacroExpander {
         return [
             DeclSyntax(stringLiteral: """
             public actor Actor {
-                private var _machine: \(typeName)
+                private var machine: \(typeName)
 
                 public init() throws {
-                    _machine = try \(typeName).makeMachine()
+                    machine = try \(typeName).makeMachine()
+                }
+
+                public init(_ initial: State) throws {
+                    machine = try \(typeName).makeMachine(initial)
                 }
 
                 public var state: State {
-                    _machine.state
+                    machine.state
                 }
 
                 public func isEnabled(_ action: Action) throws -> Bool {
-                    try _machine.isEnabled(action)
+                    try machine.isEnabled(action)
                 }
 
                 public func enabledActions() throws -> [Action] {
-                    try _machine.enabledActions()
+                    try machine.enabledActions()
                 }
 
                 public func send(_ action: Action) throws -> Transition {
-                    try _machine.send(action)
+                    try machine.send(action)
                 }
             }
             """)
