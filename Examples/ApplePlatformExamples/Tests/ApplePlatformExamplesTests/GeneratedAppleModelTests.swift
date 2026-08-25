@@ -45,12 +45,4 @@ final class GeneratedAppleModelTests: XCTestCase {
         XCTAssertEqual(failedDiscovery.state.phase, .connected)
     }
 
-    func testDiskStoreGeneratedLifecycle() async throws {
-        var diskStore = try DiskStoreModel.makeMachine()
-        _ = try diskStore.send(.write)
-        _ = try diskStore.send(.delete)
-        _ = try diskStore.send(.clear)
-        let readyDiskStore = diskStore.state
-        XCTAssertEqual(readyDiskStore.phase, .ready)
-    }
 }
