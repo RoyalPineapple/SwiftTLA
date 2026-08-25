@@ -150,7 +150,7 @@ struct AlgorithmBuilderTests {
             #expect(diagnostic.construct.construct == .temporalRefinementLiveSpec)
             #expect(diagnostic.operation == .compilation)
             #expect(diagnostic.sourcePath == ["refinements", "Refines", "operator"])
-            #expect(diagnostic.expected == "Live specification refinement targets are not admitted by the initial Algorithm ledger.")
+            #expect(diagnostic.expected == "Temporal refinement targets that are live specifications are not supported in Algorithm.")
         } catch {
             Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
         }

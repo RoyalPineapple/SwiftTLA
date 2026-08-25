@@ -206,7 +206,7 @@ public enum LanguageCapabilityLedger {
                 construct,
                 sourceDecoding: .supported,
                 resultBuilderConstruction: .notApplicable,
-                boundary: "Live specification refinement targets are not admitted by the initial Algorithm ledger.",
+                boundary: "Temporal refinement targets that are live specifications are not supported in Algorithm.",
                 nextSafeAction: "Use an explicitly admitted temporal property."
             )
         case .algorithm, .sharedVariable, .localVariable, .each, .procedure, .atomicStep,
