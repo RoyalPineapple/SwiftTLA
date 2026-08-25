@@ -22,15 +22,12 @@ enum MacroExpander {
     }
 
     static func generate(model: MacroCompilation) -> [DeclSyntax] {
-        generateStateMachineMembers(isActor: false, model: model)
+        generateStateMachineMembers(model: model)
     }
 
     // MARK: - State machine code generation (model / actor)
 
-    static func generateStateMachineMembers(
-        isActor: Bool,
-        model: MacroCompilation
-    ) -> [DeclSyntax] {
+    static func generateStateMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
         let plan = model.machineSurface
         let collectionParameters = plan.symmetricCollections.map {
@@ -75,7 +72,6 @@ enum MacroExpander {
         decls.append(contentsOf: generateAction(actions: plan.actions))
         decls.append(DeclSyntax(generateStateStruct(variables: ordinaryVariables, enumInfos: model.enumInfos)))
         decls.append(contentsOf: generateGeneratedMachineStorageMembers(
-            isActor: isActor,
             hasActions: !plan.actions.isEmpty,
             actions: plan.actions,
             variables: plan.variables,
