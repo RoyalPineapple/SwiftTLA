@@ -73,6 +73,7 @@ public struct ModuleDescription: Sendable, Equatable {
 struct DirectModuleSectionPlan: Sendable, Equatable {
     let renderedModuleSource: String
     let renderedConfiguration: String
+    let renderedConfigurationWithoutSymmetry: String
 }
 
 struct DirectModuleAction: Sendable, Equatable {
@@ -176,7 +177,7 @@ public struct CompiledSpecification: Sendable {
         }
         return .init(
             action: action,
-            arguments: try formalArguments.map { try .init(formal: $0, using: layout) }
+            arguments: formalArguments.map { .init(formal: $0) }
         )
     }
 
@@ -270,6 +271,10 @@ public struct CompiledSpecification: Sendable {
 
     /// Renders a complete TLA+/CFG bundle from the already-linked closure.
     public func renderedTLAModuleBundle() throws -> TLAModuleBundle {
+        try renderedTLAModuleBundle(usesSymmetryReduction: true)
+    }
+
+    package func renderedTLAModuleBundle(usesSymmetryReduction: Bool) throws -> TLAModuleBundle {
         let entries = formalModuleClosure.entries
         let files = try entries.map { entry in
             guard let sectionPlan = moduleSectionPlans[entry.id] else {
@@ -286,7 +291,9 @@ public struct CompiledSpecification: Sendable {
                 name: entry.module.name,
                 tla: sectionPlan.renderedModuleSource,
                 cfg: entry.id == formalModuleClosure.root.id
-                    ? sectionPlan.renderedConfiguration
+                    ? usesSymmetryReduction
+                        ? sectionPlan.renderedConfiguration
+                        : sectionPlan.renderedConfigurationWithoutSymmetry
                     : nil
             )
         }
@@ -748,7 +755,11 @@ public extension TLASpec {
                 layout: layout,
                 semantics: semantics
             ),
-            renderedConfiguration: renderedTLCConfiguration(semantics: semantics)
+            renderedConfiguration: renderedTLCConfiguration(semantics: semantics, usesSymmetryReduction: true),
+            renderedConfigurationWithoutSymmetry: renderedTLCConfiguration(
+                semantics: semantics,
+                usesSymmetryReduction: false
+            )
         )
     }
 
@@ -1002,7 +1013,10 @@ public extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func renderedTLCConfiguration(semantics: CompiledSemantics) -> String {
+    private func renderedTLCConfiguration(
+        semantics: CompiledSemantics,
+        usesSymmetryReduction: Bool
+    ) -> String {
         var lines: [String] = []
         lines.append("SPECIFICATION Spec")
         lines.append(checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE")
@@ -1022,9 +1036,11 @@ public extension TLASpec {
         if constraint != nil { lines.append("CONSTRAINT StateConstraint") }
         for invariant in invariants { lines.append("INVARIANT \(invariant.name)") }
         for temporal in temporalProperties { lines.append("PROPERTY \(temporal.name)") }
-        for symmetry in symmetrySets { lines.append("SYMMETRY Symm\(symmetry.variableName)") }
-        for collection in symmetricCollections {
-            lines.append("SYMMETRY \(collection.metadata.symmetrySymbol)")
+        if usesSymmetryReduction {
+            for symmetry in symmetrySets { lines.append("SYMMETRY Symm\(symmetry.variableName)") }
+            for collection in symmetricCollections {
+                lines.append("SYMMETRY \(collection.metadata.symmetrySymbol)")
+            }
         }
         return lines.joined(separator: "\n") + "\n"
     }

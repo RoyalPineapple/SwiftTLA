@@ -36,7 +36,7 @@ member constants. Independent collections use independent permutation groups.
 ## Run a bounded check
 
 The rendered TLA+ bundle declares the member domain, symmetry operator, and
-TLC configuration. The temporal and symmetry conformance gate compares the
+TLC configuration. Temporal and symmetry conformance compares the
 declared finite SwiftTLA and TLC explorations.
 
 ## Generated collections

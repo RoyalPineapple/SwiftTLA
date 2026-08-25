@@ -31,7 +31,7 @@ struct SymmetryOrbitConformanceTests {
     let rawStates = [state("A"), state("B")]
     let reducedStates = [state("A")]
     let correlation = try TemporalSymmetryCaseRunCorrelation(
-      caseID: "scope-2", gateRunID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
+      caseID: "scope-2", runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     let input = try SymmetryOrbitComparisonInput(
       caseID: "scope-2", configuration: try TemporalSymmetryConfiguration(
         symmetryCollection: "members", symmetryScope: 2, symmetryEnabled: true), correlation: correlation,
@@ -76,7 +76,7 @@ struct SymmetryOrbitConformanceTests {
     let swiftReducedRun = try run(states: reducedStates, edges: reducedEdges)
     let tlcReducedRun = try run(states: reducedStates, edges: reducedEdges)
     let correlation = try TemporalSymmetryCaseRunCorrelation(
-      caseID: "scope-2", gateRunID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
+      caseID: "scope-2", runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     let input = try SymmetryOrbitComparisonInput(
       caseID: "scope-2", configuration: try TemporalSymmetryConfiguration(
         symmetryCollection: "members", symmetryScope: 2, symmetryEnabled: true), correlation: correlation,
@@ -151,7 +151,7 @@ struct SymmetryOrbitConformanceTests {
   private func fixture(reducedStates: [CanonicalState]) throws -> SymmetryOrbitComparisonInput {
     let rawStates = [state("A"), state("B")]
     let correlation = try TemporalSymmetryCaseRunCorrelation(
-      caseID: "scope-2", gateRunID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
+      caseID: "scope-2", runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     return try SymmetryOrbitComparisonInput(
       caseID: "scope-2", configuration: try TemporalSymmetryConfiguration(
         symmetryCollection: "members", symmetryScope: 2, symmetryEnabled: true),

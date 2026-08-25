@@ -36,14 +36,13 @@ public struct TLCTemporalCaptureResult: Sendable {
 
 package struct TLCTemporalCaptureInput: Sendable {
   package let declaredCase: TemporalSymmetryCase
+  package let referencePin: TLCReferencePin
   package let correlation: TemporalSymmetryCaseRunCorrelation
   package let request: TLCProcessRequest
   package let completeGraphRequest: TLCProcessRequest?
+  package let swiftRun: CanonicalRun
   package let swiftResult: TemporalPropertyResult
   package let swiftEvidence: CoreEvidenceReference
-  package let enablednessEvidence: CoreEvidenceReference
-  package let fairComponents: [TemporalRecurrentComponent]
-  package let rejectedComponents: [TemporalRecurrentComponent]
   package let allowsImplicitStuttering: Bool
   package let manifest: CoreEvidenceReference
   package let manifestURL: URL
@@ -55,14 +54,13 @@ package struct TLCTemporalCaptureInput: Sendable {
 
   package init(
     declaredCase: TemporalSymmetryCase,
+    referencePin: TLCReferencePin,
     correlation: TemporalSymmetryCaseRunCorrelation,
     request: TLCProcessRequest,
     completeGraphRequest: TLCProcessRequest? = nil,
+    swiftRun: CanonicalRun,
     swiftResult: TemporalPropertyResult,
     swiftEvidence: CoreEvidenceReference,
-    enablednessEvidence: CoreEvidenceReference,
-    fairComponents: [TemporalRecurrentComponent],
-    rejectedComponents: [TemporalRecurrentComponent],
     allowsImplicitStuttering: Bool = false,
     manifest: CoreEvidenceReference,
     manifestURL: URL,
@@ -73,14 +71,13 @@ package struct TLCTemporalCaptureInput: Sendable {
     relativeOutputDirectory: String
   ) {
     self.declaredCase = declaredCase
+    self.referencePin = referencePin
     self.correlation = correlation
     self.request = request
     self.completeGraphRequest = completeGraphRequest
+    self.swiftRun = swiftRun
     self.swiftResult = swiftResult
     self.swiftEvidence = swiftEvidence
-    self.enablednessEvidence = enablednessEvidence
-    self.fairComponents = fairComponents
-    self.rejectedComponents = rejectedComponents
     self.allowsImplicitStuttering = allowsImplicitStuttering
     self.manifest = manifest
     self.manifestURL = manifestURL
@@ -143,6 +140,7 @@ package struct TLCTemporalAdapter: Sendable {
       allowsImplicitStuttering: input.allowsImplicitStuttering)
       let comparison = try comparison(
         input: input,
+        tlcRun: graph,
         tlcResult: result,
         tlcEvidence: tlcEvidence,
         completeGraphEvidence: completeGraph?.evidence)
@@ -173,11 +171,13 @@ package struct TLCTemporalAdapter: Sendable {
   }
 
   private func validate(_ input: TLCTemporalCaptureInput) throws {
+    guard let sourceInput = input.declaredCase.sourceInput else {
+      throw TLCTemporalAdapterError.sourceInputMismatch
+    }
     try validateTraceOutput(input)
     try input.declaredCase.validate()
     try input.swiftResult.validate()
     try input.swiftEvidence.validate()
-    try input.enablednessEvidence.validate()
     try input.manifest.validate()
     try input.toolchain.validate()
     guard input.declaredCase.kind == .temporal,
@@ -187,23 +187,18 @@ package struct TLCTemporalAdapter: Sendable {
           input.request.caseID == input.declaredCase.id else {
       throw TLCTemporalAdapterError.correlationMismatch
     }
-    let declared = input.declaredCase.provenance
     let request = input.request.expectedCase
-    guard request.moduleSHA256 == declared.moduleSHA256,
-          request.cfgSHA256 == declared.cfgSHA256,
-          request.argumentsSHA256 == declared.argumentsSHA256,
-          request.pin.tag == declared.tlcTag,
-          request.pin.commit == declared.tlcCommit,
-          request.pin.jarSHA256 == declared.tlcJarSHA256,
-          request.pin.javaArchiveSHA256 == declared.javaArchiveSHA256,
-          request.pin.bridgeSourceSHA256 == declared.bridgeSourceSHA256,
-          request.pin.bridgeBinarySHA256 == declared.bridgeBinarySHA256 else {
+    guard request.pin == input.referencePin,
+          input.request.referencePin == input.referencePin,
+          request.moduleSHA256 == sourceInput.sha256,
+          request.cfgSHA256 == SHA256.hex(Data(input.request.bundle.cfg.utf8)),
+          request.argumentsSHA256 == (try CoreConformanceCase.argumentsDigest(input.request.arguments)) else {
       throw TLCTemporalAdapterError.provenanceMismatch
     }
     guard input.relativeOutputDirectory.isEmpty == false, !input.relativeOutputDirectory.hasPrefix("/") else {
       throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
-    guard try SHA256.hex(Data(contentsOf: input.sourceInputURL)) == input.declaredCase.sourceInput.sha256 else {
+    guard try SHA256.hex(Data(contentsOf: input.sourceInputURL)) == sourceInput.sha256 else {
       throw TLCTemporalAdapterError.sourceInputMismatch
     }
     guard try SHA256.hex(Data(contentsOf: input.manifestURL)) == input.manifest.sha256 else {
@@ -224,9 +219,11 @@ package struct TLCTemporalAdapter: Sendable {
             graphRequest.expectedCase.operatingSystem == input.request.expectedCase.operatingSystem,
             graphRequest.expectedCase.architecture == input.request.expectedCase.architecture,
             graphRequest.expectedCase.environment == input.request.expectedCase.environment,
-            graphRequest.expectedCase.moduleSHA256 == input.declaredCase.sourceInput.sha256,
+            graphRequest.expectedCase.moduleSHA256 == sourceInput.sha256,
             let declaration = input.declaredCase.configuration.completeGraphPass,
-            graphRequest.expectedCase.cfgSHA256 == declaration.configuration.sha256 else {
+            graphRequest.expectedCase.cfgSHA256 == declaration.configuration.sha256,
+            graphRequest.expectedCase.cfgSHA256 == SHA256.hex(Data(graphRequest.bundle.cfg.utf8)),
+            graphRequest.expectedCase.argumentsSHA256 == (try CoreConformanceCase.argumentsDigest(graphRequest.arguments)) else {
         throw TLCTemporalAdapterError.correlationMismatch
       }
     } else if input.declaredCase.configuration.completeGraphPass != nil {
@@ -252,7 +249,7 @@ package struct TLCTemporalAdapter: Sendable {
     try ConformanceEvidence.copy(input.toolchainURL, to: input.outputDirectory.appendingPathComponent("toolchain.json"))
     try ConformanceEvidence.writeJSON([
       "caseID": input.declaredCase.id,
-      "gateRunID": input.correlation.gateRunID.uuidString.lowercased(),
+      "runID": input.correlation.runID.uuidString.lowercased(),
       "tlcRunID": input.correlation.tlcRunID.uuidString.lowercased(),
       "arguments": input.request.arguments,
       "module": input.request.moduleFileName,
@@ -264,7 +261,8 @@ package struct TLCTemporalAdapter: Sendable {
     _ input: TLCTemporalCaptureInput
   ) throws -> (graph: CanonicalRun, evidence: TemporalCompleteGraphEvidence)? {
     guard let request = input.completeGraphRequest else { return nil }
-    guard let completeGraphPass = input.declaredCase.configuration.completeGraphPass else {
+    guard let completeGraphPass = input.declaredCase.configuration.completeGraphPass,
+          let sourceInput = input.declaredCase.sourceInput else {
       throw TLCTemporalAdapterError.correlationMismatch
     }
     try clearTraceOutput(for: request)
@@ -291,7 +289,7 @@ package struct TLCTemporalAdapter: Sendable {
       operatingSystem: request.expectedCase.operatingSystem,
       architecture: request.expectedCase.architecture,
       environment: request.expectedCase.environment,
-      sourceInput: input.declaredCase.sourceInput,
+      sourceInput: sourceInput,
       configuration: try CoreEvidenceReference(
         path: completeGraphPass.configuration.path,
         sha256: SHA256.hex(Data(request.bundle.cfg.utf8))),
@@ -342,24 +340,24 @@ extension TLCTemporalAdapter {
 
   private func comparison(
     input: TLCTemporalCaptureInput,
+    tlcRun: CanonicalRun,
     tlcResult: TemporalPropertyResult,
     tlcEvidence: CoreEvidenceReference,
     completeGraphEvidence: TemporalCompleteGraphEvidence?
   ) throws -> TemporalComparison {
-    let outcome: TemporalSymmetryExpectedOutcome
+    let outcome: TemporalSymmetryOutcome
     let diagnostic: TemporalSymmetryDiagnosticCode
     if input.swiftResult.availability == .unavailable || tlcResult.availability == .unavailable {
       outcome = .unavailable
       diagnostic = .temporalEvidenceUnavailable
     } else if input.swiftResult.outcome == tlcResult.outcome,
-              input.swiftResult.graphID == tlcResult.graphID,
-              input.swiftResult.initialStateIDs == tlcResult.initialStateIDs {
+              try exactGraph(tlcRun, input.swiftRun) {
       outcome = .exact
       diagnostic = .exactAgreement
     } else if input.swiftResult.outcome != tlcResult.outcome {
       outcome = .difference
       diagnostic = .propertyOutcomeDifference
-    } else if input.swiftResult.graphID != tlcResult.graphID {
+    } else if try exactGraph(tlcRun, input.swiftRun) == false {
       outcome = .difference
       diagnostic = .graphIdentityDifference
     } else {
@@ -376,10 +374,21 @@ extension TLCTemporalAdapter {
       swiftEvidence: input.swiftEvidence,
       tlcEvidence: tlcEvidence,
       completeGraphEvidence: completeGraphEvidence,
-      enablednessEvidence: input.enablednessEvidence,
-      fairComponents: input.fairComponents,
-      rejectedComponents: input.rejectedComponents,
       diagnosticCode: diagnostic)
+  }
+
+  private func exactGraph(_ expected: CanonicalRun, _ actual: CanonicalRun) throws -> Bool {
+    let expectedGraph = try CanonicalRun(
+      graph: expected.graph,
+      observableActions: expected.observableActions,
+      outcome: .exhaustiveSuccess
+    )
+    let actualGraph = try CanonicalRun(
+      graph: actual.graph,
+      observableActions: actual.observableActions,
+      outcome: .exhaustiveSuccess
+    )
+    return exactFiniteTLCGraph(expected: expectedGraph, actual: actualGraph).isConformant
   }
 
   private func lasso(

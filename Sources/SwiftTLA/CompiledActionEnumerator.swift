@@ -92,13 +92,13 @@ struct CompiledActionEnumerator {
         }
     }
 
-    private func actionBindings(_ bindings: [CompiledActionBinding]) throws -> [CompiledActionBindingValues] {
-        try bindings.reduce([.init(values: .init(), arguments: [])]) { partial, binding in
-            try partial.flatMap { current in
-                try binding.values.map { value in
+    private func actionBindings(_ bindings: [CompiledActionBinding]) -> [CompiledActionBindingValues] {
+        bindings.reduce([.init(values: .init(), arguments: [])]) { partial, binding in
+            partial.flatMap { current in
+                binding.values.map { value in
                     .init(
-                        values: current.values.binding(try .init(formal: value, using: layout), to: binding.binder),
-                        arguments: current.arguments + [try .init(formal: value, using: layout)]
+                        values: current.values.binding(.init(formal: value), to: binding.binder),
+                        arguments: current.arguments + [.init(formal: value)]
                     )
                 }
             }

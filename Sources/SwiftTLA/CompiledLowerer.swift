@@ -421,7 +421,7 @@ struct CompiledLowerer {
             }
             return .controlLocation(id)
         }
-        return try CompiledValue(formal: variable.initial, using: layout)
+        return CompiledValue(formal: variable.initial)
     }
 
     private func initialExpression(for variable: NamedVar) throws -> CompiledStateExpr? {

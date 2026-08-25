@@ -87,7 +87,7 @@ public struct SymmetryOrbitComparisonInput: Sendable {
     guard Set(explorations.map { "\($0.engine.rawValue):\($0.reduced)" }).count == 4,
           swiftRaw.runID == correlation.swiftRunID,
           tlcRaw.runID == correlation.tlcRunID,
-          Set([correlation.gateRunID, correlation.comparisonRunID, swiftRaw.runID, swiftReduced.runID,
+          Set([correlation.runID, correlation.comparisonRunID, swiftRaw.runID, swiftReduced.runID,
                tlcRaw.runID, tlcReduced.runID]).count == 6,
           Set(explorations.map(\.declaredConfigurationSHA256)).count == 1 else {
       throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "symmetry pair configuration")

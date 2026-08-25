@@ -23,16 +23,19 @@ package struct ModelChecker {
     let compilation: CompiledSpecification
     let configuration: FiniteExplorationConfiguration
     let permutationProductBudget: Int
+    let usesSymmetryReduction: Bool
 
     package init(
         compilation: CompiledSpecification,
         configuration: FiniteExplorationConfiguration,
-        permutationProductBudget: Int = 100_000
+        permutationProductBudget: Int = 100_000,
+        usesSymmetryReduction: Bool = true
     ) {
         self.spec = compilation.spec
         self.compilation = compilation
         self.configuration = configuration
         self.permutationProductBudget = permutationProductBudget
+        self.usesSymmetryReduction = usesSymmetryReduction
     }
 
     func check() throws -> CheckResult {
@@ -112,7 +115,8 @@ package struct ModelChecker {
             layout: compilation.layout,
             checkDeadlock: self.spec.checkDeadlock,
             specificationName: self.spec.name,
-            configuration: configuration
+            configuration: configuration,
+            usesSymmetryReduction: usesSymmetryReduction
         )
         return ModelExplorationResult(
             graph: exploration.graph,
@@ -163,7 +167,8 @@ private func compiledBFS(
     layout: CompiledLayout,
     checkDeadlock: Bool,
     specificationName: String,
-    configuration: FiniteExplorationConfiguration
+    configuration: FiniteExplorationConfiguration,
+    usesSymmetryReduction: Bool
 ) throws -> ModelExplorationResult {
     var queue: [CompiledState] = []
     var stateToID: [CompiledState: StateGraph.StateID] = [:]
@@ -201,8 +206,12 @@ private func compiledBFS(
             + steps.reversed().map { try TraceStep(state: $0.0.projection(using: layout), action: $0.1) }
     }
 
+    func representative(_ state: CompiledState) throws -> CompiledState {
+        try usesSymmetryReduction ? runtime.canonicalState(state) : state
+    }
+
     for seed in seeds {
-        let key = try runtime.canonicalState(seed)
+        let key = try representative(seed)
         guard stateToID[key] == nil else { continue }
         let id = StateGraph.StateID(nextID)
         stateToID[key] = id
@@ -228,7 +237,7 @@ private func compiledBFS(
         let current = queue[head]
         head += 1
         processed += 1
-        let key = try runtime.canonicalState(current)
+        let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
         for invariant in runtime.compilation.semantics.invariants {
@@ -262,7 +271,7 @@ private func compiledBFS(
 
         for successor in successors {
             let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
-            let successorKey = try runtime.canonicalState(successor.state)
+            let successorKey = try representative(successor.state)
             let targetID: StateGraph.StateID
             if let existing = stateToID[successorKey] {
                 targetID = existing

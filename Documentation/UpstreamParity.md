@@ -42,11 +42,10 @@ canonical records locate the first difference. See
 
 ## Temporal and symmetry cases
 
-The temporal and symmetry gate uses cases in
+Temporal and symmetry conformance uses cases in
 [`Verification/TemporalSymmetryConformance`](../Verification/TemporalSymmetryConformance).
-It retains the declared tool identity, finite configuration, graph data, and
-admission record. The gate evaluates the finite behavior named by its case
-register.
+It retains the pinned tool identity, finite configuration, graph data, and
+direct comparison. Every case must complete and match.
 
 See [Temporal and symmetry conformance](TemporalSymmetryConformance.md).
 
