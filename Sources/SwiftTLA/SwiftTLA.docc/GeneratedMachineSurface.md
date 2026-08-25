@@ -25,8 +25,10 @@ typed state.
 ```swift
 let actor = try Counter.Actor()
 let transition = try await actor.send(.advance)
-assert(await actor.state == transition.after)
+let actorState = await actor.state
+assert(actorState == transition.after)
 
 let seeded = try Counter.Actor(.init(count: 4))
-assert(await seeded.state.count == 4)
+let seededState = await seeded.state
+assert(seededState.count == 4)
 ```

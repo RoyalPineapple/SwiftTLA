@@ -115,6 +115,7 @@ struct GeneratedMachineDocumentationTests {
         ] {
             #expect(actor.contains(term), "Actor-machine guide is missing: \(term)")
         }
+        #expect(!actor.contains("assert(await"), "Actor-machine guide puts await inside assert")
     }
 
     @Test("Generated machine documentation fixture compiles and exercises its stated macOS behavior")
