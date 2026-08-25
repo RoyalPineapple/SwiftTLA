@@ -3,7 +3,7 @@ set -euo pipefail
 
 # macOS-only, deliberately narrow local diagnostic runner. Hosted Actions is
 # the admission authority; this only bounds a focused command's host impact.
-readonly max_rss_mib=16384
+readonly max_rss_mib=24576
 readonly min_available_mib=768
 readonly poll_seconds=2
 # The native advisory lock waits briefly rather than failing at first collision.
