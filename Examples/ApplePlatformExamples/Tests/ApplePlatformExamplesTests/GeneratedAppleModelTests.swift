@@ -45,9 +45,18 @@ final class GeneratedAppleModelTests: XCTestCase {
         _ = try writer.send(.write)
         _ = try writer.send(.pause)
         _ = try writer.send(.resume)
+        _ = try writer.send(.requestFinish)
+        let finishingWriter = writer.state
+        XCTAssertEqual(finishingWriter.phase, .finishing)
         _ = try writer.send(.finish)
         let finishedWriter = writer.state
         XCTAssertEqual(finishedWriter.phase, .finished)
+
+        var failedWriter = try WriterModel.makeMachine()
+        _ = try failedWriter.send(.start)
+        _ = try failedWriter.send(.requestFinish)
+        _ = try failedWriter.send(.fail)
+        XCTAssertEqual(failedWriter.state.phase, .failed)
 
         var player = try PlayerModel.makeMachine()
         _ = try player.send(.beginLoad)
