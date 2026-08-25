@@ -7,19 +7,19 @@ import Observation
 
 @main
 struct CameraApp: App {
-    @State private var model = CameraModel()
+    @State private var controller = CameraController()
 
     var body: some Scene {
         WindowGroup {
             VStack(spacing: 0) {
                 ZStack {
-                    if model.phase == 3, let player = model.currentPlayer {
+                    if controller.phase == 3, let player = controller.currentPlayer {
                         VideoPlayerView(player: player)
                             .overlay(alignment: .topTrailing) {
                                 Button {
-                                    model.currentPlayer?.pause()
-                                    model.currentPlayer = nil
-                                    Task { await model.live() }
+                                    controller.currentPlayer?.pause()
+                                    controller.currentPlayer = nil
+                                    Task { await controller.live() }
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.title)
@@ -30,16 +30,16 @@ struct CameraApp: App {
                                 .padding(12)
                             }
                     } else {
-                        if let capture = model.capture {
+                        if let capture = controller.capture {
                             CameraPreviewView(session: capture.session)
                         } else {
                             Color.black
                         }
                     }
 
-                    if let preview = model.selectedPhoto {
-                        PhotoDetailView(data: preview) { model.selectedPhoto = nil }
-                    } else if model.phase == 1, model.flashActive {
+                    if let preview = controller.selectedPhoto {
+                        PhotoDetailView(data: preview) { controller.selectedPhoto = nil }
+                    } else if controller.phase == 1, controller.flashActive {
                         Rectangle().fill(.white).transition(.opacity)
                     }
                 }
@@ -47,7 +47,7 @@ struct CameraApp: App {
 
                 filmstrip
                 controls
-                if let diagnostic = model.diagnostic {
+                if let diagnostic = controller.diagnostic {
                     Text(diagnostic)
                         .foregroundStyle(.red)
                         .padding(8)
@@ -55,7 +55,7 @@ struct CameraApp: App {
             }
             .background(.black)
             .frame(minWidth: 640, minHeight: 520)
-            .task { await model.ready() }
+            .task { await controller.ready() }
         }
     }
 
@@ -63,14 +63,14 @@ struct CameraApp: App {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    ForEach(model.roll) { item in
-                        let selected = model.isSelected(item)
+                    ForEach(controller.roll) { item in
+                        let selected = controller.isSelected(item)
                         ThumbnailView(item: item, size: CGSize(width: 72, height: 54))
                             .id(item.id)
                             .onTapGesture {
                                 switch item {
-                                case .photo(let data): model.selectedPhoto = data
-                                case .video(let url): Task { await model.playRecording(url: url) }
+                                case .photo(let data): controller.selectedPhoto = data
+                                case .video(let url): Task { await controller.playRecording(url: url) }
                                 }
                             }
                             .overlay(
@@ -78,7 +78,7 @@ struct CameraApp: App {
                                     .stroke(selected ? .yellow : .clear, lineWidth: 2)
                             )
                             .overlay(alignment: .topTrailing) {
-                                DeleteButton { model.delete(item) }
+                                DeleteButton { controller.delete(item) }
                             }
                     }
                 }
@@ -86,8 +86,8 @@ struct CameraApp: App {
             }
             .frame(height: 62)
             .background(.black.opacity(0.8))
-            .onChange(of: model.roll.count) {
-                if let last = model.roll.last {
+            .onChange(of: controller.roll.count) {
+                if let last = controller.roll.last {
                     proxy.scrollTo(last.id, anchor: .trailing)
                 }
             }
@@ -96,10 +96,10 @@ struct CameraApp: App {
 
     var controls: some View {
         HStack(spacing: 30) {
-            if model.phase == 3 || model.selectedPhoto != nil {
+            if controller.phase == 3 || controller.selectedPhoto != nil {
                 Button(action: {
-                    model.selectedPhoto = nil
-                    Task { await model.live() }
+                    controller.selectedPhoto = nil
+                    Task { await controller.live() }
                 }) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 28))
@@ -110,7 +110,7 @@ struct CameraApp: App {
                 .buttonStyle(.plain)
             } else {
                 Button(action: {
-                    Task { await model.takeSnapshot() }
+                    Task { await controller.takeSnapshot() }
                 }) {
                     ZStack {
                         Circle().stroke(.white, lineWidth: 4).frame(width: 64, height: 64)
@@ -118,12 +118,12 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(model.phase != 1)
+                .disabled(controller.phase != 1)
 
-                Button(action: { Task { await model.toggleRecording() } }) {
+                Button(action: { Task { await controller.toggleRecording() } }) {
                     ZStack {
                         Circle().stroke(.red, lineWidth: 4).frame(width: 56, height: 56)
-                        if model.phase == 2 {
+                        if controller.phase == 2 {
                             RoundedRectangle(cornerRadius: 4).fill(.red).frame(width: 24, height: 24)
                         } else {
                             Circle().fill(.red).frame(width: 44, height: 44)
@@ -131,7 +131,7 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(model.phase != 1 && model.phase != 2)
+                .disabled(controller.phase != 1 && controller.phase != 2)
             }
         }
         .padding(.vertical, 10)
@@ -332,7 +332,7 @@ struct CameraWorkflow {
 
 @MainActor
 @Observable
-final class CameraModel {
+final class CameraController {
     private var machine: CameraWorkflow?
     private(set) var capture: Media.Capture?
     var roll: [RollItem] = []
@@ -359,7 +359,7 @@ final class CameraModel {
 
     private func send(_ action: CameraWorkflow.Action) -> Bool {
         guard var machine else {
-            diagnostic = "The camera model did not initialize."
+            diagnostic = "The generated camera machine did not initialize."
             return false
         }
         do {
@@ -375,7 +375,7 @@ final class CameraModel {
 
     func takeSnapshot() async {
         guard let capture, let disk else {
-            diagnostic = "The camera model did not initialize."
+            diagnostic = "The generated camera machine did not initialize."
             return
         }
         do {

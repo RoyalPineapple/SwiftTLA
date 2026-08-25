@@ -4,12 +4,12 @@ import CoreBluetooth
 
 @main
 struct BLEScannerApp: App {
-    @StateObject private var model = BLEModel()
+    @StateObject private var controller = BLEController()
 
     var body: some Scene {
         WindowGroup {
             VStack(spacing: 0) {
-                List(model.devices) { device in
+                List(controller.devices) { device in
                     HStack {
                         Circle()
                             .fill(.blue)
@@ -26,29 +26,29 @@ struct BLEScannerApp: App {
                     .padding(.vertical, 2)
                 }
 
-                if let diagnostic = model.diagnostic {
+                if let diagnostic = controller.diagnostic {
                     Text(diagnostic)
                         .foregroundStyle(.red)
                         .padding(.horizontal)
                 }
 
                 HStack {
-                    Button(model.isScanning ? "Stop" : "Scan") {
-                        Task { await model.toggleScan() }
+                    Button(controller.isScanning ? "Stop" : "Scan") {
+                        Task { await controller.toggleScan() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(model.isScanning ? .red : .accentColor)
+                    .tint(controller.isScanning ? .red : .accentColor)
 
                     Spacer()
 
-                    Text("\(model.devices.count) device(s)")
+                    Text("\(controller.devices.count) device(s)")
                         .foregroundStyle(.secondary)
                         .font(.caption)
                 }
                 .padding()
             }
             .frame(minWidth: 400, minHeight: 300)
-            .task { await model.ready() }
+            .task { await controller.ready() }
         }
     }
 }
@@ -60,7 +60,7 @@ struct DiscoveredDevice: Identifiable {
 }
 
 @MainActor
-final class BLEModel: ObservableObject {
+final class BLEController: ObservableObject {
     @Published var devices: [DiscoveredDevice] = []
     @Published var isScanning = false
     @Published var diagnostic: String?
