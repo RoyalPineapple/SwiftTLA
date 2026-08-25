@@ -100,19 +100,46 @@ The generated state is ordinary Swift value state. A view renders it and sends
 typed actions; the machine keeps each transition atomic.
 
 ```swift
-@State private var transitionError = ""
+import SwiftUI
 
-Button("Tick") {
-    do {
-        try clock.send(.tick)
-        transitionError = ""
-    } catch {
-        transitionError = String(describing: error)
+struct ClockView: View {
+    @State private var machine: ClockModel?
+    @State private var diagnostic = ""
+
+    var body: some View {
+        VStack {
+            if let machine {
+                Text("Time: \(machine.state.hour):\(machine.state.minute):\(machine.state.second)")
+                Button("Tick") {
+                    do {
+                        var machine = machine
+                        _ = try machine.send(.tick)
+                        self.machine = machine
+                        diagnostic = ""
+                    } catch {
+                        diagnostic = String(describing: error)
+                    }
+                }
+            } else {
+                ProgressView()
+            }
+
+            if diagnostic.isEmpty == false {
+                Text(diagnostic)
+            }
+        }
+        .task {
+            do {
+                machine = try ClockModel.makeMachine()
+            } catch {
+                diagnostic = String(describing: error)
+            }
+        }
     }
 }
 ```
 
-`clock` is the generated value stored by the view. A failed action is explicit
+`machine` is the generated value stored by the view. A failed action is explicit
 application state, not a discarded error. Use the generated actor when the
 application needs shared asynchronous state; it stores the same generated
 machine value behind actor isolation.
