@@ -92,7 +92,8 @@ public actor Device: Identifiable {
     }
 
     public func discoverServices(_ uuids: [CBUUID]? = nil) async throws -> [CBService] {
-        guard let peripheral, machine.state.phase == .connected else { throw BleError.notReady }
+        guard let peripheral else { throw BleError.notReady }
+        guard try machine.isEnabled(.beginDiscovery) else { throw BleError.notReady }
         _ = try machine.send(.beginDiscovery)
         return try await withCheckedThrowingContinuation { servicesContinuation = $0; peripheral.discoverServices(uuids) }
     }
