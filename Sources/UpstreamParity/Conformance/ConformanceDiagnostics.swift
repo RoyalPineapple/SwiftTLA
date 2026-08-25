@@ -3,22 +3,22 @@ import Foundation
 /// A retained input or output that explains a conformance decision.
 ///
 /// `location` identifies the recorded module, configuration, graph, or log.
-public struct ConformanceEvidenceLocation: Equatable, Sendable {
-  public let role: String
-  public let location: String
+package struct ConformanceEvidenceLocation: Equatable, Sendable {
+  package let role: String
+  package let location: String
 
-  public init(role: String, location: String) {
+  package init(role: String, location: String) {
     self.role = role
     self.location = location
   }
 }
 
 /// Captured tool output retained with a failure report.
-public struct ConformanceToolOutput: Equatable, Sendable {
-  public let stream: String
-  public let content: String
+package struct ConformanceToolOutput: Equatable, Sendable {
+  package let stream: String
+  package let content: String
 
-  public init(stream: String, content: String) {
+  package init(stream: String, content: String) {
     self.stream = stream
     self.content = content
   }
@@ -27,16 +27,16 @@ public struct ConformanceToolOutput: Equatable, Sendable {
 /// A diagnostic that answers the next useful investigation question.
 ///
 /// The fields let a UI present the diagnostic and retained evidence directly.
-public struct ConformanceFailureReport: Equatable, Sendable {
-  public let whatFailed: String
-  public let whereItFailed: String
-  public let expected: String
-  public let actual: String
-  public let nextSafeAction: String
-  public let evidence: [ConformanceEvidenceLocation]
-  public let toolOutput: [ConformanceToolOutput]
+package struct ConformanceFailureReport: Equatable, Sendable {
+  package let whatFailed: String
+  package let whereItFailed: String
+  package let expected: String
+  package let actual: String
+  package let nextSafeAction: String
+  package let evidence: [ConformanceEvidenceLocation]
+  package let toolOutput: [ConformanceToolOutput]
 
-  public init(
+  package init(
     whatFailed: String,
     whereItFailed: String,
     expected: String,
@@ -60,7 +60,7 @@ extension ConformanceDifference {
   ///
   /// In core conformance, `expected` is TLC and `actual` is SwiftTLA.
   /// `tlc-graph.jsonl` and `swift-graph.jsonl` contain the complete graph records.
-  public var failureReport: ConformanceFailureReport {
+  package var failureReport: ConformanceFailureReport {
     switch self {
     case .mapping(let messages):
       return .init(
@@ -120,14 +120,14 @@ extension ConformanceDifference {
 
 extension ExactFiniteTLCComparison {
   /// One actionable report per detected difference, in comparison order.
-  public var failureReports: [ConformanceFailureReport] {
+  package var failureReports: [ConformanceFailureReport] {
     differences.map(\.failureReport)
   }
 }
 
 extension TLCProcessError {
   /// A structured tool failure with source inputs and any captured output.
-  public func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
+  package func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
     let evidence = [
       ConformanceEvidenceLocation(role: "TLA+ module", location: request.moduleFileName),
       ConformanceEvidenceLocation(role: "TLC configuration", location: request.configurationFileName),

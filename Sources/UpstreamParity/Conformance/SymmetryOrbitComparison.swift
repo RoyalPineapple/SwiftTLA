@@ -1,17 +1,17 @@
 import Foundation
 
-public enum SymmetryOrbitDifferenceKind: String, Codable, Sendable {
+package enum SymmetryOrbitDifferenceKind: String, Codable, Sendable {
   case rawStateSet
   case quotientTransition
   case invariantOutcome
   case deadlockOutcome
 }
 
-public struct SymmetryOrbitDifference: Equatable, Codable, Sendable {
-  public let kind: SymmetryOrbitDifferenceKind
-  public let detail: String
+package struct SymmetryOrbitDifference: Equatable, Codable, Sendable {
+  package let kind: SymmetryOrbitDifferenceKind
+  package let detail: String
 
-  public init(kind: SymmetryOrbitDifferenceKind, detail: String) throws {
+  package init(kind: SymmetryOrbitDifferenceKind, detail: String) throws {
     guard !detail.isEmpty else {
       throw ConformanceGovernanceError.invalidField(record: "symmetry difference", field: "detail")
     }
@@ -20,28 +20,28 @@ public struct SymmetryOrbitDifference: Equatable, Codable, Sendable {
   }
 }
 
-public enum SymmetryOrbitComparisonResult: Equatable, Sendable {
+package enum SymmetryOrbitComparisonResult: Equatable, Sendable {
   case exact(SymmetryOrbitComparison)
   case difference([SymmetryOrbitDifference])
 }
 
-public struct SymmetryOrbitComparisonInput: Sendable {
-  public let caseID: String
-  public let configuration: TemporalSymmetryConfiguration
-  public let correlation: TemporalSymmetryCaseRunCorrelation
-  public let swiftRaw: SymmetryExploration
-  public let swiftReduced: SymmetryExploration
-  public let tlcRaw: SymmetryExploration
-  public let tlcReduced: SymmetryExploration
-  public let swiftRawRun: CanonicalRun
-  public let swiftReducedRun: CanonicalRun
-  public let tlcRawRun: CanonicalRun
-  public let tlcReducedRun: CanonicalRun
-  public let configurationEvidence: CoreEvidenceReference
-  public let quotientEvidence: CoreEvidenceReference
-  public let permutations: [SymmetryPermutation]
+package struct SymmetryOrbitComparisonInput: Sendable {
+  package let caseID: String
+  package let configuration: TemporalSymmetryConfiguration
+  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let swiftRaw: SymmetryExploration
+  package let swiftReduced: SymmetryExploration
+  package let tlcRaw: SymmetryExploration
+  package let tlcReduced: SymmetryExploration
+  package let swiftRawRun: CanonicalRun
+  package let swiftReducedRun: CanonicalRun
+  package let tlcRawRun: CanonicalRun
+  package let tlcReducedRun: CanonicalRun
+  package let configurationEvidence: CoreEvidenceReference
+  package let quotientEvidence: CoreEvidenceReference
+  package let permutations: [SymmetryPermutation]
 
-  public init(
+  package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
     correlation: TemporalSymmetryCaseRunCorrelation,
@@ -74,7 +74,7 @@ public struct SymmetryOrbitComparisonInput: Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     try configuration.validate()
     try configurationEvidence.validate()
     try quotientEvidence.validate()
@@ -94,10 +94,10 @@ public struct SymmetryOrbitComparisonInput: Sendable {
   }
 }
 
-public struct SymmetryOrbitComparator: Sendable {
-  public init() {}
+package struct SymmetryOrbitComparator: Sendable {
+  package init() {}
 
-  public func compare(_ input: SymmetryOrbitComparisonInput) throws -> SymmetryOrbitComparisonResult {
+  package func compare(_ input: SymmetryOrbitComparisonInput) throws -> SymmetryOrbitComparisonResult {
     try validate(input.swiftRaw, against: input.swiftRawRun)
     try validate(input.swiftReduced, against: input.swiftReducedRun)
     try validate(input.tlcRaw, against: input.tlcRawRun)

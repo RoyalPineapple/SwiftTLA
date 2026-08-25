@@ -1,14 +1,14 @@
 import Foundation
 
-public struct ObservableNameMapping: Hashable, Sendable {
-    public let expectedVariables: Set<String>
-    public let actualVariables: Set<String>
-    public let variables: [String: String]
-    public let expectedActions: Set<String>
-    public let actualActions: Set<String>
-    public let actions: [String: String]
+package struct ObservableNameMapping: Hashable, Sendable {
+    package let expectedVariables: Set<String>
+    package let actualVariables: Set<String>
+    package let variables: [String: String]
+    package let expectedActions: Set<String>
+    package let actualActions: Set<String>
+    package let actions: [String: String]
 
-    public init(
+    package init(
         expectedVariables: Set<String>,
         actualVariables: Set<String>,
         variables: [String: String],
@@ -24,7 +24,7 @@ public struct ObservableNameMapping: Hashable, Sendable {
         self.actions = actions
     }
 
-    public var validationFailures: [String] {
+    package var validationFailures: [String] {
         var failures: [String] = []
         if expectedVariables.count != actualVariables.count
             || variables.count != expectedVariables.count
@@ -43,7 +43,7 @@ public struct ObservableNameMapping: Hashable, Sendable {
 
 }
 
-public enum ConformanceDifferenceCategory: String, Codable, Hashable, Sendable {
+package enum ConformanceDifferenceCategory: String, Codable, Hashable, Sendable {
     case mapping
     case initialStates
     case states
@@ -54,7 +54,7 @@ public enum ConformanceDifferenceCategory: String, Codable, Hashable, Sendable {
     case traces
 }
 
-public enum ConformanceDifference: Equatable, Sendable {
+package enum ConformanceDifference: Equatable, Sendable {
     case mapping([String])
     case initialStates(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
     case states(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
@@ -67,7 +67,7 @@ public enum ConformanceDifference: Equatable, Sendable {
     case errors(expected: [CanonicalDiagnostic], actual: [CanonicalDiagnostic])
     case traces(expected: [CanonicalTrace], actual: [CanonicalTrace])
 
-    public var category: ConformanceDifferenceCategory {
+    package var category: ConformanceDifferenceCategory {
         switch self {
         case .mapping: .mapping
         case .initialStates: .initialStates
@@ -81,17 +81,17 @@ public enum ConformanceDifference: Equatable, Sendable {
     }
 }
 
-public struct ExactFiniteTLCComparison: Equatable, Sendable {
-    public let differences: [ConformanceDifference]
+package struct ExactFiniteTLCComparison: Equatable, Sendable {
+    package let differences: [ConformanceDifference]
 
-    public init(differences: [ConformanceDifference]) {
+    package init(differences: [ConformanceDifference]) {
         self.differences = differences
     }
 
-    public var isConformant: Bool { differences.isEmpty }
+    package var isConformant: Bool { differences.isEmpty }
 }
 
-public func exactFiniteTLCGraph(
+package func exactFiniteTLCGraph(
     expected: CanonicalRun,
     actual: CanonicalRun,
     mapping: ObservableNameMapping? = nil

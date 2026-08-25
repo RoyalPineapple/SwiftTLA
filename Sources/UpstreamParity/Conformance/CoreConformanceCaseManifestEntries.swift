@@ -1,29 +1,29 @@
 import Foundation
 
-public struct CoreConformanceCaseManifestIdentityMapping: Decodable, Sendable {
-        public let variables: [String: String]
-        public let actions: [String: String]
+package struct CoreConformanceCaseManifestIdentityMapping: Decodable, Sendable {
+        package let variables: [String: String]
+        package let actions: [String: String]
 
         private enum CodingKeys: String, CodingKey, CaseIterable { case variables, actions }
 
-        public init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
             variables = try container.decode([String: String].self, forKey: .variables)
             actions = try container.decode([String: String].self, forKey: .actions)
         }
     }
 
-public struct CoreConformanceCaseManifestInvocationMapping: Decodable, Sendable {
-        public let wrapper: String
-        public let action: String
-        public let arguments: [String]
-        public let indices: [Int]
+package struct CoreConformanceCaseManifestInvocationMapping: Decodable, Sendable {
+        package let wrapper: String
+        package let action: String
+        package let arguments: [String]
+        package let indices: [Int]
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case wrapper, action, arguments, indices
         }
 
-        public init(wrapper: String, action: String, arguments: [String], indices: [Int]) throws {
+        package init(wrapper: String, action: String, arguments: [String], indices: [Int]) throws {
             _ = try CoreConformanceInvocationMapping(
                 wrapper: wrapper, action: action, arguments: arguments, indices: indices)
             self.wrapper = wrapper
@@ -32,7 +32,7 @@ public struct CoreConformanceCaseManifestInvocationMapping: Decodable, Sendable 
             self.indices = indices
         }
 
-        public init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
             try self.init(
                 wrapper: container.decode(String.self, forKey: .wrapper),
@@ -41,58 +41,58 @@ public struct CoreConformanceCaseManifestInvocationMapping: Decodable, Sendable 
                 indices: container.decode([Int].self, forKey: .indices))
         }
 
-        public func runtimeValue() throws -> CoreConformanceInvocationMapping {
+        package func runtimeValue() throws -> CoreConformanceInvocationMapping {
             try CoreConformanceInvocationMapping(
                 wrapper: wrapper, action: action, arguments: arguments, indices: indices)
         }
     }
 
-public struct CoreConformanceCaseManifestValueNormalization: Decodable, Sendable {
-        public let binding: String
-        public let functionKeys: [String: String]
+package struct CoreConformanceCaseManifestValueNormalization: Decodable, Sendable {
+        package let binding: String
+        package let functionKeys: [String: String]
 
         private enum CodingKeys: String, CodingKey, CaseIterable { case binding, functionKeys }
 
-        public init(binding: String, functionKeys: [String: String]) throws {
+        package init(binding: String, functionKeys: [String: String]) throws {
             _ = try CoreConformanceValueNormalization(
                 binding: binding, functionKeys: functionKeys)
             self.binding = binding
             self.functionKeys = functionKeys
         }
 
-        public init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
             try self.init(
                 binding: container.decode(String.self, forKey: .binding),
                 functionKeys: container.decode([String: String].self, forKey: .functionKeys))
         }
 
-        public func runtimeValue() throws -> CoreConformanceValueNormalization {
+        package func runtimeValue() throws -> CoreConformanceValueNormalization {
             try CoreConformanceValueNormalization(
                 binding: binding, functionKeys: functionKeys)
         }
     }
 
-public struct CoreConformanceCaseManifestUpstream: Decodable, Sendable {
-        public let repository: String
-        public let commit: String
+package struct CoreConformanceCaseManifestUpstream: Decodable, Sendable {
+        package let repository: String
+        package let commit: String
 
         private enum CodingKeys: String, CodingKey, CaseIterable { case repository, commit }
 
-        public init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
             repository = try container.decode(String.self, forKey: .repository)
             commit = try container.decode(String.self, forKey: .commit)
         }
     }
 
-public struct CoreConformanceCaseManifestFixtures: Decodable, Sendable {
-        public let module: String
-        public let configuration: String
+package struct CoreConformanceCaseManifestFixtures: Decodable, Sendable {
+        package let module: String
+        package let configuration: String
 
         private enum CodingKeys: String, CodingKey, CaseIterable { case module, configuration }
 
-        public init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)

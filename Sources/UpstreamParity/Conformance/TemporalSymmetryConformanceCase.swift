@@ -1,39 +1,39 @@
 import Foundation
 
-public enum TemporalSymmetryCaseKind: String, Codable, Sendable {
+package enum TemporalSymmetryCaseKind: String, Codable, Sendable {
   case temporal
   case symmetry
 }
 
-public enum TemporalFairnessMode: String, Codable, Sendable {
+package enum TemporalFairnessMode: String, Codable, Sendable {
   case none
   case weak
   case strong
 }
 
-public enum TemporalSymmetryOutcome: String, Codable, Sendable {
+package enum TemporalSymmetryOutcome: String, Codable, Sendable {
   case exact
   case difference
   case unavailable
 }
 
-public enum TemporalPropertyOutcome: String, Codable, Sendable {
+package enum TemporalPropertyOutcome: String, Codable, Sendable {
   case satisfied
   case violated
 }
 
-public enum TemporalEvaluationAvailability: String, Codable, Sendable {
+package enum TemporalEvaluationAvailability: String, Codable, Sendable {
   case evaluated
   case unavailable
 }
 
-public enum TemporalTraceAvailability: String, Codable, Sendable {
+package enum TemporalTraceAvailability: String, Codable, Sendable {
   case available
   case unavailable
   case notApplicable
 }
 
-public enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
+package enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
   case exactAgreement
   case propertyOutcomeDifference
   case applicableOutcomeDifference
@@ -44,45 +44,45 @@ public enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
   case orbitDifference
 }
 
-public enum SymmetryExplorationEngine: String, Codable, Sendable {
+package enum SymmetryExplorationEngine: String, Codable, Sendable {
   case swift
   case tlc
 }
 
-public enum SymmetryApplicableOutcome: String, Codable, Sendable {
+package enum SymmetryApplicableOutcome: String, Codable, Sendable {
   case notApplicable
   case satisfied
   case violated
   case deadlocked
 }
 
-public struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendable {
-  public let configuration: CoreEvidenceReference
+package struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendable {
+  package let configuration: CoreEvidenceReference
 
-  public init(configuration: CoreEvidenceReference) throws {
+  package init(configuration: CoreEvidenceReference) throws {
     self.configuration = configuration
     try configuration.validate()
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case configuration }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(configuration: container.decode(CoreEvidenceReference.self, forKey: .configuration))
   }
 }
 
-public struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
-  public let property: String?
-  public let fairness: TemporalFairnessMode?
-  public let fairnessActions: [String]
-  public let symmetryCollection: String?
-  public let symmetryScope: Int?
-  public let symmetryEnabled: Bool
-  public let allowsImplicitStuttering: Bool
-  public let completeGraphPass: TemporalCompleteGraphPassDeclaration?
+package struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
+  package let property: String?
+  package let fairness: TemporalFairnessMode?
+  package let fairnessActions: [String]
+  package let symmetryCollection: String?
+  package let symmetryScope: Int?
+  package let symmetryEnabled: Bool
+  package let allowsImplicitStuttering: Bool
+  package let completeGraphPass: TemporalCompleteGraphPassDeclaration?
 
-  public init(
+  package init(
     property: String? = nil,
     fairness: TemporalFairnessMode? = nil,
     fairnessActions: [String] = [],
@@ -103,7 +103,7 @@ public struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     guard Set(fairnessActions).count == fairnessActions.count,
           fairnessActions.allSatisfy({ !$0.isEmpty }) else {
       throw ConformanceGovernanceError.invalidField(record: "configuration", field: "fairnessActions")
@@ -138,7 +138,7 @@ public struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
     case allowsImplicitStuttering, completeGraphPass
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       property: try container.decodeIfPresent(String.self, forKey: .property),
@@ -152,15 +152,15 @@ public struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
   }
 }
 
-public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
-  public let id: String
-  public let kind: TemporalSymmetryCaseKind
-  public let swiftSpec: String
-  public let finiteBounds: CoreFiniteBounds
-  public let sourceInput: CoreEvidenceReference?
-  public let configuration: TemporalSymmetryConfiguration
+package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
+  package let id: String
+  package let kind: TemporalSymmetryCaseKind
+  package let swiftSpec: String
+  package let finiteBounds: CoreFiniteBounds
+  package let sourceInput: CoreEvidenceReference?
+  package let configuration: TemporalSymmetryConfiguration
 
-  public init(
+  package init(
     id: String,
     kind: TemporalSymmetryCaseKind,
     swiftSpec: String,
@@ -177,7 +177,7 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     try finiteBounds.validate()
     try sourceInput?.validate()
     try configuration.validate()
@@ -201,7 +201,7 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
     case id, kind, swiftSpec, finiteBounds, sourceInput, configuration
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: container.decode(String.self, forKey: .id),
@@ -213,16 +213,16 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   }
 }
 
-public struct TemporalSymmetryCases: Equatable, Codable, Sendable {
-  public static let schema = "TemporalSymmetryCases"
-  public let schema: String
-  public let cases: [TemporalSymmetryCase]
+package struct TemporalSymmetryCases: Equatable, Codable, Sendable {
+  package static let schema = "TemporalSymmetryCases"
+  package let schema: String
+  package let cases: [TemporalSymmetryCase]
 
-  public init(cases: [TemporalSymmetryCase]) throws {
+  package init(cases: [TemporalSymmetryCase]) throws {
     try self.init(schema: Self.schema, cases: cases)
   }
 
-  public init(schema: String, cases: [TemporalSymmetryCase]) throws {
+  package init(schema: String, cases: [TemporalSymmetryCase]) throws {
     guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
     var ids = Set<String>()
     for item in cases {
@@ -237,20 +237,20 @@ public struct TemporalSymmetryCases: Equatable, Codable, Sendable {
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(schema: container.decode(String.self, forKey: .schema), cases: container.decode([TemporalSymmetryCase].self, forKey: .cases))
   }
 }
 
-public struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
-  public let caseID: String
-  public let runID: UUID
-  public let swiftRunID: UUID
-  public let tlcRunID: UUID
-  public let comparisonRunID: UUID
+package struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
+  package let caseID: String
+  package let runID: UUID
+  package let swiftRunID: UUID
+  package let tlcRunID: UUID
+  package let comparisonRunID: UUID
 
-  public init(caseID: String, runID: UUID, swiftRunID: UUID, tlcRunID: UUID, comparisonRunID: UUID) throws {
+  package init(caseID: String, runID: UUID, swiftRunID: UUID, tlcRunID: UUID, comparisonRunID: UUID) throws {
     guard !caseID.isEmpty,
           Set([runID, swiftRunID, tlcRunID, comparisonRunID]).count == 4 else {
       throw ConformanceGovernanceError.invalidField(record: "correlation", field: "caseID")
@@ -266,7 +266,7 @@ public struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
     case caseID, runID, swiftRunID, tlcRunID, comparisonRunID
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
@@ -277,11 +277,11 @@ public struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
   }
 }
 
-public struct TemporalLassoWitness: Equatable, Codable, Sendable {
-  public let prefixStateIDs: [String]
-  public let cycleStateIDs: [String]
+package struct TemporalLassoWitness: Equatable, Codable, Sendable {
+  package let prefixStateIDs: [String]
+  package let cycleStateIDs: [String]
 
-  public init(prefixStateIDs: [String], cycleStateIDs: [String]) throws {
+  package init(prefixStateIDs: [String], cycleStateIDs: [String]) throws {
     self.prefixStateIDs = prefixStateIDs
     self.cycleStateIDs = cycleStateIDs
     guard prefixStateIDs.allSatisfy({ !$0.isEmpty }), cycleStateIDs.count >= 2,
@@ -292,7 +292,7 @@ public struct TemporalLassoWitness: Equatable, Codable, Sendable {
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case prefixStateIDs, cycleStateIDs }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       prefixStateIDs: container.decode([String].self, forKey: .prefixStateIDs),
@@ -300,16 +300,16 @@ public struct TemporalLassoWitness: Equatable, Codable, Sendable {
   }
 }
 
-public struct TemporalPropertyResult: Equatable, Codable, Sendable {
-  public let availability: TemporalEvaluationAvailability
-  public let outcome: TemporalPropertyOutcome?
-  public let graphID: String
-  public let initialStateIDs: [String]
-  public let traceAvailability: TemporalTraceAvailability
-  public let traceEvidence: CoreEvidenceReference?
-  public let lasso: TemporalLassoWitness?
+package struct TemporalPropertyResult: Equatable, Codable, Sendable {
+  package let availability: TemporalEvaluationAvailability
+  package let outcome: TemporalPropertyOutcome?
+  package let graphID: String
+  package let initialStateIDs: [String]
+  package let traceAvailability: TemporalTraceAvailability
+  package let traceEvidence: CoreEvidenceReference?
+  package let lasso: TemporalLassoWitness?
 
-  public init(
+  package init(
     availability: TemporalEvaluationAvailability,
     outcome: TemporalPropertyOutcome?,
     graphID: String,
@@ -328,7 +328,7 @@ public struct TemporalPropertyResult: Equatable, Codable, Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     guard !graphID.isEmpty, !initialStateIDs.isEmpty,
           Set(initialStateIDs).count == initialStateIDs.count,
           initialStateIDs.allSatisfy({ !$0.isEmpty }) else {
@@ -369,7 +369,7 @@ public struct TemporalPropertyResult: Equatable, Codable, Sendable {
     case availability, outcome, graphID, initialStateIDs, traceAvailability, traceEvidence, lasso
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       availability: container.decode(TemporalEvaluationAvailability.self, forKey: .availability),
@@ -382,20 +382,20 @@ public struct TemporalPropertyResult: Equatable, Codable, Sendable {
   }
 }
 
-public struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
-  public let propertyRunID: UUID
-  public let graphRunID: UUID
-  public let arguments: [String]
-  public let fingerprintPolynomial: Int
-  public let operatingSystem: String
-  public let architecture: String
-  public let environment: [String: String]
-  public let sourceInput: CoreEvidenceReference
-  public let configuration: CoreEvidenceReference
-  public let graphEvents: CoreEvidenceReference
-  public let result: CoreEvidenceReference
+package struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
+  package let propertyRunID: UUID
+  package let graphRunID: UUID
+  package let arguments: [String]
+  package let fingerprintPolynomial: Int
+  package let operatingSystem: String
+  package let architecture: String
+  package let environment: [String: String]
+  package let sourceInput: CoreEvidenceReference
+  package let configuration: CoreEvidenceReference
+  package let graphEvents: CoreEvidenceReference
+  package let result: CoreEvidenceReference
 
-  public init(
+  package init(
     propertyRunID: UUID,
     graphRunID: UUID,
     arguments: [String],
@@ -433,7 +433,7 @@ public struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
     case sourceInput, configuration, graphEvents, result
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       propertyRunID: container.decode(UUID.self, forKey: .propertyRunID),
@@ -449,7 +449,7 @@ public struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
       result: container.decode(CoreEvidenceReference.self, forKey: .result))
   }
 
-  public func validate() throws {
+  package func validate() throws {
     _ = try Self(
       propertyRunID: propertyRunID, graphRunID: graphRunID, arguments: arguments,
       fingerprintPolynomial: fingerprintPolynomial, operatingSystem: operatingSystem, architecture: architecture,

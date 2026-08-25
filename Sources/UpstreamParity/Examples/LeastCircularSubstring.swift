@@ -5,7 +5,7 @@ import SwiftTLA
 /// This is the upstream PlusCal control flow with its labels preserved. The
 /// model imports `ZSequences` as a real module, and configures that module's
 /// `Nat` operator with the same finite bound used for model checking.
-public enum LeastCircularSubstringModel {
+package enum LeastCircularSubstringModel {
     private enum Step: String, CaseIterable {
         case l3 = "L3"
         case l5 = "L5"
@@ -76,7 +76,7 @@ public enum LeastCircularSubstringModel {
         )
     }
 
-    public static let spec = TLASpec("MCLeastCircularSubstring") {
+    package static let spec = TLASpec("MCLeastCircularSubstring") {
         Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...6))
 
         Algorithm("LeastCircularSubstring", scoped: { scope in
@@ -205,7 +205,7 @@ public enum LeastCircularSubstringModel {
 }
 
 extension Example {
-    public static let leastCircularSubstring = Entry(
+    package static let leastCircularSubstring = Entry(
         id: "LeastCircularSubstring/MCLeastCircularSubstringSmall",
         upstreamSpec: "LeastCircularSubstring",
         upstreamModule: "specifications/LeastCircularSubstring/LeastCircularSubstring.tla",

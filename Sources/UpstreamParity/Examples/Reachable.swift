@@ -7,24 +7,24 @@ import SwiftTLAMacros
 /// node has exactly two successors. This model makes that configuration a
 /// static formal choice, then runs the published work-list algorithm.
 @TLAModel
-public struct ReachableModel: Sendable {
-    public enum Node: Int, FiniteTLAValueDomain {
+package struct ReachableModel: Sendable {
+    package enum Node: Int, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
         case four = 4
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues: [Self] = [.one, .two, .three, .four]
+        package static var defaultValue: Self { .one }
+        package static let finiteValues: [Self] = [.one, .two, .three, .four]
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
         case a
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Reachable") {
             Extends(.finiteSets)
             Extends(.integers)
@@ -68,7 +68,7 @@ extension Example {
     /// This native count is not an upstream-TLC parity claim: TLC's `CHOOSE`
     /// ordering is an external implementation detail that still needs a graph
     /// comparison before this entry can be marked as parity-validated.
-    public static let reachable = Entry(
+    package static let reachable = Entry(
         id: "MisraReachability/Reachable",
         upstreamSpec: "MisraReachability",
         upstreamModule: "specifications/MisraReachability/Reachable.tla",

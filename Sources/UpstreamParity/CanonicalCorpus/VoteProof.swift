@@ -3,8 +3,8 @@ import SwiftTLAMacros
 
 /// The bounded `byzpaxos/VoteProof` model from the upstream PlusCal corpus.
 @TLAModel
-public struct VoteProofModel: Sendable {
-    public static let corpusEntry = CanonicalCorpusEntry(
+package struct VoteProofModel: Sendable {
+    package static let corpusEntry = CanonicalCorpusEntry(
         id: "voteproof-upstream-port",
         specification: { VoteProofModel.spec },
         swiftConfiguration: configuration,
@@ -29,11 +29,11 @@ public struct VoteProofModel: Sendable {
         checkDeadlock: false
     )
 
-    public enum Value: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Value: String, CaseIterable, FiniteTLAValueDomain {
         case v1, v2
     }
 
-    public enum Acceptor: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Acceptor: String, CaseIterable, FiniteTLAValueDomain {
         case a1, a2, a3
     }
 
@@ -41,7 +41,7 @@ public struct VoteProofModel: Sendable {
         case acc
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("VoteProof") {
             Constant("Value", SetExpr<Value>(.v1, .v2))
             Constant("Acceptor", SetExpr<Acceptor>(.a1, .a2, .a3))

@@ -1,14 +1,14 @@
 import Foundation
 import SwiftTLA
 
-public enum CanonicalSchemaError: Error, Equatable, Sendable {
+package enum CanonicalSchemaError: Error, Equatable, Sendable {
     case unknownSchema(String)
 }
 
-public enum CanonicalValueError: Error, Equatable, Sendable, CustomStringConvertible {
+package enum CanonicalValueError: Error, Equatable, Sendable, CustomStringConvertible {
     case duplicateFunctionKey(CanonicalValue)
 
-    public var description: String {
+    package var description: String {
         switch self {
         case .duplicateFunctionKey(let key):
             return "Canonical function contains duplicate key \(key.canonicalEncoding)."
@@ -16,10 +16,10 @@ public enum CanonicalValueError: Error, Equatable, Sendable, CustomStringConvert
     }
 }
 
-public enum CanonicalSchema: String, Hashable, Sendable {
+package enum CanonicalSchema: String, Hashable, Sendable {
     case exactFiniteTLCGraph
 
-    public init(validating rawValue: String) throws {
+    package init(validating rawValue: String) throws {
         guard let schema = Self(rawValue: rawValue) else {
             throw CanonicalSchemaError.unknownSchema(rawValue)
         }
@@ -27,7 +27,7 @@ public enum CanonicalSchema: String, Hashable, Sendable {
     }
 }
 
-public enum CanonicalValue: Hashable, Sendable {
+package enum CanonicalValue: Hashable, Sendable {
     case integer(Int)
     case boolean(Bool)
     case string(String)
@@ -37,20 +37,20 @@ public enum CanonicalValue: Hashable, Sendable {
     case orderedRecord([CanonicalRecordField])
     case orderedFunction([CanonicalFunctionEntry])
 
-    public static func set(_ values: [CanonicalValue]) -> CanonicalValue {
+    package static func set(_ values: [CanonicalValue]) -> CanonicalValue {
         .orderedSet(values.sorted { canonicalBytes($0.canonicalEncoding, $1.canonicalEncoding) })
     }
 
-    public static func tuple(_ values: [CanonicalValue]) -> CanonicalValue {
+    package static func tuple(_ values: [CanonicalValue]) -> CanonicalValue {
         .orderedTuple(values)
     }
 
-    public static func record(_ fields: [String: CanonicalValue]) -> CanonicalValue {
+    package static func record(_ fields: [String: CanonicalValue]) -> CanonicalValue {
         .orderedRecord(fields.map { CanonicalRecordField(name: $0.key, value: $0.value) }
             .sorted { canonicalBytes($0.name, $1.name) })
     }
 
-    public static func function(_ entries: [CanonicalFunctionEntry]) throws -> CanonicalValue {
+    package static func function(_ entries: [CanonicalFunctionEntry]) throws -> CanonicalValue {
         let ordered = entries.sorted { canonicalBytes($0.key.canonicalEncoding, $1.key.canonicalEncoding) }
         var keys = Set<CanonicalValue>()
         for entry in ordered {
@@ -61,7 +61,7 @@ public enum CanonicalValue: Hashable, Sendable {
         return .orderedFunction(ordered)
     }
 
-    public init(_ value: TLAValue) throws {
+    package init(_ value: TLAValue) throws {
         switch value {
         case .int(let value): self = .integer(value)
         case .bool(let value): self = .boolean(value)
@@ -78,7 +78,7 @@ public enum CanonicalValue: Hashable, Sendable {
         }
     }
 
-    public var canonicalEncoding: String {
+    package var canonicalEncoding: String {
         switch self {
         case .integer(let value): return "integer:\(value)"
         case .boolean(let value): return "boolean:\(value ? "true" : "false")"
@@ -96,48 +96,48 @@ public enum CanonicalValue: Hashable, Sendable {
     }
 }
 
-public struct CanonicalRecordField: Hashable, Sendable {
-    public let name: String
-    public let value: CanonicalValue
+package struct CanonicalRecordField: Hashable, Sendable {
+    package let name: String
+    package let value: CanonicalValue
 
-    public init(name: String, value: CanonicalValue) {
+    package init(name: String, value: CanonicalValue) {
         self.name = name
         self.value = value
     }
 }
 
-public struct CanonicalFunctionEntry: Hashable, Sendable {
-    public let key: CanonicalValue
-    public let value: CanonicalValue
+package struct CanonicalFunctionEntry: Hashable, Sendable {
+    package let key: CanonicalValue
+    package let value: CanonicalValue
 
-    public init(key: CanonicalValue, value: CanonicalValue) {
+    package init(key: CanonicalValue, value: CanonicalValue) {
         self.key = key
         self.value = value
     }
 }
 
-public struct CanonicalStateKey: Hashable, Sendable, Comparable, CustomStringConvertible {
-    public let canonicalEncoding: String
+package struct CanonicalStateKey: Hashable, Sendable, Comparable, CustomStringConvertible {
+    package let canonicalEncoding: String
 
-    public init(canonicalEncoding: String) {
+    package init(canonicalEncoding: String) {
         self.canonicalEncoding = canonicalEncoding
     }
 
-    public var description: String { canonicalEncoding }
+    package var description: String { canonicalEncoding }
 
-    public static func < (lhs: Self, rhs: Self) -> Bool {
+    package static func < (lhs: Self, rhs: Self) -> Bool {
         canonicalBytes(lhs.canonicalEncoding, rhs.canonicalEncoding)
     }
 }
 
-public struct CanonicalState: Hashable, Sendable {
-    public let bindings: [String: CanonicalValue]
+package struct CanonicalState: Hashable, Sendable {
+    package let bindings: [String: CanonicalValue]
 
-    public init(bindings: [String: CanonicalValue]) {
+    package init(bindings: [String: CanonicalValue]) {
         self.bindings = bindings
     }
 
-    public var key: CanonicalStateKey {
+    package var key: CanonicalStateKey {
         let fields = bindings.sorted { canonicalBytes($0.key, $1.key) }
             .map { "\(encodedBytes($0.key))=\($0.value.canonicalEncoding)" }
             .joined(separator: ",")
@@ -145,47 +145,47 @@ public struct CanonicalState: Hashable, Sendable {
     }
 }
 
-public struct CanonicalEdge: Hashable, Sendable, Comparable {
-  public let source: CanonicalStateKey
-  public let action: String
-  public let target: CanonicalStateKey
-  public let canonicalEncoding: String
+package struct CanonicalEdge: Hashable, Sendable, Comparable {
+  package let source: CanonicalStateKey
+  package let action: String
+  package let target: CanonicalStateKey
+  package let canonicalEncoding: String
 
-  public init(source: CanonicalStateKey, action: String, target: CanonicalStateKey) {
+  package init(source: CanonicalStateKey, action: String, target: CanonicalStateKey) {
     self.source = source
     self.action = action
     self.target = target
     canonicalEncoding = "edge:\(source.canonicalEncoding)--\(encodedBytes(action))-->\(target.canonicalEncoding)"
     }
 
-    public static func < (lhs: Self, rhs: Self) -> Bool {
+    package static func < (lhs: Self, rhs: Self) -> Bool {
         canonicalBytes(lhs.canonicalEncoding, rhs.canonicalEncoding)
     }
 
 }
 
-public struct CanonicalStateObservation: Hashable, Sendable {
-    public let enabledActions: Set<String>
-    public let isTerminal: Bool
+package struct CanonicalStateObservation: Hashable, Sendable {
+    package let enabledActions: Set<String>
+    package let isTerminal: Bool
 
-    public init(enabledActions: Set<String>, isTerminal: Bool) {
+    package init(enabledActions: Set<String>, isTerminal: Bool) {
         self.enabledActions = enabledActions
         self.isTerminal = isTerminal
     }
 }
 
-public enum CanonicalGraphError: Error, Equatable, Sendable {
+package enum CanonicalGraphError: Error, Equatable, Sendable {
     case inconsistentStateBindings(expected: Set<String>, actual: Set<String>)
     case initialStateMissing(CanonicalStateKey)
     case edgeStateMissing(CanonicalStateKey)
 }
 
-public struct CanonicalGraph: Equatable, Sendable {
-    public let initialStateKeys: Set<CanonicalStateKey>
-    public let states: [CanonicalStateKey: CanonicalState]
-    public let edgeOccurrences: [CanonicalEdge: Int]
+package struct CanonicalGraph: Equatable, Sendable {
+    package let initialStateKeys: Set<CanonicalStateKey>
+    package let states: [CanonicalStateKey: CanonicalState]
+    package let edgeOccurrences: [CanonicalEdge: Int]
 
-    public init(
+    package init(
         initialStates: [CanonicalState],
         states: [CanonicalState],
         edges: some Sequence<CanonicalEdge>
@@ -220,11 +220,11 @@ public struct CanonicalGraph: Equatable, Sendable {
         self.edgeOccurrences = occurrences
     }
 
-    public var variableNames: Set<String> {
+    package var variableNames: Set<String> {
         states.values.first.map { Set($0.bindings.keys) } ?? []
     }
 
-    public var observations: [CanonicalStateKey: CanonicalStateObservation] {
+    package var observations: [CanonicalStateKey: CanonicalStateObservation] {
         let enabledByState = edgeOccurrences.keys.reduce(into: [CanonicalStateKey: Set<String>]()) { result, edge in
             result[edge.source, default: []].insert(edge.action)
         }
@@ -238,65 +238,65 @@ public struct CanonicalGraph: Equatable, Sendable {
     }
 }
 
-public enum CanonicalOutcome: Hashable, Sendable {
+package enum CanonicalOutcome: Hashable, Sendable {
     case exhaustiveSuccess
     case invariantViolation(String)
     case deadlock(CanonicalStateKey)
     case incomplete(reason: String)
     case executionError(String)
 
-    public var isExhaustiveSuccess: Bool {
+    package var isExhaustiveSuccess: Bool {
         if case .exhaustiveSuccess = self { return true }
         return false
     }
 }
 
-public struct CanonicalDiagnostic: Hashable, Sendable {
-    public let code: String
-    public let message: String
+package struct CanonicalDiagnostic: Hashable, Sendable {
+    package let code: String
+    package let message: String
 
-    public init(code: String, message: String) {
+    package init(code: String, message: String) {
         self.code = code
         self.message = message
     }
 }
 
-public struct CanonicalTraceStep: Hashable, Sendable {
-    public let state: CanonicalStateKey
-    public let action: String
+package struct CanonicalTraceStep: Hashable, Sendable {
+    package let state: CanonicalStateKey
+    package let action: String
 
-    public init(state: CanonicalStateKey, action: String) {
+    package init(state: CanonicalStateKey, action: String) {
         self.state = state
         self.action = action
     }
 }
 
-public struct CanonicalTrace: Hashable, Sendable {
-    public let id: String
-    public let steps: [CanonicalTraceStep]
+package struct CanonicalTrace: Hashable, Sendable {
+    package let id: String
+    package let steps: [CanonicalTraceStep]
 
-    public init(id: String, steps: [CanonicalTraceStep]) {
+    package init(id: String, steps: [CanonicalTraceStep]) {
         self.id = id
         self.steps = steps
     }
 }
 
-public enum CanonicalRunError: Error, Equatable, Sendable {
+package enum CanonicalRunError: Error, Equatable, Sendable {
     case duplicateTraceID(String)
     case graphActionUndeclared(String)
     case deadlockStateMissing(CanonicalStateKey)
     case traceStateMissing(CanonicalStateKey)
 }
 
-public struct CanonicalRun: Equatable, Sendable {
-    public let schema: CanonicalSchema
-    public let graph: CanonicalGraph
-    public let observableActions: Set<String>
-    public let outcome: CanonicalOutcome
-    public let errors: [CanonicalDiagnostic]
-    public let traces: [CanonicalTrace]
+package struct CanonicalRun: Equatable, Sendable {
+    package let schema: CanonicalSchema
+    package let graph: CanonicalGraph
+    package let observableActions: Set<String>
+    package let outcome: CanonicalOutcome
+    package let errors: [CanonicalDiagnostic]
+    package let traces: [CanonicalTrace]
 
-    public init(
+    package init(
         schema: CanonicalSchema = .exactFiniteTLCGraph,
         graph: CanonicalGraph,
         observableActions: Set<String>,
@@ -328,7 +328,7 @@ public struct CanonicalRun: Equatable, Sendable {
         self.traces = traces
     }
 
-    public var isPassEligible: Bool {
+    package var isPassEligible: Bool {
         outcome.isExhaustiveSuccess && errors.isEmpty
     }
 }

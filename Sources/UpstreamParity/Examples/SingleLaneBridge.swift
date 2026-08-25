@@ -1,20 +1,20 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-public struct SingleLaneBridgeModel: Sendable {
-    public enum Car: String, CaseIterable, FiniteTLAValueDomain {
+package struct SingleLaneBridgeModel: Sendable {
+    package enum Car: String, CaseIterable, FiniteTLAValueDomain {
         case rightOne = "r1"
         case rightTwo = "r2"
         case leftOne = "l1"
         case leftTwo = "l2"
 
-        public static var defaultValue: Self { .rightOne }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .rightOne }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("SingleLaneBridge") {
             Extends(.naturals, .sequences)
             Constant("CarsRight", SetExpr<Car>(.rightOne, .rightTwo))

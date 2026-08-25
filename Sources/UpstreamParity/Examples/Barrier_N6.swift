@@ -2,14 +2,14 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct BarrierModel: Sendable {
-    public enum BarrierPhase: String, TLAValueType {
+package struct BarrierModel: Sendable {
+    package enum BarrierPhase: String, TLAValueType {
         case b0, b1
 
-        public static var defaultValue: Self { .b0 }
+        package static var defaultValue: Self { .b0 }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Barrier") { scope in
             Extends(.integers)
             let pc1 = scope.sharedVar("pc1", initial: BarrierPhase.b0)
@@ -34,7 +34,7 @@ public struct BarrierModel: Sendable {
 }
 
 extension Example {
-    public static let barrierN6 = Entry(
+    package static let barrierN6 = Entry(
         id: "barriers/Barrier_N6",
         upstreamSpec: "barriers",
         upstreamModule: "specifications/barriers/Barrier.tla",

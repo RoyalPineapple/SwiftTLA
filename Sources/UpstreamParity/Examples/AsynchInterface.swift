@@ -6,32 +6,32 @@ import SwiftTLAMacros
 /// The value, ready, and acknowledgement fields are formal record fields, so
 /// the authored model and generated state machine share their names and types.
 @TLAModel
-public struct AsynchInterfaceModel: Sendable {
-    public enum Data: String, CaseIterable, FiniteTLAValueDomain {
+package struct AsynchInterfaceModel: Sendable {
+    package enum Data: String, CaseIterable, FiniteTLAValueDomain {
         case d1
         case d2
         case d3
 
-        public static var defaultValue: Self { .d1 }
-        public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package static var defaultValue: Self { .d1 }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public struct InterfaceFields {
-        public let value: Data
-        public let ready: Int
-        public let acknowledgement: Int
+    package struct InterfaceFields {
+        package let value: Data
+        package let ready: Int
+        package let acknowledgement: Int
     }
 
-    public enum InterfaceSchema: TLARecordSchema {
-        public typealias Fields = InterfaceFields
+    package enum InterfaceSchema: TLARecordSchema {
+        package typealias Fields = InterfaceFields
 
-        public static let fieldNames: Set<String> = ["val", "rdy", "ack"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["val", "rdy", "ack"]
+        package static let defaultRecord: TLAValue = .record([
             "val": .string(Data.d1.rawValue), "rdy": .int(0), "ack": .int(0),
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<InterfaceFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<InterfaceFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \InterfaceFields.value { return "val" }
             if key == \InterfaceFields.ready { return "rdy" }
@@ -39,12 +39,12 @@ public struct AsynchInterfaceModel: Sendable {
             return nil
         }
 
-        public static let value = field(\InterfaceFields.value)
-        public static let ready = field(\InterfaceFields.ready)
-        public static let acknowledgement = field(\InterfaceFields.acknowledgement)
+        package static let value = field(\InterfaceFields.value)
+        package static let ready = field(\InterfaceFields.ready)
+        package static let acknowledgement = field(\InterfaceFields.acknowledgement)
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("AsynchInterface") { scope in
             Extends(.naturals)
             let interface = scope.sharedVar("interface", in: SetExpr<Record<InterfaceSchema>>.literal(
@@ -102,7 +102,7 @@ public struct AsynchInterfaceModel: Sendable {
 }
 
 extension Example {
-    public static let asynchInterface = Entry(
+    package static let asynchInterface = Entry(
         id: "SpecifyingSystems/AsynchInterface",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",

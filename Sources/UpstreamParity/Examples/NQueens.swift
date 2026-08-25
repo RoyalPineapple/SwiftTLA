@@ -4,12 +4,12 @@ import SwiftTLAMacros
 /// The upstream N-Queens PlusCal algorithm, specialized to the published
 /// FourQueens TLC model. A tuple is one partial board: its index is the row
 /// and its value is the chosen column.
-public struct NQueensModel: Sendable {
+package struct NQueensModel: Sendable {
     private enum Step: String, CaseIterable {
         case nextQueen = "nxtQ"
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("QueensPluscal") {
             Extends(.naturals)
             Algorithm("Queens", scoped: { scope in
@@ -62,7 +62,7 @@ public struct NQueensModel: Sendable {
 }
 
 extension Example {
-    public static let nQueensFour = Entry(
+    package static let nQueensFour = Entry(
         id: "N-Queens/QueensPluscal/FourQueens",
         upstreamSpec: "N-Queens",
         upstreamModule: "specifications/N-Queens/QueensPluscal.tla",

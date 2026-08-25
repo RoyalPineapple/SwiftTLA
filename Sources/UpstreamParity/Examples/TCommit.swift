@@ -5,28 +5,28 @@ import SwiftTLA
 /// The resource-manager state is one finite, typed formal function. The three
 /// parameterized actions retain the upstream transition relation without
 /// manufacturing a separate action for each manager in Swift.
-public struct TCommitModel: Sendable {
-    public enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
+package struct TCommitModel: Sendable {
+    package enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
         case one = "r1"
         case two = "r2"
         case three = "r3"
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum ManagerState: String, TLAValueType {
+    package enum ManagerState: String, TLAValueType {
         case working
         case prepared
         case committed
         case aborted
 
-        public static var defaultValue: Self { .working }
+        package static var defaultValue: Self { .working }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         TLASpec("TCommit", scoped: specificationComponents)
     }
 
@@ -87,7 +87,7 @@ public struct TCommitModel: Sendable {
 }
 
 extension Example {
-    public static let tCommit = Entry(
+    package static let tCommit = Entry(
         id: "transaction_commit/TCommit",
         upstreamSpec: "transaction_commit",
         upstreamModule: "specifications/transaction_commit/TCommit.tla",

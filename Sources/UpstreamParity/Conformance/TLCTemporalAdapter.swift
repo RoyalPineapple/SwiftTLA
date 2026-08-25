@@ -1,27 +1,27 @@
 import Foundation
 
-public enum TLCTemporalCaptureStatus: Equatable, Sendable {
+package enum TLCTemporalCaptureStatus: Equatable, Sendable {
   case captured
   case unavailable
 }
 
-public struct TLCTemporalCaptureDiagnostic: Equatable, Sendable {
-  public let code: String
-  public let message: String
+package struct TLCTemporalCaptureDiagnostic: Equatable, Sendable {
+  package let code: String
+  package let message: String
 
-  public init(code: String, message: String) {
+  package init(code: String, message: String) {
     self.code = code
     self.message = message
   }
 }
 
-public struct TLCTemporalCaptureResult: Sendable {
-  public let status: TLCTemporalCaptureStatus
-  public let comparison: TemporalComparison?
-  public let evidenceDirectory: URL
-  public let diagnostic: TLCTemporalCaptureDiagnostic?
+package struct TLCTemporalCaptureResult: Sendable {
+  package let status: TLCTemporalCaptureStatus
+  package let comparison: TemporalComparison?
+  package let evidenceDirectory: URL
+  package let diagnostic: TLCTemporalCaptureDiagnostic?
 
-  public init(
+  package init(
     status: TLCTemporalCaptureStatus,
     comparison: TemporalComparison?,
     evidenceDirectory: URL,
@@ -89,7 +89,7 @@ package struct TLCTemporalCaptureInput: Sendable {
   }
 }
 
-public enum TLCTemporalAdapterError: Error, Equatable, Sendable {
+package enum TLCTemporalAdapterError: Error, Equatable, Sendable {
   case outputAlreadyExists
   case invalidDeclaredCase
   case correlationMismatch

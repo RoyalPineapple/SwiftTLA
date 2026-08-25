@@ -4,40 +4,40 @@ import SwiftTLAMacros
 // Dining Philosophers — Chandy-Misra solution. NP=5.
 // Upstream: specifications/DiningPhilosophers/DiningPhilosophers.tla
 
-public struct DiningPhilosophersModel: Sendable {
-    public enum Philosopher: Int, FiniteTLAValueDomain {
+package struct DiningPhilosophersModel: Sendable {
+    package enum Philosopher: Int, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
         case four = 4
         case five = 5
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues: [Self] = [.one, .two, .three, .four, .five]
+        package static var defaultValue: Self { .one }
+        package static let finiteValues: [Self] = [.one, .two, .three, .four, .five]
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public struct ForkFields {
+    package struct ForkFields {
         let holder: Philosopher
         let clean: Bool
     }
 
-    public enum Fork: TLARecordSchema {
-        public typealias Fields = ForkFields
+    package enum Fork: TLARecordSchema {
+        package typealias Fields = ForkFields
 
-        public static let fieldNames: Set<String> = ["holder", "clean"]
-        public static let defaultRecord: TLAValue = .record(["holder": .int(1), "clean": .bool(false)])
+        package static let fieldNames: Set<String> = ["holder", "clean"]
+        package static let defaultRecord: TLAValue = .record(["holder": .int(1), "clean": .bool(false)])
 
-        public static func fieldName<Value>(for field: KeyPath<ForkFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<ForkFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \ForkFields.holder { return "holder" }
             if key == \ForkFields.clean { return "clean" }
             return nil
         }
 
-        public static let holder = field(\ForkFields.holder)
-        public static let clean = field(\ForkFields.clean)
+        package static let holder = field(\ForkFields.holder)
+        package static let clean = field(\ForkFields.clean)
     }
 
     private enum Step: String, CaseIterable {
@@ -46,7 +46,7 @@ public struct DiningPhilosophersModel: Sendable {
         case eat = "Eat"
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("DiningPhilosophers") {
             Extends(.integers)
 

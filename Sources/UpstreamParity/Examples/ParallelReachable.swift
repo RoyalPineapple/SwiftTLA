@@ -6,28 +6,28 @@ import SwiftTLAMacros
 /// Each worker claims one frontier node, marks it, then moves its successor
 /// nodes into the shared frontier one at a time. The separate `a`, `b`, and
 /// `c` steps deliberately mirror the published PlusCal labels.
-public struct ParallelReachableModel: Sendable {
-    public enum Node: Int, FiniteTLAValueDomain {
+package struct ParallelReachableModel: Sendable {
+    package enum Node: Int, FiniteTLAValueDomain {
         case one = 1, two = 2, three = 3, four = 4
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues: [Self] = [.one, .two, .three, .four]
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package static var defaultValue: Self { .one }
+        package static let finiteValues: [Self] = [.one, .two, .three, .four]
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public enum Worker: Int, FiniteTLAValueDomain {
+    package enum Worker: Int, FiniteTLAValueDomain {
         case one = 1, two = 2
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues: [Self] = [.one, .two]
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package static var defaultValue: Self { .one }
+        package static let finiteValues: [Self] = [.one, .two]
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
         case a, b, c
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("ParallelReachability") {
             Extends(.finiteSets)
             Algorithm("ParallelReachability", scoped: { scope in
@@ -97,7 +97,7 @@ extension Example {
     /// A bounded source port of `MCParReach` with the published finite
     /// process and graph constraints. Its native count is pinned here;
     /// external TLC graph comparison remains separate evidence.
-    public static let parallelReachable = Entry(
+    package static let parallelReachable = Entry(
         id: "MisraReachability/ParReach",
         upstreamSpec: "MisraReachability",
         upstreamModule: "specifications/MisraReachability/ParReach.tla",

@@ -1,12 +1,12 @@
 import Foundation
 import SwiftTLA
 
-public struct TemporalSymmetryCaseRun: Equatable, Sendable {
-  public let caseID: String
-  public let outcome: TemporalSymmetryOutcome
-  public let diagnostic: String
+package struct TemporalSymmetryCaseRun: Equatable, Sendable {
+  package let caseID: String
+  package let outcome: TemporalSymmetryOutcome
+  package let diagnostic: String
 
-  public init(
+  package init(
     caseID: String,
     outcome: TemporalSymmetryOutcome,
     diagnostic: String
@@ -20,15 +20,15 @@ public struct TemporalSymmetryCaseRun: Equatable, Sendable {
   }
 }
 
-public struct TemporalSymmetryConformanceRunnerInput: Sendable {
-  public let cases: TemporalSymmetryCases
-  public let runID: UUID
-  public let projectRoot: URL
-  public let outputDirectory: URL
-  public let toolRoot: URL
-  public let referencePin: TLCReferencePin
+package struct TemporalSymmetryConformanceRunnerInput: Sendable {
+  package let cases: TemporalSymmetryCases
+  package let runID: UUID
+  package let projectRoot: URL
+  package let outputDirectory: URL
+  package let toolRoot: URL
+  package let referencePin: TLCReferencePin
 
-  public init(
+  package init(
     cases: TemporalSymmetryCases,
     runID: UUID,
     projectRoot: URL,
@@ -45,11 +45,11 @@ public struct TemporalSymmetryConformanceRunnerInput: Sendable {
   }
 }
 
-public struct TemporalSymmetryConformanceRunner: Sendable {
-  public init() {}
+package struct TemporalSymmetryConformanceRunner: Sendable {
+  package init() {}
 
   @discardableResult
-  public func run(_ input: TemporalSymmetryConformanceRunnerInput) throws -> [TemporalSymmetryCaseRun] {
+  package func run(_ input: TemporalSymmetryConformanceRunnerInput) throws -> [TemporalSymmetryCaseRun] {
     let root = try ConformanceEvidence.projectRoot(input.projectRoot)
     let output = try ConformanceEvidence.outputDirectory(input.outputDirectory, beneath: root)
     return try input.cases.cases.map { declaredCase in
@@ -500,18 +500,18 @@ private extension Dictionary where Key == StateGraph.StateID, Value == Bool {
   }
 }
 
-public struct TemporalSymmetryModelDefinition: Sendable {
-  public let spec: TLASpec
-  public let expectedStateCount: Int
-  public let maxStates: Int
+package struct TemporalSymmetryModelDefinition: Sendable {
+  package let spec: TLASpec
+  package let expectedStateCount: Int
+  package let maxStates: Int
 }
 
 private struct ConformanceMember: Identifiable, Sendable {
   let id: Int
 }
 
-public enum TemporalSymmetryModelCatalog {
-  public static func model(for declaredCase: TemporalSymmetryCase) throws -> TemporalSymmetryModelDefinition {
+package enum TemporalSymmetryModelCatalog {
+  package static func model(for declaredCase: TemporalSymmetryCase) throws -> TemporalSymmetryModelDefinition {
     switch declaredCase.swiftSpec {
     case "TemporalMatrix":
       return try temporalMatrix(configuration: declaredCase.configuration)

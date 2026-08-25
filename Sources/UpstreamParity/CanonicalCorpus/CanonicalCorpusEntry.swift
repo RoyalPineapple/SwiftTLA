@@ -1,39 +1,39 @@
 import SwiftTLA
 
 /// One compiled claim selected by a corpus TLC configuration.
-public struct CanonicalCorpusCheck: Sendable {
-    public enum Kind: String, CaseIterable, Sendable {
+package struct CanonicalCorpusCheck: Sendable {
+    package enum Kind: String, CaseIterable, Sendable {
         case invariant
         case property
         case constraint
     }
 
-    public let name: String
-    public let kind: Kind
+    package let name: String
+    package let kind: Kind
 
-    public init(_ name: String, kind: Kind) {
+    package init(_ name: String, kind: Kind) {
         self.name = name
         self.kind = kind
     }
 }
 
 /// A corpus TLC configuration rendered from its declared checks and constants.
-public struct CanonicalCorpusConfiguration: Sendable {
-    public struct Constant: Sendable {
-        public let name: String
-        public let value: String
+package struct CanonicalCorpusConfiguration: Sendable {
+    package struct Constant: Sendable {
+        package let name: String
+        package let value: String
 
-        public init(_ name: String, _ value: String) {
+        package init(_ name: String, _ value: String) {
             self.name = name
             self.value = value
         }
     }
 
-    public let checks: [CanonicalCorpusCheck]
-    public let constants: [Constant]
-    public let checkDeadlock: Bool?
+    package let checks: [CanonicalCorpusCheck]
+    package let constants: [Constant]
+    package let checkDeadlock: Bool?
 
-    public init(
+    package init(
         checks: [CanonicalCorpusCheck] = [],
         constants: [Constant] = [],
         checkDeadlock: Bool? = nil
@@ -43,7 +43,7 @@ public struct CanonicalCorpusConfiguration: Sendable {
         self.checkDeadlock = checkDeadlock
     }
 
-    public var tlaText: String {
+    package var tlaText: String {
         var lines = ["SPECIFICATION Spec"]
         for kind in CanonicalCorpusCheck.Kind.allCases {
             let names = checks.compactMap { $0.kind == kind ? $0.name : nil }
@@ -85,10 +85,10 @@ public struct CanonicalCorpusConfiguration: Sendable {
     }
 }
 
-public enum CanonicalCorpusConfigurationError: Error, Sendable, CustomStringConvertible {
+package enum CanonicalCorpusConfigurationError: Error, Sendable, CustomStringConvertible {
     case unresolvedCheck(entryID: String, name: String, kind: CanonicalCorpusCheck.Kind)
 
-    public var description: String {
+    package var description: String {
         switch self {
         case let .unresolvedCheck(entryID, name, kind):
             "Canonical corpus entry '\(entryID)' configures \(kind.rawValue) '\(name)', but the compiled specification does not declare it."
@@ -97,13 +97,13 @@ public enum CanonicalCorpusConfigurationError: Error, Sendable, CustomStringConv
 }
 
 /// Everything an immutable corpus export needs from one canonical model.
-public struct CanonicalCorpusEntry: Sendable {
-    public let id: String
-    public let specification: @Sendable () -> TLASpec
-    public let swiftConfiguration: CanonicalCorpusConfiguration
-    public let plusCalConfiguration: CanonicalCorpusConfiguration
+package struct CanonicalCorpusEntry: Sendable {
+    package let id: String
+    package let specification: @Sendable () -> TLASpec
+    package let swiftConfiguration: CanonicalCorpusConfiguration
+    package let plusCalConfiguration: CanonicalCorpusConfiguration
 
-    public init(
+    package init(
         id: String,
         specification: @escaping @Sendable () -> TLASpec,
         swiftConfiguration: CanonicalCorpusConfiguration,
@@ -115,15 +115,15 @@ public struct CanonicalCorpusEntry: Sendable {
         self.plusCalConfiguration = plusCalConfiguration
     }
 
-    public func validateConfigurationReferences(in compilation: CompiledSpecification) throws {
+    package func validateConfigurationReferences(in compilation: CompiledSpecification) throws {
         try swiftConfiguration.validate(against: compilation, entryID: id)
         try plusCalConfiguration.validate(against: compilation, entryID: id)
     }
 }
 
 /// The corpus registry has no case-specific export or link behavior.
-public enum CanonicalCorpus {
-    public static let entries: [CanonicalCorpusEntry] = [
+package enum CanonicalCorpus {
+    package static let entries: [CanonicalCorpusEntry] = [
         BoulangerModel.corpusEntry,
         KVsnapModel.corpusEntry,
         VoteProofModel.corpusEntry

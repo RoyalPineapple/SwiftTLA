@@ -2,8 +2,8 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct CigaretteSmokersModel: Sendable {
-    public static var spec: TLASpec {
+package struct CigaretteSmokersModel: Sendable {
+    package static var spec: TLASpec {
         #spec("CigaretteSmokers") { scope in
             Extends(.integers)
             let smokingM = scope.sharedVar("smokingM", initial: false)
@@ -38,7 +38,7 @@ public struct CigaretteSmokersModel: Sendable {
 }
 
 extension Example {
-    public static let cigaretteSmokers = Entry(
+    package static let cigaretteSmokers = Entry(
         id: "CigaretteSmokers/CigaretteSmokers",
         upstreamSpec: "CigaretteSmokers",
         upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",

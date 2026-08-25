@@ -1,5 +1,5 @@
 extension Example {
-    public static let catOddBoxes = Entry(
+    package static let catOddBoxes = Entry(
         id: "Moving_Cat_Puzzle/CatOddBoxes",
         upstreamSpec: "Moving_Cat_Puzzle",
         upstreamModule: "specifications/Moving_Cat_Puzzle/Cat.tla",

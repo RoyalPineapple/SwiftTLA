@@ -8,23 +8,23 @@ import SwiftTLAMacros
 /// chosen, and no execution can choose a second value. The source uses a
 /// parameterless `Choose()` macro, a guarded `when`, and a scoped `with`.
 @TLAModel
-public struct ConsensusModel: Sendable {
-    public enum Value: String, CaseIterable, FiniteTLAValueDomain {
+package struct ConsensusModel: Sendable {
+    package enum Value: String, CaseIterable, FiniteTLAValueDomain {
         case one = "v1"
         case two = "v2"
         case three = "v3"
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
         case choose = "lbl"
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Consensus") {
             Extends(.finiteSets)
             Extends(.integers)
@@ -55,7 +55,7 @@ public struct ConsensusModel: Sendable {
 }
 
 extension Example {
-    public static let consensus = Entry(
+    package static let consensus = Entry(
         id: "byzpaxos/Consensus",
         upstreamSpec: "byzpaxos",
         upstreamModule: "specifications/byzpaxos/Consensus.tla",

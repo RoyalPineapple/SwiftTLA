@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-public enum CoreConformanceCaseError: Error, Equatable, Sendable {
+package enum CoreConformanceCaseError: Error, Equatable, Sendable {
     case invalidIdentifier(String)
     case invalidSHA256(field: String)
     case invalidWorkers(Int)
@@ -15,18 +15,18 @@ public enum CoreConformanceCaseError: Error, Equatable, Sendable {
     case missingArtifact(String)
 }
 
-public struct TLCReferencePin: Equatable, Sendable {
-    public let tag: String
-    public let commit: String
-    public let jarSHA256: String
-    public let javaDistribution: String
-    public let javaVersion: String
-    public let javaArchiveSHA256: String
-    public let bridgeClass: String
-    public let bridgeSourceSHA256: String
-    public let bridgeBinarySHA256: String
+package struct TLCReferencePin: Equatable, Sendable {
+    package let tag: String
+    package let commit: String
+    package let jarSHA256: String
+    package let javaDistribution: String
+    package let javaVersion: String
+    package let javaArchiveSHA256: String
+    package let bridgeClass: String
+    package let bridgeSourceSHA256: String
+    package let bridgeBinarySHA256: String
 
-    public init(
+    package init(
         tag: String,
         commit: String,
         jarSHA256: String,
@@ -63,7 +63,7 @@ public struct TLCReferencePin: Equatable, Sendable {
         self.bridgeBinarySHA256 = bridgeBinarySHA256
     }
 
-    public static let standardModuleNames: Set<String> = [
+    package static let standardModuleNames: Set<String> = [
         "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
         "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
         "_Possible", "_TLAPlusCounterExample", "_TLCActionTrace", "_TLCTESpec", "_TLCTrace",
@@ -71,7 +71,7 @@ public struct TLCReferencePin: Equatable, Sendable {
     ]
 
 
-    public func validate(_ artifacts: TLCReferenceArtifacts) throws {
+    package func validate(_ artifacts: TLCReferenceArtifacts) throws {
         try Self.verify(artifacts.jar, expected: jarSHA256, name: "TLC JAR")
         guard artifacts.jarManifest.contains("Implementation-Title: TLA+ Tools"),
               artifacts.jarManifest.contains("X-Git-Revision: \(commit)")
@@ -89,7 +89,7 @@ public struct TLCReferencePin: Equatable, Sendable {
         try Self.verify(artifacts.bridgeSource, expected: bridgeSourceSHA256, name: "bridge source")
     }
 
-    public func validateReportedTLCBanner(_ output: String) throws {
+    package func validateReportedTLCBanner(_ output: String) throws {
         let revision = String(commit.prefix(7))
         guard output.split(whereSeparator: \.isNewline).contains(where: {
             $0.contains("TLC2 Version") && $0.contains("(rev: \(revision))")
@@ -116,23 +116,23 @@ public struct TLCReferencePin: Equatable, Sendable {
     }
 }
 
-public struct CoreConformanceCase: Equatable, Sendable {
-    public let id: String
-    public let moduleSHA256: String
-    public let cfgSHA256: String
-    public let arguments: [String]
-    public let argumentsSHA256: String
-    public let workers: Int
-    public let fingerprintPolynomial: Int
-    public let deadlock: Bool
-    public let operatingSystem: String
-    public let architecture: String
-    public let environment: [String: String]
-    public let pin: TLCReferencePin
-    public let invocationMappings: [CoreConformanceInvocationMapping]
-    public let valueNormalizations: [CoreConformanceValueNormalization]
+package struct CoreConformanceCase: Equatable, Sendable {
+    package let id: String
+    package let moduleSHA256: String
+    package let cfgSHA256: String
+    package let arguments: [String]
+    package let argumentsSHA256: String
+    package let workers: Int
+    package let fingerprintPolynomial: Int
+    package let deadlock: Bool
+    package let operatingSystem: String
+    package let architecture: String
+    package let environment: [String: String]
+    package let pin: TLCReferencePin
+    package let invocationMappings: [CoreConformanceInvocationMapping]
+    package let valueNormalizations: [CoreConformanceValueNormalization]
 
-    public init(
+    package init(
         id: String,
         moduleSHA256: String,
         cfgSHA256: String,
@@ -171,12 +171,12 @@ public struct CoreConformanceCase: Equatable, Sendable {
         self.valueNormalizations = valueNormalizations
     }
 
-    public static func argumentsDigest(_ arguments: [String]) throws -> String {
+    package static func argumentsDigest(_ arguments: [String]) throws -> String {
         let encoded = try JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys])
         return SHA256.hex(encoded)
     }
 
-    public func validateLaunch(module: URL, configuration: URL, arguments: [String], caseID: String) throws {
+    package func validateLaunch(module: URL, configuration: URL, arguments: [String], caseID: String) throws {
         guard caseID == id else { throw CoreConformanceCaseError.executionCaseMismatch }
         guard SHA256.hex(try Data(contentsOf: module)) == moduleSHA256 else {
             throw CoreConformanceCaseError.moduleDigestMismatch
@@ -190,13 +190,13 @@ public struct CoreConformanceCase: Equatable, Sendable {
     }
 }
 
-public struct CoreConformanceInvocationMapping: Equatable, Sendable {
-    public let wrapper: String
-    public let action: String
-    public let arguments: [String]
-    public let indices: [Int]
+package struct CoreConformanceInvocationMapping: Equatable, Sendable {
+    package let wrapper: String
+    package let action: String
+    package let arguments: [String]
+    package let indices: [Int]
 
-    public init(wrapper: String, action: String, arguments: [String], indices: [Int]) throws {
+    package init(wrapper: String, action: String, arguments: [String], indices: [Int]) throws {
         guard !wrapper.isEmpty, !action.isEmpty,
               !arguments.contains(where: \.isEmpty),
               indices.count == arguments.count,
@@ -209,20 +209,20 @@ public struct CoreConformanceInvocationMapping: Equatable, Sendable {
         self.indices = indices
     }
 
-    public var swiftLabel: String {
+    package var swiftLabel: String {
         arguments.isEmpty ? action : "\(action)(\(arguments.joined(separator: ", ")))"
     }
 
-    public var locationIdentity: String {
+    package var locationIdentity: String {
         tlaInvocationLocationIdentity(action: action, arguments: arguments)
     }
 }
 
-public struct CoreConformanceValueNormalization: Equatable, Sendable {
-    public let binding: String
-    public let functionKeys: [String: String]
+package struct CoreConformanceValueNormalization: Equatable, Sendable {
+    package let binding: String
+    package let functionKeys: [String: String]
 
-    public init(binding: String, functionKeys: [String: String]) throws {
+    package init(binding: String, functionKeys: [String: String]) throws {
         guard !binding.isEmpty,
               !functionKeys.isEmpty,
               !functionKeys.keys.contains(where: \.isEmpty),
@@ -264,40 +264,40 @@ func tlaLocationArgumentIdentity(_ argument: String) -> String {
 }
 
 /// The source-controlled declaration for a finite conformance case.
-public struct CoreConformanceCasesManifest: Decodable, Sendable {
-    public static let schema = "CoreConformanceCases"
-    public static let relation = "exactFiniteTLCGraph"
+package struct CoreConformanceCasesManifest: Decodable, Sendable {
+    package static let schema = "CoreConformanceCases"
+    package static let relation = "exactFiniteTLCGraph"
 
-    public let schema: String
-    public let relation: String
-    public let cases: [Entry]
+    package let schema: String
+    package let relation: String
+    package let cases: [Entry]
 
-    public struct Entry: Decodable, Sendable {
-        public typealias IdentityMapping = CoreConformanceCaseManifestIdentityMapping
-        public typealias InvocationMapping = CoreConformanceCaseManifestInvocationMapping
-        public typealias ValueNormalization = CoreConformanceCaseManifestValueNormalization
-        public typealias Upstream = CoreConformanceCaseManifestUpstream
-        public typealias Fixtures = CoreConformanceCaseManifestFixtures
-        public let id: String
-        public let swiftSpec: String
-        public let module: String
-        public let configuration: String
-        public let imports: [String]
-        public let moduleSHA256: String
-        public let cfgSHA256: String
-        public let arguments: [String]
-        public let argumentsSHA256: String
-        public let workers: Int
-        public let fingerprintPolynomial: Int
-        public let maximumStateLimit: Int
-        public let deadlock: Bool
-        public let replay: String
-        public let expectedExit: Int?
-        public let upstream: Upstream
-        public let fixtures: Fixtures
-        public let identityMapping: IdentityMapping
-        public let invocationMappings: [InvocationMapping]
-        public let valueNormalizations: [ValueNormalization]
+    package struct Entry: Decodable, Sendable {
+        package typealias IdentityMapping = CoreConformanceCaseManifestIdentityMapping
+        package typealias InvocationMapping = CoreConformanceCaseManifestInvocationMapping
+        package typealias ValueNormalization = CoreConformanceCaseManifestValueNormalization
+        package typealias Upstream = CoreConformanceCaseManifestUpstream
+        package typealias Fixtures = CoreConformanceCaseManifestFixtures
+        package let id: String
+        package let swiftSpec: String
+        package let module: String
+        package let configuration: String
+        package let imports: [String]
+        package let moduleSHA256: String
+        package let cfgSHA256: String
+        package let arguments: [String]
+        package let argumentsSHA256: String
+        package let workers: Int
+        package let fingerprintPolynomial: Int
+        package let maximumStateLimit: Int
+        package let deadlock: Bool
+        package let replay: String
+        package let expectedExit: Int?
+        package let upstream: Upstream
+        package let fixtures: Fixtures
+        package let identityMapping: IdentityMapping
+        package let invocationMappings: [InvocationMapping]
+        package let valueNormalizations: [ValueNormalization]
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case id, swiftSpec, module, configuration, imports, moduleSHA256, cfgSHA256
@@ -305,7 +305,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
             case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations
         }
 
-        public init(from decoder: Decoder) throws {
+        package init(from decoder: Decoder) throws {
             let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
             swiftSpec = try container.decode(String.self, forKey: .swiftSpec)
@@ -330,7 +330,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
             try validate()
         }
 
-        public func validate() throws {
+        package func validate() throws {
             guard !id.isEmpty, !swiftSpec.isEmpty, !module.isEmpty, !configuration.isEmpty,
                   Set(imports).count == imports.count, imports.allSatisfy({ !$0.isEmpty }),
                   !replay.isEmpty, !upstream.repository.isEmpty,
@@ -361,7 +361,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey, CaseIterable { case schema, relation, cases }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
         schema = try container.decode(String.self, forKey: .schema)
         relation = try container.decode(String.self, forKey: .relation)
@@ -369,7 +369,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
         try validate()
     }
 
-    public func validate() throws {
+    package func validate() throws {
         guard schema == Self.schema, relation == Self.relation, !cases.isEmpty else {
             throw ConformanceGovernanceError.invalidSchema(schema)
         }
@@ -384,15 +384,15 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
 
 }
 
-public struct TLCReferenceArtifacts: Equatable, Sendable {
-    public let jar: URL
-    public let javaArchive: URL
-    public let bridgeSource: URL
-    public let bridgeBinary: URL
-    public let jarManifest: String
-    public let runtime: TLCJavaRuntimeIdentity
+package struct TLCReferenceArtifacts: Equatable, Sendable {
+    package let jar: URL
+    package let javaArchive: URL
+    package let bridgeSource: URL
+    package let bridgeBinary: URL
+    package let jarManifest: String
+    package let runtime: TLCJavaRuntimeIdentity
 
-    public init(jar: URL, javaArchive: URL, bridgeSource: URL, bridgeBinary: URL, jarManifest: String, runtime: TLCJavaRuntimeIdentity) {
+    package init(jar: URL, javaArchive: URL, bridgeSource: URL, bridgeBinary: URL, jarManifest: String, runtime: TLCJavaRuntimeIdentity) {
         self.jar = jar
         self.javaArchive = javaArchive
         self.bridgeSource = bridgeSource
@@ -402,13 +402,13 @@ public struct TLCReferenceArtifacts: Equatable, Sendable {
     }
 }
 
-public struct TLCJavaRuntimeIdentity: Equatable, Sendable {
-    public let version: String
-    public let vendor: String
-    public let architecture: String
-    public let properties: [String: String]
+package struct TLCJavaRuntimeIdentity: Equatable, Sendable {
+    package let version: String
+    package let vendor: String
+    package let architecture: String
+    package let properties: [String: String]
 
-    public init(version: String, vendor: String, architecture: String, properties: [String: String]) {
+    package init(version: String, vendor: String, architecture: String, properties: [String: String]) {
         self.version = version
         self.vendor = vendor
         self.architecture = architecture
@@ -416,8 +416,8 @@ public struct TLCJavaRuntimeIdentity: Equatable, Sendable {
     }
 }
 
-public enum SHA256 {
-    public static func hex(_ data: Data) -> String {
+package enum SHA256 {
+    package static func hex(_ data: Data) -> String {
         CryptoKit.SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }

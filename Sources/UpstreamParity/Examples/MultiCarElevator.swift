@@ -1,50 +1,50 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-public enum MultiCarElevator {
-    public enum PersonID: String, CaseIterable, FiniteTLAValueDomain {
+package enum MultiCarElevator {
+    package enum PersonID: String, CaseIterable, FiniteTLAValueDomain {
         case alice, bob
 
-        public static var defaultValue: Self { .alice }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .alice }
+        package static let finiteValues = allCases
     }
 
-    public enum CarID: String, CaseIterable, FiniteTLAValueDomain {
+    package enum CarID: String, CaseIterable, FiniteTLAValueDomain {
         case carA, carB
 
-        public static var defaultValue: Self { .carA }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .carA }
+        package static let finiteValues = allCases
     }
 
-    public enum FloorID: Int, CaseIterable, FiniteTLAValueDomain {
+    package enum FloorID: Int, CaseIterable, FiniteTLAValueDomain {
         case ground = 0, middle = 1, top = 2
 
-        public static var defaultValue: Self { .ground }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .ground }
+        package static let finiteValues = allCases
     }
 
-    public enum Direction: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Direction: String, CaseIterable, FiniteTLAValueDomain {
         case up, down
 
-        public static var defaultValue: Self { .up }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .up }
+        package static let finiteValues = allCases
     }
 
-    public struct CarFields {
-        public let floor: FloorID
-        public let doorsOpen: Bool
-        public let rider: String
+    package struct CarFields {
+        package let floor: FloorID
+        package let doorsOpen: Bool
+        package let rider: String
     }
 
-    public enum CarSchema: TLARecordSchema {
-        public typealias Fields = CarFields
+    package enum CarSchema: TLARecordSchema {
+        package typealias Fields = CarFields
 
-        public static let fieldNames: Set<String> = ["floor", "doorsOpen", "rider"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["floor", "doorsOpen", "rider"]
+        package static let defaultRecord: TLAValue = .record([
             "floor": .int(0), "doorsOpen": .bool(false), "rider": .string("none")
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \CarFields.floor { return "floor" }
             if key == \CarFields.doorsOpen { return "doorsOpen" }
@@ -52,26 +52,26 @@ public enum MultiCarElevator {
             return nil
         }
 
-        public static let floor = field(\CarFields.floor)
-        public static let doorsOpen = field(\CarFields.doorsOpen)
-        public static let rider = field(\CarFields.rider)
+        package static let floor = field(\CarFields.floor)
+        package static let doorsOpen = field(\CarFields.doorsOpen)
+        package static let rider = field(\CarFields.rider)
     }
 
-    public struct CallFields {
-        public let person: PersonID
-        public let floor: FloorID
-        public let direction: Direction
+    package struct CallFields {
+        package let person: PersonID
+        package let floor: FloorID
+        package let direction: Direction
     }
 
-    public enum CallSchema: TLARecordSchema {
-        public typealias Fields = CallFields
+    package enum CallSchema: TLARecordSchema {
+        package typealias Fields = CallFields
 
-        public static let fieldNames: Set<String> = ["person", "floor", "direction"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["person", "floor", "direction"]
+        package static let defaultRecord: TLAValue = .record([
             "person": .string("alice"), "floor": .int(0), "direction": .string("up")
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<CallFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<CallFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \CallFields.person { return "person" }
             if key == \CallFields.floor { return "floor" }
@@ -79,12 +79,12 @@ public enum MultiCarElevator {
             return nil
         }
 
-        public static let person = field(\CallFields.person)
-        public static let floor = field(\CallFields.floor)
-        public static let direction = field(\CallFields.direction)
+        package static let person = field(\CallFields.person)
+        package static let floor = field(\CallFields.floor)
+        package static let direction = field(\CallFields.direction)
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
         let calls = Var<SetExpr<Record<CallSchema>>>("calls")
         let lastMoveDoorClosed = Var<Bool>("lastMoveDoorClosed")
@@ -231,7 +231,7 @@ public enum MultiCarElevator {
 }
 
 extension Example {
-    public static let multiCarElevator = Entry(
+    package static let multiCarElevator = Entry(
         id: "elevator/MultiCarElevator",
         upstreamSpec: "multicar-elevator",
         upstreamModule: "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla",

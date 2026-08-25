@@ -4,27 +4,27 @@ import SwiftTLAMacros
 /// The bounded `Boulanger` process-control model from the upstream PlusCal
 /// corpus. The bound and state constraint match MCBoulanger.
 @TLAModel
-public struct BoulangerModel: Sendable {
-    public static let corpusEntry = CanonicalCorpusEntry(
+package struct BoulangerModel: Sendable {
+    package static let corpusEntry = CanonicalCorpusEntry(
         id: "boulanger-upstream-port",
         specification: { BoulangerModel.spec },
         swiftConfiguration: .init(checks: [.init("StateConstraint", kind: .constraint)]),
         plusCalConfiguration: .init(checks: [.init("StateConstraint", kind: .constraint)])
     )
 
-    public enum Process: Int, FiniteTLAValueDomain {
+    package enum Process: Int, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues: [Self] = [.one, .two]
+        package static var defaultValue: Self { .one }
+        package static let finiteValues: [Self] = [.one, .two]
     }
 
     private enum Label: String, CaseIterable {
         case ncs, e1, e2, e3, e4, w1, w2, cs, exit
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Boulanger") {
             Extends(.integers)
             Algorithm("Boulanger", scoped: { scope in

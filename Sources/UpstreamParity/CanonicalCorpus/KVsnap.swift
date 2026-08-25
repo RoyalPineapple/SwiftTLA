@@ -8,8 +8,8 @@ import SwiftTLAMacros
 /// the published cross-transaction invariant, where the upstream model reads
 /// the complete generated local function through `Range(ops)`.
 @TLAModel
-public struct KVsnapModel: Sendable {
-    public static let corpusEntry = CanonicalCorpusEntry(
+package struct KVsnapModel: Sendable {
+    package static let corpusEntry = CanonicalCorpusEntry(
         id: "kvsnap-upstream-port",
         specification: { KVsnapModel.spec },
         swiftConfiguration: .init(
@@ -38,62 +38,62 @@ public struct KVsnapModel: Sendable {
         )
     )
 
-    public enum Key: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Key: String, CaseIterable, FiniteTLAValueDomain {
         case k1, k2
 
-        public var tlaValue: TLAValue { .constant(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
 
-        public init?(formalValue: TLAValue) {
+        package init?(formalValue: TLAValue) {
             guard case .constant(let rawValue) = formalValue else { return nil }
             self.init(rawValue: rawValue)
         }
     }
 
-    public enum Transaction: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Transaction: String, CaseIterable, FiniteTLAValueDomain {
         case t1, t2, t3
 
-        public var tlaValue: TLAValue { .constant(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
 
-        public init?(formalValue: TLAValue) {
+        package init?(formalValue: TLAValue) {
             guard case .constant(let rawValue) = formalValue else { return nil }
             self.init(rawValue: rawValue)
         }
     }
 
-    public enum NoValue: String, TLAValueType {
+    package enum NoValue: String, TLAValueType {
         case noVal = "NoVal"
 
-        public var tlaValue: TLAValue { .constant(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
 
-        public init?(formalValue: TLAValue) {
+        package init?(formalValue: TLAValue) {
             guard case .constant(let rawValue) = formalValue else { return nil }
             self.init(rawValue: rawValue)
         }
     }
 
-    public enum OperationKind: String, TLAValueType {
+    package enum OperationKind: String, TLAValueType {
         case read, write
     }
 
-    public typealias Value = OneOf<Transaction, NoValue>
+    package typealias Value = OneOf<Transaction, NoValue>
 
-    public struct OperationFields {
-        public let operation: OperationKind
-        public let key: Key
-        public let value: Value
+    package struct OperationFields {
+        package let operation: OperationKind
+        package let key: Key
+        package let value: Value
     }
 
-    public enum OperationSchema: TLARecordSchema {
-        public typealias Fields = OperationFields
+    package enum OperationSchema: TLARecordSchema {
+        package typealias Fields = OperationFields
 
-        public static let fieldNames: Set<String> = ["op", "key", "value"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["op", "key", "value"]
+        package static let defaultRecord: TLAValue = .record([
             "op": OperationKind.read.tlaValue,
             "key": Key.k1.tlaValue,
             "value": Value.second(.noVal).tlaValue,
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<OperationFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<OperationFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \OperationFields.operation { return "op" }
             if key == \OperationFields.key { return "key" }
@@ -101,9 +101,9 @@ public struct KVsnapModel: Sendable {
             return nil
         }
 
-        public static let operation = field(\OperationFields.operation)
-        public static let key = field(\OperationFields.key)
-        public static let value = field(\OperationFields.value)
+        package static let operation = field(\OperationFields.operation)
+        package static let key = field(\OperationFields.key)
+        package static let value = field(\OperationFields.value)
     }
 
     private enum Step: String, CaseIterable {
@@ -113,7 +113,7 @@ public struct KVsnapModel: Sendable {
         case commit = "COMMIT"
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("KVsnap") {
             Extends(.integers, .sequences, .finiteSets)
             Import(KeyValueStoreUtil.module)

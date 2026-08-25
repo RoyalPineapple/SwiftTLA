@@ -1,16 +1,16 @@
 import Foundation
 
-public struct CoreFiniteBounds: Equatable, Codable, Sendable {
-  public let summary: String
-  public let limits: [String: Int]
+package struct CoreFiniteBounds: Equatable, Codable, Sendable {
+  package let summary: String
+  package let limits: [String: Int]
 
-  public init(summary: String, limits: [String: Int]) throws {
+  package init(summary: String, limits: [String: Int]) throws {
     self.summary = summary
     self.limits = limits
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     guard !summary.isEmpty, !limits.isEmpty, limits.allSatisfy({ !$0.key.isEmpty && $0.value > 0 }) else {
       throw ConformanceGovernanceError.invalidField(record: "finiteBounds", field: "limits")
     }
@@ -18,7 +18,7 @@ public struct CoreFiniteBounds: Equatable, Codable, Sendable {
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case summary, limits }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       summary: container.decode(String.self, forKey: .summary),
@@ -26,22 +26,22 @@ public struct CoreFiniteBounds: Equatable, Codable, Sendable {
   }
 }
 
-public struct CoreEvidenceProvenance: Equatable, Codable, Sendable {
-  public let caseID: String
-  public let moduleSHA256: String
-  public let cfgSHA256: String
-  public let argumentsSHA256: String
-  public let tlcTag: String
-  public let tlcCommit: String
-  public let tlcJarSHA256: String
-  public let javaDistribution: String
-  public let javaVersion: String
-  public let javaArchiveSHA256: String
-  public let bridgeClass: String
-  public let bridgeSourceSHA256: String
-  public let bridgeBinarySHA256: String
+package struct CoreEvidenceProvenance: Equatable, Codable, Sendable {
+  package let caseID: String
+  package let moduleSHA256: String
+  package let cfgSHA256: String
+  package let argumentsSHA256: String
+  package let tlcTag: String
+  package let tlcCommit: String
+  package let tlcJarSHA256: String
+  package let javaDistribution: String
+  package let javaVersion: String
+  package let javaArchiveSHA256: String
+  package let bridgeClass: String
+  package let bridgeSourceSHA256: String
+  package let bridgeBinarySHA256: String
 
-  public init(
+  package init(
     caseID: String,
     moduleSHA256: String,
     cfgSHA256: String,
@@ -72,7 +72,7 @@ public struct CoreEvidenceProvenance: Equatable, Codable, Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     guard !caseID.isEmpty, !tlcTag.isEmpty, !tlcCommit.isEmpty, !javaDistribution.isEmpty,
           !javaVersion.isEmpty, !bridgeClass.isEmpty else {
       throw ConformanceGovernanceError.invalidField(record: caseID, field: "provenance")
@@ -107,7 +107,7 @@ public struct CoreEvidenceProvenance: Equatable, Codable, Sendable {
     case bridgeBinarySHA256
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
@@ -126,17 +126,17 @@ public struct CoreEvidenceProvenance: Equatable, Codable, Sendable {
   }
 }
 
-public struct CoreEvidenceReference: Equatable, Codable, Sendable {
-  public let path: String
-  public let sha256: String
+package struct CoreEvidenceReference: Equatable, Codable, Sendable {
+  package let path: String
+  package let sha256: String
 
-  public init(path: String, sha256: String) throws {
+  package init(path: String, sha256: String) throws {
     self.path = path
     self.sha256 = sha256
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     guard !path.isEmpty, !path.hasPrefix("/"), TLCReferencePin.isSHA256(sha256) else {
       throw ConformanceGovernanceError.invalidField(record: "evidence", field: "path or sha256")
     }
@@ -144,7 +144,7 @@ public struct CoreEvidenceReference: Equatable, Codable, Sendable {
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case path, sha256 }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       path: container.decode(String.self, forKey: .path),

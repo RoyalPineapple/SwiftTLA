@@ -6,12 +6,12 @@ import SwiftTLAMacros
 /// The published algorithm accepts sequences over an arbitrary integer set.
 /// This finite model uses `-1...1` and sequences up to length three, while
 /// preserving the algorithm's state and one-element-at-a-time loop.
-public struct SumSequenceModel: Sendable {
+package struct SumSequenceModel: Sendable {
     private enum Step: String, CaseIterable {
         case a
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("SumSequence") {
             Extends(.integers)
             Algorithm("SumSequence", fairness: .weak, scoped: { scope in
@@ -44,7 +44,7 @@ extension Example {
     /// This source model has no published TLC configuration. The expected
     /// state count is pinned by the local finite bounds above, not claimed as
     /// upstream TLC parity.
-    public static let sumSequence = Entry(
+    package static let sumSequence = Entry(
         id: "LoopInvariance/SumSequence",
         upstreamSpec: "LoopInvariance",
         upstreamModule: "specifications/LoopInvariance/SumSequence.tla",

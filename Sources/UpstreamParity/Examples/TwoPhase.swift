@@ -6,75 +6,75 @@ import SwiftTLAMacros
 /// The coordinator and each resource manager are independently scheduled
 /// PlusCal-shaped processes. Messages are a typed formal record set, not a
 /// Swift dictionary or a raw string-keyed state value.
-public struct TwoPhaseModel: Sendable {
-    public enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
+package struct TwoPhaseModel: Sendable {
+    package enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
         case one = "r1"
         case two = "r2"
         case three = "r3"
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum Coordinator: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Coordinator: String, CaseIterable, FiniteTLAValueDomain {
         case transactionManager
 
-        public static var defaultValue: Self { .transactionManager }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .transactionManager }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum ResourceManagerState: String, TLAValueType {
+    package enum ResourceManagerState: String, TLAValueType {
         case working
         case prepared
         case committed
         case aborted
 
-        public static var defaultValue: Self { .working }
+        package static var defaultValue: Self { .working }
     }
 
-    public enum TransactionManagerState: String, TLAValueType {
+    package enum TransactionManagerState: String, TLAValueType {
         case initial = "init"
         case committed
         case aborted
 
-        public static var defaultValue: Self { .initial }
+        package static var defaultValue: Self { .initial }
     }
 
-    public enum MessageKind: String, TLAValueType {
+    package enum MessageKind: String, TLAValueType {
         case prepared
         case commit
         case abort
 
-        public static var defaultValue: Self { .prepared }
+        package static var defaultValue: Self { .prepared }
     }
 
-    public struct MessageFields {
-        public let kind: MessageKind
-        public let resourceManager: ResourceManager
+    package struct MessageFields {
+        package let kind: MessageKind
+        package let resourceManager: ResourceManager
     }
 
-    public enum MessageSchema: TLARecordSchema {
-        public typealias Fields = MessageFields
+    package enum MessageSchema: TLARecordSchema {
+        package typealias Fields = MessageFields
 
-        public static let fieldNames: Set<String> = ["kind", "rm"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["kind", "rm"]
+        package static let defaultRecord: TLAValue = .record([
             "kind": .string(MessageKind.prepared.rawValue),
             "rm": .string(ResourceManager.one.rawValue)
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \MessageFields.kind { return "kind" }
             if key == \MessageFields.resourceManager { return "rm" }
             return nil
         }
 
-        public static let kind = field(\MessageFields.kind)
-        public static let resourceManager = field(\MessageFields.resourceManager)
+        package static let kind = field(\MessageFields.kind)
+        package static let resourceManager = field(\MessageFields.resourceManager)
     }
 
     private enum ResourceManagerStep: String, CaseIterable {
@@ -85,7 +85,7 @@ public struct TwoPhaseModel: Sendable {
         case coordinatorOperate
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("TwoPhase") {
             Extends(.integers)
             Algorithm("TwoPhase", scoped: { scope in
@@ -170,7 +170,7 @@ public struct TwoPhaseModel: Sendable {
 }
 
 extension Example {
-    public static let twoPhase = Entry(
+    package static let twoPhase = Entry(
         id: "transaction_commit/TwoPhase",
         upstreamSpec: "transaction_commit",
         upstreamModule: "specifications/transaction_commit/TwoPhase.tla",

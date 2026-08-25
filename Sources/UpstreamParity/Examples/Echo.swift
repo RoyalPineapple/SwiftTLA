@@ -7,51 +7,51 @@ import SwiftTLAMacros
 /// A record is the message on the network. The `inbox` finite function gives
 /// every node its own set of messages, while each `Each(Node.all)` body is an
 /// independently scheduled PlusCal process.
-public struct EchoModel: Sendable {
-    public enum Node: String, TLAValueType, FiniteTLAValueDomain {
+package struct EchoModel: Sendable {
+    package enum Node: String, TLAValueType, FiniteTLAValueDomain {
         case a, b, c
 
-        public static let finiteValues: [Self] = [.a, .b, .c]
-        public static var defaultValue: Self { .a }
+        package static let finiteValues: [Self] = [.a, .b, .c]
+        package static var defaultValue: Self { .a }
     }
 
-    public enum MessageKind: String, TLAValueType {
+    package enum MessageKind: String, TLAValueType {
         case message = "m"
         case acknowledgement = "c"
 
-        public static var defaultValue: Self { .message }
+        package static var defaultValue: Self { .message }
     }
 
-    public struct MessageFields {
-        public let kind: MessageKind
-        public let sender: Node
+    package struct MessageFields {
+        package let kind: MessageKind
+        package let sender: Node
     }
 
-    public enum MessageSchema: TLARecordSchema {
-        public typealias Fields = MessageFields
+    package enum MessageSchema: TLARecordSchema {
+        package typealias Fields = MessageFields
 
-        public static let fieldNames: Set<String> = ["kind", "sender"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["kind", "sender"]
+        package static let defaultRecord: TLAValue = .record([
             "kind": MessageKind.message.tlaValue,
             "sender": Node.a.tlaValue
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \MessageFields.kind { return "kind" }
             if key == \MessageFields.sender { return "sender" }
             return nil
         }
 
-        public static let kind = field(\MessageFields.kind)
-        public static let sender = field(\MessageFields.sender)
+        package static let kind = field(\MessageFields.kind)
+        package static let sender = field(\MessageFields.sender)
     }
 
     private enum Step: String, CaseIterable {
         case n0, n1, n2
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Echo") {
             Extends(.finiteSets)
             Algorithm("Echo", scoped: { scope in
@@ -127,7 +127,7 @@ extension Example {
     /// A bounded source port of MCEcho: three fully connected nodes and `a`
     /// as TLC's deterministic choice of initiator. The typed record spells
     /// the upstream `sndr` field as the clearer Swift name `sender`.
-    public static let echo = Entry(
+    package static let echo = Entry(
         id: "echo/Echo",
         upstreamSpec: "echo",
         upstreamModule: "specifications/echo/Echo.tla",

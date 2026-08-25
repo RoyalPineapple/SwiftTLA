@@ -3,25 +3,25 @@ import SwiftTLAMacros
 
 /// Dijkstra's three-node termination detector from EWD 840.
 @TLAModel
-public struct EWD840Model: Sendable {
-    public enum Node: Int, CaseIterable, FiniteTLAValueDomain {
+package struct EWD840Model: Sendable {
+    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case zero = 0
         case one = 1
         case two = 2
 
-        public static var defaultValue: Self { .zero }
-        public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package static var defaultValue: Self { .zero }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public enum Color: String, TLAValueType {
+    package enum Color: String, TLAValueType {
         case white
         case black
 
-        public static var defaultValue: Self { .white }
+        package static var defaultValue: Self { .white }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("EWD840") { scope in
             Extends(.integers)
             let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
@@ -101,7 +101,7 @@ public struct EWD840Model: Sendable {
 }
 
 extension Example {
-    public static let ewd840 = Entry(
+    package static let ewd840 = Entry(
         id: "ewd840/EWD840",
         upstreamSpec: "ewd840",
         upstreamModule: "specifications/ewd840/EWD840.tla",

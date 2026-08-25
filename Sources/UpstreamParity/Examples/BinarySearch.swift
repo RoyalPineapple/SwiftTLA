@@ -6,12 +6,12 @@ import SwiftTLAMacros
 /// The input is an assumption: `seq` is selected from the finite set of
 /// nondecreasing sequences. The `While` body is the source's one labeled
 /// atomic step, including its two scoped `with` bindings.
-public struct BinarySearchModel: Sendable {
+package struct BinarySearchModel: Sendable {
     private enum Step: String, CaseIterable {
         case a
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("BinarySearch") {
             Extends(.integers)
             Algorithm("BinarySearch", fairness: .weak, scoped: { scope in
@@ -61,7 +61,7 @@ public struct BinarySearchModel: Sendable {
 }
 
 extension Example {
-    public static let binarySearch = Entry(
+    package static let binarySearch = Entry(
         id: "LoopInvariance/BinarySearch",
         upstreamSpec: "LoopInvariance",
         upstreamModule: "specifications/LoopInvariance/BinarySearch.tla",

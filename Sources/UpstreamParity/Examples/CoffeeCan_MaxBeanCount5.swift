@@ -1,7 +1,7 @@
 import SwiftTLA
 
 extension Example {
-    public static let coffeeCanMax5 = Entry(
+    package static let coffeeCanMax5 = Entry(
         id: "CoffeeCan/MaxBeanCount5",
         upstreamSpec: "CoffeeCan",
         upstreamModule: "specifications/CoffeeCan/CoffeeCan.tla",

@@ -1,8 +1,8 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-public struct NanoBlockchainModel: Sendable {
-    public static var spec: TLASpec {
+package struct NanoBlockchainModel: Sendable {
+    package static var spec: TLASpec {
         let nodes = ["n1", "n2"]
         let hashes = ["h1", "h2", "h3"]
         let privKeys = ["prv1", "prv2"]
@@ -82,7 +82,7 @@ public struct NanoBlockchainModel: Sendable {
 }
 
 extension Example {
-    public static let nanoBlockchain = Entry(
+    package static let nanoBlockchain = Entry(
         id: "NanoBlockchain/Small",
         upstreamSpec: "NanoBlockchain",
         upstreamModule: "specifications/NanoBlockchain/Nano.tla",
