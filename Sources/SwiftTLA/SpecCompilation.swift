@@ -548,19 +548,10 @@ public extension SpecParser.ParsedSpecComponents {
         }
         let spec = TLASpec(
             name: specificationName,
-            variables: variables.map(\.formal),
+            variables: variables,
             constants: constants,
             formalParameters: formalParameters,
-            actions: actions.map {
-                NamedAction(
-                    name: $0.name,
-                    body: $0.body,
-                    bindings: $0.bindings,
-                    controlOwner: nil,
-                    generatedBindingSwiftTypes: $0.bindingSwiftTypes,
-                    generatedSymmetricCollectionName: $0.symmetricCollectionName
-                )
-            },
+            actions: actions,
             invariants: invariants.map { NamedInvariant(name: $0.name, body: $0.body) } + additionalInvariants,
             temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: fairness,
@@ -571,7 +562,7 @@ public extension SpecParser.ParsedSpecComponents {
             moduleInstances: moduleInstances,
             refinements: refinements,
             symmetrySets: symmetrySets,
-            symmetricCollections: symmetricCollections.map(\.declaration),
+            symmetricCollections: symmetricCollections,
             algorithmFidelityTokens: algorithmFidelityTokens,
             sourceAlgorithms: sourceAlgorithms
         )

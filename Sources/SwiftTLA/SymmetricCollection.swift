@@ -63,16 +63,6 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   public var verificationScope: Int { metadata.verificationScope }
   public var initial: TLAValue { metadata.initial }
 
-  public init(name: String, verificationScope: Int, initial: TLAValue) {
-    self.init(
-      name: name,
-      verificationScope: verificationScope,
-      initial: initial,
-      generatedElementType: nil,
-      generatedValueType: nil
-    )
-  }
-
   init(
     name: String,
     verificationScope: Int,

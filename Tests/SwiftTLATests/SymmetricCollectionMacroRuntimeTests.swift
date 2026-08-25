@@ -156,8 +156,8 @@ struct SymmetricCollectionMacroRuntimeTests {
     let id: Int
   }
 
-  @Test("Parsed symmetric declarations retain type, scope, action, and source provenance")
-  func parserRetainsCollectionProvenance() throws {
+  @Test("Parsed symmetric declarations retain type, scope, and action ownership")
+  func parserRetainsCollectionStructure() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
@@ -172,10 +172,10 @@ struct SymmetricCollectionMacroRuntimeTests {
     let parsed = SpecParser.parseSpecClosure(closure)
 
     #expect(parsed.symmetricCollections.map(\.name) == ["devices"])
-    #expect(parsed.symmetricCollections[0].elementType == "Device")
-    #expect(parsed.symmetricCollections[0].valueType == "Int")
+    #expect(parsed.symmetricCollections[0].generatedElementType == "Device")
+    #expect(parsed.symmetricCollections[0].generatedValueType == "Int")
     #expect(parsed.symmetricCollections[0].verificationScope == 2)
-    #expect(parsed.actions.compactMap(\.symmetricCollectionName) == ["devices"])
+    #expect(parsed.actions.compactMap(\.generatedSymmetricCollectionName) == ["devices"])
     #expect(parsed.diagnostics.isEmpty)
   }
 
@@ -192,8 +192,8 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let parsed = SpecParser.parseSpecClosure(closure)
 
-    #expect(parsed.symmetricCollections.map(\.elementType) == ["Model.Device"])
-    #expect(parsed.symmetricCollections.map(\.valueType) == ["Swift.Int"])
+    #expect(parsed.symmetricCollections.map(\.generatedElementType) == ["Model.Device"])
+    #expect(parsed.symmetricCollections.map(\.generatedValueType) == ["Swift.Int"])
     #expect(parsed.diagnostics.isEmpty)
   }
 

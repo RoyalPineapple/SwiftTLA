@@ -58,7 +58,7 @@ struct SymmetricCollectionTLCOracleTests {
     let runtimeCompilation = try runtime.compile()
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(parsed.symmetricCollections.map { $0.declaration.metadata }
+    #expect(parsed.symmetricCollections.map(\.metadata)
       == runtime.symmetricCollections.map(\.metadata))
     #expect(parsedCompilation.spec.actions == runtime.actions)
     #expect(try parsedCompilation.initialStateProjections() == runtimeCompilation.initialStateProjections())

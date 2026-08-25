@@ -64,7 +64,7 @@ struct SymmetricCollectionPredicateTests {
     let directCompilation = try direct.compile()
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(parsed.symmetricCollections.map(\.declaration.metadata)
+    #expect(parsed.symmetricCollections.map(\.metadata)
       == direct.symmetricCollections.map(\.metadata))
     #expect(parsedCompilation.identity == directCompilation.identity)
     #expect(try parsedCompilation.initialStateProjections() == directCompilation.initialStateProjections())

@@ -62,11 +62,8 @@ extension ParserSession {
             generatedElementType: elementType,
             generatedValueType: valueType
         )
-        result.symmetricCollections.append(.init(
-            source: call.description,
-            declaration: declaration
-        ))
-        result.variables.append(.init(formal: declaration.variable))
+        result.symmetricCollections.append(declaration)
+        result.variables.append(declaration.variable)
     }
 
     func parseCollectionAction(
@@ -124,7 +121,8 @@ extension ParserSession {
                 .domain(.variable(collectionName)),
                 actionBody
             ),
-            symmetricCollectionName: collectionName
+            controlOwner: nil,
+            generatedSymmetricCollectionName: collectionName
         ))
     }
 
@@ -161,7 +159,7 @@ extension ParserSession {
         action: String,
         source: String,
         detail: String
-    ) -> SymmetricCollectionParseDiagnostic {
+    ) -> SourceParseDiagnostic {
         .init(
             message: "\(detail) for symmetric collection '\(collection)' in action '\(action)': "
                 + "member identity is opaque and may only select or update its owning collection. "

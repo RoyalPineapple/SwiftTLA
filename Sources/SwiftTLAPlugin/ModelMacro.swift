@@ -268,7 +268,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
         let parsed: MacroCompilation
         do {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
-        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
+        } catch let diagnostic as SpecParser.SourceParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []
         } catch {
@@ -377,7 +377,7 @@ private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
 }
 
 package func parserDiagnostic(
-    _ diagnostic: SpecParser.SymmetricCollectionParseDiagnostic,
+    _ diagnostic: SpecParser.SourceParseDiagnostic,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     let finder = ParserDiagnosticNodeFinder(
@@ -406,11 +406,11 @@ private func modelCompilationDiagnostic(
 }
 
 private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
-    let location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
+    let location: SpecParser.SourceParseDiagnostic.SourceSpan.Location
     var node: Syntax?
 
     init(
-        location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
+        location: SpecParser.SourceParseDiagnostic.SourceSpan.Location
     ) {
         self.location = location
         super.init(viewMode: .sourceAccurate)
