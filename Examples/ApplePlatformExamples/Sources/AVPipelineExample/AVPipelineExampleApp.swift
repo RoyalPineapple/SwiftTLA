@@ -343,7 +343,7 @@ final class CameraController {
     var recordedURL: URL?
     var currentPlayer: AVPlayer?
     var isStopping = false
-    private var disk: DiskStore?
+    private let photoDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/SwiftTLA/camera")
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
     var diagnostic: String?
@@ -354,7 +354,7 @@ final class CameraController {
         do {
             machine = try CameraWorkflow.makeMachine()
             capture = try Media.Capture()
-            disk = try DiskStore(name: "camera")
+            try FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
             recordDelegate.owner = self
         } catch {
             diagnostic = String(describing: error)
@@ -378,15 +378,16 @@ final class CameraController {
     }
 
     func takeSnapshot() async {
-        guard let capture, let disk else {
+        guard let capture else {
             diagnostic = "The generated camera machine did not initialize."
             return
         }
         do {
             let data = try await capture.capturePhoto()
+            let name = "snap-\(Int(Date().timeIntervalSince1970)).jpg"
+            try data.write(to: photoDirectory.appendingPathComponent(name))
             roll.append(.photo(data))
             flashActive = true
-            try await disk.write(name: "snap-\(Int(Date().timeIntervalSince1970)).jpg", data: data)
             try await Task.sleep(for: .milliseconds(120))
             flashActive = false
         } catch {
