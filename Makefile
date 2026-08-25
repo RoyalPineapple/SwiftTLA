@@ -1,4 +1,4 @@
-.PHONY: build examples core-conformance temporal-symmetry-conformance public-workflow-release-check ci-pr ci-release-qualification
+.PHONY: build examples core-conformance temporal-symmetry-conformance ci-pr ci-release-qualification
 
 TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-conformance
 build:
@@ -13,9 +13,6 @@ core-conformance:
 
 temporal-symmetry-conformance:
 	./scripts/run_temporal_symmetry_conformance.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)
-
-public-workflow-release-check:
-	./scripts/run_public_workflow_support_gate.sh --output .build/public-workflow-support-gate
 
 ci-pr:
 	./scripts/run_pr_validation.sh

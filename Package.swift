@@ -49,23 +49,9 @@ let package = Package(
             dependencies: [
                 "SwiftTLA",
                 "SwiftTLAMacros",
-                "CanonicalUpstreamCorpus",
-                .product(name: "SwiftParser", package: "swift-syntax"),
-                .product(name: "SwiftSyntax", package: "swift-syntax")
+                "CanonicalUpstreamCorpus"
             ],
             exclude: ["Examples/AGENTS.md", "CanonicalCorpus"],
-            swiftSettings: settings
-        ),
-        .target(
-            name: "PublicWorkflowGeneratedFixtures",
-            dependencies: ["SwiftTLA", "SwiftTLAMacros"],
-            path: "Tests/Fixtures/PublicWorkflowConformance/Generated",
-            exclude: [
-                "builder-observation.json",
-                "counter.config.json",
-                "counter-mismatch.config.json",
-                "generated-observation.json"
-            ],
             swiftSettings: settings
         ),
         .executableTarget(
@@ -90,12 +76,11 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax")
         ], swiftSettings: settings),
-        // Slower corpus, oracle, governance, and public-workflow tests.
+        // Slower corpus, oracle, and governance tests.
         .testTarget(name: "SwiftTLAParityTests", dependencies: [
             "SwiftTLA",
             "SwiftTLAMacros",
-            "UpstreamParity",
-            "PublicWorkflowGeneratedFixtures"
+            "UpstreamParity"
         ], path: "Tests/SwiftTLAParityTests", swiftSettings: settings)
     ]
 )

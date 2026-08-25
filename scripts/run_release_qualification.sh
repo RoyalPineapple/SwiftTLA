@@ -38,6 +38,3 @@ Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
 
 echo "Run temporal-symmetry conformance"
 CORE_CONFORMANCE_TOOL_ROOT="$tool_root" make temporal-symmetry-conformance
-
-echo "Run public-workflow diagnostic check"
-make public-workflow-release-check

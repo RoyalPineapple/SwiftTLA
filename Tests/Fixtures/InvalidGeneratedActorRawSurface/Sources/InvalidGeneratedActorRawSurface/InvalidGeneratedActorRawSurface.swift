@@ -3,11 +3,19 @@ import SwiftTLAMacros
 
 @TLAModel
 struct GeneratedActorSurface {
+  enum Step: String, CaseIterable {
+    case advance
+  }
+
   static var spec: TLASpec {
-    TLASpec("GeneratedActorSurface") {
-      let value = Var<Int>("value")
-      Variable(value, 0)
-      Action("advance") { value.becomes(value + 1).when(value < 1) }
+    #spec("GeneratedActorSurface") {
+      Algorithm("GeneratedActorSurface", scoped: { scope in
+        let value = scope.sharedVar("value", initial: 0)
+        Do(Step.advance) {
+          When(value < 1)
+          Assign(value, to: value + 1)
+        }
+      })
     }
   }
 }

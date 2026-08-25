@@ -64,6 +64,24 @@ jobs:
       - uses: actions/checkout@v5
       - run: swift build --target SwiftTLA -j 1
 
+  public-api:
+    name: public-api (${{ matrix.name }})
+    runs-on: macos-15
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: machine
+            filter: 'SwiftTLATests\.(GeneratedStateMachineTests|GeneratedActorExecutionContractTests|GeneratedMachineDocumentationTests)'
+          - name: model-diagnostics
+            filter: 'modelWithInstanceStoredStateDoesNotTypeCheck|modelWithDynamicFormalModuleNameDoesNotTypeCheck|modelWithObservedInstanceStateDoesNotTypeCheck'
+          - name: external-surfaces
+            filter: 'generatedTypedSurfaceCompilesExternally|generatedRawStateAndTransitionEvidenceDoNotCompileExternally|generatedActorRawStateDoesNotCompileExternally'
+    steps:
+      - uses: actions/checkout@v5
+      - run: ./scripts/local-validation.sh swiftpm-test '${{ matrix.filter }}'
+
   apple-platform-examples:
     runs-on: macos-15
     timeout-minutes: 15

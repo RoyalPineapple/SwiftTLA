@@ -2401,7 +2401,7 @@ private let cameraModeDefinition = parserEnum(
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues)
             ]) {
-                cars.becomes(cars.updating(CarID.carA) { car in
+                cars.becomes(cars.updating(.carA) { car in
                     car.updating(CarSchema.floor, to: 2)
                 })
             }
@@ -2443,7 +2443,11 @@ private let cameraModeDefinition = parserEnum(
         let enumDefinitions = [
             parserEnum("PersonID", cases: ["alice": .string("alice"), "bob": .string("bob")]),
             parserEnum("CarID", cases: ["carA": .string("carA"), "carB": .string("carB")]),
-            parserEnum("Direction", cases: ["up": .string("up"), "down": .string("down")])
+            parserEnum(
+                "Direction",
+                cases: ["up": .string("up"), "down": .string("down")],
+                finiteValues: [.string("up"), .string("down")]
+            )
         ]
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(

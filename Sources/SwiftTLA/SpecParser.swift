@@ -1216,6 +1216,7 @@ public final class ParserSession {
 
     func typedFieldName(_ expression: ExprSyntax) -> String? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
+              member.base != nil,
               member.declName.baseName.text != "finiteValues"
         else { return nil }
         if let typeName = terminalTypeName(in: member.base), enumDefinition(named: typeName) != nil {
