@@ -26,12 +26,17 @@ public struct PeripheralModel {
         static let finiteValues: [Self] = [.finishDiscoveryEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
+    private enum DiscoveryFailedProcess: String, FiniteTLAValueDomain { case discoveryFailedEvent
+        static var defaultValue: Self { .discoveryFailedEvent }
+        static let finiteValues: [Self] = [.discoveryFailedEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
     private enum DisconnectProcess: String, FiniteTLAValueDomain { case disconnectEvent
         static var defaultValue: Self { .disconnectEvent }
         static let finiteValues: [Self] = [.disconnectEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, CaseIterable { case connected, beginDiscovery, finishDiscovery, disconnect }
+    private enum Step: String, CaseIterable { case connected, beginDiscovery, finishDiscovery, discoveryFailed, disconnect }
 
     public static var spec: TLASpec {
         #spec("PeripheralModel") {
@@ -46,6 +51,7 @@ public struct PeripheralModel {
                 }
                 Each(BeginDiscoveryProcess.all) { _ in Do(Step.beginDiscovery) { When(phase == .connected); Assign(phase, to: Phase.discovering); Goto(Step.beginDiscovery) } }
                 Each(FinishDiscoveryProcess.all) { _ in Do(Step.finishDiscovery) { When(phase == .discovering); Assign(phase, to: Phase.ready); Goto(Step.finishDiscovery) } }
+                Each(DiscoveryFailedProcess.all) { _ in Do(Step.discoveryFailed) { When(phase == .discovering); Assign(phase, to: Phase.connected); Goto(Step.discoveryFailed) } }
                 Each(DisconnectProcess.all) { _ in Do(Step.disconnect) { When(phase == .ready); Assign(phase, to: Phase.disconnected); Goto(Step.disconnect) } }
                 Invariant("knownPeripheralPhase") { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
             })
@@ -69,7 +75,6 @@ public actor Device: Identifiable {
     private let delegate = DeviceDelegate()
     private var machine: PeripheralModel
     private var servicesContinuation: CheckedContinuation<[CBService], Error>?
-    private var diagnostic: String?
 
     init(peripheral: CBPeripheral) throws {
         id = peripheral.identifier
@@ -87,7 +92,6 @@ public actor Device: Identifiable {
     }
 
     public func discoverServices(_ uuids: [CBUUID]? = nil) async throws -> [CBService] {
-        if let diagnostic { throw BleError.transitionFailed(diagnostic) }
         guard let peripheral, machine.state.phase == .connected else { throw BleError.notReady }
         _ = try machine.send(.beginDiscovery)
         return try await withCheckedThrowingContinuation { servicesContinuation = $0; peripheral.discoverServices(uuids) }
@@ -95,16 +99,16 @@ public actor Device: Identifiable {
 
     func finishedDiscoveringServices(_ error: (any Error)?) async {
         do {
-            _ = try machine.send(.finishDiscovery)
-            diagnostic = nil
+            if let error {
+                _ = try machine.send(.discoveryFailed)
+                servicesContinuation?.resume(throwing: error)
+            } else {
+                _ = try machine.send(.finishDiscovery)
+                servicesContinuation?.resume(returning: peripheral?.services ?? [])
+            }
         } catch {
-            diagnostic = String(describing: error)
             servicesContinuation?.resume(throwing: error)
-            servicesContinuation = nil
-            return
         }
-        if let error { servicesContinuation?.resume(throwing: error) }
-        else { servicesContinuation?.resume(returning: peripheral?.services ?? []) }
         servicesContinuation = nil
     }
 }

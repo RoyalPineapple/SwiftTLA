@@ -37,6 +37,12 @@ final class GeneratedAppleModelTests: XCTestCase {
         _ = try machine.send(.disconnect)
         let disconnected = machine.state
         XCTAssertEqual(disconnected.phase, .disconnected)
+
+        var failedDiscovery = try PeripheralModel.makeMachine()
+        _ = try failedDiscovery.send(.connected)
+        _ = try failedDiscovery.send(.beginDiscovery)
+        _ = try failedDiscovery.send(.discoveryFailed)
+        XCTAssertEqual(failedDiscovery.state.phase, .connected)
     }
 
     func testAVGeneratedLifecycles() async throws {
