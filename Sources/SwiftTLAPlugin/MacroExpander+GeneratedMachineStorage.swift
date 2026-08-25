@@ -3,13 +3,11 @@ import SwiftTLA
 
 extension MacroExpander {
     static func generateGeneratedMachineStorageMembers(
-        isActor: Bool,
         hasActions: Bool,
         actions: [MachineSurfacePlan.Action],
         variables: [MachineSurfacePlan.Variable],
         symmetricCollections: [MachineSurfacePlan.SymmetricCollection] = []
     ) -> [DeclSyntax] {
-        let modifier = isActor ? "" : "mutating "
         let liveProjection = symmetricCollections.compactMap { collection in
             guard let ordinal = variables.first(where: { $0.formalName == collection.formalName })?.storageOrdinal else {
                 return nil
@@ -143,7 +141,7 @@ extension MacroExpander {
                 }
                 """),
                 DeclSyntax(stringLiteral: """
-                public \(modifier)func send(_ action: Action) throws -> Transition {
+                public mutating func send(_ action: Action) throws -> Transition {
                     let before = _state
                     let candidates = try Self._successors(
                         for: action,
