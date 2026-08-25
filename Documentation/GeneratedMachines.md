@@ -23,25 +23,38 @@ Import `SwiftTLA` and `SwiftTLAMacros`. Apply `@TLAModel` to a type with a
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/BoundedCounter.swift`
 
 ```swift
+// Example ID: generated-machine-bounded-model
+
 import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
 struct BoundedCounter {
+    enum Process: String, FiniteTLAValueDomain {
+        case only
+
+        static var defaultValue: Self { .only }
+        static let finiteValues: [Process] = [.only]
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
     enum Step: String, CaseIterable {
         case advance
     }
 
     static var spec: TLASpec {
         #spec("BoundedCounter") {
-            Algorithm("BoundedCounter") {
-                let value = SharedVar("value", initial: 0)
-                Do(Step.advance) {
-                    When(value < 1)
-                    Assign(value, to: value + 1)
-                    Stop()
+            Algorithm("BoundedCounter", scoped: { scope in
+                let value = scope.sharedVar("value", initial: 0)
+                Each(Process.all) { _ in
+                    Do(Step.advance) {
+                        When(value < 1)
+                        Assign(value, to: value + 1)
+                        Stop()
+                    }
                 }
-            }
+            })
         }
     }
 }
@@ -63,13 +76,16 @@ a rejected action leaves `state` unchanged.
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/DirectAction.swift`
 
 ```swift
+// Example ID: generated-machine-direct-action
+
 import SwiftTLA
 
 func runDirectAction() throws {
     var machine = try BoundedCounter.makeMachine()
-    assert(try machine.isEnabled(.advance))
+    let actions = try machine.enabledActions()
     let result = try machine.send(.advance)
 
+    assert(actions == [.advance])
     assert(result.action == .advance)
     assert(result.before.value == 0)
     assert(result.after.value == 1)
@@ -90,6 +106,9 @@ complete state in one transition.
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/CounterView.swift`
 
 ```swift
+// Example ID: generated-machine-swiftui
+
+import SwiftTLA
 import SwiftUI
 
 struct CounterView: View {
@@ -98,7 +117,7 @@ struct CounterView: View {
 
     var body: some View {
         VStack {
-            Text("Value: \(machine?.state.value ?? 0)")
+            Text("Value: \(machine.map { String($0.state.value) } ?? "-")")
             Button("Advance") {
                 do {
                     guard var machine else { return }
@@ -109,12 +128,12 @@ struct CounterView: View {
                     diagnostic = String(describing: error)
                 }
             }
-
-            if diagnostic.isEmpty == false {
+            if !diagnostic.isEmpty {
                 Text(diagnostic)
             }
         }
         .task {
+            guard machine == nil else { return }
             do {
                 machine = try CounterScreenModel.makeMachine()
             } catch {
@@ -122,6 +141,7 @@ struct CounterView: View {
             }
         }
     }
+
 }
 ```
 
@@ -140,12 +160,53 @@ same typed initial state as `makeMachine(_:)`.
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
 
 ```swift
-let actor = try CounterHost.Actor()
-let transition = try await actor.send(.advance)
-assert(await actor.state == transition.after)
+// Example ID: generated-machine-actor
 
-let seeded = try CounterHost.Actor(.init(value: 0))
-assert(await seeded.state.value == 0)
+import SwiftTLA
+import SwiftTLAMacros
+
+@TLAModel
+struct CounterHost {
+    enum Process: String, FiniteTLAValueDomain {
+        case only
+
+        static var defaultValue: Self { .only }
+        static let finiteValues: [Process] = [.only]
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Step: String, CaseIterable {
+        case advance
+    }
+
+    static var spec: TLASpec {
+        #spec("CounterHost") {
+            Algorithm("CounterHost", scoped: { scope in
+                let value = scope.sharedVar("value", initial: 0)
+                Each(Process.all) { _ in
+                    Do(Step.advance) {
+                        When(value < 1)
+                        Assign(value, to: value + 1)
+                        Stop()
+                    }
+                }
+            })
+        }
+    }
+
+}
+
+func runActorAccess() async throws {
+    let actor = try CounterHost.Actor()
+    let transition = try await actor.send(.advance)
+    let seeded = try CounterHost.Actor(.init(value: 0))
+
+    let actorState = await actor.state
+    let seededState = await seeded.state
+    assert(actorState == transition.after)
+    assert(seededState.value == 0)
+}
 ```
 
 ## Test a model integration
@@ -158,25 +219,32 @@ they do not extend the model's declared finite verification bounds.
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/GeneratedMachineTests.swift`
 
 ```swift
-var machine = try BoundedCounter.makeMachine()
-let result = try machine.send(.advance)
-let beforeFailure = machine.state
+// Example ID: generated-machine-testing
 
-assert(result.after.value == 1)
-assert(try machine.isEnabled(.advance) == false)
+import SwiftTLA
 
-do {
-    try machine.send(.advance)
-    assertionFailure("Expected a disabled action")
-} catch is GeneratedMachineError {
-    assert(machine.state == beforeFailure)
+func runGeneratedMachineTesting() throws {
+    var machine = try BoundedCounter.makeMachine()
+    let result = try machine.send(.advance)
+    let beforeFailure = machine.state
+
+    assert(result.before.value == 0)
+    let isEnabled = try machine.isEnabled(.advance)
+    assert(isEnabled == false)
+    assert(result.after.value == 1)
+
+    do {
+        _ = try machine.send(.advance)
+        assertionFailure("Expected an unavailable action")
+    } catch is GeneratedMachineError {
+        assert(machine.state == beforeFailure)
+    }
 }
 ```
 
 ## Formal verification
 
-Compile the same model when an application needs to inspect, render, or
-explore it:
+Compile the same model when an application needs to inspect, render, or explore it:
 
 ```swift
 let compilation = try BoundedCounter.spec.compile()
@@ -186,11 +254,12 @@ let bundle = try compilation.renderedTLAModuleBundle()
 The generated Swift machine, local exploration, and rendered formal bundle
 come from that one compilation.
 
-## Public API
+## API reference
 
 | Name | Role |
 | --- | --- |
 | `@TLAModel` | Generates the typed machine surface for a `TLASpec`. |
+| `GeneratedMachineError` | Reports a rejected or invalid generated-machine operation. |
 | Generated `State` | Holds declared model variables as Swift values. |
 | Generated `Action` | Represents declared actions and their typed parameters. |
 | Generated `Transition` | Records a successful action and its before/after state. |
@@ -198,8 +267,9 @@ come from that one compilation.
 | Generated `send(_:)` | Applies one typed action or throws. |
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |
 | Generated `Actor` | Serializes access to one generated machine value. |
+| Generated `enabledActions()` | Lists the typed actions enabled by the current state. |
 
-## Claim sources
+## Stable contract
 
 | Claim area | Evidence |
 | --- | --- |

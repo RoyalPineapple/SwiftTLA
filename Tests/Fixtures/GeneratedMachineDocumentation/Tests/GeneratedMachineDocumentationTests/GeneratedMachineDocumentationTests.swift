@@ -10,7 +10,8 @@ struct GeneratedMachineDocumentationTests {
         let beforeFailure = machine.state
 
         #expect(result.before.value == 0)
-        #expect(try machine.isEnabled(.advance) == false)
+        let isEnabled = try machine.isEnabled(.advance)
+        #expect(isEnabled == false)
         #expect(result.after.value == 1)
         #expect(throws: GeneratedMachineError.self) {
             try machine.send(.advance)
@@ -23,6 +24,7 @@ struct GeneratedMachineDocumentationTests {
         let actor = try CounterHost.Actor()
 
         let transition = try await actor.send(.advance)
-        #expect(await actor.state == transition.after)
+        let state = await actor.state
+        #expect(state == transition.after)
     }
 }
