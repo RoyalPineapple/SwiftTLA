@@ -13,7 +13,7 @@ struct CameraApp: App {
         WindowGroup {
             VStack(spacing: 0) {
                 ZStack {
-                    if controller.phase == 3, let player = controller.currentPlayer {
+                    if controller.phase == .playing, let player = controller.currentPlayer {
                         VideoPlayerView(player: player)
                             .overlay(alignment: .topTrailing) {
                                 Button {
@@ -39,7 +39,7 @@ struct CameraApp: App {
 
                     if let preview = controller.selectedPhoto {
                         PhotoDetailView(data: preview) { controller.selectedPhoto = nil }
-                    } else if controller.phase == 1, controller.flashActive {
+                    } else if controller.phase == .live, controller.flashActive {
                         Rectangle().fill(.white).transition(.opacity)
                     }
                 }
@@ -96,7 +96,7 @@ struct CameraApp: App {
 
     var controls: some View {
         HStack(spacing: 30) {
-            if controller.phase == 3 || controller.selectedPhoto != nil {
+            if controller.phase == .playing || controller.selectedPhoto != nil {
                 Button(action: {
                     controller.selectedPhoto = nil
                     Task { await controller.live() }
@@ -118,12 +118,12 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(controller.phase != 1)
+                .disabled(controller.phase != .live)
 
                 Button(action: { Task { await controller.toggleRecording() } }) {
                     ZStack {
                         Circle().stroke(.red, lineWidth: 4).frame(width: 56, height: 56)
-                        if controller.phase == 2 {
+                        if controller.phase == .recording {
                             RoundedRectangle(cornerRadius: 4).fill(.red).frame(width: 24, height: 24)
                         } else {
                             Circle().fill(.red).frame(width: 44, height: 44)
@@ -131,7 +131,7 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(controller.isStopping || (controller.phase != 1 && controller.phase != 2))
+                .disabled(controller.isStopping || (controller.phase != .live && controller.phase != .recording))
             }
         }
         .padding(.vertical, 10)
@@ -279,6 +279,14 @@ enum RollItem: Identifiable {
 
 @TLAModel
 struct CameraWorkflow {
+    enum Phase: String, CaseIterable, FiniteTLAValueDomain {
+        case starting, live, recording, playing
+
+        static var defaultValue: Self { .starting }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
     private enum ReadyProcess: String, FiniteTLAValueDomain { case readyEvent
         static var defaultValue: Self { .readyEvent }
         static let finiteValues: [Self] = [.readyEvent]
@@ -309,23 +317,23 @@ struct CameraWorkflow {
     static var spec: TLASpec {
         #spec("CameraWorkflow") {
             Algorithm("CameraWorkflow", scoped: { scope in
-                let phase = scope.sharedVar("phase", initial: 0)
+                let phase = scope.sharedVar("phase", initial: Phase.starting)
                 Each(ReadyProcess.all) { _ in
-                    Do(Step.ready) { When(phase == 0); Assign(phase, to: 1); Goto(Step.ready) }
+                    Do(Step.ready) { When(phase == Phase.starting); Assign(phase, to: Phase.live); Goto(Step.ready) }
                 }
                 Each(RecordProcess.all) { _ in
-                    Do(Step.record) { When(phase == 1); Assign(phase, to: 2); Goto(Step.record) }
+                    Do(Step.record) { When(phase == Phase.live); Assign(phase, to: Phase.recording); Goto(Step.record) }
                 }
                 Each(RecordingFinishedProcess.all) { _ in
-                    Do(Step.recordingFinished) { When(phase == 2); Assign(phase, to: 1); Goto(Step.recordingFinished) }
+                    Do(Step.recordingFinished) { When(phase == Phase.recording); Assign(phase, to: Phase.live); Goto(Step.recordingFinished) }
                 }
                 Each(PlayProcess.all) { _ in
-                    Do(Step.play) { When(phase == 1); Assign(phase, to: 3); Goto(Step.play) }
+                    Do(Step.play) { When(phase == Phase.live); Assign(phase, to: Phase.playing); Goto(Step.play) }
                 }
                 Each(LiveProcess.all) { _ in
-                    Do(Step.live) { When(phase == 3); Assign(phase, to: 1); Goto(Step.live) }
+                    Do(Step.live) { When(phase == Phase.playing); Assign(phase, to: Phase.live); Goto(Step.live) }
                 }
-                Invariant("validPhase") { phase >= 0 && phase <= 3 }
+                Invariant("validPhase") { phase == Phase.starting || phase == Phase.live || phase == Phase.recording || phase == Phase.playing }
             })
         }
     }
@@ -348,7 +356,7 @@ final class CameraController {
     private let recordDelegate = RecordingDelegate()
     var diagnostic: String?
 
-    var phase: Int { machine?.state.phase ?? 0 }
+    var phase: CameraWorkflow.Phase { machine?.state.phase ?? .starting }
 
     init() {
         do {
@@ -396,7 +404,7 @@ final class CameraController {
     }
 
     func toggleRecording() async {
-        if phase == 2 {
+        if phase == .recording {
             guard isStopping == false else { return }
             guard let movieOutput else {
                 diagnostic = "The camera output is not ready."
@@ -404,7 +412,7 @@ final class CameraController {
             }
             isStopping = true
             movieOutput.stopRecording()
-        } else if phase == 1 {
+        } else if phase == .live {
             guard let movieOutput else {
                 diagnostic = "The camera output is not ready."
                 return
@@ -418,7 +426,7 @@ final class CameraController {
 
     func playRecording(url: URL? = nil) async {
         recordedURL = url ?? recordedURL
-        guard phase == 1, let url = recordedURL else { return }
+        guard phase == .live, let url = recordedURL else { return }
         guard send(.play) else { return }
         let player = AVPlayer(url: url)
         currentPlayer = player
