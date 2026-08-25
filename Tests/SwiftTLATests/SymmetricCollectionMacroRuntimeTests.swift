@@ -140,10 +140,9 @@ public struct GeneratedContainsPredicateRuntime {
 @Suite(.serialized)
 struct SymmetricCollectionMacroRuntimeTests {
   private func compiledSuccessors(
-    of spec: TLASpec,
+    in compilation: CompiledSpecification,
     from projection: TLAStateProjection
   ) throws -> [TLAStateProjection] {
-    let compilation = try spec.compile()
     let state = try CompiledState(
       projection: projection,
       compilation: compilation
@@ -216,24 +215,20 @@ struct SymmetricCollectionMacroRuntimeTests {
       ("devices", .function([TLAValue.constant("DevicesMember0"): TLAValue.int(1)]))
     ]
     let devices = SymmetricCollectionVar<Device, Int>("devices")
-    let runtimeBuilt = TLASpec("RuntimeBuiltParity") {
+    let runtimeBuilt = TLASpec("CollectionActionBehavior") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
       }
     }
 
-    let parsedSpec = TLASpec(
-      name: "ParsedCollectionAction",
-      variables: parsed.variables.map { .init(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
-      actions: parsed.actions.map { .init(name: $0.name, body: $0.body) },
-      invariants: []
-    )
+    let parsedCompilation = try parsed.compile(specificationName: "CollectionActionBehavior")
+    let runtimeCompilation = try runtimeBuilt.compile()
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(try compiledSuccessors(of: parsedSpec, from: projection(initial))
-      == compiledSuccessors(of: runtimeBuilt, from: projection(initial)))
-    #expect(try compiledSuccessors(of: parsedSpec, from: projection(advanced)).isEmpty)
+    #expect(try compiledSuccessors(in: parsedCompilation, from: projection(initial))
+      == compiledSuccessors(in: runtimeCompilation, from: projection(initial)))
+    #expect(try compiledSuccessors(in: parsedCompilation, from: projection(advanced)).isEmpty)
   }
 
   @Test("Parser preserves collection action precedence from syntax nodes")
@@ -453,7 +448,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ]))
     ]
     let boundedSuccessors = try compiledSuccessors(
-      of: GeneratedMultiStatementSymmetricRuntime.spec,
+      in: GeneratedMultiStatementSymmetricRuntime.spec.compile(),
       from: projection(boundedState)
     )
     let devices = try #require(TLAStateProjection.Token(validating: "devices"))
@@ -492,7 +487,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ]))
     ]
     let boundedSuccessors = try compiledSuccessors(
-      of: GeneratedDisjunctiveSymmetricRuntime.spec,
+      in: GeneratedDisjunctiveSymmetricRuntime.spec.compile(),
       from: projection(boundedState)
     )
     let devices = try #require(TLAStateProjection.Token(validating: "devices"))

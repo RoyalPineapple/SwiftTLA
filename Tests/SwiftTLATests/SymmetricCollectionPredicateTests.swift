@@ -60,15 +60,16 @@ struct SymmetricCollectionPredicateTests {
   func parserMatchesDirectCollectionPredicateInvariants() throws {
     let parsed = SpecParser.parseSpecClosure(try predicateClosure())
     let direct = directPredicateSpec()
-    let parsedSpec = spec(from: parsed)
+    let parsedCompilation = try parsed.compile(specificationName: "CollectionPredicateSemantics")
+    let directCompilation = try direct.compile()
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.symmetricCollections.map(\.declaration.metadata)
       == direct.symmetricCollections.map(\.metadata))
-    #expect(try parsedSpec.compile().identity == direct.compile().identity)
-    #expect(try parsedSpec.compile().initialStateProjections() == direct.compile().initialStateProjections())
-    #expect(try ModelChecker(compilation: try parsedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description
-      == ModelChecker(compilation: try direct.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description)
+    #expect(parsedCompilation.identity == directCompilation.identity)
+    #expect(try parsedCompilation.initialStateProjections() == directCompilation.initialStateProjections())
+    #expect(try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description
+      == ModelChecker(compilation: directCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description)
   }
 
   @Test("macro and source-model compilation share collection binder identity")
@@ -147,7 +148,7 @@ struct SymmetricCollectionPredicateTests {
   @Test("Parsed collection predicates preserve invariant violations")
   func parserPreservesCollectionPredicateInvariantViolations() throws {
     let parsed = SpecParser.parseSpecClosure(try violatingPredicateClosure())
-    let parsedSpec = spec(from: parsed)
+    let parsedCompilation = try parsed.compile(specificationName: "ViolatingPredicate")
     let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
     let direct = TLASpec("ViolatingPredicate") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
@@ -160,7 +161,7 @@ struct SymmetricCollectionPredicateTests {
     }
 
     #expect(parsed.diagnostics.isEmpty)
-    let parsedResult = try ModelChecker(compilation: try parsedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
+    let parsedResult = try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check()
     let directResult = try ModelChecker(compilation: try direct.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
     #expect(parsedResult.description == directResult.description)
     guard case .bounded(_, .invariantViolated(let name, _, _)) = parsedResult else {
@@ -279,7 +280,7 @@ struct SymmetricCollectionPredicateTests {
 
   private func directPredicateSpec() -> TLASpec {
     let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
-    return TLASpec("PredicateParity") {
+    return TLASpec("CollectionPredicateSemantics") {
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
@@ -291,16 +292,6 @@ struct SymmetricCollectionPredicateTests {
         devices.contains(where: { phase in phase >= 0 })
       }
     }
-  }
-
-  private func spec(from parsed: SpecParser.ParsedSpecComponents) -> TLASpec {
-    TLASpec(
-      name: "ParsedPredicate",
-      variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
-      actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
-      invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
-      symmetricCollections: parsed.symmetricCollections.map(\.declaration)
-    )
   }
 
 }

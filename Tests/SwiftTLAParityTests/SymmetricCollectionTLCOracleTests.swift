@@ -54,20 +54,15 @@ struct SymmetricCollectionTLCOracleTests {
     )
     let parsed = SpecParser.parseSpecClosure(closure)
     let runtime = parserParitySpec(scope: 2)
-    let parsedSpec = TLASpec(
-      name: "ParserParity2",
-      variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
-      actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
-      invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
-      symmetricCollections: parsed.symmetricCollections.map(\.declaration)
-    )
+    let parsedCompilation = try parsed.compile(specificationName: "OpaqueMemberSemantics2")
+    let runtimeCompilation = try runtime.compile()
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.symmetricCollections.map { $0.declaration.metadata }
       == runtime.symmetricCollections.map(\.metadata))
-    #expect(parsed.actions.map { NamedAction(name: $0.name, body: $0.body) } == runtime.actions)
-    #expect(try parsedSpec.compile().initialStateProjections() == runtime.compile().initialStateProjections())
-    #expect(try ModelChecker(compilation: try parsedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description == ModelChecker(compilation: try runtime.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description)
+    #expect(parsedCompilation.spec.actions == runtime.actions)
+    #expect(try parsedCompilation.initialStateProjections() == runtimeCompilation.initialStateProjections())
+    #expect(try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description == ModelChecker(compilation: runtimeCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description)
   }
 
   @Test("Every opaque member identity misuse family produces symmetry guidance")
@@ -137,7 +132,7 @@ struct SymmetricCollectionTLCOracleTests {
 
   private func parserParitySpec(scope: Int) -> TLASpec {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
-    return TLASpec("ParserParity\(scope)") {
+    return TLASpec("OpaqueMemberSemantics\(scope)") {
       SymmetricCollection(devices, verificationScope: scope, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
