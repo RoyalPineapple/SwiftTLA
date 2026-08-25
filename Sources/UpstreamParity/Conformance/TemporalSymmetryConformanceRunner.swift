@@ -244,7 +244,13 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       configuration: explorationConfiguration,
       usesSymmetryReduction: true
     ).explore())
-    let permutations = try symmetryPermutations(scope: scope)
+    guard model.spec.symmetricCollections.count == 1,
+          let collection = model.spec.symmetricCollections.first,
+          collection.verificationScope == scope else {
+      throw ConformanceGovernanceError.invalidField(
+        record: declaredCase.id, field: "symmetric collection")
+    }
+    let permutations = try symmetryPermutations(members: collection.metadata.members)
     let configurationURL = outputDirectory.appendingPathComponent("symmetry-configuration.json")
     try ConformanceEvidence.writeJSON([
       "raw": SHA256.hex(Data(rawBundle.cfg.utf8)),
@@ -343,8 +349,18 @@ extension TemporalSymmetryConformanceRunner {
       arguments: declared.arguments, expectedCase: declared, runID: runID, referencePin: declared.pin, referenceArtifacts: context.artifacts)
   }
 
-  private func symmetryPermutations(scope: Int) throws -> [SymmetryPermutation] {
-    let names = try symmetryMemberNames(scope: scope)
+  private func symmetryPermutations(members: [TLAValue]) throws -> [SymmetryPermutation] {
+    let names = try members.map { member in
+      guard case .constant(let name) = member else {
+        throw ConformanceGovernanceError.invalidField(
+          record: "symmetric collection", field: "member")
+      }
+      return name
+    }
+    guard names.isEmpty == false else {
+      throw ConformanceGovernanceError.invalidField(
+        record: "symmetric collection", field: "members")
+    }
     var permutations = [try SymmetryPermutation(constantMapping: Dictionary(uniqueKeysWithValues: names.map { ($0, $0) }))]
     for index in names.indices.dropFirst() {
       var mapping = Dictionary(uniqueKeysWithValues: names.map { ($0, $0) })
@@ -500,15 +516,6 @@ public struct TemporalSymmetryModelDefinition: Sendable {
   public let spec: TLASpec
   public let expectedStateCount: Int
   public let maxStates: Int
-}
-
-private func symmetryMemberNames(scope: Int) throws -> [String] {
-  let alphabet = Array("abcdefghijklmnopqrstuvwxyz")
-  guard (1...alphabet.count).contains(scope) else {
-    throw ConformanceGovernanceError.invalidField(
-      record: "symmetric collection", field: "scope")
-  }
-  return alphabet.prefix(scope).map(String.init)
 }
 
 private struct ConformanceMember: Identifiable, Sendable {
