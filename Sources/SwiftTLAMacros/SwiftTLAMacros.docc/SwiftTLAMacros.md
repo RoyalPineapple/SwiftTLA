@@ -4,8 +4,8 @@ Generate typed Swift machines from a `TLASpec` declaration.
 
 ## Overview
 
-Apply ``TLAModel()`` to a model declaration. Nest ``TLAActor()`` inside that
-declaration when an actor is required.
+Apply ``TLAModel()`` to a model declaration. The generated model includes an
+`Actor` type for serialized access.
 
 The macro parses the supported builder syntax, lowers it once to `TLASpec`,
 compiles that model, and generates the public machine surface described in the
@@ -57,4 +57,3 @@ Use bounded exploration before you make a broader behavior claim.
 ### Macros
 
 - ``TLAModel()``
-- ``TLAActor()``

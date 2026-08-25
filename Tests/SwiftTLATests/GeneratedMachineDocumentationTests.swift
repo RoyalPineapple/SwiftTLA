@@ -96,9 +96,7 @@ struct GeneratedMachineDocumentationTests {
             #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
             #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
         }
-        for macro in ["TLAModel", "TLAActor"] {
-            #expect(macroDocc.contains(macro), "Macro DocC is missing macro: \(macro)")
-        }
+        #expect(macroDocc.contains("TLAModel"), "Macro DocC is missing TLAModel")
 
         for staleTerm in ["TransitionEvidence", "state[\"value\"]", "tlaSnapshot()["] {
             #expect(!guide.contains(staleTerm), "Markdown guide exposes stale boundary: \(staleTerm)")
@@ -106,20 +104,19 @@ struct GeneratedMachineDocumentationTests {
         }
     }
 
-    @Test("Live-machine guide describes one generated machine owner")
-    func liveMachineGuideDescribesGeneratedMachineOwnership() throws {
+    @Test("Actor guide describes one generated machine owner")
+    func actorMachineGuideDescribesGeneratedMachineOwnership() throws {
         let root = packageRoot()
-        let live = try String(
-            contentsOf: root.appendingPathComponent("Documentation/LiveMachines.md"),
+        let actor = try String(
+            contentsOf: root.appendingPathComponent("Documentation/ActorMachines.md"),
             encoding: .utf8
         )
         for term in [
-            "Live()",
             "Actor()",
             "generated machine value",
             "serializes access"
         ] {
-            #expect(live.contains(term), "Live-machine guide is missing: \(term)")
+            #expect(actor.contains(term), "Actor-machine guide is missing: \(term)")
         }
     }
 
@@ -170,10 +167,10 @@ struct GeneratedMachineDocumentationTests {
     private var supportedInventory: [(String, String, String)] {
         [
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
-            ("`@TLAActor`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAActor"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/TLAStateProjection.swift", "public enum GeneratedMachineError"),
             ("Generated `Action`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum Action"),
             ("Generated `Transition`", "Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift", "public struct Transition"),
+            ("Generated `Actor`", "Sources/SwiftTLAPlugin/MacroExpander+Actor.swift", "public actor Actor"),
         ]
     }
 

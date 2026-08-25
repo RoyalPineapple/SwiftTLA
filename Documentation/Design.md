@@ -86,9 +86,9 @@ request. The private runtime executes compiled action identities and
 slot-backed state. Application code does not use action names, runtime IDs,
 slots, or formal state maps.
 
-Generated `Live` and `@TLAActor` APIs use the same typed state and actions.
+The generated `Actor` API uses the same typed state and actions.
 See [Generated Machines](GeneratedMachines.md) and
-[Live Machines](LiveMachines.md).
+[Actor Machines](ActorMachines.md).
 
 ## Render formal bundles
 

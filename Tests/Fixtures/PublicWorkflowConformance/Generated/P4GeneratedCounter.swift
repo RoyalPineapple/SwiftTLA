@@ -12,8 +12,6 @@ public struct P4GeneratedCounter {
         }
     }
 
-    @TLAActor
-    public actor Actor {}
 }
 
 @TLAModel
@@ -26,8 +24,5 @@ public struct P4GeneratedCounterIntentionalMismatch {
             Invariant("withinBounds") { value >= 0 && value <= 1 }
         }
     }
-
-    @TLAActor
-    public actor Actor {}
 
 }

@@ -131,10 +131,9 @@ application state.
 
 ## Advanced execution
 
-`Live` and nested `@TLAActor` each own a generated machine value when an
-application needs asynchronous coordination. They serialize `send(_:)` and
-expose the same generated `State` and `Action` values used by value and SwiftUI
-code.
+`Actor` owns a generated machine value when an application needs asynchronous
+coordination. It serializes `send(_:)` and exposes the same generated `State`
+and `Action` values used by value and SwiftUI code.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
@@ -194,7 +193,8 @@ come from that one compilation.
 | Generated `state` | Reads the complete current generated state. |
 | Generated `send(_:)` | Applies one typed action or throws. |
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |
-| `Live`, `@TLAActor` | Advanced shared execution surfaces. |
+| Generated `Actor` | Serializes access to one generated machine value. |
+| Generated `Actor` | Shared execution surface. |
 
 ## Claim sources
 

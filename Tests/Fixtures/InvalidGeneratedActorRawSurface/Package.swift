@@ -1,15 +1,14 @@
 // swift-tools-version: 5.9
 
-import CompilerPluginSupport
 import PackageDescription
 
 let package = Package(
-  name: "InvalidNestedMacroComposition",
+  name: "InvalidGeneratedActorRawSurface",
   platforms: [.macOS(.v14)],
   dependencies: [.package(name: "SwiftTLA", path: "../../..")],
   targets: [
     .executableTarget(
-      name: "InvalidNestedMacroComposition",
+      name: "InvalidGeneratedActorRawSurface",
       dependencies: [
         .product(name: "SwiftTLA", package: "SwiftTLA"),
         .product(name: "SwiftTLAMacros", package: "SwiftTLA")

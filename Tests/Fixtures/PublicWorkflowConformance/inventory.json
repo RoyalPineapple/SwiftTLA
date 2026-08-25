@@ -16,9 +16,9 @@
       "expectedInvalidOutcome": "buildFailed",
       "diagnosticCategory": "macroInvariantViolation",
       "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputsSHA256": "7fa62bded4dac7bb29f860b6b5330caae34475695577cadbe9cb51c9c6815a8f",
+      "sourceInputsSHA256": "91ee0dd863c52f8a3579622949ed8cfba099081062ea2450396a41348ffb7d44",
       "sourceInputs": [
-        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "6a8c8c45f4fef68de7b47f3fcc0675be3df6c7195407b5240d30a93fc0502e0d"},
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "ce5f29f61903412f72687e182041806c805c9d99f49487a3b9ae7efa68d2c480"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Valid/Package.swift", "sha256": "ef5d117d2c4658ba3b0d63268d59d2689398829ee8578ac5619e14460131d15b"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Valid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Valid/Sources/main.swift", "sha256": "2cda46e8245e0d7ede3cbc2244ce5f8150e19e0f5216c41d716fea8fe4b3fbf6"},
@@ -28,42 +28,15 @@
       ]
     },
     {
-      "name": "@TLAActor",
-      "fixtureID": "p4-annotation-tla-actor",
-      "advertised": true,
-      "decision": "pendingCI",
-      "publicAdmission": "notAdmitted",
-      "localEvidence": "diagnosticOnly",
-      "ciEvidence": "requiredRetained",
-      "positiveFixture": "TLActor/Valid",
-      "invalidFixture": "TLActor/Invalid",
-      "scheme": "PublicWorkflowTLAActorValid",
-      "expectedPositiveOutcome": "buildSucceeded",
-      "expectedInvalidOutcome": "buildFailed",
-      "runtimeProof": {"command": "swift run", "evidence": "localDiagnosticOnly"},
-      "diagnosticCategory": "macroInvariantViolation",
-      "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputsSHA256": "e42bfe499d6fe641007eb4580e7d429580c29739a3a8c0230ebba9b8160a9b62",
-      "sourceInputs": [
-        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "6a8c8c45f4fef68de7b47f3fcc0675be3df6c7195407b5240d30a93fc0502e0d"},
-        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Package.swift", "sha256": "64dc2dfd687dd85995916554127496b07d0caee6728de9d12edb16ba05f6ef52"},
-        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
-        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Sources/ValidActorFixture.swift", "sha256": "b5512727cc60b2bf144b545aa4dec8fc09441e7db9626175e83f3803befb8c01"},
-        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Package.swift", "sha256": "1160efd08b1ba36c4f4fd3d5b70d66b3ad7672e6a1ffdc42837acfec6f51e42f"},
-        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
-        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Sources/main.swift", "sha256": "b04d5a8f2cd81331c55dd4ed755f71a1b24bcaf1c5d1c8faabc9d7401cfd91f1"}
-      ]
-    },
-    {
       "name": "@TypedVar",
       "fixtureID": "p4-annotation-typed-var-removed",
       "advertised": false,
       "decision": "removed",
       "sourceDeclaration": "Sources/SwiftTLAMacros/Macros.swift",
       "reason": "The public declaration was removed because the peer macro was an undocumented implementation surface with no fixture-backed release claim.",
-      "sourceInputsSHA256": "6fc6b5cecf47df716427db51ab54b2f34d117597ca5c52ada26ce00e220c6947",
+      "sourceInputsSHA256": "ee6a681c2add3fc5471af6c69d0fd92bc7256993511edca5d0d6133afc5bd6c1",
       "sourceInputs": [
-        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "6a8c8c45f4fef68de7b47f3fcc0675be3df6c7195407b5240d30a93fc0502e0d"}
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "ce5f29f61903412f72687e182041806c805c9d99f49487a3b9ae7efa68d2c480"}
       ]
     },
     {
@@ -73,9 +46,9 @@
       "decision": "removed",
       "sourceDeclaration": "Sources/SwiftTLAMacros/Macros.swift",
       "reason": "The public declaration was removed because its declared plugin implementation did not exist.",
-      "sourceInputsSHA256": "6fc6b5cecf47df716427db51ab54b2f34d117597ca5c52ada26ce00e220c6947",
+      "sourceInputsSHA256": "ee6a681c2add3fc5471af6c69d0fd92bc7256993511edca5d0d6133afc5bd6c1",
       "sourceInputs": [
-        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "6a8c8c45f4fef68de7b47f3fcc0675be3df6c7195407b5240d30a93fc0502e0d"}
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "ce5f29f61903412f72687e182041806c805c9d99f49487a3b9ae7efa68d2c480"}
       ]
     }
   ]
