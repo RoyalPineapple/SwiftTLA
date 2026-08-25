@@ -1,8 +1,8 @@
 # Upstream parity
 
-Upstream parity keeps one canonical SwiftTLA source model for each selected
-example. The canonical corpus owns its source model, module closure,
-configuration, and provenance.
+Upstream parity is repository validation tooling. It keeps one canonical
+SwiftTLA source model for each selected example. The canonical corpus owns its
+source model, module closure, configuration, and provenance.
 
 ```text
 canonical Swift source model → compile → rendered module bundle
