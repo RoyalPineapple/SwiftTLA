@@ -36,7 +36,8 @@ edge multiplicities, and outcomes.
 GitHub Actions retains the tool invocation, raw TLC event stream, complete
 `swift-graph.jsonl` and `tlc-graph.jsonl` streams, and one `comparison.json`
 for each declared case. Each graph stream ends with its outcome and declared
-record counts. Missing, truncated, failed, and bounded streams cannot match.
+record counts, and retains any diagnostics or counterexample traces. Missing,
+truncated, failed, and bounded streams cannot match.
 The comparison record reports exact equality or the first structured
 difference. See
 [Core graph conformance](CoreGraphConformance.md).

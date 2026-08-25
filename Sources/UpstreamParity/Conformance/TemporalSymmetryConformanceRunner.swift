@@ -365,7 +365,7 @@ extension TemporalSymmetryConformanceRunner {
   ) throws -> SymmetryExploration {
     try SymmetryExploration(
       engine: engine, reduced: reduced, runID: runID,
-      graphID: CanonicalGraphRecords.digest(for: run.graph),
+      graphID: try CanonicalGraphRecords.digest(for: run.graph),
       initialStateIDs: run.graph.initialStateKeys.map(\.canonicalEncoding), stateIDs: run.graph.states.keys.map(\.canonicalEncoding),
       transitions: try run.graph.edgeOccurrences.map {
         try SymmetryRawTransitionWitness(
@@ -407,14 +407,14 @@ extension TemporalSymmetryConformanceRunner {
       "caseID": declaredCase.id,
       "correlation": correlation.tlcRunID.uuidString.lowercased(),
       "status": String(describing: analysis.status),
-      "graphID": CanonicalGraphRecords.digest(for: swiftRun.graph)
+      "graphID": try CanonicalGraphRecords.digest(for: swiftRun.graph)
     ], to: resultURL)
     let initial = swiftRun.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
     switch analysis.status {
     case .satisfied:
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .satisfied,
-        graphID: CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
+        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .notApplicable)
     case .violated:
       guard let witness = analysis.witness else {
@@ -432,12 +432,12 @@ extension TemporalSymmetryConformanceRunner {
       try ConformanceEvidence.writeCanonical(lasso, to: traceURL)
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .violated,
-        graphID: CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
+        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .available, traceEvidence: try ConformanceEvidence.reference(for: traceURL, beneath: projectRoot), lasso: lasso)
     case .unavailable:
       return try TemporalPropertyResult(
         availability: .unavailable, outcome: nil,
-        graphID: CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
+        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .unavailable)
     }
   }

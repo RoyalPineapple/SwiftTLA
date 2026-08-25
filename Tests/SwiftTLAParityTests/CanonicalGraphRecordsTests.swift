@@ -18,12 +18,33 @@ struct CanonicalGraphRecordsTests {
       .init(source: first.key, action: "advance", target: second.key)
     ])
 
-    #expect(CanonicalGraphRecords.digest(for: forward) == CanonicalGraphRecords.digest(for: reversed))
+    #expect(try CanonicalGraphRecords.digest(for: forward) == CanonicalGraphRecords.digest(for: reversed))
 
     let changed = try graph(first, second, edges: [
       .init(source: first.key, action: "reset", target: second.key)
     ])
-    #expect(CanonicalGraphRecords.digest(for: forward) != CanonicalGraphRecords.digest(for: changed))
+    #expect(try CanonicalGraphRecords.digest(for: forward) != CanonicalGraphRecords.digest(for: changed))
+
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let url = root.appendingPathComponent("graph.jsonl")
+    try CanonicalGraphRecords.write(
+      CanonicalRun(
+        graph: forward,
+        observableActions: ["advance", "reset"],
+        outcome: .exhaustiveSuccess
+      ),
+      to: url
+    )
+    let graphRecordTypes = Set(["initial", "state", "edge"])
+    let retainedGraphRecords = try records(in: Data(contentsOf: url)).filter {
+      graphRecordTypes.contains($0["type"] as? String ?? "")
+    }
+    #expect(
+      try CanonicalGraphRecords.digest(for: forward)
+        == SHA256.hex(data(for: retainedGraphRecords))
+    )
   }
 
   @Test("canonical graph stream declares completion and exact counts")
@@ -74,6 +95,49 @@ struct CanonicalGraphRecordsTests {
     #expect((incompleteRecords.last?["outcome"] as? [String: String])?["kind"] == "incomplete")
   }
 
+  @Test("canonical graph stream retains diagnostics and traces")
+  func graphStreamRetainsDiagnosticsAndTraces() throws {
+    let first = state(counter: 1, values: [.integer(1)])
+    let second = state(counter: 2, values: [.integer(2)])
+    let run = try CanonicalRun(
+      graph: graph(
+        first,
+        second,
+        edges: [.init(source: first.key, action: "advance", target: second.key)]
+      ),
+      observableActions: ["advance"],
+      outcome: .invariantViolation("counter escaped its range"),
+      errors: [.init(code: "range", message: "counter is 2")],
+      traces: [
+        .init(
+          id: "counterexample",
+          steps: [
+            .init(state: first.key, action: "advance"),
+            .init(state: second.key, action: "")
+          ]
+        )
+      ]
+    )
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let url = root.appendingPathComponent("graph.jsonl")
+    try CanonicalGraphRecords.write(run, to: url)
+
+    let streamRecords = try records(in: Data(contentsOf: url))
+    let error = try #require(streamRecords.first { $0["type"] as? String == "error" })
+    #expect(error["index"] as? Int == 0)
+    #expect(error["code"] as? String == "range")
+    #expect(error["message"] as? String == "counter is 2")
+    let trace = try #require(streamRecords.first { $0["type"] as? String == "trace" })
+    #expect(trace["index"] as? Int == 0)
+    #expect(trace["id"] as? String == "counterexample")
+    #expect((trace["steps"] as? [[String: String]])?.count == 2)
+    #expect(streamRecords.last?["errorCount"] as? Int == 1)
+    #expect(streamRecords.last?["traceCount"] as? Int == 1)
+    #expect(streamRecords.last?["eligible"] as? Bool == false)
+  }
+
   private func state(counter: Int, values: [CanonicalValue]) -> CanonicalState {
     CanonicalState(bindings: ["counter": .integer(counter), "values": .set(values)])
   }
@@ -89,6 +153,13 @@ struct CanonicalGraphRecordsTests {
   private func records(in data: Data) throws -> [[String: Any]] {
     try data.split(separator: 0x0a).map {
       try #require(JSONSerialization.jsonObject(with: Data($0)) as? [String: Any])
+    }
+  }
+
+  private func data(for records: [[String: Any]]) throws -> Data {
+    try records.reduce(into: Data()) { data, record in
+      data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
+      data.append(0x0a)
     }
   }
 

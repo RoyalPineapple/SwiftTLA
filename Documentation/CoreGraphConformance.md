@@ -41,9 +41,10 @@ tlc-graph.jsonl ───┘
 ```
 
 Each graph stream contains a header, sorted initial states, sorted states,
-sorted labeled edges with multiplicity, and a final completion record. The
-completion record declares the outcome and exact record counts. A missing,
-truncated, failed, or bounded completion cannot represent an exact result.
+sorted labeled edges with multiplicity, diagnostics, counterexample traces,
+and a final completion record. The completion record declares the outcome and
+exact record counts. A missing, truncated, failed, or bounded completion cannot
+represent an exact result.
 
 `comparison.json` records whether the two complete graphs match and includes
 the first structured differences when they do not. Exact equality is decided
