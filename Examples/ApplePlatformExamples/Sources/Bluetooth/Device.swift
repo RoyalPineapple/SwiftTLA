@@ -80,6 +80,7 @@ public actor Device: Identifiable {
     }
 
     public var name: String? { peripheral?.name }
+    public var state: PeripheralModel.State { machine.state }
 
     func connected() async throws {
         _ = try machine.send(.connected)

@@ -43,7 +43,7 @@ extension Media {
             player = AVPlayer(url: url)
         }
 
-        public func phase() async -> PlayerModel.Phase { machine.state.phase }
+        public var state: PlayerModel.State { machine.state }
 
         public func load() async throws {
             guard try machine.isEnabled(.beginLoad) else { throw MediaError.alreadyLoaded }
