@@ -10,7 +10,6 @@ and guarded application boundary. The `SwiftTLAMacros` module contains the
 macros that generate typed machines from a `TLASpec` declaration.
 
 Application code reads generated `State`, `Action`, and `Transition` values.
-It does not read a raw formal state map.
 
 ## Compile the source model
 
@@ -43,10 +42,9 @@ let procedure = LanguageCapabilityLedger.capability(for: .procedure)
 let capabilities = LanguageCapabilityLedger.all
 ```
 
-The parser and result builders use the same ledger. If a required dimension
-is unsupported, compilation throws `LanguageCapabilityDiagnostic`. The
-diagnostic identifies the construct, operation, source path, and required
-action. No compiled specification is available after this failure.
+The parser and result builders use the same ledger. An unsupported required
+dimension produces `LanguageCapabilityDiagnostic`, which identifies the
+construct, operation, source path, and required action.
 
 ## Materialize a linked bundle
 
@@ -60,9 +58,7 @@ try compilation.materializeModuleBundle(to: outputDirectory)
 `TLAModuleBundle` is source-owned input for a formal tool. The compiler links
 imports and instances before rendering, checks the rendered closure, writes it
 to an isolated sibling staging directory, and publishes it with one rename.
-A structural, rendering, I/O, or rename failure does not present a partial
-destination as a valid compiler result. Inspect the diagnostic, correct the
-named source relationship or destination, and compile again.
+Diagnostics identify the named source relationship or destination to correct.
 
 If a model has `Algorithm` source, its authored PlusCal export is also
 throwing:
@@ -71,9 +67,8 @@ throwing:
 let bundle = try compilation.renderedPlusCalBundle()
 ```
 
-`AlgorithmPlusCalRenderDiagnostic` identifies an Algorithm node that has no
-source-faithful PlusCal spelling. Change that model construct. Do not replace
-the failed node with text that changes the model's meaning.
+`AlgorithmPlusCalRenderDiagnostic` identifies the Algorithm node that needs a
+source-faithful PlusCal spelling. Change that typed model construct.
 
 ## Compiler and evidence limits
 
