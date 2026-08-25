@@ -30,7 +30,6 @@ struct MacroCompilation {
     let compilation: CompiledSpecification
     let machineSurface: MachineSurfacePlan
     let enumInfos: [ParsedEnumInfo]
-    let hasNestedActor: Bool
 
     var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
 }
@@ -74,8 +73,7 @@ enum TLASpecVerifier {
             typeName: typeName,
             compilation: compilation,
             machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
-            enumInfos: enumInfos,
-            hasNestedActor: hasNestedActor(in: memberList)
+            enumInfos: enumInfos
         )
     }
 
@@ -435,39 +433,6 @@ private func hasTLAModelAttribute(_ attributes: AttributeListSyntax) -> Bool {
     attributes.contains { element in
         guard let attribute = element.as(AttributeSyntax.self) else { return false }
         return attribute.hasTerminalName("TLAModel")
-    }
-}
-
-private func hasNestedActor(in declaration: some DeclGroupSyntax) -> Bool {
-    let members: MemberBlockItemListSyntax
-    if let value = declaration.as(StructDeclSyntax.self) {
-        members = value.memberBlock.members
-    } else if let value = declaration.as(ClassDeclSyntax.self) {
-        members = value.memberBlock.members
-    } else if let value = declaration.as(ActorDeclSyntax.self) {
-        members = value.memberBlock.members
-    } else {
-        return false
-    }
-    return hasNestedActor(in: members)
-}
-
-private func hasNestedActor(in members: MemberBlockItemListSyntax) -> Bool {
-    members.contains { member in
-        let attributes: AttributeListSyntax?
-        if let value = member.decl.as(StructDeclSyntax.self) {
-            attributes = value.attributes
-        } else if let value = member.decl.as(ClassDeclSyntax.self) {
-            attributes = value.attributes
-        } else if let value = member.decl.as(ActorDeclSyntax.self) {
-            attributes = value.attributes
-        } else {
-            attributes = nil
-        }
-        return attributes?.contains { element in
-            guard let attribute = element.as(AttributeSyntax.self) else { return false }
-            return attribute.hasTerminalName("TLAActor")
-        } == true
     }
 }
 
