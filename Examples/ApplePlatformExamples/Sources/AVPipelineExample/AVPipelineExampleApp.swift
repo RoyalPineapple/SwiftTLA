@@ -297,9 +297,14 @@ struct CameraWorkflow {
         static let finiteValues: [Self] = [.recordEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum RecordingFinishedProcess: String, FiniteTLAValueDomain { case recordingFinishedEvent
-        static var defaultValue: Self { .recordingFinishedEvent }
-        static let finiteValues: [Self] = [.recordingFinishedEvent]
+    private enum RecordingSucceededProcess: String, FiniteTLAValueDomain { case recordingSucceededEvent
+        static var defaultValue: Self { .recordingSucceededEvent }
+        static let finiteValues: [Self] = [.recordingSucceededEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum RecordingFailedProcess: String, FiniteTLAValueDomain { case recordingFailedEvent
+        static var defaultValue: Self { .recordingFailedEvent }
+        static let finiteValues: [Self] = [.recordingFailedEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent
@@ -312,7 +317,7 @@ struct CameraWorkflow {
         static let finiteValues: [Self] = [.liveEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, CaseIterable { case ready, record, recordingFinished, play, live }
+    private enum Step: String, CaseIterable { case ready, record, recordingSucceeded, recordingFailed, play, live }
 
     static var spec: TLASpec {
         #spec("CameraWorkflow") {
@@ -324,8 +329,11 @@ struct CameraWorkflow {
                 Each(RecordProcess.all) { _ in
                     Do(Step.record) { When(phase == Phase.live); Assign(phase, to: Phase.recording); Goto(Step.record) }
                 }
-                Each(RecordingFinishedProcess.all) { _ in
-                    Do(Step.recordingFinished) { When(phase == Phase.recording); Assign(phase, to: Phase.live); Goto(Step.recordingFinished) }
+                Each(RecordingSucceededProcess.all) { _ in
+                    Do(Step.recordingSucceeded) { When(phase == Phase.recording); Assign(phase, to: Phase.live); Goto(Step.recordingSucceeded) }
+                }
+                Each(RecordingFailedProcess.all) { _ in
+                    Do(Step.recordingFailed) { When(phase == Phase.recording); Assign(phase, to: Phase.live); Goto(Step.recordingFailed) }
                 }
                 Each(PlayProcess.all) { _ in
                     Do(Step.play) { When(phase == Phase.live); Assign(phase, to: Phase.playing); Goto(Step.play) }
@@ -450,11 +458,12 @@ final class CameraController {
 
     fileprivate func recordingDidFinish(url: URL, error: Error?) {
         isStopping = false
-        guard send(.recordingFinished) else { return }
         if let error {
+            guard send(.recordingFailed) else { return }
             diagnostic = "Recording failed: \(error)"
             return
         }
+        guard send(.recordingSucceeded) else { return }
         recordedURL = url
         roll.append(.video(url))
     }
