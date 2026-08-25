@@ -51,7 +51,7 @@ struct BoundedCounter {
 
 Each generated model exposes these value types:
 
-- `State` contains the declared variables with their Swift types.
+- `State` is an immutable value with the declared variables and their Swift types.
 - `Action` contains declared actions and their typed parameters.
 - `Transition` contains the action and the state before and after it.
 

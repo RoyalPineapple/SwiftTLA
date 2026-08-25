@@ -296,7 +296,7 @@ extension MacroExpander {
                 for v in variables {
                     VariableDeclSyntax(
                         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                        bindingSpecifier: .keyword(.var),
+                        bindingSpecifier: .keyword(.let),
                         bindings: [PatternBindingSyntax(
                             pattern: IdentifierPatternSyntax(identifier: .identifier(v.formalName)),
                             typeAnnotation: TypeAnnotationSyntax(
