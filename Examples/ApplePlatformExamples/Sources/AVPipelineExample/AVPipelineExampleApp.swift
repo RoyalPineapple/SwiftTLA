@@ -131,7 +131,7 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(controller.phase != 1 && controller.phase != 2)
+                .disabled(controller.isStopping || (controller.phase != 1 && controller.phase != 2))
             }
         }
         .padding(.vertical, 10)
@@ -289,9 +289,9 @@ struct CameraWorkflow {
         static let finiteValues: [Self] = [.recordEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum StopProcess: String, FiniteTLAValueDomain { case stopEvent
-        static var defaultValue: Self { .stopEvent }
-        static let finiteValues: [Self] = [.stopEvent]
+    private enum RecordingFinishedProcess: String, FiniteTLAValueDomain { case recordingFinishedEvent
+        static var defaultValue: Self { .recordingFinishedEvent }
+        static let finiteValues: [Self] = [.recordingFinishedEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent
@@ -304,7 +304,7 @@ struct CameraWorkflow {
         static let finiteValues: [Self] = [.liveEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, CaseIterable { case ready, record, stop, play, live }
+    private enum Step: String, CaseIterable { case ready, record, recordingFinished, play, live }
 
     static var spec: TLASpec {
         #spec("CameraWorkflow") {
@@ -316,8 +316,8 @@ struct CameraWorkflow {
                 Each(RecordProcess.all) { _ in
                     Do(Step.record) { When(phase == 1); Assign(phase, to: 2); Goto(Step.record) }
                 }
-                Each(StopProcess.all) { _ in
-                    Do(Step.stop) { When(phase == 2); Assign(phase, to: 1); Goto(Step.stop) }
+                Each(RecordingFinishedProcess.all) { _ in
+                    Do(Step.recordingFinished) { When(phase == 2); Assign(phase, to: 1); Goto(Step.recordingFinished) }
                 }
                 Each(PlayProcess.all) { _ in
                     Do(Step.play) { When(phase == 1); Assign(phase, to: 3); Goto(Step.play) }
@@ -342,6 +342,7 @@ final class CameraController {
     var selectedPhoto: Data?
     var recordedURL: URL?
     var currentPlayer: AVPlayer?
+    var isStopping = false
     private var disk: DiskStore?
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
@@ -354,6 +355,7 @@ final class CameraController {
             machine = try CameraWorkflow.makeMachine()
             capture = try Media.Capture()
             disk = try DiskStore(name: "camera")
+            recordDelegate.owner = self
         } catch {
             diagnostic = String(describing: error)
         }
@@ -394,13 +396,13 @@ final class CameraController {
 
     func toggleRecording() async {
         if phase == 2 {
+            guard isStopping == false else { return }
             guard let movieOutput else {
                 diagnostic = "The camera output is not ready."
                 return
             }
-            guard send(.stop) else { return }
+            isStopping = true
             movieOutput.stopRecording()
-            if let url = recordedURL { roll.append(.video(url)) }
         } else if phase == 1 {
             guard let movieOutput else {
                 diagnostic = "The camera output is not ready."
@@ -435,6 +437,17 @@ final class CameraController {
             }
         }
         roll.removeAll { $0.id == item.id }
+    }
+
+    fileprivate func recordingDidFinish(url: URL, error: Error?) {
+        isStopping = false
+        guard send(.recordingFinished) else { return }
+        if let error {
+            diagnostic = "Recording failed: \(error)"
+            return
+        }
+        recordedURL = url
+        roll.append(.video(url))
     }
 
     func isSelected(_ item: RollItem) -> Bool {
@@ -473,9 +486,11 @@ final class CameraController {
 }
 
 private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
+    weak var owner: CameraController?
+
     func fileOutput(_: AVCaptureFileOutput, didFinishRecordingTo url: URL,
                     from _: [AVCaptureConnection], error: Error?) {
-        if let error { print("Record error: \(error)") }
-        else { print("Recorded: \(url.path)") }
+        guard let owner else { return }
+        Task { @MainActor in owner.recordingDidFinish(url: url, error: error) }
     }
 }
