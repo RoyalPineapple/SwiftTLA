@@ -613,7 +613,7 @@ public extension TLASpec {
         let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
         let compiledRefinements = try compiledRefinements(bindings: bindings, closure: closure, layout: layout)
         let identity = compilationIdentity
-        let machineSurfacePlan = try MachineSurfacePlan(identity: identity, spec: self, layout: layout)
+        let machineSurfacePlan = try MachineSurfacePlan(layout: layout)
         let directModuleSections = try directModuleSectionPlan(
             layout: layout,
             bindings: bindings,
@@ -1497,7 +1497,7 @@ private struct CanonicalSpecificationEncoder {
                 node("action-binding", [
                     $0.name,
                     canonicalList($0.values.map(canonicalValue)),
-                    canonicalOptional(action.generatedBindingSwiftTypes[$0.name])
+                    canonicalOptional($0.generatedSwiftType)
                 ])
             }),
             canonicalOptional(action.generatedSymmetricCollectionName)

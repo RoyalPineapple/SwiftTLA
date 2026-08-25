@@ -1360,7 +1360,7 @@ struct AlgorithmBuilderTests {
 
         let compilation = try compiledSourceSpecification(algorithm).compile()
         let action = try #require(compilation.spec.actions.first { $0.name == "mark" })
-        #expect(action.generatedBindingSwiftTypes == ["process": "Node"])
+        #expect(action.bindings.map(\.generatedSwiftType) == ["Node"])
     }
 }
 

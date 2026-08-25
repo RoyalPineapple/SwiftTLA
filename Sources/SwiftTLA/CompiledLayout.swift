@@ -59,12 +59,25 @@ struct CompiledDeclaration: Hashable, Sendable {
 struct CompiledVariableLayout: Hashable, Sendable {
     let id: VariableID
     let declaration: CompiledDeclaration
+    let initial: TLAValue
+    let generatedSwiftType: String?
+    let symmetricCollection: CompiledSymmetricCollectionLayout?
+}
+
+struct CompiledSymmetricCollectionLayout: Hashable, Sendable {
+    let verificationScope: Int
+    let initial: TLAValue
+    let elementType: String?
+    let valueType: String?
 }
 
 struct CompiledActionLayout: Hashable, Sendable {
     let id: ActionID
     let declaration: CompiledDeclaration
     let renderedName: String
+    let bindings: [ActionBinding]
+    let symmetricCollection: VariableID?
+    let unresolvedSymmetricCollectionName: String?
 }
 
 struct CompiledPropertyLayout: Hashable, Sendable {
@@ -172,14 +185,25 @@ struct CompiledLayout: Hashable, Sendable {
 
     private init(spec: TLASpec, modules: [TLASpec]) {
         variables = spec.variables.enumerated().map { ordinal, variable in
-            CompiledVariableLayout(
+            let collection = spec.symmetricCollections.first { $0.name == variable.name }
+            return CompiledVariableLayout(
                 id: VariableID(ordinal: ordinal),
                 declaration: .init(
                     kind: .variable,
                     name: variable.name,
                     sourceOffset: nil,
                     origin: variable.origin
-                )
+                ),
+                initial: variable.initial,
+                generatedSwiftType: variable.generatedSwiftType,
+                symmetricCollection: collection.map {
+                    .init(
+                        verificationScope: $0.verificationScope,
+                        initial: $0.initial,
+                        elementType: $0.generatedElementType,
+                        valueType: $0.generatedValueType
+                    )
+                }
             )
         }
         let controlLocations = Self.controlLocations(
@@ -187,7 +211,11 @@ struct CompiledLayout: Hashable, Sendable {
             actions: spec.actions,
             hasProgramCounter: spec.variables.contains { $0.name == CompilerControlSymbol.programCounter.rawValue }
         )
-        actions = Self.actions(spec.actions, controlLocations: controlLocations)
+        actions = Self.actions(
+            spec.actions,
+            variables: variables,
+            controlLocations: controlLocations
+        )
         stateProperties = spec.invariants.enumerated().map { ordinal, invariant in
             .init(
                 id: .init(ordinal: ordinal),
@@ -566,6 +594,7 @@ struct CompiledLayout: Hashable, Sendable {
 
     private static func actions(
         _ declarations: [NamedAction],
+        variables: [CompiledVariableLayout],
         controlLocations: [CompiledControlLocation]
     ) -> [CompiledActionLayout] {
         let actionNames = Set(declarations.map(\.name))
@@ -599,10 +628,18 @@ struct CompiledLayout: Hashable, Sendable {
                 renderedName = "\(stem)__\(suffix)"
                 suffix += 1
             }
+            let symmetricCollection = action.generatedSymmetricCollectionName.flatMap { name in
+                variables.first { $0.declaration.name == name && $0.symmetricCollection != nil }?.id
+            }
             return .init(
                 id: .init(ordinal: ordinal),
                 declaration: .init(kind: .action, name: action.name, sourceOffset: nil),
-                renderedName: renderedName
+                renderedName: renderedName,
+                bindings: action.bindings,
+                symmetricCollection: symmetricCollection,
+                unresolvedSymmetricCollectionName: symmetricCollection == nil
+                    ? action.generatedSymmetricCollectionName
+                    : nil
             )
         }
     }

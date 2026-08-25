@@ -5,17 +5,13 @@ extension MacroExpander {
     static func generateGeneratedMachineStorageMembers(
         hasActions: Bool,
         actions: [MachineSurfacePlan.Action],
-        variables: [MachineSurfacePlan.Variable],
         symmetricCollections: [MachineSurfacePlan.SymmetricCollection] = []
     ) -> [DeclSyntax] {
-        let liveProjection = symmetricCollections.compactMap { collection in
-            guard let ordinal = variables.first(where: { $0.formalName == collection.formalName })?.storageOrdinal else {
-                return nil
-            }
+        let liveProjection = symmetricCollections.map { collection in
             return """
             state = try _storage.replacing(
                 value: \(collection.formalName).tlaValue,
-                at: \(ordinal),
+                at: \(collection.storageOrdinal),
                 in: state
             )
             """

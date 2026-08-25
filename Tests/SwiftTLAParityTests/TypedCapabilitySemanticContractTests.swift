@@ -23,7 +23,6 @@ struct TypedCapabilitySemanticContractTests {
 
         let tla = try compilation.renderedTLAModuleBundle()
         let plusCal = try compilation.renderedPlusCalBundle()
-        let machineSurface = compilation.machineSurfacePlan
         let exploration = try ModelChecker(
             compilation: compilation,
             configuration: .init(maximumStateLimit: 10)
@@ -60,7 +59,6 @@ struct TypedCapabilitySemanticContractTests {
         } else {
             Issue.record("PlusCal bundle must retain compiled provenance.")
         }
-        #expect(machineSurface.compilationIdentity == compilation.identity)
         #expect(exploration.compilationIdentity == compilation.identity)
         #expect(exploration.graph.states.count == 2)
         #expect(canonicalRun.graph.variableNames.contains("counter"))

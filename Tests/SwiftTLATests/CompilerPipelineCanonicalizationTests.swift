@@ -923,9 +923,12 @@ struct CompilerPipelineCanonicalizationTests {
                     .init(
                         name: "advance",
                         body: .guard_(.value(.bool(true))),
-                        bindings: [.init(name: "worker", values: [.int(0)])],
+                        bindings: [.init(
+                            name: "worker",
+                            values: [.int(0)],
+                            generatedSwiftType: bindingType
+                        )],
                         controlOwner: nil,
-                        generatedBindingSwiftTypes: ["worker": bindingType],
                         generatedSymmetricCollectionName: collectionAction
                     )
                 ],

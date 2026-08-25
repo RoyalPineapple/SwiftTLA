@@ -63,7 +63,6 @@ extension TLASpec {
           body: a.body,
           bindings: a.bindings,
           controlOwner: nil,
-          generatedBindingSwiftTypes: a.generatedBindingSwiftTypes,
           generatedSymmetricCollectionName: a.generatedSymmetricCollectionName
         ))
       } else if let algorithm = comp as? Algorithm {
@@ -158,7 +157,6 @@ extension TLASpec {
         body: ActionNormalization.complete(action.body, variables: variables),
         bindings: action.bindings,
         controlOwner: action.controlOwner,
-        generatedBindingSwiftTypes: action.generatedBindingSwiftTypes,
         generatedSymmetricCollectionName: action.generatedSymmetricCollectionName
       )
     }

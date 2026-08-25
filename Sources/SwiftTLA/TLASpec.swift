@@ -62,9 +62,16 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
 public struct ActionBinding: Sendable, Hashable, Equatable {
   public let name: String
   public let values: [TLAValue]
+  let generatedSwiftType: String?
+
   public init(name: String, values: [TLAValue]) {
+    self.init(name: name, values: values, generatedSwiftType: nil)
+  }
+
+  init(name: String, values: [TLAValue], generatedSwiftType: String?) {
     self.name = name
     self.values = values
+    self.generatedSwiftType = generatedSwiftType
   }
 }
 public protocol ActionParameterDescriptor: Sendable {
@@ -79,7 +86,11 @@ public struct ActionParameter<Domain: TLAValueType & Sendable>: Sendable {
     self.values = values
   }
   public var actionBinding: ActionBinding {
-    ActionBinding(name: name, values: values.map(\.tlaValue))
+    ActionBinding(
+      name: name,
+      values: values.map(\.tlaValue),
+      generatedSwiftType: generatedSwiftType
+    )
   }
   public var generatedSwiftType: String { swiftSurfaceTypeName(for: Domain.self) }
 }
@@ -106,7 +117,6 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let bindings: [ActionBinding]
   let sourceIssue: SourceModelIssue?
   let controlOwner: ControlOwner?
-  let generatedBindingSwiftTypes: [String: String]
   let generatedSymmetricCollectionName: String?
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
@@ -118,7 +128,6 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     body: ActionExpr,
     bindings: [ActionBinding] = [],
     controlOwner: ControlOwner?,
-    generatedBindingSwiftTypes: [String: String] = [:],
     generatedSymmetricCollectionName: String? = nil
   ) {
     self.name = name
@@ -126,7 +135,6 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     self.bindings = bindings
     self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
     self.controlOwner = controlOwner
-    self.generatedBindingSwiftTypes = generatedBindingSwiftTypes
     self.generatedSymmetricCollectionName = generatedSymmetricCollectionName
   }
 
@@ -416,19 +424,16 @@ public struct ActionDecl: SpecComponent {
   public let name: String
   public let body: ActionExpr
   public let bindings: [ActionBinding]
-  let generatedBindingSwiftTypes: [String: String]
   let generatedSymmetricCollectionName: String?
   init(
     _ name: String,
     _ body: ActionExpr,
     bindings: [ActionBinding] = [],
-    generatedBindingSwiftTypes: [String: String] = [:],
     generatedSymmetricCollectionName: String? = nil
   ) {
     self.name = name
     self.body = body
     self.bindings = bindings
-    self.generatedBindingSwiftTypes = generatedBindingSwiftTypes
     self.generatedSymmetricCollectionName = generatedSymmetricCollectionName
   }
 }
@@ -828,10 +833,7 @@ public func Action(
   ActionDecl(
     name,
     body(),
-    bindings: parameters.map(\.actionBinding),
-    generatedBindingSwiftTypes: Dictionary(
-      uniqueKeysWithValues: parameters.map { ($0.actionBinding.name, $0.generatedSwiftType) }
-    )
+    bindings: parameters.map(\.actionBinding)
   )
 }
 public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {

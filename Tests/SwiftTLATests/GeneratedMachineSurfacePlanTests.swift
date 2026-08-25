@@ -22,4 +22,18 @@ struct GeneratedMachineSurfacePlanTests {
             }.compile()
         }
     }
+
+    @Test("duplicate typed action parameters produce a compilation diagnostic")
+    func rejectsDuplicateTypedActionParameters() {
+        let worker = ActionParameter("worker", values: [1, 2])
+        let specification = TLASpec("DuplicateTypedActionParameter") {
+            Action("advance", parameters: [worker, worker]) {
+                StateExpr.bool(true)
+            }
+        }
+
+        #expect(throws: CompilationDiagnostic.self) {
+            try specification.compile()
+        }
+    }
 }
