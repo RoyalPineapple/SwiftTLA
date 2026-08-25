@@ -439,15 +439,20 @@ final class CameraController {
         }
     }
     func ready() async {
-        guard send(.ready),
-              let capture,
-              let device = AVCaptureDevice.default(for: .video) else { return }
+        guard let capture,
+              let device = AVCaptureDevice.default(for: .video) else {
+            diagnostic = "No video capture device is available."
+            return
+        }
         do {
             try await capture.configure(device: device)
             let output = AVCaptureMovieFileOutput()
             capture.session.addOutput(output)
             movieOutput = output
             try await capture.start()
+            if send(.ready) == false {
+                try await capture.stop()
+            }
         } catch {
             diagnostic = "Camera setup failed: \(error)"
         }
