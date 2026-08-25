@@ -61,7 +61,10 @@ private struct TwoBucketsView: View {
                     .frame(maxWidth: .infinity, minHeight: 430)
             }
         }
-        .task { reset() }
+        .task {
+            guard machine == nil else { return }
+            reset()
+        }
     }
 
     private func reset() {
@@ -128,7 +131,10 @@ private struct DuckDuckLeaderView: View {
                 togglePlayback: togglePlayback
             )
         }
-        .task { reset() }
+        .task {
+            guard machine == nil else { return }
+            reset()
+        }
     }
 
     private func shuffleSchedule() {
@@ -281,7 +287,10 @@ private struct ElevatorBankView: View {
                     .frame(maxWidth: .infinity, minHeight: 430)
             }
         }
-        .task { reset() }
+        .task {
+            guard machine == nil else { return }
+            reset()
+        }
     }
 
     private func reset() {
