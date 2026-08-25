@@ -4,7 +4,7 @@ import Testing
 struct TwoBucketsDemoTests {
     @Test("two buckets exposes all generated puzzle moves")
     func exposesPuzzleMoves() throws {
-        var machine = TwoBuckets()
+        var machine = try TwoBuckets.makeMachine()
 
         #expect(try machine.isEnabled(.fillThree))
         #expect(try machine.isEnabled(.fillFive))

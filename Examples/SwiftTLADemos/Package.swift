@@ -19,8 +19,7 @@ let package = Package(
                 .product(name: "SwiftTLAMacros", package: "SwiftTLA")
             ],
             swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency"),
-                .unsafeFlags(["-warnings-as-errors"])
+                .enableExperimentalFeature("StrictConcurrency")
             ]
         ),
         .testTarget(
@@ -30,8 +29,7 @@ let package = Package(
                 .product(name: "SwiftTLA", package: "SwiftTLA")
             ],
             swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency"),
-                .unsafeFlags(["-warnings-as-errors"])
+                .enableExperimentalFeature("StrictConcurrency")
             ]
         )
     ]

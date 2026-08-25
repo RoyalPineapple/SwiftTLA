@@ -39,33 +39,53 @@ private struct DemoHomeView: View {
 }
 
 private struct TwoBucketsView: View {
-    @State private var machine = TwoBuckets()
+    @State private var machine: TwoBuckets?
     @State private var error: String?
 
     var body: some View {
         DemoScreen(title: "Two Buckets", subtitle: "Measure exactly 4 gallons.") {
-            TwoBucketsScene(state: machine.state, error: error)
-            TwoBucketsControls(
-                fillThree: { perform(.fillThree) },
-                emptyThree: { perform(.emptyThree) },
-                pourThreeIntoFive: { perform(.pourThreeIntoFive) },
-                pourFiveIntoThree: { perform(.pourFiveIntoThree) },
-                fillFive: { perform(.fillFive) },
-                emptyFive: { perform(.emptyFive) },
-                reset: { machine = TwoBuckets() }
-            )
+            if let machine {
+                TwoBucketsScene(state: machine.state, error: error)
+                TwoBucketsControls(
+                    fillThree: { perform(.fillThree) },
+                    emptyThree: { perform(.emptyThree) },
+                    pourThreeIntoFive: { perform(.pourThreeIntoFive) },
+                    pourFiveIntoThree: { perform(.pourFiveIntoThree) },
+                    fillFive: { perform(.fillFive) },
+                    emptyFive: { perform(.emptyFive) },
+                    reset: reset
+                )
+            } else {
+                StateCard(title: "Machine unavailable", detail: "The generated machine could not start.", error: error)
+                    .frame(maxWidth: .infinity, minHeight: 430)
+            }
+        }
+        .task { reset() }
+    }
+
+    private func reset() {
+        do {
+            machine = try TwoBuckets.makeMachine()
+            error = nil
+        } catch let failure {
+            machine = nil
+            error = failure.localizedDescription
         }
     }
 
     private func perform(_ action: TwoBuckets.Action) {
-        do { _ = try machine.send(action); error = nil }
+        guard var machine else { return }
+        do {
+            _ = try machine.send(action)
+            self.machine = machine
+            error = nil
+        }
         catch let failure { error = failure.localizedDescription }
     }
 }
 
 private struct DuckDuckLeaderView: View {
-    @State private var actor: ChangRoberts.Actor?
-    @State private var state = ChangRoberts().state
+    @State private var machine: ChangRoberts?
     @State private var error: String?
     @State private var delivery: DuckDelivery?
     @State private var isDelivering = false
@@ -81,14 +101,19 @@ private struct DuckDuckLeaderView: View {
             title: "Duck, Duck, Leader",
             subtitle: "A message carrying the largest identifier completes the ring."
         ) {
-            DuckDuckLeaderScene(
-                nodes: ring,
-                state: state,
-                delivery: delivery,
-                lastMove: lastMove,
-                messageStatus: messageStatus,
-                error: error
-            )
+            if let machine {
+                DuckDuckLeaderScene(
+                    nodes: ring,
+                    state: machine.state,
+                    delivery: delivery,
+                    lastMove: lastMove,
+                    messageStatus: messageStatus,
+                    error: error
+                )
+            } else {
+                StateCard(title: "Election unavailable", detail: "The generated machine could not start.", error: error)
+                    .frame(maxWidth: .infinity, minHeight: 430)
+            }
             DuckDuckLeaderControls(
                 isPlaying: isPlaying,
                 shuffle: shuffleSchedule,
@@ -96,7 +121,7 @@ private struct DuckDuckLeaderView: View {
                 togglePlayback: togglePlayback
             )
         }
-        .task { if actor == nil { reset() } }
+        .task { reset() }
     }
 
     private func shuffleSchedule() {
@@ -109,14 +134,14 @@ private struct DuckDuckLeaderView: View {
         isPlaying = false
         isDelivering = false
         deliveryOrder = ring
-        actor = nil
-        state = ChangRoberts().state
         delivery = nil
         lastMove = message
-        error = nil
-        Task { @MainActor in
-            do { actor = try ChangRoberts.Actor() }
-            catch let failure { error = failure.localizedDescription }
+        do {
+            machine = try ChangRoberts.makeMachine()
+            error = nil
+        } catch let failure {
+            machine = nil
+            error = failure.localizedDescription
         }
     }
 
@@ -129,12 +154,12 @@ private struct DuckDuckLeaderView: View {
         isPlaying = true
         let runID = simulationID
         Task { @MainActor in
-            while isPlaying && state.leader == 0 && runID == simulationID {
+            while isPlaying && machine?.state.leader == 0 && runID == simulationID {
                 let delivered = await deliverNext(runID: runID)
                 if !delivered { break }
             }
-            if runID == simulationID, state.leader != 0 {
-                lastMove = "ID \(state.leader) completed the ring and is the leader."
+            if runID == simulationID, let leader = machine?.state.leader, leader != 0 {
+                lastMove = "ID \(leader) completed the ring and is the leader."
             }
             if runID == simulationID { isPlaying = false }
         }
@@ -144,17 +169,18 @@ private struct DuckDuckLeaderView: View {
     private func deliverNext(runID: UUID) async -> Bool {
         guard !isDelivering,
               runID == simulationID,
-              let actor,
+              let machine,
               let node = deliveryOrder.first(where: { node in
-                  state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
+                  machine.state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
               }),
-              let message = state.messages.elements.first(where: { $0[ChangRoberts.MessageSchema.to] == node })
+              let message = machine.state.messages.elements.first(where: { $0[ChangRoberts.MessageSchema.to] == node })
         else { return false }
 
         isDelivering = true
         defer { isDelivering = false }
         do {
-            let result = try await actor.send(.deliver(process: node))
+            var nextMachine = machine
+            let result = try nextMachine.send(.deliver(process: node))
             guard runID == simulationID else { return false }
             let forwarded = result.after.messages.elements.first {
                 $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&
@@ -169,13 +195,21 @@ private struct DuckDuckLeaderView: View {
             delivery = animation
             lastMove = moveDescription(for: animation)
             error = nil
-            try? await Task.sleep(for: .milliseconds(50))
+            do {
+                try await Task.sleep(for: .milliseconds(50))
+            } catch {
+                return false
+            }
             withAnimation(.easeInOut(duration: 0.8)) {
                 delivery?.progress = 1
             }
-            try? await Task.sleep(for: .milliseconds(850))
+            do {
+                try await Task.sleep(for: .milliseconds(850))
+            } catch {
+                return false
+            }
             guard runID == simulationID else { return false }
-            state = result.after
+            self.machine = nextMachine
             delivery = nil
             return true
         } catch let failure {
@@ -196,6 +230,7 @@ private struct DuckDuckLeaderView: View {
     }
 
     private var messageStatus: String {
+        guard let state = machine?.state else { return "No formal tokens are available." }
         if state.leader != 0, !state.messages.elements.isEmpty {
             return "\(state.messages.elements.count) older tokens remain in flight; the formal election is complete."
         }
@@ -205,7 +240,7 @@ private struct DuckDuckLeaderView: View {
 }
 
 private struct ElevatorBankView: View {
-    @State private var machine = ElevatorBank()
+    @State private var machine: ElevatorBank?
     @State private var error: String?
 
     var body: some View {
@@ -213,12 +248,28 @@ private struct ElevatorBankView: View {
             title: "Elevator Bank",
             subtitle: "Two riders, two cars, and doors that make every handoff explicit."
         ) {
-            ElevatorBankScene(state: machine.state, riderSummary: riderSummary(machine.state), error: error)
-            ElevatorBankControls(
-                operateCarA: { operate(.operate(process: .carA)) },
-                operateCarB: { operate(.operate(process: .carB)) },
-                reset: { machine = ElevatorBank() }
-            )
+            if let machine {
+                ElevatorBankScene(state: machine.state, riderSummary: riderSummary(machine.state), error: error)
+                ElevatorBankControls(
+                    operateCarA: { operate(.operate(process: .carA)) },
+                    operateCarB: { operate(.operate(process: .carB)) },
+                    reset: reset
+                )
+            } else {
+                StateCard(title: "Machine unavailable", detail: "The generated machine could not start.", error: error)
+                    .frame(maxWidth: .infinity, minHeight: 430)
+            }
+        }
+        .task { reset() }
+    }
+
+    private func reset() {
+        do {
+            machine = try ElevatorBank.makeMachine()
+            error = nil
+        } catch let failure {
+            machine = nil
+            error = failure.localizedDescription
         }
     }
 
@@ -231,7 +282,12 @@ private struct ElevatorBankView: View {
     }
 
     private func operate(_ action: ElevatorBank.Action) {
-        do { _ = try machine.send(action); error = nil }
+        guard var machine else { return }
+        do {
+            _ = try machine.send(action)
+            self.machine = machine
+            error = nil
+        }
         catch let failure { error = failure.localizedDescription }
     }
 }
@@ -415,7 +471,7 @@ private struct GeneratedSurfaceSummary: View {
                 )
                 GeneratedSurfaceItem(
                     title: "Native adapters",
-                    detail: "The bucket and elevator scenes use their generated values. The ring uses Actor."
+                    detail: "Scenes hold generated values. Actors provide serialized access when needed."
                 )
                 GeneratedSurfaceItem(
                     title: "Verification suite",
