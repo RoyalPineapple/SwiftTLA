@@ -8,7 +8,8 @@ func runGeneratedMachineTesting() throws {
     let beforeFailure = machine.state
 
     assert(result.before.value == 0)
-    assert(try machine.isEnabled(.advance) == false)
+    let isEnabled = try machine.isEnabled(.advance)
+    assert(isEnabled == false)
     assert(result.after.value == 1)
 
     do {

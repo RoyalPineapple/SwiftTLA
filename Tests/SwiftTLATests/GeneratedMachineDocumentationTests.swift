@@ -18,7 +18,7 @@ struct GeneratedMachineDocumentationTests {
             #expect(guide.contains(term), "Guide is missing public contract term: \(term)")
         }
 
-        for (identifier, file) in fixtureSources {
+        for (identifier, file) in completeExampleSources {
             let fixture = try String(
                 contentsOf: root.appendingPathComponent(file),
                 encoding: .utf8
@@ -64,15 +64,12 @@ struct GeneratedMachineDocumentationTests {
             #expect(!inventory.contains(unsupportedName), "Unsupported API appears in public inventory: \(unsupportedName)")
         }
 
-        for requiredLimit in [
-            "declared finite state space",
-            "exploration limit",
-            "diagnosticOnly",
-            "candidateEvidence",
-            "does not widen either surface",
-            "No SemVer promise"
+        for currentClaim in [
+            "generated machine value is SwiftUI state",
+            "same model when an application needs to inspect, render, or explore it",
+            "one generated machine value"
         ] {
-            #expect(guide.contains(requiredLimit), "Guide is missing bounded-evidence wording: \(requiredLimit)")
+            #expect(guide.contains(currentClaim), "Guide is missing current contract wording: \(currentClaim)")
         }
     }
 
@@ -132,12 +129,11 @@ struct GeneratedMachineDocumentationTests {
 
     private let requiredHeadings = [
         "Generate a machine",
-        "Run actions",
-        "Nest a machine",
-        "Isolation and callbacks",
-        "Test an integration",
-        "Debug a machine",
+        "State, actions, and transitions",
         "SwiftUI",
+        "Advanced execution",
+        "Test a model integration",
+        "Formal verification",
         "API reference",
         "Stable contract"
     ]
@@ -151,23 +147,25 @@ struct GeneratedMachineDocumentationTests {
         "`send(_:)`"
     ]
 
-    private var fixtureSources: [String: String] {
+    private var completeExampleSources: [String: String] {
         [
             "generated-machine-bounded-model":
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/BoundedCounter.swift",
             "generated-machine-direct-action":
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/DirectAction.swift",
-            "generated-machine-actor": "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift",
+            "generated-machine-swiftui":
+                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/CounterView.swift",
+            "generated-machine-actor":
+                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift",
             "generated-machine-testing":
-                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/GeneratedMachineTests.swift",
-            "generated-machine-swiftui": "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/CounterView.swift"
+                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/GeneratedMachineTests.swift"
         ]
     }
 
     private var supportedInventory: [(String, String, String)] {
         [
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
-            ("`GeneratedMachineError`", "Sources/SwiftTLA/TLAStateProjection.swift", "public enum GeneratedMachineError"),
+            ("`GeneratedMachineError`", "Sources/SwiftTLA/GeneratedMachineError.swift", "public enum GeneratedMachineError"),
             ("Generated `Action`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum Action"),
             ("Generated `Transition`", "Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift", "public struct Transition"),
             ("Generated `Actor`", "Sources/SwiftTLAPlugin/MacroExpander+Actor.swift", "public actor Actor"),
