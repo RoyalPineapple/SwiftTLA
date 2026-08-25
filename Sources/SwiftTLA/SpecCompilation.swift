@@ -1461,9 +1461,7 @@ private struct CanonicalSpecificationEncoder {
             node("symmetric-collection", [
                 $0.name,
                 String($0.verificationScope),
-                canonicalValue($0.initial),
-                canonicalOptional($0.generatedElementType),
-                canonicalOptional($0.generatedValueType)
+                canonicalValue($0.initial)
             ])
         }
         list("symmetricCollections", symmetricCollections) { $0 }
@@ -1484,8 +1482,7 @@ private struct CanonicalSpecificationEncoder {
             canonicalOptional(variable.initialSet.map(canonicalExpression)),
             canonicalOptional(variable.initExpr.map(canonicalExpression)),
             canonicalOptional(variable.lazySet.map(canonicalExpression)),
-            collection,
-            canonicalOptional(variable.generatedSwiftType)
+            collection
         ])
     }
 
@@ -1496,8 +1493,7 @@ private struct CanonicalSpecificationEncoder {
             canonicalList(action.bindings.map {
                 node("action-binding", [
                     $0.name,
-                    canonicalList($0.values.map(canonicalValue)),
-                    canonicalOptional($0.generatedSwiftType)
+                    canonicalList($0.values.map(canonicalValue))
                 ])
             }),
             canonicalOptional(action.generatedSymmetricCollectionName)

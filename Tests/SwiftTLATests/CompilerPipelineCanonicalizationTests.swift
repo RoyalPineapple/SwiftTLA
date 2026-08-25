@@ -894,8 +894,8 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstIdentity != secondIdentity)
     }
 
-    @Test("generated machine schema changes the compilation identity")
-    func generatedMachineSchemaChangesCompilationIdentity() throws {
+    @Test("generated host types change the machine surface without changing formal identity")
+    func generatedHostTypesStayOutsideFormalIdentity() throws {
         func specification(
             variableType: String = "Count",
             bindingType: String = "Worker",
@@ -937,10 +937,16 @@ struct CompilerPipelineCanonicalizationTests {
             )
         }
 
-        let baseline = try specification().compile().identity
-        #expect(try specification(variableType: "Counter").compile().identity != baseline)
-        #expect(try specification(bindingType: "Process").compile().identity != baseline)
-        #expect(try specification(collectionAction: "devices").compile().identity != baseline)
+        let baseline = try specification().compile()
+        let variableType = try specification(variableType: "Counter").compile()
+        let bindingType = try specification(bindingType: "Process").compile()
+        let collectionAction = try specification(collectionAction: "devices").compile()
+
+        #expect(variableType.identity == baseline.identity)
+        #expect(bindingType.identity == baseline.identity)
+        #expect(variableType.machineSurfacePlan != baseline.machineSurfacePlan)
+        #expect(bindingType.machineSurfacePlan != baseline.machineSurfacePlan)
+        #expect(collectionAction.identity != baseline.identity)
     }
 
     @Test("compiled descriptions preserve declaration order without exposing runtime slots")

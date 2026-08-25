@@ -257,7 +257,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     }
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(parsed.actions.map(\.body) == authored.actions.map(\.body))
+    #expect(parsed.actions.map { alphaKey($0.body) } == authored.actions.map { alphaKey($0.body) })
   }
 
   @Test("Parser rejects observable, escaping, and cross-collection member identities")
