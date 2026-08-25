@@ -7,15 +7,15 @@ Each example has three layers:
 
 1. A SwiftTLA specification defines the state, allowed transitions, and
    formal properties.
-2. Generated model, actor, or observable code owns the executable state and
+2. A generated machine, `Live`, or nested actor owns the executable state and
    applies those transitions.
 3. A thin application adapter receives platform events, invokes generated
    actions, and renders generated state.
 
 For example, a CoreBluetooth delegate maps discovery and connection callbacks
 to generated actions. It does not keep a parallel connection-phase variable.
-A SwiftUI view reads an observable's generated state. It does not decide which
-formal transition is legal.
+A SwiftUI view stores a generated machine in `@State`. It does not decide
+which formal transition is legal.
 
 Keep platform values at the edge. A record in the model can hold a formal
 device identifier or other formal state; the adapter maps that identifier to
