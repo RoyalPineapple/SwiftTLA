@@ -105,10 +105,12 @@ struct CameraApp: App {
 
     var controls: some View {
         HStack(spacing: 30) {
-            if phase == .playing || effects.selectedPhoto != nil {
+            if isEnabled(.live) || effects.selectedPhoto != nil {
                 Button(action: {
                     effects.selectedPhoto = nil
-                    Task { await live() }
+                    if isEnabled(.live) {
+                        Task { await live() }
+                    }
                 }) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 28))
@@ -196,12 +198,12 @@ struct CameraApp: App {
     }
 
     private func playRecording(url: URL) async {
-        guard phase == .live, send(.play) else { return }
+        guard isEnabled(.play), send(.play) else { return }
         await effects.playRecording(url: url)
     }
 
     private func live() async {
-        guard send(.live) else { return }
+        guard isEnabled(.live), send(.live) else { return }
         effects.stopPlayback()
     }
 }
