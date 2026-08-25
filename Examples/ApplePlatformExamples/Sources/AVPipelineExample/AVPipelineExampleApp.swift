@@ -172,10 +172,12 @@ struct ThumbnailView: View {
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         gen.maximumSize = CGSize(width: size.width * 2, height: size.height * 2)
-        if let cg = try? gen.copyCGImage(at: .zero, actualTime: nil) {
+        do {
+            let cg = try gen.copyCGImage(at: .zero, actualTime: nil)
             return NSImage(cgImage: cg, size: size)
+        } catch {
+            return nil
         }
-        return nil
     }
 }
 
@@ -417,8 +419,15 @@ final class CameraController {
     }
 
     func delete(_ item: RollItem) {
+        if case .video(let url) = item {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                diagnostic = "Recording could not be deleted: \(error)"
+                return
+            }
+        }
         roll.removeAll { $0.id == item.id }
-        if case .video(let url) = item { try? FileManager.default.removeItem(at: url) }
     }
 
     func isSelected(_ item: RollItem) -> Bool {
