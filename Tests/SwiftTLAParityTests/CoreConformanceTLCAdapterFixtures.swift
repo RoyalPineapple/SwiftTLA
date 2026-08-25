@@ -5,6 +5,30 @@ import Testing
 import SwiftTLA
 import UpstreamParity
 
+func testReferencePin() throws -> TLCReferencePin {
+  let root = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+  let data = try Data(contentsOf: root.appendingPathComponent("Verification/CoreConformance/toolchain.json"))
+  let toolchain = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+  let tlc = try #require(toolchain["tlc"] as? [String: Any])
+  let jar = try #require(tlc["jar"] as? [String: Any])
+  let java = try #require(toolchain["java"] as? [String: Any])
+  let archives = try #require(java["archives"] as? [String: Any])
+  let arm64 = try #require(archives["arm64"] as? [String: Any])
+  let bridge = try #require(toolchain["bridge"] as? [String: Any])
+  return try TLCReferencePin(
+    tag: try #require(tlc["tag"] as? String),
+    commit: try #require(tlc["commit"] as? String),
+    jarSHA256: try #require(jar["sha256"] as? String),
+    javaDistribution: try #require(java["distribution"] as? String),
+    javaVersion: try #require(java["version"] as? String),
+    javaArchiveSHA256: try #require(arm64["sha256"] as? String),
+    bridgeClass: try #require(bridge["class"] as? String),
+    bridgeSourceSHA256: try #require(bridge["sourceSha256"] as? String),
+    bridgeBinarySHA256: try #require(bridge["binarySha256"] as? String)
+  )
+}
+
 func completeGraphStream(_ expectedCase: CoreConformanceCase) throws -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let state0: [String: Any] = ["fingerprint": "1", "level": 1, "bindings": [binding(0, "x", "0")]]
@@ -255,7 +279,7 @@ func frozenCase(_ url: URL) throws -> CoreConformanceCase {
     deadlock: try #require(object["deadlock"] as? Bool),
     operatingSystem: try #require(object["operatingSystem"] as? String),
     architecture: try #require(object["architecture"] as? String),
-    environment: try #require(object["environment"] as? [String: String]), pin: .fixture,
+    environment: try #require(object["environment"] as? [String: String]), pin: try testReferencePin(),
     invocationMappings: invocationMappings, valueNormalizations: valueNormalizations)
 }
 func mutatedCompleteGraphStream(
@@ -295,7 +319,7 @@ func caseForFiles(
     arguments: arguments, argumentsSHA256: try CoreConformanceCase.argumentsDigest(arguments),
     workers: 1,
     fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos", architecture: "arm64",
-    environment: environment, pin: .fixture
+    environment: environment, pin: try testReferencePin()
   )
 }
 func helperProcessDirectory() throws -> URL {
@@ -357,8 +381,8 @@ func requestWithReferenceArtifacts(
     replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
     workingDirectory: URL(fileURLWithPath: "/tmp"),
     arguments: ["-workers", "1", "-fp", "1"],
-    expectedCase: try fixtureCase(.fixture, arguments: ["-workers", "1", "-fp", "1"]),
-    runID: UUID(), referencePin: .fixture, referenceArtifacts: artifacts
+    expectedCase: try fixtureCase(try testReferencePin(), arguments: ["-workers", "1", "-fp", "1"]),
+    runID: UUID(), referencePin: try testReferencePin(), referenceArtifacts: artifacts
   )
 }
 func retainedBridgeCase() throws -> CoreConformanceCase {
@@ -373,7 +397,7 @@ func retainedBridgeCase() throws -> CoreConformanceCase {
     argumentsSHA256: try CoreConformanceCase.argumentsDigest(arguments), workers: 1,
     fingerprintPolynomial: 1,
     deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:],
-    pin: .fixture
+    pin: try testReferencePin()
   )
 }
 func header(_ expectedCase: CoreConformanceCase) throws -> String {

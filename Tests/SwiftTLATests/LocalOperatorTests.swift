@@ -56,16 +56,18 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
 private struct GeneratedTopLevelTypedFormalDefinitionModel {
   static var spec: TLASpec {
     #spec("GeneratedTopLevelTypedFormalDefinitionModel") { scope in
-      let bound = scope.sharedVar("bound", initial: 2)
-      let counter = scope.sharedVar("counter", initial: 0)
-      FormalDefinition("SafeAt", taking: Int.self) { ballot in
-        LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
-          If(current == 0, then: true, else: recursion(current.expr - 1))
-        }, in: { recursion in recursion(ballot) })
-      }
-      Action("advance") {
-        counter.becomes(counter.expr + 1)
-      }
+      Algorithm("GeneratedTopLevelTypedFormalDefinitionModel", scoped: { algorithm in
+        let bound = algorithm.sharedVar("bound", initial: 2)
+        let counter = algorithm.sharedVar("counter", initial: 0)
+        FormalDefinition("SafeAt", taking: Int.self) { ballot in
+          LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
+            If(current == 0, then: true, else: recursion(current.expr - 1))
+          }, in: { recursion in recursion(ballot) })
+        }
+        Do(TestControlLabel.advance) {
+          Assign(counter, to: counter.expr + 1)
+        }
+      })
     }
   }
 }

@@ -2,7 +2,6 @@ import Testing
 @testable import SwiftTLA
 import SwiftTLAMacros
 
-@TLAModel
 private struct TypedSetAlgorithm {
   static var spec: TLASpec {
     #spec("TypedSetAlgorithm") { scope in
@@ -20,7 +19,6 @@ private struct TypedSetAlgorithm {
   }
 }
 
-@TLAModel
 private struct TypedTupleAlgorithm {
   static var spec: TLASpec {
     #spec("TypedTupleAlgorithm") { scope in
@@ -35,7 +33,6 @@ private struct TypedTupleAlgorithm {
   }
 }
 
-@TLAModel
 private struct TypedFiniteInitialAlgorithm {
   static var spec: TLASpec {
     #spec("TypedFiniteInitialAlgorithm") { scope in

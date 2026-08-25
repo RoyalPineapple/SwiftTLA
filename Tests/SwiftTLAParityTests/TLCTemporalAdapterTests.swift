@@ -305,7 +305,7 @@ struct TLCTemporalAdapterTests {
         id: "temporal", moduleSHA256: SHA256.hex(Data(contentsOf: module)),
         cfgSHA256: SHA256.hex(Data(contentsOf: configuration)), arguments: [],
         argumentsSHA256: try CoreConformanceCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
-        deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: .fixture)
+        deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: try testReferencePin())
       let pin = coreCase.pin
       declaredCase = try TemporalSymmetryCase(
         id: coreCase.id, kind: .temporal, swiftSpec: "TemporalFixture",

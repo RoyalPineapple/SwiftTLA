@@ -9,6 +9,11 @@ private func parseExpression(_ source: String) throws -> ExprSyntax {
     try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
 }
 
+private enum CollectionStep: String, CaseIterable {
+    case keepEvenSquares
+    case findEven
+}
+
 private enum InvalidLiteralDomain: String, CaseIterable, FiniteTLAValueDomain {
     case first
     case second
@@ -81,14 +86,16 @@ private enum InvalidDefaultRecordSchema: TLARecordSchema {
 private struct TypedCollectionGeneratedModel {
     static var spec: TLASpec {
         #spec("TypedCollectionGeneratedModel") { scope in
-            let values = scope.sharedVar("values", initial: IntRange(1, through: 4))
-            Action("keepEvenSquares") {
-                values.becomes(
-                    values.expr
-                        .filtering { value in value.expr % 2 == 0 }
-                        .mapping { value in value.expr * value.expr }
-                )
-            }
+            Algorithm("TypedCollectionGeneratedModel", scoped: { algorithm in
+                let values = algorithm.sharedVar("values", initial: IntRange(1, through: 4))
+                Do(CollectionStep.keepEvenSquares) {
+                    Assign(values, to:
+                        values.expr
+                            .filtering { value in value.expr % 2 == 0 }
+                            .mapping { value in value.expr * value.expr }
+                    )
+                }
+            })
         }
     }
 }
@@ -97,12 +104,14 @@ private struct TypedCollectionGeneratedModel {
 private struct TypedQuantifierGeneratedModel {
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
-            let result = scope.sharedVar("result", initial: false)
-            Action("findEven") {
-                result.becomes(Exists(in: IntRange(1, through: 4)) { value in
-                    value.expr % 2 == 0
-                })
-            }
+            Algorithm("TypedQuantifierGeneratedModel", scoped: { algorithm in
+                let result = algorithm.sharedVar("result", initial: false)
+                Do(CollectionStep.findEven) {
+                    Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
+                        value.expr % 2 == 0
+                    })
+                }
+            })
         }
     }
 }

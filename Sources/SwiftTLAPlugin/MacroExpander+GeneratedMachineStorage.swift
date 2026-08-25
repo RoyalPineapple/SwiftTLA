@@ -69,7 +69,7 @@ extension MacroExpander {
                     at: \(collection.storageOrdinal),
                     for: member,
                     as: \(collection.valueType).self,
-                    in: state
+                    in: afterStorageState
                 ) else {
                     throw GeneratedMachineStateDiagnostic.typeMismatch(
                         path: \(String(reflecting: collection.formalName)),
@@ -80,6 +80,7 @@ extension MacroExpander {
                 try \(collection.formalName).update(id: member, to: value)
             """
         }.joined(separator: "\n                ")
+        let collectionUpdateFallback = actions.contains { $0.symmetricCollection == nil } ? "default: break" : ""
         let collectionActions = actions.compactMap { action -> String? in
             guard let collection = action.symmetricCollection else { return nil }
             return """
@@ -157,7 +158,7 @@ extension MacroExpander {
                     let after = try State(storage: _storage, storageState: afterStorageState)
                     switch action {
                     \(collectionUpdates)
-                    default: break
+                    \(collectionUpdateFallback)
                     }
                     _storageState = afterStorageState
                     _state = after
