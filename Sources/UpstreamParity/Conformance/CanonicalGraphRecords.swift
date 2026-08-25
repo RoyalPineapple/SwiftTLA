@@ -33,18 +33,21 @@ package enum CanonicalGraphRecords {
   }
 
   private static func records(for run: CanonicalRun) -> [[String: Any]] {
-    [[
+    var records: [[String: Any]] = [[
       "type": "header",
       "schema": run.schema.rawValue,
       "observableActions": run.observableActions.sorted()
-    ]] + graphRecords(for: run.graph) + run.errors.enumerated().map { index, error in
+    ]]
+    records += graphRecords(for: run.graph)
+    records += run.errors.enumerated().map { index, error in
       [
         "type": "error",
         "index": index,
         "code": error.code,
         "message": error.message
       ]
-    } + run.traces.enumerated().map { index, trace in
+    }
+    records += run.traces.enumerated().map { index, trace in
       [
         "type": "trace",
         "index": index,
@@ -53,7 +56,8 @@ package enum CanonicalGraphRecords {
           ["state": $0.state.canonicalEncoding, "action": $0.action]
         }
       ]
-    } + [[
+    }
+    records.append([
       "type": "complete",
       "eligible": run.isPassEligible,
       "outcome": outcome(run.outcome),
@@ -62,7 +66,8 @@ package enum CanonicalGraphRecords {
       "edgeCount": run.graph.edgeOccurrences.values.reduce(0, +),
       "errorCount": run.errors.count,
       "traceCount": run.traces.count
-    ]]
+    ])
+    return records
   }
 
   private static func outcome(_ outcome: CanonicalOutcome) -> [String: String] {
