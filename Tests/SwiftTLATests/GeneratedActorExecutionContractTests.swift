@@ -3,9 +3,9 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-struct DuckDuckLeaderCanonical {
+struct ParameterizedActorModel {
     static var spec: TLASpec {
-        TLASpec("DuckDuckLeaderCanonical") {
+        TLASpec("ParameterizedActorModel") {
             let leader = Var<Int>("leader")
             let turn = Var<Int>("turn")
             Variable(leader, 1)
@@ -30,37 +30,33 @@ struct DuckDuckLeaderCanonical {
 }
 
 struct GeneratedActorExecutionContractTests {
-    @Test("actor preserves canonical arbitrary-length evidence")
-    func actorMatchesCanonicalSchedule() async throws {
-        var canonical = try DuckDuckLeaderCanonical.makeMachine()
-        let actor = try DuckDuckLeaderCanonical.Actor()
-        let schedule: [DuckDuckLeaderCanonical.Action] = [
+    @Test("actor matches the value machine for a typed schedule")
+    func actorMatchesValueMachineForTypedSchedule() async throws {
+        var machine = try ParameterizedActorModel.makeMachine()
+        let actor = try ParameterizedActorModel.Actor()
+        let schedule: [ParameterizedActorModel.Action] = [
             .pass(from: 1, to: 2, round: 1),
             .pass(from: 2, to: 1, round: 2),
             .pass(from: 1, to: 2, round: 3)
         ]
 
-        #expect(await actor.state == canonical.state)
+        #expect(await actor.state == machine.state)
 
-        for label in schedule {
-            let expected = try canonical.send(label)
-            let actual = try await actor.send(label)
+        for action in schedule {
+            let expected = try machine.send(action)
+            let actual = try await actor.send(action)
 
-            #expect(actual.action == label)
             #expect(actual.action == expected.action)
-            #expect(actual.before.leader == expected.before.leader)
-            #expect(actual.before.turn == expected.before.turn)
-            #expect(actual.after.leader == expected.after.leader)
-            #expect(actual.after.turn == expected.after.turn)
-            #expect((await actor.state).leader == expected.after.leader)
-            #expect((await actor.state).turn == expected.after.turn)
+            #expect(actual.before == expected.before)
+            #expect(actual.after == expected.after)
+            #expect(await actor.state == expected.after)
         }
     }
 
-    @Test("actor rejects unavailable invocations without mutation")
-    func unavailableActionPreservesActorSnapshot() async throws {
-        let actor = try DuckDuckLeaderCanonical.Actor()
-        let unavailable = DuckDuckLeaderCanonical.Actor.Action.pass(from: 2, to: 1, round: 1)
+    @Test("disabled typed action leaves actor state unchanged")
+    func disabledTypedActionLeavesActorStateUnchanged() async throws {
+        let actor = try ParameterizedActorModel.Actor()
+        let unavailable = ParameterizedActorModel.Actor.Action.pass(from: 2, to: 1, round: 1)
         let before = await actor.state
         #expect(throws: GeneratedMachineError.self) {
             try await actor.send(unavailable)
@@ -69,37 +65,34 @@ struct GeneratedActorExecutionContractTests {
         #expect(await actor.state == before)
     }
 
-    @Test("actor serializes concurrent duplicate submissions")
-    func concurrentSubmissionsMatchActualCanonicalEvidence() async throws {
-        let actor = try DuckDuckLeaderCanonical.Actor()
-        let label = DuckDuckLeaderCanonical.Actor.Action.pass(from: 1, to: 2, round: 1)
+    @Test("concurrent duplicate actions commit once")
+    func concurrentDuplicateActionsCommitOnce() async throws {
+        let actor = try ParameterizedActorModel.Actor()
+        let action = ParameterizedActorModel.Actor.Action.pass(from: 1, to: 2, round: 1)
 
-        async let first = submit(actor, label: label)
-        async let second = submit(actor, label: label)
+        async let first = submit(actor, action: action)
+        async let second = submit(actor, action: action)
         let submissions = await [first, second]
 
-        var canonical = try DuckDuckLeaderCanonical.makeMachine()
-        let expected = try canonical.send(.pass(from: 1, to: 2, round: 1))
+        var machine = try ParameterizedActorModel.makeMachine()
+        let expected = try machine.send(action)
         let successful = submissions.compactMap(\.evidence)
         let rejected = submissions.filter(\.isUnexpected)
 
         #expect(successful.count == 1)
         #expect(rejected.count == 1)
         #expect(successful[0].action == expected.action)
-        #expect(successful[0].before.leader == expected.before.leader)
-        #expect(successful[0].before.turn == expected.before.turn)
-        #expect(successful[0].after.leader == expected.after.leader)
-        #expect(successful[0].after.turn == expected.after.turn)
-        #expect((await actor.state).leader == expected.after.leader)
-        #expect((await actor.state).turn == expected.after.turn)
+        #expect(successful[0].before == expected.before)
+        #expect(successful[0].after == expected.after)
+        #expect(await actor.state == expected.after)
     }
 
     private func submit(
-        _ actor: DuckDuckLeaderCanonical.Actor,
-        label: DuckDuckLeaderCanonical.Actor.Action
+        _ actor: ParameterizedActorModel.Actor,
+        action: ParameterizedActorModel.Actor.Action
     ) async -> Submission {
         do {
-            let evidence = try await actor.send(label)
+            let evidence = try await actor.send(action)
             return .applied(.init(
                 action: evidence.action,
                 before: evidence.before,
@@ -127,8 +120,8 @@ struct GeneratedActorExecutionContractTests {
     }
 
     private struct Evidence: Sendable {
-        let action: DuckDuckLeaderCanonical.Actor.Action
-        let before: DuckDuckLeaderCanonical.Actor.State
-        let after: DuckDuckLeaderCanonical.Actor.State
+        let action: ParameterizedActorModel.Actor.Action
+        let before: ParameterizedActorModel.Actor.State
+        let after: ParameterizedActorModel.Actor.State
     }
 }
