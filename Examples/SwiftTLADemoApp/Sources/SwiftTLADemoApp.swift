@@ -40,6 +40,7 @@ private struct DemoHomeView: View {
 
 private struct TwoBucketsView: View {
     @State private var machine: TwoBuckets?
+    @State private var enabledActions: Set<TwoBuckets.Action> = []
     @State private var error: String?
 
     var body: some View {
@@ -53,6 +54,7 @@ private struct TwoBucketsView: View {
                     pourFiveIntoThree: { perform(.pourFiveIntoThree) },
                     fillFive: { perform(.fillFive) },
                     emptyFive: { perform(.emptyFive) },
+                    enabledActions: enabledActions,
                     reset: reset
                 )
             } else {
@@ -65,10 +67,14 @@ private struct TwoBucketsView: View {
 
     private func reset() {
         do {
-            machine = try TwoBuckets.makeMachine()
+            let machine = try TwoBuckets.makeMachine()
+            let enabledActions = try Set(machine.enabledActions())
+            self.machine = machine
+            self.enabledActions = enabledActions
             error = nil
         } catch let failure {
             machine = nil
+            enabledActions = []
             error = failure.localizedDescription
         }
     }
@@ -77,7 +83,9 @@ private struct TwoBucketsView: View {
         guard var machine else { return }
         do {
             _ = try machine.send(action)
+            let enabledActions = try Set(machine.enabledActions())
             self.machine = machine
+            self.enabledActions = enabledActions
             error = nil
         }
         catch let failure { error = failure.localizedDescription }
@@ -241,6 +249,7 @@ private struct DuckDuckLeaderView: View {
 
 private struct ElevatorBankView: View {
     @State private var machine: ElevatorBank?
+    @State private var enabledActions: Set<ElevatorBank.Action> = []
     @State private var error: String?
 
     var body: some View {
@@ -253,6 +262,7 @@ private struct ElevatorBankView: View {
                 ElevatorBankControls(
                     operateCarA: { operate(.operate(process: .carA)) },
                     operateCarB: { operate(.operate(process: .carB)) },
+                    enabledActions: enabledActions,
                     reset: reset
                 )
             } else {
@@ -265,10 +275,14 @@ private struct ElevatorBankView: View {
 
     private func reset() {
         do {
-            machine = try ElevatorBank.makeMachine()
+            let machine = try ElevatorBank.makeMachine()
+            let enabledActions = try Set(machine.enabledActions())
+            self.machine = machine
+            self.enabledActions = enabledActions
             error = nil
         } catch let failure {
             machine = nil
+            enabledActions = []
             error = failure.localizedDescription
         }
     }
@@ -285,7 +299,9 @@ private struct ElevatorBankView: View {
         guard var machine else { return }
         do {
             _ = try machine.send(action)
+            let enabledActions = try Set(machine.enabledActions())
             self.machine = machine
+            self.enabledActions = enabledActions
             error = nil
         }
         catch let failure { error = failure.localizedDescription }
@@ -319,25 +335,27 @@ private struct TwoBucketsControls: View {
     let pourFiveIntoThree: () -> Void
     let fillFive: () -> Void
     let emptyFive: () -> Void
+    let enabledActions: Set<TwoBuckets.Action>
     let reset: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
-            actionButton("Fill 3", action: fillThree)
-            actionButton("Empty 3", action: emptyThree)
-            actionButton("Pour 3 → 5", tint: .orange, action: pourThreeIntoFive)
-            actionButton("Pour 5 → 3", tint: .orange, action: pourFiveIntoThree)
-            actionButton("Fill 5", action: fillFive)
-            actionButton("Empty 5", action: emptyFive)
+            actionButton("Fill 3", action: .fillThree, perform: fillThree)
+            actionButton("Empty 3", action: .emptyThree, perform: emptyThree)
+            actionButton("Pour 3 → 5", tint: .orange, action: .pourThreeIntoFive, perform: pourThreeIntoFive)
+            actionButton("Pour 5 → 3", tint: .orange, action: .pourFiveIntoThree, perform: pourFiveIntoThree)
+            actionButton("Fill 5", action: .fillFive, perform: fillFive)
+            actionButton("Empty 5", action: .emptyFive, perform: emptyFive)
             Spacer()
             Button("Reset", systemImage: "arrow.counterclockwise", action: reset)
         }
     }
 
-    private func actionButton(_ title: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
+    private func actionButton(_ title: String, tint: Color? = nil, action: TwoBuckets.Action, perform: @escaping () -> Void) -> some View {
+        Button(title, action: perform)
             .buttonStyle(.borderedProminent)
             .tint(tint)
+            .disabled(enabledActions.contains(action) == false)
     }
 }
 
@@ -406,14 +424,17 @@ private struct ElevatorBankScene: View {
 private struct ElevatorBankControls: View {
     let operateCarA: () -> Void
     let operateCarB: () -> Void
+    let enabledActions: Set<ElevatorBank.Action>
     let reset: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
             Button("Operate Car 1", action: operateCarA)
                 .buttonStyle(.borderedProminent)
+                .disabled(enabledActions.contains(.operate(process: .carA)) == false)
             Button("Operate Car 2", action: operateCarB)
                 .buttonStyle(.borderedProminent)
+                .disabled(enabledActions.contains(.operate(process: .carB)) == false)
             Divider().frame(height: 26)
             Button("Reset", systemImage: "arrow.counterclockwise", action: reset)
         }
