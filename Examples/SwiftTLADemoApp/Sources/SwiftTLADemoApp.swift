@@ -176,10 +176,23 @@ private struct DuckDuckLeaderView: View {
     private func deliverNext(runID: UUID) async -> Bool {
         guard !isDelivering,
               runID == simulationID,
-              let machine,
-              let node = deliveryOrder.first(where: { node in
-                  machine.state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
-              }),
+              let machine
+        else { return false }
+
+        let action: ChangRoberts.Action
+        do {
+            let enabledActions = try Set(machine.enabledActions())
+            guard let nextAction = deliveryOrder.lazy
+                .map({ .deliver(process: $0) })
+                .first(where: { enabledActions.contains($0) })
+            else { return false }
+            action = nextAction
+        } catch let failure {
+            error = failure.localizedDescription
+            return false
+        }
+
+        guard case .deliver(let node) = action,
               let message = machine.state.messages.elements.first(where: { $0[ChangRoberts.MessageSchema.to] == node })
         else { return false }
 
@@ -187,7 +200,7 @@ private struct DuckDuckLeaderView: View {
         defer { isDelivering = false }
         do {
             var nextMachine = machine
-            let result = try nextMachine.send(.deliver(process: node))
+            let result = try nextMachine.send(action)
             guard runID == simulationID else { return false }
             let forwarded = result.after.messages.elements.first {
                 $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&

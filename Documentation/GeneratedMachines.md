@@ -82,9 +82,9 @@ Use `isEnabled(_:)` to drive a control affordance, but always handle a failed
 
 ## SwiftUI
 
-The generated value is a SwiftUI view model. Keep it in `@State`, read its
-typed state, and send typed actions. A successful action replaces the complete
-state in one transition.
+The generated machine value is SwiftUI state. Keep it directly in `@State`,
+read its typed state, and send typed actions. A successful action replaces the
+complete state in one transition.
 
 **Example ID:** `generated-machine-swiftui`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/CounterView.swift`
