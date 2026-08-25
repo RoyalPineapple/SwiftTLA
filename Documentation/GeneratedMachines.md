@@ -149,6 +149,24 @@ The fixture uses an explicit throwing factory at its boundary. The view works
 only with generated state and actions, and it presents a rejected action as
 application state.
 
+## Effects and presentation data
+
+The generated machine owns state that controls which transition can occur.
+Platform handles, received data, diagnostics, and animation remain ordinary
+application state. They do not duplicate the machine's transition state.
+
+The platform examples use this division directly:
+
+- `CameraWorkflow` owns camera phase transitions, including recording and
+  stopping. `CameraEffects` owns AVFoundation objects, captured media, and
+  selected thumbnails.
+- `BluetoothModel` owns scanning transitions. `BluetoothEffects` owns the
+  devices reported by Core Bluetooth.
+
+An effect first applies the action that authorizes it. When the platform
+reports an outcome, the application sends the corresponding typed action back
+to the same machine.
+
 ## Advanced execution
 
 `Actor` owns a generated machine value when an application needs asynchronous
