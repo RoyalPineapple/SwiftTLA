@@ -1421,24 +1421,22 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 
     @Test func finiteVariableDomainsCompareAsFormalSets() throws {
-        let parsed = canonicalTestSpec(
-            variables: [(
-                name: "counter",
-                initial: .set([.int(0), .int(1)]),
-                initialSet: .setLiteral([.int(0), .int(1)])
-            )],
-            actions: [],
-            invariants: []
-        )
-        let built = canonicalTestSpec(
-            variables: [(
-                name: "counter",
-                initial: .set([.int(0), .int(1)]),
-                initialSet: .setLiteral([.int(1), .int(0)])
-            )],
-            actions: [],
-            invariants: []
-        )
+        func specification(_ values: [StateExpr]) -> TLASpec {
+            TLASpec(
+                name: "CanonicalTestSpec",
+                variables: [.init(
+                    name: "counter",
+                    initial: .set([.int(0), .int(1)]),
+                    initialSet: .setLiteral(values),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )],
+                actions: [],
+                invariants: []
+            )
+        }
+        let parsed = specification([.int(0), .int(1)])
+        let built = specification([.int(1), .int(0)])
 
         #expect(try parsed.compile().identity == built.compile().identity)
     }
