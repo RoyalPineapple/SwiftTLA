@@ -5,7 +5,7 @@ import SwiftTLAMacros
 @TLAModel
 public struct WriterModel {
     public enum Phase: String, CaseIterable, FiniteTLAValueDomain {
-        case configured, writing, paused, finished, cancelled
+        case configured, writing, paused, finishing, finished, failed, cancelled
         public static var defaultValue: Self { .configured }
         public static let finiteValues = allCases
         public var tlaValue: TLAValue { .string(rawValue) }
@@ -14,9 +14,11 @@ public struct WriterModel {
     private enum WriteProcess: String, FiniteTLAValueDomain { case writeEvent; static var defaultValue: Self { .writeEvent }; static let finiteValues: [Self] = [.writeEvent]; var tlaValue: TLAValue { .string(rawValue) } }
     private enum PauseProcess: String, FiniteTLAValueDomain { case pauseEvent; static var defaultValue: Self { .pauseEvent }; static let finiteValues: [Self] = [.pauseEvent]; var tlaValue: TLAValue { .string(rawValue) } }
     private enum ResumeProcess: String, FiniteTLAValueDomain { case resumeEvent; static var defaultValue: Self { .resumeEvent }; static let finiteValues: [Self] = [.resumeEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum RequestFinishProcess: String, FiniteTLAValueDomain { case requestFinishEvent; static var defaultValue: Self { .requestFinishEvent }; static let finiteValues: [Self] = [.requestFinishEvent]; var tlaValue: TLAValue { .string(rawValue) } }
     private enum FinishProcess: String, FiniteTLAValueDomain { case finishEvent; static var defaultValue: Self { .finishEvent }; static let finiteValues: [Self] = [.finishEvent]; var tlaValue: TLAValue { .string(rawValue) } }
+    private enum FailProcess: String, FiniteTLAValueDomain { case failEvent; static var defaultValue: Self { .failEvent }; static let finiteValues: [Self] = [.failEvent]; var tlaValue: TLAValue { .string(rawValue) } }
     private enum CancelProcess: String, FiniteTLAValueDomain { case cancelEvent; static var defaultValue: Self { .cancelEvent }; static let finiteValues: [Self] = [.cancelEvent]; var tlaValue: TLAValue { .string(rawValue) } }
-    private enum Step: String, CaseIterable { case start, write, pause, resume, finish, cancel }
+    private enum Step: String, CaseIterable { case start, write, pause, resume, requestFinish, finish, fail, cancel }
     public static var spec: TLASpec {
         #spec("WriterModel") {
             Algorithm("WriterModel", scoped: { scope in
@@ -25,9 +27,11 @@ public struct WriterModel {
                 Each(WriteProcess.all) { _ in Do(Step.write) { When(phase == .writing); Assign(phase, to: Phase.writing); Goto(Step.write) } }
                 Each(PauseProcess.all) { _ in Do(Step.pause) { When(phase == .writing); Assign(phase, to: Phase.paused); Goto(Step.pause) } }
                 Each(ResumeProcess.all) { _ in Do(Step.resume) { When(phase == .paused); Assign(phase, to: Phase.writing); Goto(Step.resume) } }
-                Each(FinishProcess.all) { _ in Do(Step.finish) { When(phase == .configured || phase == .writing || phase == .paused); Assign(phase, to: Phase.finished); Goto(Step.finish) } }
+                Each(RequestFinishProcess.all) { _ in Do(Step.requestFinish) { When(phase == .writing || phase == .paused); Assign(phase, to: Phase.finishing); Goto(Step.requestFinish) } }
+                Each(FinishProcess.all) { _ in Do(Step.finish) { When(phase == .finishing); Assign(phase, to: Phase.finished); Goto(Step.finish) } }
+                Each(FailProcess.all) { _ in Do(Step.fail) { When(phase == .finishing); Assign(phase, to: Phase.failed); Goto(Step.fail) } }
                 Each(CancelProcess.all) { _ in Do(Step.cancel) { When(phase == .writing || phase == .paused); Assign(phase, to: Phase.cancelled); Goto(Step.cancel) } }
-                Invariant("knownWriterPhase") { phase == .configured || phase == .writing || phase == .paused || phase == .finished || phase == .cancelled }
+                Invariant("knownWriterPhase") { phase == .configured || phase == .writing || phase == .paused || phase == .finishing || phase == .finished || phase == .failed || phase == .cancelled }
             })
         }
     }
@@ -63,9 +67,17 @@ extension Media {
         public func resume() async throws { _ = try machine.send(.resume) }
 
         public func finish() async throws {
-            guard try machine.isEnabled(.finish) else { throw MediaError.cannotFinish }
-            input.markAsFinished(); _ = try machine.send(.finish)
+            guard try machine.isEnabled(.requestFinish) else { throw MediaError.cannotFinish }
+            input.markAsFinished()
+            _ = try machine.send(.requestFinish)
             await withCheckedContinuation { continuation in writer.finishWriting { continuation.resume() } }
+            switch writer.status {
+            case .completed:
+                _ = try machine.send(.finish)
+            default:
+                _ = try machine.send(.fail)
+                throw writer.error ?? MediaError.writerDidNotFinish
+            }
         }
 
         public func cancel() async throws {
