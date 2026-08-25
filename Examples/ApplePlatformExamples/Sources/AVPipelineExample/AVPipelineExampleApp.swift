@@ -394,12 +394,19 @@ final class CameraController {
 
     func toggleRecording() async {
         if phase == 2 {
+            guard let movieOutput else {
+                diagnostic = "The camera output is not ready."
+                return
+            }
             guard send(.stop) else { return }
-            movieOutput?.stopRecording()
+            movieOutput.stopRecording()
             if let url = recordedURL { roll.append(.video(url)) }
         } else if phase == 1 {
+            guard let movieOutput else {
+                diagnostic = "The camera output is not ready."
+                return
+            }
             guard send(.record) else { return }
-            guard let movieOutput else { return }
             let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
             recordedURL = url
             movieOutput.startRecording(to: url, recordingDelegate: recordDelegate)
