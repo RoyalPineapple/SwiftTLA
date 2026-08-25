@@ -11,7 +11,7 @@ public enum TemporalFairnessMode: String, Codable, Sendable {
   case strong
 }
 
-public enum TemporalSymmetryExpectedOutcome: String, Codable, Sendable {
+public enum TemporalSymmetryOutcome: String, Codable, Sendable {
   case exact
   case difference
   case unavailable
@@ -31,13 +31,6 @@ public enum TemporalTraceAvailability: String, Codable, Sendable {
   case available
   case unavailable
   case notApplicable
-}
-
-public enum TemporalRecurrentReasonCode: String, Codable, Sendable {
-  case accepting
-  case rejectedByWeakFairness
-  case rejectedByStrongFairness
-  case rejectedByProperty
 }
 
 public enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
@@ -163,59 +156,49 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   public let id: String
   public let kind: TemporalSymmetryCaseKind
   public let swiftSpec: String
-  public let provenance: CoreEvidenceProvenance
   public let finiteBounds: CoreFiniteBounds
-  public let semanticCitations: [String]
-  public let sourceInput: CoreEvidenceReference
+  public let sourceInput: CoreEvidenceReference?
   public let configuration: TemporalSymmetryConfiguration
-  public let expectedOutcome: TemporalSymmetryExpectedOutcome
 
   public init(
     id: String,
     kind: TemporalSymmetryCaseKind,
     swiftSpec: String,
-    provenance: CoreEvidenceProvenance,
     finiteBounds: CoreFiniteBounds,
-    semanticCitations: [String],
-    sourceInput: CoreEvidenceReference,
-    configuration: TemporalSymmetryConfiguration,
-    expectedOutcome: TemporalSymmetryExpectedOutcome
+    sourceInput: CoreEvidenceReference? = nil,
+    configuration: TemporalSymmetryConfiguration
   ) throws {
     self.id = id
     self.kind = kind
     self.swiftSpec = swiftSpec
-    self.provenance = provenance
     self.finiteBounds = finiteBounds
-    self.semanticCitations = semanticCitations
     self.sourceInput = sourceInput
     self.configuration = configuration
-    self.expectedOutcome = expectedOutcome
     try validate()
   }
 
   public func validate() throws {
-    try provenance.validate()
     try finiteBounds.validate()
-    try sourceInput.validate()
+    try sourceInput?.validate()
     try configuration.validate()
-    guard !id.isEmpty, !swiftSpec.isEmpty, provenance.caseID == id,
-          !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
+    guard !id.isEmpty, !swiftSpec.isEmpty else {
       throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
     }
     switch kind {
     case .temporal:
-      guard configuration.property != nil, configuration.fairness != nil, !configuration.symmetryEnabled else {
+      guard configuration.property != nil, configuration.fairness != nil,
+            configuration.symmetryEnabled == false, sourceInput != nil else {
         throw ConformanceGovernanceError.inconsistentReference(record: id, field: "temporal configuration")
       }
     case .symmetry:
-      guard configuration.property == nil, configuration.symmetryEnabled else {
+      guard configuration.property == nil, configuration.symmetryEnabled, sourceInput == nil else {
         throw ConformanceGovernanceError.inconsistentReference(record: id, field: "symmetry configuration")
       }
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case id, kind, swiftSpec, provenance, finiteBounds, semanticCitations, sourceInput, configuration, expectedOutcome
+    case id, kind, swiftSpec, finiteBounds, sourceInput, configuration
   }
 
   public init(from decoder: Decoder) throws {
@@ -224,12 +207,9 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
       swiftSpec: container.decode(String.self, forKey: .swiftSpec),
-      provenance: container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       finiteBounds: container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
-      semanticCitations: container.decode([String].self, forKey: .semanticCitations),
-      sourceInput: container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
-      configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
-      expectedOutcome: container.decode(TemporalSymmetryExpectedOutcome.self, forKey: .expectedOutcome))
+      sourceInput: try container.decodeIfPresent(CoreEvidenceReference.self, forKey: .sourceInput),
+      configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration))
   }
 }
 
@@ -265,32 +245,32 @@ public struct TemporalSymmetryCases: Equatable, Codable, Sendable {
 
 public struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
   public let caseID: String
-  public let gateRunID: UUID
+  public let runID: UUID
   public let swiftRunID: UUID
   public let tlcRunID: UUID
   public let comparisonRunID: UUID
 
-  public init(caseID: String, gateRunID: UUID, swiftRunID: UUID, tlcRunID: UUID, comparisonRunID: UUID) throws {
+  public init(caseID: String, runID: UUID, swiftRunID: UUID, tlcRunID: UUID, comparisonRunID: UUID) throws {
     guard !caseID.isEmpty,
-          Set([gateRunID, swiftRunID, tlcRunID, comparisonRunID]).count == 4 else {
+          Set([runID, swiftRunID, tlcRunID, comparisonRunID]).count == 4 else {
       throw ConformanceGovernanceError.invalidField(record: "correlation", field: "caseID")
     }
     self.caseID = caseID
-    self.gateRunID = gateRunID
+    self.runID = runID
     self.swiftRunID = swiftRunID
     self.tlcRunID = tlcRunID
     self.comparisonRunID = comparisonRunID
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case caseID, gateRunID, swiftRunID, tlcRunID, comparisonRunID
+    case caseID, runID, swiftRunID, tlcRunID, comparisonRunID
   }
 
   public init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
-      gateRunID: container.decode(UUID.self, forKey: .gateRunID),
+      runID: container.decode(UUID.self, forKey: .runID),
       swiftRunID: container.decode(UUID.self, forKey: .swiftRunID),
       tlcRunID: container.decode(UUID.self, forKey: .tlcRunID),
       comparisonRunID: container.decode(UUID.self, forKey: .comparisonRunID))
@@ -317,29 +297,6 @@ public struct TemporalLassoWitness: Equatable, Codable, Sendable {
     try self.init(
       prefixStateIDs: container.decode([String].self, forKey: .prefixStateIDs),
       cycleStateIDs: container.decode([String].self, forKey: .cycleStateIDs))
-  }
-}
-
-public struct TemporalRecurrentComponent: Equatable, Codable, Sendable {
-  public let stateIDs: [String]
-  public let reasonCode: TemporalRecurrentReasonCode
-
-  public init(stateIDs: [String], reasonCode: TemporalRecurrentReasonCode) throws {
-    guard !stateIDs.isEmpty, Set(stateIDs).count == stateIDs.count,
-          stateIDs.allSatisfy({ !$0.isEmpty }) else {
-      throw ConformanceGovernanceError.invalidField(record: "recurrent component", field: "state IDs or reason")
-    }
-    self.stateIDs = stateIDs.sorted()
-    self.reasonCode = reasonCode
-  }
-
-  private enum CodingKeys: String, CodingKey, CaseIterable { case stateIDs, reasonCode }
-
-  public init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(
-      stateIDs: container.decode([String].self, forKey: .stateIDs),
-      reasonCode: container.decode(TemporalRecurrentReasonCode.self, forKey: .reasonCode))
   }
 }
 

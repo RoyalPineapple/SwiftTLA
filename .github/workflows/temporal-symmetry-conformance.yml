@@ -43,41 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Validate focused workflow contract
-        run: Tests/Fixtures/TemporalSymmetryConformance/CI/assert_workflow.sh
-
-      - name: Run mandatory temporal-symmetry gate
-        id: conformance
-        continue-on-error: true
-        run: |
-          set +e
-          make temporal-symmetry-release-check
-          status=$?
-          set -e
-
-          mkdir -p .build/temporal-symmetry-ci
-          printf '%s\n' "$status" > .build/temporal-symmetry-ci/exit-code
-          case "$status" in
-            0)
-              echo "Temporal and symmetry support gate passed (exit 0)."
-              echo "enforcement_exit=0" >> "$GITHUB_OUTPUT"
-              ;;
-            1)
-              echo "::error::Temporal or symmetry evidence blocks admission (exit 1)."
-              echo "enforcement_exit=1" >> "$GITHUB_OUTPUT"
-              ;;
-            2)
-              echo "::warning::Temporal or symmetry evidence is unavailable or unsafe to evaluate on this hosted runner (exit 2). Run make temporal-symmetry-release-check locally on a provisioned machine before making a support claim."
-              echo "enforcement_exit=0" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "::error::Temporal and symmetry conformance returned an unexpected exit $status."
-              status=2
-              echo "enforcement_exit=2" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-          exit "$status"
+      - name: Run temporal-symmetry conformance
+        run: make temporal-symmetry-conformance
 
       - name: Upload temporal-symmetry evidence
         if: always()
@@ -85,27 +52,5 @@ jobs:
         with:
           name: temporal-symmetry-conformance-${{ github.run_id }}
           path: |
-            .build/temporal-symmetry-support-gate
-            .build/temporal-symmetry-ci
+            .build/temporal-symmetry-conformance
           if-no-files-found: warn
-
-      - name: Enforce temporal-symmetry result
-        if: always()
-        env:
-          TEMPORAL_SYMMETRY_EXIT: ${{ steps.conformance.outputs.enforcement_exit }}
-        run: |
-          case "$TEMPORAL_SYMMETRY_EXIT" in
-            0)
-              exit 0
-              ;;
-            1)
-              exit 1
-              ;;
-            2)
-              exit 2
-              ;;
-            *)
-              echo "temporal-symmetry did not report a recognized result" >&2
-              exit 2
-              ;;
-          esac

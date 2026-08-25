@@ -1,6 +1,6 @@
-.PHONY: build examples core-conformance temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-pr ci-release-qualification
+.PHONY: build examples core-conformance temporal-symmetry-conformance public-workflow-release-check ci-pr ci-release-qualification
 
-TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-support-gate
+TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-conformance
 build:
 	swift build
 
@@ -11,11 +11,8 @@ examples:
 core-conformance:
 	./scripts/run_core_conformance.sh --case all --output .build/core-conformance-evidence
 
-temporal-symmetry-support-gate:
-	./scripts/run_temporal_symmetry_support_gate.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)
-
-temporal-symmetry-release-check:
-	./scripts/check_temporal_symmetry_release.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)
+temporal-symmetry-conformance:
+	./scripts/run_temporal_symmetry_conformance.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)
 
 public-workflow-release-check:
 	./scripts/run_public_workflow_support_gate.sh --output .build/public-workflow-support-gate

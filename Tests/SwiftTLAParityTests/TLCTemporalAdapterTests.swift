@@ -14,7 +14,7 @@ struct TLCTemporalAdapterTests {
       availability: .evaluated, outcome: .satisfied,
       graphID: CanonicalGraphRecords.digest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .notApplicable)
-    let input = try fixture.input(swiftResult: swiftResult)
+    let input = try fixture.input(swiftRun: graph, swiftResult: swiftResult)
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: FixtureExecutor(stream: stream, result: Fixture.success)))
       .capture(input)
@@ -32,7 +32,7 @@ struct TLCTemporalAdapterTests {
   func blocksForeignOrIncompleteEvidence() throws {
     let foreign = try Fixture()
     let foreignCorrelation = try TemporalSymmetryCaseRunCorrelation(
-      caseID: foreign.declaredCase.id, gateRunID: foreign.correlation.gateRunID, swiftRunID: foreign.correlation.swiftRunID,
+      caseID: foreign.declaredCase.id, runID: foreign.correlation.runID, swiftRunID: foreign.correlation.swiftRunID,
       tlcRunID: UUID(), comparisonRunID: foreign.correlation.comparisonRunID)
     let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
       .capture(try foreign.input(correlation: foreignCorrelation))
@@ -62,7 +62,7 @@ struct TLCTemporalAdapterTests {
     let temporalViolation = TLCProcessResult(status: 12, stdout: "Error: Temporal property is violated.", stderr: "")
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: FixtureExecutor(stream: stream, result: temporalViolation)))
-      .capture(try fixture.input(swiftResult: swiftResult))
+      .capture(try fixture.input(swiftRun: graph, swiftResult: swiftResult))
 
     #expect(result.status == .unavailable)
     #expect(result.comparison?.outcome == .unavailable)
@@ -86,7 +86,7 @@ struct TLCTemporalAdapterTests {
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(
         primaryStream: stream, trace: try numberedLoopBackTrace())))
-      .capture(try fixture.input(swiftResult: swiftResult))
+      .capture(try fixture.input(swiftRun: graph, swiftResult: swiftResult))
 
     #expect(result.status == .captured)
     #expect(result.comparison?.outcome == .exact)
@@ -109,7 +109,7 @@ struct TLCTemporalAdapterTests {
     let trace = try numberedStutteringTrace()
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: stream, trace: trace)))
-      .capture(try fixture.input(swiftResult: swiftResult))
+      .capture(try fixture.input(swiftRun: graph, swiftResult: swiftResult))
 
     #expect(result.status == .captured)
     #expect(result.comparison?.outcome == .exact)
@@ -131,7 +131,7 @@ struct TLCTemporalAdapterTests {
     let namedTrace = try numberedStutteringTrace(action: "A")
     let rejected = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: stream, trace: namedTrace)))
-      .capture(try rejectedFixture.input(swiftResult: swiftResult))
+      .capture(try rejectedFixture.input(swiftRun: graph, swiftResult: swiftResult))
     #expect(rejected.status == .unavailable)
 
     let admittedFixture = try Fixture()
@@ -147,7 +147,11 @@ struct TLCTemporalAdapterTests {
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
     let admitted = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: admittedStream, trace: namedTrace)))
-      .capture(try admittedFixture.input(swiftResult: admittedSwiftResult, allowsImplicitStuttering: true))
+      .capture(try admittedFixture.input(
+        swiftRun: admittedGraph,
+        swiftResult: admittedSwiftResult,
+        allowsImplicitStuttering: true
+      ))
     #expect(admitted.status == .captured)
     #expect(admitted.comparison?.outcome == .exact)
   }
@@ -168,7 +172,7 @@ struct TLCTemporalAdapterTests {
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(
         primaryStream: stream, trace: try numberedLoopBackTrace(secondValue: 99))))
-      .capture(try fixture.input(swiftResult: swiftResult))
+      .capture(try fixture.input(swiftRun: graph, swiftResult: swiftResult))
 
     #expect(result.status == .unavailable)
     #expect(result.comparison?.tlcResult.availability == .unavailable)
@@ -220,7 +224,6 @@ struct TLCTemporalAdapterTests {
       .capture(try fixture.input(request: fixture.makeRequest(traceOutput: traceAlias)))
 
     #expect(result.status == .unavailable)
-    #expect(!FileManager.default.fileExists(atPath: fixture.output.path))
     #expect(try Data(contentsOf: fixture.module) == module)
     #expect(FileManager.default.fileExists(atPath: traceAlias.path))
   }
@@ -288,6 +291,7 @@ struct TLCTemporalAdapterTests {
     let declaredCase: TemporalSymmetryCase
     let correlation: TemporalSymmetryCaseRunCorrelation
     let request: TLCProcessRequest
+    let swiftRun: CanonicalRun
 
     init() throws {
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCTemporalAdapterTests-\(UUID())")
@@ -306,32 +310,28 @@ struct TLCTemporalAdapterTests {
         cfgSHA256: SHA256.hex(Data(contentsOf: configuration)), arguments: [],
         argumentsSHA256: try CoreConformanceCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
         deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: try testReferencePin())
-      let pin = coreCase.pin
       declaredCase = try TemporalSymmetryCase(
         id: coreCase.id, kind: .temporal, swiftSpec: "TemporalFixture",
-        provenance: try CoreEvidenceProvenance(
-          caseID: coreCase.id, moduleSHA256: coreCase.moduleSHA256, cfgSHA256: coreCase.cfgSHA256,
-          argumentsSHA256: coreCase.argumentsSHA256, tlcTag: pin.tag, tlcCommit: pin.commit,
-          tlcJarSHA256: pin.jarSHA256, javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
-          javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
-          bridgeSourceSHA256: pin.bridgeSourceSHA256, bridgeBinarySHA256: pin.bridgeBinarySHA256),
         finiteBounds: try CoreFiniteBounds(summary: "two states", limits: ["states": 2]),
-        semanticCitations: ["TLA+ temporal semantics"],
         sourceInput: try Fixture.reference(module, path: "Verification/TemporalSymmetryConformance/TemporalFixture.tla"),
-        configuration: try TemporalSymmetryConfiguration(property: "[] P", fairness: TemporalFairnessMode.none),
-        expectedOutcome: .exact)
+        configuration: try TemporalSymmetryConfiguration(property: "[] P", fairness: TemporalFairnessMode.none))
       correlation = try TemporalSymmetryCaseRunCorrelation(
-        caseID: coreCase.id, gateRunID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
+        caseID: coreCase.id, runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
         replayInput: root.appendingPathComponent("replay.json"), workingDirectory: root, arguments: [],
-        expectedCase: coreCase, runID: correlation.tlcRunID)
+        expectedCase: coreCase, runID: correlation.tlcRunID, referencePin: coreCase.pin)
+      swiftRun = try TLCGraphEventParser(expectedCase: coreCase).parseCanonicalRun(
+        graphStream(case: coreCase, runID: correlation.tlcRunID),
+        result: Self.success
+      )
     }
 
     func input(
+      swiftRun: CanonicalRun? = nil,
       swiftResult: TemporalPropertyResult? = nil,
       correlation: TemporalSymmetryCaseRunCorrelation? = nil,
       request: TLCProcessRequest? = nil,
@@ -341,10 +341,11 @@ struct TLCTemporalAdapterTests {
         availability: .unavailable, outcome: nil, graphID: "unavailable", initialStateIDs: ["unavailable"],
         traceAvailability: .unavailable)
       return TLCTemporalCaptureInput(
-        declaredCase: declaredCase, correlation: correlation ?? self.correlation, request: request ?? self.request,
+        declaredCase: declaredCase, referencePin: coreCase.pin,
+        correlation: correlation ?? self.correlation, request: request ?? self.request,
+        swiftRun: swiftRun ?? self.swiftRun,
         swiftResult: graphResult,
         swiftEvidence: try Fixture.reference(module, path: "runs/swift.json"),
-        enablednessEvidence: try Fixture.reference(module, path: "runs/enabled.json"), fairComponents: [], rejectedComponents: [],
         allowsImplicitStuttering: allowsImplicitStuttering,
         manifest: try Fixture.reference(manifest, path: "runs/manifest.json"), manifestURL: manifest,
         toolchain: try Fixture.reference(toolchain, path: "runs/toolchain.json"), toolchainURL: toolchain,

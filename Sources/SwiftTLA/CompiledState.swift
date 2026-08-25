@@ -3,7 +3,7 @@ struct CompiledState: Hashable, Sendable {
     private let values: [CompiledValue]
 
     init(formalValues values: [TLAValue], compilation: CompiledSpecification) throws {
-        try self.init(values: values.map { try .init(formal: $0, using: compilation.layout) }, compilation: compilation)
+        try self.init(values: values.map { .init(formal: $0) }, compilation: compilation)
     }
 
     init(values: [CompiledValue], compilation: CompiledSpecification) throws {
@@ -33,7 +33,7 @@ struct CompiledState: Hashable, Sendable {
                     actual: actualNames.count
                 )
             }
-            return try CompiledValue(formal: value, using: compilation.layout)
+            return CompiledValue(formal: value)
         }
         try self.init(values: values, compilation: compilation)
     }

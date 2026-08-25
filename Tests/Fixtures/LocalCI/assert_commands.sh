@@ -28,7 +28,7 @@ forbid() {
 
 require "$makefile" "ci-pr:"
 require "$makefile" "ci-release-qualification:"
-require "$makefile" "temporal-symmetry-release-check:"
+require "$makefile" "temporal-symmetry-conformance:"
 require "$makefile" "public-workflow-release-check:"
 
 require "$pr_runner" "Tests/Fixtures/LocalCI/assert_commands.sh"
@@ -62,7 +62,7 @@ require "$release_runner" "swift build --target SwiftTLAMacros"
 require "$release_runner" "make examples"
 require "$release_runner" "Tests/Fixtures/CoreConformance/CI/assert_workflow.sh"
 require "$release_runner" "Tests/Fixtures/TemporalSymmetryConformance/CI/assert_workflow.sh"
-require "$release_runner" "make temporal-symmetry-release-check"
+require "$release_runner" "make temporal-symmetry-conformance"
 require "$release_runner" "make public-workflow-release-check"
 
 echo "local CI command contracts passed"

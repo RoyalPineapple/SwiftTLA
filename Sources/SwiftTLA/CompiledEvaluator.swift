@@ -68,7 +68,7 @@ struct CompiledEvaluator {
 
         switch expression {
         case .value(let value):
-            return try .init(formal: value, using: layout)
+            return .init(formal: value)
         case .stateVariable(let variable):
             return try state.value(for: variable)
         case .boundValue(let binder):

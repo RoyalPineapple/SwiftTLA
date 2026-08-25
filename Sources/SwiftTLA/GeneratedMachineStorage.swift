@@ -82,7 +82,7 @@ public struct _GeneratedMachineStorage: Sendable {
             throw GeneratedMachineError.invalidGeneratedVariableOrdinal
         }
         let variable = compilation.layout.variables[variableOrdinal]
-        let compiledValue = try CompiledValue(formal: value.tlaValue, using: compilation.layout)
+        let compiledValue = CompiledValue(formal: value.tlaValue)
         return State(try state.compiled.updating(variable.id, to: compiledValue))
     }
 

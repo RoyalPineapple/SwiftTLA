@@ -132,7 +132,8 @@ struct CompiledLowerer {
                 .init(
                     variable: try variable(at: "variables.\(collection.name).declaration"),
                     members: collection.metadata.members,
-                    domainSymbol: collection.metadata.domainSymbol
+                    domainSymbol: collection.metadata.domainSymbol,
+                    initial: .init(formal: collection.metadata.initial)
                 )
             }
         )
@@ -421,7 +422,7 @@ struct CompiledLowerer {
             }
             return .controlLocation(id)
         }
-        return try CompiledValue(formal: variable.initial, using: layout)
+        return CompiledValue(formal: variable.initial)
     }
 
     private func initialExpression(for variable: NamedVar) throws -> CompiledStateExpr? {

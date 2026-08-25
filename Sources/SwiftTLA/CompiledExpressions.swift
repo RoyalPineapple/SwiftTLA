@@ -253,6 +253,7 @@ struct CompiledSymmetricCollection: Sendable {
     let variable: VariableID
     let members: [TLAValue]
     let domainSymbol: String
+    let initial: CompiledValue
 }
 
 struct CompiledSemantics: Sendable {

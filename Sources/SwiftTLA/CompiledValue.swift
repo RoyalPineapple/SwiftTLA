@@ -36,29 +36,8 @@ indirect enum CompiledValue: Hashable, Sendable {
     case function([CompiledValue: CompiledValue])
     case constant(String)
 
-    init(formal value: TLAValue, using layout: CompiledLayout) throws {
-        switch value {
-        case .int(let value):
-            self = .integer(value)
-        case .bool(let value):
-            self = .boolean(value)
-        case .string(let value):
-            self = .string(value)
-        case .set(let values):
-            self = .set(try Set(values.map { try Self(formal: $0, using: layout) }))
-        case .tuple(let values):
-            self = .tuple(try values.map { try Self(formal: $0, using: layout) })
-        case .record(let values):
-            self = .record(CompiledRecord(try values.fields.map { entry in
-                .init(key: .string(entry.name), value: try Self(formal: entry.value, using: layout))
-            }))
-        case .function(let values):
-            self = .function(try Dictionary(uniqueKeysWithValues: values.map {
-                (try Self(formal: $0.key, using: layout), try Self(formal: $0.value, using: layout))
-            }))
-        case .constant(let value):
-            self = .constant(value)
-        }
+    init(formal value: TLAValue) {
+        self = Self.formalValue(value)
     }
 
     func rendered(using layout: CompiledLayout) throws -> TLAValue {
@@ -96,7 +75,15 @@ indirect enum CompiledValue: Hashable, Sendable {
 
     func transformingFormalValues(_ transform: (TLAValue) -> TLAValue) -> CompiledValue {
         switch self {
-        case .integer, .boolean, .string, .controlLocation, .constant:
+        case .integer(let value):
+            return Self.formalValue(transform(.int(value)))
+        case .boolean(let value):
+            return Self.formalValue(transform(.bool(value)))
+        case .string(let value):
+            return Self.formalValue(transform(.string(value)))
+        case .constant(let value):
+            return Self.formalValue(transform(.constant(value)))
+        case .controlLocation:
             return self
         case .set(let values):
             return .set(Set(values.map { $0.transformingFormalValues(transform) }))
@@ -109,6 +96,25 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .function(let values):
             return .function(Dictionary(uniqueKeysWithValues: values.map {
                 ($0.key.transformingFormalValues(transform), $0.value.transformingFormalValues(transform))
+            }))
+        }
+    }
+
+    private static func formalValue(_ value: TLAValue) -> CompiledValue {
+        switch value {
+        case .int(let value): return .integer(value)
+        case .bool(let value): return .boolean(value)
+        case .string(let value): return .string(value)
+        case .constant(let value): return .constant(value)
+        case .set(let values): return .set(Set(values.map(formalValue)))
+        case .tuple(let values): return .tuple(values.map(formalValue))
+        case .record(let fields):
+            return .record(CompiledRecord(fields.fields.map {
+                .init(key: .string($0.name), value: formalValue($0.value))
+            }))
+        case .function(let values):
+            return .function(Dictionary(uniqueKeysWithValues: values.map {
+                (formalValue($0.key), formalValue($0.value))
             }))
         }
     }

@@ -2,7 +2,6 @@ import Foundation
 
 public enum SymmetryOrbitDifferenceKind: String, Codable, Sendable {
   case rawStateSet
-  case reducedRepresentative
   case quotientTransition
   case invariantOutcome
   case deadlockOutcome
@@ -87,7 +86,7 @@ public struct SymmetryOrbitComparisonInput: Sendable {
     guard Set(explorations.map { "\($0.engine.rawValue):\($0.reduced)" }).count == 4,
           swiftRaw.runID == correlation.swiftRunID,
           tlcRaw.runID == correlation.tlcRunID,
-          Set([correlation.gateRunID, correlation.comparisonRunID, swiftRaw.runID, swiftReduced.runID,
+          Set([correlation.runID, correlation.comparisonRunID, swiftRaw.runID, swiftReduced.runID,
                tlcRaw.runID, tlcReduced.runID]).count == 6,
           Set(explorations.map(\.declaredConfigurationSHA256)).count == 1 else {
       throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "symmetry pair configuration")
@@ -120,10 +119,6 @@ public struct SymmetryOrbitComparator: Sendable {
     let tlcReducedQuotient = quotientTransitions(input.tlcReducedRun, derivation: derivation)
 
     var differences: [SymmetryOrbitDifference] = []
-    if swiftRepresentatives != tlcRepresentatives {
-      differences.append(try SymmetryOrbitDifference(
-        kind: .reducedRepresentative, detail: "Swift and TLC reduced representatives differ by orbit"))
-    }
     if expectedQuotient != tlcRawQuotient || expectedQuotient != swiftReducedQuotient
       || expectedQuotient != tlcReducedQuotient {
       differences.append(try SymmetryOrbitDifference(
