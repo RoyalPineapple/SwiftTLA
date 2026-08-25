@@ -8,18 +8,17 @@ import Observation
 @main
 struct CameraApp: App {
     @State private var controller = CameraController()
+    @State private var machine: CameraWorkflow?
 
     var body: some Scene {
         WindowGroup {
             VStack(spacing: 0) {
                 ZStack {
-                    if controller.phase == .playing, let player = controller.currentPlayer {
+                    if phase == .playing, let player = controller.currentPlayer {
                         VideoPlayerView(player: player)
                             .overlay(alignment: .topTrailing) {
                                 Button {
-                                    controller.currentPlayer?.pause()
-                                    controller.currentPlayer = nil
-                                    Task { await controller.live() }
+                                    Task { await live() }
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.title)
@@ -39,7 +38,7 @@ struct CameraApp: App {
 
                     if let preview = controller.selectedPhoto {
                         PhotoDetailView(data: preview) { controller.selectedPhoto = nil }
-                    } else if controller.phase == .live, controller.flashActive {
+                    } else if phase == .live, controller.flashActive {
                         Rectangle().fill(.white).transition(.opacity)
                     }
                 }
@@ -55,7 +54,18 @@ struct CameraApp: App {
             }
             .background(.black)
             .frame(minWidth: 640, minHeight: 520)
-            .task { await controller.ready() }
+            .task {
+                do {
+                    machine = try CameraWorkflow.makeMachine()
+                    controller.recordingDidFinish = { url, error in
+                        recordingDidFinish(url: url, error: error)
+                    }
+                    controller.playbackDidFinish = { Task { await live() } }
+                    await ready()
+                } catch {
+                    controller.diagnostic = "Camera workflow failed to initialize: \(error)"
+                }
+            }
         }
     }
 
@@ -70,7 +80,7 @@ struct CameraApp: App {
                             .onTapGesture {
                                 switch item {
                                 case .photo(let data): controller.selectedPhoto = data
-                                case .video(let url): Task { await controller.playRecording(url: url) }
+                                case .video(let url): Task { await playRecording(url: url) }
                                 }
                             }
                             .overlay(
@@ -96,10 +106,10 @@ struct CameraApp: App {
 
     var controls: some View {
         HStack(spacing: 30) {
-            if controller.phase == .playing || controller.selectedPhoto != nil {
+            if phase == .playing || controller.selectedPhoto != nil {
                 Button(action: {
                     controller.selectedPhoto = nil
-                    Task { await controller.live() }
+                    Task { await live() }
                 }) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 28))
@@ -118,12 +128,12 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(controller.phase != .live)
+                .disabled(phase != .live)
 
-                Button(action: { Task { await controller.toggleRecording() } }) {
+                Button(action: { Task { await toggleRecording() } }) {
                     ZStack {
                         Circle().stroke(.red, lineWidth: 4).frame(width: 56, height: 56)
-                        if controller.phase == .recording {
+                        if phase == .recording {
                             RoundedRectangle(cornerRadius: 4).fill(.red).frame(width: 24, height: 24)
                         } else {
                             Circle().fill(.red).frame(width: 44, height: 44)
@@ -131,12 +141,64 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(controller.isStopping || (controller.phase != .live && controller.phase != .recording))
+                .disabled(controller.isStopping || (phase != .live && phase != .recording))
             }
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(.black.opacity(0.8))
+    }
+
+    private var phase: CameraWorkflow.Phase { machine?.state.phase ?? .starting }
+
+    private func send(_ action: CameraWorkflow.Action) -> Bool {
+        guard var machine else {
+            controller.diagnostic = "Camera workflow did not initialize."
+            return false
+        }
+        do {
+            _ = try machine.send(action)
+            self.machine = machine
+            controller.diagnostic = nil
+            return true
+        } catch {
+            controller.diagnostic = String(describing: error)
+            return false
+        }
+    }
+
+    private func ready() async {
+        guard await controller.ready() else { return }
+        guard send(.ready) else { return }
+    }
+
+    private func toggleRecording() async {
+        if phase == .recording {
+            await controller.stopRecording()
+        } else if phase == .live, controller.canStartRecording {
+            guard send(.record) else { return }
+            controller.startRecording()
+        }
+    }
+
+    private func recordingDidFinish(url: URL, error: Error?) {
+        if let error {
+            guard send(.recordingFailed) else { return }
+            controller.diagnostic = "Recording failed: \(error)"
+            return
+        }
+        guard send(.recordingSucceeded) else { return }
+        controller.recordingSucceeded(at: url)
+    }
+
+    private func playRecording(url: URL) async {
+        guard phase == .live, send(.play) else { return }
+        await controller.playRecording(url: url)
+    }
+
+    private func live() async {
+        guard send(.live) else { return }
+        controller.stopPlayback()
     }
 }
 
@@ -351,7 +413,6 @@ struct CameraWorkflow {
 @MainActor
 @Observable
 final class CameraController {
-    private var machine: CameraWorkflow?
     private(set) var capture: Media.Capture?
     var roll: [RollItem] = []
     var flashActive = false
@@ -363,12 +424,13 @@ final class CameraController {
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
     var diagnostic: String?
+    var recordingDidFinish: ((URL, Error?) -> Void)?
+    var playbackDidFinish: (() -> Void)?
 
-    var phase: CameraWorkflow.Phase { machine?.state.phase ?? .starting }
+    var canStartRecording: Bool { movieOutput != nil }
 
     init() {
         do {
-            machine = try CameraWorkflow.makeMachine()
             capture = try Media.Capture()
             try FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
             recordDelegate.owner = self
@@ -377,25 +439,9 @@ final class CameraController {
         }
     }
 
-    private func send(_ action: CameraWorkflow.Action) -> Bool {
-        guard var machine else {
-            diagnostic = "The generated camera machine did not initialize."
-            return false
-        }
-        do {
-            _ = try machine.send(action)
-            self.machine = machine
-            diagnostic = nil
-            return true
-        } catch {
-            diagnostic = String(describing: error)
-            return false
-        }
-    }
-
     func takeSnapshot() async {
         guard let capture else {
-            diagnostic = "The generated camera machine did not initialize."
+            diagnostic = "The camera did not initialize."
             return
         }
         do {
@@ -411,37 +457,35 @@ final class CameraController {
         }
     }
 
-    func toggleRecording() async {
-        if phase == .recording {
-            guard isStopping == false else { return }
-            guard let movieOutput else {
-                diagnostic = "The camera output is not ready."
-                return
-            }
-            isStopping = true
-            movieOutput.stopRecording()
-        } else if phase == .live {
-            guard let movieOutput else {
-                diagnostic = "The camera output is not ready."
-                return
-            }
-            guard send(.record) else { return }
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
-            recordedURL = url
-            movieOutput.startRecording(to: url, recordingDelegate: recordDelegate)
+    func startRecording() {
+        guard let movieOutput else {
+            diagnostic = "The camera output is not ready."
+            return
         }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
+        movieOutput.startRecording(to: url, recordingDelegate: recordDelegate)
+    }
+
+    func stopRecording() async {
+        guard isStopping == false, let movieOutput else { return }
+        isStopping = true
+        movieOutput.stopRecording()
     }
 
     func playRecording(url: URL? = nil) async {
         recordedURL = url ?? recordedURL
-        guard phase == .live, let url = recordedURL else { return }
-        guard send(.play) else { return }
+        guard let url = recordedURL else { return }
         let player = AVPlayer(url: url)
         currentPlayer = player
         player.play()
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
-            Task { await self?.live() }
+            self?.playbackDidFinish?()
         }
+    }
+
+    func stopPlayback() {
+        currentPlayer?.pause()
+        currentPlayer = nil
     }
 
     func delete(_ item: RollItem) {
@@ -456,14 +500,12 @@ final class CameraController {
         roll.removeAll { $0.id == item.id }
     }
 
-    fileprivate func recordingDidFinish(url: URL, error: Error?) {
+    fileprivate func finishedRecording(url: URL, error: Error?) {
         isStopping = false
-        if let error {
-            guard send(.recordingFailed) else { return }
-            diagnostic = "Recording failed: \(error)"
-            return
-        }
-        guard send(.recordingSucceeded) else { return }
+        recordingDidFinish?(url, error)
+    }
+
+    func recordingSucceeded(at url: URL) {
         recordedURL = url
         roll.append(.video(url))
     }
@@ -476,11 +518,11 @@ final class CameraController {
             return recordedURL.map { $0 == url } ?? false
         }
     }
-    func ready() async {
+    func ready() async -> Bool {
         guard let capture,
               let device = AVCaptureDevice.default(for: .video) else {
             diagnostic = "No video capture device is available."
-            return
+            return false
         }
         do {
             try await capture.configure(device: device)
@@ -488,18 +530,11 @@ final class CameraController {
             capture.session.addOutput(output)
             movieOutput = output
             try await capture.start()
-            if send(.ready) == false {
-                try await capture.stop()
-            }
+            return true
         } catch {
             diagnostic = "Camera setup failed: \(error)"
+            return false
         }
-    }
-
-    func live() async {
-        guard send(.live) else { return }
-        currentPlayer?.pause()
-        currentPlayer = nil
     }
 }
 
@@ -509,6 +544,6 @@ private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDel
     func fileOutput(_: AVCaptureFileOutput, didFinishRecordingTo url: URL,
                     from _: [AVCaptureConnection], error: Error?) {
         guard let owner else { return }
-        Task { @MainActor in owner.recordingDidFinish(url: url, error: error) }
+        Task { @MainActor in owner.finishedRecording(url: url, error: error) }
     }
 }
