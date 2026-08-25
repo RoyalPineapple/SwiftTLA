@@ -159,7 +159,7 @@ enum AlgorithmLowerer {
                 name: CompilerControlSymbol.stack.rawValue,
                 initial: .int(0),
                 initExpr: constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
-                origin: .compiler
+                origin: .procedureStack
             ))
         }
 

@@ -195,6 +195,20 @@ private func compiledBFS(
         )
     }
 
+    func boundedResult() throws -> ModelExplorationResult {
+        .init(
+            graph: try graph(),
+            initialStateIDs: initialStateIDs,
+            result: .depthExceeded(
+                statesCount: stateToID.count,
+                limit: configuration.maximumStateLimit
+            ),
+            compilationIdentity: runtime.compilation.identity,
+            configuration: configuration,
+            compiledStates: idToState
+        )
+    }
+
     func trace(to final: CompiledState, initial: CompiledState) throws -> [TraceStep] {
         var steps: [(CompiledState, String)] = []
         var current = final
@@ -213,6 +227,9 @@ private func compiledBFS(
     for seed in seeds {
         let key = try representative(seed)
         guard stateToID[key] == nil else { continue }
+        guard stateToID.count < configuration.maximumStateLimit else {
+            return try boundedResult()
+        }
         let id = StateGraph.StateID(nextID)
         stateToID[key] = id
         idToState[id] = seed
@@ -222,21 +239,9 @@ private func compiledBFS(
     }
 
     var head = 0
-    var processed = 0
     while head < queue.count {
-        guard processed < configuration.maximumStateLimit else {
-            return .init(
-                graph: try graph(),
-                initialStateIDs: initialStateIDs,
-                result: .depthExceeded(statesCount: processed, limit: configuration.maximumStateLimit),
-                compilationIdentity: runtime.compilation.identity,
-                configuration: configuration,
-                compiledStates: idToState
-            )
-        }
         let current = queue[head]
         head += 1
-        processed += 1
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
@@ -276,6 +281,9 @@ private func compiledBFS(
             if let existing = stateToID[successorKey] {
                 targetID = existing
             } else {
+                guard stateToID.count < configuration.maximumStateLimit else {
+                    return try boundedResult()
+                }
                 targetID = StateGraph.StateID(nextID)
                 stateToID[successorKey] = targetID
                 idToState[targetID] = successor.state
@@ -304,7 +312,7 @@ private func compiledBFS(
     return .init(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
-        result: .ok(statesCount: processed),
+        result: .ok(statesCount: stateToID.count),
         compilationIdentity: runtime.compilation.identity,
         configuration: configuration,
         compiledStates: idToState
