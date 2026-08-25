@@ -29,13 +29,11 @@ public enum TemporalSymmetryReasonCode: String, CaseIterable, Codable, Sendable 
   case nonExactComparison
   case missingTemporalWitness
   case missingOrbitEvidence
-  case missingReportIdentity
   public var makesEvaluationUnavailable: Bool {
     switch self {
     case .invalidRegister, .missingPrerequisite, .missingEvidence, .partialEvidence, .foreignRun,
          .manifestDigestMismatch, .toolchainDigestMismatch, .configurationMismatch,
-         .executionFailed, .missingTemporalWitness, .missingOrbitEvidence,
-         .missingReportIdentity:
+         .executionFailed, .missingTemporalWitness, .missingOrbitEvidence:
       true
     case .explicitlyUnsupported, .declaredBlocked, .nonExactComparison:
       false
@@ -115,8 +113,6 @@ public struct TemporalSymmetryCaseEvidence: Sendable {
 public struct TemporalSymmetryGateInput: Sendable {
   public let reportID: UUID
   public let gateRunID: UUID
-  public let coreAdmission: TemporalSymmetryCoreAdmissionReference
-  public let coreAdmissionContext: TemporalSymmetryCoreAdmissionContext
   public let cases: TemporalSymmetryCases
   public let surface: TemporalSymmetrySupportSurface
   public let evidence: [TemporalSymmetryCaseEvidence]
@@ -126,8 +122,6 @@ public struct TemporalSymmetryGateInput: Sendable {
   public init(
     reportID: UUID = UUID(),
     gateRunID: UUID,
-    coreAdmission: TemporalSymmetryCoreAdmissionReference,
-    coreAdmissionContext: TemporalSymmetryCoreAdmissionContext,
     cases: TemporalSymmetryCases,
     surface: TemporalSymmetrySupportSurface,
     evidence: [TemporalSymmetryCaseEvidence],
@@ -137,8 +131,6 @@ public struct TemporalSymmetryGateInput: Sendable {
   ) {
     self.reportID = reportID
     self.gateRunID = gateRunID
-    self.coreAdmission = coreAdmission
-    self.coreAdmissionContext = coreAdmissionContext
     self.cases = cases
     self.surface = surface
     self.evidence = evidence
@@ -170,18 +162,15 @@ public struct TemporalSymmetrySupportGate: Sendable {
     let observations = casesByID.mapValues {
       inspect($0, evidence: evidenceByCaseID[$0.id], input: input)
     }
-    let coreAdmissionReasons = coreAdmissionReasons(input)
     let entries = try input.surface.entries.map {
       try decision(
         for: $0,
         observations: observations,
-        coreAdmissionReasons: coreAdmissionReasons,
         gateRunID: input.gateRunID)
     }
     let report = try TemporalSymmetryAdmission(
       reportID: input.reportID,
       gateRunID: input.gateRunID,
-      coreAdmission: input.coreAdmission,
       manifestSHA256: input.manifestSHA256,
       toolchainSHA256: input.toolchainSHA256,
       entries: entries,
@@ -201,7 +190,6 @@ public struct TemporalSymmetrySupportGate: Sendable {
     return try TemporalSymmetryAdmission(
       reportID: input.reportID,
       gateRunID: input.gateRunID,
-      coreAdmission: input.coreAdmission,
       manifestSHA256: validDigest(input.manifestSHA256),
       toolchainSHA256: validDigest(input.toolchainSHA256),
       entries: [entry],
@@ -248,7 +236,6 @@ public struct TemporalSymmetrySupportGate: Sendable {
   private func decision(
     for entry: TemporalSymmetrySupportSurfaceEntry,
     observations: [String: CaseObservation],
-    coreAdmissionReasons: Set<TemporalSymmetryReasonCode>,
     gateRunID: UUID
   ) throws -> TemporalSymmetryAdmissionEntry {
     if entry.requestedStatus == .unsupported {
@@ -270,7 +257,6 @@ public struct TemporalSymmetrySupportGate: Sendable {
         correlations.append(correlation)
       }
     }
-    reasons.formUnion(coreAdmissionReasons)
     if entry.requestedStatus == .blocked { reasons.insert(.declaredBlocked) }
     let decision: TemporalSymmetrySupportDecision = reasons.isEmpty ? .admitted : .blocked
     return try TemporalSymmetryAdmissionEntry(
@@ -280,24 +266,6 @@ public struct TemporalSymmetrySupportGate: Sendable {
       mandatoryCaseIDs: entry.mandatoryCaseIDs,
       evidence: references,
       caseRunCorrelations: correlations)
-  }
-  private func coreAdmissionReasons(_ input: TemporalSymmetryGateInput) -> Set<TemporalSymmetryReasonCode> {
-    let core = input.coreAdmission
-    let context = input.coreAdmissionContext
-    var reasons = Set<TemporalSymmetryReasonCode>()
-    if context.temporalSymmetryGateRunID != input.gateRunID {
-      reasons.insert(.foreignRun)
-    }
-    if core.reportID != context.reportID {
-      reasons.insert(.missingPrerequisite)
-    }
-    if core.gateRunID != context.coreGateRunID || core.report.path != context.reportPath {
-      reasons.insert(.foreignRun)
-    }
-    if core.report.sha256 != context.reportSHA256 {
-      reasons.insert(.manifestDigestMismatch)
-    }
-    return reasons
   }
   private func exitClass(for entries: [TemporalSymmetryAdmissionEntry]) -> TemporalSymmetryAdmissionExitClass {
     if entries.contains(where: { $0.reasonCodes.contains(where: \.makesEvaluationUnavailable) }) { return .unavailable }
@@ -431,49 +399,6 @@ public struct TemporalSymmetrySupportSurface: Equatable, Codable, Sendable {
     }
   }
 }
-public struct TemporalSymmetryCoreAdmissionReference: Equatable, Codable, Sendable {
-  public let reportID: UUID
-  public let gateRunID: UUID
-  public let report: CoreEvidenceReference
-  public init(reportID: UUID, gateRunID: UUID, report: CoreEvidenceReference) throws {
-    self.reportID = reportID
-    self.gateRunID = gateRunID
-    self.report = report
-    try report.validate()
-  }
-  private enum CodingKeys: String, CodingKey, CaseIterable { case reportID, gateRunID, report }
-  public init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(
-      reportID: container.decode(UUID.self, forKey: .reportID),
-      gateRunID: container.decode(UUID.self, forKey: .gateRunID),
-      report: container.decode(CoreEvidenceReference.self, forKey: .report))
-  }
-}
-/// Binds the required core-admission artifact to its P3 invocation.
-public struct TemporalSymmetryCoreAdmissionContext: Equatable, Sendable {
-  public let temporalSymmetryGateRunID: UUID
-  public let reportID: UUID
-  public let coreGateRunID: UUID
-  public let reportPath: String
-  public let reportSHA256: String
-  public init(
-    temporalSymmetryGateRunID: UUID,
-    reportID: UUID,
-    coreGateRunID: UUID,
-    reportPath: String,
-    reportSHA256: String
-  ) throws {
-    guard !reportPath.isEmpty, !reportPath.hasPrefix("/"), TLCReferencePin.isSHA256(reportSHA256) else {
-      throw ConformanceGovernanceError.invalidField(record: "core admission", field: "current context")
-    }
-    self.temporalSymmetryGateRunID = temporalSymmetryGateRunID
-    self.reportID = reportID
-    self.coreGateRunID = coreGateRunID
-    self.reportPath = reportPath
-    self.reportSHA256 = reportSHA256
-  }
-}
 public struct TemporalSymmetryAdmissionEntry: Equatable, Codable, Sendable {
   public let supportID: String
   public let decision: TemporalSymmetrySupportDecision
@@ -536,7 +461,6 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
   public let schema: String
   public let reportID: UUID
   public let gateRunID: UUID
-  public let coreAdmission: TemporalSymmetryCoreAdmissionReference
   public let authority: String
   public let manifestSHA256: String
   public let toolchainSHA256: String
@@ -546,7 +470,6 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
   public init(
     reportID: UUID,
     gateRunID: UUID,
-    coreAdmission: TemporalSymmetryCoreAdmissionReference,
     manifestSHA256: String,
     toolchainSHA256: String,
     entries: [TemporalSymmetryAdmissionEntry],
@@ -557,7 +480,6 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
       schema: Self.schema,
       reportID: reportID,
       gateRunID: gateRunID,
-      coreAdmission: coreAdmission,
       authority: Self.authorityBoundary,
       manifestSHA256: manifestSHA256,
       toolchainSHA256: toolchainSHA256,
@@ -569,7 +491,6 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
     schema: String,
     reportID: UUID,
     gateRunID: UUID,
-    coreAdmission: TemporalSymmetryCoreAdmissionReference,
     authority: String,
     manifestSHA256: String,
     toolchainSHA256: String,
@@ -612,7 +533,6 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
     self.schema = schema
     self.reportID = reportID
     self.gateRunID = gateRunID
-    self.coreAdmission = coreAdmission
     self.authority = authority
     self.manifestSHA256 = manifestSHA256
     self.toolchainSHA256 = toolchainSHA256
@@ -662,7 +582,7 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
     }
   }
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case schema, reportID, gateRunID, coreAdmission, authority, manifestSHA256, toolchainSHA256, entries
+    case schema, reportID, gateRunID, authority, manifestSHA256, toolchainSHA256, entries
     case admittedBounds, finalExitClass
   }
   public init(from decoder: Decoder) throws {
@@ -671,7 +591,6 @@ public struct TemporalSymmetryAdmission: Equatable, Codable, Sendable {
       schema: container.decode(String.self, forKey: .schema),
       reportID: container.decode(UUID.self, forKey: .reportID),
       gateRunID: container.decode(UUID.self, forKey: .gateRunID),
-      coreAdmission: container.decode(TemporalSymmetryCoreAdmissionReference.self, forKey: .coreAdmission),
       authority: container.decode(String.self, forKey: .authority),
       manifestSHA256: container.decode(String.self, forKey: .manifestSHA256),
       toolchainSHA256: container.decode(String.self, forKey: .toolchainSHA256),

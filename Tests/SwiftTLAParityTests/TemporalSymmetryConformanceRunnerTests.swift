@@ -102,8 +102,7 @@ struct TemporalSymmetryConformanceRunnerTests {
     let result = try runTemporalGate(
       from: canonicalRoot,
       evidence: evidence,
-      report: scratch.appendingPathComponent("support-admission.json"),
-      coreAdmission: scratch.appendingPathComponent("missing-core-admission.json"))
+      report: scratch.appendingPathComponent("support-admission.json"))
 
     #expect(result.status == 2)
     #expect(!result.output.contains("evidence must be retained inside the project"))
@@ -125,8 +124,7 @@ struct TemporalSymmetryConformanceRunnerTests {
   private func runTemporalGate(
     from root: URL,
     evidence: URL,
-    report: URL,
-    coreAdmission: URL
+    report: URL
   ) throws -> (status: Int32, output: String) {
     let executable = root.appendingPathComponent(".build/out/Products/Debug/tlc-validate")
     guard FileManager.default.isExecutableFile(atPath: executable.path) else {
@@ -141,8 +139,6 @@ struct TemporalSymmetryConformanceRunnerTests {
       "--evidence", evidence.path,
       "--report", report.path,
       "--run-id", UUID().uuidString,
-      "--core-admission", coreAdmission.path,
-      "--core-report-id", UUID().uuidString,
       "--prerequisite", "available"
     ]
     process.standardOutput = pipe

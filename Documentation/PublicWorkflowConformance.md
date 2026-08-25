@@ -112,6 +112,6 @@ behavior, device behavior, runtime UI behavior, or every package consumer. Its
 Apple matrix is build/test evidence only for the exact named destinations and
 the pinned nested package tree.
 
-Core graph support and temporal or symmetry support keep separate registers,
-reports, and authority boundaries. See [core support](CoreSupport.md) and
+Core graph conformance and temporal or symmetry support have separate claims
+and authority boundaries. See [core graph conformance](CoreGraphConformance.md) and
 [temporal and symmetry conformance](TemporalSymmetryConformance.md).

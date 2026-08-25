@@ -1,4 +1,4 @@
-.PHONY: build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-pr ci-release-qualification
+.PHONY: build examples core-conformance temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-pr ci-release-qualification
 
 TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-support-gate
 build:
@@ -10,9 +10,6 @@ examples:
 
 core-conformance:
 	./scripts/run_core_conformance.sh --case all --output .build/core-conformance-evidence
-
-core-support-gate:
-	./scripts/run_core_support_gate.sh --output .build/core-support-gate
 
 temporal-symmetry-support-gate:
 	./scripts/run_temporal_symmetry_support_gate.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)

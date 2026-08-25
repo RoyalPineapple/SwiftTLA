@@ -35,11 +35,10 @@ edge multiplicities, and outcomes.
 
 GitHub Actions retains the provenance, tool identity, raw TLC event stream,
 canonical runs, and `core-decision.json` for each declared case.
-The decision record references the exact run and graph chunks by digest. The
-gate reads those records and repeats the exact comparison before admission.
-The retained canonical records locate the first difference. See
-[Core graph conformance](CoreGraphConformance.md) and
-[Core support](CoreSupport.md).
+The decision record references the exact run and graph chunks by digest. Its
+reader reconstructs both graphs and repeats the comparison. The retained
+canonical records locate the first difference. See
+[Core graph conformance](CoreGraphConformance.md).
 
 ## Temporal and symmetry cases
 

@@ -2,14 +2,6 @@ import SwiftTLA
 import UpstreamParity
 import Foundation
 
-struct CoreSupportGateOptions {
-    let evidence: String
-    let report: String
-    let gateRunID: UUID
-    let prerequisiteAvailable: Bool
-    let conformanceExitCode: Int32
-}
-
 func validateMappings(
     _ entry: CoreConformanceCasesManifest.Entry,
     for spec: TLASpec
@@ -90,10 +82,10 @@ func validateIdentityMapping(
 
 func parseCoreConformanceOptions(
     _ arguments: [String]
-) throws -> (caseID: String, output: String, gateRunID: UUID?) {
+) throws -> (caseID: String, output: String, runID: UUID?) {
     var caseID: String?
     var output: String?
-    var gateRunID: UUID?
+    var runID: UUID?
     var index = 0
     while index < arguments.count {
         let option = arguments[index]
@@ -103,11 +95,11 @@ func parseCoreConformanceOptions(
             caseID = arguments[index + 1]
         case "--output" where output == nil:
             output = arguments[index + 1]
-        case "--run-id" where gateRunID == nil:
+        case "--run-id" where runID == nil:
             guard let value = UUID(uuidString: arguments[index + 1]) else {
-                throw CoreConformanceCLIError.invalidGateRunID(arguments[index + 1])
+                throw CoreConformanceCLIError.invalidRunID(arguments[index + 1])
             }
-            gateRunID = value
+            runID = value
         default:
             throw CoreConformanceCLIError.usage
         }
@@ -116,58 +108,7 @@ func parseCoreConformanceOptions(
     guard let caseID, !caseID.isEmpty, let output, !output.isEmpty else {
         throw CoreConformanceCLIError.usage
     }
-    return (caseID, output, gateRunID)
-}
-
-func parseCoreSupportGateOptions(_ arguments: [String]) throws -> CoreSupportGateOptions {
-    var evidence: String?
-    var report: String?
-    var gateRunID: UUID?
-    var prerequisiteAvailable = true
-    var conformanceExitCode = CoreConformanceExitCode.exact.rawValue
-    var index = 0
-    while index < arguments.count {
-        let option = arguments[index]
-        guard index + 1 < arguments.count else { throw CoreConformanceCLIError.usage }
-        let value = arguments[index + 1]
-        switch option {
-        case "--evidence" where evidence == nil:
-            evidence = value
-        case "--report" where report == nil:
-            report = value
-        case "--run-id" where gateRunID == nil:
-            guard let parsed = UUID(uuidString: value) else {
-                throw CoreConformanceCLIError.invalidGateRunID(value)
-            }
-            gateRunID = parsed
-        case "--prerequisite":
-            switch value {
-            case "available": prerequisiteAvailable = true
-            case "unavailable": prerequisiteAvailable = false
-            default: throw CoreConformanceCLIError.invalidPrerequisite(value)
-            }
-        case "--conformance-exit":
-            guard let parsed = Int32(value),
-                  parsed == CoreConformanceExitCode.exact.rawValue
-                    || parsed == CoreConformanceExitCode.semanticDifference.rawValue
-                    || parsed == CoreConformanceExitCode.failure.rawValue
-            else { throw CoreConformanceCLIError.invalidPrerequisite(value) }
-            conformanceExitCode = parsed
-        default:
-            throw CoreConformanceCLIError.usage
-        }
-        index += 2
-    }
-    guard let evidence, !evidence.isEmpty,
-          let report, !report.isEmpty,
-          let gateRunID
-    else { throw CoreConformanceCLIError.usage }
-    return CoreSupportGateOptions(
-        evidence: evidence,
-        report: report,
-        gateRunID: gateRunID,
-        prerequisiteAvailable: prerequisiteAvailable,
-        conformanceExitCode: conformanceExitCode)
+    return (caseID, output, runID)
 }
 
 func requiredEnvironment(_ name: String, _ environment: [String: String]) throws -> String {
@@ -215,7 +156,6 @@ func declaredCase(
         architecture: architecture,
         environment: [:],
         pin: pin,
-        governance: entry.governance,
         invocationMappings: try entry.invocationMappings.map { mapping in
             try CoreConformanceInvocationMapping(
                 wrapper: mapping.wrapper,
