@@ -19,12 +19,13 @@ suites; the wrapper's isolated scratch directory keeps that build out of the
 working tree.
 
 `SwiftTLAParityTests` contains the slower upstream corpus, TLC/oracle,
-core-governance, temporal/symmetry, and public-workflow checks:
+core-governance, and temporal/symmetry checks:
 
 ```sh
 ./scripts/local-validation.sh swiftpm-test "UpstreamParityTests"
 ```
 
-GitHub Actions runs the broad PR smoke suite. Do not invoke its underlying
-script directly on a local machine; use the approved wrapper for focused
-diagnosis.
+GitHub Actions runs the broad PR smoke suite as the `public-api` job. The suite
+checks generated value-machine and actor behavior, then builds valid and
+invalid external consumer packages. Run focused local diagnosis through the
+approved wrapper.
