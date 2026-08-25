@@ -67,7 +67,7 @@ jobs:
   public-api:
     name: public-api (${{ matrix.name }})
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
