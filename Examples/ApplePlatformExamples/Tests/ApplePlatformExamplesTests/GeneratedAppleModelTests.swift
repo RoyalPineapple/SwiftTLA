@@ -1,5 +1,6 @@
 import AVPipeline
 import Bluetooth
+import CoreBluetooth
 import XCTest
 
 final class GeneratedAppleModelTests: XCTestCase {
@@ -25,6 +26,12 @@ final class GeneratedAppleModelTests: XCTestCase {
         _ = try machine.send(.stopScan)
         let poweredOn = machine.state
         XCTAssertEqual(poweredOn.phase, .poweredOn)
+    }
+
+    func testBluetoothManagerStatesMapToTypedActions() {
+        XCTAssertEqual(BluetoothModel.Action(managerState: .poweredOn), .poweredOn)
+        XCTAssertEqual(BluetoothModel.Action(managerState: .poweredOff), .poweredOff)
+        XCTAssertNil(BluetoothModel.Action(managerState: .unknown))
     }
 
     func testPeripheralGeneratedLifecycle() async throws {
