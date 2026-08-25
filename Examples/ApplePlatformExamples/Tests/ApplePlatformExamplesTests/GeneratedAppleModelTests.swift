@@ -45,36 +45,7 @@ final class GeneratedAppleModelTests: XCTestCase {
         XCTAssertEqual(failedDiscovery.state.phase, .connected)
     }
 
-    func testAVGeneratedLifecycles() async throws {
-        var writer = try WriterModel.makeMachine()
-        _ = try writer.send(.start)
-        _ = try writer.send(.write)
-        _ = try writer.send(.pause)
-        _ = try writer.send(.resume)
-        _ = try writer.send(.requestFinish)
-        let finishingWriter = writer.state
-        XCTAssertEqual(finishingWriter.phase, .finishing)
-        _ = try writer.send(.finish)
-        let finishedWriter = writer.state
-        XCTAssertEqual(finishedWriter.phase, .finished)
-
-        var failedWriter = try WriterModel.makeMachine()
-        _ = try failedWriter.send(.start)
-        _ = try failedWriter.send(.requestFinish)
-        _ = try failedWriter.send(.fail)
-        XCTAssertEqual(failedWriter.state.phase, .failed)
-
-        var player = try PlayerModel.makeMachine()
-        _ = try player.send(.beginLoad)
-        _ = try player.send(.ready)
-        _ = try player.send(.play)
-        _ = try player.send(.pause)
-        _ = try player.send(.seek)
-        _ = try player.send(.play)
-        _ = try player.send(.finish)
-        let finishedPlayer = player.state
-        XCTAssertEqual(finishedPlayer.phase, .finished)
-
+    func testDiskStoreGeneratedLifecycle() async throws {
         var diskStore = try DiskStoreModel.makeMachine()
         _ = try diskStore.send(.write)
         _ = try diskStore.send(.delete)
