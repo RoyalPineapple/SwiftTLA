@@ -5,11 +5,30 @@ import SwiftTLAMacros
 
 @TLAModel
 private struct ActorCounter {
+    private enum Process: String, FiniteTLAValueDomain {
+        case only
+
+        static var defaultValue: Self { .only }
+        static let finiteValues: [Self] = [.only]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    private enum Step: String, CaseIterable {
+        case advance
+    }
+
     static var spec: TLASpec {
-        TLASpec("ActorCounter") {
-            let count = Var<Int>("count")
-            Variable(count, 0)
-            SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 1) }
+        #spec("ActorCounter") {
+            Algorithm("ActorCounter", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
+                Each(Process.all) { _ in
+                    Do(Step.advance) {
+                        When(count < 1)
+                        Assign(count, to: count + 1)
+                        Stop()
+                    }
+                }
+            })
         }
     }
 }
