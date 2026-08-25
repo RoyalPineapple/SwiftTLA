@@ -6,7 +6,7 @@
 
 Each generated model exposes these `Sendable` value types:
 
-- `State`: typed values for declared variables.
+- `State`: immutable typed values for declared variables.
 - `Action`: a typed action identity and typed parameters.
 - `Transition`: typed action, state before, and state after for one successful transition.
 
