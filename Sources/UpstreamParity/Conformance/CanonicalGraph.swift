@@ -164,16 +164,6 @@ package struct CanonicalEdge: Hashable, Sendable, Comparable {
 
 }
 
-package struct CanonicalStateObservation: Hashable, Sendable {
-    package let enabledActions: Set<String>
-    package let isTerminal: Bool
-
-    package init(enabledActions: Set<String>, isTerminal: Bool) {
-        self.enabledActions = enabledActions
-        self.isTerminal = isTerminal
-    }
-}
-
 package enum CanonicalGraphError: Error, Equatable, Sendable {
     case inconsistentStateBindings(expected: Set<String>, actual: Set<String>)
     case initialStateMissing(CanonicalStateKey)
@@ -224,18 +214,6 @@ package struct CanonicalGraph: Equatable, Sendable {
         states.values.first.map { Set($0.bindings.keys) } ?? []
     }
 
-    package var observations: [CanonicalStateKey: CanonicalStateObservation] {
-        let enabledByState = edgeOccurrences.keys.reduce(into: [CanonicalStateKey: Set<String>]()) { result, edge in
-            result[edge.source, default: []].insert(edge.action)
-        }
-        return Dictionary(uniqueKeysWithValues: states.keys.map { key in
-            let enabledActions = enabledByState[key, default: []]
-            return (key, CanonicalStateObservation(
-                enabledActions: enabledActions,
-                isTerminal: enabledActions.isEmpty
-            ))
-        })
-    }
 }
 
 package enum CanonicalOutcome: Hashable, Sendable {

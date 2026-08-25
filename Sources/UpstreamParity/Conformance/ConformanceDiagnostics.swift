@@ -88,8 +88,6 @@ extension ConformanceDifference {
       )
     case .edges(let expected, let actual):
       return edgeDifferenceReport(expected: expected, actual: actual)
-    case .observations(let expected, let actual):
-      return observationDifferenceReport(expected: expected, actual: actual)
     case .outcome(let expected, let actual):
       return .init(
         whatFailed: "The verification outcomes differ.",
@@ -243,22 +241,6 @@ private func edgeDifferenceReport(
   )
 }
 
-private func observationDifferenceReport(
-  expected: [CanonicalStateKey: CanonicalStateObservation],
-  actual: [CanonicalStateKey: CanonicalStateObservation]
-) -> ConformanceFailureReport {
-  let witness = Set(expected.keys).union(actual.keys).sorted().first { expected[$0] != actual[$0] }
-  let expectedObservation = witness.flatMap { expected[$0] }
-  let actualObservation = witness.flatMap { actual[$0] }
-  return .init(
-    whatFailed: "The enabled-action observation differs.",
-    whereItFailed: witness.map { "canonical state \($0.canonicalEncoding)" } ?? "canonical state observations",
-    expected: describe(expectedObservation),
-    actual: describe(actualObservation),
-    nextSafeAction: "Compare the enabled action guards at the named state in tlc-graph.jsonl and swift-graph.jsonl."
-  )
-}
-
 private func processFailureReport(
   what: String, phase: String, request: TLCProcessRequest, expected: String, actual: String,
   outputs: TLCProcessResult
@@ -307,11 +289,6 @@ private func describe(_ value: CanonicalOutcome) -> String {
   case .incomplete(let reason): "incomplete: \(reason)"
   case .executionError(let reason): "execution error: \(reason)"
   }
-}
-
-private func describe(_ observation: CanonicalStateObservation?) -> String {
-  guard let observation else { return "no observation retained" }
-  return "enabled actions \(observation.enabledActions.sorted()); terminal \(observation.isTerminal)."
 }
 
 private func describe(_ diagnostics: [CanonicalDiagnostic]) -> String {

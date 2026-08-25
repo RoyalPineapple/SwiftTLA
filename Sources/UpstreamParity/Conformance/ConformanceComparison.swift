@@ -48,7 +48,6 @@ package enum ConformanceDifferenceCategory: String, Codable, Hashable, Sendable 
     case initialStates
     case states
     case edges
-    case observations
     case outcome
     case errors
     case traces
@@ -59,10 +58,6 @@ package enum ConformanceDifference: Equatable, Sendable {
     case initialStates(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
     case states(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
     case edges(expected: [CanonicalEdge: Int], actual: [CanonicalEdge: Int])
-    case observations(
-        expected: [CanonicalStateKey: CanonicalStateObservation],
-        actual: [CanonicalStateKey: CanonicalStateObservation]
-    )
     case outcome(expected: CanonicalOutcome, actual: CanonicalOutcome)
     case errors(expected: [CanonicalDiagnostic], actual: [CanonicalDiagnostic])
     case traces(expected: [CanonicalTrace], actual: [CanonicalTrace])
@@ -73,7 +68,6 @@ package enum ConformanceDifference: Equatable, Sendable {
         case .initialStates: .initialStates
         case .states: .states
         case .edges: .edges
-        case .observations: .observations
         case .outcome: .outcome
         case .errors: .errors
         case .traces: .traces
@@ -148,9 +142,6 @@ private func compare(
     }
     if expected.graph.edgeOccurrences != actual.graph.edgeOccurrences {
         differences.append(.edges(expected: expected.graph.edgeOccurrences, actual: actual.graph.edgeOccurrences))
-    }
-    if expected.graph.observations != actual.graph.observations {
-        differences.append(.observations(expected: expected.graph.observations, actual: actual.graph.observations))
     }
     if expected.outcome != actual.outcome || !expected.isPassEligible || !actual.isPassEligible {
         differences.append(.outcome(expected: expected.outcome, actual: actual.outcome))
@@ -273,12 +264,6 @@ func comparisonDifferencesJSON(_ comparison: ExactFiniteTLCComparison) -> [[Stri
                 "expected": firstDifferentEdgeOccurrenceJSON(expected, actual),
                 "actual": firstDifferentEdgeOccurrenceJSON(actual, expected)
             ]
-        case .observations(let expected, let actual):
-            [
-                "category": difference.category.rawValue,
-                "expected": firstDifferentObservationJSON(expected, actual),
-                "actual": firstDifferentObservationJSON(actual, expected)
-            ]
         case .outcome(let expected, let actual):
             ["category": difference.category.rawValue, "expected": outcomeJSON(expected), "actual": outcomeJSON(actual)]
         case .errors(let expected, let actual):
@@ -317,18 +302,4 @@ private func firstDifferentEdgeOccurrenceJSON(
         expected[$0] != actual[$0]
     }), let count = expected[edge] else { return [] }
     return [["edge": edge.canonicalEncoding, "count": count]]
-}
-
-private func firstDifferentObservationJSON(
-    _ expected: [CanonicalStateKey: CanonicalStateObservation],
-    _ actual: [CanonicalStateKey: CanonicalStateObservation]
-) -> [[String: Any]] {
-    guard let state = Set(expected.keys).union(actual.keys).sorted().first(where: {
-        expected[$0] != actual[$0]
-    }), let observation = expected[state] else { return [] }
-    return [[
-        "state": state.canonicalEncoding,
-        "enabledActions": observation.enabledActions.sorted(),
-        "isTerminal": observation.isTerminal
-    ]]
 }
