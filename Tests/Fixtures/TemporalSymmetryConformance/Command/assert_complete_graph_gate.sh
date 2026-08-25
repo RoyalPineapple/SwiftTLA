@@ -18,9 +18,8 @@ set -e
 test "$source_status" -eq 0
 
 run_id="$(jq -r '.gateRunID' "$(current_report "$TMP/source")")"
-core_report="$TMP/source/runs/$run_id/core/support-admission.json"
 source_cases="$TMP/source/runs/$run_id/cases"
-test -f "$core_report"
+test -f "$TMP/source/runs/$run_id/core/hour-clock/core-decision.json"
 test -d "$source_cases"
 
 expect_unavailable() {
@@ -34,7 +33,6 @@ expect_unavailable() {
         cd "$ROOT"
         swift run tlc-validate temporal-symmetry gate \
             --evidence "$cases" --report "$report" --run-id "$run_id" \
-            --core-admission "$core_report" --core-report-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
             --prerequisite available
     ) >"$TMP/$name/stdout" 2>"$TMP/$name/stderr"
     local status=$?

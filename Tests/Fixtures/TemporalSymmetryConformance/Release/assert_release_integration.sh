@@ -28,28 +28,18 @@ success_report="$(current_report "$success_output")"
 jq -e '.finalExitClass == "success" and ([.entries[] | select(.decision == "admitted")] | length > 0)' \
     "$success_report" >/dev/null
 success_run="$(jq -r '.gateRunID' "$success_report")"
-core_run="$(jq -r '.coreAdmission.gateRunID' "$success_report")"
-core_report="$success_output/runs/$success_run/core/support-admission.json"
 core_invocation="$success_output/runs/$success_run/invocation.json"
-test -f "$core_report"
-jq -e --arg core_run "$core_run" '
-    .gateRunID == $core_run and .finalExitClass == "success"
-' "$core_report" >/dev/null
-jq -e --arg gate_run "$success_run" --arg core_run "$core_run" --arg core_path "runs/$success_run/core/support-admission.json" \
-    --arg core_sha "$(shasum -a 256 "$core_report" | awk '{print $1}')" '
+test -f "$success_output/runs/$success_run/core/hour-clock/core-decision.json"
+test -f "$success_output/runs/$success_run/core/die-hard-type-ok/core-decision.json"
+test -f "$success_output/runs/$success_run/core/multicar-elevator/core-decision.json"
+jq -e --arg gate_run "$success_run" '
     .gateRunID == $gate_run
-    and .coreGateRunID == $core_run
-    and .coreAdmissionPath == $core_path
-    and .coreReportSHA256 == $core_sha
+    and .prerequisite == "available"
+    and .coreConformanceExit == 0
 ' "$core_invocation" >/dev/null
-jq -e --arg core_path "runs/$success_run/core/support-admission.json" \
-    --arg core_sha "$(shasum -a 256 "$core_report" | awk '{print $1}')" '
-    .coreAdmission.report.path == $core_path
-    and .coreAdmission.report.sha256 == $core_sha
-' "$success_report" >/dev/null
 
 unavailable_output="$TMP/unavailable"
-expect_exit 2 env CORE_CONFORMANCE_TOOL_ROOT="$TOOL_ROOT" TEMPORAL_SYMMETRY_TOOL_ROOT="$TMP/missing-tools" \
+expect_exit 2 env CORE_CONFORMANCE_TOOL_ROOT="$TOOL_ROOT" CORE_CONFORMANCE_RUNNER="$TMP/missing-core-runner" \
     make -C "$ROOT" temporal-symmetry-release-check TEMPORAL_SYMMETRY_OUTPUT="$unavailable_output"
 unavailable_report="$(current_report "$unavailable_output")"
 jq -e '.finalExitClass == "unavailable" and ([.entries[] | select(.decision == "admitted")] | length == 0)' \

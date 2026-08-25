@@ -470,7 +470,6 @@ private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
     case usage
     case invalidRunID(String)
     case invalidPrerequisite(String)
-    case invalidCoreReportID(String)
     case evidenceOutsideProject(String)
     case invalidEvidence(String)
     case unsafeReportDestination(String)
@@ -479,14 +478,12 @@ private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
         switch self {
         case .usage:
             return "Usage: tlc-validate temporal-symmetry <run|gate> --evidence <directory> "
-                + "--report <file> --run-id <uuid> --core-admission <file> --core-report-id <uuid> "
+                + "--report <file> --run-id <uuid> "
                 + "[--prerequisite available|unavailable]"
         case .invalidRunID(let value):
             return "invalid temporal-symmetry gate run ID: \(value)"
         case .invalidPrerequisite(let value):
             return "invalid temporal-symmetry prerequisite status: \(value)"
-        case .invalidCoreReportID(let value):
-            return "invalid temporal-symmetry core report ID: \(value)"
         case .evidenceOutsideProject(let path):
             return "temporal-symmetry evidence must be retained inside the project: \(path)"
         case .invalidEvidence(let message):
@@ -502,8 +499,6 @@ private struct TemporalSymmetryGateOptions {
     let evidence: String
     let report: String
     let gateRunID: UUID
-    let coreAdmission: String
-    let coreReportID: UUID
     let prerequisiteAvailable: Bool
 }
 private func runTemporalSymmetry(arguments: [String]) -> Never {
@@ -595,7 +590,6 @@ private func validateTemporalSymmetryReportDestination(
         governanceURL(
             environment["TEMPORAL_SYMMETRY_TOOLCHAIN"], projectRoot: projectRoot,
             defaultPath: "Verification/CoreConformance/toolchain.json"),
-        URL(fileURLWithPath: options.coreAdmission),
         URL(fileURLWithPath: options.evidence)
     ]
     let candidate = resolvedProspectivePath(reportURL)
@@ -621,19 +615,6 @@ private func temporalSymmetryAdmissionReport(
     let surface = try decode(TemporalSymmetrySupportSurface.self, at: surfaceURL)
     let manifestSHA256 = try ConformanceEvidence.reference(for: casesURL, beneath: projectRoot).sha256
     let toolchainSHA256 = try ConformanceEvidence.reference(for: toolchainURL, beneath: projectRoot).sha256
-    let coreURL = URL(fileURLWithPath: options.coreAdmission).standardizedFileURL
-    let coreEvidence = try ConformanceEvidence.reference(for: coreURL, beneath: projectRoot)
-    let coreReport = try decode(CoreSupportAdmission.self, at: coreURL)
-    let coreReference = try TemporalSymmetryCoreAdmissionReference(
-        reportID: options.coreReportID,
-        gateRunID: coreReport.gateRunID,
-        report: coreEvidence)
-    let coreContext = try TemporalSymmetryCoreAdmissionContext(
-        temporalSymmetryGateRunID: options.gateRunID,
-        reportID: coreReference.reportID,
-        coreGateRunID: coreReport.gateRunID,
-        reportPath: coreEvidence.path,
-        reportSHA256: coreEvidence.sha256)
     let evidenceRoot = URL(fileURLWithPath: options.evidence).standardizedFileURL
     _ = try ConformanceEvidence.relativePath(for: evidenceRoot, beneath: projectRoot)
     let evidence = try temporalSymmetryEvidence(
@@ -644,14 +625,12 @@ private func temporalSymmetryAdmissionReport(
         toolchainSHA256: toolchainSHA256)
     return try TemporalSymmetrySupportGate().evaluate(TemporalSymmetryGateInput(
         gateRunID: options.gateRunID,
-        coreAdmission: coreReference,
-        coreAdmissionContext: coreContext,
         cases: cases,
         surface: surface,
         evidence: evidence,
         manifestSHA256: manifestSHA256,
         toolchainSHA256: toolchainSHA256,
-        prerequisiteAvailable: options.prerequisiteAvailable && coreReport.finalExitClass == .success))
+        prerequisiteAvailable: options.prerequisiteAvailable))
 }
 private func temporalSymmetryEvidence(
     cases: TemporalSymmetryCases,
@@ -764,10 +743,6 @@ private func requiredJSONObject(_ url: URL) throws -> [String: Any] {
     return object
 }
 private func unavailableTemporalSymmetryReport(gateRunID: UUID) throws -> TemporalSymmetryAdmission {
-    let unavailableReference = try CoreEvidenceReference(
-        path: "unavailable/core-admission.json", sha256: String(repeating: "0", count: 64))
-    let coreAdmission = try TemporalSymmetryCoreAdmissionReference(
-        reportID: UUID(), gateRunID: UUID(), report: unavailableReference)
     let entry = try TemporalSymmetryAdmissionEntry(
         supportID: "governance-register",
         decision: .blocked,
@@ -776,7 +751,6 @@ private func unavailableTemporalSymmetryReport(gateRunID: UUID) throws -> Tempor
     return try TemporalSymmetryAdmission(
         reportID: UUID(),
         gateRunID: gateRunID,
-        coreAdmission: coreAdmission,
         manifestSHA256: String(repeating: "0", count: 64),
         toolchainSHA256: String(repeating: "0", count: 64),
         entries: [entry],
@@ -787,8 +761,6 @@ private func parseTemporalSymmetryGateOptions(_ arguments: [String]) throws -> T
     var evidence: String?
     var report: String?
     var gateRunID: UUID?
-    var coreAdmission: String?
-    var coreReportID: UUID?
     var prerequisiteAvailable = true
     var index = 0
     while index < arguments.count {
@@ -805,13 +777,6 @@ private func parseTemporalSymmetryGateOptions(_ arguments: [String]) throws -> T
                 throw TemporalSymmetryCLIError.invalidRunID(value)
             }
             gateRunID = parsed
-        case "--core-admission" where coreAdmission == nil:
-            coreAdmission = value
-        case "--core-report-id" where coreReportID == nil:
-            guard let parsed = UUID(uuidString: value) else {
-                throw TemporalSymmetryCLIError.invalidCoreReportID(value)
-            }
-            coreReportID = parsed
         case "--prerequisite":
             switch value {
             case "available": prerequisiteAvailable = true
@@ -825,9 +790,7 @@ private func parseTemporalSymmetryGateOptions(_ arguments: [String]) throws -> T
     }
     guard let evidence, !evidence.isEmpty,
           let report, !report.isEmpty,
-          let gateRunID,
-          let coreAdmission, !coreAdmission.isEmpty,
-          let coreReportID
+          let gateRunID
     else {
         throw TemporalSymmetryCLIError.usage
     }
@@ -835,8 +798,6 @@ private func parseTemporalSymmetryGateOptions(_ arguments: [String]) throws -> T
         evidence: evidence,
         report: report,
         gateRunID: gateRunID,
-        coreAdmission: coreAdmission,
-        coreReportID: coreReportID,
         prerequisiteAvailable: prerequisiteAvailable)
 }
 private func temporalSymmetryExitCode(_ exitClass: TemporalSymmetryAdmissionExitClass) -> Int32 {

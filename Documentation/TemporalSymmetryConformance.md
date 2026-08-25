@@ -9,8 +9,8 @@ not define a hidden oracle.
 
 ## Run the hosted gate
 
-GitHub Actions validates the checked-in registers, then creates a current core
-admission and a current temporal and symmetry run. Local broad gate execution
+GitHub Actions validates the checked-in registers, requires exact core graph
+conformance, and then creates a temporal and symmetry run. Local broad gate execution
 requires explicit authorization and is diagnostic-only. The current-report
 reference is:
 
@@ -26,7 +26,8 @@ are under:
 ```
 
 Do not use an old report as current evidence. Each report binds its cases,
-comparison artifacts, core admission, digests, and run IDs to one gate run.
+comparison artifacts, digests, and run IDs to one gate run. The retained
+invocation records the core-conformance exit status used as its prerequisite.
 
 ## Read the result
 

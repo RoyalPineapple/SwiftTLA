@@ -25,24 +25,12 @@ expect_exit() {
     fi
 }
 
-core_run_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-core_report="$TMP/core-admission.json"
-expect_exit 2 env CORE_CONFORMANCE_CASES="$ROOT/Verification/CoreConformance/cases.json" \
-    swift run tlc-validate core-conformance gate \
-    --evidence "$TMP/missing-core-evidence" \
-    --report "$core_report" \
-    --run-id "$core_run_id" \
-    --prerequisite unavailable
-test -f "$core_report"
-
 run_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 report="$TMP/temporal-symmetry-admission.json"
 expect_exit 2 swift run tlc-validate temporal-symmetry gate \
     --evidence "$TMP/missing-comparisons" \
     --report "$report" \
     --run-id "$run_id" \
-    --core-admission "$core_report" \
-    --core-report-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
     --prerequisite unavailable
 test -f "$report"
 jq -e '.schema == "TemporalSymmetryAdmission" and .gateRunID == $run and .finalExitClass == "unavailable"' \
@@ -57,8 +45,6 @@ expect_exit 2 swift run tlc-validate temporal-symmetry run \
     --evidence "$TMP/missing-comparisons" \
     --report "$run_report" \
     --run-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
-    --core-admission "$core_report" \
-    --core-report-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
     --prerequisite unavailable
 test -f "$run_report"
 
@@ -71,8 +57,6 @@ assert_invalid_register() {
         --evidence "$TMP/missing-comparisons" \
         --report "$invalid_report" \
         --run-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
-        --core-admission "$core_report" \
-        --core-report-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
         --prerequisite available
     test -f "$invalid_report"
     jq -e '.finalExitClass == "unavailable" and any(.entries[]; .reasonCodes | index("invalidRegister"))' \
@@ -98,8 +82,6 @@ expect_exit 2 swift run tlc-validate temporal-symmetry gate \
     --evidence "$TMP/missing-comparisons" \
     --report "$manifest" \
     --run-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
-    --core-admission "$core_report" \
-    --core-report-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
     --prerequisite unavailable
 manifest_digest_after="$(shasum -a 256 "$manifest" | awk '{print $1}')"
 test "$manifest_digest_before" = "$manifest_digest_after"
@@ -110,8 +92,6 @@ expect_exit 2 swift run tlc-validate temporal-symmetry gate \
     --evidence "$TMP/missing-comparisons" \
     --report "$manifest_alias" \
     --run-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
-    --core-admission "$core_report" \
-    --core-report-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
     --prerequisite unavailable
 manifest_digest_after_alias="$(shasum -a 256 "$manifest" | awk '{print $1}')"
 test "$manifest_digest_before" = "$manifest_digest_after_alias"

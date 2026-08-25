@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 struct TemporalSymmetryCommandContractTests {
-  @Test("release qualification retains a current core context and runs the temporal gate")
+  @Test("release qualification requires exact core conformance before the temporal gate")
   func releaseQualificationContract() throws {
     let root = projectRoot()
     let script = try String(contentsOf: root.appendingPathComponent("scripts/run_temporal_symmetry_support_gate.sh"))
@@ -13,11 +13,8 @@ struct TemporalSymmetryCommandContractTests {
       ".github/workflows/temporal-symmetry-conformance.yml"))
 
     #expect(script.contains("temporal-symmetry run"))
-    #expect(script.contains("--core-admission"))
-    #expect(script.contains("--core-report-id"))
-    #expect(script.contains("CURRENT_CORE_REFERENCE"))
-    #expect(script.contains("coreGateRunID"))
-    #expect(script.contains("coreReportSHA256"))
+    #expect(script.contains("run_core_conformance.sh"))
+    #expect(script.contains("coreConformanceExit"))
     #expect(script.contains("runs/$GATE_RUN_ID"))
     #expect(makefile.contains("temporal-symmetry-support-gate:"))
     #expect(makefile.contains("temporal-symmetry-release-check:"))
