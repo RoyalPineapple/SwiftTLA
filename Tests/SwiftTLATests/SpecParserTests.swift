@@ -64,9 +64,10 @@ private func parserEnum(
         #expect(specification.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.string("left"), .string("right")])
         ])
-        let facts = parsed.machineSurfaceSwiftFacts(for: compilation)
-        let increment = try #require(compilation.layout.actionID(named: "increment"))
-        #expect(facts.actionBindingTypes[increment] == ["Node"])
+        let increment = try #require(compilation.machineSurfacePlan.actions.first {
+            $0.formalName == "increment"
+        })
+        #expect(increment.bindings.map(\.swiftType) == ["Node"])
     }
 
     @Test("parser retains unsupported procedure declarations for compiler diagnostics")
@@ -115,11 +116,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let compilation = try compile(parsed, named: "Counter")
-        let surface = try MachineSurfacePlan(
-            compilation: compilation,
-            swiftFacts: parsed.machineSurfaceSwiftFacts(for: compilation)
-        )
-        #expect(surface.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
+        #expect(compilation.machineSurfacePlan.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
     }
 
     @Test("Algorithm parser carries prior shared bindings into mapping initializers")
@@ -359,7 +356,7 @@ private func parserEnum(
             try parseClosure("{ CollectionAction(\"update\") }")
         )
 
-        #expect(parsed.collectionActions.isEmpty)
+        #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
             "CollectionAction requires a literal name, a declared collection binding, and a builder body."
         ])
@@ -1010,8 +1007,8 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let compilation = try compile(parsed, named: "FunctionDomain")
         let successors = try #require(compilation.spec.variables.first { $0.name == "successors" })
-        let successorsID = try #require(compilation.layout.variableID(named: successors.name))
-        #expect(parsed.machineSurfaceSwiftFacts(for: compilation).variableTypes[successorsID] == "Function<Node, SetExpr<Node>>")
+        let surface = try #require(compilation.machineSurfacePlan.variables.first { $0.formalName == successors.name })
+        #expect(surface.swiftType == "Function<Node, SetExpr<Node>>")
         #expect(successors.initialSet?.description.contains("Cardinality") == true)
     }
 
@@ -1410,8 +1407,8 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.variables.map(\.swiftTypeName) == ["SwiftTLA.Function<Model.Node, SwiftTLA.SetExpr<Swift.Int>>"])
     }
 
-    @Test("top-level variable type facts are retained in the parser context")
-    func retainsAnnotatedVariableTypeInSourceContext() throws {
+    @Test("top-level variable declarations retain their Swift type")
+    func retainsAnnotatedVariableType() throws {
         let source = """
         {
             let mode: SharedVariable<CameraMode> = SharedVar("mode", initial: CameraMode.idle)
@@ -1422,8 +1419,6 @@ private enum ParserNode: String, FiniteTLAValueDomain {
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.map(\.swiftTypeName) == ["CameraMode"])
-        #expect(parsed.sourceContext.variables.map(\.sourceName) == ["mode"])
-        #expect(parsed.sourceContext.swiftVariableTypes == ["mode": "CameraMode"])
     }
 
     @Test func finiteVariableDomainsCompareAsFormalSets() throws {

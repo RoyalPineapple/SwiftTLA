@@ -56,24 +56,50 @@ public struct SymmetricMember<Element: Identifiable> {
 
 public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   public let metadata: SymmetricCollectionMetadata
+  let generatedElementType: String?
+  let generatedValueType: String?
 
   public var name: String { metadata.name }
   public var verificationScope: Int { metadata.verificationScope }
   public var initial: TLAValue { metadata.initial }
 
   public init(name: String, verificationScope: Int, initial: TLAValue) {
+    self.init(
+      name: name,
+      verificationScope: verificationScope,
+      initial: initial,
+      generatedElementType: nil,
+      generatedValueType: nil
+    )
+  }
+
+  init(
+    name: String,
+    verificationScope: Int,
+    initial: TLAValue,
+    generatedElementType: String?,
+    generatedValueType: String?
+  ) {
     self.metadata = SymmetricCollectionMetadata(
       name: name,
       verificationScope: verificationScope,
       initial: initial
     )
+    self.generatedElementType = generatedElementType
+    self.generatedValueType = generatedValueType
   }
 
   var variable: NamedVar {
     NamedVar(
       name: name,
       initial: .function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) })),
-      collectionType: .dictionary(verificationScope)
+      collectionType: .dictionary(verificationScope),
+      generatedSwiftType: generatedElementType.flatMap { element in
+        generatedValueType.map { value in
+          "IdentifiedModelCollection<\(element), \(value)>"
+        }
+      },
+      origin: .source
     )
   }
 }
@@ -323,7 +349,12 @@ public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
   initial: Value
 ) -> SymmetricCollectionDecl {
   SymmetricCollectionDecl(
-    name: collection.name, verificationScope: verificationScope, initial: initial.tlaValue)
+    name: collection.name,
+    verificationScope: verificationScope,
+    initial: initial.tlaValue,
+    generatedElementType: String(reflecting: Element.self),
+    generatedValueType: String(reflecting: Value.self)
+  )
 }
 
 @discardableResult
@@ -333,7 +364,12 @@ public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
   elementType: Element.Type
 ) -> SymmetricCollectionDecl {
   SymmetricCollectionDecl(
-    name: initialState.name, verificationScope: verificationScope, initial: initialState.initial ?? Value.defaultValue.tlaValue)
+    name: initialState.name,
+    verificationScope: verificationScope,
+    initial: initialState.initial ?? Value.defaultValue.tlaValue,
+    generatedElementType: String(reflecting: Element.self),
+    generatedValueType: String(reflecting: Value.self)
+  )
 }
 
 @discardableResult
@@ -344,5 +380,9 @@ public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
 ) -> ActionDecl {
   let member = generatedBinderName()
   let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member))
-  return ActionDecl(name, .existsAction(member, collection.memberDomain, body(token)))
+  return ActionDecl(
+    name,
+    .existsAction(member, collection.memberDomain, body(token)),
+    generatedSymmetricCollectionName: collection.name
+  )
 }

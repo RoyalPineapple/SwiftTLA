@@ -5,40 +5,10 @@ import SwiftBasicFormat
 extension ParserSession {
     // MARK: - Unified spec builder parser
 
-    /// Source-boundary declaration facts for one specification closure.
-    public struct BoundSourceContext: Sendable, Equatable {
-        public struct Variable: Sendable, Equatable {
-            public let sourceName: String
-            public let swiftTypeName: String?
-
-            public init(sourceName: String, swiftTypeName: String?) {
-                self.sourceName = sourceName
-                self.swiftTypeName = swiftTypeName
-            }
-        }
-
-        public let variables: [Variable]
-
-        public init(variables: [Variable] = []) {
-            self.variables = variables
-        }
-
-        public var swiftVariableTypes: [String: String] {
-            Dictionary(
-                uniqueKeysWithValues: variables.compactMap { variable in
-                    variable.swiftTypeName.map { (variable.sourceName, $0) }
-                }
-            )
-        }
-    }
-
     public struct ParsedSpecComponents {
-        /// Canonical formal variables and Swift-only type facts for generated
-        /// surface code.
         public var variables: [ParsedVariable] = []
         public var actions: [ParsedAction] = []
         public var symmetricCollections: [ParsedSymmetricCollection] = []
-        public var collectionActions: [ParsedCollectionAction] = []
         public var diagnostics: [SymmetricCollectionParseDiagnostic] = []
         public var invariants: [(name: String, body: StateExpr)] = []
         public var temporal: [(name: String, expr: TemporalExpr)] = []
@@ -56,98 +26,12 @@ extension ParserSession {
         /// Authored algorithms in the source model.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [ConstantDecl] = []
-        /// The parser's top-level declaration facts for generated Swift.
-        public var sourceContext = BoundSourceContext()
         var instanceBindings: [String: FormalModuleInstance] = [:]
         var algorithmBindings: [String: Algorithm] = [:]
-
-        public func swiftVariableTypes() -> [String: String] {
-            var types = sourceContext.swiftVariableTypes
-            for algorithm in sourceAlgorithms {
-                let localNames: Set<String> = Set(algorithm.model.processes.flatMap { process in
-                    process.components.compactMap {
-                        guard case .local(let state) = $0 else { return nil }
-                        return state.root
-                    }
-                })
-                for state in algorithm.model.stateDeclarations {
-                    if let type = state.swiftTypeName {
-                        types[state.root] = localNames.contains(state.root) ? "TLAValue" : type
-                    }
-                }
-            }
-            return types
-        }
-
-        package func machineSurfaceSwiftFacts(
-            for compilation: CompiledSpecification
-        ) -> MachineSurfaceSwiftFacts {
-            let variableTypesByName = swiftVariableTypes()
-            let actionBindingTypesByName = Dictionary(
-                uniqueKeysWithValues: actions.map { ($0.name, $0.bindingSwiftTypes) }
-            )
-            let symmetricCollectionsByName = Dictionary(
-                uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0) }
-            )
-            let collectionActionsByName = Dictionary(
-                uniqueKeysWithValues: collectionActions.map { ($0.name, $0.collectionName) }
-            )
-            let variableIDsByName = Dictionary(
-                uniqueKeysWithValues: compilation.layout.variables.map {
-                    ($0.declaration.name, $0.id)
-                }
-            )
-            let variableTypes = compilation.layout.variables.reduce(into: [VariableID: String]()) {
-                facts, layout in
-                if let swiftType = variableTypesByName[layout.declaration.name] {
-                    facts[layout.id] = swiftType
-                }
-            }
-            let actionBindingTypes = compilation.layout.actions.reduce(into: [ActionID: [String?]]()) {
-                facts, layout in
-                let action = compilation.spec.actions[layout.id.ordinal]
-                let types = action.generatedBindingSwiftTypes.isEmpty
-                    ? actionBindingTypesByName[layout.declaration.name, default: [:]]
-                    : action.generatedBindingSwiftTypes
-                let bindings = action.bindings.map { types[$0.name] }
-                if bindings.contains(where: { $0 != nil }) {
-                    facts[layout.id] = bindings
-                }
-            }
-            let symmetricCollections = compilation.layout.variables.reduce(
-                into: [VariableID: MachineSurfaceSwiftFacts.SymmetricCollection]()
-            ) { facts, layout in
-                guard let collection = symmetricCollectionsByName[layout.declaration.name] else {
-                    return
-                }
-                facts[layout.id] = .init(
-                    elementType: collection.elementType,
-                    valueType: collection.valueType,
-                    verificationScope: collection.verificationScope,
-                    initial: collection.declaration.initial
-                )
-            }
-            let collectionActions = compilation.layout.actions.reduce(into: [ActionID: VariableID]()) {
-                facts, layout in
-                guard let collectionName = collectionActionsByName[layout.declaration.name],
-                      let variableID = variableIDsByName[collectionName]
-                else {
-                    return
-                }
-                facts[layout.id] = variableID
-            }
-            return .init(
-                variableTypes: variableTypes,
-                actionBindingTypes: actionBindingTypes,
-                symmetricCollections: symmetricCollections,
-                collectionActions: collectionActions
-            )
-        }
     }
 
     public struct ParsedVariable: Sendable, Equatable {
         public var formal: NamedVar
-        public var swiftTypeName: String?
 
         public init(
             name: String,
@@ -164,14 +48,23 @@ extension ParserSession {
                 initialSet: initialSet,
                 initExpr: initExpr,
                 lazySet: lazySet,
-                collectionType: collectionType
+                collectionType: collectionType,
+                generatedSwiftType: swiftTypeName,
+                origin: .source
             )
-            self.swiftTypeName = swiftTypeName
         }
 
         public init(formal: NamedVar, swiftTypeName: String? = nil) {
-            self.formal = formal
-            self.swiftTypeName = swiftTypeName
+            self.formal = NamedVar(
+                name: formal.name,
+                initial: formal.initial,
+                initialSet: formal.initialSet,
+                initExpr: formal.initExpr,
+                lazySet: formal.lazySet,
+                collectionType: formal.collectionType,
+                generatedSwiftType: swiftTypeName ?? formal.generatedSwiftType,
+                origin: formal.origin
+            )
         }
 
         public var name: String { formal.name }
@@ -180,6 +73,7 @@ extension ParserSession {
         public var initExpr: StateExpr? { formal.initExpr }
         public var lazySet: StateExpr? { formal.lazySet }
         public var collectionType: CollectionVarType { formal.collectionType }
+        public var swiftTypeName: String? { formal.generatedSwiftType }
     }
 
     public struct ParsedAction: Sendable, Equatable {
@@ -187,35 +81,31 @@ extension ParserSession {
         public let body: ActionExpr
         public let bindings: [ActionBinding]
         public let bindingSwiftTypes: [String: String]
+        public let symmetricCollectionName: String?
 
         public init(
             name: String,
             body: ActionExpr,
             bindings: [ActionBinding] = [],
-            bindingSwiftTypes: [String: String] = [:]
+            bindingSwiftTypes: [String: String] = [:],
+            symmetricCollectionName: String? = nil
         ) {
             self.name = name
             self.body = body
             self.bindings = bindings
             self.bindingSwiftTypes = bindingSwiftTypes
+            self.symmetricCollectionName = symmetricCollectionName
         }
     }
 
     public struct ParsedSymmetricCollection {
-        public let name: String
-        public let elementType: String
-        public let valueType: String
-        public let verificationScope: Int
         public let source: String
         public let declaration: SymmetricCollectionDecl
-    }
 
-    public struct ParsedCollectionAction {
-        public let name: String
-        public let collectionName: String
-        /// Swift-only source provenance. The executable action is retained
-        /// only in `ParsedAction` and lowered once into `TLASpec`.
-        public let source: String
+        public var name: String { declaration.name }
+        public var elementType: String? { declaration.generatedElementType }
+        public var valueType: String? { declaration.generatedValueType }
+        public var verificationScope: Int { declaration.verificationScope }
     }
 
     /// Evidence retained when the source parser cannot form a formal model.
@@ -374,9 +264,6 @@ extension ParserSession {
                 ))
             }
         }
-        result.sourceContext = .init(variables: result.variables.map {
-            .init(sourceName: $0.name, swiftTypeName: $0.swiftTypeName)
-        })
         return result
     }
 

@@ -67,12 +67,11 @@ enum TLASpecVerifier {
         }
 
         let compilation = try parsed.compile(specificationName: source.name)
-        let swiftFacts = parsed.machineSurfaceSwiftFacts(for: compilation)
 
         return MacroCompilation(
             typeName: typeName,
             compilation: compilation,
-            machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
+            machineSurface: compilation.machineSurfacePlan,
             enumInfos: enumInfos
         )
     }

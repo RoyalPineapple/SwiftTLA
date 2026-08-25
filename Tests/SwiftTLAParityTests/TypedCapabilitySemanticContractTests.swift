@@ -23,7 +23,7 @@ struct TypedCapabilitySemanticContractTests {
 
         let tla = try compilation.renderedTLAModuleBundle()
         let plusCal = try compilation.renderedPlusCalBundle()
-        let machineSurface = try MachineSurfacePlan(compilation: compilation)
+        let machineSurface = compilation.machineSurfacePlan
         let exploration = try ModelChecker(
             compilation: compilation,
             configuration: .init(maximumStateLimit: 10)

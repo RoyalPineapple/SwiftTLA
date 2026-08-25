@@ -93,7 +93,9 @@ enum AlgorithmLowerer {
                 name: state.root,
                 initial: .int(0),
                 initialSet: state.initialSet,
-                initExpr: state.initialSet == nil ? state.initial : nil
+                initExpr: state.initialSet == nil ? state.initial : nil,
+                generatedSwiftType: state.swiftTypeName,
+                origin: .source
             )
         }
         for process in processes {
@@ -388,7 +390,9 @@ enum AlgorithmLowerer {
                 name: state.root,
                 initial: .int(0),
                 initialSet: state.initialSet,
-                initExpr: state.initialSet == nil ? state.initial : nil
+                initExpr: state.initialSet == nil ? state.initial : nil,
+                generatedSwiftType: state.swiftTypeName,
+                origin: .source
             )
         }
         var procedureVariables: [NamedVar] = []

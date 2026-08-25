@@ -113,8 +113,8 @@ extension TLASpec {
         }
         return TLASpec(
             name: name,
-            variables: variables.map { .init(name: $0.name, initial: $0.initial, initialSet: $0.initialSet.map(state), initExpr: $0.initExpr.map(state), lazySet: $0.lazySet.map(state), collectionType: $0.collectionType, origin: $0.origin) },
-            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, controlOwner: $0.controlOwner) },
+            variables: variables.map { .init(name: $0.name, initial: $0.initial, initialSet: $0.initialSet.map(state), initExpr: $0.initExpr.map(state), lazySet: $0.lazySet.map(state), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) },
+            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, controlOwner: $0.controlOwner, generatedBindingSwiftTypes: $0.generatedBindingSwiftTypes, generatedSymmetricCollectionName: $0.generatedSymmetricCollectionName) },
             invariants: invariants.map { .init(name: $0.name, body: state($0.body)) }, temporalProperties: temporalProperties,
             fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
             theorems: theorems, extendsModules: extendsModules, constraint: constraint.map(state),

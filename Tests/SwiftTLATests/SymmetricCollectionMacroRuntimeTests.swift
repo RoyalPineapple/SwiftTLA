@@ -176,7 +176,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(parsed.symmetricCollections[0].elementType == "Device")
     #expect(parsed.symmetricCollections[0].valueType == "Int")
     #expect(parsed.symmetricCollections[0].verificationScope == 2)
-    #expect(parsed.collectionActions.map(\.name) == ["begin"])
+    #expect(parsed.actions.compactMap(\.symmetricCollectionName) == ["devices"])
     #expect(parsed.diagnostics.isEmpty)
   }
 

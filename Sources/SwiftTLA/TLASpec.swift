@@ -19,6 +19,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let initExpr: StateExpr?
   public let lazySet: StateExpr?  // expression-backed nondeterministic init
   public let collectionType: CollectionVarType
+  let generatedSwiftType: String?
   let origin: VariableOrigin
 
   public init(
@@ -32,6 +33,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
       initExpr: initExpr,
       lazySet: lazySet,
       collectionType: collectionType,
+      generatedSwiftType: nil,
       origin: .source
     )
   }
@@ -39,6 +41,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   init(
     name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil,
     lazySet: StateExpr? = nil, collectionType: CollectionVarType = .scalar,
+    generatedSwiftType: String? = nil,
     origin: VariableOrigin
   ) {
     self.name = name
@@ -47,6 +50,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     self.initExpr = initExpr
     self.lazySet = lazySet
     self.collectionType = collectionType
+    self.generatedSwiftType = generatedSwiftType
     self.origin = origin
   }
   public var description: String {
@@ -65,6 +69,7 @@ public struct ActionBinding: Sendable, Hashable, Equatable {
 }
 public protocol ActionParameterDescriptor: Sendable {
   var actionBinding: ActionBinding { get }
+  var generatedSwiftType: String { get }
 }
 public struct ActionParameter<Domain: TLAValueType & Sendable>: Sendable {
   public let name: String
@@ -76,6 +81,7 @@ public struct ActionParameter<Domain: TLAValueType & Sendable>: Sendable {
   public var actionBinding: ActionBinding {
     ActionBinding(name: name, values: values.map(\.tlaValue))
   }
+  public var generatedSwiftType: String { swiftSurfaceTypeName(for: Domain.self) }
 }
 extension ActionParameter: ActionParameterDescriptor {}
 func formalActionCall(named name: String, arguments: [TLAValue]) -> String {
@@ -101,6 +107,7 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   let sourceIssue: SourceModelIssue?
   let controlOwner: ControlOwner?
   let generatedBindingSwiftTypes: [String: String]
+  let generatedSymmetricCollectionName: String?
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
     self.init(name: name, body: body, bindings: bindings, controlOwner: nil)
@@ -111,7 +118,8 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     body: ActionExpr,
     bindings: [ActionBinding] = [],
     controlOwner: ControlOwner?,
-    generatedBindingSwiftTypes: [String: String] = [:]
+    generatedBindingSwiftTypes: [String: String] = [:],
+    generatedSymmetricCollectionName: String? = nil
   ) {
     self.name = name
     self.body = body
@@ -119,6 +127,7 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
     self.controlOwner = controlOwner
     self.generatedBindingSwiftTypes = generatedBindingSwiftTypes
+    self.generatedSymmetricCollectionName = generatedSymmetricCollectionName
   }
 
   private static func bindingIssue(action: String, bindings: [ActionBinding]) -> SourceModelIssue? {
@@ -346,17 +355,25 @@ public struct VarDecl: SpecComponent, Sendable {
   public let initExpr: StateExpr?
   public let lazySet: StateExpr?
   public let collectionType: CollectionVarType
-  init(_ name: String, _ initial: TLAValue, collectionType: CollectionVarType = .scalar) {
+  let generatedSwiftType: String?
+  init(
+    _ name: String,
+    _ initial: TLAValue,
+    collectionType: CollectionVarType = .scalar,
+    generatedSwiftType: String? = nil
+  ) {
     self.name = name
     self.initial = initial
     self.initialSet = nil
     self.initExpr = nil
     self.lazySet = nil
     self.collectionType = collectionType
+    self.generatedSwiftType = generatedSwiftType
   }
   init(
     _ name: String, _ initial: TLAValue, initialSet: StateExpr?,
-    collectionType: CollectionVarType = .scalar
+    collectionType: CollectionVarType = .scalar,
+    generatedSwiftType: String? = nil
   ) {
     self.name = name
     self.initial = initial
@@ -364,32 +381,55 @@ public struct VarDecl: SpecComponent, Sendable {
     self.initExpr = nil
     self.lazySet = nil
     self.collectionType = collectionType
+    self.generatedSwiftType = generatedSwiftType
   }
-  init(_ name: String, initExpr: StateExpr, collectionType: CollectionVarType = .scalar) {
+  init(
+    _ name: String,
+    initExpr: StateExpr,
+    collectionType: CollectionVarType = .scalar,
+    generatedSwiftType: String? = nil
+  ) {
     self.name = name
     self.initial = .int(0)
     self.initialSet = nil
     self.initExpr = initExpr
     self.lazySet = nil
     self.collectionType = collectionType
+    self.generatedSwiftType = generatedSwiftType
   }
-  init(_ name: String, lazySet: StateExpr, collectionType: CollectionVarType = .scalar) {
+  init(
+    _ name: String,
+    lazySet: StateExpr,
+    collectionType: CollectionVarType = .scalar,
+    generatedSwiftType: String? = nil
+  ) {
     self.name = name
     self.initial = .int(0)
     self.initialSet = nil
     self.initExpr = nil
     self.lazySet = lazySet
     self.collectionType = collectionType
+    self.generatedSwiftType = generatedSwiftType
   }
 }
 public struct ActionDecl: SpecComponent {
   public let name: String
   public let body: ActionExpr
   public let bindings: [ActionBinding]
-  init(_ name: String, _ body: ActionExpr, bindings: [ActionBinding] = []) {
+  let generatedBindingSwiftTypes: [String: String]
+  let generatedSymmetricCollectionName: String?
+  init(
+    _ name: String,
+    _ body: ActionExpr,
+    bindings: [ActionBinding] = [],
+    generatedBindingSwiftTypes: [String: String] = [:],
+    generatedSymmetricCollectionName: String? = nil
+  ) {
     self.name = name
     self.body = body
     self.bindings = bindings
+    self.generatedBindingSwiftTypes = generatedBindingSwiftTypes
+    self.generatedSymmetricCollectionName = generatedSymmetricCollectionName
   }
 }
 public struct InvDecl: SpecComponent {
@@ -738,26 +778,36 @@ public func Variable(_ name: String, in values: some Sequence<some TLAValueConve
   let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
   return VarDecl(name, .set(set), initialSet: stateSet)
 }
+private func swiftSurfaceTypeName<T>(for type: T.Type) -> String {
+  ObjectIdentifier(type) == ObjectIdentifier(TLAValue.self)
+    ? "TLAValue"
+    : String(reflecting: type)
+}
 @discardableResult
 public func Variable<T>(_ ref: Var<T>) -> VarDecl {
   if let issue = ref.sourceIssue {
     return VarDecl(ref.name, initExpr: .sourceIssue(issue))
   }
-    return VarDecl(ref.name, ref.initial ?? .int(0))
+    return VarDecl(ref.name, ref.initial ?? .int(0), generatedSwiftType: swiftSurfaceTypeName(for: T.self))
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
   if let issue = initial.sourceIssue {
     return VarDecl(ref.name, initExpr: .sourceIssue(issue))
   }
-    return VarDecl(ref.name, initial.tlaValue)
+    return VarDecl(ref.name, initial.tlaValue, generatedSwiftType: swiftSurfaceTypeName(for: T.self))
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueConvertible>)
   -> VarDecl {
   let set = Set(values.map(\.tlaValue))
   let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
-  return VarDecl(ref.name, .set(set), initialSet: stateSet)
+  return VarDecl(
+    ref.name,
+    .set(set),
+    initialSet: stateSet,
+    generatedSwiftType: swiftSurfaceTypeName(for: T.self)
+  )
 }
 /// Expression-backed nondeterministic init. The range is evaluated when initial
 /// states are computed instead of being materialized while building the spec.
@@ -775,7 +825,14 @@ public func Action(
   parameters: [any ActionParameterDescriptor],
   @ActionBuilder _ body: () -> ActionExpr
 ) -> ActionDecl {
-  ActionDecl(name, body(), bindings: parameters.map(\.actionBinding))
+  ActionDecl(
+    name,
+    body(),
+    bindings: parameters.map(\.actionBinding),
+    generatedBindingSwiftTypes: Dictionary(
+      uniqueKeysWithValues: parameters.map { ($0.actionBinding.name, $0.generatedSwiftType) }
+    )
+  )
 }
 public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
   InvDecl(name, body())
