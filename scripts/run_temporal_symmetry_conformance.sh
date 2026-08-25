@@ -28,6 +28,8 @@ fi
 export TEMPORAL_SYMMETRY_CASES="$CASES_FILE"
 export CORE_CONFORMANCE_TOOL_ROOT="$TOOL_ROOT"
 
+"$SCRIPT_DIR/setup-core-conformance-tools.sh" --tool-root "$TOOL_ROOT" >/dev/null
+
 (
     cd "$PROJECT_ROOT"
     swift run tlc-validate temporal-symmetry run --output "$OUTPUT"
