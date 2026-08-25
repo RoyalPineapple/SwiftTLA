@@ -867,6 +867,52 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstIdentity != secondIdentity)
     }
 
+    @Test("generated machine schema changes the compilation identity")
+    func generatedMachineSchemaChangesCompilationIdentity() throws {
+        func specification(
+            variableType: String = "Count",
+            bindingType: String = "Worker",
+            collectionAction: String? = nil
+        ) -> TLASpec {
+            let collection = SymmetricCollectionDecl(
+                name: "devices",
+                verificationScope: 1,
+                initial: .int(0),
+                generatedElementType: "Device",
+                generatedValueType: "Int"
+            )
+            return TLASpec(
+                name: "GeneratedSchemaIdentity",
+                variables: [
+                    .init(
+                        name: "count",
+                        initial: .int(0),
+                        generatedSwiftType: variableType,
+                        origin: .source
+                    ),
+                    collection.variable
+                ],
+                actions: [
+                    .init(
+                        name: "advance",
+                        body: .guard_(.value(.bool(true))),
+                        bindings: [.init(name: "worker", values: [.int(0)])],
+                        controlOwner: nil,
+                        generatedBindingSwiftTypes: ["worker": bindingType],
+                        generatedSymmetricCollectionName: collectionAction
+                    )
+                ],
+                invariants: [],
+                symmetricCollections: [collection]
+            )
+        }
+
+        let baseline = try specification().compile().identity
+        #expect(try specification(variableType: "Counter").compile().identity != baseline)
+        #expect(try specification(bindingType: "Process").compile().identity != baseline)
+        #expect(try specification(collectionAction: "devices").compile().identity != baseline)
+    }
+
     @Test("compiled descriptions preserve declaration order without exposing runtime slots")
     func compiledDescriptionPreservesDeclaredOrder() throws {
         let compilation = try TLASpec(

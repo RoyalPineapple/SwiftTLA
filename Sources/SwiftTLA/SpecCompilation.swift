@@ -1467,7 +1467,13 @@ private struct CanonicalSpecificationEncoder {
         }
         list("symmetrySets", symmetrySets) { $0 }
         let symmetricCollections = spec.symmetricCollections.map {
-            node("symmetric-collection", [$0.name, String($0.verificationScope), canonicalValue($0.initial)])
+            node("symmetric-collection", [
+                $0.name,
+                String($0.verificationScope),
+                canonicalValue($0.initial),
+                canonicalOptional($0.generatedElementType),
+                canonicalOptional($0.generatedValueType)
+            ])
         }
         list("symmetricCollections", symmetricCollections) { $0 }
         list("algorithmTokens", spec.algorithmFidelityTokens) { $0.encodedCanonicalForm }
@@ -1487,7 +1493,8 @@ private struct CanonicalSpecificationEncoder {
             canonicalOptional(variable.initialSet.map(canonicalExpression)),
             canonicalOptional(variable.initExpr.map(canonicalExpression)),
             canonicalOptional(variable.lazySet.map(canonicalExpression)),
-            collection
+            collection,
+            canonicalOptional(variable.generatedSwiftType)
         ])
     }
 
@@ -1496,8 +1503,13 @@ private struct CanonicalSpecificationEncoder {
             action.name,
             canonicalActionExpression(action.body),
             canonicalList(action.bindings.map {
-                node("action-binding", [$0.name, canonicalList($0.values.map(canonicalValue))])
-            })
+                node("action-binding", [
+                    $0.name,
+                    canonicalList($0.values.map(canonicalValue)),
+                    canonicalOptional(action.generatedBindingSwiftTypes[$0.name])
+                ])
+            }),
+            canonicalOptional(action.generatedSymmetricCollectionName)
         ])
     }
 
