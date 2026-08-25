@@ -131,7 +131,7 @@ struct CameraApp: App {
                 .buttonStyle(.plain)
                 .disabled(phase != .live)
 
-                Button(action: { Task { await toggleRecording() } }) {
+                Button(action: toggleRecording) {
                     ZStack {
                         Circle().stroke(.red, lineWidth: 4).frame(width: 56, height: 56)
                         if phase == .recording {
@@ -142,7 +142,7 @@ struct CameraApp: App {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(effects.isStopping || (isEnabled(.record) == false && phase != .recording))
+                .disabled(effects.canRecord == false || (isEnabled(.record) == false && isEnabled(.stopRecording) == false))
             }
         }
         .padding(.vertical, 10)
@@ -178,10 +178,12 @@ struct CameraApp: App {
         guard send(.ready) else { return }
     }
 
-    private func toggleRecording() async {
-        if phase == .recording {
-            await effects.stopRecording()
-        } else if phase == .live, effects.canStartRecording {
+    private func toggleRecording() {
+        guard effects.canRecord else { return }
+        if isEnabled(.stopRecording) {
+            guard send(.stopRecording) else { return }
+            effects.stopRecording()
+        } else if isEnabled(.record) {
             guard send(.record) else { return }
             effects.startRecording()
         }
@@ -354,7 +356,6 @@ final class CameraEffects {
     var selectedPhoto: Data?
     var recordedURL: URL?
     var currentPlayer: AVPlayer?
-    var isStopping = false
     private let photoDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/SwiftTLA/camera")
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
@@ -362,7 +363,7 @@ final class CameraEffects {
     var recordingDidFinish: ((URL, Error?) -> Void)?
     var playbackDidFinish: (() -> Void)?
 
-    var canStartRecording: Bool { movieOutput != nil }
+    var canRecord: Bool { movieOutput != nil }
 
     init() {
         do {
@@ -401,9 +402,11 @@ final class CameraEffects {
         movieOutput.startRecording(to: url, recordingDelegate: recordDelegate)
     }
 
-    func stopRecording() async {
-        guard isStopping == false, let movieOutput else { return }
-        isStopping = true
+    func stopRecording() {
+        guard let movieOutput else {
+            diagnostic = "The camera output is not ready."
+            return
+        }
         movieOutput.stopRecording()
     }
 
@@ -436,7 +439,6 @@ final class CameraEffects {
     }
 
     fileprivate func finishedRecording(url: URL, error: Error?) {
-        isStopping = false
         recordingDidFinish?(url, error)
     }
 

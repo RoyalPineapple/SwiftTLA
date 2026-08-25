@@ -58,10 +58,14 @@ final class GeneratedAppleModelTests: XCTestCase {
         _ = try machine.send(.record)
         XCTAssertEqual(machine.state.phase, .recording)
 
+        _ = try machine.send(.stopRecording)
+        XCTAssertEqual(machine.state.phase, .stopping)
+
         _ = try machine.send(.recordingSucceeded)
         XCTAssertEqual(machine.state.phase, .live)
 
         _ = try machine.send(.record)
+        _ = try machine.send(.stopRecording)
         _ = try machine.send(.recordingFailed)
         XCTAssertEqual(machine.state.phase, .live)
     }
