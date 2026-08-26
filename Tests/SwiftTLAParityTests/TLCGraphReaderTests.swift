@@ -249,13 +249,13 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
     }
   }
 
-  @Test("retained TLC v1.8.0 counterexample remains trace-only evidence")
-  func parsesRetainedCounterexample() throws {
+  @Test("TLC v1.8.0 counterexample parses as trace-only evidence")
+  func parsesCounterexampleFixture() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let traceURL =
       testFile
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-      .appendingPathComponent("Verification/FiniteGraph/spike/violation/counterexample.json")
+      .appendingPathComponent("Tests/Fixtures/FiniteGraph/TLCTrace/violation-counterexample.json")
     let evidence = try TLCTraceParser().parseCounterexample(Data(contentsOf: traceURL))
     #expect(evidence.states.count == 4)
     #expect(evidence.actions == ["Next", "Next", "Next"])

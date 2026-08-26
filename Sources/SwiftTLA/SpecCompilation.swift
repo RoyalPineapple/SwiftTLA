@@ -482,9 +482,7 @@ public extension TLASpec {
         let closure = try FormalModuleClosure.resolve(root: self)
         let layout = CompiledLayout(spec: self, closure: closure)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
-        _ = try validator.validate(spec: self)
-        try validator.validateRefinementMappings(refinements)
-        let bindings = validator.bindingTable()
+        let bindings = try validator.validate(spec: self)
         let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
         let compiledRefinements = try compiledRefinements(bindings: bindings, closure: closure, layout: layout)
         let identity = compilationIdentity
@@ -793,9 +791,7 @@ public extension TLASpec {
             closure: context.closure,
             incomingModuleParameters: context.incomingModuleParameters
         )
-        _ = try validator.validate(spec: source)
-        try validator.validateRefinementMappings(source.refinements)
-        let bindings = validator.bindingTable()
+        let bindings = try validator.validate(spec: source)
         let semantics = try CompiledLowerer(
             bindings: bindings,
             closure: context.closure,

@@ -240,14 +240,6 @@ extension TLAValue: Codable {
     }
 }
 
-public func set(_ elements: [some TLAValueConvertible]) -> TLAValue {
-    .set(Set(elements.map(\.tlaValue)))
-}
-
-public func tuple(_ elements: [some TLAValueConvertible]) -> TLAValue {
-    .tuple(elements.map(\.tlaValue))
-}
-
 extension TLAValue: ExpressibleByIntegerLiteral {
     public init(integerLiteral value: Int) { self = .int(value) }
 }
