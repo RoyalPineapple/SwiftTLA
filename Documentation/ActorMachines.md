@@ -18,7 +18,10 @@ SwiftUI stores the generated machine value directly in `@State`. Use `Actor`
 when asynchronous work must serialize access to the same machine.
 
 ```swift
-let actor = try Counter.Actor(.init(count: 4))
+let actor = try Counter.Actor(.init(count: 0))
 let state = await actor.state
-assert(state.count == 4)
+assert(state.count == 0)
 ```
+
+The typed initializer selects one unique state from the model's declared
+initial states.

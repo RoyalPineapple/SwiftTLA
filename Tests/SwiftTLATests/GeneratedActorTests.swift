@@ -57,9 +57,9 @@ struct GeneratedActorTests {
 
     @Test("A typed initial state is preserved")
     func typedInitialStateIsPreserved() async throws {
-        let actor = try ActorCounter.Actor(.init(count: 1))
+        let actor = try ActorCounter.Actor(.init(count: 0))
 
-        #expect(await actor.state == .init(count: 1))
-        #expect(try await actor.isEnabled(.advance) == false)
+        #expect(await actor.state == .init(count: 0))
+        #expect(try await actor.isEnabled(.advance))
     }
 }

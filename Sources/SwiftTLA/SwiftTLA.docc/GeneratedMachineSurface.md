@@ -28,7 +28,10 @@ let transition = try await actor.send(.advance)
 let actorState = await actor.state
 assert(actorState == transition.after)
 
-let seeded = try Counter.Actor(.init(count: 4))
+let seeded = try Counter.Actor(.init(count: 0))
 let seededState = await seeded.state
-assert(seededState.count == 4)
+assert(seededState.count == 0)
 ```
+
+The typed initializer selects one unique state from the model's declared
+initial states.
