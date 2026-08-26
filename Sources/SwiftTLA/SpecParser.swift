@@ -24,6 +24,8 @@ public struct ParserEnumDefinition: Sendable {
 
 public final class ParserSession {
     indirect enum TypedFacadeValueShape: Sendable {
+        case enumeration(String)
+        case function(TypedFacadeValueShape)
         case tuple
         case zeroBasedSequence
         case set(TypedFacadeValueShape)
@@ -31,6 +33,11 @@ public final class ParserSession {
         var selectedElement: TypedFacadeValueShape? {
             guard case .set(let element) = self else { return nil }
             return element
+        }
+
+        var enumerationType: String? {
+            guard case .enumeration(let type) = self else { return nil }
+            return type
         }
     }
 
@@ -187,6 +194,10 @@ public final class ParserSession {
 
     // MARK: - Compact expression decoder
 
+    static func integerLiteralValue(_ literal: IntegerLiteralExprSyntax) -> Int? {
+        Int(literal.literal.text.filter { $0 != "_" })
+    }
+
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let precedingMembers = decodePrecedingFormalMembers(expression) {
             return precedingMembers
@@ -275,7 +286,8 @@ public final class ParserSession {
             return .functionApply(function, argument)
         }
         if let intLit = expression.as(IntegerLiteralExprSyntax.self) {
-            return .value(.int(Int(intLit.literal.text) ?? 0))
+            guard let value = Self.integerLiteralValue(intLit) else { return nil }
+            return .value(.int(value))
         }
         if let boolLit = expression.as(BooleanLiteralExprSyntax.self) {
             return .value(.bool(boolLit.literal.text == "true"))
@@ -290,6 +302,11 @@ public final class ParserSession {
             return .variable(name)
         }
         if let enumCase = decodeEnumCase(expression) { return enumCase }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = terminalTypeName(in: member.base),
+           enumDefinition(named: type) != nil {
+            return nil
+        }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base,
            let selfExpr = decodeStateExpr(base) {
@@ -415,7 +432,7 @@ public final class ParserSession {
     private func controlLocation(_ expression: ExprSyntax?) -> String? {
         guard let expression else { return nil }
         if let literal = expression.as(StringLiteralExprSyntax.self) {
-            return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
+            return literal.representedLiteralValue
         }
         guard let access = expression.as(MemberAccessExprSyntax.self) else { return nil }
         if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
@@ -612,7 +629,8 @@ public final class ParserSession {
 
     func decodeTypedFacadeExpr(
         _ expression: ExprSyntax,
-        scope: TypedFacadeScope
+        scope: TypedFacadeScope,
+        expectedEnumType: String? = nil
     ) -> StateExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let family = decodeProcessLocalFamily(call) {
@@ -642,7 +660,7 @@ public final class ParserSession {
         if let tuple = expression.as(TupleExprSyntax.self),
            tuple.elements.count == 1,
            let value = tuple.elements.first?.expression {
-            return decodeTypedFacadeValue(value, scope: scope)
+            return decodeTypedFacadeValue(value, scope: scope, expectedEnumType: expectedEnumType)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
@@ -667,6 +685,23 @@ public final class ParserSession {
         if let reference = expression.as(DeclReferenceExprSyntax.self),
            let value = scope.value(for: reference) {
             return value
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+           member.declName.baseName.text == "operatorApplication",
+           call.arguments.count == 2,
+           let operation = decodeFormalOperator(call.arguments[call.arguments.startIndex].expression),
+           let argumentArray = call.arguments[call.arguments.index(after: call.arguments.startIndex)]
+            .expression.as(ArrayExprSyntax.self) {
+            let arguments = argumentArray.elements.compactMap {
+                decodeFormalCallArgument(
+                    $0.expression,
+                    valueDecoder: { self.decodeTypedFacadeValue($0, scope: scope) }
+                )
+            }
+            guard arguments.count == argumentArray.elements.count else { return nil }
+            return .operatorApplication(operation, arguments)
         }
         // `Expr<T>` is a phantom type wrapper. Its one value argument is
         // already a formal expression, including the canonical formal
@@ -698,8 +733,16 @@ public final class ParserSession {
             return localRecursion
         }
         if let sequence = expression.as(SequenceExprSyntax.self) {
-            return decodeInfixExpr(Array(sequence.elements)) {
-                decodeTypedFacadeValue($0, scope: scope)
+            return decodeInfixExpr(
+                Array(sequence.elements),
+                expectedEnumType: expectedEnumType,
+                enumType: { self.typedFacadeValueShape($0, scope: scope)?.enumerationType }
+            ) { expression, expectedEnumType in
+                decodeTypedFacadeValue(
+                    expression,
+                    scope: scope,
+                    expectedEnumType: expectedEnumType
+                )
             }
         }
         // `IntRange` occurs inside scoped typed expressions as well as at the
@@ -749,7 +792,7 @@ public final class ParserSession {
              || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall") {
             let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
             guard let name = argumentsSyntax.first?.expression.as(StringLiteralExprSyntax.self)?
-                .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+                .representedLiteralValue
             else { return nil }
             let arguments = argumentsSyntax.dropFirst().compactMap {
                 decodeTypedFacadeValue($0.expression, scope: scope)
@@ -782,9 +825,9 @@ public final class ParserSession {
             let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
             guard argumentsSyntax.count >= 2 else { return nil }
             guard let instance = argumentsSyntax[0].expression.as(StringLiteralExprSyntax.self)?
-            .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined(),
+                .representedLiteralValue,
                   let operation = argumentsSyntax[1].expression.as(StringLiteralExprSyntax.self)?
-                    .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+                    .representedLiteralValue
             else { return nil }
             let arguments = argumentsSyntax.dropFirst(2).compactMap {
                 decodeTypedFacadeValue($0.expression, scope: scope)
@@ -824,8 +867,16 @@ public final class ParserSession {
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
            let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
            let condition = decodeTypedFacadeValue(conditionSyntax, scope: scope),
-           let thenValue = decodeTypedFacadeValue(thenSyntax, scope: scope),
-           let elseValue = decodeTypedFacadeValue(elseSyntax, scope: scope) {
+           let thenValue = decodeTypedFacadeValue(
+                thenSyntax,
+                scope: scope,
+                expectedEnumType: expectedEnumType
+           ),
+           let elseValue = decodeTypedFacadeValue(
+                elseSyntax,
+                scope: scope,
+                expectedEnumType: expectedEnumType
+           ) {
             return .ifThenElse(condition, thenValue, elseValue)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
@@ -858,8 +909,16 @@ public final class ParserSession {
         }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
-           let lhs = decodeTypedFacadeValue(infix.leftOperand, scope: scope),
-           let rhs = decodeTypedFacadeValue(infix.rightOperand, scope: scope) {
+           let lhs = decodeTypedFacadeValue(
+                infix.leftOperand,
+                scope: scope,
+                expectedEnumType: typedFacadeValueShape(infix.rightOperand, scope: scope)?.enumerationType
+           ),
+           let rhs = decodeTypedFacadeValue(
+                infix.rightOperand,
+                scope: scope,
+                expectedEnumType: typedFacadeValueShape(infix.leftOperand, scope: scope)?.enumerationType
+           ) {
             return applyInfixOp(operation, lhs, rhs)
         }
         if let prefix = expression.as(PrefixOperatorExprSyntax.self),
@@ -997,9 +1056,14 @@ public final class ParserSession {
             let functionScope = typedFacadeScope(
                 scope,
                 binding: parameter,
-                to: .variable("__pcal_function_key")
+                to: .variable("__pcal_function_key"),
+                shape: .enumeration(domainType)
             )
-            let body = decodeTypedFacadeValue(bodySyntax, scope: functionScope)
+            let body = decodeTypedFacadeValue(
+                bodySyntax,
+                scope: functionScope,
+                expectedEnumType: literalType.terminalArgumentName(at: 1)
+            )
                 ?? decodeTypedDefaultValue(bodySyntax, expectedType: literalType.argument(at: 1))
             guard let body else { return nil }
             return .functionLiteral(
@@ -1016,8 +1080,16 @@ public final class ParserSession {
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
            let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
            let condition = decodeTypedFacadeValue(conditionSyntax, scope: scope),
-           let thenValue = decodeTypedFacadeValue(thenSyntax, scope: scope),
-           let elseValue = decodeTypedFacadeValue(elseSyntax, scope: scope) {
+           let thenValue = decodeTypedFacadeValue(
+                thenSyntax,
+                scope: scope,
+                expectedEnumType: expectedEnumType
+           ),
+           let elseValue = decodeTypedFacadeValue(
+                elseSyntax,
+                scope: scope,
+                expectedEnumType: expectedEnumType
+           ) {
             return .ifThenElse(condition, thenValue, elseValue)
         }
 
@@ -1151,7 +1223,7 @@ public final class ParserSession {
             if let state = sourceScope.value(for: reference) { return state }
         }
         if let literal = expression.as(IntegerLiteralExprSyntax.self),
-           let value = Int(literal.literal.text) {
+           let value = Self.integerLiteralValue(literal) {
             return .value(.int(value))
         }
         if let literal = expression.as(BooleanLiteralExprSyntax.self) {
@@ -1164,7 +1236,16 @@ public final class ParserSession {
         if let enumCase = decodeEnumCase(expression, expectedType: expectedEnumType) {
             return enumCase
         }
-        if let decoded = decodeTypedFacadeExpr(expression, scope: scope) {
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = terminalTypeName(in: member.base),
+           enumDefinition(named: type) != nil {
+            return nil
+        }
+        if let decoded = decodeTypedFacadeExpr(
+            expression,
+            scope: scope,
+            expectedEnumType: expectedEnumType
+        ) {
             return decoded
         }
         guard scope.isEmpty else { return nil }
@@ -1278,6 +1359,18 @@ public final class ParserSession {
            let base = member.base {
             return typedFacadeValueShape(base, scope: scope)
         }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = terminalTypeName(in: member.base),
+           enumDefinition(named: type) != nil {
+            return .enumeration(type)
+        }
+        if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
+           case .function(let value) = typedFacadeValueShape(
+                subscriptCall.calledExpression,
+                scope: scope
+           ) {
+            return value
+        }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
             switch reference.baseName.text {
@@ -1290,6 +1383,11 @@ public final class ParserSession {
             return typedFacadeValueShape(type)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           ["appending", "concatenating"].contains(member.declName.baseName.text),
+           let base = member.base {
+            return typedFacadeValueShape(base, scope: scope)
+        }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            let type = typedFacadeType(member.base) {
             return typedFacadeValueShape(type)
         }
@@ -1298,6 +1396,11 @@ public final class ParserSession {
 
     private func typedFacadeValueShape(_ type: TypedFacadeType) -> TypedFacadeValueShape? {
         switch type.name {
+        case "Function":
+            guard let valueType = type.argument(at: 1),
+                  let value = typedFacadeValueShape(valueType)
+            else { return nil }
+            return .function(value)
         case "TupleExpr": return .tuple
         case "ZeroBasedSequence": return .zeroBasedSequence
         case "SetExpr":
@@ -1305,7 +1408,8 @@ public final class ParserSession {
                   let element = typedFacadeValueShape(argument)
             else { return nil }
             return .set(element)
-        default: return nil
+        default:
+            return enumDefinition(named: type.name) == nil ? nil : .enumeration(type.name)
         }
     }
 
@@ -1462,7 +1566,13 @@ public final class ParserSession {
         for argument in call.arguments {
             guard let entry = argument.expression.as(TupleExprSyntax.self),
                   entry.elements.count == 2,
-                  let key = entry.elements.first.flatMap({ decodeTypedFacadeValue($0.expression, scope: scope) }),
+                  let key = entry.elements.first.flatMap({
+                      decodeTypedFacadeValue(
+                          $0.expression,
+                          scope: scope,
+                          expectedEnumType: domainType
+                      )
+                  }),
                   let value = entry.elements.dropFirst().first.flatMap({ decodeTypedFacadeValue($0.expression, scope: scope) })
             else { return nil }
             pairs += [.equal(.variable("_typedFunctionEntry"), key), value]
@@ -1542,7 +1652,7 @@ public final class ParserSession {
             return .except(selfExpr, key, val)
         case "at":
             guard let selfExpr,
-                  let idx = args.first?.expression.as(IntegerLiteralExprSyntax.self).flatMap({ Int($0.literal.text) })
+                  let idx = args.first?.expression.as(IntegerLiteralExprSyntax.self).flatMap(Self.integerLiteralValue)
             else { return nil }
             return .tupleAccess(selfExpr, idx)
         case "set", "tuple", "singleton":
@@ -1581,8 +1691,9 @@ public final class ParserSession {
             else { return nil }
             return .negate(value)
         case "enabled":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
-            let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? ""
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
+            else { return nil }
             return .enabledAction(name)
         case "letValue":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
@@ -1609,7 +1720,9 @@ public final class ParserSession {
                   let operation = decodeFormalOperator(args[0].expression),
                   let argumentArray = args[1].expression.as(ArrayExprSyntax.self)
             else { return nil }
-            let arguments = argumentArray.elements.compactMap { decodeFormalCallArgument($0.expression) }
+            let arguments = argumentArray.elements.compactMap {
+                decodeFormalCallArgument($0.expression, valueDecoder: decodeStateExpr)
+            }
             guard arguments.count == argumentArray.elements.count else { return nil }
             return .operatorApplication(operation, arguments)
         case "setFilter", "setMap", "forAll":
@@ -1633,7 +1746,7 @@ public final class ParserSession {
             default:
                 return nil
             }
-        case "function", "for", "exists", "choose", "any", "functionLiteral":
+        case "exists", "choose", "any", "functionLiteral":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
             if args.count == 3,
                let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
@@ -1648,10 +1761,6 @@ public final class ParserSession {
             }
             let exprs = args.compactMap { decodeStateExpr($0.expression) }
             switch methodName {
-            case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], generatedBinderName(), exprs[1]) : nil
-            case "for": return exprs.count >= 2 ? .forAll(exprs[0], generatedBinderName(), exprs[1]) : nil
-            case "exists": return exprs.count >= 2 ? .exists(exprs[0], generatedBinderName(), exprs[1]) : nil
-            case "choose": return exprs.count >= 2 ? .choose(exprs[0], generatedBinderName(), exprs[1]) : nil
             case "any": return exprs.count >= 1 ? .choose(exprs[0], generatedBinderName(), .value(.bool(true))) : nil
             default: return nil
             }
@@ -1710,7 +1819,7 @@ public final class ParserSession {
                     .representedLiteralValue,
                   let aritySyntax = call.arguments.first(where: { $0.label?.text == "arity" })?
                     .expression.as(IntegerLiteralExprSyntax.self),
-                  let arity = Int(aritySyntax.literal.text), arity >= 0
+                  let arity = Self.integerLiteralValue(aritySyntax), arity >= 0
             else { return nil }
             return .reference(name, arity: arity)
         case "lambda":
@@ -1742,7 +1851,10 @@ public final class ParserSession {
         return FormalLambda(parameters: parameters, body: body)
     }
 
-    private func decodeFormalCallArgument(_ expression: ExprSyntax) -> FormalCallArgument? {
+    private func decodeFormalCallArgument(
+        _ expression: ExprSyntax,
+        valueDecoder: (ExprSyntax) -> StateExpr?
+    ) -> FormalCallArgument? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
               let argument = call.arguments.first?.expression
@@ -1750,7 +1862,7 @@ public final class ParserSession {
 
         switch member.declName.baseName.text {
         case "value":
-            return decodeStateExpr(argument).map(FormalCallArgument.value)
+            return valueDecoder(argument).map(FormalCallArgument.value)
         case "operator":
             return decodeFormalOperator(argument).map(FormalCallArgument.operator)
         default:
@@ -1759,16 +1871,22 @@ public final class ParserSession {
     }
 
     func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
-        decodeInfixExpr(elements, decoding: decodeStateExpr)
+        decodeInfixExpr(
+            elements,
+            enumType: { _ in nil },
+            decoding: { expression, _ in decodeStateExpr(expression) }
+        )
     }
 
     func decodeInfixExpr(
         _ elements: [ExprSyntax],
-        decoding decodeOperand: (ExprSyntax) -> StateExpr?
+        expectedEnumType: String? = nil,
+        enumType: (ExprSyntax) -> String?,
+        decoding decodeOperand: (ExprSyntax, String?) -> StateExpr?
     ) -> StateExpr? {
         guard !elements.isEmpty else { return nil }
         if elements.count == 1 {
-            return decodeOperand(elements[0])
+            return decodeOperand(elements[0], expectedEnumType)
         }
         guard elements.count % 2 == 1 else { return nil }
 
@@ -1800,8 +1918,27 @@ public final class ParserSession {
               })
         else { return nil }
 
-        guard let lhs = decodeInfixExpr(Array(elements[..<split.0]), decoding: decodeOperand),
-              let rhs = decodeInfixExpr(Array(elements[(split.0 + 1)...]), decoding: decodeOperand)
+        let lhsElements = Array(elements[..<split.0])
+        let rhsElements = Array(elements[(split.0 + 1)...])
+        let carriesEnumType = split.1 == "==" || split.1 == "!="
+        let lhsEnumType = carriesEnumType && rhsElements.count == 1
+            ? enumType(rhsElements[0]) ?? expectedEnumType
+            : expectedEnumType
+        let rhsEnumType = carriesEnumType && lhsElements.count == 1
+            ? enumType(lhsElements[0]) ?? expectedEnumType
+            : expectedEnumType
+        guard let lhs = decodeInfixExpr(
+                  lhsElements,
+                  expectedEnumType: lhsEnumType,
+                  enumType: enumType,
+                  decoding: decodeOperand
+              ),
+              let rhs = decodeInfixExpr(
+                  rhsElements,
+                  expectedEnumType: rhsEnumType,
+                  enumType: enumType,
+                  decoding: decodeOperand
+              )
         else { return nil }
         return applyInfixOp(split.1, lhs, rhs)
     }
@@ -2126,11 +2263,15 @@ extension ParserSession {
         } else {
             return nil
         }
-        let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
-            .representedLiteralValue ?? ""
         switch name {
-        case "weakFairness", "WeakFairness": return .weakFairness(actionName)
-        case "strongFairness", "StrongFairness": return .strongFairness(actionName)
+        case "weakFairness", "WeakFairness":
+            guard let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+                .representedLiteralValue else { return nil }
+            return .weakFairness(actionName)
+        case "strongFairness", "StrongFairness":
+            guard let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+                .representedLiteralValue else { return nil }
+            return .strongFairness(actionName)
         case "weakFairnessNext", "WeakFairnessNext": return .weakFairnessNext
         case "strongFairnessNext", "StrongFairnessNext": return .strongFairnessNext
         default: return nil

@@ -361,7 +361,6 @@ public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
   let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member))
   return ActionDecl(
     name,
-    .existsAction(member, collection.memberDomain, body(token)),
-    generatedSymmetricCollectionName: collection.name
+    .existsAction(member, collection.memberDomain, body(token))
   )
 }

@@ -45,7 +45,7 @@ extension ParserSession {
               let types = collectionTypes[collectionReference],
               let scopeArgument = arguments.first(where: { $0.label?.text == "verificationScope" })?.expression,
               let scopeLiteral = scopeArgument.as(IntegerLiteralExprSyntax.self),
-              let scope = Int(scopeLiteral.literal.text),
+              let scope = Self.integerLiteralValue(scopeLiteral),
               let initialExpression = arguments.first(where: { $0.label?.text == "initial" })?.expression,
               let initial = parseLiteralValue(initialExpression),
               let elementType = Self.sourceTypeSpelling(types.element),
@@ -127,8 +127,7 @@ extension ParserSession {
                 .domain(.variable(collection.formalName)),
                 renameVar(collectionReference, to: collection.formalName, in: actionBody)
             ),
-            controlOwner: nil,
-            generatedSymmetricCollectionName: collection.formalName
+            controlOwner: nil
         ))
     }
 
@@ -381,7 +380,7 @@ extension ParserSession {
 
     func parseLiteralValue(_ expression: ExprSyntax) -> TLAValue? {
         if let integer = expression.as(IntegerLiteralExprSyntax.self) {
-            return Int(integer.literal.text).map(TLAValue.int)
+            return Self.integerLiteralValue(integer).map(TLAValue.int)
         }
         if let boolean = expression.as(BooleanLiteralExprSyntax.self) {
             return .bool(boolean.literal.text == "true")
@@ -401,19 +400,19 @@ extension ParserSession {
         let args = Array(call.arguments)
         guard index < args.count else { return nil }
         guard let stringLit = args[index].expression.as(StringLiteralExprSyntax.self) else { return nil }
-
-        // Build string from segments, substituting loop variable
+        guard let loopVar, let loopValue else { return stringLit.representedLiteralValue }
         var result = ""
         for segment in stringLit.segments {
             if let text = segment.as(StringSegmentSyntax.self)?.content.text {
                 result += text
-            } else if let expr = segment.as(ExpressionSegmentSyntax.self),
-                      let loopVar, let loopValue,
-                      let expr0 = expr.expressions.first?.expression,
-                      let declRef = expr0.as(DeclReferenceExprSyntax.self),
-                      declRef.baseName.text == loopVar {
-                result += "\(loopValue)"
+                continue
             }
+            guard let expression = segment.as(ExpressionSegmentSyntax.self),
+                  expression.expressions.count == 1,
+                  let reference = expression.expressions.first?.expression.as(DeclReferenceExprSyntax.self),
+                  reference.baseName.text == loopVar
+            else { return nil }
+            result += "\(loopValue)"
         }
         return result
     }
@@ -452,8 +451,13 @@ extension ParserSession {
         if args.count >= 2 {
             let label = args[1].label?.text
             if label == "in" {
-                if let setExpr = decodeStateExpr(args[1].expression) {
-                    result.variables.append(.init(name: firstName, initial: .int(0), initialSet: setExpr))
+                if let setExpr = decodeStateExpr(args[1].expression),
+                   case .set(let values) = parsedInitialValue(args[1].expression) {
+                    result.variables.append(.init(
+                        name: firstName,
+                        initial: .set(values),
+                        initialSet: setExpr
+                    ))
                     return
                 }
             }
@@ -462,8 +466,9 @@ extension ParserSession {
         // Variable(name, value)
         if args.count >= 2 {
             let valExpr = args[1].expression
-            if let intVal = valExpr.as(IntegerLiteralExprSyntax.self) {
-                result.variables.append(.init(name: firstName, initial: .int(Int(intVal.literal.text) ?? 0)))
+            if let intVal = valExpr.as(IntegerLiteralExprSyntax.self),
+               let value = Self.integerLiteralValue(intVal) {
+                result.variables.append(.init(name: firstName, initial: .int(value)))
                 return
             }
             if let boolVal = valExpr.as(BooleanLiteralExprSyntax.self) {

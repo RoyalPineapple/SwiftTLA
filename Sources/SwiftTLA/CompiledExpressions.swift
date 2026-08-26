@@ -162,11 +162,14 @@ struct CompiledAction: Sendable {
     let id: ActionID
     let bindings: [CompiledActionBinding]
     let body: CompiledActionExpr
+    let symmetricCollection: VariableID?
 }
 
 struct CompiledActionBinding: Sendable {
     let binder: BinderID
+    let sourceName: String
     let values: [TLAValue]
+    let generatedSwiftType: String?
 }
 
 struct CompiledInvariant: Sendable {

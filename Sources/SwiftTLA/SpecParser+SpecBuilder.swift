@@ -334,44 +334,20 @@ extension ParserSession {
             }
 
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
-                if callName == "SharedVar", let range = parseIntegerClosedRange(rangeExpr) {
+                if callName == "SharedVar",
+                   let domain = finiteSharedVariableDomain(rangeExpr) {
                     result.variables.append(.init(
                         name: patternName,
-                        initial: .int(0),
-                        initialSet: .setLiteral(range.map { .value(.int($0)) }),
-                        generatedSwiftType: varTypeName ?? "Int",
+                        initial: domain.initial,
+                        initialSet: domain.expression,
+                        generatedSwiftType: varTypeName ?? domain.elementType,
                         origin: .source
                     ))
                     continue
                 }
-                if callName == "SharedVar",
-                   let initialSet = decodeStateExpr(rangeExpr),
-                   case .setLiteral = initialSet,
-                   let elementType = setExpressionElementTypeName(rangeExpr) {
-                    result.variables.append(.init(
-                        name: patternName, initial: .int(0), initialSet: initialSet,
-                        generatedSwiftType: varTypeName ?? elementType,
-                        origin: .source
-                    ))
-                    continue
-                }
-                let lowerBound = parseRangeLowerBound(rangeExpr)
-                result.variables.append(.init(
-                    name: patternName,
-                    initial: .int(lowerBound),
-                    generatedSwiftType: varTypeName,
-                    origin: .source
-                ))
-                continue
-            }
-
-            if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
-                let firstValue = parseValuesFirst(valuesArg)
-                result.variables.append(.init(
-                    name: patternName,
-                    initial: .string(firstValue),
-                    generatedSwiftType: varTypeName,
-                    origin: .source
+                result.diagnostics.append(.init(
+                    message: "SharedVar '\(patternName)' requires a supported finite set expression.",
+                    source: rangeExpr
                 ))
                 continue
             }
@@ -514,11 +490,29 @@ extension ParserSession {
               elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "...",
               let lowerSyntax = elements[0].as(IntegerLiteralExprSyntax.self),
               let upperSyntax = elements[2].as(IntegerLiteralExprSyntax.self),
-              let lower = Int(lowerSyntax.literal.text),
-              let upper = Int(upperSyntax.literal.text),
+              let lower = Self.integerLiteralValue(lowerSyntax),
+              let upper = Self.integerLiteralValue(upperSyntax),
               lower <= upper
         else { return nil }
         return lower...upper
+    }
+
+    func finiteSharedVariableDomain(
+        _ expression: ExprSyntax
+    ) -> (initial: TLAValue, expression: StateExpr, elementType: String)? {
+        if let range = parseIntegerClosedRange(expression) {
+            return (
+                initial: .int(range.lowerBound),
+                expression: .setLiteral(range.map { .int($0) }),
+                elementType: "Int"
+            )
+        }
+        guard let decoded = decodeStateExpr(expression),
+              case .set(let values) = try? evaluateClosed(decoded),
+              values.isEmpty == false,
+              let elementType = setExpressionElementTypeName(expression)
+        else { return nil }
+        return (initial: .int(0), expression: decoded, elementType: elementType)
     }
 
     /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
@@ -562,39 +556,13 @@ extension ParserSession {
         return type.argument(at: 0).flatMap(Self.sourceTypeSpelling)
     }
 
-    /// Extracts the lower bound from a range expression like `1...12`.
-    func parseRangeLowerBound(_ expression: ExprSyntax) -> Int {
-        if let seq = expression.as(SequenceExprSyntax.self) {
-            let elements = Array(seq.elements)
-            if let firstInt = elements.first?.as(IntegerLiteralExprSyntax.self),
-               let lower = Int(firstInt.literal.text) {
-                return lower
-            }
-        }
-        if let infix = expression.as(InfixOperatorExprSyntax.self),
-           let firstInt = infix.leftOperand.as(IntegerLiteralExprSyntax.self),
-           let lower = Int(firstInt.literal.text) {
-            return lower
-        }
-        return 0
-    }
-
-    /// Extracts the first string value from `["a", "b"]`.
-    func parseValuesFirst(_ expression: ExprSyntax) -> String {
-        if let array = expression.as(ArrayExprSyntax.self),
-           let first = array.elements.first?.expression.as(StringLiteralExprSyntax.self) {
-            return first.representedLiteralValue ?? ""
-        }
-        return ""
-    }
-
     /// Converts a Swift initializer expression to a TLAValue.
     func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue? {
         if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
             return value
         }
         if let intVal = expression.as(IntegerLiteralExprSyntax.self) {
-            return Int(intVal.literal.text).map(TLAValue.int)
+            return Self.integerLiteralValue(intVal).map(TLAValue.int)
         }
         if let boolVal = expression.as(BooleanLiteralExprSyntax.self) {
             return .bool(boolVal.literal.text == "true")
@@ -1038,7 +1006,7 @@ extension ParserSession {
             case "operator":
                 guard let arityExpression = call.arguments.first(where: { $0.label?.text == "arity" })?.expression,
                       let arityLiteral = arityExpression.as(IntegerLiteralExprSyntax.self),
-                      let arity = Int(arityLiteral.literal.text), arity >= 0
+                      let arity = Self.integerLiteralValue(arityLiteral), arity >= 0
                 else { return nil }
                 return .operator(name, arity: arity)
             default: return nil

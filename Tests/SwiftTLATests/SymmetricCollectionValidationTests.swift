@@ -167,7 +167,7 @@ struct SymmetricCollectionValidationTests {
       Action("biased") { .guard_(.equal(.value(member), .value(member))) }
     }
 
-    assertMemberReferenceRejected(spec, path: "actions.biased.body.guard.left")
+    assertMemberReferenceRejected(spec, path: "actions.biased.body.left.guard.left")
   }
 
   @Test("Authored invariants cannot name a compiler-owned symmetric member")

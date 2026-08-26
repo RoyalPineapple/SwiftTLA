@@ -1,12 +1,31 @@
 import Testing
 import SwiftParser
 import SwiftSyntax
-import SwiftTLAPlugin
+@testable import SwiftTLAPlugin
 
 @testable import SwiftTLA
 
 @Suite("Language capability contract")
 struct LanguageCapabilityContractTests {
+    @Test("Explicit unsupported enum raw values are rejected")
+    func explicitUnsupportedEnumRawValueIsRejected() throws {
+        let source = Parser.parse(source: """
+        struct Model {
+            enum Phase: Int, FiniteTLAValueDomain {
+                case waiting = true
+            }
+        }
+        """)
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+
+        do {
+            _ = try TLASpecVerifier.collectEnumVariables(from: model.memberBlock.members)
+            Issue.record("Expected an explicit unsupported enum raw value to fail.")
+        } catch {
+            #expect(String(describing: error).contains("requires a supported literal raw value"))
+        }
+    }
+
     @Test("The ledger covers every declared construct exactly once")
     func ledgerCoversEveryDeclaredConstructExactlyOnce() {
         let capabilities = LanguageCapabilityLedger.all
@@ -83,7 +102,7 @@ struct LanguageCapabilityContractTests {
             actual: "unregistered declaration 'UnsupportedAlgorithm'",
             nextSafeAction: "Use an admitted Algorithm declaration."
         )
-        let parserDiagnostic = SpecParser.SourceParseDiagnostic(
+        let sourceDiagnostic = SpecParser.SourceParseDiagnostic(
             capability: capability
         )
         let source = Parser.parse(source: "struct Example {}")
@@ -92,7 +111,7 @@ struct LanguageCapabilityContractTests {
             return
         }
 
-        let emitted = SwiftTLAPlugin.parserDiagnostic(parserDiagnostic, in: declaration).message
+        let emitted = parserDiagnostic(sourceDiagnostic, in: declaration).message
         let requiredFacts = [
             "Code: unsupported-language-capability",
             "Construct: UnsupportedAlgorithm.",
@@ -104,7 +123,7 @@ struct LanguageCapabilityContractTests {
         ]
 
         #expect(requiredFacts.allSatisfy(emitted.contains))
-        #expect(!requiredFacts.allSatisfy(capability.headline.contains))
+        #expect(requiredFacts.allSatisfy(capability.headline.contains) == false)
     }
 
     @Test("Unsupported capabilities cannot advertise compilation support")

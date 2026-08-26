@@ -74,7 +74,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package let actions: [Action]
     package let symmetricCollections: [SymmetricCollection]
 
-    init(layout: CompiledLayout) throws {
+    init(layout: CompiledLayout, semantics: CompiledSemantics) throws {
         let symmetricCollectionsByVariableID: [VariableID: SymmetricCollection] = try Dictionary(
             uniqueKeysWithValues: layout.variables.compactMap { variable in
                 guard let declaration = variable.symmetricCollection else { return nil }
@@ -129,9 +129,10 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             $0.declaration.name != CompilerControlSymbol.terminatingAction.rawValue
         }
         let actionIdentifiers = Self.generatedActionIdentifiers(executableActions.map(\.declaration.name))
-        let actions = try zip(executableActions, actionIdentifiers).map { action, identifier in
-            if let name = action.unresolvedSymmetricCollectionName {
-                throw Self.missingDeclaration("symmetric collection", named: name)
+        let compiledActions = Dictionary(uniqueKeysWithValues: semantics.actions.map { ($0.id, $0) })
+        let actions = try zip(executableActions, actionIdentifiers).map { layoutAction, identifier in
+            guard let action = compiledActions[layoutAction.id] else {
+                throw Self.missingDeclaration("action", named: layoutAction.declaration.name)
             }
             let collection = action.symmetricCollection.flatMap {
                 symmetricCollectionsByVariableID[$0]
@@ -139,7 +140,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             if action.symmetricCollection != nil, collection == nil {
                 throw Self.missingDeclaration(
                     "symmetric collection",
-                    named: action.declaration.name
+                    named: layoutAction.declaration.name
                 )
             }
             if let collection {
@@ -148,7 +149,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .lowering,
-                        path: "machineSurfacePlan.actions.\(action.declaration.name)",
+                        path: "machineSurfacePlan.actions.\(layoutAction.declaration.name)",
                         expected: "one compiled member binding for symmetric collection '\(collection.formalName)'",
                         actual: "\(action.bindings.count) binding(s) with domains \(action.bindings.map(\.values))",
                         nextSafeAction: "Compile the collection action from its declared symmetric collection."
@@ -159,11 +160,11 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 swiftIdentifier: identifier,
                 bindings: try action.bindings.map { binding in
                     Binding(
-                        formalName: binding.name,
+                        formalName: collection == nil ? binding.sourceName : "member",
                         swiftType: try Self.generatedSwiftType(
                             explicit: binding.generatedSwiftType,
                             fallback: binding.values[0],
-                            path: "actions.\(action.declaration.name).bindings.\(binding.name)"
+                            path: "actions.\(layoutAction.declaration.name).bindings.\(binding.sourceName)"
                         ),
                         domain: binding.values,
                         isPublic: binding.values.count > 1

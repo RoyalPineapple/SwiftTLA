@@ -40,7 +40,7 @@ enum TLASpecVerifier {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
-        let enumInfos = Self.collectEnumVariables(from: memberList)
+        let enumInfos = try Self.collectEnumVariables(from: memberList)
         let enumDefinitions = enumInfos.map {
             ParserEnumDefinition(
                 typeName: $0.typeName,
@@ -126,7 +126,7 @@ enum TLASpecVerifier {
         return nil
     }
 
-    static func collectEnumVariables(from members: MemberBlockItemListSyntax) -> [ParsedEnum] {
+    static func collectEnumVariables(from members: MemberBlockItemListSyntax) throws -> [ParsedEnum] {
         var result: [ParsedEnum] = []
         for member in members {
             guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
@@ -135,14 +135,14 @@ enum TLASpecVerifier {
             let inheritedNames = inheritance.inheritedTypes.compactMap {
                 $0.type.as(IdentifierTypeSyntax.self)?.name.text
             }
-
-            guard inheritedNames.contains("TLAValueType")
-                || inheritedNames.contains("FiniteTLAValueDomain")
-            else { continue }
-
             let intBacked = inheritedNames.contains("Int")
             let stringBacked = inheritedNames.contains("String")
             guard intBacked || stringBacked else { continue }
+            let formalValue = inheritedNames.contains("TLAValueType")
+                || inheritedNames.contains("FiniteTLAValueDomain")
+            guard formalValue || (stringBacked && inheritedNames.contains("CaseIterable")) else {
+                continue
+            }
 
             var cases: [(name: String, value: TLAValue)] = []
             var idx = 0
@@ -150,12 +150,21 @@ enum TLASpecVerifier {
                 guard let caseDecl = caseMember.decl.as(EnumCaseDeclSyntax.self) else { continue }
                 for element in caseDecl.elements {
                     let value: TLAValue
-                    if let raw = element.rawValue?.value.as(IntegerLiteralExprSyntax.self),
-                       let val = Int(raw.literal.text) {
-                        value = .int(val)
-                        idx = val + 1
-                    } else if let raw = element.rawValue?.value.as(StringLiteralExprSyntax.self) {
-                        value = .string(raw.representedLiteralValue ?? element.name.text)
+                    if let rawValue = element.rawValue?.value {
+                        if intBacked,
+                           let raw = rawValue.as(IntegerLiteralExprSyntax.self),
+                           let val = Int(raw.literal.text.filter { $0 != "_" }) {
+                            value = .int(val)
+                            idx = val + 1
+                        } else if stringBacked,
+                                  let raw = rawValue.as(StringLiteralExprSyntax.self),
+                                  let val = raw.representedLiteralValue {
+                            value = .string(val)
+                        } else {
+                            throw SimpleError(
+                                "Enum case '\(element.name.text)' requires a supported literal raw value."
+                            )
+                        }
                     } else if intBacked {
                         value = .int(idx)
                         idx += 1

@@ -16,12 +16,10 @@ struct CompiledLowerer {
                 lazySet: try lowerOptional(declaration.lazySet, at: "\(path).lazySet")
             )
         }
-        let actionDeclarations = try Dictionary(uniqueKeysWithValues: spec.actions.map { action in
-            (try self.action(at: "actions.\(action.name).declaration"), action)
-        })
         let actions: [CompiledAction] = try spec.actions.map {
             try lower($0)
         }
+        let actionsByID = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
         let invariants: [CompiledInvariant] = try spec.invariants.map {
             CompiledInvariant(
                 id: try property(at: "invariants.\($0.name).declaration"),
@@ -59,7 +57,7 @@ struct CompiledLowerer {
             )
         }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
-            try lower(condition, actionDeclarations: actionDeclarations, at: "fairness[\(offset)]")
+            try lower(condition, actions: actionsByID, at: "fairness[\(offset)]")
         }
         let formalOperators: [CompiledFormalOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             CompiledFormalOperatorDefinition(
@@ -146,7 +144,7 @@ struct CompiledLowerer {
 
     private func lower(
         _ condition: FairnessCondition,
-        actionDeclarations: [ActionID: NamedAction],
+        actions: [ActionID: CompiledAction],
         at path: String
     ) throws -> CompiledFairnessCondition {
         let action: ActionID
@@ -166,14 +164,16 @@ struct CompiledLowerer {
             action = try self.action(at: "\(path).action")
             arguments = value.arguments
         }
-        guard let declaration = actionDeclarations[action] else { throw diagnostic(path: path) }
-        if let arguments, actionVariants(declaration).contains(where: { $0.arguments == arguments }) == false {
+        guard let declaration = layout.actions.first(where: { $0.id == action }),
+              let compiled = actions[action]
+        else { throw diagnostic(path: path) }
+        if let arguments, accepts(arguments, for: compiled) == false {
             throw CompilationDiagnostic(
                 code: .unknownReference,
                 stage: .lowering,
                 path: path,
                 expected: "a declared finite action call",
-                actual: "fairness references '\(formalActionCall(named: declaration.name, arguments: arguments))'",
+                actual: "fairness references '\(formalActionCall(named: declaration.declaration.name, arguments: arguments))'",
                 nextSafeAction: "Use an action call declared by the source model."
             )
         }
@@ -191,16 +191,45 @@ struct CompiledLowerer {
             throw issue.compilationDiagnostic(stage: .lowering, path: "actions.\(action.name).bindings")
         }
         let id = try self.action(at: "actions.\(action.name).declaration")
+        let bindings = try action.bindings.map {
+            CompiledActionBinding(
+                binder: try binder(at: "actions.\(action.name).bindings.\($0.name)"),
+                sourceName: $0.name,
+                values: $0.values,
+                generatedSwiftType: $0.generatedSwiftType
+            )
+        }
+        let body = try lower(action.body, at: "actions.\(action.name).body")
+        if bindings.isEmpty,
+           case .existsAction(let sourceMember, _, _) = action.body,
+           case .existsAction(let member, .domain(.stateVariable(let variable)), let memberBody) = body,
+           layout.variables.indices.contains(variable.ordinal),
+           let collection = layout.variables[variable.ordinal].symmetricCollection {
+            return CompiledAction(
+                id: id,
+                bindings: [CompiledActionBinding(
+                    binder: member,
+                    sourceName: sourceMember,
+                    values: collection.members,
+                    generatedSwiftType: collection.elementType.map { "\($0).ID" }
+                )],
+                body: memberBody,
+                symmetricCollection: variable
+            )
+        }
         return CompiledAction(
             id: id,
-            bindings: try action.bindings.map {
-                CompiledActionBinding(
-                    binder: try binder(at: "actions.\(action.name).bindings.\($0.name)"),
-                    values: $0.values
-                )
-            },
-            body: try lower(action.body, at: "actions.\(action.name).body")
+            bindings: bindings,
+            body: body,
+            symmetricCollection: nil
         )
+    }
+
+    private func accepts(_ arguments: [TLAValue], for action: CompiledAction) -> Bool {
+        arguments.count == action.bindings.count
+            && zip(arguments, action.bindings).allSatisfy { argument, binding in
+                binding.values.contains(argument)
+            }
     }
 
     private func lowerOptional(_ expression: StateExpr?, at path: String) throws -> CompiledStateExpr? {
