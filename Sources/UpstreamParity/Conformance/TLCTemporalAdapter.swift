@@ -37,7 +37,7 @@ package struct TLCTemporalCaptureResult: Sendable {
 package struct TLCTemporalCaptureInput: Sendable {
   package let temporalCase: TemporalSymmetryCase
   package let referencePin: TLCReferencePin
-  package let correlation: TemporalSymmetryCaseOutcomeCorrelation
+  package let correlation: TemporalSymmetryRunReferences
   package let request: TLCProcessRequest
   package let completeGraphRequest: TLCProcessRequest?
   package let swiftRun: CompletedGraphRun
@@ -55,7 +55,7 @@ package struct TLCTemporalCaptureInput: Sendable {
   package init(
     temporalCase: TemporalSymmetryCase,
     referencePin: TLCReferencePin,
-    correlation: TemporalSymmetryCaseOutcomeCorrelation,
+    correlation: TemporalSymmetryRunReferences,
     request: TLCProcessRequest,
     completeGraphRequest: TLCProcessRequest? = nil,
     swiftRun: CompletedGraphRun,

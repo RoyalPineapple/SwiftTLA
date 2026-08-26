@@ -28,7 +28,7 @@ package enum SymmetryOrbitComparisonResult: Equatable, Sendable {
 package struct SymmetryOrbitComparisonInput: Sendable {
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let correlation: TemporalSymmetryCaseOutcomeCorrelation
+  package let correlation: TemporalSymmetryRunReferences
   package let swiftRaw: SymmetryExploration
   package let swiftReduced: SymmetryExploration
   package let tlcRaw: SymmetryExploration
@@ -44,7 +44,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    correlation: TemporalSymmetryCaseOutcomeCorrelation,
+    correlation: TemporalSymmetryRunReferences,
     swiftRaw: SymmetryExploration,
     swiftReduced: SymmetryExploration,
     tlcRaw: SymmetryExploration,

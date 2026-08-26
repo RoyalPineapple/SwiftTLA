@@ -6,7 +6,7 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
   package let schema: String
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let correlation: TemporalSymmetryCaseOutcomeCorrelation
+  package let correlation: TemporalSymmetryRunReferences
   package let outcome: TemporalSymmetryOutcome
   package let swiftResult: TemporalPropertyResult
   package let tlcResult: TemporalPropertyResult
@@ -18,7 +18,7 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    correlation: TemporalSymmetryCaseOutcomeCorrelation,
+    correlation: TemporalSymmetryRunReferences,
     outcome: TemporalSymmetryOutcome,
     swiftResult: TemporalPropertyResult,
     tlcResult: TemporalPropertyResult,
@@ -99,7 +99,7 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
-      correlation: container.decode(TemporalSymmetryCaseOutcomeCorrelation.self, forKey: .correlation),
+      correlation: container.decode(TemporalSymmetryRunReferences.self, forKey: .correlation),
       outcome: container.decode(TemporalSymmetryOutcome.self, forKey: .outcome),
       swiftResult: container.decode(TemporalPropertyResult.self, forKey: .swiftResult),
       tlcResult: container.decode(TemporalPropertyResult.self, forKey: .tlcResult),
@@ -307,7 +307,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
   package let schema: String
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let correlation: TemporalSymmetryCaseOutcomeCorrelation
+  package let correlation: TemporalSymmetryRunReferences
   package let outcome: TemporalSymmetryOutcome
   package let swiftRaw: SymmetryExploration
   package let swiftReduced: SymmetryExploration
@@ -323,7 +323,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    correlation: TemporalSymmetryCaseOutcomeCorrelation,
+    correlation: TemporalSymmetryRunReferences,
     outcome: TemporalSymmetryOutcome,
     swiftRaw: SymmetryExploration,
     swiftReduced: SymmetryExploration,
@@ -493,7 +493,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
-      correlation: container.decode(TemporalSymmetryCaseOutcomeCorrelation.self, forKey: .correlation),
+      correlation: container.decode(TemporalSymmetryRunReferences.self, forKey: .correlation),
       outcome: container.decode(TemporalSymmetryOutcome.self, forKey: .outcome),
       swiftRaw: container.decode(SymmetryExploration.self, forKey: .swiftRaw),
       swiftReduced: container.decode(SymmetryExploration.self, forKey: .swiftReduced),

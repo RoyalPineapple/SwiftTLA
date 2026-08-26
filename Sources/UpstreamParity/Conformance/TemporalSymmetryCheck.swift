@@ -119,7 +119,7 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TLCTemporalCaptureResult {
     let swiftRun = try SwiftGraphExporter().export(exploration)
-    let correlation = try TemporalSymmetryCaseOutcomeCorrelation(
+    let correlation = try TemporalSymmetryRunReferences(
       caseID: temporalCase.id, runID: runID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     let inputs = evidenceRoot.appendingPathComponent("swift-inputs", isDirectory: true)
       .appendingPathComponent(temporalCase.id, isDirectory: true)
@@ -208,7 +208,7 @@ package struct TemporalSymmetryCheck: Sendable {
     }
     let context = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     try RetainedEvidence.createDirectory(outputDirectory, beneath: projectRoot)
-    let correlation = try TemporalSymmetryCaseOutcomeCorrelation(
+    let correlation = try TemporalSymmetryRunReferences(
       caseID: temporalCase.id, runID: runID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     let reducedRunID = UUID()
     let rawBundle = try compilation.renderedTLAModuleBundle(usesSymmetryReduction: false)
@@ -385,7 +385,7 @@ extension TemporalSymmetryCheck {
     model: TemporalSymmetryModelDefinition,
     exploration: ModelExplorationResult,
     swiftRun: CompletedGraphRun,
-    correlation: TemporalSymmetryCaseOutcomeCorrelation,
+    correlation: TemporalSymmetryRunReferences,
     inputs: URL,
     projectRoot: URL
   ) throws -> TemporalPropertyResult {

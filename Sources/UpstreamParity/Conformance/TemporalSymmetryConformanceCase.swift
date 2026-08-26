@@ -243,7 +243,7 @@ package struct TemporalSymmetryCases: Equatable, Codable, Sendable {
   }
 }
 
-package struct TemporalSymmetryCaseOutcomeCorrelation: Equatable, Codable, Sendable {
+package struct TemporalSymmetryRunReferences: Equatable, Codable, Sendable {
   package let caseID: String
   package let runID: UUID
   package let swiftRunID: UUID

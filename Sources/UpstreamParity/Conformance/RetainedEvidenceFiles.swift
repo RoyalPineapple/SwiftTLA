@@ -73,14 +73,9 @@ package enum RetainedEvidence {
     try write(data, to: url)
   }
 
-  package static func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> RetainedFileReference {
+  package static func reference(for url: URL, beneath root: URL) throws -> RetainedFileReference {
     let url = try resolve(url, beneath: root)
-    let bytes: Data
-    if let data {
-      bytes = data
-    } else {
-      bytes = try Data(contentsOf: url)
-    }
+    let bytes = try Data(contentsOf: url)
     return try RetainedFileReference(
       path: relativePath(for: url, beneath: root),
       sha256: SHA256.hex(bytes))
@@ -103,12 +98,4 @@ package enum RetainedEvidence {
     try write(canonicalData(value, trailingNewline: trailingNewline), to: url)
   }
 
-  package static func writePrettyCanonical<T: Encodable>(_ value: T, to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    var data = try encoder.encode(value)
-    data.append(0x0A)
-    try write(data, to: url)
-  }
 }
