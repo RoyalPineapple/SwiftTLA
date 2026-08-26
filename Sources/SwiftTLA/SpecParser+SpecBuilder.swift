@@ -28,6 +28,7 @@ extension ParserSession {
         public var constants: [ConstantDecl] = []
         var instanceBindings: [String: FormalModuleInstance] = [:]
         var algorithmBindings: [String: Algorithm] = [:]
+        var moduleBindings: [String: TLASpec] = [:]
     }
 
     /// Evidence retained when the source parser cannot form a formal model.
@@ -219,6 +220,12 @@ extension ParserSession {
                       let instance = result.moduleInstances.last
                 else { continue }
                 result.instanceBindings[sourceName] = instance
+            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
+                parseFormalModuleBinding(
+                    sourceName: sourceName,
+                    call: call,
+                    into: &result
+                )
             } else if algorithmBindingType(in: binding),
                       call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" {
                 guard result.algorithmBindings[sourceName] == nil else {
@@ -251,6 +258,47 @@ extension ParserSession {
         }
         if containsVariableConstructor {
             parseVarDecl(declaration, into: &result, declarationScope: declarationScope)
+        }
+    }
+
+    private func parseFormalModuleBinding(
+        sourceName: String,
+        call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        guard result.moduleBindings[sourceName] == nil else {
+            result.diagnostics.append(.init(
+                message: "Formal module binding '\(sourceName)' is declared more than once.",
+                source: call
+            ))
+            return
+        }
+        guard let moduleName = extractStringArg(call, index: 0),
+              let body = call.trailingClosure
+        else {
+            result.diagnostics.append(.init(
+                message: "A formal module binding requires a literal module name and declaration body.",
+                source: call,
+                expected: "let support = TLASpec(\"Support\") { declarations }"
+            ))
+            return
+        }
+
+        let outerScope = sourceScope
+        defer { sourceScope = outerScope }
+        let parsed = parseSpecClosure(body)
+        do {
+            result.moduleBindings[sourceName] = try parsed.sourceModel(specificationName: moduleName)
+        } catch let diagnostic as SourceParseDiagnostic {
+            result.diagnostics.append(diagnostic)
+        } catch let diagnostic as LanguageCapabilityDiagnostic {
+            result.diagnostics.append(.init(capability: diagnostic))
+        } catch {
+            result.diagnostics.append(.init(
+                message: "Formal module '\(moduleName)' could not be constructed.",
+                source: call,
+                actual: String(describing: error)
+            ))
         }
     }
 
@@ -737,14 +785,21 @@ extension ParserSession {
         case "FormalDefinition":
             parseFormalDefinition(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
-            if let expr = decodeTemporal(call) {
-                result.temporal.append((name, expr))
-            } else {
+            guard let declarationName = extractStringArg(call, index: 0) else {
                 result.diagnostics.append(.init(
-                    message: "Temporal declaration requires a supported temporal expression.",
+                    message: "Temporal declaration requires a literal name.",
                     source: call
                 ))
+                return
             }
+            guard let temporal = decodeTemporal(call, scope: sourceScope) else {
+                result.diagnostics.append(.init(
+                    message: "Temporal declaration requires supported state expressions.",
+                    source: call
+                ))
+                return
+            }
+            result.temporal.append((declarationName, temporal))
         case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
             if let fc = decodeFairness(call) {
                 result.fairness.append(fc)
@@ -759,15 +814,21 @@ extension ParserSession {
                 result.diagnostics.append(.init(message: "Import requires a concrete typed formal module.", source: call))
                 return
             }
-            guard let module = formalModule(from: argument) else {
+            guard let module = formalModule(from: argument, bindings: result.moduleBindings) else {
                 result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
                 return
             }
             result.imports.append(module)
-            if let configuration = parseFormalModuleConfiguration(
-                call,
-                moduleName: module.name
-            ) {
+            if call.arguments.contains(where: { $0.label?.text == "configuring" }) {
+                guard let provider = formalModuleProvider(from: argument),
+                      let configuration = parseFormalModuleConfiguration(call, provider: provider)
+                else {
+                    result.diagnostics.append(.init(
+                        message: "Import configuration requires a supported typed module configuration.",
+                        source: call
+                    ))
+                    return
+                }
                 result.importConfigurations.append(configuration)
             }
         case "Instance":
@@ -892,22 +953,18 @@ extension ParserSession {
     }
 
     private func refinementTargetName(_ expression: ExprSyntax) -> String? {
-        if let member = expression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "valueParameter",
-           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ByzPaxosConsensus" {
-            return "Value"
+        if let call = expression.as(FunctionCallExprSyntax.self) {
+            let constructor = terminalTypeName(in: call.calledExpression)
+            if constructor == "FormalModuleParameter" || constructor == "Parameter" {
+                return extractStringArg(call, index: 0)
+            }
+            if typedFacadeType(call.calledExpression)?.name == "Var" {
+                return extractStringArg(call, index: 0)
+            }
         }
-        if let call = expression.as(FunctionCallExprSyntax.self),
-           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "chosen",
-           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ByzPaxosConsensus" {
-            return "chosen"
-        }
-        if let reference = expression.as(DeclReferenceExprSyntax.self) {
-            return reference.baseName.text
-        }
-        if let member = expression.as(MemberAccessExprSyntax.self) {
-            return member.declName.baseName.text
+        if let reference = expression.as(DeclReferenceExprSyntax.self),
+           case .variable(let formalName) = sourceScope.value(for: reference) {
+            return formalName
         }
         return nil
     }
@@ -1033,7 +1090,7 @@ extension ParserSession {
             result.diagnostics.append(.init(message: "Instance requires a name and a named formal module.", source: call))
             return
         }
-        guard let module = formalModule(from: moduleArgument) else {
+        guard let module = formalModule(from: moduleArgument, bindings: result.moduleBindings) else {
             result.diagnostics.append(.init(message: "Instance requires a concrete typed formal module.", source: call))
             return
         }
@@ -1096,14 +1153,15 @@ extension ParserSession {
 
     private func parseFormalModuleConfiguration(
         _ call: FunctionCallExprSyntax,
-        moduleName: String
+        provider: FormalModuleProvider
     ) -> FormalModuleConfiguration? {
         guard let argument = call.arguments.first(where: { $0.label?.text == "configuring" })?.expression
         else { return nil }
-        guard moduleName == "ZSequences",
+        guard provider == .zeroBasedSequences,
               let call = argument.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences",
+              let configurationType = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              FormalModuleProvider(sourceType: configurationType) == provider,
               member.declName.baseName.text == "boundedNaturalNumbers",
               call.arguments.count == 1,
               let bounds = call.arguments.first?.expression,
@@ -1112,28 +1170,25 @@ extension ParserSession {
         return ZSequences.boundedNaturalNumbers(range)
     }
 
-    private func formalModuleName(from expression: ExprSyntax) -> String? {
+    private func formalModuleProvider(from expression: ExprSyntax) -> FormalModuleProvider? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.text == "module",
-              let module = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+              let sourceType = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
         else { return nil }
-        return module
+        return FormalModuleProvider(sourceType: sourceType)
     }
 
-    private func formalModule(from expression: ExprSyntax) -> TLASpec? {
-        if let moduleName = formalModuleName(from: expression) {
-            return BuiltInFormalModules.resolve(moduleName)
+    private func formalModule(
+        from expression: ExprSyntax,
+        bindings: [String: TLASpec]
+    ) -> TLASpec? {
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            return bindings[reference.baseName.text]
         }
-        guard let call = expression.as(FunctionCallExprSyntax.self),
-              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.text == "module",
-              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ByzPaxosConsensus",
-              let typeExpression = call.arguments.first(where: { $0.label?.text == "for" })?.expression,
-              let metatype = typeExpression.as(MemberAccessExprSyntax.self),
-              metatype.declName.baseName.text == "self",
-              let choiceTypeName = terminalTypeName(in: metatype.base)
-        else { return nil }
-        return ByzPaxosConsensus.parsedModule(choiceTypeName: choiceTypeName)
+        if let provider = formalModuleProvider(from: expression) {
+            return provider.module
+        }
+        return nil
     }
 
     func mergeVariableDeclaration(

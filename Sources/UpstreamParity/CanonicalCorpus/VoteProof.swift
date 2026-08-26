@@ -54,9 +54,21 @@ package struct VoteProofModel: Sendable {
             Constant("Ballot", SetExpr<Int>(0, 1, 2))
             let consensusValue = SetExpr<Value>.literal(.v1, .v2)
             let consensusChosen = FormalCall(as: SetExpr<Value>.self, "chosen")
+            let consensusModule = TLASpec("Consensus") {
+                Parameter("Value")
+                let chosen = Var<SetExpr<Value>>("chosen")
+                Variable(chosen)
+                SwiftTLA.Action("Next") {
+                    ActionExpr.exists("candidate", from: Parameter("Value")) { candidate in
+                        chosen.becomes(SetExpr<Value>.literal(Expr<Value>(candidate)))
+                            .when(chosen == SetExpr<Value>())
+                    }
+                }
+                Eventually("Success", Expr<SetExpr<Value>>(chosen.stateExpr).isEmpty == false)
+            }
             let consensus = Instance(
                 "C",
-                of: ByzPaxosConsensus.module(for: Value.self),
+                of: consensusModule,
                 plusCalPhase: .postTranslation,
                 dependsOn: ["chosen"]
             )
@@ -65,8 +77,8 @@ package struct VoteProofModel: Sendable {
                 name: "Refines",
                 instance: consensus,
                 mappings: [
-                    .init(ByzPaxosConsensus.valueParameter, from: consensusValue),
-                    .init(ByzPaxosConsensus.chosen(for: Value.self), from: consensusChosen)
+                    .init(FormalModuleParameter("Value"), from: consensusValue),
+                    .init(Var<SetExpr<Value>>("chosen"), from: consensusChosen)
                 ]
             )
 
