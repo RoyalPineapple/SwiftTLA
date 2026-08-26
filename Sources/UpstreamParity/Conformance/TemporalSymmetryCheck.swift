@@ -211,8 +211,8 @@ package struct TemporalSymmetryCheck: Sendable {
     let correlation = try TemporalSymmetryRunReferences(
       caseID: temporalCase.id, runID: runID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     let reducedRunID = UUID()
-    let rawBundle = try compilation.renderedTLAModuleBundle(usesSymmetryReduction: false)
-    let reducedBundle = try compilation.renderedTLAModuleBundle(usesSymmetryReduction: true)
+    let rawBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: false)
+    let reducedBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: true)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id, isDirectory: true)
     try RetainedEvidence.createDirectory(work, beneath: projectRoot)
     let rawCase = try launchCase(

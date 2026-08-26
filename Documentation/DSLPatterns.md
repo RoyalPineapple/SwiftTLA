@@ -54,10 +54,10 @@ state slots.
 let compilation = try Counter.spec.compile()
 let machine = try Counter.makeMachine()
 let transition = try machine.send(.advance)
-let bundle = try compilation.renderedTLAModuleBundle()
+let bundle = compilation.renderedTLAModuleBundle()
 ```
 
-`CompiledSpecification` is the source for local exploration, generated Swift,
+`CompiledSpecification` is the single compiled input for local exploration, generated Swift,
 direct TLA+, authored PlusCal, and conformance evidence. Its description
 exposes declarations, control locations, imports, and identity in canonical
 order.

@@ -88,7 +88,7 @@ do {
         let specification = item.specification()
         let compilation = try specification.compile()
         try item.validateConfigurationReferences(in: compilation)
-        let bundle = try compilation.renderedTLAModuleBundle()
+        let bundle = compilation.renderedTLAModuleBundle()
         let plusCalBundle = try compilation.renderedPlusCalBundle()
 
         var files = [Manifest.Case.File]()

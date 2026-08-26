@@ -29,7 +29,7 @@ struct CompilerBundleOwnershipTests {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Instance("Library", of: library, with: [ModuleArgument("Base", value: 1)])
     }
-    let closure = try root.compile().formalModuleClosure
+    let closure = try FormalModuleClosure.resolve(root: root)
 
     #expect(closure.edges.contains { if case .importModule(let configuration) = $0.kind { configuration == ZSequences.boundedNaturalNumbers(0...2) } else { false } })
     #expect(closure.edges.contains { if case .namedInstance("Library", let arguments) = $0.kind { arguments == [ModuleArgument("Base", value: 1)] } else { false } })
@@ -94,7 +94,8 @@ struct CompilerBundleOwnershipTests {
       ]
     )
 
-    let definitions = try root.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
+    let definitions = try FormalModuleClosure.resolve(root: root)
+      .linkedOperators.formalOperatorDefinitions
     let value = try compiledValue(
       .operatorApplication(.reference("ConfiguredValue", arity: 0), []),
       formalOperators: definitions

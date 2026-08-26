@@ -42,11 +42,11 @@ private struct InstancedFormalModuleGeneratedModel {
 @Suite("TLA+ module bundles")
 struct TLAModuleBundleTests {
   @Test("a generated model preserves its imported module")
-  func generatedModelRetainsImportedModule() {
-    #expect(ImportedFormalModuleGeneratedModel.spec.imports.map { $0.name } == ["ZSequences"])
-    #expect(ImportedFormalModuleGeneratedModel.spec.importConfigurations == [
-      ZSequences.boundedNaturalNumbers(0...2)
-    ])
+  func generatedModelRetainsImportedModule() throws {
+    let bundle = try ImportedFormalModuleGeneratedModel.spec.compile().renderedTLAModuleBundle()
+
+    #expect(bundle.imports.map(\.name) == ["ZSequences"])
+    #expect(try #require(bundle.root.cfg).contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
   }
 
   @Test("the parser records imports for builder fidelity")
@@ -89,9 +89,11 @@ struct TLAModuleBundleTests {
   }
 
   @Test("a generated model preserves a named module instance")
-  func generatedModelRetainsNamedModuleInstance() {
-    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map(\.name) == ["Folding"])
-    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map { $0.module.name } == ["Folds"])
+  func generatedModelRetainsNamedModuleInstance() throws {
+    let bundle = try InstancedFormalModuleGeneratedModel.spec.compile().renderedTLAModuleBundle()
+
+    #expect(bundle.imports.map(\.name) == ["Folds"])
+    #expect(bundle.root.tla.contains("Folding == INSTANCE Folds"))
   }
 
   @Test("the parser preserves qualified ZSequences calls")
@@ -112,7 +114,8 @@ struct TLAModuleBundleTests {
     }
     let result = try compiledValue(
       rotated.raw,
-      recursiveFunctions: try configured.compile().formalModuleClosure.linkedOperators.recursiveFunctions
+      recursiveFunctions: try FormalModuleClosure.resolve(root: configured)
+        .linkedOperators.recursiveFunctions
     )
     #expect(result == .function([
       .int(0): .int(1), .int(1): .int(2), .int(2): .int(3)
@@ -163,7 +166,8 @@ struct TLAModuleBundleTests {
 
     let sequences = try compiledValue(
       .recursiveCall("ZSeq", [.setLiteral([.int(0), .int(1)])]),
-      recursiveFunctions: try consumer.compile().formalModuleClosure.linkedOperators.recursiveFunctions
+      recursiveFunctions: try FormalModuleClosure.resolve(root: consumer)
+        .linkedOperators.recursiveFunctions
     )
     guard case .set(let values) = sequences else {
       Issue.record("The bounded ZSeq result was not a set.")
@@ -268,7 +272,8 @@ struct TLAModuleBundleTests {
       Invariant("CountsDown") { math.call("CountDown", value.stateExpr) == 3 }
     }
 
-    let resolved = try consumer.compile().formalModuleClosure.linkedOperators.recursiveFunctions
+    let resolved = try FormalModuleClosure.resolve(root: consumer)
+      .linkedOperators.recursiveFunctions
     #expect(resolved.map(\.name) == ["Math!CountDown"])
     #expect(resolved[0].body.description.contains("Math!CountDown"))
     let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()

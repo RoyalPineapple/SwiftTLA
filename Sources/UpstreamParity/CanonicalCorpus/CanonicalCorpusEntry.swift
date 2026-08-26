@@ -63,10 +63,11 @@ package struct CanonicalCorpusConfiguration: Sendable {
     }
 
     func validate(against compilation: CompiledSpecification, entryID: String) throws {
-        let compiledInvariants = Set(compilation.spec.invariants.map(\.name))
-        let compiledProperties = Set(compilation.spec.temporalProperties.map(\.name))
-            .union(compilation.spec.refinements.map(\.name))
-        let compiledConstraints = compilation.spec.constraint == nil ? Set<String>() : ["StateConstraint"]
+        let description = compilation.description
+        let compiledInvariants = Set(description.invariants)
+        let compiledProperties = Set(description.temporalProperties)
+            .union(description.refinements)
+        let compiledConstraints = description.stateConstraint.map { Set([$0]) } ?? []
 
         for check in checks {
             let compiled = switch check.kind {

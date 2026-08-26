@@ -100,7 +100,7 @@ struct StructuredAlgorithmTests {
             Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
         let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let cars = try #require(compilation.layout.variableID(named: "cars"))

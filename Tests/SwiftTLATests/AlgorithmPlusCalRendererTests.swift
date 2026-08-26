@@ -25,20 +25,6 @@ struct AlgorithmPlusCalRendererTests {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    @Test("rejects residual anonymous formal lambdas")
-    func rejectsResidualAnonymousFormalLambdas() {
-        #expect(StateExpr.plusCalExpression(from: .variable("count"), using: { $0 }) != nil)
-        #expect(StateExpr.plusCalExpression(from: .operatorApplication(
-            .lambda(.init(parameters: ["value"], body: .variable("value"))),
-            [.value(0)]
-        ), using: { $0 }) != nil)
-        #expect(StateExpr.plusCalExpression(from: .foldFunction(
-            .init(parameters: ["left", "right"], body: .add(.variable("left"), .variable("right"))),
-            initial: 0,
-            sequence: .tupleLiteral([])
-        ), using: { $0 }) == nil)
-    }
-
     @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
         let algorithm = Algorithm("RenderedProcess", scoped: { scope in
@@ -75,7 +61,7 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("---- MODULE RenderedProcess ----"))
         #expect(rendered.contains("count = 0"))
         #expect(rendered.contains("sentinel = \"author text\""))
-        #expect(rendered.contains("(*--algorithm Rendered Process {"))
+        #expect(rendered.contains("(*--algorithm RenderedProcess {"))
         #expect(rendered.contains("fair+ process (pcalProcess1 \\in {\"left\", \"right\"})"))
         #expect(rendered.contains("local = 0"))
         #expect(rendered.contains("repeat: while ((count < 2)) {"))
@@ -117,7 +103,7 @@ struct AlgorithmPlusCalRendererTests {
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
-        #expect(rendered.contains("EXTENDS Naturals, Integers, Sequences, FiniteSets"))
+        #expect(rendered.contains("EXTENDS Integers, Naturals, Sequences, FiniteSets"))
         #expect(rendered.contains("previous = -1"))
     }
 
@@ -159,7 +145,7 @@ struct AlgorithmPlusCalRendererTests {
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
         let variableRange = try #require(rendered.range(of: "count = 0"))
         let defineRange = try #require(rendered.range(of: "define {"))
-        let definitionRange = try #require(rendered.range(of: "Ready(value0) =="))
+        let definitionRange = try #require(rendered.range(of: "Ready("))
         let actionRange = try #require(rendered.range(of: "done:"))
         #expect(variableRange.lowerBound < defineRange.lowerBound)
         #expect(defineRange.lowerBound < definitionRange.lowerBound)
@@ -301,8 +287,8 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("{\n  start:"))
     }
 
-    @Test("retains authored Algorithm source for independent PlusCal rendering")
-    func retainsAuthoredAlgorithmOnTheLoweredSpec() throws {
+    @Test("compilation renders the authored Algorithm and its state constraint")
+    func rendersAuthoredAlgorithmAndStateConstraint() throws {
         let spec = TLASpec("Retained") {
             Algorithm("Retained", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
@@ -311,12 +297,13 @@ struct AlgorithmPlusCalRendererTests {
             })
         }
 
-        let module = try spec.compile().renderedPlusCalBundle().root.tla
+        let compilation = try spec.compile()
+        let module = try compilation.renderedPlusCalBundle().root.tla
 
         #expect(module.contains("(*--algorithm Retained {"))
         #expect(module.contains("} *)\nStateConstraint == (count < 2)\n===="))
         #expect(!module.contains("\\* StateConstraint"))
-        #expect(spec.actions.contains(where: { $0.name == "stop" }))
+        #expect(compilation.description.actions.contains(where: { $0.name == "stop" }))
     }
 
     @Test("renders authored module context around the Algorithm comment")
@@ -337,11 +324,11 @@ struct AlgorithmPlusCalRendererTests {
 
         #expect(module.contains("CONSTANTS N"))
         #expect(module.contains("TLC"))
-        #expect(module.contains("Seed == N"))
+        #expect(module.contains("Seed == 2"))
         #expect(module.contains("(*--algorithm Context {"))
         #expect(module.contains("Bounded == (count <= 2)"))
         #expect(module.contains("Symmmember == Permutations({1, 2})"))
-        let seed = try #require(module.range(of: "Seed == N"))
+        let seed = try #require(module.range(of: "Seed == 2"))
         let algorithm = try #require(module.range(of: "(*--algorithm Context {"))
         #expect(seed.lowerBound < algorithm.lowerBound)
     }

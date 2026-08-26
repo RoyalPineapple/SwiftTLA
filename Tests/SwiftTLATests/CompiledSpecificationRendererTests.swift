@@ -19,16 +19,6 @@ struct CompiledSpecificationRendererTests {
         }
     }
 
-    @Test("the compiled declaration plan owns direct module text")
-    func compiledPlanOwnsDirectModuleText() throws {
-        let compilation = try compiledBundle()
-        let plan = try #require(compilation.moduleSectionPlans[compilation.formalModuleClosure.root.id])
-        let bundle = try compilation.renderedTLAModuleBundle()
-
-        #expect(bundle.root.tla == plan.renderedModuleSource)
-        #expect(bundle.root.cfg == plan.renderedConfiguration)
-    }
-
     @Test("an invalid closure cannot render or materialize a bundle")
     func invalidClosureHasNoRenderedOutcome() throws {
         let invalid = TLASpec(
@@ -72,31 +62,7 @@ struct CompiledSpecificationRendererTests {
         #expect(dependencies.map(\.importedModule) == ["Left", "Support", "Right", "Support"])
     }
 
-    @Test("rendering rejects a bundle whose identity no longer matches its source")
-    func renderingRejectsSourceFidelityMismatch() throws {
-        let compilation = try compiledBundle()
-        let stale = CompiledSpecification(
-            spec: compilation.spec,
-            formalModuleClosure: compilation.formalModuleClosure,
-            identity: .init(value: "stale"),
-            machineSurfacePlan: compilation.machineSurfacePlan,
-            layout: compilation.layout,
-            bindings: compilation.bindings,
-            semantics: compilation.semantics,
-            refinements: compilation.refinements,
-            moduleSectionPlans: compilation.moduleSectionPlans
-        )
-
-        do {
-            _ = try stale.renderedTLAModuleBundle()
-            Issue.record("Expected rendering to reject a stale compilation identity.")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.code == .compilationIdentityMismatch)
-            #expect(diagnostic.stage == .rendering)
-        }
-    }
-
-    @Test("authored PlusCal presentation also requires the compiled source identity")
+    @Test("authored PlusCal presentation uses the compiled bundle")
     func authoredPlusCalUsesCompiledBoundary() throws {
         let support = TLASpec(name: "Support", variables: [], actions: [], invariants: [])
         let specification = TLASpec("Authored") {
@@ -109,7 +75,7 @@ struct CompiledSpecificationRendererTests {
         let compilation = try specification.compile()
 
         let bundle = try compilation.renderedPlusCalBundle()
-        let directBundle = try compilation.renderedTLAModuleBundle()
+        let directBundle = compilation.renderedTLAModuleBundle()
         #expect(bundle.root.tla.contains("--algorithm Authored"))
         #expect(bundle.root.cfg == directBundle.root.cfg)
         #expect(bundle.imports.map(\.name) == ["Support"])
@@ -118,20 +84,6 @@ struct CompiledSpecificationRendererTests {
             return
         }
 
-        let stale = CompiledSpecification(
-            spec: compilation.spec,
-            formalModuleClosure: compilation.formalModuleClosure,
-            identity: .init(value: "stale"),
-            machineSurfacePlan: compilation.machineSurfacePlan,
-            layout: compilation.layout,
-            bindings: compilation.bindings,
-            semantics: compilation.semantics,
-            refinements: compilation.refinements,
-            moduleSectionPlans: compilation.moduleSectionPlans
-        )
-        #expect(throws: CompilationDiagnostic.self) {
-            try stale.renderedPlusCalBundle()
-        }
     }
 
     @Test("authored PlusCal export requires one canonical Algorithm root")

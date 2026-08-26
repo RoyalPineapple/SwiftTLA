@@ -105,7 +105,11 @@ internal struct AlgorithmModel: Sendable {
             let family = localRoots.reduce(value) { result, root in
                 result.replacingProcessLocalFamily(named: root, with: .variable(root))
             }
-            return family.replacingCurrentProcess(with: .variable("self"))
+            return StateExpr.renamingRecursiveCalls(
+                in: family.replacingCurrentProcess(with: .variable("self")),
+                using: { $0 },
+                lowerAnonymousLambdaApplications: true
+            )
         }
 
         func temporal(_ value: TemporalExpr) -> TemporalExpr {

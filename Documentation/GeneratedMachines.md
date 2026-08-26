@@ -266,7 +266,7 @@ Compile the same model when an application needs to inspect, render, or explore 
 
 ```swift
 let compilation = try BoundedCounter.spec.compile()
-let bundle = try compilation.renderedTLAModuleBundle()
+let bundle = compilation.renderedTLAModuleBundle()
 ```
 
 The generated Swift machine, local exploration, and rendered formal bundle

@@ -35,6 +35,13 @@ private func parserEnum(
         try parsed.compile(specificationName: name)
     }
 
+    private func loweredSource(
+        _ parsed: SpecParser.ParsedSpecComponents,
+        named name: String
+    ) throws -> TLASpec {
+        try parsed.sourceModel(specificationName: name).loweredSourceModel()
+    }
+
     @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
     func parsesBoundedAlgorithm() throws {
         let source = """
@@ -58,7 +65,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let compilation = try compile(parsed, named: "Counter")
-        let specification = compilation.spec
+        let specification = try loweredSource(parsed, named: "Counter")
         #expect(specification.variables.map(\.name) == ["pc", "count"])
         #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
         #expect(specification.actions.first?.bindings.map(\.name) == ["process"])
@@ -137,7 +144,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(try compile(parsed, named: "MappingScope").spec.variables.map(\.name) == ["pc", "enabled", "values"])
+        #expect(try loweredSource(parsed, named: "MappingScope").variables.map(\.name) == ["pc", "enabled", "values"])
     }
 
     @Test("Algorithm parser carries shared bindings into Each bodies")
@@ -161,7 +168,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(try compile(parsed, named: "EachScope").spec.actions.map(\.name) == ["step", "Terminating"])
+        #expect(try loweredSource(parsed, named: "EachScope").actions.map(\.name) == ["step", "Terminating"])
     }
 
     @Test("Algorithm parser carries shared bindings into macro declarations")
@@ -180,7 +187,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(try compile(parsed, named: "MacroScope").spec.actions.map(\.name) == ["step", "Terminating"])
+        #expect(try loweredSource(parsed, named: "MacroScope").actions.map(\.name) == ["step", "Terminating"])
     }
 
     @Test("Algorithm parser resolves enum cases through lexical and declared type scope")
@@ -345,8 +352,8 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.sourceAlgorithms.count == 1)
         let compilation = try compile(parsed, named: "Counter")
-        #expect(compilation.spec.variables.map(\.name) == ["pc", "count"])
-        #expect(compilation.spec.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(compilation.description.variables.map(\.name) == ["pc", "count"])
+        #expect(compilation.description.actions.map(\.name) == ["increment", "Terminating"])
     }
 
     @Test("CollectionAction reports an incomplete declaration")
@@ -660,7 +667,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "Counter").spec
+        let specification = try loweredSource(parsed, named: "Counter")
         #expect(specification.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
         #expect(specification.fairness == [
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
@@ -688,7 +695,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(try compile(parsed, named: "Temporal").spec.temporalProperties.map(\.name) == [
+        #expect(try loweredSource(parsed, named: "Temporal").temporalProperties.map(\.name) == [
             "progress", "eventual", "safe", "recurs", "settles"
         ])
     }
@@ -725,7 +732,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "ScopedFormalLambda").spec
+        let specification = try loweredSource(parsed, named: "ScopedFormalLambda")
         #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
         #expect(specification.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
     }
@@ -781,7 +788,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let specification = try compile(parsed, named: "ThreeWith").spec
+        let specification = try loweredSource(parsed, named: "ThreeWith")
         #expect(specification.actions.first?.body.description.contains("__pcal_with_0") == true)
         #expect(specification.actions.first?.body.description.contains("__pcal_with_2") == true)
     }
@@ -809,7 +816,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "MacroLock").spec
+        let specification = try loweredSource(parsed, named: "MacroLock")
         #expect(specification.actions.map(\.name) == ["acquire", "Terminating"])
         #expect(specification.actions.first?.body.description.contains("lock") == true)
     }
@@ -832,7 +839,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "CopyValue").spec
+        let specification = try loweredSource(parsed, named: "CopyValue")
         #expect(specification.actions.first?.body.description.contains("destination' = source") == true)
         #expect(specification.actions.first?.body.description.contains("__pcal_macro_parameter") == false)
     }
@@ -855,7 +862,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "OffsetValue").spec
+        let specification = try loweredSource(parsed, named: "OffsetValue")
         #expect(specification.actions.first?.body.description.contains("destination' = (source + 1)") == true)
     }
 
@@ -881,7 +888,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let specification = try compile(parsed, named: "PairVote").spec
+        let specification = try loweredSource(parsed, named: "PairVote")
         #expect(specification.actions.first?.body.description.contains("SafeAt(1, 2)") == true)
     }
 
@@ -931,7 +938,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let specification = try compile(parsed, named: "ProcedureSource").spec
+        let specification = try loweredSource(parsed, named: "ProcedureSource")
         #expect(specification.variables.contains { $0.name == "parameter0" })
         #expect(specification.actions.contains { $0.name == "procedure.work.enter" })
     }
@@ -974,7 +981,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "ParameterlessMacro").spec
+        let specification = try loweredSource(parsed, named: "ParameterlessMacro")
         #expect(specification.actions.first?.body.description.contains("count' = (count + 1)") == true)
     }
 
@@ -1005,7 +1012,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let compilation = try compile(parsed, named: "FunctionDomain")
-        let successors = try #require(compilation.spec.variables.first { $0.name == "successors" })
+        let successors = try #require(try loweredSource(parsed, named: "FunctionDomain").variables.first { $0.name == "successors" })
         let surface = try #require(compilation.machineSurfacePlan.variables.first { $0.formalName == successors.name })
         #expect(surface.swiftType == "Function<Node, SetExpr<Node>>")
         #expect(successors.initialSet?.description.contains("Cardinality") == true)
@@ -1041,7 +1048,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(try compile(parsed, named: "FunctionSetInvariant").spec.invariants.map(\.name) == ["TypeOK"])
+        #expect(try loweredSource(parsed, named: "FunctionSetInvariant").invariants.map(\.name) == ["TypeOK"])
     }
 
     @Test("parser retains a typed record-valued function comprehension")
@@ -1069,7 +1076,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let specification = try compile(parsed, named: "RecordFunction").spec
+        let specification = try loweredSource(parsed, named: "RecordFunction")
         let carsDeclaration = try #require(specification.variables.first { $0.name == "cars" })
         guard case .function(let cars) = carsDeclaration.initial else {
             Issue.record("Expected cars to retain a formal finite function")
@@ -1100,7 +1107,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let specification = try compile(parsed, named: "Votes").spec
+        let specification = try loweredSource(parsed, named: "Votes")
         let votesDeclaration = try #require(specification.variables.first { $0.name == "votes" })
         guard case .function(let votes) = votesDeclaration.initial else {
             Issue.record("Expected votes to retain a formal finite function")
@@ -1136,7 +1143,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let specification = try compile(parsed, named: "FiniteFunction").spec
+        let specification = try loweredSource(parsed, named: "FiniteFunction")
         #expect(specification.actions.first?.body.description.contains("CASE") == true)
         #expect(specification.actions.first?.body.description.contains("_typedFunctionEntry") == true)
     }
@@ -1159,7 +1166,7 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let specification = try compile(parsed, named: "StaticChoice").spec
+        let specification = try loweredSource(parsed, named: "StaticChoice")
         #expect(specification.variables.first { $0.name == "current" }?.initial == .int(2))
     }
 
@@ -1188,7 +1195,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "MacroProcess").spec
+        let specification = try loweredSource(parsed, named: "MacroProcess")
         let body = try? #require(specification.actions.first?.body)
         #expect(body?.description.contains("process") == true)
         #expect(body?.description.contains("__pcal_macro_parameter") == false)
@@ -1215,7 +1222,7 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try compile(parsed, named: "RawLabel").spec
+        let specification = try loweredSource(parsed, named: "RawLabel")
         #expect(specification.actions.map(\.name) == ["RS", "Terminating"])
     }
 
@@ -1251,13 +1258,13 @@ private func parserEnum(
                 }
             }
         }
-        let runtimeSpecification = try runtime.compile().spec
+        let runtimeSpecification = try runtime.loweredSourceModel()
         let runtimeTree = canonicalTestSpec(
             variables: runtimeSpecification.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: runtimeSpecification.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: runtimeSpecification.invariants.map { ($0.name, $0.body) }
         )
-        let parserSpecification = try compile(parsed, named: "Counter").spec
+        let parserSpecification = try loweredSource(parsed, named: "Counter")
         let parserTree = canonicalTestSpec(
             variables: parserSpecification.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: parserSpecification.actions.map { ($0.name, $0.body, $0.bindings) },
@@ -1281,8 +1288,8 @@ private func parserEnum(
             let count = SharedVar("count", initial: 1 + 2)
             count
         }
-        let parsedVariable = try #require(try compile(parsed, named: "SharedInitializer").spec.variables.first)
-        let runtimeVariable = try #require(try runtime.compile().spec.variables.first)
+        let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
+        let runtimeVariable = try #require(try runtime.loweredSourceModel().variables.first)
 
         #expect(parsedVariable == runtimeVariable)
         #expect(parsedVariable.initial == .int(0))

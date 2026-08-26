@@ -19,7 +19,6 @@ public struct FiniteExplorationConfiguration: Sendable, Equatable, Hashable {
 
 /// Explores every reachable state of a TLA+ specification with breadth-first search.
 package struct ModelChecker {
-    private let spec: TLASpec
     let compilation: CompiledSpecification
     let configuration: FiniteExplorationConfiguration
     let permutationProductBudget: Int
@@ -31,7 +30,6 @@ package struct ModelChecker {
         permutationProductBudget: Int = 100_000,
         usesSymmetryReduction: Bool = true
     ) {
-        self.spec = compilation.spec
         self.compilation = compilation
         self.configuration = configuration
         self.permutationProductBudget = permutationProductBudget
@@ -47,7 +45,7 @@ package struct ModelChecker {
             guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
             return exploration.result
         } catch {
-            guard !spec.symmetricCollections.isEmpty else { throw error }
+            guard !symmetricCollectionScopes.isEmpty else { throw error }
             return bounded(.error(String(describing: error)))
         }
     }
@@ -59,10 +57,10 @@ package struct ModelChecker {
         do {
             let exploration = try explore()
             guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
-            guard !self.spec.temporalProperties.isEmpty else { return exploration.result }
+            guard !compilation.semantics.temporalProperties.isEmpty else { return exploration.result }
 
             let analyses = exploration.analyzeTemporalProperties(in: compilation)
-            for (property, result) in zip(self.spec.temporalProperties, analyses) {
+            for (property, result) in zip(compilation.semantics.temporalProperties, analyses) {
                 switch result.status {
                 case .satisfied:
                     continue
@@ -74,7 +72,7 @@ package struct ModelChecker {
             }
             return bounded(.ok(statesCount: exploration.graph.states.count))
         } catch {
-            guard !spec.symmetricCollections.isEmpty else { throw error }
+            guard !symmetricCollectionScopes.isEmpty else { throw error }
             return bounded(.error(String(describing: error)))
         }
     }
@@ -82,8 +80,6 @@ package struct ModelChecker {
     private func runExploration() throws -> ModelExplorationResult {
         if let validationError = validateSymmetricCollections() {
             return emptyExploration(
-                self.spec,
-                variableNames: self.spec.variables.map(\.name),
                 result: bounded(.error(validationError.description))
             )
         }
@@ -91,16 +87,12 @@ package struct ModelChecker {
         let initialStates = try runtime.initialStates()
         guard !initialStates.isEmpty else {
             return emptyExploration(
-                self.spec,
-                variableNames: self.spec.variables.map(\.name),
                 result: bounded(.error("No initial states"))
             )
         }
 
         guard try runtime.assumeHolds(in: initialStates[0]) else {
             return emptyExploration(
-                self.spec,
-                variableNames: self.spec.variables.map(\.name),
                 result: bounded(.error("ASSUME failed"))
             )
         }
@@ -109,8 +101,8 @@ package struct ModelChecker {
             runtime: runtime,
             seeds: initialStates,
             layout: compilation.layout,
-            checkDeadlock: self.spec.checkDeadlock,
-            specificationName: self.spec.name,
+            checkDeadlock: compilation.semantics.checkDeadlock,
+            specificationName: compilation.description.name,
             configuration: configuration,
             usesSymmetryReduction: usesSymmetryReduction
         )
@@ -126,14 +118,12 @@ package struct ModelChecker {
 
 
     private func emptyExploration(
-        _ specification: TLASpec,
-        variableNames: [String],
         result: CheckResult
     ) -> ModelExplorationResult {
         ModelExplorationResult(
             graph: StateGraph(
-                specName: specification.name,
-                variableNames: variableNames,
+                specName: compilation.description.name,
+                variableNames: compilation.layout.variables.map(\.declaration.name),
                 transitions: [:],
                 states: [:]
             ),
@@ -145,16 +135,27 @@ package struct ModelChecker {
     }
 
     private func bounded(_ outcome: CheckResult) -> CheckResult {
-        let scopes = spec.symmetricCollections.map {
-            SymmetricCollectionScope(collectionName: $0.name, verificationScope: $0.verificationScope)
-        }
-        return scopes.isEmpty ? outcome : .bounded(scopes: scopes, outcome: outcome)
+        symmetricCollectionScopes.isEmpty
+            ? outcome
+            : .bounded(scopes: symmetricCollectionScopes, outcome: outcome)
     }
 
     private func validateSymmetricCollections() -> SymmetricCollectionValidationError? {
-        spec.symmetricCollectionValidationError(
-            permutationProductBudget: permutationProductBudget
+        symmetricCollectionPermutationBudgetError(
+            scopes: symmetricCollectionScopes,
+            budget: permutationProductBudget
         )
+    }
+
+    private var symmetricCollectionScopes: [SymmetricCollectionScope] {
+        compilation.layout.variables.compactMap { variable in
+            variable.symmetricCollection.map {
+                SymmetricCollectionScope(
+                    collectionName: variable.declaration.name,
+                    verificationScope: $0.verificationScope
+                )
+            }
+        }
     }
 }
 

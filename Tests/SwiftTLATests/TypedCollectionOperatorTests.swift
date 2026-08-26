@@ -212,10 +212,6 @@ private struct FoldGeneratedModel {
             (
                 Function<DuplicateFiniteDomain, Int>.literal((.first, 0)).raw,
                 .invalidFiniteDomain
-            ),
-            (
-                Expr<Function<PartialFiniteDomain, Int>>(.variable("lookup"))[.second].raw,
-                .invalidFiniteDomainValue
             )
         ]
 
@@ -234,6 +230,27 @@ private struct FoldGeneratedModel {
             } catch {
                 Issue.record("Expected CompilationDiagnostic, got \(error)")
             }
+        }
+
+        let invalidFiniteDomainValue = TLASpec(
+            name: "InvalidFiniteDomainValue",
+            variables: [NamedVar(
+                name: "lookup",
+                initial: .function([PartialFiniteDomain.first.tlaValue: .int(0)])
+            )],
+            actions: [],
+            invariants: [.init(
+                name: "TypeOK",
+                body: Expr<Function<PartialFiniteDomain, Int>>(.variable("lookup"))[.second].raw
+            )]
+        )
+        do {
+            _ = try invalidFiniteDomainValue.compile()
+            Issue.record("Expected finite-domain value validation to fail")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidFiniteDomainValue)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
         }
     }
 
@@ -336,14 +353,16 @@ private struct FoldGeneratedModel {
     func generatedMachineUsesFormalFold() throws {
         var model = try FoldGeneratedModel.makeMachine()
         let result = try model.send(.sum)
+        let compilation = try FoldGeneratedModel.spec.compile()
 
         #expect(result.after.total == 6)
-        #expect(try FoldGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("FoldFunction(LAMBDA"))
-        #expect(try FoldGeneratedModel.spec.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
+        #expect(compilation.renderedTLAModuleBundle().tla.contains("FoldFunction(LAMBDA"))
+        #expect(try compilation.renderedPlusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
+        #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
     }
 
-    @Test("the bundled Functions module makes FoldFunction valid TLA+ source")
-    func bundledFunctionsModulePassesSANY() throws {
+    @Test("authored PlusCal folds translate into valid TLA+")
+    func authoredPlusCalFoldTranslatesAndPassesSANY() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -361,22 +380,44 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try FoldGeneratedModel.spec.compile().materializeModuleBundle(to: directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let bundle = try FoldGeneratedModel.spec.compile().renderedPlusCalBundle()
+        for file in bundle.files {
+            try file.tla.write(
+                to: directory.appendingPathComponent("\(file.name).tla"),
+                atomically: true,
+                encoding: .utf8
+            )
+            if let configuration = file.cfg {
+                try configuration.write(
+                    to: directory.appendingPathComponent("\(file.name).cfg"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+            }
+        }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: java)
-        process.arguments = ["-cp", jar.path, "tla2sany.SANY", "FoldGeneratedModel.tla"]
-        process.currentDirectoryURL = directory
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = output
-        try process.run()
-        process.waitUntilExit()
+        func run(_ mainClass: String) throws -> (status: Int32, output: String) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: java)
+            process.arguments = ["-cp", jar.path, mainClass, "FoldGeneratedModel.tla"]
+            process.currentDirectoryURL = directory
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = output
+            try process.run()
+            process.waitUntilExit()
+            return (
+                process.terminationStatus,
+                String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+                    ?? "<non-UTF-8 output>"
+            )
+        }
 
-        let text = String(
-            data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
-        ) ?? "<non-UTF-8 SANY output>"
-        #expect(process.terminationStatus == 0, "SANY rejected bundled Functions:\n\(text)")
+        let translation = try run("pcal.trans")
+        #expect(translation.status == 0, "PlusCal translation failed:\n\(translation.output)")
+        let sany = try run("tla2sany.SANY")
+        #expect(sany.status == 0, "SANY rejected translated PlusCal:\n\(sany.output)")
     }
 
     @Test("the bundled KeyValueStore Util module preserves its upstream imports")
@@ -488,22 +529,23 @@ private struct FoldGeneratedModel {
         let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
         let runtime = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
-
-        #expect(parsed == runtime.raw)
-        #expect(try compiledValue(runtime.raw) == .set([
+        let expectedMembers: Set<TLAValue> = [
             .set([.int(1)]),
             .set([.int(2)]),
             .set([.int(1), .int(2)])
-        ]))
+        ]
+
+        #expect(parsed == runtime.raw)
+        #expect(try compiledValue(runtime.raw) == .set(expectedMembers))
 
         let compilation = try NonEmptySubsetGeneratedModel.spec.compile()
         let selectedKeys = try #require(compilation.layout.variableID(named: "selectedKeys"))
         let initialStates = try CompiledRuntime(compilation: compilation).initialStates()
         #expect(initialStates.count == 3)
-        let representative = NonEmptySubsetGeneratedModel.spec.variables.first?.initial
-        #expect(try initialStates.contains {
-            try $0.value(for: selectedKeys).rendered(using: compilation.layout) == representative
+        let initialValues = try Set(initialStates.map {
+            try $0.value(for: selectedKeys).rendered(using: compilation.layout)
         })
+        #expect(initialValues == expectedMembers)
         #expect(try NonEmptySubsetGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("SUBSET"))
     }
 

@@ -54,8 +54,8 @@ struct AlgorithmBuilderTests {
 
         #expect(source.variables.isEmpty)
         let compilation = try source.compile()
-        #expect(compilation.spec.variables.map(\.name) == ["pc", "count"])
-        #expect(compilation.spec.actions.map(\.name).contains("advance"))
+        #expect(compilation.description.variables.map(\.name) == ["pc", "count"])
+        #expect(compilation.description.actions.map(\.name).contains("advance"))
     }
 
     @Test("unsupported Algorithm fairness fails before lowering")
@@ -304,7 +304,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "acquire", arguments: [.string("first")], in: compilation, from: initial)
         #expect(try value(named: "lock", in: next, compilation: compilation) == .int(0))
@@ -323,7 +323,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "copy", in: compilation, from: initial)
         #expect(try value(named: "destination", in: next, compilation: compilation) == .int(7))
@@ -343,7 +343,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "copy", in: compilation, from: initial)
         #expect(try value(named: "destination", in: next, compilation: compilation) == .int(8))
@@ -434,7 +434,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let afterCall = try successor(named: "start", in: compilation, from: initial)
         #expect(try value(named: "parameter0", in: afterCall, compilation: compilation) == .int(7))
@@ -465,7 +465,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "increment", in: compilation, from: initial)
         #expect(try value(named: "count", in: next, compilation: compilation) == .int(1))
@@ -486,7 +486,7 @@ struct AlgorithmBuilderTests {
             Do(TestControlLabel.done) { Stop() }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
         #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 4)
     }
@@ -553,7 +553,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "mark", arguments: [.string("first")], in: compilation, from: initial)
         #expect(try value(named: "marked", in: next, compilation: compilation)
@@ -575,7 +575,7 @@ struct AlgorithmBuilderTests {
             }
         }
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         #expect(try value(named: "pc", in: initial, compilation: compilation) == .function([
             .string("first"): .string("stringProcess"),
@@ -601,7 +601,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["increment", "finish", "Terminating"])
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
@@ -631,7 +631,7 @@ struct AlgorithmBuilderTests {
             Do(TestControlLabel.increment) { Assign(value, to: value + 1) }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["increment", "Terminating"])
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
@@ -714,7 +714,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.invariants.map(\.name) == ["NonNegative"])
         #expect(spec.temporalProperties.map(\.name) == ["EventuallyPositive"])
         #expect(spec.fairness.isEmpty)
@@ -735,7 +735,7 @@ struct AlgorithmBuilderTests {
         }
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
         guard case .forAll(_, let binding, let localCount) = spec.invariants[0].body else {
             Issue.record("A process-local invariant must lower to a bounded universal property.")
@@ -837,7 +837,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
 
         #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["receive", "done", "Terminating"])
@@ -863,7 +863,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["value"])
         #expect(spec.actions.map(\.name) == ["pcalProcess1"])
         let rendered = try spec.compile().renderedTLAModuleBundle().tla
@@ -889,7 +889,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let advanced = try successor(named: "receive", arguments: [.string("first")], in: compilation, from: initial)
 
@@ -927,7 +927,7 @@ struct AlgorithmBuilderTests {
             })
         }
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         #expect(try value(named: "inbox", in: initial, compilation: compilation) == .function([
             .string("first"): .int(0),
@@ -950,7 +950,7 @@ struct AlgorithmBuilderTests {
             })
         }
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         #expect(try value(named: "leader", in: initial, compilation: compilation) == .function([
             .string("first"): .bool(true),
@@ -972,7 +972,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        #expect(try compiledSourceSpecification(algorithm).actions.map(\.name).contains("forward"))
+        #expect(try loweredSourceSpecification(algorithm).actions.map(\.name).contains("forward"))
     }
 
     @Test("the end of an Each machine reaches its builder-owned Done state")
@@ -986,7 +986,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let terminal = try successor(named: "finish", arguments: [.string("first")], in: compilation, from: initial)
         #expect(try value(named: "pc", in: terminal, compilation: compilation) == .function([
@@ -1009,7 +1009,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let advanced = try successor(named: "prepare", arguments: [.string("first")], in: compilation, from: initial)
         #expect(try value(named: "pc", in: advanced, compilation: compilation) == .function([
@@ -1031,7 +1031,7 @@ struct AlgorithmBuilderTests {
         let spec = TLASpec("Composed") {
             algorithm
         }
-        let compiled = try spec.compile().spec
+        let compiled = try spec.loweredSourceModel()
         #expect(compiled.variables.map(\.name) == ["pc", "value"])
         #expect(compiled.actions.map(\.name) == ["finish", "Terminating"])
         #expect(compiled.invariants.map(\.name) == ["nonNegative"])
@@ -1047,7 +1047,7 @@ struct AlgorithmBuilderTests {
             Do(TestControlLabel.stop) { Stop() }
         })
 
-        let lowered = try compiledSourceSpecification(algorithm)
+        let lowered = try loweredSourceSpecification(algorithm)
         #expect(lowered.formalOperatorDefinitions == [
             FormalOperatorDefinition(
                 name: "same",
@@ -1059,7 +1059,7 @@ struct AlgorithmBuilderTests {
         #expect(renderedPlusCal.contains("same(") && renderedPlusCal.contains(" == ("))
 
         let spec = TLASpec("FormalOperators") { algorithm }
-        #expect(try spec.compile().spec.formalOperatorDefinitions == lowered.formalOperatorDefinitions)
+        #expect(try spec.loweredSourceModel().formalOperatorDefinitions == lowered.formalOperatorDefinitions)
         let rendered = try spec.compile().renderedTLAModuleBundle().tla
         #expect(rendered.components(separatedBy: "same(").count == 2)
     }
@@ -1082,7 +1082,7 @@ struct AlgorithmBuilderTests {
         })
 
         #expect(algorithm.validate().isEmpty)
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
         #expect(spec.fairness == [FairnessCondition.weakFairnessActionCall(.init(name: "choose", arguments: [.string("first")])),
             .weakFairnessActionCall(.init(name: "choose", arguments: [.string("second")]))
@@ -1109,7 +1109,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let looped = try successor(named: "repeat", arguments: [.string("first")], in: compilation, from: initial)
         #expect(try value(named: "count", in: looped, compilation: compilation) == .int(1))
@@ -1167,7 +1167,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let count = try #require(compilation.layout.variableID(named: "count"))
         #expect(try compilation.semantics.invariants.allSatisfy {
@@ -1191,7 +1191,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let result = try ModelChecker(compilation: try compiledSourceSpecification(algorithm).compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
+        let result = try ModelChecker(compilation: try loweredSourceSpecification(algorithm).compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
         guard case .invariantViolated(let name, _, _) = result else {
             Issue.record("Expected Assert to produce an invariant violation, got \(result)")
             return
@@ -1212,7 +1212,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
         let hour = try #require(compilation.layout.variableID(named: "hour"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
@@ -1234,7 +1234,7 @@ struct AlgorithmBuilderTests {
             Do(TestControlLabel.stop) { Stop() }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
         let candidate = try #require(compilation.layout.variableID(named: "candidate"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
@@ -1256,7 +1256,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let successors = try successors(named: "choose", in: compilation, from: initial)
 
@@ -1278,7 +1278,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let successors = try successors(named: "choose", in: compilation, from: initial)
 
@@ -1300,7 +1300,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let successors = try successors(named: "choose", in: compilation, from: initial)
 
@@ -1320,7 +1320,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let successors = try successors(named: "choose", in: compilation, from: initial)
         #expect(Set(try successors.map { try value(named: "selected", in: $0, compilation: compilation) }) == [.int(1), .int(2), .int(3)])
@@ -1336,7 +1336,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let spec = try compiledSourceSpecification(algorithm)
+        let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
         let seed = try #require(compilation.layout.variableID(named: "seed"))
         let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
@@ -1358,9 +1358,9 @@ struct AlgorithmBuilderTests {
             }
         }
 
-        let compilation = try compiledSourceSpecification(algorithm).compile()
-        let action = try #require(compilation.spec.actions.first { $0.name == "mark" })
-        #expect(action.bindings.map(\.generatedSwiftType) == ["Node"])
+        let compilation = try loweredSourceSpecification(algorithm).compile()
+        let action = try #require(compilation.machineSurfacePlan.actions.first { $0.swiftIdentifier == "mark" })
+        #expect(action.bindings.map(\.swiftType) == ["Node"])
     }
 }
 

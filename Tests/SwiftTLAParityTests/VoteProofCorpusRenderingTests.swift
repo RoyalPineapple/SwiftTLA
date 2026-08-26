@@ -15,24 +15,25 @@ struct VoteProofCorpusRenderingTests {
 
     @Test("VoteProof #spec macro compiles and preserves typed local recursion and formal module composition")
     func specMacroCompilationPreservesFormalStructure() throws {
-        let compilation = try VoteProofModel.spec.compile()
-        #expect(compilation.spec.name == "VoteProof")
+        let source = VoteProofModel.spec
+        let compilation = try source.compile()
+        #expect(compilation.description.name == "VoteProof")
         #expect(Set(compilation.description.variables.map(\.name)).isSuperset(of: Set(["votes", "maxBal"])))
-        #expect(Set(VoteProofModel.spec.formalOperatorDefinitions.map(\.name)) == [
+        #expect(Set(source.formalOperatorDefinitions.map(\.name)) == [
             "ChosenIn", "SafeAt", "chosen", "VoteProofTypeOK",
             "VoteProofSingleVotePerBallot", "VoteProofVotesAreSafe",
             "VoteProofAgreement", "VoteProofChosenValuesAgree"
         ])
-        #expect(Set(VoteProofModel.spec.invariants.map(\.name)) == ["TypeOK", "VInv1", "VInv2", "VInv3", "VInv4"])
-        #expect(VoteProofModel.spec.refinements.map(\.name) == ["Refines"])
-        let definitions = Dictionary(uniqueKeysWithValues: VoteProofModel.spec.formalOperatorDefinitions.map {
+        #expect(Set(compilation.description.invariants) == ["TypeOK", "VInv1", "VInv2", "VInv3", "VInv4"])
+        #expect(compilation.description.refinements == ["Refines"])
+        let definitions = Dictionary(uniqueKeysWithValues: source.formalOperatorDefinitions.map {
             ($0.name, $0)
         })
         #expect(definitions["VoteProofVotesAreSafe"]?.plusCalDependencies == ["SafeAt"])
         #expect(definitions["VoteProofChosenValuesAgree"]?.plusCalDependencies == ["chosen"])
 
-        let bundle = try compilation.renderedTLAModuleBundle()
-        #expect(VoteProofModel.spec.constants == [
+        let bundle = compilation.renderedTLAModuleBundle()
+        #expect(source.constants == [
             ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
             ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),
             ConstantDecl("Quorum", .set([
@@ -60,7 +61,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("VInv4 == VoteProofChosenValuesAgree"))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
-        let plusCal = try VoteProofModel.spec.compile().renderedPlusCalBundle().root.tla
+        let plusCal = try compilation.renderedPlusCalBundle().root.tla
         #expect(plusCal.contains("--algorithm Voting"))
         #expect(!plusCal.contains("LET RECURSIVE SA"))
         let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))

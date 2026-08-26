@@ -205,36 +205,19 @@ extension StateExpr {
         lowerAnonymousLambdaApplications: Bool = false,
         lowerLocalFunctionApplications: [String: String] = [:]
     ) -> StateExpr {
-        var ignoredResidualFormalLambda = false
         return transform(
             expression,
             using: rename,
             lowerAnonymousLambdaApplications: lowerAnonymousLambdaApplications,
-            lowerLocalFunctionApplications: lowerLocalFunctionApplications,
-            hasResidualFormalLambda: &ignoredResidualFormalLambda
+            lowerLocalFunctionApplications: lowerLocalFunctionApplications
         )
-    }
-
-    static func plusCalExpression(
-        from expression: StateExpr,
-        using rename: (String) -> String
-    ) -> StateExpr? {
-        var hasResidualFormalLambda = false
-        let transformed = transform(
-            expression,
-            using: rename,
-            lowerAnonymousLambdaApplications: true,
-            hasResidualFormalLambda: &hasResidualFormalLambda
-        )
-        return hasResidualFormalLambda ? nil : transformed
     }
 
     private static func transform(
         _ expression: StateExpr,
         using rename: (String) -> String,
         lowerAnonymousLambdaApplications: Bool = false,
-        lowerLocalFunctionApplications: [String: String] = [:],
-        hasResidualFormalLambda: inout Bool
+        lowerLocalFunctionApplications: [String: String] = [:]
     ) -> StateExpr {
         var activeLocalFunctionApplications = lowerLocalFunctionApplications
         func visitUnderBindings(_ names: Set<String>, _ expression: StateExpr) -> StateExpr {
@@ -304,7 +287,6 @@ extension StateExpr {
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
             case .foldFunction(let operation, let initial, let sequence):
-                hasResidualFormalLambda = true
                 return .foldFunction(
                     FormalLambda(parameters: operation.parameters, body: visitUnderBindings(Set(operation.parameters), operation.body)),
                     initial: visit(initial),
@@ -344,15 +326,6 @@ extension StateExpr {
                         guard case .value(let argument) = binding.1 else { return body }
                         return Self.substituteVariable(binding.0, with: argument, in: body)
                     }
-                }
-                if case .lambda = renamedOperator {
-                    hasResidualFormalLambda = true
-                }
-                if renamedArguments.contains(where: {
-                    if case .operator(.lambda) = $0 { return true }
-                    return false
-                }) {
-                    hasResidualFormalLambda = true
                 }
                 return .operatorApplication(renamedOperator, renamedArguments)
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
