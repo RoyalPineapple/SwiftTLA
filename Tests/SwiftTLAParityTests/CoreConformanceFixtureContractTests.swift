@@ -1,22 +1,23 @@
 import Foundation
+import SwiftTLA
 import Testing
 import UpstreamParity
 
 struct CoreConformanceFixtureContractTests {
-  @Test("bounded elevator wrapper provenance is ordered and declares its only value normalization")
-  func declaresOrderedElevatorInvocationMappings() throws {
+  @Test("bounded elevator action wrappers come from compilation")
+  func compilesOrderedElevatorActionWrappers() throws {
     let manifest = try JSONDecoder().decode(
       CoreConformanceCasesManifest.self,
       from: fixtureData("cases.json"))
     let elevator = try #require(manifest.cases.first { $0.id == "multicar-elevator" })
+    let calls = try MultiCarElevator.spec.compile().renderedActionCalls()
 
-    #expect(elevator.invocationMappings.count == 80)
-    #expect(elevator.invocationMappings.first?.wrapper == "request__0_0_0")
-    #expect(elevator.invocationMappings.first?.action == "request")
-    #expect(elevator.invocationMappings.first?.arguments == ["\"alice\"", "0", "\"up\""])
-    #expect(elevator.invocationMappings.last?.wrapper == "completeRide__1_1_2")
-    #expect(Set(elevator.invocationMappings.map(\.wrapper)).count == 80)
-    #expect(Set(try elevator.invocationMappings.map { try $0.runtimeValue().swiftLabel }).count == 80)
+    #expect(calls.count == 80)
+    #expect(calls.first?.renderedName == "request__0_0_0")
+    #expect(calls.first?.sourceName == "request")
+    #expect(calls.first?.arguments == [.string("alice"), .int(0), .string("up")])
+    #expect(calls.last?.renderedName == "completeRide__1_1_2")
+    #expect(Set(calls.map(\.renderedName)).count == 80)
     #expect(elevator.valueNormalizations.count == 1)
     #expect(elevator.valueNormalizations.first?.binding == "cars")
     #expect(elevator.valueNormalizations.first?.functionKeys == ["\"carA\"": "carA", "\"carB\"": "carB"])

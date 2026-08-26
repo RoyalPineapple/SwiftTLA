@@ -194,19 +194,15 @@ package struct CoreConformanceInvocationMapping: Equatable, Sendable {
     package let wrapper: String
     package let action: String
     package let arguments: [String]
-    package let indices: [Int]
 
-    package init(wrapper: String, action: String, arguments: [String], indices: [Int]) throws {
+    package init(wrapper: String, action: String, arguments: [String]) throws {
         guard !wrapper.isEmpty, !action.isEmpty,
-              !arguments.contains(where: \.isEmpty),
-              indices.count == arguments.count,
-              indices.allSatisfy({ $0 >= 0 }) else {
+              !arguments.contains(where: \.isEmpty) else {
             throw CoreConformanceCaseError.invalidIdentifier("invocation mapping")
         }
         self.wrapper = wrapper
         self.action = action
         self.arguments = arguments
-        self.indices = indices
     }
 
     package var swiftLabel: String {
@@ -273,8 +269,6 @@ package struct CoreConformanceCasesManifest: Decodable, Sendable {
     package let cases: [Entry]
 
     package struct Entry: Decodable, Sendable {
-        package typealias IdentityMapping = CoreConformanceCaseManifestIdentityMapping
-        package typealias InvocationMapping = CoreConformanceCaseManifestInvocationMapping
         package typealias ValueNormalization = CoreConformanceCaseManifestValueNormalization
         package typealias Upstream = CoreConformanceCaseManifestUpstream
         package typealias Fixtures = CoreConformanceCaseManifestFixtures
@@ -291,18 +285,14 @@ package struct CoreConformanceCasesManifest: Decodable, Sendable {
         package let fingerprintPolynomial: Int
         package let maximumStateLimit: Int
         package let deadlock: Bool
-        package let replay: String
-        package let expectedExit: Int?
         package let upstream: Upstream
         package let fixtures: Fixtures
-        package let identityMapping: IdentityMapping
-        package let invocationMappings: [InvocationMapping]
         package let valueNormalizations: [ValueNormalization]
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case id, swiftSpec, module, configuration, imports, moduleSHA256, cfgSHA256
-            case arguments, argumentsSHA256, workers, fingerprintPolynomial, maximumStateLimit, deadlock, replay
-            case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations
+            case arguments, argumentsSHA256, workers, fingerprintPolynomial, maximumStateLimit, deadlock
+            case upstream, fixtures, valueNormalizations
         }
 
         package init(from decoder: Decoder) throws {
@@ -320,12 +310,8 @@ package struct CoreConformanceCasesManifest: Decodable, Sendable {
             fingerprintPolynomial = try container.decode(Int.self, forKey: .fingerprintPolynomial)
             maximumStateLimit = try container.decode(Int.self, forKey: .maximumStateLimit)
             deadlock = try container.decode(Bool.self, forKey: .deadlock)
-            replay = try container.decode(String.self, forKey: .replay)
-            expectedExit = try container.decodeIfPresent(Int.self, forKey: .expectedExit)
             upstream = try container.decode(Upstream.self, forKey: .upstream)
             fixtures = try container.decode(Fixtures.self, forKey: .fixtures)
-            identityMapping = try container.decode(IdentityMapping.self, forKey: .identityMapping)
-            invocationMappings = try container.decodeIfPresent([InvocationMapping].self, forKey: .invocationMappings) ?? []
             valueNormalizations = try container.decodeIfPresent([ValueNormalization].self, forKey: .valueNormalizations) ?? []
             try validate()
         }
@@ -333,8 +319,8 @@ package struct CoreConformanceCasesManifest: Decodable, Sendable {
         package func validate() throws {
             guard !id.isEmpty, !swiftSpec.isEmpty, !module.isEmpty, !configuration.isEmpty,
                   Set(imports).count == imports.count, imports.allSatisfy({ !$0.isEmpty }),
-                  !replay.isEmpty, !upstream.repository.isEmpty,
-                  !upstream.commit.isEmpty, !fixtures.module.isEmpty, !fixtures.configuration.isEmpty else {
+                  !upstream.repository.isEmpty, !upstream.commit.isEmpty,
+                  !fixtures.module.isEmpty, !fixtures.configuration.isEmpty else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
             }
             let computedArgumentsDigest = try CoreConformanceCase.argumentsDigest(arguments)
@@ -343,18 +329,9 @@ package struct CoreConformanceCasesManifest: Decodable, Sendable {
                   fingerprintPolynomial >= 0, maximumStateLimit > 0 else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "launch contract")
             }
-            let wrappers = invocationMappings.map(\.wrapper)
-            let labels = try invocationMappings.map { try $0.runtimeValue().swiftLabel }
-            let locations = try invocationMappings.map { try $0.runtimeValue().locationIdentity }
             let normalizedBindings = valueNormalizations.map(\.binding)
-            guard Set(wrappers).count == wrappers.count,
-                  Set(labels).count == labels.count,
-                  Set(locations).count == locations.count,
-                  Set(normalizedBindings).count == normalizedBindings.count else {
-                throw ConformanceGovernanceError.invalidField(record: id, field: "invocationMappings")
-            }
-            guard expectedExit == nil || expectedExit == 0 else {
-                throw ConformanceGovernanceError.invalidField(record: id, field: "governance outcome")
+            guard Set(normalizedBindings).count == normalizedBindings.count else {
+                throw ConformanceGovernanceError.invalidField(record: id, field: "valueNormalizations")
             }
         }
     }

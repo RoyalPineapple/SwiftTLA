@@ -1,52 +1,5 @@
 import Foundation
 
-package struct CoreConformanceCaseManifestIdentityMapping: Decodable, Sendable {
-        package let variables: [String: String]
-        package let actions: [String: String]
-
-        private enum CodingKeys: String, CodingKey, CaseIterable { case variables, actions }
-
-        package init(from decoder: Decoder) throws {
-            let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
-            variables = try container.decode([String: String].self, forKey: .variables)
-            actions = try container.decode([String: String].self, forKey: .actions)
-        }
-    }
-
-package struct CoreConformanceCaseManifestInvocationMapping: Decodable, Sendable {
-        package let wrapper: String
-        package let action: String
-        package let arguments: [String]
-        package let indices: [Int]
-
-        private enum CodingKeys: String, CodingKey, CaseIterable {
-            case wrapper, action, arguments, indices
-        }
-
-        package init(wrapper: String, action: String, arguments: [String], indices: [Int]) throws {
-            _ = try CoreConformanceInvocationMapping(
-                wrapper: wrapper, action: action, arguments: arguments, indices: indices)
-            self.wrapper = wrapper
-            self.action = action
-            self.arguments = arguments
-            self.indices = indices
-        }
-
-        package init(from decoder: Decoder) throws {
-            let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
-            try self.init(
-                wrapper: container.decode(String.self, forKey: .wrapper),
-                action: container.decode(String.self, forKey: .action),
-                arguments: container.decode([String].self, forKey: .arguments),
-                indices: container.decode([Int].self, forKey: .indices))
-        }
-
-        package func runtimeValue() throws -> CoreConformanceInvocationMapping {
-            try CoreConformanceInvocationMapping(
-                wrapper: wrapper, action: action, arguments: arguments, indices: indices)
-        }
-    }
-
 package struct CoreConformanceCaseManifestValueNormalization: Decodable, Sendable {
         package let binding: String
         package let functionKeys: [String: String]

@@ -24,19 +24,6 @@ JSON
 expect_failure "unknown core-conformance case" \
     env CORE_CONFORMANCE_CASES="$TMP/cases.json" "$RUN" --case invalid --output "$TMP/output"
 
-python3 - "$ROOT/Verification/CoreConformance/cases.json" "$TMP/incomplete-mapping.json" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as source:
-    manifest = json.load(source)
-del manifest["cases"][0]["identityMapping"]["variables"]["hr"]
-with open(sys.argv[2], "w", encoding="utf-8") as destination:
-    json.dump(manifest, destination)
-PY
-expect_failure "incomplete or non-identity variable mapping" \
-    env CORE_CONFORMANCE_CASES="$TMP/incomplete-mapping.json" swift run tlc-validate core-conformance run --case hour-clock --output "$TMP/mapping-output"
-
 mkdir "$TMP/output"
 expect_failure "output directory already exists" \
     env CORE_CONFORMANCE_CASES="$TMP/cases.json" "$RUN" --case hour-clock --output "$TMP/output"

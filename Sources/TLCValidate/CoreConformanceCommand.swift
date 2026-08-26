@@ -2,82 +2,20 @@ import SwiftTLA
 import UpstreamParity
 import Foundation
 
-func validateMappings(
-    _ entry: CoreConformanceCasesManifest.Entry,
-    for spec: TLASpec
-) throws -> [String: String] {
-    let mapping = entry.identityMapping
-    try validateIdentityMapping(
-        mapping.variables,
-        expectedNames: Set(spec.variables.map(\.name)),
-        kind: "variable",
-        caseID: entry.id
-    )
-    try validateIdentityMapping(
-        mapping.actions,
-        expectedNames: Set(spec.actions.map(\.name)),
-        kind: "action",
-        caseID: entry.id
-    )
-    let expected = try spec.actions.flatMap { try invocationMappings(for: $0) }
-    guard expected.isEmpty == entry.invocationMappings.isEmpty else {
-        throw CoreConformanceCLIError.invalidManifest(
-            "case \(entry.id) must declare every parameterized action wrapper")
-    }
-    guard expected.count == entry.invocationMappings.count,
-          zip(expected, entry.invocationMappings).allSatisfy({ expected, declared in
-              expected.wrapper == declared.wrapper
-                && expected.action == declared.action
-                && expected.arguments == declared.arguments
-                && expected.indices == declared.indices
-          })
-    else {
-        throw CoreConformanceCLIError.invalidManifest(
-            "case \(entry.id) has incomplete or reordered invocation wrapper provenance")
-    }
-    return try Dictionary(uniqueKeysWithValues: entry.invocationMappings.map {
-        (try $0.runtimeValue().swiftLabel, $0.wrapper)
-    })
-}
-
-func invocationMappings(
-    for action: NamedAction
-) throws -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
-    func expand(
-        _ position: Int,
-        _ arguments: [String],
-        _ indices: [Int]
-    ) throws -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
-        guard position < action.bindings.count else {
-            guard !indices.isEmpty else { return [] }
-            let wrapper = "\(action.name)__\(indices.map(String.init).joined(separator: "_"))"
-            return [try CoreConformanceCasesManifest.Entry.InvocationMapping(
-                wrapper: wrapper,
-                action: action.name,
-                arguments: arguments,
-                indices: indices)]
-        }
-        return try action.bindings[position].values.enumerated().flatMap { index, value in
-            try expand(position + 1, arguments + [value.description], indices + [index])
-        }
-    }
-    return try expand(0, [], [])
-}
-
-func validateIdentityMapping(
-    _ mapping: [String: String],
-    expectedNames: Set<String>,
-    kind: String,
-    caseID: String
-) throws {
-    guard Set(mapping.keys) == expectedNames,
-          Set(mapping.values) == expectedNames,
-          mapping.allSatisfy({ $0.key == $0.value })
-    else {
-        throw CoreConformanceCLIError.invalidManifest(
-            "case \(caseID) has an incomplete or non-identity \(kind) mapping"
+func conformanceActionCalls(
+    _ compilation: CompiledSpecification
+) throws -> (mappings: [CoreConformanceInvocationMapping], swiftNames: [String: String]) {
+    let mappings = try compilation.renderedActionCalls().map { call in
+        try CoreConformanceInvocationMapping(
+            wrapper: call.renderedName,
+            action: call.sourceName,
+            arguments: call.arguments.map(\.description)
         )
     }
+    return (
+        mappings: mappings,
+        swiftNames: Dictionary(uniqueKeysWithValues: mappings.map { ($0.swiftLabel, $0.wrapper) })
+    )
 }
 
 func parseCoreConformanceOptions(
@@ -141,7 +79,8 @@ func normalizedArchitecture() throws -> String {
 func declaredCase(
     _ entry: CoreConformanceCasesManifest.Entry,
     pin: TLCReferencePin,
-    architecture: String
+    architecture: String,
+    invocationMappings: [CoreConformanceInvocationMapping]
 ) throws -> CoreConformanceCase {
     try CoreConformanceCase(
         id: entry.id,
@@ -156,13 +95,7 @@ func declaredCase(
         architecture: architecture,
         environment: [:],
         pin: pin,
-        invocationMappings: try entry.invocationMappings.map { mapping in
-            try CoreConformanceInvocationMapping(
-                wrapper: mapping.wrapper,
-                action: mapping.action,
-                arguments: mapping.arguments,
-                indices: mapping.indices)
-        },
+        invocationMappings: invocationMappings,
         valueNormalizations: try entry.valueNormalizations.map { normalization in
             try CoreConformanceValueNormalization(
                 binding: normalization.binding,
@@ -205,13 +138,5 @@ private func simultaneousSwapConformanceSpec() -> TLASpec {
             left.becomes(right)
             right.becomes(left)
         }
-    }
-}
-
-func replayPolicy(_ value: String) throws -> TLCReplayPolicy {
-    switch value {
-    case "none": return .none
-    case "required": return .required
-    default: throw CoreConformanceCLIError.invalidReplayPolicy(value)
     }
 }

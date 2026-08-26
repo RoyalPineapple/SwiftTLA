@@ -70,7 +70,6 @@ enum CoreConformanceCLIError: Error, CustomStringConvertible {
     case unknownCase(String)
     case outputExists(String)
     case unsupportedSwiftSpec(String)
-    case invalidReplayPolicy(String)
     case invalidRunID(String)
     var description: String {
         switch self {
@@ -88,8 +87,6 @@ enum CoreConformanceCLIError: Error, CustomStringConvertible {
             return "output directory already exists: \(path)"
         case .unsupportedSwiftSpec(let id):
             return "unsupported Swift core-conformance spec: \(id)"
-        case .invalidReplayPolicy(let policy):
-            return "invalid core-conformance replay policy: \(policy)"
         case .invalidRunID(let value):
             return "invalid core-conformance run ID: \(value)"
         }
@@ -121,14 +118,14 @@ private func runCoreConformance(arguments: [String]) -> Never {
         } else {
             throw CoreConformanceCLIError.unknownCase(options.caseID)
         }
-        let swiftSpecs = try Dictionary(uniqueKeysWithValues: selected.map { entry in
-            (entry.id, try swiftSpec(entry.swiftSpec))
+        let compilations = try Dictionary(uniqueKeysWithValues: selected.map { entry in
+            (entry.id, try swiftSpec(entry.swiftSpec).compile())
         })
-        let invocationMappings = try Dictionary(uniqueKeysWithValues: selected.map { entry in
-            guard let spec = swiftSpecs[entry.id] else {
-                throw CoreConformanceCLIError.invalidManifest("missing Swift specification for \(entry.id)")
+        let actionCalls = try Dictionary(uniqueKeysWithValues: selected.map { entry in
+            guard let compilation = compilations[entry.id] else {
+                throw CoreConformanceCLIError.invalidManifest("missing Swift compilation for \(entry.id)")
             }
-            return (entry.id, try validateMappings(entry, for: spec))
+            return (entry.id, try conformanceActionCalls(compilation))
         })
         let toolRoot = try requiredEnvironment("CORE_CONFORMANCE_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("CORE_CONFORMANCE_INPUT_ROOT", environment)
@@ -185,23 +182,21 @@ private func runCoreConformance(arguments: [String]) -> Never {
         }
         var exitCode: Int32 = CoreConformanceExitCode.exact.rawValue
         for entry in selected {
-            guard let swiftSpec = swiftSpecs[entry.id] else {
-                throw CoreConformanceCLIError.invalidManifest("missing Swift specification for \(entry.id)")
+            guard let compilation = compilations[entry.id] else {
+                throw CoreConformanceCLIError.invalidManifest("missing Swift compilation for \(entry.id)")
             }
-            guard let actionNames = invocationMappings[entry.id] else {
-                throw CoreConformanceCLIError.invalidManifest("missing invocation mapping for \(entry.id)")
-            }
-            let expectedExit = Int32(entry.expectedExit ?? Int(CoreConformanceExitCode.exact.rawValue))
-            guard expectedExit == CoreConformanceExitCode.exact.rawValue ||
-                expectedExit == CoreConformanceExitCode.semanticDifference.rawValue
-            else {
-                throw CoreConformanceCLIError.invalidManifest(
-                    "unsupported expected exit \(expectedExit) for \(entry.id)")
+            guard let calls = actionCalls[entry.id] else {
+                throw CoreConformanceCLIError.invalidManifest("missing compiled action calls for \(entry.id)")
             }
             let caseOutput = selected.count == 1
                 ? output
                 : output.appendingPathComponent(entry.id, isDirectory: true)
-            let caseDefinition = try declaredCase(entry, pin: pin, architecture: architecture)
+            let caseDefinition = try declaredCase(
+                entry,
+                pin: pin,
+                architecture: architecture,
+                invocationMappings: calls.mappings
+            )
             let bundle = try TLCProcessRequest.declaredBundle(
                 root: inputPath(entry.module, within: inputRoot),
                 configuration: inputPath(entry.configuration, within: inputRoot),
@@ -225,7 +220,6 @@ private func runCoreConformance(arguments: [String]) -> Never {
             let result = CoreConformanceRunner().run(
                 case: caseDefinition,
                 swiftExploration: {
-                    let compilation = try swiftSpec.compile()
                     return SwiftExplorationEvidence(
                         caseID: caseDefinition.id,
                         exploration: try ModelChecker(
@@ -237,13 +231,11 @@ private func runCoreConformance(arguments: [String]) -> Never {
                     )
                 },
                 tlcRequest: request,
-                replay: try replayPolicy(entry.replay),
+                replay: .none,
                 outputDirectory: caseOutput,
-                swiftActionNames: actionNames
+                swiftActionNames: calls.swiftNames
             )
-            let label = expectedExit == CoreConformanceExitCode.semanticDifference.rawValue
-                ? "core-conformance negative control \(entry.id)"
-                : "core-conformance \(entry.id)"
+            let label = "core-conformance \(entry.id)"
             if let diagnostic = result.diagnostic {
               let report = diagnostic.report
               fputs("\(label): \(report.whatFailed)\n", stderr)
@@ -262,7 +254,7 @@ private func runCoreConformance(arguments: [String]) -> Never {
             }
             if selected.count == 1 {
                 exitCode = result.exitCode.rawValue
-            } else if result.exitCode.rawValue != expectedExit {
+            } else if result.exitCode != .exact {
                 exitCode = max(exitCode, result.exitCode.rawValue)
             }
         }
