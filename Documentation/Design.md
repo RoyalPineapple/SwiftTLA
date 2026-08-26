@@ -95,7 +95,7 @@ See [Generated Machines](GeneratedMachines.md) and
 The compiled specification renders direct TLA+ and authored PlusCal bundles.
 
 ```swift
-let tla = try compilation.renderedTLAModuleBundle()
+let tla = compilation.renderedTLAModuleBundle()
 let plusCal = try compilation.renderedPlusCalBundle()
 ```
 

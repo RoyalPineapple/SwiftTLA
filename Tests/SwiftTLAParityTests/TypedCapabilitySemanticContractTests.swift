@@ -21,7 +21,7 @@ struct TypedCapabilitySemanticContractTests {
         }
         let compilation = try specification.compile()
 
-        let tla = try compilation.renderedTLAModuleBundle()
+        let tla = compilation.renderedTLAModuleBundle()
         let plusCal = try compilation.renderedPlusCalBundle()
         let exploration = try ModelChecker(
             compilation: compilation,

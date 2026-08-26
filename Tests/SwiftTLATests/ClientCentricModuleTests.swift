@@ -21,7 +21,7 @@ struct ClientCentricModuleTests {
       "CC", "SnapshotIsolation", Expr<Function<TestKey, TestValue>>(initial),
       Expr<SetExpr<TupleExpr<Int>>>(.setLiteral([]))
     )
-    let closure = try consumer.compile().formalModuleClosure
+    let closure = try FormalModuleClosure.resolve(root: consumer)
     #expect(try compiledValue(
       snapshot.raw,
       recursiveFunctions: closure.linkedOperators.recursiveFunctions,
@@ -41,7 +41,8 @@ struct ClientCentricModuleTests {
     let expression = StateExpr.tupleConcatenate(.tupleLiteral([]), selected)
     let result = try compiledValue(
       expression,
-      formalOperators: try FunctionsModule.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
+      formalOperators: try FormalModuleClosure.resolve(root: FunctionsModule.module)
+        .linkedOperators.formalOperatorDefinitions
     )
     guard case .tuple(let values) = result else {
       Issue.record("An injective function choice must be consumable as a formal sequence.")

@@ -1,7 +1,7 @@
 @testable import SwiftTLA
 
-func compiledSourceSpecification(_ algorithm: Algorithm) throws -> TLASpec {
-    try TLASpec(algorithm.model.name) { algorithm }.compile().spec
+func loweredSourceSpecification(_ algorithm: Algorithm) throws -> TLASpec {
+    try TLASpec(algorithm.model.name) { algorithm }.loweredSourceModel()
 }
 
 func renderedSourceAlgorithmPlusCal(_ algorithm: Algorithm) throws -> String {

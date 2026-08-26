@@ -451,7 +451,10 @@ public final class ParserSession {
 
     /// Parses `ZeroBasedSequence<Element>.filled(length:with:)` into the
     /// TLA+ function literal used by the runtime builder.
-    private func decodeZeroBasedSequenceFill(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeZeroBasedSequenceFill(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let access = call.calledExpression.as(MemberAccessExprSyntax.self),
               access.declName.baseName.text == "filled",
@@ -459,8 +462,8 @@ public final class ParserSession {
               typedFacadeType(base)?.name == "ZeroBasedSequence",
               let lengthSyntax = call.arguments.first(where: { $0.label?.text == "length" })?.expression,
               let valueSyntax = call.arguments.first(where: { $0.label?.text == "with" })?.expression,
-              let length = decodeStateExpr(lengthSyntax),
-              let value = decodeStateExpr(valueSyntax)
+              let length = decodeTypedFacadeValue(lengthSyntax, scope: scope),
+              let value = decodeTypedFacadeValue(valueSyntax, scope: scope)
         else { return nil }
         return .functionLiteral(
             .integerRange(.int(0), .subtract(length, .int(1))),
@@ -1138,6 +1141,9 @@ public final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let filledSequence = decodeZeroBasedSequenceFill(expression, scope: scope) {
+            return filledSequence
+        }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             let name = reference.baseName.text
             if let value = scope.value(for: reference) { return value }

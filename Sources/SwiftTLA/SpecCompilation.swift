@@ -24,9 +24,14 @@ public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
 }
 
 public struct CompilationDescription: Sendable, Equatable {
+    public let name: String
     public let identity: CompilationIdentity
     public let variables: [VariableDescription]
     public let actions: [ActionDescription]
+    public let invariants: [String]
+    public let temporalProperties: [String]
+    public let refinements: [String]
+    public let stateConstraint: String?
     public let procedures: [ProcedureDescription]
     public let controlLocations: [ControlLocationDescription]
     public let imports: [ModuleDescription]
@@ -109,71 +114,21 @@ struct CompiledRefinement: Sendable {
     let variableMappings: [CompiledStateExpr]
 }
 
-/// The point at which a formal specification becomes available to consumers.
-///
-/// A compiled specification owns the semantic model and its validated output plans.
+/// The immutable semantic model and validated outputs produced by compilation.
 public struct CompiledSpecification: Sendable {
-    package let spec: TLASpec
-    package let formalModuleClosure: FormalModuleClosure
-    public let identity: CompilationIdentity
+    public let description: CompilationDescription
+    public var identity: CompilationIdentity { description.identity }
     package let machineSurfacePlan: MachineSurfacePlan
     let layout: CompiledLayout
-    let bindings: CompiledBindingTable
     let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
-    let moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan]
-    let authoredPlusCalModule: AuthoredPlusCalModule?
+    private let renderedBundle: TLAModuleBundle
+    private let renderedConfigurationWithoutSymmetry: String
+    private let renderedActionPlan: [RenderedAction]
+    private let renderedPlusCalModuleBundle: TLAModuleBundle?
 
-    public var description: CompilationDescription {
-        .init(
-            identity: identity,
-            variables: layout.variables.map {
-                .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
-            },
-            actions: layout.actions.map {
-                .init(
-                    name: $0.declaration.name,
-                    renderedName: $0.renderedName,
-                    sourceOffset: $0.declaration.sourceOffset
-                )
-            },
-            procedures: layout.procedures.map {
-                .init(
-                    algorithm: $0.algorithm,
-                    name: $0.name,
-                    sourceOffset: $0.sourceOffset
-                )
-            },
-            controlLocations: layout.controlLocations.map {
-                .init(
-                    owner: $0.owner.description,
-                    sourceName: $0.sourceName,
-                    renderedName: $0.renderedName,
-                    sourceOffset: nil
-                )
-            },
-            imports: formalModuleClosure.entries.map {
-                .init(
-                    name: $0.module.name,
-                    owningRoot: $0.owningRoot,
-                    structuralPath: $0.structuralPath
-                )
-            }
-        )
-    }
-
-    package func renderedActions() throws -> [RenderedAction] {
-        guard let plan = moduleSectionPlans[formalModuleClosure.root.id] else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "formalModuleClosure.\(formalModuleClosure.root.module.name)",
-                expected: "a compiled module section plan",
-                actual: "no module section plan",
-                nextSafeAction: "Compile the source model again."
-            )
-        }
-        return plan.renderedActions
+    package func renderedActions() -> [RenderedAction] {
+        renderedActionPlan
     }
 
     package func actionRequest(
@@ -218,91 +173,44 @@ public struct CompiledSpecification: Sendable {
         )
     }
 
-    init(
-        spec: TLASpec,
-        formalModuleClosure: FormalModuleClosure,
-        identity: CompilationIdentity,
+    fileprivate init(
+        description: CompilationDescription,
         machineSurfacePlan: MachineSurfacePlan,
         layout: CompiledLayout,
-        bindings: CompiledBindingTable,
         semantics: CompiledSemantics,
         refinements: [CompiledRefinement],
-        moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan],
-        authoredPlusCalModule: AuthoredPlusCalModule? = nil
+        renderedBundle: TLAModuleBundle,
+        renderedConfigurationWithoutSymmetry: String,
+        renderedActionPlan: [RenderedAction],
+        renderedPlusCalModuleBundle: TLAModuleBundle?
     ) {
-        self.spec = spec
-        self.formalModuleClosure = formalModuleClosure
-        self.identity = identity
+        self.description = description
         self.machineSurfacePlan = machineSurfacePlan
         self.layout = layout
-        self.bindings = bindings
         self.semantics = semantics
         self.refinements = refinements
-        self.moduleSectionPlans = moduleSectionPlans
-        self.authoredPlusCalModule = authoredPlusCalModule
+        self.renderedBundle = renderedBundle
+        self.renderedConfigurationWithoutSymmetry = renderedConfigurationWithoutSymmetry
+        self.renderedActionPlan = renderedActionPlan
+        self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
     }
 
-    /// Renders a complete TLA+/CFG bundle from the already-linked closure.
-    public func renderedTLAModuleBundle() throws -> TLAModuleBundle {
-        try renderedTLAModuleBundle(usesSymmetryReduction: true)
+    /// Returns the complete TLA+/CFG bundle produced by compilation.
+    public func renderedTLAModuleBundle() -> TLAModuleBundle {
+        renderedTLAModuleBundle(usesSymmetryReduction: true)
     }
 
-    package func renderedTLAModuleBundle(usesSymmetryReduction: Bool) throws -> TLAModuleBundle {
-        let entries = formalModuleClosure.entries
-        let files = try entries.map { entry in
-            guard let sectionPlan = moduleSectionPlans[entry.id] else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .rendering,
-                    path: "formalModuleClosure.\(entry.module.name)",
-                    expected: "a compiled module section plan",
-                    actual: "no module section plan",
-                    nextSafeAction: "Compile the source model again."
-                )
-            }
-            return TLAModuleFile(
-                name: entry.module.name,
-                tla: sectionPlan.renderedModuleSource,
-                cfg: entry.id == formalModuleClosure.root.id
-                    ? usesSymmetryReduction
-                        ? sectionPlan.renderedConfiguration
-                        : sectionPlan.renderedConfigurationWithoutSymmetry
-                    : nil
-            )
-        }
-        guard let rootFile = files.last else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "formalModuleClosure",
-                expected: "a root module",
-                actual: "an empty module closure",
-                nextSafeAction: "Compile the source model again."
-            )
-        }
-        let bundle = TLAModuleBundle(
-            root: rootFile,
-            imports: Array(files.dropLast()),
-            provenance: .compiled(
-                identity: identity,
-                ownership: entries.map {
-                    .init(
-                        moduleName: $0.module.name,
-                        owningRoot: $0.owningRoot,
-                        structuralPath: $0.structuralPath
-                    )
-                },
-                dependencies: formalModuleClosure.edges.map {
-                    .init(
-                        importingModule: $0.fromModule,
-                        importedModule: $0.toModule,
-                        structuralPath: $0.structuralPath
-                    )
-                }
-            )
+    package func renderedTLAModuleBundle(usesSymmetryReduction: Bool) -> TLAModuleBundle {
+        guard usesSymmetryReduction == false else { return renderedBundle }
+        return TLAModuleBundle(
+            root: .init(
+                name: renderedBundle.root.name,
+                tla: renderedBundle.root.tla,
+                cfg: renderedConfigurationWithoutSymmetry
+            ),
+            imports: renderedBundle.imports,
+            provenance: renderedBundle.provenance
         )
-        try bundle.validateDeclaredClosure()
-        return bundle
     }
 
     /// Materializes the validated bundle as a new sibling directory.
@@ -311,7 +219,7 @@ public struct CompiledSpecification: Sendable {
     /// directory becomes visible at `directory` in one rename, so a failed
     /// write or rename cannot leave a partial bundle at the destination.
     public func materializeModuleBundle(to directory: URL) throws {
-        let bundle = try renderedTLAModuleBundle()
+        let bundle = renderedTLAModuleBundle()
         let fileManager = FileManager.default
         let parent = directory.deletingLastPathComponent()
         var parentIsDirectory: ObjCBool = false
@@ -376,34 +284,18 @@ public struct CompiledSpecification: Sendable {
         try data.write(to: directory.appendingPathComponent("bundle-manifest.json"), options: .atomic)
     }
 
-    /// Renders the one source-faithful PlusCal module from this compilation.
-    ///
-    /// The bundle keeps the same linked imports and configuration as direct
-    /// TLA+ export. It is the only supported PlusCal export path: callers do
-    /// not reconstruct a second bundle around renderer strings.
+    /// Returns the source-faithful PlusCal bundle produced by compilation.
     public func renderedPlusCalBundle() throws -> TLAModuleBundle {
-        guard let authoredPlusCalModule else {
+        guard let renderedPlusCalModuleBundle else {
             throw AlgorithmPlusCalRenderDiagnostic(
                 failedConcept: "authored PlusCal module root",
                 path: "TLASpec.sourceAlgorithms",
                 expected: "exactly one authored Algorithm",
-                actual: "\(spec.sourceAlgorithms.count) authored Algorithms",
+                actual: "no authored PlusCal module in this compilation",
                 nextSafeAction: "Compile one canonical Algorithm model per exported module."
             )
         }
-        let directBundle = try renderedTLAModuleBundle()
-        let root = TLAModuleFile(
-            name: directBundle.root.name,
-            tla: try AlgorithmPlusCalRenderer(module: authoredPlusCalModule).render(),
-            cfg: directBundle.root.cfg
-        )
-        let bundle = TLAModuleBundle(
-            root: root,
-            imports: directBundle.imports,
-            provenance: directBundle.provenance
-        )
-        try bundle.validateDeclaredClosure()
-        return bundle
+        return renderedPlusCalModuleBundle
     }
 }
 
@@ -506,19 +398,18 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
     }
 }
 
-public extension SpecParser.ParsedSpecComponents {
-    /// Compiles parser output and generated-machine type facts.
-    func compile(
+extension SpecParser.ParsedSpecComponents {
+    func sourceModel(
         specificationName: String,
         additionalInvariants: [NamedInvariant] = []
-    ) throws -> CompiledSpecification {
+    ) throws -> TLASpec {
         if let diagnostic = diagnostics.first {
             if let capabilityDiagnostic = diagnostic.capabilityDiagnostic {
                 throw capabilityDiagnostic
             }
             throw diagnostic
         }
-        let spec = TLASpec(
+        return TLASpec(
             name: specificationName,
             variables: variables,
             constants: constants,
@@ -538,7 +429,19 @@ public extension SpecParser.ParsedSpecComponents {
             algorithmFidelityTokens: algorithmFidelityTokens,
             sourceAlgorithms: sourceAlgorithms
         )
-        return try spec.compile()
+    }
+}
+
+public extension SpecParser.ParsedSpecComponents {
+    /// Compiles parser output and generated-machine type facts.
+    func compile(
+        specificationName: String,
+        additionalInvariants: [NamedInvariant] = []
+    ) throws -> CompiledSpecification {
+        try sourceModel(
+            specificationName: specificationName,
+            additionalInvariants: additionalInvariants
+        ).compile()
     }
 }
 
@@ -611,17 +514,130 @@ public extension TLASpec {
             formalRenderer: formalRenderer,
             renderedRefinements: renderedRefinements
         )
-        return CompiledSpecification(
-            spec: self,
-            formalModuleClosure: closure,
+        guard let rootPlan = moduleSectionPlans[closure.root.id] else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "moduleClosure.\(closure.root.module.name)",
+                expected: "a rendered root module plan",
+                actual: "no rendered root module plan",
+                nextSafeAction: "Compile the source model again."
+            )
+        }
+        let renderedFiles = try closure.entries.map { entry in
+            guard let plan = moduleSectionPlans[entry.id] else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "moduleClosure.\(entry.module.name)",
+                    expected: "a rendered module plan",
+                    actual: "no rendered module plan",
+                    nextSafeAction: "Compile the source model again."
+                )
+            }
+            return TLAModuleFile(
+                name: entry.module.name,
+                tla: plan.renderedModuleSource,
+                cfg: entry.id == closure.root.id ? plan.renderedConfiguration : nil
+            )
+        }
+        guard let renderedRoot = renderedFiles.last else {
+            throw CompilationDiagnostic(
+                code: .emptyFormalModuleClosure,
+                stage: .linking,
+                path: "moduleClosure",
+                expected: "a linked root module",
+                actual: "an empty module closure",
+                nextSafeAction: "Compile a source model with one root module."
+            )
+        }
+        let renderedBundle = TLAModuleBundle(
+            root: renderedRoot,
+            imports: Array(renderedFiles.dropLast()),
+            provenance: .compiled(
+                identity: identity,
+                ownership: closure.entries.map {
+                    .init(
+                        moduleName: $0.module.name,
+                        owningRoot: $0.owningRoot,
+                        structuralPath: $0.structuralPath
+                    )
+                },
+                dependencies: closure.edges.map {
+                    .init(
+                        importingModule: $0.fromModule,
+                        importedModule: $0.toModule,
+                        structuralPath: $0.structuralPath
+                    )
+                }
+            )
+        )
+        try renderedBundle.validateDeclaredClosure()
+        let renderedPlusCalModuleBundle = try authoredPlusCalModule.map { module in
+            let bundle = TLAModuleBundle(
+                root: .init(
+                    name: renderedRoot.name,
+                    tla: try AlgorithmPlusCalRenderer(module: module).render(),
+                    cfg: renderedRoot.cfg
+                ),
+                imports: renderedBundle.imports,
+                provenance: renderedBundle.provenance
+            )
+            try bundle.validateDeclaredClosure()
+            return bundle
+        }
+        let description = CompilationDescription(
+            name: name,
             identity: identity,
+            variables: layout.variables.map {
+                .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
+            },
+            actions: layout.actions.map {
+                .init(
+                    name: $0.declaration.name,
+                    renderedName: $0.renderedName,
+                    sourceOffset: $0.declaration.sourceOffset
+                )
+            },
+            invariants: semantics.invariants.map(\.name),
+            temporalProperties: semantics.temporalProperties.map(\.name),
+            refinements: compiledRefinements.map(\.name),
+            stateConstraint: semantics.constraint.map { _ in
+                DeclaredLanguageConstruct.stateConstraint.rawValue
+            },
+            procedures: layout.procedures.map {
+                .init(
+                    algorithm: $0.algorithm,
+                    name: $0.name,
+                    sourceOffset: $0.sourceOffset
+                )
+            },
+            controlLocations: layout.controlLocations.map {
+                .init(
+                    owner: $0.owner.description,
+                    sourceName: $0.sourceName,
+                    renderedName: $0.renderedName,
+                    sourceOffset: nil
+                )
+            },
+            imports: closure.entries.filter { $0.id != closure.root.id }.map {
+                .init(
+                    name: $0.module.name,
+                    owningRoot: $0.owningRoot,
+                    structuralPath: $0.structuralPath
+                )
+            }
+        )
+        return CompiledSpecification(
+            description: description,
             machineSurfacePlan: machineSurfacePlan,
             layout: layout,
-            bindings: bindings,
             semantics: semantics,
             refinements: compiledRefinements,
-            moduleSectionPlans: moduleSectionPlans,
-            authoredPlusCalModule: authoredPlusCalModule
+            renderedBundle: renderedBundle,
+            renderedConfigurationWithoutSymmetry: rootPlan.renderedConfigurationWithoutSymmetry,
+            renderedActionPlan: rootPlan.renderedActions,
+            renderedPlusCalModuleBundle: renderedPlusCalModuleBundle
         )
     }
 

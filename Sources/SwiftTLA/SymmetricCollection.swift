@@ -254,15 +254,36 @@ public enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
   }
 }
 
+func symmetricCollectionPermutationBudgetError(
+  scopes: [SymmetricCollectionScope],
+  budget: Int
+) -> SymmetricCollectionValidationError? {
+  guard budget > 0 else { return .invalidPermutationBudget(budget) }
+  var product = 1
+  for collection in scopes where collection.verificationScope > 1 {
+    for factor in 2...collection.verificationScope {
+      let (nextProduct, overflow) = product.multipliedReportingOverflow(by: factor)
+      let requiredProduct = overflow ? Int.max : nextProduct
+      guard !overflow, requiredProduct <= budget else {
+        return .permutationBudgetExceeded(
+          collection: collection.collectionName,
+          scope: collection.verificationScope,
+          product: requiredProduct,
+          budget: budget
+        )
+      }
+      product = requiredProduct
+    }
+  }
+  return nil
+}
+
 public extension TLASpec {
   func symmetricCollectionValidationError(
     permutationProductBudget: Int = 100_000
   ) -> SymmetricCollectionValidationError? {
     let collections = symmetricCollections
     guard !collections.isEmpty else { return nil }
-    guard permutationProductBudget > 0 else {
-      return .invalidPermutationBudget(permutationProductBudget)
-    }
 
     var collectionNames = Set<String>()
     var generatedSymbols = Set<String>()
@@ -276,7 +297,6 @@ public extension TLASpec {
     reservedSymbols.formUnion(formalOperatorDefinitions.map(\.name))
     reservedSymbols.formUnion(theorems.map(\.name))
 
-    var product = 1
     for declaration in collections {
       let metadata = declaration.metadata
       guard !metadata.name.isEmpty else { return .missingCollectionName }
@@ -311,24 +331,13 @@ public extension TLASpec {
           return .symbolCollision(collection: metadata.name, symbol: symbol)
         }
       }
-
-      if metadata.verificationScope > 1 {
-        for factor in 2...metadata.verificationScope {
-          let (nextProduct, overflow) = product.multipliedReportingOverflow(by: factor)
-          let requiredProduct = overflow ? Int.max : nextProduct
-          guard !overflow, requiredProduct <= permutationProductBudget else {
-            return .permutationBudgetExceeded(
-              collection: metadata.name,
-              scope: metadata.verificationScope,
-              product: requiredProduct,
-              budget: permutationProductBudget
-            )
-          }
-          product = requiredProduct
-        }
-      }
     }
-    return nil
+    return symmetricCollectionPermutationBudgetError(
+      scopes: collections.map {
+        .init(collectionName: $0.name, verificationScope: $0.verificationScope)
+      },
+      budget: permutationProductBudget
+    )
   }
 }
 

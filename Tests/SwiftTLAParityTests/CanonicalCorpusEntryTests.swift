@@ -7,10 +7,11 @@ struct CanonicalCorpusEntryTests {
         let voteProof = try #require(
             CanonicalCorpus.entries.first { $0.id == "voteproof-upstream-port" }
         )
-        #expect(try voteProof.specification().compile().renderedTLAModuleBundle().imports.map(\.name) == ["Consensus"])
+        let compilation = try voteProof.specification().compile()
+        #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Consensus"])
         #expect(voteProof.swiftConfiguration.tlaText.contains("INVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4"))
         #expect(voteProof.plusCalConfiguration.tlaText.contains("PROPERTIES Refines"))
-        try voteProof.validateConfigurationReferences(in: voteProof.specification().compile())
+        try voteProof.validateConfigurationReferences(in: compilation)
         let kvsnap = try #require(
             CanonicalCorpus.entries.first { $0.id == "kvsnap-upstream-port" }
         )

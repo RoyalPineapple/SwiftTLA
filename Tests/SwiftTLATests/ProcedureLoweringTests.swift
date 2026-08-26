@@ -74,7 +74,7 @@ struct ProcedureLoweringTests {
         #expect(try value(named: "workValue", in: afterCall, compilation: compilation) == .int(7))
         #expect(try value(named: "workOffset", in: afterCall, compilation: compilation) == .int(1))
         #expect(try value(named: "stack", in: afterCall, compilation: compilation) != .tuple([]))
-        let rendered = try compilation.renderedTLAModuleBundle().tla
+        let rendered = compilation.renderedTLAModuleBundle().tla
         #expect(rendered.contains("pc' = \"enter\""))
         #expect(rendered.contains("pc' = \"procedure.work.enter\"") == false)
 

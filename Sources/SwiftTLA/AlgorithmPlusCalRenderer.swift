@@ -92,7 +92,7 @@ internal struct AlgorithmPlusCalRenderer {
         }
         if !shared.isEmpty {
             lines.append("variables")
-            lines += try declarations(shared, indent: "  ", terminator: ";", path: "shared")
+            lines += declarations(shared, indent: "  ", terminator: ";")
         }
         if !module.defineDeclarations.isEmpty {
             lines.append("define {")
@@ -151,7 +151,7 @@ internal struct AlgorithmPlusCalRenderer {
         var lines = ["", "procedure \(procedure.name)(\(procedure.parameters.map(\.root).joined(separator: ", ")))"]
         if !procedure.locals.isEmpty {
             lines.append("variables")
-            lines += try declarations(procedure.locals, indent: "  ", terminator: ";", path: "\(path).locals")
+            lines += declarations(procedure.locals, indent: "  ", terminator: ";")
         }
         lines.append("{")
         for (index, step) in procedure.steps.enumerated() {
@@ -183,7 +183,7 @@ internal struct AlgorithmPlusCalRenderer {
         }
         if !locals.isEmpty {
             lines.append("variables")
-            lines += try declarations(locals, indent: "  ", terminator: ";", path: "\(path).locals")
+            lines += declarations(locals, indent: "  ", terminator: ";")
         }
         lines.append("{")
         for (index, component) in process.components.enumerated() {
@@ -207,18 +207,18 @@ internal struct AlgorithmPlusCalRenderer {
         return lines
     }
 
-    private func declarations(_ declarations: [AlgorithmStateModel], indent: String, terminator: String, path: String) throws -> [String] {
-        try declarations.enumerated().map { index, declaration in
+    private func declarations(_ declarations: [AlgorithmStateModel], indent: String, terminator: String) -> [String] {
+        declarations.enumerated().map { index, declaration in
             let suffix = index == declarations.index(before: declarations.endIndex) ? terminator : ","
-            let initializer = try declaration.initialSet.map { "\\in \(try expression($0, path: "\(path)[\(index)].initialSet"))" }
-                ?? "= \(try expression(declaration.initial, path: "\(path)[\(index)].initial"))"
+            let initializer = declaration.initialSet.map { "\\in \(expression($0))" }
+                ?? "= \(expression(declaration.initial))"
             return "\(indent)\(declaration.root) \(initializer)\(suffix)"
         }
     }
 
     private func render(step: AlgorithmStepModel, indent: String, path: String) throws -> [String] {
         if let condition = step.loopCondition {
-            var lines = ["\(indent)\(step.label.name): while (\(try expression(condition, path: "\(path).loopCondition"))) {"]
+            var lines = ["\(indent)\(step.label.name): while (\(expression(condition))) {"]
             lines += try render(statements: step.statements, indent: indent + "  ", path: "\(path).statements")
             lines.append("\(indent)};")
             return lines
@@ -248,8 +248,8 @@ internal struct AlgorithmPlusCalRenderer {
                     return false
                 }()
 
-                let rendered = try assignments.enumerated().map { assignmentIndex, assignment in
-                    "\(try lvalue(assignment.target, path: "\(path)[\(assignmentIndex)].target")) := \(try expression(assignment.value, path: "\(path)[\(assignmentIndex)].value"))"
+                let rendered = assignments.map { assignment in
+                    "\(lvalue(assignment.target)) := \(expression(assignment.value))"
                 }
                     .joined(separator: " || ")
                 lines.append("\(indent)\(rendered);")
@@ -266,21 +266,21 @@ internal struct AlgorithmPlusCalRenderer {
         switch statement {
         case .rejected(let diagnostic):
             throw unsupported(path: path, expected: "a validated algorithm statement", actual: diagnostic.rawValue)
-        case .await(let condition): return ["\(indent)await \(try expression(condition, path: "\(path).condition"));"]
-        case .assert(let condition): return ["\(indent)assert \(try expression(condition, path: "\(path).condition"));"]
-        case .set(let target, let value): return ["\(indent)\(try lvalue(target, path: "\(path).target")) := \(try expression(value, path: "\(path).value"));"]
+        case .await(let condition): return ["\(indent)await \(expression(condition));"]
+        case .assert(let condition): return ["\(indent)assert \(expression(condition));"]
+        case .set(let target, let value): return ["\(indent)\(lvalue(target)) := \(expression(value));"]
         case .letBinding(let variable, let value, let body):
-            var lines = ["\(indent)with (\(variable) = \(try expression(value, path: "\(path).value"))) {"]
+            var lines = ["\(indent)with (\(variable) = \(expression(value))) {"]
             lines += try render(statements: body, indent: indent + "  ", path: "\(path).body")
             lines.append("\(indent)};")
             return lines
         case .with(let variable, let source, let body):
-            var lines = ["\(indent)with (\(variable) \\in \(try expression(source, path: "\(path).source"))) {"]
+            var lines = ["\(indent)with (\(variable) \\in \(expression(source))) {"]
             lines += try render(statements: body, indent: indent + "  ", path: "\(path).body")
             lines.append("\(indent)};")
             return lines
         case .ifElse(let condition, let then, let otherwise):
-            var lines = ["\(indent)if (\(try expression(condition, path: "\(path).condition"))) {"]
+            var lines = ["\(indent)if (\(expression(condition))) {"]
             lines += try render(statements: then, indent: indent + "  ", path: "\(path).then")
             if otherwise.isEmpty {
                 lines.append("\(indent)};")
@@ -305,33 +305,21 @@ internal struct AlgorithmPlusCalRenderer {
             return lines
         case .goto(let label): return ["\(indent)goto \(label.name);"]
         case .call(let target, let arguments):
-            return ["\(indent)call \(target)(\(try arguments.enumerated().map { try expression($0.element, path: "\(path).arguments[\($0.offset)]") }.joined(separator: ", ")));"]
+            return ["\(indent)call \(target)(\(arguments.map(expression).joined(separator: ", ")));"]
         case .return: return ["\(indent)return;"]
         case .stop: return ["\(indent)goto Done;"]
         case .skip: return ["\(indent)skip;"]
         }
     }
 
-    private func lvalue(_ value: AlgorithmLValueModel, path: String) throws -> String {
+    private func lvalue(_ value: AlgorithmLValueModel) -> String {
         switch value {
         case .root(let name): return name
-        case .function(let root, let key): return "\(root)[\(try expression(key, path: "\(path).key"))]"
+        case .function(let root, let key): return "\(root)[\(expression(key))]"
         }
     }
 
-    func expression(_ value: StateExpr, path: String) throws -> String {
-        guard let renderedExpression = StateExpr.plusCalExpression(
-            from: value,
-            using: { $0 }
-        ) else {
-            throw unsupported(
-                path: path,
-                expected: "a direct anonymous formal-lambda application with value arguments, or a named operator reference",
-                actual: "a residual anonymous formal lambda that PlusCal cannot render without changing higher-order semantics"
-            )
-        }
-        return renderedExpression.description
-    }
+    private func expression(_ value: StateExpr) -> String { value.description }
 
     private func propertyNames(
         in components: [AlgorithmComponentModel],
@@ -388,17 +376,6 @@ internal struct AlgorithmPlusCalRenderer {
             return process == binding
         default:
             return false
-        }
-    }
-
-    private func temporal(_ value: TemporalExpr, path: String) throws -> String {
-        switch value {
-        case .always(let predicate): return "[](\(try expression(predicate, path: "\(path).always")))"
-        case .eventually(let predicate): return "<>(\(try expression(predicate, path: "\(path).eventually")))"
-        case .alwaysEventually(let predicate): return "[]<>(\(try expression(predicate, path: "\(path).alwaysEventually")))"
-        case .eventuallyAlways(let predicate): return "<>[](\(try expression(predicate, path: "\(path).eventuallyAlways")))"
-        case .leadsTo(let lhs, let rhs):
-            return "(\(try expression(lhs, path: "\(path).from")) ~> \(try expression(rhs, path: "\(path).to")))"
         }
     }
 

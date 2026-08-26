@@ -257,6 +257,7 @@ struct CompiledSymmetricCollection: Sendable {
 }
 
 struct CompiledSemantics: Sendable {
+    let checkDeadlock: Bool
     let initialValues: [VariableID: CompiledValue]
     let variableInitializers: [VariableID: CompiledVariableInitializer]
     let actions: [CompiledAction]

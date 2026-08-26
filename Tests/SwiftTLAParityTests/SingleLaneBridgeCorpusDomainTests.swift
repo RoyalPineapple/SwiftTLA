@@ -15,20 +15,21 @@ struct SingleLaneBridgeCorpusDomainTests {
 
     @Test("SingleLaneBridge compiles one typed direct model with its published action labels")
     func compilesTypedDirectModel() throws {
-        let compilation = try SingleLaneBridgeModel.spec.compile()
+        let source = SingleLaneBridgeModel.spec
+        let compilation = try source.compile()
 
-        #expect(compilation.spec.actions.map(\.name) == [
+        #expect(compilation.description.actions.map(\.name) == [
             "MoveOutside_r1", "MoveInside_r1", "Enter_r1",
             "MoveOutside_r2", "MoveInside_r2", "Enter_r2",
             "MoveOutside_l1", "MoveInside_l1", "Enter_l1",
             "MoveOutside_l2", "MoveInside_l2", "Enter_l2",
         ])
-        #expect(compilation.spec.formalOperatorDefinitions.map(\.name) == [
+        #expect(source.formalOperatorDefinitions.map(\.name) == [
             "IsRight", "InBridge", "NextLocation", "LocationAt", "CarsOnBridge", "IsLeaving",
         ])
         #expect(compilation.description.variables.map(\.name) == [
             "Location", "WaitingBeforeBridge",
         ])
-        #expect(compilation.spec.variables.last?.initExpr == .value(.tuple([])))
+        #expect(source.variables.last?.initExpr == .value(.tuple([])))
     }
 }

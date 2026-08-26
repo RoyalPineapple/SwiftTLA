@@ -102,8 +102,8 @@ struct CompilerPipelineCanonicalizationTests {
         let first = try sourceModel().compile()
         _ = sourceModel()
         let second = try sourceModel().compile()
-        let firstModule = try first.renderedTLAModuleBundle().root.tla
-        let secondModule = try second.renderedTLAModuleBundle().root.tla
+        let firstModule = first.renderedTLAModuleBundle().root.tla
+        let secondModule = second.renderedTLAModuleBundle().root.tla
 
         #expect(first.identity == second.identity)
         #expect(firstModule == secondModule)
@@ -122,13 +122,16 @@ struct CompilerPipelineCanonicalizationTests {
         }
 
         let compilation = try spec.compile()
-        let first = try #require(compilation.bindings.binderName(.init(ordinal: 0)))
-        let second = try #require(compilation.bindings.binderName(.init(ordinal: 1)))
-        let module = try compilation.renderedTLAModuleBundle().root.tla
+        let invariant = try #require(compilation.semantics.invariants.first)
+        guard case .forAll(_, let first, .forAll(_, let second, _)) = invariant.body else {
+            Issue.record("Expected nested compiled quantifiers")
+            return
+        }
+        let module = compilation.renderedTLAModuleBundle().root.tla
 
         #expect(first != second)
-        #expect(module.contains(first))
-        #expect(module.contains(second))
+        #expect(module.contains("\\A __swift_tla_binder_0 \\in"))
+        #expect(module.contains("\\A __swift_tla_binder_1 \\in"))
     }
 
     @Test("macro compilation uses the explicit formal module name")
@@ -136,7 +139,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try CompilerPipelineExplicitFormalNameModel.spec.compile()
         let repeated = try CompilerPipelineExplicitFormalNameModel.spec.compile()
 
-        #expect(compilation.spec.name == "CompilerPipelineExplicitFormalName")
+        #expect(compilation.description.name == "CompilerPipelineExplicitFormalName")
         #expect(compilation.identity == repeated.identity)
     }
 
@@ -241,7 +244,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         })
 
-        let source = try compiledSourceSpecification(algorithm)
+        let source = try loweredSourceSpecification(algorithm)
         #expect(source.actions.map(\.controlOwner) == [
             .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode"),
             .procedure(algorithm: "ControlLayout", name: "first"),
@@ -281,7 +284,7 @@ struct CompilerPipelineCanonicalizationTests {
                 }
             }
         })
-        let changedCompilation = try compiledSourceSpecification(changed).compile()
+        let changedCompilation = try loweredSourceSpecification(changed).compile()
         #expect(compilation.identity != changedCompilation.identity)
     }
 
@@ -299,7 +302,7 @@ struct CompilerPipelineCanonicalizationTests {
                 }
             }
         })
-        let compilation = try compiledSourceSpecification(algorithm).compile()
+        let compilation = try loweredSourceSpecification(algorithm).compile()
         let runtime = CompiledRuntime(compilation: compilation)
         let pc = try #require(compilation.layout.variableID(named: "pc"))
         let initial = try #require(runtime.initialStates().first)
@@ -482,7 +485,7 @@ struct CompilerPipelineCanonicalizationTests {
             return
         }
         let counter = try #require(next.first).value(for: .init(ordinal: 0))
-        #expect(compilation.bindings.operatorName(id) == "Double")
+        #expect(compilation.semantics.formalOperatorDefinitions.contains { $0.id == id })
         #expect(counter == .integer(4))
     }
 
@@ -961,15 +964,15 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.description.identity == compilation.identity)
         #expect(compilation.description.variables.map(\.name) == ["count", "limit"])
         #expect(compilation.description.actions.map(\.name) == ["advance"])
-        #expect(compilation.description.imports.map(\.name) == ["Description"])
+        #expect(compilation.description.imports.isEmpty)
     }
 
     @Test("#spec Algorithm lowering reaches macro-generated consumers through one identity")
     func algorithmSpecificationUsesMacroCompiledPayload() throws {
         let compilation = try CompilerPipelineAlgorithmModel.spec.compile()
         let repeated = try CompilerPipelineAlgorithmModel.spec.compile()
-        let rendered = try compilation.renderedTLAModuleBundle().tla
-        let repeatedRendered = try repeated.renderedTLAModuleBundle().tla
+        let rendered = compilation.renderedTLAModuleBundle().tla
+        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
 
         #expect(repeated.identity == compilation.identity)
         #expect(rendered == repeatedRendered)
@@ -1010,9 +1013,17 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
 
         #expect(compilation.layout.variableID(named: "counter") == .init(ordinal: 0))
-        #expect(compilation.bindings.references.values.contains(.variable(.init(ordinal: 0))))
-        #expect(compilation.bindings.references.values.contains(.binder(.init(ordinal: 0))))
-        #expect(compilation.bindings.references.values.contains(.binder(.init(ordinal: 1))))
+        let action = try #require(compilation.semantics.actions.first)
+        guard case .and(
+            .guard_(.forAll(_, let outer, .exists(_, let inner, .equal(.boundValue(let reference), _)))),
+            .unchanged(let variable)
+        ) = action.body else {
+            Issue.record("Expected compiled quantified action")
+            return
+        }
+        #expect(outer != inner)
+        #expect(reference == inner)
+        #expect(variable == .init(ordinal: 0))
     }
 
     @Test("free references fail at the binding gate")
@@ -1113,8 +1124,8 @@ struct CompilerPipelineCanonicalizationTests {
     func macroGeneratedConsumersUseCompiledPayload() throws {
         let compilation = try CompilerPipelineGeneratedModel.spec.compile()
         let repeated = try CompilerPipelineGeneratedModel.spec.compile()
-        let rendered = try compilation.renderedTLAModuleBundle().tla
-        let repeatedRendered = try repeated.renderedTLAModuleBundle().tla
+        let rendered = compilation.renderedTLAModuleBundle().tla
+        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
 
         #expect(repeated.identity == compilation.identity)
         #expect(rendered == repeatedRendered)
@@ -1122,9 +1133,10 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("#spec lowering preserves every canonical variable initialization field")
     func specMacroRetainsInitializationForms() throws {
-        let compilation = try CompilerPipelineInitializationModel.spec.compile()
-        let computed = try #require(compilation.spec.variables.first { $0.name == "computed" })
-        let choice = try #require(compilation.spec.variables.first { $0.name == "choice" })
+        let source = try CompilerPipelineInitializationModel.spec.loweredSourceModel()
+        let compilation = try source.compile()
+        let computed = try #require(source.variables.first { $0.name == "computed" })
+        let choice = try #require(source.variables.first { $0.name == "choice" })
         let repeated = try CompilerPipelineInitializationModel.spec.compile()
 
         #expect(computed.initExpr == .add(.variable("seed"), .int(1)))
@@ -1136,9 +1148,10 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("#spec lowering preserves symmetric collection metadata")
     func specMacroRetainsSymmetricCollectionMetadata() throws {
-        let compilation = try CompilerPipelineCollectionModel.spec.compile()
-        let devices = try #require(compilation.spec.variables.first { $0.name == "devices" })
-        let declaration = try #require(compilation.spec.symmetricCollections.first { $0.name == "devices" })
+        let source = try CompilerPipelineCollectionModel.spec.loweredSourceModel()
+        let compilation = try source.compile()
+        let devices = try #require(source.variables.first { $0.name == "devices" })
+        let declaration = try #require(source.symmetricCollections.first { $0.name == "devices" })
         let repeated = try CompilerPipelineCollectionModel.spec.compile()
 
         #expect(devices.collectionType == .dictionary(2))
@@ -1201,7 +1214,7 @@ struct CompilerPipelineCanonicalizationTests {
             "procedure_work_enter",
             "procedure_work_enter__2"
         ])
-        let source = try compilation.renderedTLAModuleBundle().tla
+        let source = compilation.renderedTLAModuleBundle().tla
         #expect(source.contains("procedure_work_enter =="))
         #expect(source.contains("procedure_work_enter__2 =="))
     }

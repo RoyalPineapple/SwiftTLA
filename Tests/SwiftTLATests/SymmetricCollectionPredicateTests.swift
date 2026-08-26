@@ -78,7 +78,7 @@ struct SymmetricCollectionPredicateTests {
     let sourceCompilation = try GeneratedPredicateRuntime.spec.compile()
 
     #expect(macroCompilation.identity == sourceCompilation.identity)
-    #expect(try macroCompilation.renderedTLAModuleBundle().root.tla
+    #expect(macroCompilation.renderedTLAModuleBundle().root.tla
       == sourceCompilation.renderedTLAModuleBundle().root.tla)
   }
 

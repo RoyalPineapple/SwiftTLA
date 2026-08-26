@@ -850,7 +850,6 @@ extension ParserSession {
             guard let initialSet = decodeStateExpr(setSyntax),
                   case .set(let elements) = try? evaluateClosed(initialSet),
                   !elements.isEmpty,
-                  let initial = elements.min(),
                   let typeName = setExpressionElementTypeName(setSyntax)
             else {
                 algorithmParseFailure = algorithmParseFailure
@@ -860,7 +859,7 @@ extension ParserSession {
             }
             state = AlgorithmStateModel(
                 root: declaredName,
-                initial: .value(initial),
+                initial: .value(.int(0)),
                 initialSet: initialSet,
                 swiftTypeName: typeName
             )

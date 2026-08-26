@@ -113,6 +113,7 @@ struct CompiledLowerer {
                 )
             }
         return CompiledSemantics(
+            checkDeadlock: spec.checkDeadlock,
             initialValues: initialValues,
             variableInitializers: initializers,
             actions: actions,
