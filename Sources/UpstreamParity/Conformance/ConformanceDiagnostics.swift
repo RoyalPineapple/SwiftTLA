@@ -3,7 +3,7 @@ import Foundation
 /// A retained input or output that explains a conformance decision.
 ///
 /// `location` identifies the recorded module, configuration, graph, or log.
-package struct ConformanceEvidenceLocation: Equatable, Sendable {
+package struct RetainedEvidenceLocation: Equatable, Sendable {
   package let role: String
   package let location: String
 
@@ -33,7 +33,7 @@ package struct ConformanceFailureReport: Equatable, Sendable {
   package let expected: String
   package let actual: String
   package let nextSafeAction: String
-  package let evidence: [ConformanceEvidenceLocation]
+  package let evidence: [RetainedEvidenceLocation]
   package let toolOutput: [ConformanceToolOutput]
 
   package init(
@@ -42,7 +42,7 @@ package struct ConformanceFailureReport: Equatable, Sendable {
     expected: String,
     actual: String,
     nextSafeAction: String,
-    evidence: [ConformanceEvidenceLocation] = [],
+    evidence: [RetainedEvidenceLocation] = [],
     toolOutput: [ConformanceToolOutput] = []
   ) {
     self.whatFailed = whatFailed
@@ -116,9 +116,9 @@ extension TLCProcessError {
   /// A structured tool failure with source inputs and any captured output.
   package func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
     let evidence = [
-      ConformanceEvidenceLocation(role: "TLA+ module", location: request.moduleFileName),
-      ConformanceEvidenceLocation(role: "TLC configuration", location: request.configurationFileName),
-      ConformanceEvidenceLocation(role: "TLC graph event output", location: request.graphEvents.path)
+      RetainedEvidenceLocation(role: "TLA+ module", location: request.moduleFileName),
+      RetainedEvidenceLocation(role: "TLC configuration", location: request.configurationFileName),
+      RetainedEvidenceLocation(role: "TLC graph event output", location: request.graphEvents.path)
     ]
     switch self {
     case .timedOut(let stdout, let stderr):
@@ -262,7 +262,7 @@ private func executionFailureReport(
   )
 }
 
-private func toolEvidence(for request: TLCProcessRequest) -> [ConformanceEvidenceLocation] {
+private func toolEvidence(for request: TLCProcessRequest) -> [RetainedEvidenceLocation] {
   [
     .init(role: "TLA+ module", location: request.moduleFileName),
     .init(role: "TLC configuration", location: request.configurationFileName),

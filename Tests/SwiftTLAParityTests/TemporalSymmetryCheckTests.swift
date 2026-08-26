@@ -3,7 +3,7 @@ import SwiftTLA
 import Testing
 import UpstreamParity
 
-struct TemporalSymmetryConformanceRunnerTests {
+struct TemporalSymmetryCheckTests {
   @Test("Temporal cases preserve bounded fairness outcomes")
   func temporalCasesPreserveFairnessOutcomes() throws {
     for temporalCase in try registeredCases().cases where temporalCase.kind == .temporal {

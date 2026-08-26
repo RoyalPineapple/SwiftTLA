@@ -299,7 +299,7 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
     }
 
     do {
-        let projectRoot = try ConformanceEvidence.projectRoot(
+        let projectRoot = try RetainedEvidence.projectRoot(
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         let environment = ProcessInfo.processInfo.environment
         let casesURL = governanceURL(
@@ -318,7 +318,7 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
         guard let javaArchive = lock.java.archives[architecture] else {
             throw FiniteGraphCLIError.invalidManifest("no locked archive for \(architecture)")
         }
-        let records = try TemporalSymmetryConformanceRunner().run(.init(
+        let records = try TemporalSymmetryCheck().run(.init(
             cases: try decode(TemporalSymmetryCases.self, at: casesURL),
             runID: UUID(),
             projectRoot: projectRoot,

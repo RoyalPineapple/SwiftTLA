@@ -6,7 +6,7 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
   package let schema: String
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let correlation: TemporalSymmetryCaseOutcomeCorrelation
   package let outcome: TemporalSymmetryOutcome
   package let swiftResult: TemporalPropertyResult
   package let tlcResult: TemporalPropertyResult
@@ -18,7 +18,7 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    correlation: TemporalSymmetryCaseRunCorrelation,
+    correlation: TemporalSymmetryCaseOutcomeCorrelation,
     outcome: TemporalSymmetryOutcome,
     swiftResult: TemporalPropertyResult,
     tlcResult: TemporalPropertyResult,
@@ -50,15 +50,15 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
     try tlcResult.validate()
     guard !caseID.isEmpty, correlation.caseID == caseID, configuration.property != nil,
           !configuration.symmetryEnabled else {
-      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "temporal comparison")
+      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "temporal comparison")
     }
     if let declared = configuration.completeGraphPass {
       guard let evidence = completeGraphEvidence,
             evidence.configuration == declared.configuration else {
-        throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "complete graph evidence")
+        throw EvidenceFormatError.inconsistentReference(record: caseID, field: "complete graph evidence")
       }
     } else if completeGraphEvidence != nil {
-      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "unexpected complete graph evidence")
+      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "unexpected complete graph evidence")
     }
     switch outcome {
     case .exact:
@@ -67,12 +67,12 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
             swiftResult.graphID == tlcResult.graphID,
             swiftResult.initialStateIDs == tlcResult.initialStateIDs,
             diagnosticCode == .exactAgreement else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "exact temporal result")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "exact temporal result")
       }
     case .unavailable:
       guard swiftResult.availability == .unavailable || tlcResult.availability == .unavailable,
             diagnosticCode == .temporalEvidenceUnavailable else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "unavailable temporal result")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "unavailable temporal result")
       }
     case .difference:
       let different = swiftResult.availability != tlcResult.availability
@@ -81,7 +81,7 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
         || swiftResult.initialStateIDs != tlcResult.initialStateIDs
       guard different, diagnosticCode != .exactAgreement,
             diagnosticCode != .temporalEvidenceUnavailable else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "temporal difference diagnostic")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "temporal difference diagnostic")
       }
     }
   }
@@ -92,14 +92,14 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     guard try container.decode(String.self, forKey: .schema) == Self.schema else {
-      throw ConformanceGovernanceError.invalidSchema("TemporalComparison")
+      throw EvidenceFormatError.invalidSchema("TemporalComparison")
     }
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
-      correlation: container.decode(TemporalSymmetryCaseRunCorrelation.self, forKey: .correlation),
+      correlation: container.decode(TemporalSymmetryCaseOutcomeCorrelation.self, forKey: .correlation),
       outcome: container.decode(TemporalSymmetryOutcome.self, forKey: .outcome),
       swiftResult: container.decode(TemporalPropertyResult.self, forKey: .swiftResult),
       tlcResult: container.decode(TemporalPropertyResult.self, forKey: .tlcResult),
@@ -126,7 +126,7 @@ package struct SymmetryOrbit: Equatable, Codable, Sendable {
     guard !members.isEmpty, Set(members).count == members.count, members.allSatisfy({ !$0.isEmpty }),
           semanticRepresentative == members.sorted().first,
           members.contains(swiftExecutableRepresentative), members.contains(tlcExecutableRepresentative) else {
-      throw ConformanceGovernanceError.invalidField(record: "orbit", field: "members or representative")
+      throw EvidenceFormatError.invalidField(record: "orbit", field: "members or representative")
     }
     self.members = members.sorted()
     self.semanticRepresentative = semanticRepresentative
@@ -139,7 +139,7 @@ package struct SymmetryOrbit: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       members: container.decode([String].self, forKey: .members),
       semanticRepresentative: container.decode(String.self, forKey: .semanticRepresentative),
@@ -197,7 +197,7 @@ package struct SymmetryExploration: Equatable, Codable, Sendable {
           Set(initialStateIDs).isSubset(of: Set(stateIDs)),
           Set(transitions).count == transitions.count,
           transitions.allSatisfy({ $0.engine == engine && stateIDs.contains($0.sourceStateID) && stateIDs.contains($0.targetStateID) }) else {
-      throw ConformanceGovernanceError.invalidField(record: "symmetry exploration", field: "graph or initial states")
+      throw EvidenceFormatError.invalidField(record: "symmetry exploration", field: "graph or initial states")
     }
   }
 
@@ -207,7 +207,7 @@ package struct SymmetryExploration: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       engine: container.decode(SymmetryExplorationEngine.self, forKey: .engine),
       reduced: container.decode(Bool.self, forKey: .reduced),
@@ -238,7 +238,7 @@ package struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Compar
     occurrences: Int
   ) throws {
     guard !sourceStateID.isEmpty, !action.isEmpty, !targetStateID.isEmpty, occurrences > 0 else {
-      throw ConformanceGovernanceError.invalidField(record: "raw transition", field: "witness")
+      throw EvidenceFormatError.invalidField(record: "raw transition", field: "witness")
     }
     self.engine = engine
     self.sourceStateID = sourceStateID
@@ -258,7 +258,7 @@ package struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Compar
   private enum CodingKeys: String, CodingKey, CaseIterable { case engine, sourceStateID, action, targetStateID, occurrences }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       engine: container.decode(SymmetryExplorationEngine.self, forKey: .engine),
       sourceStateID: container.decode(String.self, forKey: .sourceStateID),
@@ -275,7 +275,7 @@ package struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparab
 
   package init(sourceRepresentative: String, action: String, targetRepresentative: String) throws {
     guard !sourceRepresentative.isEmpty, !action.isEmpty, !targetRepresentative.isEmpty else {
-      throw ConformanceGovernanceError.invalidField(record: "quotient transition", field: "transition")
+      throw EvidenceFormatError.invalidField(record: "quotient transition", field: "transition")
     }
     self.sourceRepresentative = sourceRepresentative
     self.action = action
@@ -293,7 +293,7 @@ package struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparab
   private enum CodingKeys: String, CodingKey, CaseIterable { case sourceRepresentative, action, targetRepresentative }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       sourceRepresentative: container.decode(String.self, forKey: .sourceRepresentative),
       action: container.decode(String.self, forKey: .action),
@@ -307,7 +307,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
   package let schema: String
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let correlation: TemporalSymmetryCaseOutcomeCorrelation
   package let outcome: TemporalSymmetryOutcome
   package let swiftRaw: SymmetryExploration
   package let swiftReduced: SymmetryExploration
@@ -323,7 +323,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    correlation: TemporalSymmetryCaseRunCorrelation,
+    correlation: TemporalSymmetryCaseOutcomeCorrelation,
     outcome: TemporalSymmetryOutcome,
     swiftRaw: SymmetryExploration,
     swiftReduced: SymmetryExploration,
@@ -365,7 +365,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
     let members = orbits.flatMap(\.members)
     guard !caseID.isEmpty, correlation.caseID == caseID, configuration.property == nil,
           configuration.symmetryEnabled, !orbits.isEmpty, Set(members).count == members.count else {
-      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "orbit comparison")
+      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "orbit comparison")
     }
     let explorations = [swiftRaw, swiftReduced, tlcRaw, tlcReduced]
     guard Set(explorations.map { "\($0.engine.rawValue):\($0.reduced)" }).count == 4,
@@ -373,7 +373,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
           swiftReduced.engine == .swift, swiftReduced.reduced,
           tlcRaw.engine == .tlc, !tlcRaw.reduced,
           tlcReduced.engine == .tlc, tlcReduced.reduced else {
-      throw ConformanceGovernanceError.invalidField(record: caseID, field: "paired explorations")
+      throw EvidenceFormatError.invalidField(record: caseID, field: "paired explorations")
     }
     guard swiftRaw.runID == correlation.swiftRunID,
           tlcRaw.runID == correlation.tlcRunID,
@@ -381,10 +381,10 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
             correlation.runID, correlation.comparisonRunID, swiftRaw.runID,
             swiftReduced.runID, tlcRaw.runID, tlcReduced.runID
           ]).count == 6 else {
-      throw ConformanceGovernanceError.invalidField(record: caseID, field: "exploration run correlation")
+      throw EvidenceFormatError.invalidField(record: caseID, field: "exploration run correlation")
     }
     guard Set(explorations.map(\.declaredConfigurationSHA256)).count == 1 else {
-      throw ConformanceGovernanceError.invalidField(record: caseID, field: "configuration equivalence")
+      throw EvidenceFormatError.invalidField(record: caseID, field: "configuration equivalence")
     }
     let rawStateIDs = Set(orbits.flatMap(\.members))
     let swiftRepresentatives = Set(orbits.map(\.swiftExecutableRepresentative))
@@ -400,7 +400,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
             orbits.contains { $0.semanticRepresentative == transition.sourceRepresentative }
               && orbits.contains { $0.semanticRepresentative == transition.targetRepresentative }
           }) else {
-      throw ConformanceGovernanceError.invalidField(record: caseID, field: "orbit witnesses or quotient")
+      throw EvidenceFormatError.invalidField(record: caseID, field: "orbit witnesses or quotient")
     }
     let quotient = Set(quotientTransitions)
     let quotientMatches = mappedQuotient(swiftRaw.transitions) == quotient
@@ -414,13 +414,13 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
     switch outcome {
     case .exact:
       guard orbitPartitionMatches else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "complete orbit partition")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "complete orbit partition")
       }
       guard quotientMatches else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "quotient completeness")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "quotient completeness")
       }
       guard applicableOutcomesAgree, diagnosticCode == .exactAgreement else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "exact applicable outcomes")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "exact applicable outcomes")
       }
     case .difference:
       let diagnosticMatchesDifference: Bool
@@ -435,11 +435,11 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
         diagnosticMatchesDifference = false
       }
       guard diagnosticMatchesDifference else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "symmetry difference diagnostic")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "symmetry difference diagnostic")
       }
     case .unavailable:
       guard diagnosticCode == .orbitEvidenceUnavailable else {
-        throw ConformanceGovernanceError.invalidField(record: caseID, field: "unavailable orbit result")
+        throw EvidenceFormatError.invalidField(record: caseID, field: "unavailable orbit result")
       }
     }
   }
@@ -486,14 +486,14 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     guard try container.decode(String.self, forKey: .schema) == Self.schema else {
-      throw ConformanceGovernanceError.invalidSchema("SymmetryOrbitComparison")
+      throw EvidenceFormatError.invalidSchema("SymmetryOrbitComparison")
     }
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
-      correlation: container.decode(TemporalSymmetryCaseRunCorrelation.self, forKey: .correlation),
+      correlation: container.decode(TemporalSymmetryCaseOutcomeCorrelation.self, forKey: .correlation),
       outcome: container.decode(TemporalSymmetryOutcome.self, forKey: .outcome),
       swiftRaw: container.decode(SymmetryExploration.self, forKey: .swiftRaw),
       swiftReduced: container.decode(SymmetryExploration.self, forKey: .swiftReduced),

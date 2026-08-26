@@ -19,7 +19,7 @@ package struct SymmetryPermutation: Equatable, Sendable {
           Set(constantMapping.values).count == constantMapping.count,
           Set(constantMapping.keys) == Set(constantMapping.values),
           constantMapping.allSatisfy({ !$0.key.isEmpty && !$0.value.isEmpty }) else {
-      throw ConformanceGovernanceError.invalidField(record: "symmetry permutation", field: "constant mapping")
+      throw EvidenceFormatError.invalidField(record: "symmetry permutation", field: "constant mapping")
     }
     self.constantMapping = constantMapping
   }

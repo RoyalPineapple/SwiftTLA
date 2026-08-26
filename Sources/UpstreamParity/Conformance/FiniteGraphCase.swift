@@ -236,7 +236,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package init(from decoder: Decoder) throws {
-            let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+            let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
@@ -249,10 +249,10 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package func validate() throws {
             guard !id.isEmpty, !module.isEmpty, !configuration.isEmpty,
                   Set(imports).count == imports.count, imports.allSatisfy({ !$0.isEmpty }) else {
-                throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
+                throw EvidenceFormatError.invalidField(record: id, field: "case declaration")
             }
             guard TLCReferencePin.isSHA256(moduleSHA256), TLCReferencePin.isSHA256(cfgSHA256) else {
-                throw ConformanceGovernanceError.invalidField(record: id, field: "launch contract")
+                throw EvidenceFormatError.invalidField(record: id, field: "launch contract")
             }
         }
     }
@@ -260,7 +260,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
     package init(from decoder: Decoder) throws {
-        let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
         schema = try container.decode(String.self, forKey: .schema)
         cases = try container.decode([Case].self, forKey: .cases)
         try validate()
@@ -268,13 +268,13 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
     package func validate() throws {
         guard schema == Self.schema, !cases.isEmpty else {
-            throw ConformanceGovernanceError.invalidSchema(schema)
+            throw EvidenceFormatError.invalidSchema(schema)
         }
         var ids = Set<String>()
         for finiteGraphCase in cases {
             try finiteGraphCase.validate()
             guard ids.insert(finiteGraphCase.id).inserted else {
-                throw ConformanceGovernanceError.duplicateID(kind: "case", id: finiteGraphCase.id)
+                throw EvidenceFormatError.duplicateID(kind: "case", id: finiteGraphCase.id)
             }
         }
     }

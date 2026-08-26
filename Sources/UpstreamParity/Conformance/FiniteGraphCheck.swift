@@ -155,7 +155,7 @@ package struct FiniteGraphCheck: Sendable {
     tlcRun: CompletedGraphRun,
     to directory: URL
   ) throws {
-    try ConformanceEvidence.writeJSON(
+    try RetainedEvidence.writeJSON(
       [
         "caseID": caseID,
         "result": comparison.isConformant ? "exact" : "difference",
@@ -178,7 +178,7 @@ package struct FiniteGraphCheck: Sendable {
   }
 
   private func writeDiagnostic(_ diagnostic: FiniteGraphDiagnostic, to directory: URL) throws {
-    try ConformanceEvidence.writeJSON(
+    try RetainedEvidence.writeJSON(
       [
         "code": diagnostic.code,
         "message": diagnostic.message,
@@ -244,7 +244,7 @@ package struct FiniteGraphCheck: Sendable {
 
   private func createStagingDirectory(beside output: URL, caseID: String, runID: UUID) throws -> URL {
     let parent = output.deletingLastPathComponent()
-    try ConformanceEvidence.createDirectory(parent, beneath: parent)
+    try RetainedEvidence.createDirectory(parent, beneath: parent)
     for _ in 0..<16 {
       let path = parent.appendingPathComponent(
         ".\(caseID).\(runID.uuidString.lowercased()).\(UUID().uuidString.lowercased()).staging"

@@ -67,7 +67,7 @@ package struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendabl
   private enum CodingKeys: String, CodingKey, CaseIterable { case configuration }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(configuration: container.decode(RetainedFileReference.self, forKey: .configuration))
   }
 }
@@ -106,29 +106,29 @@ package struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
   package func validate() throws {
     guard Set(fairnessActions).count == fairnessActions.count,
           fairnessActions.allSatisfy({ !$0.isEmpty }) else {
-      throw ConformanceGovernanceError.invalidField(record: "configuration", field: "fairnessActions")
+      throw EvidenceFormatError.invalidField(record: "configuration", field: "fairnessActions")
     }
     if property == nil {
       guard fairness == nil, fairnessActions.isEmpty, !allowsImplicitStuttering, completeGraphPass == nil else {
-        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "temporal fields")
+        throw EvidenceFormatError.invalidField(record: "configuration", field: "temporal fields")
       }
     } else {
       guard property?.isEmpty == false, fairness != nil else {
-        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "property or fairness")
+        throw EvidenceFormatError.invalidField(record: "configuration", field: "property or fairness")
       }
     }
     if completeGraphPass != nil {
       guard property != nil else {
-        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "complete graph pass")
+        throw EvidenceFormatError.invalidField(record: "configuration", field: "complete graph pass")
       }
     }
     if symmetryEnabled {
       guard symmetryCollection?.isEmpty == false, (symmetryScope ?? 0) > 0 else {
-        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "symmetry")
+        throw EvidenceFormatError.invalidField(record: "configuration", field: "symmetry")
       }
     } else {
       guard symmetryCollection == nil, symmetryScope == nil else {
-        throw ConformanceGovernanceError.invalidField(record: "configuration", field: "disabled symmetry")
+        throw EvidenceFormatError.invalidField(record: "configuration", field: "disabled symmetry")
       }
     }
   }
@@ -139,7 +139,7 @@ package struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       property: try container.decodeIfPresent(String.self, forKey: .property),
       fairness: try container.decodeIfPresent(TemporalFairnessMode.self, forKey: .fairness),
@@ -182,17 +182,17 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
     try sourceInput?.validate()
     try configuration.validate()
     guard !id.isEmpty, !swiftSpec.isEmpty else {
-      throw ConformanceGovernanceError.invalidField(record: id, field: "case declaration")
+      throw EvidenceFormatError.invalidField(record: id, field: "case declaration")
     }
     switch kind {
     case .temporal:
       guard configuration.property != nil, configuration.fairness != nil,
             configuration.symmetryEnabled == false, sourceInput != nil else {
-        throw ConformanceGovernanceError.inconsistentReference(record: id, field: "temporal configuration")
+        throw EvidenceFormatError.inconsistentReference(record: id, field: "temporal configuration")
       }
     case .symmetry:
       guard configuration.property == nil, configuration.symmetryEnabled, sourceInput == nil else {
-        throw ConformanceGovernanceError.inconsistentReference(record: id, field: "symmetry configuration")
+        throw EvidenceFormatError.inconsistentReference(record: id, field: "symmetry configuration")
       }
     }
   }
@@ -202,7 +202,7 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
@@ -223,12 +223,12 @@ package struct TemporalSymmetryCases: Equatable, Codable, Sendable {
   }
 
   package init(schema: String, cases: [TemporalSymmetryCase]) throws {
-    guard schema == Self.schema else { throw ConformanceGovernanceError.invalidSchema(schema) }
+    guard schema == Self.schema else { throw EvidenceFormatError.invalidSchema(schema) }
     var ids = Set<String>()
     for item in cases {
       try item.validate()
       guard ids.insert(item.id).inserted else {
-        throw ConformanceGovernanceError.duplicateID(kind: "case", id: item.id)
+        throw EvidenceFormatError.duplicateID(kind: "case", id: item.id)
       }
     }
     self.schema = schema
@@ -238,12 +238,12 @@ package struct TemporalSymmetryCases: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(schema: container.decode(String.self, forKey: .schema), cases: container.decode([TemporalSymmetryCase].self, forKey: .cases))
   }
 }
 
-package struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable {
+package struct TemporalSymmetryCaseOutcomeCorrelation: Equatable, Codable, Sendable {
   package let caseID: String
   package let runID: UUID
   package let swiftRunID: UUID
@@ -253,7 +253,7 @@ package struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable 
   package init(caseID: String, runID: UUID, swiftRunID: UUID, tlcRunID: UUID, comparisonRunID: UUID) throws {
     guard !caseID.isEmpty,
           Set([runID, swiftRunID, tlcRunID, comparisonRunID]).count == 4 else {
-      throw ConformanceGovernanceError.invalidField(record: "correlation", field: "caseID")
+      throw EvidenceFormatError.invalidField(record: "correlation", field: "caseID")
     }
     self.caseID = caseID
     self.runID = runID
@@ -267,7 +267,7 @@ package struct TemporalSymmetryCaseRunCorrelation: Equatable, Codable, Sendable 
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
       runID: container.decode(UUID.self, forKey: .runID),
@@ -286,14 +286,14 @@ package struct TemporalLassoWitness: Equatable, Codable, Sendable {
     self.cycleStateIDs = cycleStateIDs
     guard prefixStateIDs.allSatisfy({ !$0.isEmpty }), cycleStateIDs.count >= 2,
           cycleStateIDs.allSatisfy({ !$0.isEmpty }), cycleStateIDs.first == cycleStateIDs.last else {
-      throw ConformanceGovernanceError.invalidField(record: "temporal lasso", field: "state IDs")
+      throw EvidenceFormatError.invalidField(record: "temporal lasso", field: "state IDs")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case prefixStateIDs, cycleStateIDs }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       prefixStateIDs: container.decode([String].self, forKey: .prefixStateIDs),
       cycleStateIDs: container.decode([String].self, forKey: .cycleStateIDs))
@@ -332,35 +332,35 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
     guard !graphID.isEmpty, !initialStateIDs.isEmpty,
           Set(initialStateIDs).count == initialStateIDs.count,
           initialStateIDs.allSatisfy({ !$0.isEmpty }) else {
-      throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "graph or initial states")
+      throw EvidenceFormatError.invalidField(record: "temporal result", field: "graph or initial states")
     }
     try traceEvidence?.validate()
     switch availability {
     case .evaluated:
       guard outcome != nil else {
-        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "missing property outcome")
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "missing property outcome")
       }
     case .unavailable:
       guard outcome == nil, traceAvailability == .unavailable, traceEvidence == nil, lasso == nil else {
-        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "unavailable evaluation")
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable evaluation")
       }
       return
     }
     switch traceAvailability {
     case .available:
       guard traceEvidence != nil else {
-        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "traceEvidence")
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "traceEvidence")
       }
       if outcome == .violated, lasso == nil {
-        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "lasso")
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "lasso")
       }
     case .unavailable:
       guard traceEvidence == nil, lasso == nil else {
-        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "unavailable trace")
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable trace")
       }
     case .notApplicable:
       guard outcome == .satisfied, traceEvidence == nil, lasso == nil else {
-        throw ConformanceGovernanceError.invalidField(record: "temporal result", field: "not applicable trace")
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "not applicable trace")
       }
     }
   }
@@ -370,7 +370,7 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       availability: container.decode(TemporalEvaluationAvailability.self, forKey: .availability),
       outcome: try container.decodeIfPresent(TemporalPropertyOutcome.self, forKey: .outcome),
@@ -409,7 +409,7 @@ package struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
     result: RetainedFileReference
   ) throws {
     guard propertyRunID != graphRunID else {
-      throw ConformanceGovernanceError.inconsistentReference(record: "complete graph evidence", field: "run IDs")
+      throw EvidenceFormatError.inconsistentReference(record: "complete graph evidence", field: "run IDs")
     }
     try sourceInput.validate()
     try configuration.validate()
@@ -434,7 +434,7 @@ package struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       propertyRunID: container.decode(UUID.self, forKey: .propertyRunID),
       graphRunID: container.decode(UUID.self, forKey: .graphRunID),

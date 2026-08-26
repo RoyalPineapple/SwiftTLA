@@ -407,7 +407,7 @@ package struct TLCProcessAdapter: Sendable {
     replay: TLCReplayPolicy,
     retainingIn directory: URL
   ) throws -> TLCProcessCapture {
-    try ConformanceEvidence.createDirectory(directory, beneath: directory.deletingLastPathComponent())
+    try RetainedEvidence.createDirectory(directory, beneath: directory.deletingLastPathComponent())
     let run: TLCProcessRun
     do {
       run = try self.run(request, replay: replay)
@@ -448,7 +448,7 @@ package struct TLCProcessAdapter: Sendable {
     if let trace = run.trace { results[.trace] = trace }
     if let replay = run.replay { results[.replay] = replay }
     try writeProcessRecord(request: request, results: results, failures: [:], to: directory)
-    let logs = try ConformanceEvidence.createDirectory(
+    let logs = try RetainedEvidence.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
     try retain(run.primary, phase: .primary, in: logs)
     if let trace = run.trace { try retain(trace, phase: .trace, in: logs) }
@@ -464,7 +464,7 @@ package struct TLCProcessAdapter: Sendable {
     let lifecycle = processLifecycle(for: error)
     try writeProcessRecord(
       request: request, results: lifecycle.results, failures: lifecycle.failures, to: directory)
-    let logs = try ConformanceEvidence.createDirectory(
+    let logs = try RetainedEvidence.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
     switch error {
     case TLCProcessError.traceCaptureFailed(let completed, let failed):
@@ -504,10 +504,10 @@ package struct TLCProcessAdapter: Sendable {
         if FileManager.default.fileExists(atPath: destination.path) {
           try FileManager.default.removeItem(at: destination)
         }
-        try ConformanceEvidence.copy(source, to: destination)
+        try RetainedEvidence.copy(source, to: destination)
       }
     }
-    try ConformanceEvidence.writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
+    try RetainedEvidence.writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
   }
 
   private func updating(_ request: TLCProcessRequest, traceMode: TLCTraceMode)
@@ -571,15 +571,15 @@ package struct TLCProcessAdapter: Sendable {
         record[phase.rawValue] = NSNull()
       }
     }
-    try ConformanceEvidence.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
+    try RetainedEvidence.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
   }
 
   private func retain(_ result: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
-    try ConformanceEvidence.writeText(
+    try RetainedEvidence.writeText(
       redactingSecrets(in: result.stdout),
       to: directory.appendingPathComponent(phase.stdoutLog)
     )
-    try ConformanceEvidence.writeText(
+    try RetainedEvidence.writeText(
       redactingSecrets(in: result.stderr),
       to: directory.appendingPathComponent(phase.stderrLog)
     )
@@ -591,16 +591,16 @@ package struct TLCProcessAdapter: Sendable {
     in directory: URL
   ) throws {
     if let stdout = failure.partialStdout, let stderr = failure.partialStderr {
-      try ConformanceEvidence.writeText(
+      try RetainedEvidence.writeText(
         redactingSecrets(in: stdout),
         to: directory.appendingPathComponent(phase.stdoutLog)
       )
-      try ConformanceEvidence.writeText(
+      try RetainedEvidence.writeText(
         redactingSecrets(in: stderr),
         to: directory.appendingPathComponent(phase.stderrLog)
       )
     } else {
-      try ConformanceEvidence.writeText(
+      try RetainedEvidence.writeText(
         redactingSecrets(in: failure.message),
         to: directory.appendingPathComponent("tlc.\(phase.rawValue).failure.log")
       )
