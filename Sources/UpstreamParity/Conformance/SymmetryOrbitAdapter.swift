@@ -4,7 +4,6 @@ package enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
   case emptyPermutationGroup
   case incompatiblePermutationDomains
   case permutationDoesNotPreserveStateSpace
-  case rawStateSetsDiffer
   case incompleteOrbit(String)
   case reducedStateOutsideOrbit(engine: SymmetryExplorationEngine, stateID: String)
   case multipleReducedRepresentatives(engine: SymmetryExplorationEngine, representative: String)
@@ -67,7 +66,6 @@ package struct SymmetryPermutation: Equatable, Sendable {
 }
 
 package struct SymmetryOrbitDerivation: Equatable, Sendable {
-  package let group: [SymmetryPermutation]
   package let orbits: [[CanonicalStateKey]]
   package let representativeForState: [CanonicalStateKey: CanonicalStateKey]
 
@@ -98,7 +96,6 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
       unseen.subtract(members)
       derived.append(ordered)
     }
-    self.group = closure
     self.orbits = derived.sorted { $0[0] < $1[0] }
     self.representativeForState = representatives
   }

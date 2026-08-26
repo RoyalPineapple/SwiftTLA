@@ -98,7 +98,6 @@ package struct SymmetryOrbit: Equatable, Encodable, Sendable {
   package let semanticRepresentative: String
   package let swiftExecutableRepresentative: String
   package let tlcExecutableRepresentative: String
-  package var size: Int { members.count }
 
   package init(
     members: [String],

@@ -265,7 +265,7 @@ package struct TemporalSymmetryCheck: Sendable {
       tlcReduced: reducedTLC,
       permutations: permutations
     )
-    switch try SymmetryOrbitComparator().compare(input) {
+    switch try compareSymmetryOrbits(input) {
     case .exact(let comparison):
       try RetainedEvidence.writeCanonical(
         comparison, to: outputDirectory.appendingPathComponent("symmetry-orbit-comparison.json"))

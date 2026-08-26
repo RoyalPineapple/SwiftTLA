@@ -9,14 +9,14 @@ struct SymmetryOrbitConformanceTests {
       engine: .swift,
       stateID: state("C").key.canonicalEncoding
     )) {
-      _ = try SymmetryOrbitComparator().compare(input)
+      _ = try compareSymmetryOrbits(input)
     }
   }
 
   @Test("Matched raw and reduced graphs produce canonical orbit evidence")
   func matchedGraphsProduceExactOrbitEvidence() throws {
     let input = try fixture(reducedStates: [state("A")])
-    guard case .exact(let comparison) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .exact(let comparison) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected exact orbit comparison")
       return
     }
@@ -33,7 +33,7 @@ struct SymmetryOrbitConformanceTests {
   @Test("Different executable representatives of the same orbit agree")
   func differentExecutableRepresentativesAgree() throws {
     let input = try fixture(reducedStates: [state("A")], tlcReducedStates: [state("B")])
-    guard case .exact(let comparison) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .exact(let comparison) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected exact orbit comparison")
       return
     }
@@ -41,8 +41,8 @@ struct SymmetryOrbitConformanceTests {
     #expect(comparison.orbits[0].tlcExecutableRepresentative == state("B").key.canonicalEncoding)
   }
 
-  @Test("Raw state-set differences produce structured comparison differences")
-  func rawStateSetDifferenceIsStructured() throws {
+  @Test("Raw graph differences produce structured comparison differences")
+  func rawGraphDifferenceIsStructured() throws {
     let rawStates = [state("A"), state("B")]
     let reducedStates = [state("A")]
     let input = try comparisonInput(
@@ -51,11 +51,11 @@ struct SymmetryOrbitConformanceTests {
       tlcRaw: run(states: [state("A")]),
       tlcReduced: run(states: reducedStates)
     )
-    guard case .difference(let differences) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
       return
     }
-    #expect(differences.map(\.kind).contains(.rawStateSet))
+    #expect(differences.map(\.kind).contains(.rawGraph))
   }
 
   @Test("Raw edge differences produce structured comparison differences")
@@ -71,7 +71,7 @@ struct SymmetryOrbitConformanceTests {
       tlcRaw: tlcRaw,
       tlcReduced: run(states: [state("A")])
     )
-    guard case .difference(let differences) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
       return
     }
@@ -87,7 +87,7 @@ struct SymmetryOrbitConformanceTests {
       tlcRaw: run(states: states),
       tlcReduced: run(states: [state("A")])
     )
-    guard case .difference(let differences) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
       return
     }
@@ -103,7 +103,7 @@ struct SymmetryOrbitConformanceTests {
       tlcRaw: run(states: rawStates),
       tlcReduced: run(states: [state("A"), state("Z")])
     )
-    guard case .difference(let differences) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
       return
     }
@@ -124,7 +124,7 @@ struct SymmetryOrbitConformanceTests {
       tlcRaw: run(states: rawStates),
       tlcReduced: run(states: [reducedState])
     )
-    guard case .difference(let differences) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
       return
     }
@@ -137,7 +137,6 @@ struct SymmetryOrbitConformanceTests {
       states: [state("A"), state("B"), state("C")],
       permutations: [try SymmetryPermutation(constantMapping: ["A": "B", "B": "C", "C": "A"])]
     )
-    #expect(derivation.group.count == 3)
     #expect(derivation.orbits.count == 1)
     #expect(derivation.orbits[0].count == 3)
   }
@@ -161,7 +160,7 @@ struct SymmetryOrbitConformanceTests {
       tlcRaw: run(states: rawStates, edges: rawEdges),
       tlcReduced: run(states: [reducedState], edges: reducedEdges)
     )
-    guard case .exact(let comparison) = try SymmetryOrbitComparator().compare(input) else {
+    guard case .exact(let comparison) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected exact orbit comparison")
       return
     }
