@@ -18,8 +18,7 @@ package enum FiniteGraphPhase: String, Equatable, Sendable {
 
 package struct FiniteGraphDiagnostic: Equatable, Sendable {
   package let code: String
-  package let message: String
-  package let report: ConformanceFailureReport
+  package let report: CheckFailureReport
   package let phase: FiniteGraphPhase
 }
 
@@ -68,11 +67,11 @@ package struct FiniteGraphCheck: Sendable {
       )
       staging = directory
       try tlcProcess.retain(request: tlcRequest, in: directory)
-      guard finiteGraphCase == tlcRequest.expectedCase else { throw FiniteGraphCheckError.tlcCaseMismatch }
+      guard finiteGraphCase == tlcRequest.finiteGraphCase else { throw FiniteGraphCheckError.tlcCaseMismatch }
 
       phase = .swiftExport
       let swiftRun = try swiftExporter.export(swiftExploration(), for: finiteGraphCase)
-      try CanonicalGraphRecords.write(
+      try CompletedGraphRunRecords.write(
         swiftRun,
         to: directory.appendingPathComponent("swift-graph.jsonl")
       )
@@ -82,13 +81,13 @@ package struct FiniteGraphCheck: Sendable {
 
       phase = .tlcParsing
       let tlcRun = tlcCapture.graph
-      try CanonicalGraphRecords.write(
+      try CompletedGraphRunRecords.write(
         tlcRun,
         to: directory.appendingPathComponent("tlc-graph.jsonl")
       )
 
       phase = .comparison
-      let comparison = compareFiniteGraphs(expected: tlcRun, actual: swiftRun)
+      let comparison = compareFiniteGraphs(tlc: tlcRun, swift: swiftRun)
       try writeComparison(
         comparison,
         caseID: finiteGraphCase.id,
@@ -100,7 +99,7 @@ package struct FiniteGraphCheck: Sendable {
       phase = .publication
       try publish(staging: directory, to: outputDirectory)
       return .init(
-        exitCode: comparison.isConformant ? .exact : .semanticDifference,
+        exitCode: comparison.matches ? .exact : .semanticDifference,
         evidenceDirectory: outputDirectory,
         comparison: comparison,
         diagnostic: nil
@@ -147,10 +146,10 @@ package struct FiniteGraphCheck: Sendable {
     tlcRun: CompletedGraphRun,
     to directory: URL
   ) throws {
-    try RetainedEvidence.writeJSON(
+    try RetainedFiles.writeJSON(
       [
         "caseID": caseID,
-        "result": comparison.isConformant ? "exact" : "difference",
+        "result": comparison.matches ? "exact" : "difference",
         "swiftComplete": swiftRun.isPassEligible,
         "tlcComplete": tlcRun.isPassEligible,
         "swift": graphSummary(swiftRun.graph),
@@ -170,10 +169,9 @@ package struct FiniteGraphCheck: Sendable {
   }
 
   private func writeDiagnostic(_ diagnostic: FiniteGraphDiagnostic, to directory: URL) throws {
-    try RetainedEvidence.writeJSON(
+    try RetainedFiles.writeJSON(
       [
         "code": diagnostic.code,
-        "message": diagnostic.message,
         "phase": diagnostic.phase.rawValue,
         "report": failureReportJSON(diagnostic.report)
       ],
@@ -187,7 +185,7 @@ package struct FiniteGraphCheck: Sendable {
     error: Error,
     request: TLCProcessRequest
   ) -> FiniteGraphDiagnostic {
-    let report: ConformanceFailureReport
+    let report: CheckFailureReport
     if let processError = error as? TLCProcessError {
       report = processError.failureReport(for: request)
     } else {
@@ -206,7 +204,6 @@ package struct FiniteGraphCheck: Sendable {
     }
     return .init(
       code: code ?? "\(phase.rawValue)-failed",
-      message: redactingSecrets(in: String(describing: error)),
       report: report,
       phase: phase
     )
@@ -236,7 +233,7 @@ package struct FiniteGraphCheck: Sendable {
 
   private func createStagingDirectory(beside output: URL, caseID: String, runID: UUID) throws -> URL {
     let parent = output.deletingLastPathComponent()
-    try RetainedEvidence.createDirectory(parent, beneath: parent)
+    try RetainedFiles.createDirectory(parent, beneath: parent)
     for _ in 0..<16 {
       let path = parent.appendingPathComponent(
         ".\(caseID).\(runID.uuidString.lowercased()).\(UUID().uuidString.lowercased()).staging"
@@ -285,7 +282,7 @@ private enum FiniteGraphCheckError: Error {
   case stagingDirectoryUnavailable
 }
 
-private func failureReportJSON(_ report: ConformanceFailureReport) -> [String: Any] {
+private func failureReportJSON(_ report: CheckFailureReport) -> [String: Any] {
   [
     "whatFailed": report.whatFailed,
     "whereItFailed": report.whereItFailed,

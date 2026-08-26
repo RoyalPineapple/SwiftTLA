@@ -1,6 +1,6 @@
 import Foundation
 
-package enum RetainedEvidence {
+package enum RetainedFiles {
   package static func projectRoot(_ url: URL) throws -> URL {
     let root = url.resolvingSymlinksInPath().standardizedFileURL
     var isDirectory: ObjCBool = false
@@ -55,25 +55,15 @@ package enum RetainedEvidence {
     try write(Data(text.utf8), to: url)
   }
 
-  static func copy(_ source: URL, to destination: URL) throws {
-    try FileManager.default.copyItem(at: source, to: destination)
-  }
-
   static func writeJSON(_ value: Any, to url: URL) throws {
     let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
     try write(data, to: url)
   }
 
-  private static func canonicalData<T: Encodable>(_ value: T, trailingNewline: Bool = false) throws -> Data {
+  static func writeCanonical<T: Encodable>(_ value: T, to url: URL) throws {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-    var data = try encoder.encode(value)
-    if trailingNewline { data.append(0x0A) }
-    return data
-  }
-
-  static func writeCanonical<T: Encodable>(_ value: T, to url: URL, trailingNewline: Bool = false) throws {
-    try write(canonicalData(value, trailingNewline: trailingNewline), to: url)
+    try write(encoder.encode(value), to: url)
   }
 
 }

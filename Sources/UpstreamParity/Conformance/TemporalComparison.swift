@@ -35,7 +35,7 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
     case (.satisfied, .violated), (.violated, .satisfied):
       status = .propertyOutcomeDifference
     case (.satisfied, .satisfied), (.violated, .violated):
-      status = compareFiniteGraphs(expected: tlcRun, actual: swiftRun).isConformant
+      status = compareFiniteGraphs(tlc: tlcRun, swift: swiftRun).matches
         ? .exact
         : .graphDifference
     }

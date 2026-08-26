@@ -72,10 +72,10 @@ package struct TLCTemporalAdapter: Sendable {
         throw TLCTemporalAdapterError.outputAlreadyExists
       }
       try validate(input)
-      try RetainedEvidence.outputDirectory(
+      try RetainedFiles.outputDirectory(
         input.outputDirectory, beneath: input.outputDirectory.deletingLastPathComponent())
       try retainInput(input)
-      try CanonicalGraphRecords.write(
+      try CompletedGraphRunRecords.write(
         input.swiftRun,
         to: input.outputDirectory.appendingPathComponent("swift-graph.jsonl")
       )
@@ -84,7 +84,7 @@ package struct TLCTemporalAdapter: Sendable {
 
       let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
       let run = capture.run
-      try CanonicalGraphRecords.write(
+      try CompletedGraphRunRecords.write(
         completeGraph,
         to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")
       )
@@ -100,22 +100,22 @@ package struct TLCTemporalAdapter: Sendable {
         tlcRun: completeGraph,
         swiftResult: input.swiftResult,
         tlcResult: result)
-      try RetainedEvidence.writeCanonical(
+      try RetainedFiles.writeCanonical(
         comparison, to: input.outputDirectory.appendingPathComponent("temporal-comparison.json"))
       let diagnostic = diagnostic(for: comparison.status)
       if let diagnostic {
-        try RetainedEvidence.writeJSON(
+        try RetainedFiles.writeJSON(
           ["code": diagnostic.code, "message": diagnostic.message],
           to: input.outputDirectory.appendingPathComponent("diagnostic.json"))
       }
       return .comparison(comparison)
     } catch {
       let directory = retainedFailureDirectory(for: input)
-      _ = try? RetainedEvidence.createDirectory(
+      _ = try? RetainedFiles.createDirectory(
         directory, beneath: input.outputDirectory.deletingLastPathComponent())
       let diagnostic = TLCTemporalCaptureDiagnostic(
         code: diagnosticCode(for: error), message: String(describing: error))
-      _ = try? RetainedEvidence.writeJSON(["code": diagnostic.code, "message": diagnostic.message], to: directory.appendingPathComponent("diagnostic.json"))
+      _ = try? RetainedFiles.writeJSON(["code": diagnostic.code, "message": diagnostic.message], to: directory.appendingPathComponent("diagnostic.json"))
       return .failure(diagnostic)
     }
   }
@@ -129,7 +129,7 @@ package struct TLCTemporalAdapter: Sendable {
     guard input.request.caseID == input.temporalCase.id else {
       throw TLCTemporalAdapterError.requestMismatch
     }
-    let request = input.request.expectedCase
+    let request = input.request.finiteGraphCase
     let propertyConfiguration = input.temporalCase.configuration.renderedPropertyConfiguration
     guard input.request.bundle.cfg == propertyConfiguration,
           request.cfgSHA256 == SHA256.hex(Data(propertyConfiguration.utf8)) else {
@@ -146,7 +146,7 @@ package struct TLCTemporalAdapter: Sendable {
     let graphRequest = input.completeGraphRequest
     let graphConfiguration = TemporalCaseConfiguration.renderedGraphConfiguration
     guard graphRequest.bundle.cfg == graphConfiguration,
-          graphRequest.expectedCase.cfgSHA256 == SHA256.hex(Data(graphConfiguration.utf8)) else {
+          graphRequest.finiteGraphCase.cfgSHA256 == SHA256.hex(Data(graphConfiguration.utf8)) else {
       throw TLCTemporalAdapterError.configurationMismatch
     }
     guard graphRequest.runID != input.request.runID,
@@ -154,15 +154,15 @@ package struct TLCTemporalAdapter: Sendable {
           graphRequest.bundle.root.name == input.request.bundle.root.name,
           graphRequest.bundle.root.tla == input.request.bundle.root.tla,
           graphRequest.arguments == input.request.arguments,
-          graphRequest.expectedCase.pin == input.request.expectedCase.pin,
-          graphRequest.expectedCase.workers == input.request.expectedCase.workers,
-          graphRequest.expectedCase.fingerprintPolynomial == input.request.expectedCase.fingerprintPolynomial,
-          graphRequest.expectedCase.deadlock == input.request.expectedCase.deadlock,
-          graphRequest.expectedCase.operatingSystem == input.request.expectedCase.operatingSystem,
-          graphRequest.expectedCase.architecture == input.request.expectedCase.architecture,
-          graphRequest.expectedCase.environment == input.request.expectedCase.environment,
-          graphRequest.expectedCase.moduleSHA256 == sourceInput.sha256,
-          graphRequest.expectedCase.argumentsSHA256 == (try FiniteGraphCase.argumentsDigest(graphRequest.arguments)) else {
+          graphRequest.finiteGraphCase.pin == input.request.finiteGraphCase.pin,
+          graphRequest.finiteGraphCase.workers == input.request.finiteGraphCase.workers,
+          graphRequest.finiteGraphCase.fingerprintPolynomial == input.request.finiteGraphCase.fingerprintPolynomial,
+          graphRequest.finiteGraphCase.deadlock == input.request.finiteGraphCase.deadlock,
+          graphRequest.finiteGraphCase.operatingSystem == input.request.finiteGraphCase.operatingSystem,
+          graphRequest.finiteGraphCase.architecture == input.request.finiteGraphCase.architecture,
+          graphRequest.finiteGraphCase.environment == input.request.finiteGraphCase.environment,
+          graphRequest.finiteGraphCase.moduleSHA256 == sourceInput.sha256,
+          graphRequest.finiteGraphCase.argumentsSHA256 == (try FiniteGraphCase.argumentsDigest(graphRequest.arguments)) else {
       throw TLCTemporalAdapterError.requestMismatch
     }
   }
@@ -180,9 +180,9 @@ package struct TLCTemporalAdapter: Sendable {
   }
 
   private func retainInput(_ input: TLCTemporalCaptureInput) throws {
-    try RetainedEvidence.copy(input.sourceInputURL, to: input.outputDirectory.appendingPathComponent("source-input"))
-    try RetainedEvidence.copy(input.manifestURL, to: input.outputDirectory.appendingPathComponent("manifest.json"))
-    try RetainedEvidence.copy(input.toolchainURL, to: input.outputDirectory.appendingPathComponent("toolchain.json"))
+    try FileManager.default.copyItem(at: input.sourceInputURL, to: input.outputDirectory.appendingPathComponent("source-input"))
+    try FileManager.default.copyItem(at: input.manifestURL, to: input.outputDirectory.appendingPathComponent("manifest.json"))
+    try FileManager.default.copyItem(at: input.toolchainURL, to: input.outputDirectory.appendingPathComponent("toolchain.json"))
   }
 
   private func captureCompleteGraph(
@@ -191,7 +191,7 @@ package struct TLCTemporalAdapter: Sendable {
     let request = input.completeGraphRequest
     try clearTraceOutput(for: request)
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
-    try RetainedEvidence.createDirectory(directory, beneath: input.outputDirectory)
+    try RetainedFiles.createDirectory(directory, beneath: input.outputDirectory)
     let capture = try processAdapter.capture(request, retainingIn: directory)
     guard capture.run.primary.reportedExhaustiveCompletion, capture.graph.isPassEligible else {
       throw TLCTemporalAdapterError.incompleteGraph
