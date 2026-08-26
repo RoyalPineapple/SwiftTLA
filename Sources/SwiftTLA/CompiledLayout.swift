@@ -668,7 +668,7 @@ struct BindingValidator {
     private let layout: CompiledLayout
     private let closure: FormalModuleClosure
     private let constants: [ConstantDecl]
-    private let formalConstants: Set<String>
+    private let formalParameters: Set<String>
     private let symmetricMembers: [TLAValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
     private var operators: [String: OperatorID]
@@ -689,9 +689,7 @@ struct BindingValidator {
         self.layout = layout
         self.closure = closure
         constants = spec.constants
-        formalConstants = Set(spec.formalParameters.compactMap { parameter in
-            parameter.kind == .constant ? parameter.name : nil
-        })
+        formalParameters = Set(spec.formalParameters.map(\.name))
         symmetricMembers = spec.symmetricCollections.flatMap { $0.metadata.members }
         self.incomingModuleParameters = incomingModuleParameters
         let names = spec.formalOperatorDefinitions.map(\.name)
@@ -756,6 +754,14 @@ struct BindingValidator {
             }
             references["\(path).declaration"] = .property(id)
             try validate(temporal.expr, at: path)
+        }
+        for theorem in spec.theorems {
+            let path = "theorems.\(theorem.name)"
+            if let state = theorem.stateBody {
+                try validateExpression(state, at: path, scope: [:])
+            } else if let temporal = theorem.temporalBody {
+                try validate(temporal, at: path)
+            }
         }
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
@@ -1154,7 +1160,7 @@ struct BindingValidator {
             references[path] = .constant(value)
             return
         }
-        if formalConstants.contains(name) {
+        if formalParameters.contains(name) {
             references[path] = .constant(.constant(name))
             return
         }
@@ -1218,11 +1224,9 @@ struct BindingValidator {
         try duplicate(names, at: path)
         var nested = scope
         for name in names {
-            let id = BinderID(ordinal: nextBinderOrdinal)
-            nextBinderOrdinal += 1
+            let id = bind(name, in: nested)
             knownBinderNames.insert(name)
             nested[name] = id
-            binders[id] = "__swift_tla_binder_\(id.ordinal)"
             references["\(path).\(name)"] = .binder(id)
         }
         return nested
@@ -1238,11 +1242,9 @@ struct BindingValidator {
         for parameter in parameters {
             switch parameter {
             case .value(let name):
-                let id = BinderID(ordinal: nextBinderOrdinal)
-                nextBinderOrdinal += 1
+                let id = bind(name, in: nested)
                 knownBinderNames.insert(name)
                 nested[name] = id
-                binders[id] = "__swift_tla_binder_\(id.ordinal)"
                 references["\(path).\(name)"] = .binder(id)
             case .operator(let name, _):
                 let id = OperatorID(ordinal: nextOperatorOrdinal)
@@ -1253,6 +1255,20 @@ struct BindingValidator {
             }
         }
         return nested
+    }
+
+    private mutating func bind(_ sourceName: String, in scope: [String: BinderID]) -> BinderID {
+        let id = BinderID(ordinal: nextBinderOrdinal)
+        nextBinderOrdinal += 1
+        let activeNames = Set(scope.values.compactMap { binders[$0] })
+        var renderedName = sourceName
+        var suffix = id.ordinal
+        while activeNames.contains(renderedName) {
+            renderedName = "\(sourceName)__\(suffix)"
+            suffix += 1
+        }
+        binders[id] = renderedName
+        return id
     }
 
     private func duplicate(_ names: [String], at path: String) throws {

@@ -1,24 +1,40 @@
 /// The typed abstract consensus model used by VoteProof's refinement.
 public enum ByzPaxosConsensus {
-  public static let Value = FormalModuleParameter("Value")
-  public static let chosen = Var<SetExpr<TLAValue>>("chosen", SetExpr())
+  public static let valueParameter = FormalModuleParameter("Value")
 
-  public static let module = TLASpec("Consensus") {
-    Value
-    Variable(chosen)
-    Action("Next") {
-      .and(
-        .guard_(chosen.stateExpr == SetExpr<TLAValue>()),
-        ActionExpr.existsAction(
-          "candidate",
-          Value.stateExpr,
-          ActionExpr.assign(
-            .named(chosen.name),
-            StateExpr.singleton(StateExpr.variable("candidate"))
-          )
-        )
+  public static func chosen<Value: TLAValueType>(for _: Value.Type) -> Var<SetExpr<Value>> {
+    Var("chosen", SetExpr())
+  }
+
+  public static func module<Value: TLAValueType>(for type: Value.Type) -> TLASpec {
+    let chosen = chosen(for: type)
+    return sourceModule(chosenDeclaration: Variable(chosen))
+  }
+
+  static func parsedModule(choiceTypeName: String) -> TLASpec {
+    sourceModule(
+      chosenDeclaration: VarDecl(
+        "chosen",
+        .set([]),
+        generatedSwiftType: "SetExpr<\(choiceTypeName)>"
       )
+    )
+  }
+
+  private static func sourceModule(chosenDeclaration: VarDecl) -> TLASpec {
+    let chosen = StateExpr.variable(chosenDeclaration.name)
+    return TLASpec("Consensus") {
+      valueParameter
+      chosenDeclaration
+      Action("Next") {
+        .and(
+          .guard_(chosen == StateExpr.setLiteral([])),
+          ActionExpr.exists("candidate", from: valueParameter) { candidate in
+            .assign(.named(chosenDeclaration.name), .setLiteral([candidate]))
+          }
+        )
+      }
+      Eventually("Success", .notEqual(chosen, .setLiteral([])))
     }
-    Eventually("Success", .notEqual(chosen.stateExpr, SetExpr<TLAValue>().stateExpr))
   }
 }

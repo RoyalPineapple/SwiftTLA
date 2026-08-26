@@ -56,7 +56,7 @@ package struct VoteProofModel: Sendable {
             let consensusChosen = FormalCall(as: SetExpr<Value>.self, "chosen")
             let consensus = Instance(
                 "C",
-                of: ByzPaxosConsensus.module,
+                of: ByzPaxosConsensus.module(for: Value.self),
                 plusCalPhase: .postTranslation,
                 dependsOn: ["chosen"]
             )
@@ -65,8 +65,8 @@ package struct VoteProofModel: Sendable {
                 name: "Refines",
                 instance: consensus,
                 mappings: [
-                    .init(ByzPaxosConsensus.Value, from: consensusValue),
-                    .init(ByzPaxosConsensus.chosen, from: consensusChosen)
+                    .init(ByzPaxosConsensus.valueParameter, from: consensusValue),
+                    .init(ByzPaxosConsensus.chosen(for: Value.self), from: consensusChosen)
                 ]
             )
 

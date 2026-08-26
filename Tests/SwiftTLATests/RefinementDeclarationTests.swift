@@ -69,9 +69,9 @@ struct RefinementDeclarationTests {
   func parserBindsDeclaredInstance() throws {
     let source = """
     {
-      let C = Instance("C", of: ByzPaxosConsensus.module)
+      let C = Instance("C", of: ByzPaxosConsensus.module(for: Int.self))
       C
-      Refinement(name: "Refines", instance: C, operator: .spec, mappings: [.init(ByzPaxosConsensus.Value, from: 0), .init(ByzPaxosConsensus.chosen, from: 0)])
+      Refinement(name: "Refines", instance: C, operator: .spec, mappings: [.init(ByzPaxosConsensus.valueParameter, from: 0), .init(ByzPaxosConsensus.chosen(for: Int.self), from: 0)])
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
@@ -83,10 +83,10 @@ struct RefinementDeclarationTests {
     #expect(parsed.refinements.first?.name == "Refines")
     #expect(parsed.refinements.first?.instance.resolves(parsed.moduleInstances[0]) == true)
 
-    let instance = Instance("C", of: ByzPaxosConsensus.module)
+    let instance = Instance("C", of: ByzPaxosConsensus.module(for: Int.self))
     let builder = TLASpec("Parsed") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(ByzPaxosConsensus.Value, from: 0), .init(ByzPaxosConsensus.chosen, from: 0)])
+      Refinement(name: "Refines", instance: instance, mappings: [.init(ByzPaxosConsensus.valueParameter, from: 0), .init(ByzPaxosConsensus.chosen(for: Int.self), from: 0)])
     }
     #expect(parsed.moduleInstances == builder.moduleInstances)
     #expect(parsed.refinements == builder.refinements)
@@ -96,7 +96,7 @@ struct RefinementDeclarationTests {
   func parserRetainsTemporalTarget() throws {
     let source = """
     {
-      let C = Instance("C", of: ByzPaxosConsensus.module)
+      let C = Instance("C", of: ByzPaxosConsensus.module(for: Int.self))
       C
       Refinement(name: "Refines", instance: C, operator: .liveSpec, mappings: [])
     }

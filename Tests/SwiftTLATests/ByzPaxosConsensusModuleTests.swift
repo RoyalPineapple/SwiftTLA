@@ -5,10 +5,11 @@ import Testing
 struct ByzPaxosConsensusModuleTests {
   @Test("typed declarations render the abstract consensus transition system")
   func typedAbstractConsensusModel() throws {
-    let compilation = try ByzPaxosConsensus.module.compile()
+    let source = ByzPaxosConsensus.module(for: String.self)
+    let compilation = try source.compile()
     let module = compilation.renderedTLAModuleBundle().tla
 
-    #expect(ByzPaxosConsensus.module.formalOperatorDefinitions.isEmpty)
+    #expect(source.formalOperatorDefinitions.isEmpty)
     #expect(module.contains("CONSTANTS Value"))
     #expect(module.contains("VARIABLES chosen"))
     #expect(module.contains("Init == chosen = {}"))
@@ -16,6 +17,7 @@ struct ByzPaxosConsensusModuleTests {
     #expect(module.contains("chosen' = {"))
     #expect(module.contains("Spec =="))
     #expect(module.contains("Success == <>"))
+    #expect(compilation.machineSurfacePlan.variables.map(\.swiftType) == ["SetExpr<String>"])
   }
 
   @Test("direct module dependencies must name a local declaration")

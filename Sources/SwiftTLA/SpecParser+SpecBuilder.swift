@@ -756,16 +756,11 @@ extension ParserSession {
             }
         case "Import":
             guard let argument = call.arguments.first?.expression else {
-                result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
+                result.diagnostics.append(.init(message: "Import requires a concrete typed formal module.", source: call))
                 return
             }
-            guard let moduleName = formalModuleName(from: argument)
-            else {
+            guard let module = formalModule(from: argument) else {
                 result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
-                return
-            }
-            guard let module = BuiltInFormalModules.resolve(moduleName) else {
-                result.diagnostics.append(.init(message: "Import requires a built-in formal module.", source: call))
                 return
             }
             result.imports.append(module)
@@ -897,6 +892,17 @@ extension ParserSession {
     }
 
     private func refinementTargetName(_ expression: ExprSyntax) -> String? {
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "valueParameter",
+           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ByzPaxosConsensus" {
+            return "Value"
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "chosen",
+           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ByzPaxosConsensus" {
+            return "chosen"
+        }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return reference.baseName.text
         }
@@ -1027,10 +1033,8 @@ extension ParserSession {
             result.diagnostics.append(.init(message: "Instance requires a name and a named formal module.", source: call))
             return
         }
-        guard let moduleName = formalModuleName(from: moduleArgument),
-              let module = BuiltInFormalModules.resolve(moduleName)
-        else {
-            result.diagnostics.append(.init(message: "Instance requires a built-in formal module.", source: call))
+        guard let module = formalModule(from: moduleArgument) else {
+            result.diagnostics.append(.init(message: "Instance requires a concrete typed formal module.", source: call))
             return
         }
         let arguments: [ModuleArgument]
@@ -1114,6 +1118,22 @@ extension ParserSession {
               let module = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
         else { return nil }
         return module
+    }
+
+    private func formalModule(from expression: ExprSyntax) -> TLASpec? {
+        if let moduleName = formalModuleName(from: expression) {
+            return BuiltInFormalModules.resolve(moduleName)
+        }
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.text == "module",
+              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ByzPaxosConsensus",
+              let typeExpression = call.arguments.first(where: { $0.label?.text == "for" })?.expression,
+              let metatype = typeExpression.as(MemberAccessExprSyntax.self),
+              metatype.declName.baseName.text == "self",
+              let choiceTypeName = terminalTypeName(in: metatype.base)
+        else { return nil }
+        return ByzPaxosConsensus.parsedModule(choiceTypeName: choiceTypeName)
     }
 
     func mergeVariableDeclaration(

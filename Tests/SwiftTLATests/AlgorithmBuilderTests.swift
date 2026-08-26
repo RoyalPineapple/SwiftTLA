@@ -210,8 +210,8 @@ struct AlgorithmBuilderTests {
             .compile()
             .renderedTLAModuleBundle()
             .tla
-        #expect(module.contains("advance(__swift_tla_binder_"))
-        #expect(!module.contains("advance(process)"))
+        #expect(module.contains("advance(process)"))
+        #expect(!module.contains("__swift_tla_binder_"))
     }
 
     @Test("algorithm builder preserves the order of many elements")

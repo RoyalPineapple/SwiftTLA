@@ -929,7 +929,6 @@ enum BuiltInFormalModules {
     case "Functions", "FunctionsModule": FunctionsModule.module
     case "Util", "KeyValueStoreUtil": KeyValueStoreUtil.module
     case "ClientCentric": ClientCentric.module
-    case "Consensus", "ByzPaxosConsensus": ByzPaxosConsensus.module
     case "ZSequences": ZSequences.module
     default: nil
     }

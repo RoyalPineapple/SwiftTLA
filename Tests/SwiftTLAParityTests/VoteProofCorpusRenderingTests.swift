@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 @testable import UpstreamParity
 
 struct VoteProofCorpusRenderingTests {
@@ -17,16 +17,17 @@ struct VoteProofCorpusRenderingTests {
     func specMacroCompilationPreservesFormalStructure() throws {
         let source = VoteProofModel.spec
         let compilation = try source.compile()
+        let lowered = try source.loweredSourceModel()
         #expect(compilation.description.name == "VoteProof")
         #expect(Set(compilation.description.variables.map(\.name)).isSuperset(of: Set(["votes", "maxBal"])))
-        #expect(Set(source.formalOperatorDefinitions.map(\.name)) == [
+        #expect(Set(lowered.formalOperatorDefinitions.map(\.name)) == [
             "ChosenIn", "SafeAt", "chosen", "VoteProofTypeOK",
             "VoteProofSingleVotePerBallot", "VoteProofVotesAreSafe",
             "VoteProofAgreement", "VoteProofChosenValuesAgree"
         ])
         #expect(Set(compilation.description.invariants) == ["TypeOK", "VInv1", "VInv2", "VInv3", "VInv4"])
         #expect(compilation.description.refinements == ["Refines"])
-        let definitions = Dictionary(uniqueKeysWithValues: source.formalOperatorDefinitions.map {
+        let definitions = Dictionary(uniqueKeysWithValues: lowered.formalOperatorDefinitions.map {
             ($0.name, $0)
         })
         #expect(definitions["VoteProofVotesAreSafe"]?.plusCalDependencies == ["SafeAt"])
@@ -52,10 +53,10 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("LET SA["))
         #expect(!bundle.root.tla.contains("LET RECURSIVE SA"))
         #expect(bundle.root.tla.contains("IN SA[value0]"))
-        #expect(bundle.root.tla.contains("THEN TRUE ELSE ((SA["))
+        #expect(bundle.root.tla.contains("THEN TRUE ELSE (SA["))
         #expect(bundle.root.tla.contains(")) /\\ \\A "))
         #expect(bundle.root.tla.contains(" \\in ("))
-        #expect(bundle.root.tla.contains("ChosenIn(b, v) =="))
+        #expect(bundle.root.tla.contains("ChosenIn(value0, value1) =="))
         #expect(bundle.root.tla.contains("VoteProofTypeOK =="))
         #expect(bundle.root.tla.contains("TypeOK == VoteProofTypeOK"))
         #expect(bundle.root.tla.contains("VInv4 == VoteProofChosenValuesAgree"))
@@ -66,15 +67,15 @@ struct VoteProofCorpusRenderingTests {
         #expect(!plusCal.contains("LET RECURSIVE SA"))
         let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))
         let defineRange = try #require(plusCal.range(of: "define {"))
-        let defineEndRange = try #require(plusCal.range(of: "}\n\nfair process"))
+        let defineEndRange = try #require(plusCal.range(of: "}\n\nprocess"))
         let refinesRange = try #require(plusCal.range(of: "Refines == C!Spec"))
         let instanceRange = try #require(plusCal.range(of: "C == INSTANCE Consensus"))
         let safeAtRange = try #require(plusCal.range(of: "SafeAt(value0, value1) =="))
-        let chosenRange = try #require(plusCal.range(of: "ChosenIn(b, v) =="))
+        let chosenRange = try #require(plusCal.range(of: "ChosenIn(value0, value1) =="))
         #expect(plusCal.components(separatedBy: "C == INSTANCE Consensus").count == 2)
         #expect(defineRange.lowerBound > algorithmRange.lowerBound)
         #expect(defineRange.lowerBound < safeAtRange.lowerBound)
-        #expect(defineEndRange.lowerBound < chosenRange.lowerBound)
+        #expect(chosenRange.lowerBound < defineEndRange.lowerBound)
         #expect(chosenRange.lowerBound < instanceRange.lowerBound)
         #expect(instanceRange.lowerBound < refinesRange.lowerBound)
     }

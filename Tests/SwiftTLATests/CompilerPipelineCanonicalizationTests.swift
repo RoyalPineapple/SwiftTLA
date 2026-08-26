@@ -176,8 +176,8 @@ struct CompilerPipelineCanonicalizationTests {
         let module = compilation.renderedTLAModuleBundle().root.tla
 
         #expect(first != second)
-        #expect(module.contains("\\A __swift_tla_binder_0 \\in"))
-        #expect(module.contains("\\A __swift_tla_binder_1 \\in"))
+        #expect(module.contains("\\A value \\in"))
+        #expect(module.contains("\\A value__1 \\in"))
     }
 
     @Test("macro compilation uses the explicit formal module name")
@@ -1182,7 +1182,8 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try successors.map { successor in
             try successor.arguments.map { try $0.rendered(using: compilation.layout) }
         } == declaration.metadata.members.map { [$0] })
-        #expect(rendered.contains("advance(__swift_tla_binder_0) =="))
+        #expect(rendered.contains("advance("))
+        #expect(!rendered.contains("__swift_tla_binder_"))
         #expect(rendered.contains("advance__0 == advance(DevicesMember0)"))
         #expect(rendered.contains("advance__1 == advance(DevicesMember1)"))
         #expect(repeated.identity == compilation.identity)
