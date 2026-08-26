@@ -1828,7 +1828,7 @@ public final class ParserSession {
 /// session, while a full specification parse creates one session explicitly.
 public enum SpecParser {
     public typealias ParsedSpecComponents = ParserSession.ParsedSpecComponents
-    public typealias SymmetricCollectionParseDiagnostic = ParserSession.SymmetricCollectionParseDiagnostic
+    public typealias SourceParseDiagnostic = ParserSession.SourceParseDiagnostic
 
     public static func parseSpecClosure(
         _ closure: ClosureExprSyntax,

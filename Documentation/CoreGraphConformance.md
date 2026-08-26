@@ -31,31 +31,30 @@ or setup fails; it must not silently accept a changed upstream release asset.
 ## Evidence and diagnosis
 
 The command writes fresh evidence under `.build/core-conformance-evidence`.
-Each case retains the input identity, toolchain provenance, TLC JSONL stream,
-canonical Swift and TLC runs, `core-decision.json`, and relevant TLC logs.
-Checked-in baseline and control evidence lives under
-`Verification/CoreConformance/baselines/` and
-`Verification/CoreConformance/fixtures/`.
+Each case retains the TLC invocation and raw output, one complete canonical
+graph stream from each engine, and one exact comparison record.
 
 ```text
-swift-run.json + swift-run.graph/*.jsonl
-tlc-run.json   + tlc-run.graph/*.jsonl
-                 │
-                 ▼
-        exact canonical comparison
-                 │
-                 ▼
-          core-decision.json
+swift-graph.jsonl ─┐
+                   ├→ exact canonical comparison → comparison.json
+tlc-graph.jsonl ───┘
 ```
 
-`core-decision.json` references each run and graph chunk by SHA-256. The reader
-verifies the references, reconstructs both runs, and repeats the exact
-comparison.
+Each graph stream contains a header, sorted initial states, sorted states,
+sorted labeled edges with multiplicity, diagnostics, counterexample traces,
+and a final completion record. The completion record declares the outcome and
+exact record counts. A missing, truncated, failed, or bounded completion cannot
+represent an exact result.
 
-When a run fails, first inspect its `core-decision.json`, then the canonical
-graphs and `logs/` in that case's evidence directory. A graph mismatch is
-classified by relation (for example, an initial state, state binding, edge,
-outcome, or mapping difference); do not reduce it to a count mismatch.
+`comparison.json` records whether the two complete graphs match and includes
+the first structured differences when they do not. Exact equality is decided
+directly from the in-memory canonical runs; the retained graph streams explain
+that decision.
+
+When a run fails, inspect `comparison.json`, then `swift-graph.jsonl`,
+`tlc-graph.jsonl`, and `logs/` in that case's evidence directory. A graph
+mismatch is classified by relation, such as initial state, state binding,
+edge, outcome, or mapping difference.
 
 Counterexample traces have a different job. They explain an invariant or
 other checker failure and may be replayed, but they are not proof that the

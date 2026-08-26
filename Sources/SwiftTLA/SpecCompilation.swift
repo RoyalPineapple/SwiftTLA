@@ -93,13 +93,12 @@ struct CompiledRefinement: Sendable {
 
 /// The point at which a formal specification becomes available to consumers.
 ///
-/// A compiled specification owns the sole semantic `TLASpec` payload. Later
-/// pipeline stages can attach validated module and generated-machine plans
-/// without reparsing or rebuilding that payload.
+/// A compiled specification owns the semantic model and its validated output plans.
 public struct CompiledSpecification: Sendable {
     package let spec: TLASpec
     package let formalModuleClosure: FormalModuleClosure
     public let identity: CompilationIdentity
+    package let machineSurfacePlan: MachineSurfacePlan
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
     let semantics: CompiledSemantics
@@ -251,6 +250,7 @@ public struct CompiledSpecification: Sendable {
         spec: TLASpec,
         formalModuleClosure: FormalModuleClosure,
         identity: CompilationIdentity,
+        machineSurfacePlan: MachineSurfacePlan,
         layout: CompiledLayout,
         bindings: CompiledBindingTable,
         semantics: CompiledSemantics,
@@ -261,6 +261,7 @@ public struct CompiledSpecification: Sendable {
         self.spec = spec
         self.formalModuleClosure = formalModuleClosure
         self.identity = identity
+        self.machineSurfacePlan = machineSurfacePlan
         self.layout = layout
         self.bindings = bindings
         self.semantics = semantics
@@ -466,6 +467,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidSymmetricCollection
         case duplicateRecordField
         case compilationIdentityMismatch
+        case unsupportedGeneratedValueShape
         case emptyFormalModuleClosure
         case cyclicFormalModule
         case conflictingFormalModuleSource
@@ -546,12 +548,10 @@ public extension SpecParser.ParsedSpecComponents {
         }
         let spec = TLASpec(
             name: specificationName,
-            variables: variables.map(\.formal),
+            variables: variables,
             constants: constants,
             formalParameters: formalParameters,
-            actions: actions.map {
-                NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings)
-            },
+            actions: actions,
             invariants: invariants.map { NamedInvariant(name: $0.name, body: $0.body) } + additionalInvariants,
             temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: fairness,
@@ -562,7 +562,7 @@ public extension SpecParser.ParsedSpecComponents {
             moduleInstances: moduleInstances,
             refinements: refinements,
             symmetrySets: symmetrySets,
-            symmetricCollections: symmetricCollections.map(\.declaration),
+            symmetricCollections: symmetricCollections,
             algorithmFidelityTokens: algorithmFidelityTokens,
             sourceAlgorithms: sourceAlgorithms
         )
@@ -612,6 +612,8 @@ public extension TLASpec {
         let bindings = validator.bindingTable()
         let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
         let compiledRefinements = try compiledRefinements(bindings: bindings, closure: closure, layout: layout)
+        let identity = compilationIdentity
+        let machineSurfacePlan = try MachineSurfacePlan(layout: layout)
         let directModuleSections = try directModuleSectionPlan(
             layout: layout,
             bindings: bindings,
@@ -640,7 +642,8 @@ public extension TLASpec {
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
-            identity: compilationIdentity,
+            identity: identity,
+            machineSurfacePlan: machineSurfacePlan,
             layout: layout,
             bindings: bindings,
             semantics: semantics,
@@ -1455,7 +1458,11 @@ private struct CanonicalSpecificationEncoder {
         }
         list("symmetrySets", symmetrySets) { $0 }
         let symmetricCollections = spec.symmetricCollections.map {
-            node("symmetric-collection", [$0.name, String($0.verificationScope), canonicalValue($0.initial)])
+            node("symmetric-collection", [
+                $0.name,
+                String($0.verificationScope),
+                canonicalValue($0.initial)
+            ])
         }
         list("symmetricCollections", symmetricCollections) { $0 }
         list("algorithmTokens", spec.algorithmFidelityTokens) { $0.encodedCanonicalForm }
@@ -1484,8 +1491,12 @@ private struct CanonicalSpecificationEncoder {
             action.name,
             canonicalActionExpression(action.body),
             canonicalList(action.bindings.map {
-                node("action-binding", [$0.name, canonicalList($0.values.map(canonicalValue))])
-            })
+                node("action-binding", [
+                    $0.name,
+                    canonicalList($0.values.map(canonicalValue))
+                ])
+            }),
+            canonicalOptional(action.generatedSymmetricCollectionName)
         ])
     }
 

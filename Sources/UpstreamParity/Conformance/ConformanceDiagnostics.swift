@@ -3,22 +3,22 @@ import Foundation
 /// A retained input or output that explains a conformance decision.
 ///
 /// `location` identifies the recorded module, configuration, graph, or log.
-public struct ConformanceEvidenceLocation: Equatable, Sendable {
-  public let role: String
-  public let location: String
+package struct ConformanceEvidenceLocation: Equatable, Sendable {
+  package let role: String
+  package let location: String
 
-  public init(role: String, location: String) {
+  package init(role: String, location: String) {
     self.role = role
     self.location = location
   }
 }
 
 /// Captured tool output retained with a failure report.
-public struct ConformanceToolOutput: Equatable, Sendable {
-  public let stream: String
-  public let content: String
+package struct ConformanceToolOutput: Equatable, Sendable {
+  package let stream: String
+  package let content: String
 
-  public init(stream: String, content: String) {
+  package init(stream: String, content: String) {
     self.stream = stream
     self.content = content
   }
@@ -27,16 +27,16 @@ public struct ConformanceToolOutput: Equatable, Sendable {
 /// A diagnostic that answers the next useful investigation question.
 ///
 /// The fields let a UI present the diagnostic and retained evidence directly.
-public struct ConformanceFailureReport: Equatable, Sendable {
-  public let whatFailed: String
-  public let whereItFailed: String
-  public let expected: String
-  public let actual: String
-  public let nextSafeAction: String
-  public let evidence: [ConformanceEvidenceLocation]
-  public let toolOutput: [ConformanceToolOutput]
+package struct ConformanceFailureReport: Equatable, Sendable {
+  package let whatFailed: String
+  package let whereItFailed: String
+  package let expected: String
+  package let actual: String
+  package let nextSafeAction: String
+  package let evidence: [ConformanceEvidenceLocation]
+  package let toolOutput: [ConformanceToolOutput]
 
-  public init(
+  package init(
     whatFailed: String,
     whereItFailed: String,
     expected: String,
@@ -59,8 +59,8 @@ extension ConformanceDifference {
   /// A concrete explanation of this exact graph difference.
   ///
   /// In core conformance, `expected` is TLC and `actual` is SwiftTLA.
-  /// `tlc-run.json` and `swift-run.json` contain the complete graph records.
-  public var failureReport: ConformanceFailureReport {
+  /// `tlc-graph.jsonl` and `swift-graph.jsonl` contain the complete graph records.
+  package var failureReport: ConformanceFailureReport {
     switch self {
     case .mapping(let messages):
       return .init(
@@ -76,7 +76,7 @@ extension ConformanceDifference {
         where: "canonical initial states",
         expected: expected,
         actual: actual,
-        next: "Inspect the first differing state in tlc-run.json and swift-run.json, then compare the Init predicates."
+        next: "Inspect the first differing state in tlc-graph.jsonl and swift-graph.jsonl, then compare the Init predicates."
       )
     case .states(let expected, let actual):
       return setDifferenceReport(
@@ -84,19 +84,17 @@ extension ConformanceDifference {
         where: "canonical state space",
         expected: expected,
         actual: actual,
-        next: "Inspect the first differing state in tlc-run.json and swift-run.json, then compare the action guards and assignments that can reach it."
+        next: "Inspect the first differing state in tlc-graph.jsonl and swift-graph.jsonl, then compare the action guards and assignments that can reach it."
       )
     case .edges(let expected, let actual):
       return edgeDifferenceReport(expected: expected, actual: actual)
-    case .observations(let expected, let actual):
-      return observationDifferenceReport(expected: expected, actual: actual)
     case .outcome(let expected, let actual):
       return .init(
         whatFailed: "The verification outcomes differ.",
         whereItFailed: "finite conformance outcome",
         expected: "TLC outcome: \(describe(expected))",
         actual: "SwiftTLA outcome: \(describe(actual))",
-        nextSafeAction: "Inspect tlc-run.json and swift-run.json outcomes and their retained traces before changing the model."
+        nextSafeAction: "Inspect tlc-graph.jsonl and swift-graph.jsonl outcomes and their retained traces before changing the model."
       )
     case .errors(let expected, let actual):
       return .init(
@@ -112,7 +110,7 @@ extension ConformanceDifference {
         whereItFailed: "canonical trace evidence",
         expected: describe(expected),
         actual: describe(actual),
-        nextSafeAction: "Inspect the first differing trace step in tlc-run.json and swift-run.json before changing the model."
+        nextSafeAction: "Inspect the first differing trace step in tlc-graph.jsonl and swift-graph.jsonl before changing the model."
       )
     }
   }
@@ -120,14 +118,14 @@ extension ConformanceDifference {
 
 extension ExactFiniteTLCComparison {
   /// One actionable report per detected difference, in comparison order.
-  public var failureReports: [ConformanceFailureReport] {
+  package var failureReports: [ConformanceFailureReport] {
     differences.map(\.failureReport)
   }
 }
 
 extension TLCProcessError {
   /// A structured tool failure with source inputs and any captured output.
-  public func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
+  package func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
     let evidence = [
       ConformanceEvidenceLocation(role: "TLA+ module", location: request.moduleFileName),
       ConformanceEvidenceLocation(role: "TLC configuration", location: request.configurationFileName),
@@ -142,14 +140,17 @@ extension TLCProcessError {
         actual: "The process exceeded \(request.timeout) seconds and was terminated.",
         nextSafeAction: "Inspect the retained stdout and stderr, then reduce the declared finite bounds or raise the case timeout deliberately.",
         evidence: evidence,
-        toolOutput: [.init(stream: "stdout", content: sanitized(stdout)), .init(stream: "stderr", content: sanitized(stderr))]
+        toolOutput: [
+          .init(stream: "stdout", content: redactingSecrets(in: stdout)),
+          .init(stream: "stderr", content: redactingSecrets(in: stderr))
+        ]
       )
     case .failedToStart(let message):
       return .init(
         whatFailed: "TLC could not start.",
         whereItFailed: "TLC primary invocation for case \(request.caseID)",
         expected: "The configured Java executable and TLC class path launch TLC.",
-        actual: sanitized(message),
+        actual: redactingSecrets(in: message),
         nextSafeAction: "Verify the Java executable, TLC JAR, bridge classes, and working directory in the retained invocation snapshot.",
         evidence: evidence
       )
@@ -228,7 +229,7 @@ private func edgeDifferenceReport(
       whatFailed: "The labeled transition multisets differ.", whereItFailed: "canonical transition relation",
       expected: "TLC and SwiftTLA retain the same transition occurrences.",
       actual: "The occurrence counts differ, but no stable witness was available.",
-      nextSafeAction: "Inspect the retained edges in tlc-run.json and swift-run.json."
+      nextSafeAction: "Inspect the retained edges in tlc-graph.jsonl and swift-graph.jsonl."
     )
   }
   return .init(
@@ -236,23 +237,7 @@ private func edgeDifferenceReport(
     whereItFailed: "action \(witness.action) from \(witness.source.canonicalEncoding) to \(witness.target.canonicalEncoding)",
     expected: "TLC permits this transition \(expected[witness, default: 0]) time(s).",
     actual: "SwiftTLA permits this transition \(actual[witness, default: 0]) time(s).",
-    nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc-run.json and swift-run.json."
-  )
-}
-
-private func observationDifferenceReport(
-  expected: [CanonicalStateKey: CanonicalStateObservation],
-  actual: [CanonicalStateKey: CanonicalStateObservation]
-) -> ConformanceFailureReport {
-  let witness = Set(expected.keys).union(actual.keys).sorted().first { expected[$0] != actual[$0] }
-  let expectedObservation = witness.flatMap { expected[$0] }
-  let actualObservation = witness.flatMap { actual[$0] }
-  return .init(
-    whatFailed: "The enabled-action observation differs.",
-    whereItFailed: witness.map { "canonical state \($0.canonicalEncoding)" } ?? "canonical state observations",
-    expected: describe(expectedObservation),
-    actual: describe(actualObservation),
-    nextSafeAction: "Compare the enabled action guards at the named state in tlc-run.json and swift-run.json."
+    nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc-graph.jsonl and swift-graph.jsonl."
   )
 }
 
@@ -265,7 +250,10 @@ private func processFailureReport(
     expected: expected, actual: actual,
     nextSafeAction: "Inspect the retained TLC \(phase) stdout and stderr, then correct the trace configuration or the emitted module bundle.",
     evidence: toolEvidence(for: request),
-    toolOutput: [.init(stream: "stdout", content: sanitized(outputs.stdout)), .init(stream: "stderr", content: sanitized(outputs.stderr))]
+    toolOutput: [
+      .init(stream: "stdout", content: redactingSecrets(in: outputs.stdout)),
+      .init(stream: "stderr", content: redactingSecrets(in: outputs.stderr))
+    ]
   )
 }
 
@@ -275,12 +263,12 @@ private func executionFailureReport(
 ) -> ConformanceFailureReport {
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
-    expected: expected, actual: sanitized(error.message),
+    expected: expected, actual: redactingSecrets(in: error.message),
     nextSafeAction: "Inspect the retained invocation snapshot and TLC output before retrying.",
     evidence: toolEvidence(for: request),
     toolOutput: [
-      error.partialStdout.map { .init(stream: "stdout", content: sanitized($0)) },
-      error.partialStderr.map { .init(stream: "stderr", content: sanitized($0)) }
+      error.partialStdout.map { .init(stream: "stdout", content: redactingSecrets(in: $0)) },
+      error.partialStderr.map { .init(stream: "stderr", content: redactingSecrets(in: $0)) }
     ].compactMap { $0 }
   )
 }
@@ -301,11 +289,6 @@ private func describe(_ value: CanonicalOutcome) -> String {
   case .incomplete(let reason): "incomplete: \(reason)"
   case .executionError(let reason): "execution error: \(reason)"
   }
-}
-
-private func describe(_ observation: CanonicalStateObservation?) -> String {
-  guard let observation else { return "no observation retained" }
-  return "enabled actions \(observation.enabledActions.sorted()); terminal \(observation.isTerminal)."
 }
 
 private func describe(_ diagnostics: [CanonicalDiagnostic]) -> String {

@@ -9,12 +9,12 @@ import SwiftTLAMacros
 /// so this source-faithful model is checked by the builder/parser fidelity
 /// gate rather than added to the finite graph-count catalogue.
 @TLAModel
-public struct AddTwoModel: Sendable {
+package struct AddTwoModel: Sendable {
     private enum Label: String, CaseIterable {
         case increase
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("AddTwo") {
             Extends(.naturals)
             Algorithm("Increase", scoped: { scope in

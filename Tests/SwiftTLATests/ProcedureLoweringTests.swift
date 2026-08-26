@@ -175,6 +175,8 @@ struct ProcedureLoweringTests {
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
         let spec = try AlgorithmLowerer.lower(model)
+        let procedureAction = try #require(spec.actions.first { $0.name == "procedure.outer.enter" })
+        #expect(procedureAction.bindings.map(\.generatedSwiftType) == ["Worker"])
         let (compilation, initial) = try initialState(of: spec)
         let oneInOuter = try apply("start", process: .int(1), in: compilation, to: initial)
         let bothInOuter = try apply("start", process: .int(2), in: compilation, to: oneInOuter)

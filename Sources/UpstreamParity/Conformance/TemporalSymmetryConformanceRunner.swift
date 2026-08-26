@@ -1,12 +1,12 @@
 import Foundation
 import SwiftTLA
 
-public struct TemporalSymmetryCaseRun: Equatable, Sendable {
-  public let caseID: String
-  public let outcome: TemporalSymmetryOutcome
-  public let diagnostic: String
+package struct TemporalSymmetryCaseRun: Equatable, Sendable {
+  package let caseID: String
+  package let outcome: TemporalSymmetryOutcome
+  package let diagnostic: String
 
-  public init(
+  package init(
     caseID: String,
     outcome: TemporalSymmetryOutcome,
     diagnostic: String
@@ -20,15 +20,15 @@ public struct TemporalSymmetryCaseRun: Equatable, Sendable {
   }
 }
 
-public struct TemporalSymmetryConformanceRunnerInput: Sendable {
-  public let cases: TemporalSymmetryCases
-  public let runID: UUID
-  public let projectRoot: URL
-  public let outputDirectory: URL
-  public let toolRoot: URL
-  public let referencePin: TLCReferencePin
+package struct TemporalSymmetryConformanceRunnerInput: Sendable {
+  package let cases: TemporalSymmetryCases
+  package let runID: UUID
+  package let projectRoot: URL
+  package let outputDirectory: URL
+  package let toolRoot: URL
+  package let referencePin: TLCReferencePin
 
-  public init(
+  package init(
     cases: TemporalSymmetryCases,
     runID: UUID,
     projectRoot: URL,
@@ -45,11 +45,11 @@ public struct TemporalSymmetryConformanceRunnerInput: Sendable {
   }
 }
 
-public struct TemporalSymmetryConformanceRunner: Sendable {
-  public init() {}
+package struct TemporalSymmetryConformanceRunner: Sendable {
+  package init() {}
 
   @discardableResult
-  public func run(_ input: TemporalSymmetryConformanceRunnerInput) throws -> [TemporalSymmetryCaseRun] {
+  package func run(_ input: TemporalSymmetryConformanceRunnerInput) throws -> [TemporalSymmetryCaseRun] {
     let root = try ConformanceEvidence.projectRoot(input.projectRoot)
     let output = try ConformanceEvidence.outputDirectory(input.outputDirectory, beneath: root)
     return try input.cases.cases.map { declaredCase in
@@ -256,28 +256,16 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       "raw": SHA256.hex(Data(rawBundle.cfg.utf8)),
       "reduced": SHA256.hex(Data(reducedBundle.cfg.utf8))
     ], to: configurationURL)
-    let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.json")
-    let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.json")
-    let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.json")
-    let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.json")
+    let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.jsonl")
+    let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.jsonl")
+    let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.jsonl")
+    let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.jsonl")
     let configurationDigest = SHA256.hex(try Data(contentsOf: configurationURL))
     let swiftReducedRunID = UUID()
-    try CanonicalRunEvidence.write(
-      swiftRaw,
-      correlation: .init(caseID: declaredCase.id, runID: correlation.swiftRunID, engine: .swift),
-      to: rawSwiftURL)
-    try CanonicalRunEvidence.write(
-      swiftReduced,
-      correlation: .init(caseID: declaredCase.id, runID: swiftReducedRunID, engine: .swift),
-      to: reducedSwiftURL)
-    try CanonicalRunEvidence.write(
-      rawTLC,
-      correlation: .init(caseID: declaredCase.id, runID: correlation.tlcRunID, engine: .tlc),
-      to: rawTLCURL)
-    try CanonicalRunEvidence.write(
-      reducedTLC,
-      correlation: .init(caseID: declaredCase.id, runID: reducedRunID, engine: .tlc),
-      to: reducedTLCURL)
+    try CanonicalGraphRecords.write(swiftRaw, to: rawSwiftURL)
+    try CanonicalGraphRecords.write(swiftReduced, to: reducedSwiftURL)
+    try CanonicalGraphRecords.write(rawTLC, to: rawTLCURL)
+    try CanonicalGraphRecords.write(reducedTLC, to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
       caseID: declaredCase.id, configuration: declaredCase.configuration, correlation: correlation,
       swiftRaw: try symmetryExploration(.swift, false, correlation.swiftRunID, swiftRaw, configurationDigest, rawSwiftURL, projectRoot),
@@ -377,7 +365,7 @@ extension TemporalSymmetryConformanceRunner {
   ) throws -> SymmetryExploration {
     try SymmetryExploration(
       engine: engine, reduced: reduced, runID: runID,
-      graphID: CanonicalGraphRecords.digest(for: run.graph),
+      graphID: try CanonicalGraphRecords.digest(for: run.graph),
       initialStateIDs: run.graph.initialStateKeys.map(\.canonicalEncoding), stateIDs: run.graph.states.keys.map(\.canonicalEncoding),
       transitions: try run.graph.edgeOccurrences.map {
         try SymmetryRawTransitionWitness(
@@ -419,14 +407,14 @@ extension TemporalSymmetryConformanceRunner {
       "caseID": declaredCase.id,
       "correlation": correlation.tlcRunID.uuidString.lowercased(),
       "status": String(describing: analysis.status),
-      "graphID": CanonicalGraphRecords.digest(for: swiftRun.graph)
+      "graphID": try CanonicalGraphRecords.digest(for: swiftRun.graph)
     ], to: resultURL)
     let initial = swiftRun.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
     switch analysis.status {
     case .satisfied:
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .satisfied,
-        graphID: CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
+        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .notApplicable)
     case .violated:
       guard let witness = analysis.witness else {
@@ -444,12 +432,12 @@ extension TemporalSymmetryConformanceRunner {
       try ConformanceEvidence.writeCanonical(lasso, to: traceURL)
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .violated,
-        graphID: CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
+        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .available, traceEvidence: try ConformanceEvidence.reference(for: traceURL, beneath: projectRoot), lasso: lasso)
     case .unavailable:
       return try TemporalPropertyResult(
         availability: .unavailable, outcome: nil,
-        graphID: CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
+        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .unavailable)
     }
   }
@@ -512,18 +500,18 @@ private extension Dictionary where Key == StateGraph.StateID, Value == Bool {
   }
 }
 
-public struct TemporalSymmetryModelDefinition: Sendable {
-  public let spec: TLASpec
-  public let expectedStateCount: Int
-  public let maxStates: Int
+package struct TemporalSymmetryModelDefinition: Sendable {
+  package let spec: TLASpec
+  package let expectedStateCount: Int
+  package let maxStates: Int
 }
 
 private struct ConformanceMember: Identifiable, Sendable {
   let id: Int
 }
 
-public enum TemporalSymmetryModelCatalog {
-  public static func model(for declaredCase: TemporalSymmetryCase) throws -> TemporalSymmetryModelDefinition {
+package enum TemporalSymmetryModelCatalog {
+  package static func model(for declaredCase: TemporalSymmetryCase) throws -> TemporalSymmetryModelDefinition {
     switch declaredCase.swiftSpec {
     case "TemporalMatrix":
       return try temporalMatrix(configuration: declaredCase.configuration)

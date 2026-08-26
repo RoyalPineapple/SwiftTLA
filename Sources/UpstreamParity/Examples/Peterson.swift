@@ -3,15 +3,15 @@ import SwiftTLAMacros
 
 /// Peterson's two-process mutual-exclusion algorithm from the upstream
 /// PlusCal auxiliary-variables collection.
-public struct PetersonModel: Sendable {
-    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
+package struct PetersonModel: Sendable {
+    package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -23,7 +23,7 @@ public struct PetersonModel: Sendable {
         case a4
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Peterson") {
             Extends(.integers)
             Algorithm("Peterson", scoped: { scope in
@@ -74,7 +74,7 @@ public struct PetersonModel: Sendable {
 }
 
 extension Example {
-    public static let petersonTwoProcess = Entry(
+    package static let petersonTwoProcess = Entry(
         id: "locks_auxiliary_vars/Peterson_N2",
         upstreamSpec: "locks_auxiliary_vars",
         upstreamModule: "specifications/locks_auxiliary_vars/Peterson.tla",

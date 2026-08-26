@@ -1,21 +1,21 @@
 import Foundation
 
-public struct TemporalComparison: Equatable, Codable, Sendable {
-  public static let schema = "TemporalComparison"
+package struct TemporalComparison: Equatable, Codable, Sendable {
+  package static let schema = "TemporalComparison"
 
-  public let schema: String
-  public let caseID: String
-  public let configuration: TemporalSymmetryConfiguration
-  public let correlation: TemporalSymmetryCaseRunCorrelation
-  public let outcome: TemporalSymmetryOutcome
-  public let swiftResult: TemporalPropertyResult
-  public let tlcResult: TemporalPropertyResult
-  public let swiftEvidence: CoreEvidenceReference
-  public let tlcEvidence: CoreEvidenceReference
-  public let completeGraphEvidence: TemporalCompleteGraphEvidence?
-  public let diagnosticCode: TemporalSymmetryDiagnosticCode
+  package let schema: String
+  package let caseID: String
+  package let configuration: TemporalSymmetryConfiguration
+  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let outcome: TemporalSymmetryOutcome
+  package let swiftResult: TemporalPropertyResult
+  package let tlcResult: TemporalPropertyResult
+  package let swiftEvidence: CoreEvidenceReference
+  package let tlcEvidence: CoreEvidenceReference
+  package let completeGraphEvidence: TemporalCompleteGraphEvidence?
+  package let diagnosticCode: TemporalSymmetryDiagnosticCode
 
-  public init(
+  package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
     correlation: TemporalSymmetryCaseRunCorrelation,
@@ -41,7 +41,7 @@ public struct TemporalComparison: Equatable, Codable, Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     try configuration.validate()
     try swiftEvidence.validate()
     try tlcEvidence.validate()
@@ -91,7 +91,7 @@ public struct TemporalComparison: Equatable, Codable, Sendable {
     case completeGraphEvidence, diagnosticCode
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     guard try container.decode(String.self, forKey: .schema) == Self.schema else {
       throw ConformanceGovernanceError.invalidSchema("TemporalComparison")
@@ -110,14 +110,14 @@ public struct TemporalComparison: Equatable, Codable, Sendable {
   }
 }
 
-public struct SymmetryOrbit: Equatable, Codable, Sendable {
-  public let members: [String]
-  public let semanticRepresentative: String
-  public let swiftExecutableRepresentative: String
-  public let tlcExecutableRepresentative: String
-  public var size: Int { members.count }
+package struct SymmetryOrbit: Equatable, Codable, Sendable {
+  package let members: [String]
+  package let semanticRepresentative: String
+  package let swiftExecutableRepresentative: String
+  package let tlcExecutableRepresentative: String
+  package var size: Int { members.count }
 
-  public init(
+  package init(
     members: [String],
     semanticRepresentative: String,
     swiftExecutableRepresentative: String,
@@ -138,7 +138,7 @@ public struct SymmetryOrbit: Equatable, Codable, Sendable {
     case members, semanticRepresentative, swiftExecutableRepresentative, tlcExecutableRepresentative
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       members: container.decode([String].self, forKey: .members),
@@ -148,20 +148,20 @@ public struct SymmetryOrbit: Equatable, Codable, Sendable {
   }
 }
 
-public struct SymmetryExploration: Equatable, Codable, Sendable {
-  public let engine: SymmetryExplorationEngine
-  public let reduced: Bool
-  public let runID: UUID
-  public let graphID: String
-  public let initialStateIDs: [String]
-  public let stateIDs: [String]
-  public let transitions: [SymmetryRawTransitionWitness]
-  public let declaredConfigurationSHA256: String
-  public let graphEvidence: CoreEvidenceReference
-  public let invariantOutcome: SymmetryApplicableOutcome
-  public let deadlockOutcome: SymmetryApplicableOutcome
+package struct SymmetryExploration: Equatable, Codable, Sendable {
+  package let engine: SymmetryExplorationEngine
+  package let reduced: Bool
+  package let runID: UUID
+  package let graphID: String
+  package let initialStateIDs: [String]
+  package let stateIDs: [String]
+  package let transitions: [SymmetryRawTransitionWitness]
+  package let declaredConfigurationSHA256: String
+  package let graphEvidence: CoreEvidenceReference
+  package let invariantOutcome: SymmetryApplicableOutcome
+  package let deadlockOutcome: SymmetryApplicableOutcome
 
-  public init(
+  package init(
     engine: SymmetryExplorationEngine,
     reduced: Bool,
     runID: UUID,
@@ -188,7 +188,7 @@ public struct SymmetryExploration: Equatable, Codable, Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     try graphEvidence.validate()
     guard !graphID.isEmpty, TLCReferencePin.isSHA256(declaredConfigurationSHA256), !initialStateIDs.isEmpty,
           Set(initialStateIDs).count == initialStateIDs.count,
@@ -206,7 +206,7 @@ public struct SymmetryExploration: Equatable, Codable, Sendable {
     case declaredConfigurationSHA256, graphEvidence, invariantOutcome, deadlockOutcome
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       engine: container.decode(SymmetryExplorationEngine.self, forKey: .engine),
@@ -223,14 +223,14 @@ public struct SymmetryExploration: Equatable, Codable, Sendable {
   }
 }
 
-public struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Comparable {
-  public let engine: SymmetryExplorationEngine
-  public let sourceStateID: String
-  public let action: String
-  public let targetStateID: String
-  public let occurrences: Int
+package struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Comparable {
+  package let engine: SymmetryExplorationEngine
+  package let sourceStateID: String
+  package let action: String
+  package let targetStateID: String
+  package let occurrences: Int
 
-  public init(
+  package init(
     engine: SymmetryExplorationEngine,
     sourceStateID: String,
     action: String,
@@ -247,7 +247,7 @@ public struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Compara
     self.occurrences = occurrences
   }
 
-  public static func < (lhs: Self, rhs: Self) -> Bool {
+  package static func < (lhs: Self, rhs: Self) -> Bool {
     if lhs.engine != rhs.engine { return lhs.engine.rawValue < rhs.engine.rawValue }
     if lhs.sourceStateID != rhs.sourceStateID { return lhs.sourceStateID < rhs.sourceStateID }
     if lhs.action != rhs.action { return lhs.action < rhs.action }
@@ -257,7 +257,7 @@ public struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Compara
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case engine, sourceStateID, action, targetStateID, occurrences }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       engine: container.decode(SymmetryExplorationEngine.self, forKey: .engine),
@@ -268,12 +268,12 @@ public struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Compara
   }
 }
 
-public struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparable {
-  public let sourceRepresentative: String
-  public let action: String
-  public let targetRepresentative: String
+package struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparable {
+  package let sourceRepresentative: String
+  package let action: String
+  package let targetRepresentative: String
 
-  public init(sourceRepresentative: String, action: String, targetRepresentative: String) throws {
+  package init(sourceRepresentative: String, action: String, targetRepresentative: String) throws {
     guard !sourceRepresentative.isEmpty, !action.isEmpty, !targetRepresentative.isEmpty else {
       throw ConformanceGovernanceError.invalidField(record: "quotient transition", field: "transition")
     }
@@ -282,7 +282,7 @@ public struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparabl
     self.targetRepresentative = targetRepresentative
   }
 
-  public static func < (lhs: Self, rhs: Self) -> Bool {
+  package static func < (lhs: Self, rhs: Self) -> Bool {
     if lhs.sourceRepresentative != rhs.sourceRepresentative {
       return lhs.sourceRepresentative < rhs.sourceRepresentative
     }
@@ -292,7 +292,7 @@ public struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparabl
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case sourceRepresentative, action, targetRepresentative }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       sourceRepresentative: container.decode(String.self, forKey: .sourceRepresentative),
@@ -301,26 +301,26 @@ public struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparabl
   }
 }
 
-public struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
-  public static let schema = "SymmetryOrbitComparison"
+package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
+  package static let schema = "SymmetryOrbitComparison"
 
-  public let schema: String
-  public let caseID: String
-  public let configuration: TemporalSymmetryConfiguration
-  public let correlation: TemporalSymmetryCaseRunCorrelation
-  public let outcome: TemporalSymmetryOutcome
-  public let swiftRaw: SymmetryExploration
-  public let swiftReduced: SymmetryExploration
-  public let tlcRaw: SymmetryExploration
-  public let tlcReduced: SymmetryExploration
-  public let configurationEvidence: CoreEvidenceReference
-  public let quotientEvidence: CoreEvidenceReference
-  public let orbits: [SymmetryOrbit]
-  public let rawTransitionWitnesses: [SymmetryRawTransitionWitness]
-  public let quotientTransitions: [SymmetryQuotientTransition]
-  public let diagnosticCode: TemporalSymmetryDiagnosticCode
+  package let schema: String
+  package let caseID: String
+  package let configuration: TemporalSymmetryConfiguration
+  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let outcome: TemporalSymmetryOutcome
+  package let swiftRaw: SymmetryExploration
+  package let swiftReduced: SymmetryExploration
+  package let tlcRaw: SymmetryExploration
+  package let tlcReduced: SymmetryExploration
+  package let configurationEvidence: CoreEvidenceReference
+  package let quotientEvidence: CoreEvidenceReference
+  package let orbits: [SymmetryOrbit]
+  package let rawTransitionWitnesses: [SymmetryRawTransitionWitness]
+  package let quotientTransitions: [SymmetryQuotientTransition]
+  package let diagnosticCode: TemporalSymmetryDiagnosticCode
 
-  public init(
+  package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
     correlation: TemporalSymmetryCaseRunCorrelation,
@@ -354,7 +354,7 @@ public struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
     try validate()
   }
 
-  public func validate() throws {
+  package func validate() throws {
     try configuration.validate()
     try swiftRaw.validate()
     try swiftReduced.validate()
@@ -485,7 +485,7 @@ public struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
     case configurationEvidence, quotientEvidence, orbits, rawTransitionWitnesses, quotientTransitions, diagnosticCode
   }
 
-  public init(from decoder: Decoder) throws {
+  package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     guard try container.decode(String.self, forKey: .schema) == Self.schema else {
       throw ConformanceGovernanceError.invalidSchema("SymmetryOrbitComparison")

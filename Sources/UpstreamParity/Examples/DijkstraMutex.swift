@@ -9,16 +9,16 @@ import SwiftTLAMacros
 /// inspect. `OneOf` keeps that source-level TLA+ union explicit in Swift
 /// without changing its formal representation.
 @TLAModel
-public struct DijkstraMutexModel: Sendable {
-    public enum Process: String, CaseIterable, FiniteTLAValueDomain {
+package struct DijkstraMutexModel: Sendable {
+    package enum Process: String, CaseIterable, FiniteTLAValueDomain {
         case one = "p1"
         case two = "p2"
         case three = "p3"
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
     private enum Label: String, CaseIterable {
@@ -48,7 +48,7 @@ public struct DijkstraMutexModel: Sendable {
     private typealias ActiveTemporary = OneOf<Process, SetExpr<Process>>
     private typealias Temporary = OneOf<TemporaryInitial, ActiveTemporary>
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("DijkstraMutex") {
             Extends(.integers)
             Algorithm("Mutex", scoped: { scope in
@@ -160,7 +160,7 @@ public struct DijkstraMutexModel: Sendable {
 }
 
 extension Example {
-    public static let dijkstraMutex = Entry(
+    package static let dijkstraMutex = Entry(
         id: "dijkstra-mutex/LSpec_N3",
         upstreamSpec: "dijkstra-mutex",
         upstreamModule: "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.tla",

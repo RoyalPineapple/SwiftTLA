@@ -4,15 +4,15 @@ import SwiftTLAMacros
 /// The two-process lock example from the PlusCal auxiliary-variables
 /// collection. `l2` explicitly returns to `l0`, mirroring the source loop.
 @TLAModel
-public struct LockModel: Sendable {
-    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
+package struct LockModel: Sendable {
+    package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -22,7 +22,7 @@ public struct LockModel: Sendable {
         case l2
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Lock") {
             Extends(.integers)
             Algorithm("Lock", scoped: { scope in
@@ -60,7 +60,7 @@ public struct LockModel: Sendable {
 }
 
 extension Example {
-    public static let lockTwoProcess = Entry(
+    package static let lockTwoProcess = Entry(
         id: "locks_auxiliary_vars/Lock_N2",
         upstreamSpec: "locks_auxiliary_vars",
         upstreamModule: "specifications/locks_auxiliary_vars/Lock.tla",

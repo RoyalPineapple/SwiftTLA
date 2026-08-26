@@ -7,14 +7,14 @@ import SwiftTLAMacros
 /// process identifier. `Each` lowers to exactly that function-shaped state
 /// and its generated `pc` function; the Swift source does not unroll a
 /// separate action or program counter for every process.
-public struct TeachingSimpleN2Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
+package struct TeachingSimpleN2Model: Sendable {
+    package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case p0
         case p1
 
-        public static var defaultValue: Self { .p0 }
-        public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package static var defaultValue: Self { .p0 }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -22,7 +22,7 @@ public struct TeachingSimpleN2Model: Sendable {
         case b
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Simple") {
             Extends(.integers)
             Algorithm("Simple", scoped: { scope in
@@ -59,15 +59,15 @@ public struct TeachingSimpleN2Model: Sendable {
     }
 }
 
-public struct TeachingSimpleN3Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
+package struct TeachingSimpleN3Model: Sendable {
+    package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case p0
         case p1
         case p2
 
-        public static var defaultValue: Self { .p0 }
-        public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package static var defaultValue: Self { .p0 }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -75,7 +75,7 @@ public struct TeachingSimpleN3Model: Sendable {
         case b
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Simple") {
             Extends(.integers)
             Algorithm("Simple", scoped: { scope in
@@ -119,7 +119,7 @@ public struct TeachingSimpleN3Model: Sendable {
 }
 
 extension Example {
-    public static let teachingSimpleN2 = Entry(
+    package static let teachingSimpleN2 = Entry(
         id: "TeachingConcurrency/Simple_N2",
         upstreamSpec: "TeachingConcurrency",
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
@@ -129,7 +129,7 @@ extension Example {
         notes: "N=2, one PlusCal process family with function-shaped x, y, and pc state. TLC = 13."
     )
 
-    public static let teachingSimpleN3 = Entry(
+    package static let teachingSimpleN3 = Entry(
         id: "TeachingConcurrency/Simple_N3",
         upstreamSpec: "TeachingConcurrency",
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",

@@ -121,6 +121,5 @@ struct CoreConformanceCanonicalizationTests {
         #expect(run.graph.edgeOccurrences == [
             CanonicalEdge(source: expectedFirst.key, action: "move", target: expectedSecond.key): 1
         ])
-        #expect(run.graph.observations[expectedFirst.key]?.enabledActions == ["move"])
     }
 }

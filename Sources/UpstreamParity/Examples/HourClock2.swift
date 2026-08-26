@@ -2,21 +2,21 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct HourClock2Model: Sendable {
-    public enum Step: String, CaseIterable, Sendable {
+package struct HourClock2Model: Sendable {
+    package enum Step: String, CaseIterable, Sendable {
         case HCnxt2
     }
 
-    public enum ClockProcess: String, CaseIterable, FiniteTLAValueDomain {
+    package enum ClockProcess: String, CaseIterable, FiniteTLAValueDomain {
         case clock
 
-        public static var defaultValue: Self { .clock }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .clock }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("HourClock2") {
             Algorithm("HourClock2", scoped: { scope in
                 let hr = scope.sharedVar("hr", in: 1...12)
@@ -34,7 +34,7 @@ public struct HourClock2Model: Sendable {
 }
 
 extension Example {
-    public static let hourClock2 = Entry(
+    package static let hourClock2 = Entry(
         id: "SpecifyingSystems/HourClock2",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock2.tla",

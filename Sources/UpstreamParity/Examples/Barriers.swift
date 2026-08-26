@@ -4,8 +4,8 @@ import SwiftTLAMacros
 /// The upstream two-chamber barrier, expressed with the same PlusCal
 /// statement macros (`Lock`, `Unlock`, `Wait`, and `Signal`) as its source.
 @TLAModel
-public struct BarriersN6Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
+package struct BarriersN6Model: Sendable {
+    package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
@@ -13,17 +13,17 @@ public struct BarriersN6Model: Sendable {
         case five = 5
         case six = 6
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
         case a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Barriers") {
             Extends(.integers)
             Algorithm("Barriers", scoped: { scope in
@@ -90,7 +90,7 @@ public struct BarriersN6Model: Sendable {
 }
 
 extension Example {
-    public static let barriersN6 = Entry(
+    package static let barriersN6 = Entry(
         id: "barriers/Barriers_N6",
         upstreamSpec: "barriers",
         upstreamModule: "specifications/barriers/Barriers.tla",

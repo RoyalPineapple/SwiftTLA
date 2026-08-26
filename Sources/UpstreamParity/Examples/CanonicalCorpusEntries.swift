@@ -1,7 +1,7 @@
 import CanonicalUpstreamCorpus
 
 extension Example {
-    public static let boulanger = Entry(
+    package static let boulanger = Entry(
         id: "Boulanger/Boulanger",
         upstreamSpec: "Boulanger",
         upstreamModule: "specifications/Boulanger/Boulanger.tla",
@@ -12,7 +12,7 @@ extension Example {
         notes: "Canonical Boulanger source port. External validation retains the bounded official PlusCal and TLC comparison."
     )
 
-    public static let kvsnap = Entry(
+    package static let kvsnap = Entry(
         id: "KeyValueStore/KVsnap",
         upstreamSpec: "KeyValueStore",
         upstreamModule: "specifications/KeyValueStore/KVsnap.tla",
@@ -23,7 +23,7 @@ extension Example {
         notes: "Canonical KVsnap source port. The independent ValidationEvidence benchmark retains the bounded TLC count and graph evidence."
     )
 
-    public static let voteProof = Entry(
+    package static let voteProof = Entry(
         id: "byzpaxos/VoteProof",
         upstreamSpec: "byzpaxos",
         upstreamModule: "specifications/byzpaxos/VoteProof.tla",

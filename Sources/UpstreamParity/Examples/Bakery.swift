@@ -7,14 +7,14 @@ import SwiftTLAMacros
 /// creates the function-shaped process-local state and program counter that
 /// the upstream PlusCal translator creates.
 @TLAModel
-public struct BakeryN2Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
+package struct BakeryN2Model: Sendable {
+    package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -29,7 +29,7 @@ public struct BakeryN2Model: Sendable {
         case exit
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Bakery") {
             Extends(.integers)
             Algorithm("Bakery", scoped: { scope in
@@ -143,7 +143,7 @@ public struct BakeryN2Model: Sendable {
 }
 
 extension Example {
-    public static let bakeryN2 = Entry(
+    package static let bakeryN2 = Entry(
         id: "Bakery/N2",
         upstreamSpec: "Bakery-Boulangerie",
         upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",

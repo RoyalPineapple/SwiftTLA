@@ -6,24 +6,24 @@ import SwiftTLAMacros
 /// The three nodes own a generated program counter. `initiator` is the only
 /// nondeterministic initial value; `processState` is derived from it in the
 /// formal initial state. Every message is explicitly delivered clockwise.
-public struct ChangRobertsModel: Sendable {
-    public enum Node: Int, FiniteTLAValueDomain {
+package struct ChangRobertsModel: Sendable {
+    package enum Node: Int, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues: [Self] = [.one, .two, .three]
+        package static var defaultValue: Self { .one }
+        package static let finiteValues: [Self] = [.one, .two, .three]
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public enum ProcessState: String, TLAValueType {
+    package enum ProcessState: String, TLAValueType {
         case candidate = "cand"
         case lost
         case won
 
-        public static var defaultValue: Self { .candidate }
+        package static var defaultValue: Self { .candidate }
     }
 
     private enum Step: String, CaseIterable {
@@ -31,7 +31,7 @@ public struct ChangRobertsModel: Sendable {
         case n1
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("ChangRoberts") {
             Algorithm("ChangRoberts", scoped: { scope in
                 let initiator = scope.sharedVar("initiator", in: SetExpr<Function<Node, Bool>>.literal(
@@ -144,7 +144,7 @@ public struct ChangRobertsModel: Sendable {
 }
 
 extension Example {
-    public static let changRobertsN3 = Entry(
+    package static let changRobertsN3 = Entry(
         id: "ChangRoberts/ChangRoberts_N3",
         upstreamSpec: "chang_roberts",
         upstreamModule: "specifications/chang_roberts/ChangRoberts.tla",

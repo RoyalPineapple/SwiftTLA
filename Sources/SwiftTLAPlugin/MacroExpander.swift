@@ -74,7 +74,6 @@ enum MacroExpander {
         decls.append(contentsOf: generateGeneratedMachineStorageMembers(
             hasActions: !plan.actions.isEmpty,
             actions: plan.actions,
-            variables: plan.variables,
             symmetricCollections: plan.symmetricCollections
         ))
         decls.append(contentsOf: generateActorMembers(model: model))

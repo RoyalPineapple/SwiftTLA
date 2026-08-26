@@ -93,7 +93,9 @@ enum AlgorithmLowerer {
                 name: state.root,
                 initial: .int(0),
                 initialSet: state.initialSet,
-                initExpr: state.initialSet == nil ? state.initial : nil
+                initExpr: state.initialSet == nil ? state.initial : nil,
+                generatedSwiftType: state.swiftTypeName,
+                origin: .source
             )
         }
         for process in processes {
@@ -157,7 +159,7 @@ enum AlgorithmLowerer {
                 name: CompilerControlSymbol.stack.rawValue,
                 initial: .int(0),
                 initExpr: constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
-                origin: .compiler
+                origin: .procedureStack
             ))
         }
 
@@ -214,9 +216,12 @@ enum AlgorithmLowerer {
                             : body,
                         variables: variables
                     ),
-                    bindings: [ActionBinding(name: processBinding.rawValue, values: process.domain)],
-                    controlOwner: controlOwner,
-                    generatedBindingSwiftTypes: [processBinding.rawValue: process.typeName]
+                    bindings: [ActionBinding(
+                        name: processBinding.rawValue,
+                        values: process.domain,
+                        generatedSwiftType: process.typeName
+                    )],
+                    controlOwner: controlOwner
                 )
                 if requiresProgramCounter {
                     let actionAssertions = assertionInvariants(
@@ -235,6 +240,9 @@ enum AlgorithmLowerer {
             }
         }
 
+        let procedureProcessType = Set(processes.map(\.typeName)).count == 1
+            ? processes.first?.typeName
+            : nil
         let procedureActions = procedures.flatMap { procedure in
             procedure.steps.enumerated().map { index, atomic in
                 let control = ControlFlow(
@@ -265,7 +273,11 @@ enum AlgorithmLowerer {
                 return NamedAction(
                     name: label,
                     body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variables),
-                    bindings: [ActionBinding(name: processBinding.rawValue, values: controlDomainValues(processes))],
+                    bindings: [ActionBinding(
+                        name: processBinding.rawValue,
+                        values: controlDomainValues(processes),
+                        generatedSwiftType: procedureProcessType
+                    )],
                     controlOwner: .procedure(algorithm: algorithm.name, name: procedure.name)
                 )
             }
@@ -388,7 +400,9 @@ enum AlgorithmLowerer {
                 name: state.root,
                 initial: .int(0),
                 initialSet: state.initialSet,
-                initExpr: state.initialSet == nil ? state.initial : nil
+                initExpr: state.initialSet == nil ? state.initial : nil,
+                generatedSwiftType: state.swiftTypeName,
+                origin: .source
             )
         }
         var procedureVariables: [NamedVar] = []

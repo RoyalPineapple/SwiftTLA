@@ -5,7 +5,7 @@ import SwiftTLAMacros
 /// Upstream: specifications/Paxos/Paxos.tla
 
 extension Example {
-    public static let paxosSmall = Entry(
+    package static let paxosSmall = Entry(
         id: "Paxos/Small",
         upstreamSpec: "Paxos",
         upstreamModule: "specifications/Paxos/Paxos.tla",

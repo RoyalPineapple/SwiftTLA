@@ -43,7 +43,7 @@ struct LanguageCapabilityContractTests {
 
     @Test("Parser diagnostics preserve complete capability facts")
     func capabilityDiagnosticPreservesCompleteFactsInParserRendering() {
-        let sourceSpan = SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan(
+        let sourceSpan = SpecParser.SourceParseDiagnostic.SourceSpan(
             location: .utf8Offset(24),
             utf8Length: 19
         )
@@ -57,7 +57,7 @@ struct LanguageCapabilityContractTests {
             actual: "unregistered declaration 'UnsupportedAlgorithm'",
             nextSafeAction: "Use an admitted Algorithm declaration."
         )
-        let parserDiagnostic = SpecParser.SymmetricCollectionParseDiagnostic(
+        let parserDiagnostic = SpecParser.SourceParseDiagnostic(
             capability: capability
         )
 
@@ -83,7 +83,7 @@ struct LanguageCapabilityContractTests {
             actual: "unregistered declaration 'UnsupportedAlgorithm'",
             nextSafeAction: "Use an admitted Algorithm declaration."
         )
-        let parserDiagnostic = SpecParser.SymmetricCollectionParseDiagnostic(
+        let parserDiagnostic = SpecParser.SourceParseDiagnostic(
             capability: capability
         )
         let source = Parser.parse(source: "struct Example {}")

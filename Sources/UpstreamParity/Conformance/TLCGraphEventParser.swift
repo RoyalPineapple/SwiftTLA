@@ -1,7 +1,7 @@
 import CoreFoundation
 import Foundation
 
-public enum TLCGraphEventError: Error, Equatable, Sendable {
+package enum TLCGraphEventError: Error, Equatable, Sendable {
     case invalidUTF8
     case malformedJSON(line: Int)
     case duplicateKey(line: Int, key: String)
@@ -14,42 +14,42 @@ public enum TLCGraphEventError: Error, Equatable, Sendable {
     case incompleteExecution(String)
 }
 
-public struct TLCBinding: Equatable, Sendable {
-    public let ordinal: Int
-    public let name: String
-    public let tla: String
-    public let tlaSHA256: String
+package struct TLCBinding: Equatable, Sendable {
+    package let ordinal: Int
+    package let name: String
+    package let tla: String
+    package let tlaSHA256: String
 }
 
-public struct TLCGraphState: Equatable, Sendable {
-    public let fingerprint: String
-    public let level: Int
-    public let bindings: [TLCBinding]
+package struct TLCGraphState: Equatable, Sendable {
+    package let fingerprint: String
+    package let level: Int
+    package let bindings: [TLCBinding]
 }
 
-public struct TLCGraphTransition: Equatable, Sendable {
-    public let source: TLCGraphState
-    public let target: TLCGraphState
-    public let action: String
-    public let seen: Bool
+package struct TLCGraphTransition: Equatable, Sendable {
+    package let source: TLCGraphState
+    package let target: TLCGraphState
+    package let action: String
+    package let seen: Bool
 }
 
-public struct TLCGraphEventStream: Equatable, Sendable {
-    public let runID: UUID
-    public let caseID: String
-    public let fingerprintRepresentatives: [String: TLCGraphState]
-    public let initialStates: [TLCGraphState]
-    public let transitions: [TLCGraphTransition]
+package struct TLCGraphEventStream: Equatable, Sendable {
+    package let runID: UUID
+    package let caseID: String
+    package let fingerprintRepresentatives: [String: TLCGraphState]
+    package let initialStates: [TLCGraphState]
+    package let transitions: [TLCGraphTransition]
 }
 
-public struct TLCGraphEventParser: Sendable {
+package struct TLCGraphEventParser: Sendable {
     private let expectedPin: TLCReferencePin
     private let expectedCaseID: String
     private let expectedCase: CoreConformanceCase
     private let invocationWrappers: [String: String]
     private let valueNormalizations: [String: CoreConformanceValueNormalization]
 
-    public init(expectedCase: CoreConformanceCase) {
+    package init(expectedCase: CoreConformanceCase) {
         self.expectedPin = expectedCase.pin
         self.expectedCaseID = expectedCase.id
         self.expectedCase = expectedCase
@@ -61,7 +61,7 @@ public struct TLCGraphEventParser: Sendable {
             uniqueKeysWithValues: expectedCase.valueNormalizations.map { ($0.binding, $0) })
     }
 
-    public func parse(_ data: Data) throws -> TLCGraphEventStream {
+    package func parse(_ data: Data) throws -> TLCGraphEventStream {
         guard String(data: data, encoding: .utf8) != nil else { throw TLCGraphEventError.invalidUTF8 }
         guard !data.starts(with: [0xEF, 0xBB, 0xBF]), data.last == 10 else {
             throw TLCGraphEventError.invalidFooter("stream must be UTF-8 without BOM and LF-terminated")

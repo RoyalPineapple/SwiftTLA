@@ -2,8 +2,8 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct HourClockModel: Sendable {
-    public static var spec: TLASpec {
+package struct HourClockModel: Sendable {
+    package static var spec: TLASpec {
         #spec("HourClock") { scope in
             let hr = scope.sharedVar("hr", in: 1...12)
             SwiftTLA.Action("HCnxt") {
@@ -16,7 +16,7 @@ public struct HourClockModel: Sendable {
 }
 
 extension Example {
-    public static let hourClock = Entry(
+    package static let hourClock = Entry(
         id: "SpecifyingSystems/HourClock",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock.tla",

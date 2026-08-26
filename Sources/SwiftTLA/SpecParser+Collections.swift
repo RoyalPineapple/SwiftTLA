@@ -55,16 +55,15 @@ extension ParserSession {
             return
         }
 
-        let declaration = SymmetricCollectionDecl(name: collectionName, verificationScope: scope, initial: initial)
-        result.symmetricCollections.append(.init(
+        let declaration = SymmetricCollectionDecl(
             name: collectionName,
-            elementType: elementType,
-            valueType: valueType,
             verificationScope: scope,
-            source: call.description,
-            declaration: declaration
-        ))
-        result.variables.append(.init(formal: declaration.variable))
+            initial: initial,
+            generatedElementType: elementType,
+            generatedValueType: valueType
+        )
+        result.symmetricCollections.append(declaration)
+        result.variables.append(declaration.variable)
     }
 
     func parseCollectionAction(
@@ -115,16 +114,16 @@ extension ParserSession {
             }
             return
         }
-        result.collectionActions.append(.init(
+        result.actions.append(.init(
             name: actionName,
-            collectionName: collectionName,
-            source: call.description
+            body: .existsAction(
+                member,
+                .domain(.variable(collectionName)),
+                actionBody
+            ),
+            controlOwner: nil,
+            generatedSymmetricCollectionName: collectionName
         ))
-        result.actions.append(.init(name: actionName, body: .existsAction(
-            member,
-            .domain(.variable(collectionName)),
-            actionBody
-        )))
     }
 
     func collectionActionMemberName(in closure: ClosureExprSyntax) -> String? {
@@ -160,7 +159,7 @@ extension ParserSession {
         action: String,
         source: String,
         detail: String
-    ) -> SymmetricCollectionParseDiagnostic {
+    ) -> SourceParseDiagnostic {
         .init(
             message: "\(detail) for symmetric collection '\(collection)' in action '\(action)': "
                 + "member identity is opaque and may only select or update its owning collection. "

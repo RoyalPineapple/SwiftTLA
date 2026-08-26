@@ -61,12 +61,12 @@ private func parserEnum(
         let specification = compilation.spec
         #expect(specification.variables.map(\.name) == ["pc", "count"])
         #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
-        #expect(specification.actions.first?.bindings == [
-            ActionBinding(name: "process", values: [.string("left"), .string("right")])
-        ])
-        let facts = parsed.machineSurfaceSwiftFacts(for: compilation)
-        let increment = try #require(compilation.layout.actionID(named: "increment"))
-        #expect(facts.actionBindingTypes[increment] == ["Node"])
+        #expect(specification.actions.first?.bindings.map(\.name) == ["process"])
+        #expect(specification.actions.first?.bindings.map(\.values) == [[.string("left"), .string("right")]])
+        let increment = try #require(compilation.machineSurfacePlan.actions.first {
+            $0.swiftIdentifier == "increment"
+        })
+        #expect(increment.bindings.map(\.swiftType) == ["Node"])
     }
 
     @Test("parser retains unsupported procedure declarations for compiler diagnostics")
@@ -115,11 +115,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let compilation = try compile(parsed, named: "Counter")
-        let surface = try MachineSurfacePlan(
-            compilation: compilation,
-            swiftFacts: parsed.machineSurfaceSwiftFacts(for: compilation)
-        )
-        #expect(surface.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
+        #expect(compilation.machineSurfacePlan.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
     }
 
     @Test("Algorithm parser carries prior shared bindings into mapping initializers")
@@ -359,7 +355,7 @@ private func parserEnum(
             try parseClosure("{ CollectionAction(\"update\") }")
         )
 
-        #expect(parsed.collectionActions.isEmpty)
+        #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
             "CollectionAction requires a literal name, a declared collection binding, and a builder body."
         ])
@@ -1010,8 +1006,8 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let compilation = try compile(parsed, named: "FunctionDomain")
         let successors = try #require(compilation.spec.variables.first { $0.name == "successors" })
-        let successorsID = try #require(compilation.layout.variableID(named: successors.name))
-        #expect(parsed.machineSurfaceSwiftFacts(for: compilation).variableTypes[successorsID] == "Function<Node, SetExpr<Node>>")
+        let surface = try #require(compilation.machineSurfacePlan.variables.first { $0.formalName == successors.name })
+        #expect(surface.swiftType == "Function<Node, SetExpr<Node>>")
         #expect(successors.initialSet?.description.contains("Cardinality") == true)
     }
 
@@ -1370,7 +1366,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.variables[0].name == "counter")
         #expect(parsed.variables[0].initial == .set([.int(0), .int(1)]))
         #expect(parsed.variables[0].initialSet == .setLiteral([.value(.int(0)), .value(.int(1))]))
-        #expect(parsed.variables[0].swiftTypeName == "Int")
+        #expect(parsed.variables[0].generatedSwiftType == "Int")
     }
 
     @Test func oneArgumentVariableReferencesPreserveBindingMetadataAndOrder() throws {
@@ -1389,10 +1385,10 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.variables.count == 2)
         #expect(parsed.variables[0].name == "queued")
         #expect(parsed.variables[0].initial == .set([]))
-        #expect(parsed.variables[0].swiftTypeName == "TLAValue")
+        #expect(parsed.variables[0].generatedSwiftType == "TLAValue")
         #expect(parsed.variables[1].name == "phase")
         #expect(parsed.variables[1].initial == .int(0))
-        #expect(parsed.variables[1].swiftTypeName == "Int")
+        #expect(parsed.variables[1].generatedSwiftType == "Int")
     }
 
     @Test("generic variable types retain their structural Swift spelling")
@@ -1407,11 +1403,11 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.variables.map(\.swiftTypeName) == ["SwiftTLA.Function<Model.Node, SwiftTLA.SetExpr<Swift.Int>>"])
+        #expect(parsed.variables.map(\.generatedSwiftType) == ["SwiftTLA.Function<Model.Node, SwiftTLA.SetExpr<Swift.Int>>"])
     }
 
-    @Test("top-level variable type facts are retained in the parser context")
-    func retainsAnnotatedVariableTypeInSourceContext() throws {
+    @Test("top-level variable declarations retain their Swift type")
+    func retainsAnnotatedVariableType() throws {
         let source = """
         {
             let mode: SharedVariable<CameraMode> = SharedVar("mode", initial: CameraMode.idle)
@@ -1421,30 +1417,26 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.variables.map(\.swiftTypeName) == ["CameraMode"])
-        #expect(parsed.sourceContext.variables.map(\.sourceName) == ["mode"])
-        #expect(parsed.sourceContext.swiftVariableTypes == ["mode": "CameraMode"])
+        #expect(parsed.variables.map(\.generatedSwiftType) == ["CameraMode"])
     }
 
     @Test func finiteVariableDomainsCompareAsFormalSets() throws {
-        let parsed = canonicalTestSpec(
-            variables: [(
-                name: "counter",
-                initial: .set([.int(0), .int(1)]),
-                initialSet: .setLiteral([.int(0), .int(1)])
-            )],
-            actions: [],
-            invariants: []
-        )
-        let built = canonicalTestSpec(
-            variables: [(
-                name: "counter",
-                initial: .set([.int(0), .int(1)]),
-                initialSet: .setLiteral([.int(1), .int(0)])
-            )],
-            actions: [],
-            invariants: []
-        )
+        func specification(_ values: [StateExpr]) -> TLASpec {
+            TLASpec(
+                name: "CanonicalTestSpec",
+                variables: [.init(
+                    name: "counter",
+                    initial: .set([.int(0), .int(1)]),
+                    initialSet: .setLiteral(values),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )],
+                actions: [],
+                invariants: []
+            )
+        }
+        let parsed = specification([.int(0), .int(1)])
+        let built = specification([.int(1), .int(0)])
 
         #expect(try parsed.compile().identity == built.compile().identity)
     }
@@ -2336,6 +2328,7 @@ private let cameraModeDefinition = parserEnum(
         #expect(parsed.actions[0].bindings.map(\.values) == [
             [.int(1), .int(2)], [.int(10), .int(20)], [.int(100), .int(200)]
         ])
+        #expect(parsed.actions[0].bindings.map(\.generatedSwiftType) == ["Int", "Int", "Int"])
         #expect(parsed.actions[0].body == .assign(.named("floor"), .value(.int(1))))
     }
 
@@ -2486,10 +2479,12 @@ private let cameraModeDefinition = parserEnum(
         #expect(parsed.diagnostics.isEmpty)
         #expect(Set(parsed.variables.map(\.name)) == ["floor", "cars", "calls"])
         #expect(parsed.actions.count == builderActions.count)
+        #expect(parsed.actions[0].bindings.map(\.generatedSwiftType) == ["PersonID", "CarID", "Direction"])
         for (parsedAction, builtAction) in zip(parsed.actions, builderActions) {
             #expect(parsedAction.name == builtAction.0)
             #expect(parsedAction.body == builtAction.1)
-            #expect(parsedAction.bindings == builtAction.2)
+            #expect(parsedAction.bindings.map(\.name) == builtAction.2.map(\.name))
+            #expect(parsedAction.bindings.map(\.values) == builtAction.2.map(\.values))
         }
     }
 
@@ -2565,7 +2560,7 @@ private let cameraModeDefinition = parserEnum(
         #expect(parsed.variables.count == 1)
         #expect(parsed.variables[0].name == "mode")
         #expect(parsed.variables[0].initial == .string("idle"))
-        #expect(parsed.variables[0].swiftTypeName == "CameraMode")
+        #expect(parsed.variables[0].generatedSwiftType == "CameraMode")
     }
 
 }

@@ -1,7 +1,7 @@
 import CoreFoundation
 import Foundation
 
-public enum TLCTraceError: Error, Equatable, Sendable {
+package enum TLCTraceError: Error, Equatable, Sendable {
     case dotIsNotTraceEvidence
     case invalidUTF8
     case malformedJSON
@@ -10,36 +10,36 @@ public enum TLCTraceError: Error, Equatable, Sendable {
     case invalidAction(Int)
 }
 
-public struct TLCCounterexampleAction: Equatable, Sendable {
-    public let source: CanonicalState
-    public let name: String
-    public let target: CanonicalState
+package struct TLCCounterexampleAction: Equatable, Sendable {
+    package let source: CanonicalState
+    package let name: String
+    package let target: CanonicalState
 
-    public init(source: CanonicalState, name: String, target: CanonicalState) {
+    package init(source: CanonicalState, name: String, target: CanonicalState) {
         self.source = source
         self.name = name
         self.target = target
     }
 
-    public var edge: CanonicalEdge {
+    package var edge: CanonicalEdge {
         CanonicalEdge(source: source.key, action: name, target: target.key)
     }
 }
 
-public struct TLCCounterexampleEvidence: Equatable, Sendable {
-    public let rawJSON: Data
-    public let states: [CanonicalState]
-    public let transitions: [TLCCounterexampleAction]
+package struct TLCCounterexampleEvidence: Equatable, Sendable {
+    package let rawJSON: Data
+    package let states: [CanonicalState]
+    package let transitions: [TLCCounterexampleAction]
 
-    public var actions: [String] { transitions.map(\.name) }
+    package var actions: [String] { transitions.map(\.name) }
 
-    public init(rawJSON: Data, states: [CanonicalState], transitions: [TLCCounterexampleAction]) {
+    package init(rawJSON: Data, states: [CanonicalState], transitions: [TLCCounterexampleAction]) {
         self.rawJSON = rawJSON
         self.states = states
         self.transitions = transitions
     }
 
-    public func canonicalTrace(id: String) -> CanonicalTrace {
+    package func canonicalTrace(id: String) -> CanonicalTrace {
         CanonicalTrace(
             id: id,
             steps: transitions.map { CanonicalTraceStep(state: $0.source.key, action: $0.name) }
@@ -47,10 +47,10 @@ public struct TLCCounterexampleEvidence: Equatable, Sendable {
     }
 }
 
-public struct TLCTraceParser: Sendable {
-    public init() {}
+package struct TLCTraceParser: Sendable {
+    package init() {}
 
-    public func parseCounterexample(_ data: Data) throws -> TLCCounterexampleEvidence {
+    package func parseCounterexample(_ data: Data) throws -> TLCCounterexampleEvidence {
         guard String(data: data, encoding: .utf8) != nil else { throw TLCTraceError.invalidUTF8 }
         let trimmed = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.hasPrefix("digraph"), !trimmed.hasPrefix("strict graph") else {

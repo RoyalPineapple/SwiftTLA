@@ -6,53 +6,53 @@ import SwiftTLAMacros
 /// The published configuration fixes both failure switches to `TRUE`. This port
 /// keeps that bounded configuration and expresses its three fair process groups,
 /// typed state functions, and `Prepare`, `Decide`, and `Fail` statement macros.
-public struct TwoPhaseWithBackupManagerModel: Sendable {
-    public enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
+package struct TwoPhaseWithBackupManagerModel: Sendable {
+    package enum ResourceManager: String, CaseIterable, FiniteTLAValueDomain {
         case one = "rm1"
         case two = "rm2"
         case three = "rm3"
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum TransactionManager: String, CaseIterable, FiniteTLAValueDomain {
+    package enum TransactionManager: String, CaseIterable, FiniteTLAValueDomain {
         case primary = "tm"
 
-        public static var defaultValue: Self { .primary }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .primary }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum BackupTransactionManager: String, CaseIterable, FiniteTLAValueDomain {
+    package enum BackupTransactionManager: String, CaseIterable, FiniteTLAValueDomain {
         case backup = "btm"
 
-        public static var defaultValue: Self { .backup }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .backup }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum ResourceManagerState: String, TLAValueType {
+    package enum ResourceManagerState: String, TLAValueType {
         case working
         case prepared
         case committed
         case aborted
         case failed
 
-        public static var defaultValue: Self { .working }
+        package static var defaultValue: Self { .working }
     }
 
-    public enum TransactionManagerState: String, TLAValueType {
+    package enum TransactionManagerState: String, TLAValueType {
         case initial = "init"
         case commit
         case abort
         case hidden
 
-        public static var defaultValue: Self { .initial }
+        package static var defaultValue: Self { .initial }
     }
 
     private enum Step: String, CaseIterable {
@@ -67,7 +67,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
         case backupAbort = "BTA"
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("TwoPhaseWithBackupManager") {
             Extends(.integers)
             Algorithm("TransactionCommit", scoped: { scope in
@@ -229,7 +229,7 @@ public struct TwoPhaseWithBackupManagerModel: Sendable {
 }
 
 extension Example {
-    public static let twoPhaseWithBackupManager = Entry(
+    package static let twoPhaseWithBackupManager = Entry(
         id: "transaction_commit/2PCwithBTM",
         upstreamSpec: "transaction_commit",
         upstreamModule: "specifications/transaction_commit/2PCwithBTM.tla",

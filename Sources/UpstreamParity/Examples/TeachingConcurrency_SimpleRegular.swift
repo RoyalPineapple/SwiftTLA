@@ -7,13 +7,13 @@ import SwiftTLAMacros
 /// read may observe. The three labels are the upstream regular-register
 /// write/write/read steps; this is not a sequential Swift simulation.
 @TLAModel
-public struct TeachingSimpleRegularN8Model: Sendable {
-    public enum Process: Int, CaseIterable, FiniteTLAValueDomain {
+package struct TeachingSimpleRegularN8Model: Sendable {
+    package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case p0, p1, p2, p3, p4, p5, p6, p7
 
-        public static var defaultValue: Self { .p0 }
-        public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package static var defaultValue: Self { .p0 }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -22,7 +22,7 @@ public struct TeachingSimpleRegularN8Model: Sendable {
         case b
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("SimpleRegular") {
             Extends(.integers)
             Algorithm("SimpleRegular", scoped: { scope in
@@ -68,7 +68,7 @@ public struct TeachingSimpleRegularN8Model: Sendable {
 }
 
 extension Example {
-    public static let teachingSimpleRegularN8 = Entry(
+    package static let teachingSimpleRegularN8 = Entry(
         id: "TeachingConcurrency/SimpleRegular_N8",
         upstreamSpec: "TeachingConcurrency",
         upstreamModule: "specifications/TeachingConcurrency/SimpleRegular.tla",

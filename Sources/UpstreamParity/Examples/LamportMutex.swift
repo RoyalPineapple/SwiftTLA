@@ -1,47 +1,47 @@
 import SwiftTLA
 
-public struct LamportMutexModel: Sendable {
-    public enum Node: Int, CaseIterable, FiniteTLAValueDomain {
+package struct LamportMutexModel: Sendable {
+    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
 
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .one }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public enum MessageKind: String, TLAValueType {
+    package enum MessageKind: String, TLAValueType {
         case request = "req"
         case acknowledgement = "ack"
         case release = "rel"
 
-        public static var defaultValue: Self { .request }
+        package static var defaultValue: Self { .request }
     }
 
-    public struct MessageFields {
-        public let kind: MessageKind
-        public let clock: Int
+    package struct MessageFields {
+        package let kind: MessageKind
+        package let clock: Int
     }
 
-    public enum MessageSchema: TLARecordSchema {
-        public typealias Fields = MessageFields
+    package enum MessageSchema: TLARecordSchema {
+        package typealias Fields = MessageFields
 
-        public static let fieldNames: Set<String> = ["type", "clock"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["type", "clock"]
+        package static let defaultRecord: TLAValue = .record([
             "type": MessageKind.request.tlaValue,
             "clock": 0
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \MessageFields.kind { return "type" }
             if key == \MessageFields.clock { return "clock" }
             return nil
         }
 
-        public static let kind = field(\MessageFields.kind)
-        public static let clock = field(\MessageFields.clock)
+        package static let kind = field(\MessageFields.kind)
+        package static let clock = field(\MessageFields.clock)
     }
 
     private typealias Clock = Function<Node, Int>
@@ -51,7 +51,7 @@ public struct LamportMutexModel: Sendable {
     private typealias NetworkPeers = Function<Node, MessageQueue>
     private typealias Network = Function<Node, NetworkPeers>
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         TLASpec("LamportMutex", scoped: specificationComponents)
     }
 

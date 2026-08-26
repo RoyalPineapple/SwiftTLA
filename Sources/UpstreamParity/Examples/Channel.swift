@@ -7,32 +7,32 @@ import SwiftTLAMacros
 /// are authored in the SwiftTLA DSL. The generated machine is therefore a
 /// typed view of the same model used for parity checking.
 @TLAModel
-public struct ChannelModel: Sendable {
-    public enum Data: String, CaseIterable, FiniteTLAValueDomain {
+package struct ChannelModel: Sendable {
+    package enum Data: String, CaseIterable, FiniteTLAValueDomain {
         case d1
         case d2
         case d3
 
-        public static var defaultValue: Self { .d1 }
-        public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package static var defaultValue: Self { .d1 }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public struct ChannelFields {
-        public let value: Data
-        public let ready: Int
-        public let acknowledgement: Int
+    package struct ChannelFields {
+        package let value: Data
+        package let ready: Int
+        package let acknowledgement: Int
     }
 
-    public enum ChannelSchema: TLARecordSchema {
-        public typealias Fields = ChannelFields
+    package enum ChannelSchema: TLARecordSchema {
+        package typealias Fields = ChannelFields
 
-        public static let fieldNames: Set<String> = ["val", "rdy", "ack"]
-        public static let defaultRecord: TLAValue = .record([
+        package static let fieldNames: Set<String> = ["val", "rdy", "ack"]
+        package static let defaultRecord: TLAValue = .record([
             "val": .string(Data.d1.rawValue), "rdy": .int(0), "ack": .int(0)
         ])
 
-        public static func fieldName<Value>(for field: KeyPath<ChannelFields, Value>) -> String? {
+        package static func fieldName<Value>(for field: KeyPath<ChannelFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \ChannelFields.value { return "val" }
             if key == \ChannelFields.ready { return "rdy" }
@@ -40,12 +40,12 @@ public struct ChannelModel: Sendable {
             return nil
         }
 
-        public static let value = field(\ChannelFields.value)
-        public static let ready = field(\ChannelFields.ready)
-        public static let acknowledgement = field(\ChannelFields.acknowledgement)
+        package static let value = field(\ChannelFields.value)
+        package static let ready = field(\ChannelFields.ready)
+        package static let acknowledgement = field(\ChannelFields.acknowledgement)
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Channel") { scope in
             Extends(.naturals)
             let channel = scope.sharedVar("channel", in: SetExpr<Record<ChannelSchema>>.literal(
@@ -103,7 +103,7 @@ public struct ChannelModel: Sendable {
 }
 
 extension Example {
-    public static let channel = Entry(
+    package static let channel = Entry(
         id: "SpecifyingSystems/Channel",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.tla",

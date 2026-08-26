@@ -5,20 +5,20 @@ import SwiftTLA
 /// The finite node domain and its two shared functions are formal values.
 /// Parameterized actions replace the old raw existential action bodies, so the
 /// same authoring surface drives the parser, builder, and generated machine.
-public struct EWD998TerminationModel: Sendable {
-    public enum Node: Int, CaseIterable, FiniteTLAValueDomain {
+package struct EWD998TerminationModel: Sendable {
+    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case zero = 0
         case one = 1
         case two = 2
         case three = 3
 
-        public static var defaultValue: Self { .zero }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .zero }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .int(rawValue) }
+        package var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         TLASpec("AsyncTerminationDetection", scoped: specificationComponents)
     }
 
@@ -169,7 +169,7 @@ public struct EWD998TerminationModel: Sendable {
 }
 
 extension Example {
-    public static let ewd998 = Entry(
+    package static let ewd998 = Entry(
         id: "ewd998/AsyncTerminationDetection",
         upstreamSpec: "ewd998",
         upstreamModule: "specifications/ewd998/AsyncTerminationDetection.tla",

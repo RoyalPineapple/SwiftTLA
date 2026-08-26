@@ -167,6 +167,35 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(graph.states.count == 3)
     }
 
+    @Test("state limits retain exactly the declared number of states")
+    func stateLimitIsAnExactRetainedStateBoundary() throws {
+        func exploration(guarded: Bool) throws -> ModelExplorationResult {
+            let counter = Var<Int>("counter", 0)
+            let action = counter.becomes(counter + 1)
+            let spec = TLASpec("StateLimitBoundary") {
+                Variable(counter, 0)
+                Action("increment") {
+                    guarded ? ActionExpr.guard_(counter < 2) && action : action
+                }
+            }
+            return try ModelChecker(
+                compilation: spec.compile(),
+                configuration: FiniteExplorationConfiguration(maximumStateLimit: 3)
+            ).explore()
+        }
+
+        let complete = try exploration(guarded: true)
+        #expect(complete.graph.states.count == 3)
+        #expect(complete.isComplete)
+
+        let bounded = try exploration(guarded: false)
+        #expect(bounded.graph.states.count == 3)
+        guard case .depthExceeded(statesCount: 3, limit: 3) = bounded.result else {
+            Issue.record("Expected the fourth distinct state to stop exploration at the declared limit.")
+            return
+        }
+    }
+
     @Test("compiled layout assigns private IDs in declaration order")
     func compiledLayoutAssignsDeclarationIDs() throws {
         let spec = TLASpec(
@@ -791,12 +820,14 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("compiled record access uses a field identity")
     func compiledRecordAccessUsesFieldIdentity() throws {
-        let spec = TLASpec(
-            name: "CompiledRecordAccess",
-            variables: [.init(name: "state", initial: .record(["count": .int(1)]))],
-            actions: [.init(name: "step", body: .guard_(.equal(.recordAccess(.variable("state"), "count"), .int(1))))],
-            invariants: []
-        )
+        let recordInitial: TLARecord = ["count": .int(1)]
+        let state = Var<TLARecord>("state", recordInitial)
+        let spec = TLASpec("CompiledRecordAccess") {
+            Variable(state)
+            Action("step") {
+                ActionExpr.guard_(.equal(.recordAccess(.variable("state"), "count"), .int(1)))
+            }
+        }
         let compilation = try spec.compile()
 
         guard case .guard_(.equal(.recordAccess(_, let field, _), _)) = compilation.semantics.actions[0].body else {
@@ -812,23 +843,19 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("compiled record function access retains its formal key")
     func compiledRecordFunctionAccessRetainsFormalKey() throws {
-        let spec = TLASpec(
-            name: "CompiledRecordFunctionAccess",
-            variables: [
-                .init(name: "state", initial: .record(["count": .int(1)])),
-                .init(name: "key", initial: .string("count"))
-            ],
-            actions: [
-                .init(
-                    name: "step",
-                    body: .and(
-                        .guard_(.equal(.functionApply(.variable("state"), .variable("key")), .int(1))),
-                        .assign(.named("state"), .except(.variable("state"), .variable("key"), .int(2)))
-                    )
+        let recordInitial: TLARecord = ["count": .int(1)]
+        let state = Var<TLARecord>("state", recordInitial)
+        let key = Var<String>("key", "count")
+        let spec = TLASpec("CompiledRecordFunctionAccess") {
+            Variable(state)
+            Variable(key)
+            Action("step") {
+                ActionExpr.and(
+                    .guard_(.equal(.functionApply(.variable("state"), .variable("key")), .int(1))),
+                    .assign(.named("state"), .except(.variable("state"), .variable("key"), .int(2)))
                 )
-            ],
-            invariants: []
-        )
+            }
+        }
         let compilation = try spec.compile()
         let action = try #require(compilation.compiledActions.first).id
         let initial = try #require(try compilation.initialStateProjections().first)
@@ -836,9 +863,9 @@ struct CompilerPipelineCanonicalizationTests {
             try compilation.successors(for: action, arguments: [], from: initial).first
         )
         let stateToken = try #require(TLAStateProjection.Token(validating: "state"))
-        let state = try #require(projection.value(for: stateToken))
+        let stateValue = try #require(projection.value(for: stateToken))
 
-        #expect(state == TLAValue.record(["count": .int(2)]))
+        #expect(stateValue == TLAValue.record(["count": .int(2)]))
     }
 
     @Test("declaration order changes the compilation identity")
@@ -865,6 +892,61 @@ struct CompilerPipelineCanonicalizationTests {
         let firstIdentity = try first.compile().identity
         let secondIdentity = try second.compile().identity
         #expect(firstIdentity != secondIdentity)
+    }
+
+    @Test("generated host types change the machine surface without changing formal identity")
+    func generatedHostTypesStayOutsideFormalIdentity() throws {
+        func specification(
+            variableType: String = "Count",
+            bindingType: String = "Worker",
+            collectionAction: String? = nil
+        ) -> TLASpec {
+            let collection = SymmetricCollectionDecl(
+                name: "devices",
+                verificationScope: 1,
+                initial: .int(0),
+                generatedElementType: "Device",
+                generatedValueType: "Int"
+            )
+            return TLASpec(
+                name: "GeneratedSchemaIdentity",
+                variables: [
+                    .init(
+                        name: "count",
+                        initial: .int(0),
+                        generatedSwiftType: variableType,
+                        origin: .source
+                    ),
+                    collection.variable
+                ],
+                actions: [
+                    .init(
+                        name: "advance",
+                        body: .guard_(.value(.bool(true))),
+                        bindings: [.init(
+                            name: "worker",
+                            values: [.int(0)],
+                            generatedSwiftType: bindingType
+                        )],
+                        controlOwner: nil,
+                        generatedSymmetricCollectionName: collectionAction
+                    )
+                ],
+                invariants: [],
+                symmetricCollections: [collection]
+            )
+        }
+
+        let baseline = try specification().compile()
+        let variableType = try specification(variableType: "Counter").compile()
+        let bindingType = try specification(bindingType: "Process").compile()
+        let collectionAction = try specification(collectionAction: "devices").compile()
+
+        #expect(variableType.identity == baseline.identity)
+        #expect(bindingType.identity == baseline.identity)
+        #expect(variableType.machineSurfacePlan != baseline.machineSurfacePlan)
+        #expect(bindingType.machineSurfacePlan != baseline.machineSurfacePlan)
+        #expect(collectionAction.identity != baseline.identity)
     }
 
     @Test("compiled descriptions preserve declaration order without exposing runtime slots")
@@ -1050,8 +1132,8 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(computed.initExpr == .add(.variable("seed"), .int(1)))
         #expect(computed.lazySet == nil)
-        #expect(choice.initExpr == nil)
-        #expect(choice.lazySet == .setLiteral([.value(.int(1)), .value(.int(2))]))
+        #expect(choice.initialSet == .setLiteral([.value(.int(1)), .value(.int(2))]))
+        #expect(choice.lazySet == nil)
         #expect(repeated.identity == compilation.identity)
     }
 
@@ -1080,7 +1162,22 @@ struct CompilerPipelineCanonicalizationTests {
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], checkDeadlock: true),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], theorems: [Theorem(name: "Safety", always: .value(.bool(true)))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], symmetricCollections: [.init(name: "members", verificationScope: 1, initial: .int(0))]),
+            {
+                let collection = SymmetricCollectionDecl(
+                    name: "members",
+                    verificationScope: 1,
+                    initial: .int(0),
+                    generatedElementType: "Member",
+                    generatedValueType: "Int"
+                )
+                return TLASpec(
+                    name: "Fingerprint",
+                    variables: base.variables + [collection.variable],
+                    actions: base.actions,
+                    invariants: [],
+                    symmetricCollections: [collection]
+                )
+            }(),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], extendsModules: [.naturals])
         ]
 
@@ -1160,22 +1257,10 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("nested set values with separator-bearing strings have distinct identities")
     func separatorBearingSetValuesDoNotCollide() throws {
-        let splitValues = TLASpec(
-            name: "SeparatorCollision",
-            variables: [
-                NamedVar(name: "value", initial: .set([.string("a"), .string("b")]))
-            ],
-            actions: [],
-            invariants: []
-        )
-        let embeddedSeparator = TLASpec(
-            name: "SeparatorCollision",
-            variables: [
-                NamedVar(name: "value", initial: .set([.string("a\u{1E}string|b")]))
-            ],
-            actions: [],
-            invariants: []
-        )
+        let split = Var<SetExpr<String>>("value", SetExpr("a", "b"))
+        let embedded = Var<SetExpr<String>>("value", SetExpr("a\u{1E}string|b"))
+        let splitValues = TLASpec("SeparatorCollision") { Variable(split) }
+        let embeddedSeparator = TLASpec("SeparatorCollision") { Variable(embedded) }
 
         let splitIdentity = try splitValues.compile().identity
         let embeddedIdentity = try embeddedSeparator.compile().identity

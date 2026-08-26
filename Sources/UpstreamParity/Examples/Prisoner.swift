@@ -7,23 +7,23 @@ import SwiftTLAMacros
 /// model keeps the choice formal with `With`, so no host-language loop or UI
 /// policy decides who visits next.
 @TLAModel
-public struct PrisonerModel: Sendable {
-    public enum Prisoner: String, CaseIterable, FiniteTLAValueDomain {
+package struct PrisonerModel: Sendable {
+    package enum Prisoner: String, CaseIterable, FiniteTLAValueDomain {
         case alice = "Alice"
         case bob = "Bob"
         case eve = "Eve"
 
-        public static var defaultValue: Self { .alice }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .alice }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    public enum Light: String, TLAValueType {
+    package enum Light: String, TLAValueType {
         case off
         case on
 
-        public static var defaultValue: Self { .off }
+        package static var defaultValue: Self { .off }
     }
 
     private enum Scheduler: String, CaseIterable, FiniteTLAValueDomain {
@@ -39,7 +39,7 @@ public struct PrisonerModel: Sendable {
         case chooseVisitor
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Prisoner") {
             Extends(.naturals)
             Algorithm("Prisoner", scoped: { scope in
@@ -89,7 +89,7 @@ public struct PrisonerModel: Sendable {
 }
 
 extension Example {
-    public static let prisonerN3 = Entry(
+    package static let prisonerN3 = Entry(
         id: "Prisoners_Single_Switch/Prisoner",
         upstreamSpec: "Prisoners_Single_Switch",
         upstreamModule: "specifications/Prisoners_Single_Switch/Prisoner.tla",

@@ -52,16 +52,19 @@ extension TLASpec {
         variables.append(
           NamedVar(
             name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr,
-            lazySet: v.lazySet, collectionType: v.collectionType))
+            lazySet: v.lazySet, collectionType: v.collectionType,
+            generatedSwiftType: v.generatedSwiftType, origin: .source))
       } else if let s = comp as? SymmetricCollectionDecl {
-        variables.append(
-          NamedVar(
-            name: s.variable.name, initial: s.variable.initial, initialSet: s.variable.initialSet,
-            initExpr: s.variable.initExpr, lazySet: s.variable.lazySet,
-            collectionType: s.variable.collectionType))
+        variables.append(s.variable)
         symmetricCollections.append(s)
       } else if let a = comp as? ActionDecl {
-        actions.append(NamedAction(name: a.name, body: a.body, bindings: a.bindings))
+        actions.append(NamedAction(
+          name: a.name,
+          body: a.body,
+          bindings: a.bindings,
+          controlOwner: nil,
+          generatedSymmetricCollectionName: a.generatedSymmetricCollectionName
+        ))
       } else if let algorithm = comp as? Algorithm {
         algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
         sourceAlgorithms.append(algorithm)
@@ -154,7 +157,7 @@ extension TLASpec {
         body: ActionNormalization.complete(action.body, variables: variables),
         bindings: action.bindings,
         controlOwner: action.controlOwner,
-        generatedBindingSwiftTypes: action.generatedBindingSwiftTypes
+        generatedSymmetricCollectionName: action.generatedSymmetricCollectionName
       )
     }
 

@@ -6,16 +6,16 @@ import SwiftTLAMacros
 /// The scheduler makes the nondeterministic visitor choice explicit. The
 /// shared switch state and per-prisoner signal counts are typed formal values.
 @TLAModel
-public struct PrisonersModel: Sendable {
-    public enum NonCounterPrisoner: String, CaseIterable, FiniteTLAValueDomain {
+package struct PrisonersModel: Sendable {
+    package enum NonCounterPrisoner: String, CaseIterable, FiniteTLAValueDomain {
         case two = "p2"
         case three = "p3"
         case four = "p4"
 
-        public static var defaultValue: Self { .two }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .two }
+        package static let finiteValues = allCases
 
-        public var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .string(rawValue) }
     }
 
     private enum Scheduler: String, CaseIterable, FiniteTLAValueDomain {
@@ -31,7 +31,7 @@ public struct PrisonersModel: Sendable {
         case chooseVisitor
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Prisoners") {
             Extends(.naturals)
             Algorithm("Prisoners", scoped: { scope in
@@ -76,7 +76,7 @@ public struct PrisonersModel: Sendable {
 }
 
 extension Example {
-    public static let prisoners4 = Entry(
+    package static let prisoners4 = Entry(
         id: "Prisoners/Prisoners",
         upstreamSpec: "Prisoners",
         upstreamModule: "specifications/Prisoners/Prisoners.tla",

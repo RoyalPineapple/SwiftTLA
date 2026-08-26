@@ -12,7 +12,7 @@ struct TLCTemporalAdapterTests {
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .satisfied,
-      graphID: CanonicalGraphRecords.digest(for: graph.graph),
+      graphID: try CanonicalGraphRecords.digest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .notApplicable)
     let input = try fixture.input(swiftRun: graph, swiftResult: swiftResult)
     let result = TLCTemporalAdapter(
@@ -57,7 +57,7 @@ struct TLCTemporalAdapterTests {
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .satisfied,
-      graphID: CanonicalGraphRecords.digest(for: graph.graph),
+      graphID: try CanonicalGraphRecords.digest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .notApplicable)
     let temporalViolation = TLCProcessResult(status: 12, stdout: "Error: Temporal property is violated.", stderr: "")
     let result = TLCTemporalAdapter(
@@ -79,7 +79,7 @@ struct TLCTemporalAdapterTests {
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
-      graphID: CanonicalGraphRecords.digest(for: graph.graph),
+      graphID: try CanonicalGraphRecords.digest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .available,
       traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
@@ -102,7 +102,7 @@ struct TLCTemporalAdapterTests {
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
-      graphID: CanonicalGraphRecords.digest(for: graph.graph),
+      graphID: try CanonicalGraphRecords.digest(for: graph.graph),
       initialStateIDs: [state], traceAvailability: .available,
       traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
@@ -124,7 +124,7 @@ struct TLCTemporalAdapterTests {
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
-      graphID: CanonicalGraphRecords.digest(for: graph.graph),
+      graphID: try CanonicalGraphRecords.digest(for: graph.graph),
       initialStateIDs: [state], traceAvailability: .available,
       traceEvidence: try Fixture.reference(rejectedFixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
@@ -141,7 +141,7 @@ struct TLCTemporalAdapterTests {
     let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
     let admittedSwiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
-      graphID: CanonicalGraphRecords.digest(for: admittedGraph.graph),
+      graphID: try CanonicalGraphRecords.digest(for: admittedGraph.graph),
       initialStateIDs: [admittedState], traceAvailability: .available,
       traceEvidence: try Fixture.reference(admittedFixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
@@ -165,7 +165,7 @@ struct TLCTemporalAdapterTests {
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
-      graphID: CanonicalGraphRecords.digest(for: graph.graph),
+      graphID: try CanonicalGraphRecords.digest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .available,
       traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))

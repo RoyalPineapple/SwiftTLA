@@ -1,83 +1,39 @@
 import Foundation
 import SwiftTLA
-public enum CoreConformanceExitCode: Int32, Equatable, Sendable {
+
+package enum CoreConformanceExitCode: Int32, Equatable, Sendable {
   case exact = 0
   case semanticDifference = 1
   case failure = 2
 }
-public enum CoreConformanceEngine: String, Codable, Equatable, Sendable {
-  case swift
-  case tlc
-  case runner
-}
-public enum CoreConformancePhase: String, Equatable, Sendable {
+
+package enum CoreConformancePhase: String, Equatable, Sendable {
   case preflight
   case swiftAdaptation = "swift-adaptation"
   case tlcExecution = "tlc-execution"
   case tlcParsing = "tlc-parsing"
   case comparison
   case publication
-  fileprivate var engine: CoreConformanceEngine {
-    switch self {
-    case .swiftAdaptation: .swift
-    case .tlcExecution, .tlcParsing: .tlc
-    case .preflight, .comparison, .publication: .runner
-    }
-  }
 }
-public struct CoreConformanceCorrelation: Equatable, Sendable {
-  public let caseID: String
-  public let runID: UUID
-  public let engine: CoreConformanceEngine
-  public init(caseID: String, runID: UUID, engine: CoreConformanceEngine) {
-    self.caseID = caseID
-    self.runID = runID
-    self.engine = engine
-  }
+
+package struct CoreConformanceDiagnostic: Equatable, Sendable {
+  package let code: String
+  package let message: String
+  package let report: ConformanceFailureReport
+  package let phase: CoreConformancePhase
 }
-public struct CoreConformanceDiagnostic: Equatable, Sendable {
-  public let code: String
-  public let message: String
-  public let report: ConformanceFailureReport
-  public let correlation: CoreConformanceCorrelation
-  public let phase: CoreConformancePhase
-  public init(
-    code: String,
-    message: String,
-    report: ConformanceFailureReport,
-    correlation: CoreConformanceCorrelation,
-    phase: CoreConformancePhase
-  ) {
-    self.code = code
-    self.message = message
-    self.report = report
-    self.correlation = correlation
-    self.phase = phase
-  }
+
+package struct CoreConformanceRunResult: Sendable {
+  package let exitCode: CoreConformanceExitCode
+  package let evidenceDirectory: URL?
+  package let comparison: ExactFiniteTLCComparison?
+  package let diagnostic: CoreConformanceDiagnostic?
 }
-public struct CoreConformanceRunResult: Sendable {
-  public let exitCode: CoreConformanceExitCode
-  public let correlation: CoreConformanceCorrelation
-  public let evidenceDirectory: URL?
-  public let comparison: ExactFiniteTLCComparison?
-  public let diagnostic: CoreConformanceDiagnostic?
-  public init(
-    exitCode: CoreConformanceExitCode,
-    correlation: CoreConformanceCorrelation,
-    evidenceDirectory: URL?,
-    comparison: ExactFiniteTLCComparison?,
-    diagnostic: CoreConformanceDiagnostic?
-  ) {
-    self.exitCode = exitCode
-    self.correlation = correlation
-    self.evidenceDirectory = evidenceDirectory
-    self.comparison = comparison
-    self.diagnostic = diagnostic
-  }
-}
+
 package struct CoreConformanceRunner: Sendable {
   private let swiftAdapter: SwiftGraphAdapter
   private let tlcAdapter: TLCProcessAdapter
+
   package init(
     swiftAdapter: SwiftGraphAdapter = SwiftGraphAdapter(),
     tlcAdapter: TLCProcessAdapter = TLCProcessAdapter()
@@ -85,6 +41,7 @@ package struct CoreConformanceRunner: Sendable {
     self.swiftAdapter = swiftAdapter
     self.tlcAdapter = tlcAdapter
   }
+
   package func run(
     `case` declaredCase: CoreConformanceCase,
     swiftExploration: () throws -> SwiftExplorationEvidence,
@@ -93,181 +50,224 @@ package struct CoreConformanceRunner: Sendable {
     outputDirectory: URL,
     swiftActionNames: [String: String] = [:]
   ) -> CoreConformanceRunResult {
-    let correlations = Correlations(
-      caseID: declaredCase.id,
-      runID: tlcRequest.runID
-    )
     guard !FileManager.default.fileExists(atPath: outputDirectory.path) else {
-      let preflightDiagnostic = diagnostic(
+      let failure = diagnostic(
         phase: .preflight,
         code: "output-exists",
         error: RunnerError.outputAlreadyExists,
-        request: tlcRequest,
-        correlations: correlations
+        request: tlcRequest
       )
-      let evidenceDirectory: URL?
-      let reportedDiagnostic: CoreConformanceDiagnostic
       do {
-        evidenceDirectory = try retainPreflightFailure(
-          diagnostic: preflightDiagnostic,
-          declaredCase: declaredCase,
-          request: tlcRequest,
-          correlations: correlations,
-          beside: outputDirectory
+        return .init(
+          exitCode: .failure,
+          evidenceDirectory: try retainPreflightFailure(
+            diagnostic: failure,
+            declaredCase: declaredCase,
+            request: tlcRequest,
+            beside: outputDirectory
+          ),
+          comparison: nil,
+          diagnostic: failure
         )
-        reportedDiagnostic = preflightDiagnostic
       } catch {
-        evidenceDirectory = nil
-        reportedDiagnostic = diagnostic(
-          phase: .preflight,
-          code: "preflight-evidence-retention-failed",
-          error: error,
-          request: tlcRequest,
-          correlations: correlations
+        return .init(
+          exitCode: .failure,
+          evidenceDirectory: nil,
+          comparison: nil,
+          diagnostic: diagnostic(
+            phase: .preflight,
+            code: "preflight-evidence-retention-failed",
+            error: error,
+            request: tlcRequest
+          )
         )
       }
-      return CoreConformanceRunResult(
-        exitCode: .failure,
-        correlation: correlations.runner,
-        evidenceDirectory: evidenceDirectory,
-        comparison: nil,
-        diagnostic: reportedDiagnostic
-      )
     }
+
     var phase: CoreConformancePhase = .preflight
     var staging: URL?
     do {
-      let createdStaging = try createStagingDirectory(
+      let directory = try createStagingDirectory(
         beside: outputDirectory,
         caseID: declaredCase.id,
         runID: tlcRequest.runID
       )
-      staging = createdStaging
-      try tlcAdapter.retain(request: tlcRequest, in: createdStaging)
-      guard declaredCase == tlcRequest.expectedCase else {
-        throw RunnerError.tlcCaseMismatch
-      }
+      staging = directory
+      try tlcAdapter.retain(request: tlcRequest, in: directory)
+      guard declaredCase == tlcRequest.expectedCase else { throw RunnerError.tlcCaseMismatch }
+
       phase = .swiftAdaptation
-      let swiftEvidence = try swiftExploration()
       let swiftRun = try swiftAdapter.adapt(
-        swiftEvidence, for: declaredCase, actionNames: swiftActionNames)
-      try CanonicalConformanceEvidence.writeSwiftRun(
-        swiftRun,
-        correlation: correlations.swift,
-        to: createdStaging
+        swiftExploration(),
+        for: declaredCase,
+        actionNames: swiftActionNames
       )
+      try CanonicalGraphRecords.write(
+        swiftRun,
+        to: directory.appendingPathComponent("swift-graph.jsonl")
+      )
+
       phase = .tlcExecution
       let tlcCapture = try tlcAdapter.capture(
         tlcRequest,
         replay: replay,
-        retainingIn: createdStaging
+        retainingIn: directory
       )
+
       phase = .tlcParsing
       let tlcRun = tlcCapture.graph
-      try CanonicalConformanceEvidence.writeTLCRun(
+      try CanonicalGraphRecords.write(
         tlcRun,
-        correlation: correlations.tlc,
-        to: createdStaging
+        to: directory.appendingPathComponent("tlc-graph.jsonl")
       )
+
       phase = .comparison
-      let comparison = try CanonicalConformanceEvidence.write(
-        correlations: correlations,
-        to: createdStaging
+      let comparison = exactFiniteTLCGraph(expected: tlcRun, actual: swiftRun)
+      try writeComparison(
+        comparison,
+        caseID: declaredCase.id,
+        swiftRun: swiftRun,
+        tlcRun: tlcRun,
+        to: directory
       )
-      let exitCode: CoreConformanceExitCode =
-        comparison.isConformant ? .exact : .semanticDifference
-      try writeRun(
-        exitCode: exitCode, correlation: correlations.runner, diagnostic: nil, to: createdStaging)
+
       phase = .publication
-      try publish(staging: createdStaging, to: outputDirectory)
-      return CoreConformanceRunResult(
-        exitCode: exitCode,
-        correlation: correlations.runner,
+      try publish(staging: directory, to: outputDirectory)
+      return .init(
+        exitCode: comparison.isConformant ? .exact : .semanticDifference,
         evidenceDirectory: outputDirectory,
         comparison: comparison,
         diagnostic: nil
       )
     } catch {
       let failurePhase: CoreConformancePhase = error is TLCGraphEventError ? .tlcParsing : phase
-      let failureDiagnostic = diagnostic(
-        phase: failurePhase, error: error, request: tlcRequest, correlations: correlations)
+      let failure = diagnostic(phase: failurePhase, error: error, request: tlcRequest)
       guard let staging else {
-        return CoreConformanceRunResult(
+        return .init(
           exitCode: .failure,
-          correlation: correlations.runner,
           evidenceDirectory: nil,
           comparison: nil,
-          diagnostic: failureDiagnostic
+          diagnostic: failure
         )
       }
-      if phase == .publication {
-        do {
-          try writeDiagnostic(failureDiagnostic, to: staging)
-          try writeRun(
-            exitCode: .failure,
-            correlation: correlations.runner,
-            diagnostic: failureDiagnostic,
-            to: staging
-          )
-          let evidenceDirectory = try publishFailure(staging: staging, to: outputDirectory)
-          return CoreConformanceRunResult(
-            exitCode: .failure,
-            correlation: correlations.runner,
-            evidenceDirectory: evidenceDirectory,
-            comparison: nil,
-            diagnostic: failureDiagnostic
-          )
-        } catch {
-          let retentionDiagnostic = diagnostic(
+      do {
+        try writeDiagnostic(failure, to: staging)
+        return .init(
+          exitCode: .failure,
+          evidenceDirectory: try publishFailure(staging: staging, to: outputDirectory),
+          comparison: nil,
+          diagnostic: failure
+        )
+      } catch {
+        return .init(
+          exitCode: .failure,
+          evidenceDirectory: nil,
+          comparison: nil,
+          diagnostic: diagnostic(
             phase: .publication,
             code: "evidence-retention-failed",
             error: error,
-            request: tlcRequest,
-            correlations: correlations
+            request: tlcRequest
           )
-          return CoreConformanceRunResult(
-            exitCode: .failure,
-            correlation: correlations.runner,
-            evidenceDirectory: nil,
-            comparison: nil,
-            diagnostic: retentionDiagnostic
-          )
-        }
-      }
-      do {
-        try writeDiagnostic(failureDiagnostic, to: staging)
-        try writeRun(
-          exitCode: .failure,
-          correlation: correlations.runner,
-          diagnostic: failureDiagnostic,
-          to: staging
-        )
-        let evidenceDirectory = try publishFailure(staging: staging, to: outputDirectory)
-        return CoreConformanceRunResult(
-          exitCode: .failure,
-          correlation: correlations.runner,
-          evidenceDirectory: evidenceDirectory,
-          comparison: nil,
-          diagnostic: failureDiagnostic
-        )
-      } catch {
-        let retentionDiagnostic = diagnostic(
-          phase: .publication,
-          code: "evidence-retention-failed",
-          error: error,
-          request: tlcRequest,
-          correlations: correlations
-        )
-        return CoreConformanceRunResult(
-          exitCode: .failure,
-          correlation: correlations.runner,
-          evidenceDirectory: nil,
-          comparison: nil,
-          diagnostic: retentionDiagnostic
         )
       }
     }
   }
+
+  private func writeComparison(
+    _ comparison: ExactFiniteTLCComparison,
+    caseID: String,
+    swiftRun: CanonicalRun,
+    tlcRun: CanonicalRun,
+    to directory: URL
+  ) throws {
+    try ConformanceEvidence.writeJSON(
+      [
+        "caseID": caseID,
+        "result": comparison.isConformant ? "exact" : "difference",
+        "swiftComplete": swiftRun.isPassEligible,
+        "tlcComplete": tlcRun.isPassEligible,
+        "swift": graphSummary(swiftRun.graph),
+        "tlc": graphSummary(tlcRun.graph),
+        "differences": comparisonDifferencesJSON(comparison)
+      ],
+      to: directory.appendingPathComponent("comparison.json")
+    )
+  }
+
+  private func graphSummary(_ graph: CanonicalGraph) -> [String: Int] {
+    [
+      "initialStates": graph.initialStateKeys.count,
+      "states": graph.states.count,
+      "edges": graph.edgeOccurrences.values.reduce(0, +)
+    ]
+  }
+
+  private func writeDiagnostic(_ diagnostic: CoreConformanceDiagnostic, to directory: URL) throws {
+    try ConformanceEvidence.writeJSON(
+      [
+        "code": diagnostic.code,
+        "message": diagnostic.message,
+        "phase": diagnostic.phase.rawValue,
+        "report": failureReportJSON(diagnostic.report)
+      ],
+      to: directory.appendingPathComponent("diagnostic.json")
+    )
+  }
+
+  private func diagnostic(
+    phase: CoreConformancePhase,
+    code: String? = nil,
+    error: Error,
+    request: TLCProcessRequest
+  ) -> CoreConformanceDiagnostic {
+    let report: ConformanceFailureReport
+    if let processError = error as? TLCProcessError {
+      report = processError.failureReport(for: request)
+    } else {
+      report = .init(
+        whatFailed: "Core conformance could not complete \(phase.rawValue).",
+        whereItFailed: "\(phase.rawValue) for case \(request.caseID)",
+        expected: expectedWork(for: phase),
+        actual: redactingSecrets(in: String(describing: error)),
+        nextSafeAction: nextSafeAction(for: phase),
+        evidence: [
+          .init(role: "TLA+ module", location: request.moduleFileName),
+          .init(role: "TLC configuration", location: request.configurationFileName),
+          .init(role: "TLC graph event output", location: request.graphEvents.path)
+        ]
+      )
+    }
+    return .init(
+      code: code ?? "\(phase.rawValue)-failed",
+      message: redactingSecrets(in: String(describing: error)),
+      report: report,
+      phase: phase
+    )
+  }
+
+  private func expectedWork(for phase: CoreConformancePhase) -> String {
+    switch phase {
+    case .preflight: "A fresh output location and a launch binding that matches the declared case."
+    case .swiftAdaptation: "Swift exploration produces a complete canonical graph for the declared case."
+    case .tlcExecution: "TLC launches and writes a complete graph event stream for the declared case."
+    case .tlcParsing: "The TLC graph event stream is complete and belongs to this run."
+    case .comparison: "The complete canonical TLC and SwiftTLA graphs compare exactly."
+    case .publication: "The retained graphs, comparison, and TLC output publish atomically."
+    }
+  }
+
+  private func nextSafeAction(for phase: CoreConformancePhase) -> String {
+    switch phase {
+    case .preflight: "Choose a fresh output directory or inspect the existing retained files."
+    case .swiftAdaptation: "Inspect swift-graph.jsonl and the declared Swift model."
+    case .tlcExecution: "Inspect the retained TLC invocation, stdout, and stderr."
+    case .tlcParsing: "Inspect graph-events.jsonl and the TLC module and configuration."
+    case .comparison: "Inspect comparison.json, tlc-graph.jsonl, and swift-graph.jsonl."
+    case .publication: "Inspect the staging and destination paths."
+    }
+  }
+
   private func createStagingDirectory(beside output: URL, caseID: String, runID: UUID) throws -> URL {
     let parent = output.deletingLastPathComponent()
     try ConformanceEvidence.createDirectory(parent, beneath: parent)
@@ -284,9 +284,11 @@ package struct CoreConformanceRunner: Sendable {
     }
     throw RunnerError.stagingDirectoryUnavailable
   }
+
   private func publish(staging: URL, to outputDirectory: URL) throws {
     try FileManager.default.moveItem(at: staging, to: outputDirectory)
   }
+
   private func publishFailure(staging: URL, to outputDirectory: URL) throws -> URL {
     do {
       try publish(staging: staging, to: outputDirectory)
@@ -308,11 +310,11 @@ package struct CoreConformanceRunner: Sendable {
       throw RunnerError.stagingDirectoryUnavailable
     }
   }
+
   private func retainPreflightFailure(
     diagnostic: CoreConformanceDiagnostic,
     declaredCase: CoreConformanceCase,
     request: TLCProcessRequest,
-    correlations: Correlations,
     beside outputDirectory: URL
   ) throws -> URL {
     let failureDirectory = outputDirectory.deletingLastPathComponent().appendingPathComponent(
@@ -326,12 +328,6 @@ package struct CoreConformanceRunner: Sendable {
     do {
       try tlcAdapter.retain(request: request, in: staging)
       try writeDiagnostic(diagnostic, to: staging)
-      try writeRun(
-        exitCode: .failure,
-        correlation: correlations.runner,
-        diagnostic: diagnostic,
-        to: staging
-      )
       try publish(staging: staging, to: failureDirectory)
       return failureDirectory
     } catch {
@@ -341,86 +337,20 @@ package struct CoreConformanceRunner: Sendable {
   }
 }
 
-extension CoreConformanceRunner {
-  private func writeDiagnostic(_ diagnostic: CoreConformanceDiagnostic, to directory: URL) throws {
-    try ConformanceEvidence.writeJSON(
-      [
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "phase": diagnostic.phase.rawValue,
-        "correlation": correlationJSON(diagnostic.correlation),
-        "report": failureReportJSON(diagnostic.report)
-      ], to: directory.appendingPathComponent("diagnostic.json"))
-  }
-  private func writeRun(
-    exitCode: CoreConformanceExitCode,
-    correlation: CoreConformanceCorrelation,
-    diagnostic: CoreConformanceDiagnostic?,
-    to directory: URL
-  ) throws {
-    var object: [String: Any] = [
-      "exitCode": exitCode.rawValue,
-      "correlation": correlationJSON(correlation)
-    ]
-    if let diagnostic {
-      object["diagnostic"] = [
-        "code": diagnostic.code,
-        "phase": diagnostic.phase.rawValue,
-        "message": diagnostic.message
-      ]
-    }
-    try ConformanceEvidence.writeJSON(object, to: directory.appendingPathComponent("run.json"))
-  }
-  private func diagnostic(
-    phase: CoreConformancePhase,
-    code: String? = nil,
-    error: Error,
-    request: TLCProcessRequest,
-    correlations: Correlations
-  ) -> CoreConformanceDiagnostic {
-    let report: ConformanceFailureReport
-    if let processError = error as? TLCProcessError {
-      report = processError.failureReport(for: request)
-    } else {
-      report = .init(
-        whatFailed: "Core conformance could not complete \(phase.rawValue).",
-        whereItFailed: "\(phase.rawValue) for case \(request.caseID)",
-        expected: expectedWork(for: phase),
-        actual: sanitized(String(describing: error)),
-        nextSafeAction: nextSafeAction(for: phase),
-        evidence: [
-          .init(role: "TLA+ module", location: request.moduleFileName),
-          .init(role: "TLC configuration", location: request.configurationFileName),
-          .init(role: "TLC graph event output", location: request.graphEvents.path)
-        ]
-      )
-    }
-    return CoreConformanceDiagnostic(
-      code: code ?? "\(phase.rawValue)-failed",
-      message: sanitized(String(describing: error)),
-      report: report,
-      correlation: correlations[phase.engine],
-      phase: phase
-    )
-  }
-  private func expectedWork(for phase: CoreConformancePhase) -> String {
-    switch phase {
-    case .preflight: "A fresh output location and a launch binding that matches the declared case."
-    case .swiftAdaptation: "Swift exploration adapts to complete canonical graph evidence for the declared case."
-    case .tlcExecution: "TLC launches and writes a complete graph event stream for the declared case."
-    case .tlcParsing: "The retained TLC graph event stream has the declared run ID and valid canonical events."
-    case .comparison: "The canonical TLC and SwiftTLA runs compare exactly."
-    case .publication: "The complete retained evidence is published atomically to the requested output directory."
-    }
-  }
-  private func nextSafeAction(for phase: CoreConformancePhase) -> String {
-    switch phase {
-    case .preflight: "Choose a fresh output directory or inspect the existing retained evidence; do not overwrite it."
-    case .swiftAdaptation: "Inspect swift-run.json and the declared Swift model before changing the formal source."
-    case .tlcExecution: "Inspect the retained TLC invocation, stdout, and stderr before retrying."
-    case .tlcParsing: "Inspect graph-events.jsonl and the TLC module/configuration before rerunning."
-    case .comparison: "Inspect the exact graph differences, tlc-run.json, and swift-run.json."
-    case .publication: "Inspect the staging and destination paths; preserve the failure evidence before retrying publication."
-    }
-  }
+private enum RunnerError: Error {
+  case outputAlreadyExists
+  case tlcCaseMismatch
+  case stagingDirectoryUnavailable
+}
+
+private func failureReportJSON(_ report: ConformanceFailureReport) -> [String: Any] {
+  [
+    "whatFailed": report.whatFailed,
+    "whereItFailed": report.whereItFailed,
+    "expected": report.expected,
+    "actual": report.actual,
+    "nextSafeAction": report.nextSafeAction,
+    "evidence": report.evidence.map { ["role": $0.role, "location": $0.location] },
+    "toolOutput": report.toolOutput.map { ["stream": $0.stream, "content": $0.content] }
+  ]
 }

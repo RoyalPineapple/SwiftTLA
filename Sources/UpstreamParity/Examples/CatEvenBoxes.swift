@@ -2,15 +2,15 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct CatEvenBoxesModel: Sendable {
-    public enum Direction: String, TLAValueType {
+package struct CatEvenBoxesModel: Sendable {
+    package enum Direction: String, TLAValueType {
         case left
         case right
 
-        public static var defaultValue: Self { .left }
+        package static var defaultValue: Self { .left }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Cat") { scope in
             Extends(.naturals)
             let catBox = scope.sharedVar("catBox", in: 1...6)
@@ -35,15 +35,15 @@ public struct CatEvenBoxesModel: Sendable {
 }
 
 @TLAModel
-public struct CatOddBoxesModel: Sendable {
-    public enum Direction: String, TLAValueType {
+package struct CatOddBoxesModel: Sendable {
+    package enum Direction: String, TLAValueType {
         case left
         case right
 
-        public static var defaultValue: Self { .left }
+        package static var defaultValue: Self { .left }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Cat") { scope in
             Extends(.naturals)
             let catBox = scope.sharedVar("catBox", in: 1...5)
@@ -68,7 +68,7 @@ public struct CatOddBoxesModel: Sendable {
 }
 
 extension Example {
-    public static let catEvenBoxes = Entry(
+    package static let catEvenBoxes = Entry(
         id: "Moving_Cat_Puzzle/CatEvenBoxes",
         upstreamSpec: "Moving_Cat_Puzzle",
         upstreamModule: "specifications/Moving_Cat_Puzzle/Cat.tla",

@@ -7,12 +7,12 @@ import SwiftTLAMacros
 /// sequences of length at most three. `Sequences(of:lengths:)` states those
 /// bounds directly in SwiftTLA instead of hiding them in host-language data.
 @TLAModel
-public struct FindHighestModel: Sendable {
+package struct FindHighestModel: Sendable {
     private enum Step: String, CaseIterable {
         case lb
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("Highest") {
             Extends(.integers)
             Algorithm("Highest", scoped: { scope in
@@ -51,7 +51,7 @@ public struct FindHighestModel: Sendable {
 }
 
 extension Example {
-    public static let findHighest = Entry(
+    package static let findHighest = Entry(
         id: "LearnProofs/FindHighest",
         upstreamSpec: "LearnProofs",
         upstreamModule: "specifications/LearnProofs/FindHighest.tla",

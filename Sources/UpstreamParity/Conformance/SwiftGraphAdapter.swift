@@ -1,6 +1,6 @@
 import SwiftTLA
 
-public enum SwiftGraphAdapterError: Error, Equatable, Sendable {
+package enum SwiftGraphAdapterError: Error, Equatable, Sendable {
   case declaredCaseMismatch(expected: String, actual: String)
   case initialStateMissing(Int)
   case transitionStateMissing(Int)

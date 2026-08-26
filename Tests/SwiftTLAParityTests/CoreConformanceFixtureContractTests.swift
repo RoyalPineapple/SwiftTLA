@@ -53,7 +53,7 @@ struct CoreConformanceFixtureContractTests {
       })
 
     let terminal = try #require(run.graph.states.values.first { $0.bindings["x"] == .integer(5) })
-    #expect(run.graph.observations[terminal.key]?.isTerminal == true)
+    #expect(!run.graph.edgeOccurrences.keys.contains { $0.source == terminal.key })
     #expect(run.graph.edgeOccurrences.values.reduce(0, +) == 9)
 
     let expectedEdges = run.graph.edgeOccurrences.flatMap { edge, count in

@@ -4,7 +4,7 @@ import SwiftTLAMacros
 /// Conway's Game of Life — N=4 grid, blinker start.
 /// Upstream uses function constructor `[p \in Pos |-> ...]` — we use `functionLiteral`.
 extension Example {
-    public static let gameOfLife = Entry(
+    package static let gameOfLife = Entry(
         id: "GameOfLife/N4",
         upstreamSpec: "GameOfLife",
         upstreamModule: "specifications/GameOfLife/GameOfLife.tla",

@@ -5,41 +5,11 @@ import SwiftBasicFormat
 extension ParserSession {
     // MARK: - Unified spec builder parser
 
-    /// Source-boundary declaration facts for one specification closure.
-    public struct BoundSourceContext: Sendable, Equatable {
-        public struct Variable: Sendable, Equatable {
-            public let sourceName: String
-            public let swiftTypeName: String?
-
-            public init(sourceName: String, swiftTypeName: String?) {
-                self.sourceName = sourceName
-                self.swiftTypeName = swiftTypeName
-            }
-        }
-
-        public let variables: [Variable]
-
-        public init(variables: [Variable] = []) {
-            self.variables = variables
-        }
-
-        public var swiftVariableTypes: [String: String] {
-            Dictionary(
-                uniqueKeysWithValues: variables.compactMap { variable in
-                    variable.swiftTypeName.map { (variable.sourceName, $0) }
-                }
-            )
-        }
-    }
-
     public struct ParsedSpecComponents {
-        /// Canonical formal variables and Swift-only type facts for generated
-        /// surface code.
-        public var variables: [ParsedVariable] = []
-        public var actions: [ParsedAction] = []
-        public var symmetricCollections: [ParsedSymmetricCollection] = []
-        public var collectionActions: [ParsedCollectionAction] = []
-        public var diagnostics: [SymmetricCollectionParseDiagnostic] = []
+        public var variables: [NamedVar] = []
+        public var actions: [NamedAction] = []
+        public var symmetricCollections: [SymmetricCollectionDecl] = []
+        public var diagnostics: [SourceParseDiagnostic] = []
         public var invariants: [(name: String, body: StateExpr)] = []
         public var temporal: [(name: String, expr: TemporalExpr)] = []
         public var fairness: [FairnessCondition] = []
@@ -56,173 +26,12 @@ extension ParserSession {
         /// Authored algorithms in the source model.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [ConstantDecl] = []
-        /// The parser's top-level declaration facts for generated Swift.
-        public var sourceContext = BoundSourceContext()
         var instanceBindings: [String: FormalModuleInstance] = [:]
         var algorithmBindings: [String: Algorithm] = [:]
-
-        public func swiftVariableTypes() -> [String: String] {
-            var types = sourceContext.swiftVariableTypes
-            for algorithm in sourceAlgorithms {
-                let localNames: Set<String> = Set(algorithm.model.processes.flatMap { process in
-                    process.components.compactMap {
-                        guard case .local(let state) = $0 else { return nil }
-                        return state.root
-                    }
-                })
-                for state in algorithm.model.stateDeclarations {
-                    if let type = state.swiftTypeName {
-                        types[state.root] = localNames.contains(state.root) ? "TLAValue" : type
-                    }
-                }
-            }
-            return types
-        }
-
-        package func machineSurfaceSwiftFacts(
-            for compilation: CompiledSpecification
-        ) -> MachineSurfaceSwiftFacts {
-            let variableTypesByName = swiftVariableTypes()
-            let actionBindingTypesByName = Dictionary(
-                uniqueKeysWithValues: actions.map { ($0.name, $0.bindingSwiftTypes) }
-            )
-            let symmetricCollectionsByName = Dictionary(
-                uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0) }
-            )
-            let collectionActionsByName = Dictionary(
-                uniqueKeysWithValues: collectionActions.map { ($0.name, $0.collectionName) }
-            )
-            let variableIDsByName = Dictionary(
-                uniqueKeysWithValues: compilation.layout.variables.map {
-                    ($0.declaration.name, $0.id)
-                }
-            )
-            let variableTypes = compilation.layout.variables.reduce(into: [VariableID: String]()) {
-                facts, layout in
-                if let swiftType = variableTypesByName[layout.declaration.name] {
-                    facts[layout.id] = swiftType
-                }
-            }
-            let actionBindingTypes = compilation.layout.actions.reduce(into: [ActionID: [String?]]()) {
-                facts, layout in
-                let action = compilation.spec.actions[layout.id.ordinal]
-                let types = action.generatedBindingSwiftTypes.isEmpty
-                    ? actionBindingTypesByName[layout.declaration.name, default: [:]]
-                    : action.generatedBindingSwiftTypes
-                let bindings = action.bindings.map { types[$0.name] }
-                if bindings.contains(where: { $0 != nil }) {
-                    facts[layout.id] = bindings
-                }
-            }
-            let symmetricCollections = compilation.layout.variables.reduce(
-                into: [VariableID: MachineSurfaceSwiftFacts.SymmetricCollection]()
-            ) { facts, layout in
-                guard let collection = symmetricCollectionsByName[layout.declaration.name] else {
-                    return
-                }
-                facts[layout.id] = .init(
-                    elementType: collection.elementType,
-                    valueType: collection.valueType,
-                    verificationScope: collection.verificationScope,
-                    initial: collection.declaration.initial
-                )
-            }
-            let collectionActions = compilation.layout.actions.reduce(into: [ActionID: VariableID]()) {
-                facts, layout in
-                guard let collectionName = collectionActionsByName[layout.declaration.name],
-                      let variableID = variableIDsByName[collectionName]
-                else {
-                    return
-                }
-                facts[layout.id] = variableID
-            }
-            return .init(
-                variableTypes: variableTypes,
-                actionBindingTypes: actionBindingTypes,
-                symmetricCollections: symmetricCollections,
-                collectionActions: collectionActions
-            )
-        }
-    }
-
-    public struct ParsedVariable: Sendable, Equatable {
-        public var formal: NamedVar
-        public var swiftTypeName: String?
-
-        public init(
-            name: String,
-            initial: TLAValue,
-            initialSet: StateExpr? = nil,
-            initExpr: StateExpr? = nil,
-            lazySet: StateExpr? = nil,
-            collectionType: CollectionVarType = .scalar,
-            swiftTypeName: String? = nil
-        ) {
-            self.formal = NamedVar(
-                name: name,
-                initial: initial,
-                initialSet: initialSet,
-                initExpr: initExpr,
-                lazySet: lazySet,
-                collectionType: collectionType
-            )
-            self.swiftTypeName = swiftTypeName
-        }
-
-        public init(formal: NamedVar, swiftTypeName: String? = nil) {
-            self.formal = formal
-            self.swiftTypeName = swiftTypeName
-        }
-
-        public var name: String { formal.name }
-        public var initial: TLAValue { formal.initial }
-        public var initialSet: StateExpr? { formal.initialSet }
-        public var initExpr: StateExpr? { formal.initExpr }
-        public var lazySet: StateExpr? { formal.lazySet }
-        public var collectionType: CollectionVarType { formal.collectionType }
-    }
-
-    public struct ParsedAction: Sendable, Equatable {
-        public let name: String
-        public let body: ActionExpr
-        public let bindings: [ActionBinding]
-        public let bindingSwiftTypes: [String: String]
-
-        public init(
-            name: String,
-            body: ActionExpr,
-            bindings: [ActionBinding] = [],
-            bindingSwiftTypes: [String: String] = [:]
-        ) {
-            self.name = name
-            self.body = body
-            self.bindings = bindings
-            self.bindingSwiftTypes = bindingSwiftTypes
-        }
-    }
-
-    public struct ParsedSymmetricCollection {
-        public let name: String
-        public let elementType: String
-        public let valueType: String
-        public let verificationScope: Int
-        public let source: String
-        public let declaration: SymmetricCollectionDecl
-    }
-
-    public struct ParsedCollectionAction {
-        public let name: String
-        public let collectionName: String
-        /// Swift-only source provenance. The executable action is retained
-        /// only in `ParsedAction` and lowered once into `TLASpec`.
-        public let source: String
     }
 
     /// Evidence retained when the source parser cannot form a formal model.
-    ///
-    /// The historical name is kept because callers already catch this error;
-    /// it now covers every source-parser diagnostic, not only collections.
-    public struct SymmetricCollectionParseDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
+    public struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
         public struct SourceSpan: Sendable, Hashable, CustomStringConvertible {
             public enum Location: Sendable, Hashable, CustomStringConvertible {
                 case utf8Offset(Int)
@@ -374,9 +183,6 @@ extension ParserSession {
                 ))
             }
         }
-        result.sourceContext = .init(variables: result.variables.map {
-            .init(sourceName: $0.name, swiftTypeName: $0.swiftTypeName)
-        })
         return result
     }
 
@@ -512,7 +318,12 @@ extension ParserSession {
             if callName == "Var" && args.count < 2,
                isDefaultConstructibleVarType(fc),
                let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
-                result.variables.append(.init(name: name, initial: .int(0), swiftTypeName: varTypeName))
+                result.variables.append(.init(
+                    name: name,
+                    initial: .int(0),
+                    generatedSwiftType: varTypeName,
+                    origin: .source
+                ))
                 continue
             }
 
@@ -522,7 +333,8 @@ extension ParserSession {
                         name: patternName,
                         initial: .int(0),
                         initialSet: .setLiteral(range.map { .value(.int($0)) }),
-                        swiftTypeName: varTypeName ?? "Int"
+                        generatedSwiftType: varTypeName ?? "Int",
+                        origin: .source
                     ))
                     continue
                 }
@@ -532,13 +344,17 @@ extension ParserSession {
                    let elementType = setExpressionElementTypeName(rangeExpr) {
                     result.variables.append(.init(
                         name: patternName, initial: .int(0), initialSet: initialSet,
-                        swiftTypeName: varTypeName ?? elementType
+                        generatedSwiftType: varTypeName ?? elementType,
+                        origin: .source
                     ))
                     continue
                 }
                 let lowerBound = parseRangeLowerBound(rangeExpr)
                 result.variables.append(.init(
-                    name: patternName, initial: .int(lowerBound), swiftTypeName: varTypeName
+                    name: patternName,
+                    initial: .int(lowerBound),
+                    generatedSwiftType: varTypeName,
+                    origin: .source
                 ))
                 continue
             }
@@ -546,7 +362,10 @@ extension ParserSession {
             if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
                 let firstValue = parseValuesFirst(valuesArg)
                 result.variables.append(.init(
-                    name: patternName, initial: .string(firstValue), swiftTypeName: varTypeName
+                    name: patternName,
+                    initial: .string(firstValue),
+                    generatedSwiftType: varTypeName,
+                    origin: .source
                 ))
                 continue
             }
@@ -570,7 +389,8 @@ extension ParserSession {
                         name: varName,
                         initial: .int(0),
                         initExpr: initial,
-                        swiftTypeName: varTypeName ?? inferredType
+                        generatedSwiftType: varTypeName ?? inferredType,
+                        origin: .source
                     ))
                     continue
                 }
@@ -589,7 +409,10 @@ extension ParserSession {
                 }
                 let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
                 result.variables.append(.init(
-                    name: varName, initial: initial, swiftTypeName: varTypeName ?? inferredType
+                    name: varName,
+                    initial: initial,
+                    generatedSwiftType: varTypeName ?? inferredType,
+                    origin: .source
                 ))
             } else {
                 guard let initial = parsedInitialValue(args[0].expression) else {
@@ -601,7 +424,10 @@ extension ParserSession {
                 }
                 let inferredType = initialValueTypeName(from: args[0].expression)
                 result.variables.append(.init(
-                    name: patternName, initial: initial, swiftTypeName: varTypeName ?? inferredType
+                    name: patternName,
+                    initial: initial,
+                    generatedSwiftType: varTypeName ?? inferredType,
+                    origin: .source
                 ))
             }
         }
@@ -1326,8 +1152,14 @@ extension ParserSession {
         let replacement = result.variables[latest]
         result.variables.remove(at: latest)
         result.variables[matchingIndices[0]] = .init(
-            formal: replacement.formal,
-            swiftTypeName: replacement.swiftTypeName ?? existing.swiftTypeName
+            name: replacement.name,
+            initial: replacement.initial,
+            initialSet: replacement.initialSet,
+            initExpr: replacement.initExpr,
+            lazySet: replacement.lazySet,
+            collectionType: replacement.collectionType,
+            generatedSwiftType: replacement.generatedSwiftType ?? existing.generatedSwiftType,
+            origin: replacement.origin
         )
     }
 
@@ -1525,7 +1357,7 @@ extension ParserSession {
         _ expression: ExprSyntax,
         actionName: String,
         position: Int,
-        diagnostics: inout [SymmetricCollectionParseDiagnostic]
+        diagnostics: inout [SourceParseDiagnostic]
     ) -> ActionBinding? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ActionParameter"
@@ -1571,7 +1403,23 @@ extension ParserSession {
             ))
             return nil
         }
-        return ActionBinding(name: name, values: values)
+        return ActionBinding(
+            name: name,
+            values: values,
+            generatedSwiftType: actionParameterSwiftType(valuesExpression)
+        )
+    }
+
+    private func actionParameterSwiftType(_ expression: ExprSyntax) -> String? {
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "finiteValues",
+           let base = member.base {
+            return terminalTypeName(in: base)
+        }
+        guard let array = expression.as(ArrayExprSyntax.self),
+              let first = array.elements.first?.expression
+        else { return nil }
+        return initialValueTypeName(from: first)
     }
 
     func closureParameterNames(in closure: ClosureExprSyntax) -> [String] {
@@ -1718,7 +1566,7 @@ public struct LanguageCapabilityDiagnostic: Error, Sendable, Hashable, CustomStr
     public let operation: Operation
     public let source: String
     public let sourcePath: [String]
-    public let sourceSpan: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan
+    public let sourceSpan: SpecParser.SourceParseDiagnostic.SourceSpan
     public let expected: String
     public let actual: String
     public let nextSafeAction: String
@@ -1729,7 +1577,7 @@ public struct LanguageCapabilityDiagnostic: Error, Sendable, Hashable, CustomStr
         operation: Operation,
         source: String,
         sourcePath: [String] = [],
-        sourceSpan: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan,
+        sourceSpan: SpecParser.SourceParseDiagnostic.SourceSpan,
         expected: String,
         actual: String,
         nextSafeAction: String

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ConformanceGovernanceError: Error, Equatable, Sendable {
+package enum ConformanceGovernanceError: Error, Equatable, Sendable {
   case invalidSchema(String)
   case duplicateID(kind: String, id: String)
   case invalidField(record: String, field: String)

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
+package enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
   case emptyPermutationGroup
   case incompatiblePermutationDomains
   case permutationDoesNotPreserveStateSpace
@@ -11,10 +11,10 @@ public enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
   case missingReducedRepresentative(engine: SymmetryExplorationEngine, representative: String)
 }
 
-public struct SymmetryPermutation: Equatable, Sendable {
-  public let constantMapping: [String: String]
+package struct SymmetryPermutation: Equatable, Sendable {
+  package let constantMapping: [String: String]
 
-  public init(constantMapping: [String: String]) throws {
+  package init(constantMapping: [String: String]) throws {
     guard !constantMapping.isEmpty,
           Set(constantMapping.values).count == constantMapping.count,
           Set(constantMapping.keys) == Set(constantMapping.values),
@@ -24,7 +24,7 @@ public struct SymmetryPermutation: Equatable, Sendable {
     self.constantMapping = constantMapping
   }
 
-  public func apply(_ state: CanonicalState) throws -> CanonicalState {
+  package func apply(_ state: CanonicalState) throws -> CanonicalState {
     CanonicalState(bindings: try state.bindings.mapValues(apply))
   }
 
@@ -66,12 +66,12 @@ public struct SymmetryPermutation: Equatable, Sendable {
   }
 }
 
-public struct SymmetryOrbitDerivation: Equatable, Sendable {
-  public let group: [SymmetryPermutation]
-  public let orbits: [[CanonicalStateKey]]
-  public let representativeForState: [CanonicalStateKey: CanonicalStateKey]
+package struct SymmetryOrbitDerivation: Equatable, Sendable {
+  package let group: [SymmetryPermutation]
+  package let orbits: [[CanonicalStateKey]]
+  package let representativeForState: [CanonicalStateKey: CanonicalStateKey]
 
-  public init(
+  package init(
     states: [CanonicalState],
     permutations: [SymmetryPermutation]
   ) throws {

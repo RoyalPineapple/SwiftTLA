@@ -1,8 +1,8 @@
 # Upstream parity
 
-Upstream parity keeps one canonical SwiftTLA source model for each selected
-example. The canonical corpus owns its source model, module closure,
-configuration, and provenance.
+Upstream parity is repository validation tooling. It keeps one canonical
+SwiftTLA source model for each selected example. The canonical corpus owns its
+source model, module closure, configuration, and provenance.
 
 ```text
 canonical Swift source model → compile → rendered module bundle
@@ -33,11 +33,13 @@ Both explorations use the canonical graph schema.
 The comparator evaluates canonical initial states, state bindings, labeled
 edge multiplicities, and outcomes.
 
-GitHub Actions retains the provenance, tool identity, raw TLC event stream,
-canonical runs, and `core-decision.json` for each declared case.
-The decision record references the exact run and graph chunks by digest. Its
-reader reconstructs both graphs and repeats the comparison. The retained
-canonical records locate the first difference. See
+GitHub Actions retains the tool invocation, raw TLC event stream, complete
+`swift-graph.jsonl` and `tlc-graph.jsonl` streams, and one `comparison.json`
+for each declared case. Each graph stream ends with its outcome and declared
+record counts, and retains any diagnostics or counterexample traces. Missing,
+truncated, failed, and bounded streams cannot match.
+The comparison record reports exact equality or the first structured
+difference. See
 [Core graph conformance](CoreGraphConformance.md).
 
 ## Temporal and symmetry cases
@@ -53,5 +55,6 @@ See [Temporal and symmetry conformance](TemporalSymmetryConformance.md).
 
 TLC supplies independent evidence for the declared finite model and
 configuration. The exact comparison supplies the admission fact for that
-case. The evidence record names the source model, compilation identity,
-configuration, module closure, tool identity, and retained graph data.
+case. The declared case and retained TLC invocation identify the source model,
+configuration, module closure, and tool. The graph streams retain the compared
+behavior.

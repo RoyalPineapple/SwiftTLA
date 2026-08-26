@@ -1,19 +1,19 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-public struct SimpleAllocatorModel: Sendable {
-    public enum Client: String, CaseIterable, FiniteTLAValueDomain {
+package struct SimpleAllocatorModel: Sendable {
+    package enum Client: String, CaseIterable, FiniteTLAValueDomain {
         case c1, c2, c3
 
-        public static var defaultValue: Self { .c1 }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .c1 }
+        package static let finiteValues = allCases
     }
 
-    public enum Resource: String, CaseIterable, FiniteTLAValueDomain {
+    package enum Resource: String, CaseIterable, FiniteTLAValueDomain {
         case r1, r2
 
-        public static var defaultValue: Self { .r1 }
-        public static let finiteValues = allCases
+        package static var defaultValue: Self { .r1 }
+        package static let finiteValues = allCases
     }
 
     private enum RequestedResources: CaseIterable, FiniteTLAValueDomain {
@@ -40,7 +40,7 @@ public struct SimpleAllocatorModel: Sendable {
         }
     }
 
-    public static var spec: TLASpec {
+    package static var spec: TLASpec {
         let unsat = Var<Function<Client, SetExpr<Resource>>>("unsat")
         let alloc = Var<Function<Client, SetExpr<Resource>>>("alloc")
         let client = Expr<Client>(.variable("client"))
@@ -102,7 +102,7 @@ public struct SimpleAllocatorModel: Sendable {
 }
 
 extension Example {
-    public static let simpleAllocator = Entry(
+    package static let simpleAllocator = Entry(
         id: "allocator/SimpleAllocator",
         upstreamSpec: "allocator",
         upstreamModule: "specifications/allocator/SimpleAllocator.tla",

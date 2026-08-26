@@ -12,8 +12,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
-        .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
-        .library(name: "UpstreamParity", targets: ["UpstreamParity"])
+        .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"])
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0")
@@ -35,9 +34,8 @@ let package = Package(
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax")
         ], swiftSettings: settings),
-        // The externally qualified upstream backbone is its own source target
-        // so its exact models can be exported without compiling the full
-        // example gallery. UpstreamParity re-exports these public types.
+        // Repository tools export the canonical corpus without compiling the
+        // full example gallery.
         .target(
             name: "CanonicalUpstreamCorpus",
             dependencies: ["SwiftTLA", "SwiftTLAMacros"],
