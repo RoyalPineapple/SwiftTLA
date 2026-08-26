@@ -150,6 +150,7 @@ extension Example {
         upstreamModule: "specifications/chang_roberts/ChangRoberts.tla",
         upstreamCfg: "specifications/chang_roberts/MCChangRoberts.cfg",
         expectedDistinct: 137,
+        maximumStateLimit: 50_000,
         spec: ChangRobertsModel.spec,
         notes: "N=3, Id=i. 137 states matching upstream. Generated PlusCal-shaped processes.",
     )

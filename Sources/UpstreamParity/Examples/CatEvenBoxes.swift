@@ -74,6 +74,7 @@ extension Example {
         upstreamModule: "specifications/Moving_Cat_Puzzle/Cat.tla",
         upstreamCfg: "specifications/Moving_Cat_Puzzle/CatEvenBoxes.cfg",
         expectedDistinct: 48,
+        maximumStateLimit: 50_000,
         spec: CatEvenBoxesModel.spec,
         notes: "Number_Of_Boxes=6. Typed direction phase. TLC upstream = 48."
     )

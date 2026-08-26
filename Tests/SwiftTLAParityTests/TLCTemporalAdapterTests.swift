@@ -428,25 +428,30 @@ struct TLCTemporalAdapterTests {
       try Data("{\"schema\":\"TemporalSymmetryManifest\"}".utf8).write(to: manifest)
       try Data("{\"toolchain\":\"locked\"}".utf8).write(to: toolchain)
       launchCase = try FiniteGraphCase(
-        id: "temporal", moduleSHA256: SHA256.hex(Data(contentsOf: module)),
+        id: "temporal",
+        exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
+        moduleSHA256: SHA256.hex(Data(contentsOf: module)),
         cfgSHA256: SHA256.hex(Data(contentsOf: configuration)), arguments: [],
-        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
-        deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: try testReferencePin())
+        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), operatingSystem: "macos",
+        architecture: "arm64", environment: [:], pin: try testReferencePin())
       completeGraphCase = try FiniteGraphCase(
-        id: "temporal", moduleSHA256: SHA256.hex(Data(contentsOf: module)),
+        id: "temporal",
+        exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
+        moduleSHA256: SHA256.hex(Data(contentsOf: module)),
         cfgSHA256: SHA256.hex(Data(contentsOf: graphConfiguration)), arguments: [],
-        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
-        deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: try testReferencePin())
+        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), operatingSystem: "macos",
+        architecture: "arm64", environment: [:], pin: try testReferencePin())
       temporalCase = try TemporalCase(
         id: launchCase.id,
         sourceInput: try Fixture.reference(module, path: "Verification/TemporalSymmetryConformance/TemporalFixture.tla"),
-        configuration: caseConfiguration)
+        configuration: caseConfiguration,
+        exploration: launchCase.exploration)
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
-        workingDirectory: root, arguments: [],
+        workingDirectory: root,
         finiteGraphCase: launchCase, runID: UUID(), referencePin: launchCase.pin)
       completeGraphRequest = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
@@ -454,7 +459,7 @@ struct TLCTemporalAdapterTests {
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: graphConfiguration),
         graphEvents: root.appendingPathComponent("complete-events.jsonl"),
         traceOutput: root.appendingPathComponent("complete-trace.json"),
-        workingDirectory: root, arguments: [],
+        workingDirectory: root,
         finiteGraphCase: completeGraphCase, runID: UUID(), referencePin: completeGraphCase.pin)
       swiftRun = try TLCGraphReader(finiteGraphCase: launchCase).readCompletedGraph(
         graphStream(case: launchCase, runID: request.runID),
@@ -476,7 +481,8 @@ struct TLCTemporalAdapterTests {
           configuration: TemporalCaseConfiguration(
             property: property ?? temporalCase.configuration.property,
             fairness: temporalCase.configuration.fairness,
-            allowsImplicitStuttering: allowsImplicitStuttering))
+            allowsImplicitStuttering: allowsImplicitStuttering),
+          exploration: temporalCase.exploration)
       return TLCTemporalCaptureInput(
         temporalCase: selectedCase,
         request: request ?? self.request,
@@ -498,7 +504,6 @@ struct TLCTemporalAdapterTests {
         graphEvents: request.graphEvents,
         traceOutput: traceOutput,
         workingDirectory: request.workingDirectory,
-        arguments: request.arguments,
         finiteGraphCase: request.finiteGraphCase,
         runID: request.runID,
         timeout: request.timeout,
@@ -541,7 +546,6 @@ private func graphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) thr
     "bridgeClass": pin.bridgeClass, "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
     "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
     "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-    "workers": finiteGraphCase.workers, "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial, "deadlock": finiteGraphCase.deadlock,
     "os": finiteGraphCase.operatingSystem, "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
   ]
   let common: [String: Any] = [
@@ -645,8 +649,7 @@ private func graphProvenance(_ finiteGraphCase: FiniteGraphCase) -> [String: Any
     "bridgeClass": pin.bridgeClass, "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
     "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
     "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-    "workers": finiteGraphCase.workers, "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
-    "deadlock": finiteGraphCase.deadlock, "os": finiteGraphCase.operatingSystem,
+    "os": finiteGraphCase.operatingSystem,
     "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
   ]
 }

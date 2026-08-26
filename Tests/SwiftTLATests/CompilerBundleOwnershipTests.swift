@@ -206,7 +206,7 @@ struct CompilerBundleOwnershipTests {
     )
 
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
-    #expect(throws: CompilationDiagnostic.self) { _ = ModelChecker(compilation: try invalid.compile(), configuration: try .init(maximumStateLimit: 100_000)) }
+    #expect(throws: CompilationDiagnostic.self) { _ = ModelChecker(compilation: try invalid.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)) }
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
   }
 

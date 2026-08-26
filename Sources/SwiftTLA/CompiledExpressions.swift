@@ -8,7 +8,7 @@ struct CompiledRecordExpression: Sendable {
     let fields: [Field]
 
     init(_ fields: [Field]) {
-        self.fields = fields.sorted { $0.key.canonicalEncoding < $1.key.canonicalEncoding }
+        self.fields = fields.sorted { $0.key < $1.key }
     }
 }
 

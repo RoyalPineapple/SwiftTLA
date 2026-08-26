@@ -1,4 +1,5 @@
 import Foundation
+import SwiftTLA
 
 package enum TemporalFairnessMode: String, Codable, Sendable {
   case none
@@ -85,55 +86,81 @@ package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
   package let sourceInput: RetainedFileReference
   package let configuration: TemporalCaseConfiguration
+  package let exploration: FiniteExplorationConfiguration
 
   package init(
     id: String,
     sourceInput: RetainedFileReference,
-    configuration: TemporalCaseConfiguration
+    configuration: TemporalCaseConfiguration,
+    exploration: FiniteExplorationConfiguration
   ) throws {
     self.id = id
     self.sourceInput = sourceInput
     self.configuration = configuration
+    self.exploration = exploration
     try validate()
   }
 
   private func validate() throws {
     try sourceInput.validate()
-    guard !id.isEmpty else {
+    guard id.isEmpty == false,
+          case .disabled = exploration.symmetryReduction else {
       throw EvidenceFormatError.invalidField(record: id, field: "temporal case")
     }
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable { case id, sourceInput, configuration }
+  private enum CodingKeys: String, CodingKey, CaseIterable {
+    case id, sourceInput, configuration, exploration
+  }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
       sourceInput: try container.decode(RetainedFileReference.self, forKey: .sourceInput),
-      configuration: try container.decode(TemporalCaseConfiguration.self, forKey: .configuration))
+      configuration: try container.decode(TemporalCaseConfiguration.self, forKey: .configuration),
+      exploration: try container.decode(FiniteExplorationConfiguration.self, forKey: .exploration))
   }
 }
 
 package struct SymmetryCase: Equatable, Codable, Sendable {
   package let id: String
   package let scope: Int
+  package let rawExploration: FiniteExplorationConfiguration
+  package let reducedExploration: FiniteExplorationConfiguration
 
-  package init(id: String, scope: Int) throws {
-    guard !id.isEmpty, scope > 0 else {
+  package init(
+    id: String,
+    scope: Int,
+    rawExploration: FiniteExplorationConfiguration,
+    reducedExploration: FiniteExplorationConfiguration
+  ) throws {
+    guard id.isEmpty == false, scope > 0,
+          case .disabled = rawExploration.symmetryReduction,
+          case .enabled = reducedExploration.symmetryReduction else {
       throw EvidenceFormatError.invalidField(record: id, field: "symmetry case")
     }
     self.id = id
     self.scope = scope
+    self.rawExploration = rawExploration
+    self.reducedExploration = reducedExploration
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable { case id, scope }
+  private enum CodingKeys: String, CodingKey, CaseIterable {
+    case id, scope, rawExploration, reducedExploration
+  }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
-      scope: try container.decode(Int.self, forKey: .scope))
+      scope: try container.decode(Int.self, forKey: .scope),
+      rawExploration: try container.decode(
+        FiniteExplorationConfiguration.self,
+        forKey: .rawExploration),
+      reducedExploration: try container.decode(
+        FiniteExplorationConfiguration.self,
+        forKey: .reducedExploration))
   }
 }
 

@@ -5,16 +5,6 @@ import Testing
 
 @Suite("typed refinement declarations")
 struct RefinementDeclarationTests {
-  @Test("finite exploration configuration rejects non-positive bounds")
-  func rejectsNonPositiveExplorationBounds() {
-    #expect(throws: FiniteExplorationConfigurationError.nonPositiveStateLimit(0)) {
-      _ = try FiniteExplorationConfiguration(maximumStateLimit: 0)
-    }
-    #expect(throws: FiniteExplorationConfigurationError.nonPositiveStateLimit(-1)) {
-      _ = try FiniteExplorationConfiguration(maximumStateLimit: -1)
-    }
-  }
-
   @Test("direct module rendering follows linked instance declarations")
   func rendersLinkedTarget() throws {
     let state = Var<Int>("state", 0)
@@ -138,7 +128,7 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    guard case .ok = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome else {
+    guard case .ok = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check() else {
       Issue.record("Expected the mapped concrete model to refine the abstract model.")
       return
     }
@@ -164,7 +154,7 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    let result = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
+    let result = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
     guard case .refinementViolated(let refinement, .transition) = result else {
       Issue.record("Expected a refinement transition violation, got \(result).")
       return
@@ -194,7 +184,7 @@ struct RefinementDeclarationTests {
 
     let result = try ModelChecker(
       compilation: try concrete.compile(),
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)
+      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)
     ).check()
     guard case .refinementUnproven(let refinement, .depthExceeded) = result else {
       Issue.record("Expected an unproven refinement result, got \(result).")

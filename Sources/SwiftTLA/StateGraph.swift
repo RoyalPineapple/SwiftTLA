@@ -63,7 +63,7 @@ package struct ModelExplorationResult {
     let compiledStates: [StateGraph.StateID: CompiledState]
 
     public var isComplete: Bool {
-        if case .ok = result.underlyingOutcome { return true }
+        if case .ok = result { return true }
         return false
     }
 

@@ -12,6 +12,15 @@ struct SymmetricCollectionCanonicalizationTests {
     let transitions: Set<String>
   }
 
+  @Test("Compiled value ordering distinguishes nested values from delimiter-shaped strings")
+  func compiledValueOrderingIsStructural() {
+    let nested = CompiledValue.tuple([.string("a"), .string("b")])
+    let delimiterShaped = CompiledValue.tuple([.string("a,string:b")])
+
+    #expect((nested == delimiterShaped) == false)
+    #expect(nested < delimiterShaped || delimiterShaped < nested)
+  }
+
   private func independentlyCanonicalizedGraph(
     _ graph: StateGraph,
     groups: [[TLAValue]]
@@ -141,25 +150,25 @@ struct SymmetricCollectionCanonicalizationTests {
 
   private func explorationGraphs(for spec: TLASpec) throws -> (raw: StateGraph, reduced: StateGraph) {
     let compilation = try spec.compile()
-    let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 100_000)
     return (
       raw: try ModelChecker(
         compilation: compilation,
-        configuration: configuration,
-        usesSymmetryReduction: false
+        configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100_000, symmetryReduction: .disabled)
       ).exploreGraph(),
       reduced: try ModelChecker(
         compilation: compilation,
-        configuration: configuration,
-        usesSymmetryReduction: true
+        configuration: try FiniteExplorationConfiguration(
+          maximumStateLimit: 100_000,
+          symmetryReduction: .enabled(maximumPermutationCount: 100_000))
       ).exploreGraph()
     )
   }
 
-  private func storesCanonicalStates(_ graph: StateGraph, groups: [[TLAValue]]) -> Bool {
-    graph.states.values.allSatisfy {
-      encode($0.entries) == independentlyCanonicalizedState($0, groups: groups)
+  private func storesOneRepresentativePerOrbit(_ graph: StateGraph, groups: [[TLAValue]]) -> Bool {
+    let orbits = graph.states.values.map {
+      independentlyCanonicalizedState($0, groups: groups)
     }
+    return Set(orbits).count == graph.states.count
   }
 
   @Test("Nested symmetric values are quotient-canonicalized without collapsing identities")
@@ -189,7 +198,7 @@ struct SymmetricCollectionCanonicalizationTests {
     }
     let graphs = try explorationGraphs(for: symmetric)
     let groups = symmetric.symmetricCollections.map { $0.metadata.members }
-    #expect(storesCanonicalStates(graphs.reduced, groups: groups))
+    #expect(storesOneRepresentativePerOrbit(graphs.reduced, groups: groups))
     #expect(independentlyCanonicalizedGraph(graphs.raw, groups: groups)
       == independentlyCanonicalizedGraph(graphs.reduced, groups: groups))
   }
@@ -211,7 +220,7 @@ struct SymmetricCollectionCanonicalizationTests {
       }
       let graphs = try explorationGraphs(for: symmetric)
       let groups = symmetric.symmetricCollections.map { $0.metadata.members }
-      #expect(storesCanonicalStates(graphs.reduced, groups: groups))
+      #expect(storesOneRepresentativePerOrbit(graphs.reduced, groups: groups))
       #expect(independentlyCanonicalizedGraph(graphs.raw, groups: groups)
         == independentlyCanonicalizedGraph(graphs.reduced, groups: groups))
     }

@@ -22,13 +22,12 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let formalName: String
         package let swiftType: String
         package let domain: [TLAValue]
-        package let isPublic: Bool
+        package var isPublic: Bool { domain.count > 1 }
 
-        package init(formalName: String, swiftType: String, domain: [TLAValue], isPublic: Bool) {
+        package init(formalName: String, swiftType: String, domain: [TLAValue]) {
             self.formalName = formalName
             self.swiftType = swiftType
             self.domain = domain
-            self.isPublic = isPublic
         }
     }
 
@@ -166,8 +165,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                             fallback: binding.values[0],
                             path: "actions.\(layoutAction.declaration.name).bindings.\(binding.sourceName)"
                         ),
-                        domain: binding.values,
-                        isPublic: binding.values.count > 1
+                        domain: binding.values
                     )
                 },
                 symmetricCollection: collection

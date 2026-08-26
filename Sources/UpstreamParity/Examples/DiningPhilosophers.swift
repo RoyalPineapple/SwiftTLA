@@ -179,6 +179,7 @@ extension Example {
         upstreamModule: "specifications/DiningPhilosophers/DiningPhilosophers.tla",
         upstreamCfg: "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
         expectedDistinct: 67,
+        maximumStateLimit: 50_000,
         spec: DiningPhilosophersModel.spec,
         notes: "NP=5. Canonical PlusCal-shaped process model with typed fork records.",
     )

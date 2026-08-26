@@ -80,58 +80,6 @@ struct CompiledRuntime {
         return try boolean(predicate, in: state, enabledActions: try enabledActions(in: state))
     }
 
-    func canonicalState(_ state: CompiledState) throws -> CompiledState {
-        try canonicalState(state, values: []).state
-    }
-
-    func canonicalState(
-        _ state: CompiledState,
-        values: [CompiledValue]
-    ) throws -> (state: CompiledState, values: [CompiledValue]) {
-        try state.requireIdentity(compilation.identity)
-        let groups = semantics.symmetricCollections.map {
-            SymmetricCollectionPermutationGroup(members: $0.members)
-        }
-        let candidates = groups.reduce([(state: state, values: values)]) { candidates, group in
-            candidates.flatMap { candidate in
-                group.mappings.map { mapping in
-                    (
-                        state: candidate.state.transformingFormalValues {
-                            applySymmetricMemberPermutation($0, mapping: mapping)
-                        },
-                        values: candidate.values.map {
-                            $0.transformingFormalValues {
-                                applySymmetricMemberPermutation($0, mapping: mapping)
-                            }
-                        }
-                    )
-                }
-            }
-        }
-        let base = try candidates.min {
-            let lhs = try $0.state.canonicalEncoding(using: layout)
-                + "|arguments:"
-                + $0.values.map(\.canonicalEncoding).joined(separator: "|")
-            let rhs = try $1.state.canonicalEncoding(using: layout)
-                + "|arguments:"
-                + $1.values.map(\.canonicalEncoding).joined(separator: "|")
-            return lhs < rhs
-        } ?? (state: state, values: values)
-        return semantics.symmetrySets.reduce(base) { current, symmetry in
-            let present = TLAValue.sorted(symmetry.values).filter(current.state.contains)
-            guard let canonical = present.first else { return current }
-            let mapping: [TLAValue: TLAValue] = Dictionary(
-                uniqueKeysWithValues: present.map { ($0, canonical) }
-            )
-            return (
-                state: current.state.transformingFormalValues { applyMapping($0, mapping) },
-                values: current.values.map {
-                    $0.transformingFormalValues { applyMapping($0, mapping) }
-                }
-            )
-        }
-    }
-
     private func constraintHolds(in state: CompiledState) throws -> Bool {
         guard let constraint = semantics.constraint else { return true }
         return try boolean(constraint, in: state)

@@ -1,4 +1,4 @@
-struct CompiledState: Hashable, Sendable {
+struct CompiledState: Hashable, Sendable, Comparable {
     private let compilationIdentity: CompilationIdentity
     private let values: [CompiledValue]
 
@@ -104,8 +104,11 @@ struct CompiledState: Hashable, Sendable {
         }
     }
 
-    func canonicalEncoding(using layout: CompiledLayout) throws -> String {
-        try values.map { symmetricValueEncoding(try $0.rendered(using: layout)) }.joined(separator: "|")
+    static func < (lhs: CompiledState, rhs: CompiledState) -> Bool {
+        guard lhs.compilationIdentity == rhs.compilationIdentity else {
+            return lhs.compilationIdentity.value < rhs.compilationIdentity.value
+        }
+        return lhs.values.lexicographicallyPrecedes(rhs.values)
     }
 
     private init(validatedValues: [CompiledValue], compilationIdentity: CompilationIdentity) {

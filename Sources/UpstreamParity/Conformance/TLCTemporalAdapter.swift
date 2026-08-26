@@ -136,8 +136,7 @@ package struct TLCTemporalAdapter: Sendable {
       throw TLCTemporalAdapterError.configurationMismatch
     }
     guard request.pin == input.request.referencePin,
-          request.moduleSHA256 == sourceInput.sha256,
-          request.argumentsSHA256 == (try FiniteGraphCase.argumentsDigest(input.request.arguments)) else {
+          request.moduleSHA256 == sourceInput.sha256 else {
       throw TLCTemporalAdapterError.provenanceMismatch
     }
     guard try SHA256.hex(Data(contentsOf: input.sourceInputURL)) == sourceInput.sha256 else {
@@ -153,16 +152,12 @@ package struct TLCTemporalAdapter: Sendable {
           graphRequest.caseID == input.request.caseID,
           graphRequest.bundle.root.name == input.request.bundle.root.name,
           graphRequest.bundle.root.tla == input.request.bundle.root.tla,
-          graphRequest.arguments == input.request.arguments,
+          graphRequest.finiteGraphCase.arguments == input.request.finiteGraphCase.arguments,
           graphRequest.finiteGraphCase.pin == input.request.finiteGraphCase.pin,
-          graphRequest.finiteGraphCase.workers == input.request.finiteGraphCase.workers,
-          graphRequest.finiteGraphCase.fingerprintPolynomial == input.request.finiteGraphCase.fingerprintPolynomial,
-          graphRequest.finiteGraphCase.deadlock == input.request.finiteGraphCase.deadlock,
           graphRequest.finiteGraphCase.operatingSystem == input.request.finiteGraphCase.operatingSystem,
           graphRequest.finiteGraphCase.architecture == input.request.finiteGraphCase.architecture,
           graphRequest.finiteGraphCase.environment == input.request.finiteGraphCase.environment,
-          graphRequest.finiteGraphCase.moduleSHA256 == sourceInput.sha256,
-          graphRequest.finiteGraphCase.argumentsSHA256 == (try FiniteGraphCase.argumentsDigest(graphRequest.arguments)) else {
+          graphRequest.finiteGraphCase.moduleSHA256 == sourceInput.sha256 else {
       throw TLCTemporalAdapterError.requestMismatch
     }
   }

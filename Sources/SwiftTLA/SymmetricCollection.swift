@@ -96,7 +96,6 @@ package struct SymmetricCollectionMetadata: Equatable, Sendable {
   package let members: [TLAValue]
   package let domainSymbol: String
   package let symmetrySymbol: String
-  package let symbolOwnership: [String: String]
 
   init(name: String, verificationScope: Int, initial: TLAValue) {
     let symbolStem = name.prefix(1).uppercased() + name.dropFirst()
@@ -110,14 +109,6 @@ package struct SymmetricCollectionMetadata: Equatable, Sendable {
     self.members = members
     self.domainSymbol = "\(symbolStem)Keys"
     self.symmetrySymbol = "Symm\(symbolStem)"
-    self.symbolOwnership = Dictionary(
-      uniqueKeysWithValues: memberSymbols.enumerated().map {
-        ($0.element, "symmetric collection '\(name)' member \($0.offset + 1)")
-      } + [
-        (domainSymbol, "symmetric collection '\(name)' member domain"),
-        (symmetrySymbol, "symmetric collection '\(name)' symmetry operator")
-      ]
-    )
   }
 
   package var generatedSymbols: [String] {
@@ -128,87 +119,94 @@ package struct SymmetricCollectionMetadata: Equatable, Sendable {
   }
 }
 
-struct SymmetricCollectionPermutationGroup: Sendable {
-  let mappings: [[TLAValue: TLAValue]]
+struct SymmetryPlan: Sendable {
+  private let compilationIdentity: CompilationIdentity
+  private let groups: [[[TLAValue: TLAValue]]]
 
-  init(members: [TLAValue]) {
-    self.mappings = Self.permutations(of: members).map { permutation in
-      Dictionary(uniqueKeysWithValues: zip(members, permutation))
+  init(
+    compilation: CompiledSpecification,
+    reduction: SymmetryReduction
+  ) throws {
+    compilationIdentity = compilation.identity
+    guard case .enabled(let limit) = reduction else {
+      groups = []
+      return
     }
+
+    let domains = compilation.semantics.symmetricCollections.map(\.members)
+      + compilation.semantics.symmetrySets.map { TLAValue.sorted($0.values) }
+    guard domains.isEmpty == false else {
+      throw FiniteExplorationConfigurationError.symmetryReductionWithoutDeclarations
+    }
+
+    var permutationCount = 1
+    var groups: [[[TLAValue: TLAValue]]] = []
+    for members in domains {
+      let permutations = try Self.permutations(
+        of: members,
+        maximumCount: limit / permutationCount,
+        precedingCount: permutationCount,
+        limit: limit
+      )
+      permutationCount *= permutations.count
+      groups.append(permutations.map { permutation in
+        Dictionary(uniqueKeysWithValues: zip(members, permutation))
+      })
+    }
+    self.groups = groups
   }
 
-  private static func permutations(of values: [TLAValue]) -> [[TLAValue]] {
-    guard let first = values.first else { return [[]] }
-    return permutations(of: Array(values.dropFirst())).flatMap { tail in
-      (0...tail.count).map { index in
-        var permutation = tail
-        permutation.insert(first, at: index)
-        return permutation
+  func canonicalState(
+    _ state: CompiledState,
+    values: [CompiledValue]
+  ) throws -> (state: CompiledState, values: [CompiledValue]) {
+    try state.requireIdentity(compilationIdentity)
+    let candidates = groups.reduce([(state: state, values: values)]) { candidates, group in
+      candidates.flatMap { candidate in
+        group.map { mapping in
+          (
+            state: candidate.state.transformingFormalValues { applyMapping($0, mapping) },
+            values: candidate.values.map {
+              $0.transformingFormalValues { applyMapping($0, mapping) }
+            }
+          )
+        }
       }
     }
+    return candidates.min {
+      guard $0.state == $1.state else { return $0.state < $1.state }
+      return $0.values.lexicographicallyPrecedes($1.values)
+    } ?? (state: state, values: values)
   }
-}
 
-func applySymmetricMemberPermutation(
-  _ value: TLAValue,
-  mapping: [TLAValue: TLAValue]
-) -> TLAValue {
-  if let replacement = mapping[value] { return replacement }
-  switch value {
-  case .set(let values):
-    return .set(Set(values.map { applySymmetricMemberPermutation($0, mapping: mapping) }))
-  case .tuple(let values):
-    return .tuple(values.map { applySymmetricMemberPermutation($0, mapping: mapping) })
-  case .record(let fields):
-    return .record(TLARecord(fields.fields.map {
-      .init($0.name, applySymmetricMemberPermutation($0.value, mapping: mapping))
-    }))
-  case .function(let entries):
-    return .function(Dictionary(uniqueKeysWithValues: entries.map {
-      (
-        applySymmetricMemberPermutation($0.key, mapping: mapping),
-        applySymmetricMemberPermutation($0.value, mapping: mapping)
-      )
-    }))
-  default:
-    return value
-  }
-}
-
-func symmetricValueEncoding(_ value: TLAValue) -> String {
-  switch value {
-  case .int(let integer): return "int:\(integer)"
-  case .bool(let boolean): return "bool:\(boolean)"
-  case .string(let string): return "string:\(String(reflecting: string))"
-  case .constant(let symbol): return "constant:\(String(reflecting: symbol))"
-  case .set(let values):
-    return "set:[\(values.map(symmetricValueEncoding).sorted().joined(separator: ","))]"
-  case .tuple(let values):
-    return "tuple:[\(values.map(symmetricValueEncoding).joined(separator: ","))]"
-  case .record(let fields):
-    let encodedFields = fields.fields.map {
-      "\(String(reflecting: $0.name)):\(symmetricValueEncoding($0.value))"
+  private static func permutations(
+    of values: [TLAValue],
+    maximumCount: Int,
+    precedingCount: Int,
+    limit: Int
+  ) throws -> [[TLAValue]] {
+    var permutations: [[TLAValue]] = [[]]
+    for value in values {
+      var next: [[TLAValue]] = []
+      for permutation in permutations {
+        for index in 0...permutation.count {
+          guard next.count < maximumCount else {
+            let (required, overflow) = precedingCount.multipliedReportingOverflow(
+              by: next.count + 1
+            )
+            throw FiniteExplorationConfigurationError.permutationLimitExceeded(
+              required: overflow ? .max : required,
+              limit: limit
+            )
+          }
+          var candidate = permutation
+          candidate.insert(value, at: index)
+          next.append(candidate)
+        }
+      }
+      permutations = next
     }
-    return "record:[\(encodedFields.joined(separator: ","))]"
-  case .function(let entries):
-    let encodedEntries = entries.map {
-      "\(symmetricValueEncoding($0.key)):\(symmetricValueEncoding($0.value))"
-    }.sorted()
-    return "function:[\(encodedEntries.joined(separator: ","))]"
-  }
-}
-
-public struct SymmetricCollectionScope: Equatable, Sendable {
-  public let collectionName: String
-  public let verificationScope: Int
-
-  public init(collectionName: String, verificationScope: Int) {
-    self.collectionName = collectionName
-    self.verificationScope = verificationScope
-  }
-
-  public var description: String {
-    "\(collectionName): \(verificationScope) exchangeable members"
+    return permutations
   }
 }
 
@@ -220,8 +218,6 @@ enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
   case symbolCollision(collection: String, symbol: String)
   case invalidOwnership(collection: String)
   case invalidDomain(collection: String)
-  case permutationBudgetExceeded(collection: String, scope: Int, product: Int, budget: Int)
-  case invalidPermutationBudget(Int)
 
   public var description: String {
     switch self {
@@ -240,57 +236,19 @@ enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
     case .invalidDomain(let collection):
       return "Symmetric collection '\(collection)' must initialize every scoped member to the declared uniform value; "
         + "use SymmetricCollection(_:verificationScope:initial:)."
-    case .permutationBudgetExceeded(let collection, let scope, let product, let budget):
-      return "Symmetric collection '\(collection)' at scope \(scope) requires permutation product \(product), "
-        + "exceeding budget \(budget); lower a scope or raise the configured budget."
-    case .invalidPermutationBudget(let budget):
-      return "Symmetric collection permutation budget \(budget) is invalid; configure a positive budget."
     }
   }
-}
-
-func symmetricCollectionPermutationBudgetError(
-  scopes: [SymmetricCollectionScope],
-  budget: Int
-) -> SymmetricCollectionValidationError? {
-  guard budget > 0 else { return .invalidPermutationBudget(budget) }
-  var product = 1
-  for collection in scopes where collection.verificationScope > 1 {
-    for factor in 2...collection.verificationScope {
-      let (nextProduct, overflow) = product.multipliedReportingOverflow(by: factor)
-      let requiredProduct = overflow ? Int.max : nextProduct
-      guard !overflow, requiredProduct <= budget else {
-        return .permutationBudgetExceeded(
-          collection: collection.collectionName,
-          scope: collection.verificationScope,
-          product: requiredProduct,
-          budget: budget
-        )
-      }
-      product = requiredProduct
-    }
-  }
-  return nil
 }
 
 extension TLASpec {
-  func symmetricCollectionValidationError(
-    permutationProductBudget: Int = 100_000
-  ) -> SymmetricCollectionValidationError? {
+  func symmetricCollectionValidationError() -> SymmetricCollectionValidationError? {
     let collections = symmetricCollections
     guard !collections.isEmpty else { return nil }
 
     var collectionNames = Set<String>()
     var generatedSymbols = Set<String>()
-    var reservedSymbols = Set(variables.map(\.name))
-    reservedSymbols.formUnion(constants.map(\.name))
-    reservedSymbols.formUnion(actions.map(\.name))
-    reservedSymbols.formUnion(invariants.map(\.name))
-    reservedSymbols.formUnion(temporalProperties.map(\.name))
-    reservedSymbols.formUnion(recursiveFuncs.map(\.name))
+    var reservedSymbols = renderedDeclarationNames()
     reservedSymbols.formUnion(symmetrySets.map { "Symm\($0.variableName)" })
-    reservedSymbols.formUnion(formalOperatorDefinitions.map(\.name))
-    reservedSymbols.formUnion(theorems.map(\.name))
 
     for declaration in collections {
       let metadata = declaration.metadata
@@ -318,21 +276,13 @@ extension TLASpec {
             Set(initialValues.values) == Set([metadata.initial])
       else { return .invalidDomain(collection: metadata.name) }
 
-      let verificationSymbols = (1...metadata.verificationScope).map {
-        "__symmetric_\(metadata.name)_member_\($0)"
-      }
-      for symbol in metadata.generatedSymbols + verificationSymbols {
+      for symbol in metadata.generatedSymbols {
         guard !reservedSymbols.contains(symbol), generatedSymbols.insert(symbol).inserted else {
           return .symbolCollision(collection: metadata.name, symbol: symbol)
         }
       }
     }
-    return symmetricCollectionPermutationBudgetError(
-      scopes: collections.map {
-        .init(collectionName: $0.name, verificationScope: $0.verificationScope)
-      },
-      budget: permutationProductBudget
-    )
+    return nil
   }
 }
 
@@ -346,8 +296,8 @@ public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
     name: collection.name,
     verificationScope: verificationScope,
     initial: initial.tlaValue,
-    generatedElementType: String(reflecting: Element.self),
-    generatedValueType: String(reflecting: Value.self)
+    generatedElementType: swiftSurfaceTypeName(for: Element.self),
+    generatedValueType: swiftSurfaceTypeName(for: Value.self)
   )
 }
 

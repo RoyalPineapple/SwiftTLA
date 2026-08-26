@@ -44,6 +44,7 @@ extension Example {
         upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",
         upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
         expectedDistinct: 6,
+        maximumStateLimit: 50_000,
         spec: CigaretteSmokersModel.spec,
         notes: "Ingredients={m,p,t}, Offers=pairs. TLC TypeOK+AtMostOne = 6.",
     )

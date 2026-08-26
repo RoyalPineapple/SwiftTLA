@@ -109,6 +109,7 @@ extension Example {
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.tla",
         upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.cfg",
         expectedDistinct: 12,
+        maximumStateLimit: 50_000,
         spec: ChannelModel.spec,
         notes: "Single-record channel, authored as typed records and a finite formal initial domain. TLC = 12."
     )

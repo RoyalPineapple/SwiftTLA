@@ -107,6 +107,7 @@ extension Example {
         upstreamModule: "specifications/ewd840/EWD840.tla",
         upstreamCfg: "specifications/ewd840/EWD840.cfg",
         expectedDistinct: 258,
+        maximumStateLimit: 50_000,
         spec: EWD840Model.spec,
         notes: "Dijkstra termination detection. N=3, typed active/color functions. TLC = 258."
     )

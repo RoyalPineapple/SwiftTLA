@@ -40,6 +40,7 @@ extension Example {
         upstreamModule: "specifications/barriers/Barrier.tla",
         upstreamCfg: "specifications/barriers/Barrier.cfg",
         expectedDistinct: 64,
+        maximumStateLimit: 50_000,
         spec: BarrierModel.spec,
         notes: "N=6. TLC = 64.",
     )

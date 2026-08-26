@@ -198,20 +198,26 @@ public struct CompiledSpecification: Sendable {
 
     /// Returns the complete TLA+/CFG bundle produced by compilation.
     public func renderedTLAModuleBundle() -> TLAModuleBundle {
-        renderedTLAModuleBundle(usesSymmetryReduction: true)
+        renderedBundle
     }
 
-    package func renderedTLAModuleBundle(usesSymmetryReduction: Bool) -> TLAModuleBundle {
-        guard usesSymmetryReduction == false else { return renderedBundle }
-        return TLAModuleBundle(
-            root: .init(
-                name: renderedBundle.root.name,
-                tla: renderedBundle.root.tla,
-                cfg: renderedConfigurationWithoutSymmetry
-            ),
-            imports: renderedBundle.imports,
-            provenance: renderedBundle.provenance
-        )
+    package func renderedTLAModuleBundle(
+        symmetryReduction: SymmetryReduction
+    ) -> TLAModuleBundle {
+        switch symmetryReduction {
+        case .enabled:
+            return renderedBundle
+        case .disabled:
+            return TLAModuleBundle(
+                root: .init(
+                    name: renderedBundle.root.name,
+                    tla: renderedBundle.root.tla,
+                    cfg: renderedConfigurationWithoutSymmetry
+                ),
+                imports: renderedBundle.imports,
+                provenance: renderedBundle.provenance
+            )
+        }
     }
 
     /// Materializes the validated bundle as a new sibling directory.
@@ -330,6 +336,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateAction
         case duplicateInvariant
         case invalidSymmetricCollection
+        case invalidSymmetryDeclaration
         case duplicateRecordField
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape
@@ -479,6 +486,7 @@ public extension TLASpec {
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
         try validateSymmetricCollectionDeclarations()
+        try validateSymmetryDeclarations()
         try validateRefinements()
         let closure = try FormalModuleClosure.resolve(root: self)
         let layout = CompiledLayout(spec: self, closure: closure)
@@ -792,6 +800,7 @@ public extension TLASpec {
         try source.validateUnique(source.actions.map(\.name), code: .duplicateAction, path: "actions")
         try source.validateUnique(source.invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
         try source.validateSymmetricCollectionDeclarations()
+        try source.validateSymmetryDeclarations()
         try source.validateRefinements()
         let layout = CompiledLayout(spec: source, closure: context.closure)
         var validator = BindingValidator(
@@ -820,7 +829,7 @@ public extension TLASpec {
     }
 
     private func validateSymmetricCollectionDeclarations() throws {
-        guard let error = symmetricCollectionValidationError(permutationProductBudget: .max) else {
+        guard let error = symmetricCollectionValidationError() else {
             return
         }
         throw CompilationDiagnostic(
@@ -1495,7 +1504,8 @@ private struct CanonicalSpecificationEncoder {
             canonicalOptional(variable.initialSet.map(canonicalExpression)),
             canonicalOptional(variable.initExpr.map(canonicalExpression)),
             canonicalOptional(variable.lazySet.map(canonicalExpression)),
-            collection
+            collection,
+            canonicalOptional(variable.generatedSwiftType)
         ])
     }
 
@@ -1506,7 +1516,8 @@ private struct CanonicalSpecificationEncoder {
             canonicalList(action.bindings.map {
                 node("action-binding", [
                     $0.name,
-                    canonicalList($0.values.map(canonicalValue))
+                    canonicalList($0.values.map(canonicalValue)),
+                    canonicalOptional($0.generatedSwiftType)
                 ])
             })
         ])

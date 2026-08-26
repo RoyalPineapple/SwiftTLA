@@ -82,6 +82,7 @@ extension Example {
         upstreamModule: "specifications/Prisoners/Prisoners.tla",
         upstreamCfg: "specifications/Prisoners/Prisoners.cfg",
         expectedDistinct: 214,
+        maximumStateLimit: 50_000,
         spec: PrisonersModel.spec,
         notes: "Four prisoners, typed switch state and signal function. TLC = 214."
     )

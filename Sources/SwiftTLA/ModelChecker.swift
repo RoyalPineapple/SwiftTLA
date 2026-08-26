@@ -1,103 +1,173 @@
-public enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
+package enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
     case nonPositiveStateLimit(Int)
+    case nonPositivePermutationLimit(Int)
+    case symmetryReductionWithoutDeclarations
+    case permutationLimitExceeded(required: Int, limit: Int)
 }
 
-public struct FiniteExplorationConfiguration: Sendable, Equatable, Hashable {
-    public let maximumStateLimit: Int
+package enum SymmetryReduction: Sendable, Equatable {
+    case disabled
+    case enabled(maximumPermutationCount: Int)
+}
 
-    public init(maximumStateLimit: Int) throws {
+package struct FiniteExplorationConfiguration: Sendable, Equatable, Codable {
+    package let maximumStateLimit: Int
+    package let symmetryReduction: SymmetryReduction
+
+    package init(
+        maximumStateLimit: Int,
+        symmetryReduction: SymmetryReduction
+    ) throws {
         guard maximumStateLimit > 0 else {
             throw FiniteExplorationConfigurationError.nonPositiveStateLimit(maximumStateLimit)
         }
-        self.init(validatedMaximumStateLimit: maximumStateLimit)
+        if case .enabled(let maximumPermutationCount) = symmetryReduction,
+           maximumPermutationCount <= 0 {
+            throw FiniteExplorationConfigurationError.nonPositivePermutationLimit(
+                maximumPermutationCount
+            )
+        }
+        self.maximumStateLimit = maximumStateLimit
+        self.symmetryReduction = symmetryReduction
     }
 
-    private init(validatedMaximumStateLimit: Int) {
-        self.maximumStateLimit = validatedMaximumStateLimit
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case maximumStateLimit
+        case symmetryReduction
+        case maximumPermutationCount
+    }
+
+    private struct AnyCodingKey: CodingKey {
+        let stringValue: String
+        let intValue: Int?
+
+        init?(stringValue: String) {
+            self.stringValue = stringValue
+            intValue = nil
+        }
+
+        init?(intValue: Int) {
+            stringValue = String(intValue)
+            self.intValue = intValue
+        }
+    }
+
+    private enum SymmetryReductionName: String, Codable {
+        case disabled
+        case enabled
+    }
+
+    package init(from decoder: Decoder) throws {
+        let actual = try decoder.container(keyedBy: AnyCodingKey.self)
+        let known = Set(CodingKeys.allCases.map(\.stringValue))
+        let unknown = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
+        guard unknown.isEmpty else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Unknown exploration field: \(unknown.sorted().joined(separator: ", "))"
+                )
+            )
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let mode = try container.decode(SymmetryReductionName.self, forKey: .symmetryReduction)
+        let symmetryReduction: SymmetryReduction
+        switch mode {
+        case .disabled:
+            guard container.contains(.maximumPermutationCount) == false else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .maximumPermutationCount,
+                    in: container,
+                    debugDescription: "Disabled symmetry reduction cannot declare a permutation limit."
+                )
+            }
+            symmetryReduction = .disabled
+        case .enabled:
+            symmetryReduction = .enabled(
+                maximumPermutationCount: try container.decode(
+                    Int.self,
+                    forKey: .maximumPermutationCount
+                )
+            )
+        }
+        try self.init(
+            maximumStateLimit: container.decode(Int.self, forKey: .maximumStateLimit),
+            symmetryReduction: symmetryReduction
+        )
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(maximumStateLimit, forKey: .maximumStateLimit)
+        switch symmetryReduction {
+        case .disabled:
+            try container.encode(SymmetryReductionName.disabled, forKey: .symmetryReduction)
+        case .enabled(let maximumPermutationCount):
+            try container.encode(SymmetryReductionName.enabled, forKey: .symmetryReduction)
+            try container.encode(maximumPermutationCount, forKey: .maximumPermutationCount)
+        }
     }
 }
 
-/// Explores every reachable state of a TLA+ specification with breadth-first search.
+/// Explores reachable compiled states with bounded breadth-first search.
 package struct ModelChecker {
     let compilation: CompiledSpecification
     let configuration: FiniteExplorationConfiguration
-    let permutationProductBudget: Int
-    let usesSymmetryReduction: Bool
 
     package init(
         compilation: CompiledSpecification,
-        configuration: FiniteExplorationConfiguration,
-        permutationProductBudget: Int = 100_000,
-        usesSymmetryReduction: Bool = true
+        configuration: FiniteExplorationConfiguration
     ) {
         self.compilation = compilation
         self.configuration = configuration
-        self.permutationProductBudget = permutationProductBudget
-        self.usesSymmetryReduction = usesSymmetryReduction
     }
 
     func check() throws -> CheckResult {
-        do {
-            let exploration = try explore()
-            if let result = try RefinementChecker(compilation: compilation).check(exploration) {
-                return result
-            }
-            guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
-            return exploration.result
-        } catch {
-            guard !symmetricCollectionScopes.isEmpty else { throw error }
-            return bounded(.error(String(describing: error)))
+        let exploration = try explore()
+        if let result = try RefinementChecker(compilation: compilation).check(exploration) {
+            return result
         }
+        return exploration.result
     }
     func exploreGraph() throws -> StateGraph { try explore().graph }
 
     package func explore() throws -> ModelExplorationResult { try runExploration() }
 
     func checkLiveness() throws -> CheckResult {
-        do {
-            let exploration = try explore()
-            guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
-            guard !compilation.semantics.temporalProperties.isEmpty else { return exploration.result }
+        let exploration = try explore()
+        guard case .ok = exploration.result else { return exploration.result }
+        guard compilation.semantics.temporalProperties.isEmpty == false else { return exploration.result }
 
-            let analyses = exploration.analyzeTemporalProperties(in: compilation)
-            for (property, result) in zip(compilation.semantics.temporalProperties, analyses) {
-                switch result.status {
-                case .satisfied:
-                    continue
-                case .violated:
-                    return bounded(.livenessViolated("\(property.name): \(result.reason.rawValue)"))
-                case .unavailable:
-                    return bounded(.error("Liveness unavailable: \(result.diagnostic ?? result.reason.rawValue)"))
-                }
+        let analyses = exploration.analyzeTemporalProperties(in: compilation)
+        for (property, result) in zip(compilation.semantics.temporalProperties, analyses) {
+            switch result.status {
+            case .satisfied:
+                continue
+            case .violated:
+                return .livenessViolated("\(property.name): \(result.reason.rawValue)")
+            case .unavailable:
+                return .error("Liveness unavailable: \(result.diagnostic ?? result.reason.rawValue)")
             }
-            return bounded(.ok(statesCount: exploration.graph.states.count))
-        } catch {
-            guard !symmetricCollectionScopes.isEmpty else { throw error }
-            return bounded(.error(String(describing: error)))
         }
+        return .ok(statesCount: exploration.graph.states.count)
     }
 
     private func runExploration() throws -> ModelExplorationResult {
-        if usesSymmetryReduction,
-           let validationError = symmetricCollectionPermutationBudgetError(
-               scopes: symmetricCollectionScopes,
-               budget: permutationProductBudget
-           ) {
-            return emptyExploration(
-                result: bounded(.error(validationError.description))
-            )
-        }
+        let symmetry = try SymmetryPlan(
+            compilation: compilation,
+            reduction: configuration.symmetryReduction
+        )
         let runtime = CompiledRuntime(compilation: compilation)
         let initialStates = try runtime.initialStates()
         guard !initialStates.isEmpty else {
             return emptyExploration(
-                result: bounded(.error("No initial states"))
+                result: .error("No initial states")
             )
         }
 
         guard try runtime.assumeHolds(in: initialStates[0]) else {
             return emptyExploration(
-                result: bounded(.error("ASSUME failed"))
+                result: .error("ASSUME failed")
             )
         }
 
@@ -108,12 +178,12 @@ package struct ModelChecker {
             checkDeadlock: compilation.semantics.checkDeadlock,
             specificationName: compilation.description.name,
             configuration: configuration,
-            usesSymmetryReduction: usesSymmetryReduction
+            symmetry: symmetry
         )
         return ModelExplorationResult(
             graph: exploration.graph,
             initialStateIDs: exploration.initialStateIDs,
-            result: bounded(exploration.result),
+            result: exploration.result,
             compilationIdentity: compilation.identity,
             configuration: configuration,
             compiledStates: exploration.compiledStates
@@ -138,22 +208,6 @@ package struct ModelChecker {
         )
     }
 
-    private func bounded(_ outcome: CheckResult) -> CheckResult {
-        symmetricCollectionScopes.isEmpty
-            ? outcome
-            : .bounded(scopes: symmetricCollectionScopes, outcome: outcome)
-    }
-
-    private var symmetricCollectionScopes: [SymmetricCollectionScope] {
-        compilation.layout.variables.compactMap { variable in
-            variable.symmetricCollection.map {
-                SymmetricCollectionScope(
-                    collectionName: variable.declaration.name,
-                    verificationScope: $0.members.count
-                )
-            }
-        }
-    }
 }
 
 private func compiledBFS(
@@ -163,7 +217,7 @@ private func compiledBFS(
     checkDeadlock: Bool,
     specificationName: String,
     configuration: FiniteExplorationConfiguration,
-    usesSymmetryReduction: Bool
+    symmetry: SymmetryPlan
 ) throws -> ModelExplorationResult {
     var queue: [CompiledState] = []
     var stateToID: [CompiledState: StateGraph.StateID] = [:]
@@ -216,7 +270,7 @@ private func compiledBFS(
     }
 
     func representative(_ state: CompiledState) throws -> CompiledState {
-        try usesSymmetryReduction ? runtime.canonicalState(state) : state
+        try symmetry.canonicalState(state, values: []).state
     }
 
     for seed in seeds {
@@ -270,9 +324,10 @@ private func compiledBFS(
         }
 
         for successor in successors {
-            let canonical = try usesSymmetryReduction
-                ? runtime.canonicalState(successor.state, values: successor.arguments)
-                : (state: successor.state, values: successor.arguments)
+            let canonical = try symmetry.canonicalState(
+                successor.state,
+                values: successor.arguments
+            )
             let formalArguments = try canonical.values.map { try $0.rendered(using: layout) }
             let successorKey = canonical.state
             let targetID: StateGraph.StateID
@@ -411,18 +466,6 @@ package indirect enum CheckResult: CustomStringConvertible {
     case error(String)
     case refinementViolated(refinement: String, evidence: RefinementFailureEvidence)
     case refinementUnproven(refinement: String, exploration: CheckResult)
-    case bounded(scopes: [SymmetricCollectionScope], outcome: CheckResult)
-
-    public var underlyingOutcome: CheckResult {
-        if case .refinementUnproven = self { return self }
-        if case .bounded(_, let outcome) = self { return outcome.underlyingOutcome }
-        return self
-    }
-
-    public var boundedScopes: [SymmetricCollectionScope] {
-        if case .bounded(let scopes, _) = self { return scopes }
-        return []
-    }
 
     /// The typed explanation of any non-success result. This preserves formal
     /// state and counterexample evidence without exposing the engine's raw
@@ -504,8 +547,6 @@ package indirect enum CheckResult: CustomStringConvertible {
                 actual: exploration.description,
                 nextSafeAction: "Increase the declared finite bound, then rerun the refinement check."
             )
-        case .bounded(_, let outcome):
-            return outcome.diagnostic
         }
     }
 
@@ -520,9 +561,6 @@ package indirect enum CheckResult: CustomStringConvertible {
             return diagnostic?.description ?? "Verification diagnostic unavailable"
         case .refinementUnproven:
             return diagnostic?.description ?? "Refinement is unproven"
-        case .bounded(let scopes, let outcome):
-            return "BOUNDED VERIFICATION — " + scopes.map(\.description).joined(separator: "; ")
-                + "; this does not prove larger populations\n" + outcome.description
         }
     }
 }

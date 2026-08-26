@@ -5,14 +5,10 @@ import SwiftTLA
 package enum FiniteGraphCaseError: Error, Equatable, Sendable {
     case invalidIdentifier(String)
     case invalidSHA256(field: String)
-    case invalidWorkers(Int)
-    case invalidFingerprintPolynomial(Int)
     case invalidArgumentsDigest
     case invalidRenderedActions
-    case executionCaseMismatch
     case moduleDigestMismatch
     case cfgDigestMismatch
-    case executionArgumentsMismatch
     case pinMismatch(String)
     case missingArtifact(String)
 }
@@ -120,13 +116,11 @@ package struct TLCReferencePin: Equatable, Sendable {
 
 package struct FiniteGraphCase: Equatable, Sendable {
     package let id: String
+    package let exploration: FiniteExplorationConfiguration
     package let moduleSHA256: String
     package let cfgSHA256: String
     package let arguments: [String]
     package let argumentsSHA256: String
-    package let workers: Int
-    package let fingerprintPolynomial: Int
-    package let deadlock: Bool
     package let operatingSystem: String
     package let architecture: String
     package let environment: [String: String]
@@ -135,13 +129,11 @@ package struct FiniteGraphCase: Equatable, Sendable {
 
     package init(
         id: String,
+        exploration: FiniteExplorationConfiguration,
         moduleSHA256: String,
         cfgSHA256: String,
         arguments: [String],
         argumentsSHA256: String,
-        workers: Int,
-        fingerprintPolynomial: Int,
-        deadlock: Bool,
         operatingSystem: String,
         architecture: String,
         environment: [String: String],
@@ -151,8 +143,6 @@ package struct FiniteGraphCase: Equatable, Sendable {
         guard !id.isEmpty else { throw FiniteGraphCaseError.invalidIdentifier("case ID") }
         guard TLCReferencePin.isSHA256(moduleSHA256) else { throw FiniteGraphCaseError.invalidSHA256(field: "moduleSHA256") }
         guard TLCReferencePin.isSHA256(cfgSHA256) else { throw FiniteGraphCaseError.invalidSHA256(field: "cfgSHA256") }
-        guard workers == 1 else { throw FiniteGraphCaseError.invalidWorkers(workers) }
-        guard fingerprintPolynomial >= 0 else { throw FiniteGraphCaseError.invalidFingerprintPolynomial(fingerprintPolynomial) }
         let computedArgumentsDigest = try Self.argumentsDigest(arguments)
         guard argumentsSHA256 == computedArgumentsDigest else { throw FiniteGraphCaseError.invalidArgumentsDigest }
         guard Set(renderedActions.map(\.sourceInvocationName)).count == renderedActions.count,
@@ -160,13 +150,11 @@ package struct FiniteGraphCase: Equatable, Sendable {
             throw FiniteGraphCaseError.invalidRenderedActions
         }
         self.id = id
+        self.exploration = exploration
         self.moduleSHA256 = moduleSHA256
         self.cfgSHA256 = cfgSHA256
         self.arguments = arguments
         self.argumentsSHA256 = argumentsSHA256
-        self.workers = workers
-        self.fingerprintPolynomial = fingerprintPolynomial
-        self.deadlock = deadlock
         self.operatingSystem = operatingSystem
         self.architecture = architecture
         self.environment = environment
@@ -179,16 +167,12 @@ package struct FiniteGraphCase: Equatable, Sendable {
         return SHA256.hex(encoded)
     }
 
-    package func validateLaunch(module: URL, configuration: URL, arguments: [String], caseID: String) throws {
-        guard caseID == id else { throw FiniteGraphCaseError.executionCaseMismatch }
+    package func validateLaunch(module: URL, configuration: URL) throws {
         guard SHA256.hex(try Data(contentsOf: module)) == moduleSHA256 else {
             throw FiniteGraphCaseError.moduleDigestMismatch
         }
         guard SHA256.hex(try Data(contentsOf: configuration)) == cfgSHA256 else {
             throw FiniteGraphCaseError.cfgDigestMismatch
-        }
-        guard arguments == self.arguments, try Self.argumentsDigest(arguments) == argumentsSHA256 else {
-            throw FiniteGraphCaseError.executionArgumentsMismatch
         }
     }
 }
@@ -235,9 +219,10 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let imports: [String]
         package let moduleSHA256: String
         package let cfgSHA256: String
+        package let exploration: FiniteExplorationConfiguration
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, module, configuration, imports, moduleSHA256, cfgSHA256
+            case id, module, configuration, imports, moduleSHA256, cfgSHA256, exploration
         }
 
         package init(from decoder: Decoder) throws {
@@ -248,6 +233,10 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             imports = try container.decode([String].self, forKey: .imports)
             moduleSHA256 = try container.decode(String.self, forKey: .moduleSHA256)
             cfgSHA256 = try container.decode(String.self, forKey: .cfgSHA256)
+            exploration = try container.decode(
+                FiniteExplorationConfiguration.self,
+                forKey: .exploration
+            )
             try validate()
         }
 
@@ -255,6 +244,12 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             guard !id.isEmpty, !module.isEmpty, !configuration.isEmpty,
                   Set(imports).count == imports.count, imports.allSatisfy({ !$0.isEmpty }) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "case declaration")
+            }
+            guard case .disabled = exploration.symmetryReduction else {
+                throw EvidenceFormatError.invalidField(
+                    record: id,
+                    field: "exploration.symmetryReduction"
+                )
             }
             guard TLCReferencePin.isSHA256(moduleSHA256), TLCReferencePin.isSHA256(cfgSHA256) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "launch contract")

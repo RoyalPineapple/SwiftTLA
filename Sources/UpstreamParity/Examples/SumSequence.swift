@@ -50,6 +50,7 @@ extension Example {
         upstreamModule: "specifications/LoopInvariance/SumSequence.tla",
         upstreamCfg: nil,
         expectedDistinct: 182,
+        maximumStateLimit: 50_000,
         spec: SumSequenceModel.spec,
         notes: "Bounded source port: values -1...1 and sequence length at most three. No published TLC model configuration."
     )

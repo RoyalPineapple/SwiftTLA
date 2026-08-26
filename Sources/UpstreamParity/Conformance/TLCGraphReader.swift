@@ -276,7 +276,7 @@ package struct TLCGraphReader: Sendable {
         try exactKeys(value, [
             "tlcTag", "tlcCommit", "tlcJarSha256", "javaDistribution", "javaVersion", "javaArchiveSha256",
             "bridgeClass", "bridgeSourceSha256", "bridgeBinarySha256", "moduleSha256", "cfgSha256",
-            "arguments", "argumentsSha256", "workers", "fingerprintPolynomial", "deadlock", "os", "architecture", "environment"
+            "arguments", "argumentsSha256", "os", "architecture", "environment"
         ], 1)
         let expected: [String: String] = [
             "tlcTag": finiteGraphCase.pin.tag, "tlcCommit": finiteGraphCase.pin.commit, "tlcJarSha256": finiteGraphCase.pin.jarSHA256,
@@ -293,9 +293,6 @@ package struct TLCGraphReader: Sendable {
               try string(value, "cfgSha256", 1) == finiteGraphCase.cfgSHA256,
               try strings(value, "arguments", 1) == finiteGraphCase.arguments,
               try string(value, "argumentsSha256", 1) == finiteGraphCase.argumentsSHA256,
-              try int(value, "workers", 1) == finiteGraphCase.workers,
-              try int(value, "fingerprintPolynomial", 1) == finiteGraphCase.fingerprintPolynomial,
-              try bool(value, "deadlock", 1) == finiteGraphCase.deadlock,
               try string(value, "os", 1) == finiteGraphCase.operatingSystem,
               try string(value, "architecture", 1) == finiteGraphCase.architecture,
               try stringDictionary(value, "environment", 1) == finiteGraphCase.environment

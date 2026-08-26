@@ -1,13 +1,17 @@
 struct CompiledRecord: Hashable, Sendable {
-    struct Field: Hashable, Sendable {
+    struct Field: Hashable, Sendable, Comparable {
         let key: CompiledValue
         let value: CompiledValue
+
+        static func < (lhs: Field, rhs: Field) -> Bool {
+            lhs.key == rhs.key ? lhs.value < rhs.value : lhs.key < rhs.key
+        }
     }
 
     let fields: [Field]
 
     init(_ fields: [Field]) {
-        self.fields = fields.sorted { $0.key.canonicalEncoding < $1.key.canonicalEncoding }
+        self.fields = fields.sorted()
     }
 
     func value(for key: CompiledValue) -> CompiledValue? {
@@ -25,7 +29,7 @@ struct CompiledRecord: Hashable, Sendable {
     }
 }
 
-indirect enum CompiledValue: Hashable, Sendable {
+indirect enum CompiledValue: Hashable, Sendable, Comparable {
     case integer(Int)
     case boolean(Bool)
     case string(String)
@@ -143,29 +147,51 @@ indirect enum CompiledValue: Hashable, Sendable {
     }
 
     static func sorted(_ values: Set<CompiledValue>) -> [CompiledValue] {
-        values.sorted { $0.canonicalEncoding < $1.canonicalEncoding }
+        values.sorted()
     }
 
-    var canonicalEncoding: String {
+    static func < (lhs: CompiledValue, rhs: CompiledValue) -> Bool {
+        let lhsKind = lhs.orderingKind
+        let rhsKind = rhs.orderingKind
+        guard lhsKind == rhsKind else { return lhsKind < rhsKind }
+
+        switch (lhs, rhs) {
+        case (.integer(let lhs), .integer(let rhs)):
+            return lhs < rhs
+        case (.boolean(let lhs), .boolean(let rhs)):
+            return lhs == false && rhs == true
+        case (.string(let lhs), .string(let rhs)):
+            return lhs < rhs
+        case (.controlLocation(let lhs), .controlLocation(let rhs)):
+            return lhs.ordinal < rhs.ordinal
+        case (.set(let lhs), .set(let rhs)):
+            return Self.sorted(lhs).lexicographicallyPrecedes(Self.sorted(rhs))
+        case (.tuple(let lhs), .tuple(let rhs)):
+            return lhs.lexicographicallyPrecedes(rhs)
+        case (.record(let lhs), .record(let rhs)):
+            return lhs.fields.lexicographicallyPrecedes(rhs.fields)
+        case (.function(let lhs), .function(let rhs)):
+            let lhsFields = lhs.map { CompiledRecord.Field(key: $0.key, value: $0.value) }.sorted()
+            let rhsFields = rhs.map { CompiledRecord.Field(key: $0.key, value: $0.value) }.sorted()
+            return lhsFields.lexicographicallyPrecedes(rhsFields)
+        case (.constant(let lhs), .constant(let rhs)):
+            return lhs < rhs
+        default:
+            return false
+        }
+    }
+
+    private var orderingKind: Int {
         switch self {
-        case .integer(let value):
-            return "integer:\(value)"
-        case .boolean(let value):
-            return "boolean:\(value)"
-        case .string(let value):
-            return "string:\(value)"
-        case .controlLocation(let value):
-            return "control:\(value.ordinal)"
-        case .set(let values):
-            return "set:[\(Self.sorted(values).map(\.canonicalEncoding).joined(separator: ","))]"
-        case .tuple(let values):
-            return "tuple:[\(values.map(\.canonicalEncoding).joined(separator: ","))]"
-        case .record(let values):
-            return "record:[\(values.fields.map { "\($0.key.canonicalEncoding):\($0.value.canonicalEncoding)" }.joined(separator: ","))]"
-        case .function(let values):
-            return "function:[\(values.keys.sorted { $0.canonicalEncoding < $1.canonicalEncoding }.map { "\($0.canonicalEncoding):\(values[$0]?.canonicalEncoding ?? "")" }.joined(separator: ","))]"
-        case .constant(let value):
-            return "constant:\(value)"
+        case .integer: 0
+        case .boolean: 1
+        case .string: 2
+        case .controlLocation: 3
+        case .set: 4
+        case .tuple: 5
+        case .record: 6
+        case .function: 7
+        case .constant: 8
         }
     }
 }

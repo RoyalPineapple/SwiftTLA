@@ -125,6 +125,7 @@ extension Example {
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
         upstreamCfg: nil,
         expectedDistinct: 13,
+        maximumStateLimit: 50_000,
         spec: TeachingSimpleN2Model.spec,
         notes: "N=2, one PlusCal process family with function-shaped x, y, and pc state. TLC = 13."
     )
@@ -135,6 +136,7 @@ extension Example {
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
         upstreamCfg: nil,
         expectedDistinct: 51,
+        maximumStateLimit: 50_000,
         spec: TeachingSimpleN3Model.spec,
         notes: "N=3, one PlusCal process family with function-shaped x, y, and pc state. TLC = 51."
     )

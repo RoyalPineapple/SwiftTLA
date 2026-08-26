@@ -347,7 +347,7 @@ struct GeneratedIntegerChoiceAlgorithmTests {
     @Test("#spec retains a bounded integer choice")
     func generatedModelRetainsIntegerChoice() throws {
         let spec = GeneratedIntegerChoiceAlgorithm.spec
-        let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+        let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("selected", in: $0) }) == [.int(0), .int(1), .int(2), .int(3)])
     }
 }
@@ -372,7 +372,7 @@ struct GeneratedAlgorithmStateConstraintTests {
     func generatedModelPreservesStateConstraint() throws {
         let compilation = try GeneratedAlgorithmStateConstraint.spec.compile()
         #expect(compilation.semantics.constraint != nil)
-        let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+        let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("count", in: $0) }) == [.int(0), .int(1)])
     }
 }
@@ -727,7 +727,7 @@ struct GeneratedStateMachineTests {
             [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
             [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
         ]
-        let graph = try ModelChecker(compilation: try builder.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+        let graph = try ModelChecker(compilation: try builder.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
         #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
 
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()
@@ -867,7 +867,7 @@ struct GeneratedStateMachineTests {
         #expect(try machine.send(.tick).after.hr == 2)
         let result = try ModelChecker(
             compilation: compilation,
-            configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)
+            configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)
         ).check()
         if case .ok(let count) = result { #expect(count == 2) } else {
             #expect(Bool(false), "Expected the initial state and one successor")

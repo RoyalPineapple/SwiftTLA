@@ -32,6 +32,7 @@ extension Example {
         upstreamModule: "specifications/DieHard/DieHard.tla",
         upstreamCfg: nil,
         expectedDistinct: 16,
+        maximumStateLimit: 50_000,
         spec: DieHardModel.spec,
         notes: "Upstream cfg adds NotSolved (intentional fail). TypeOK-only = 16 both sides.",
     )

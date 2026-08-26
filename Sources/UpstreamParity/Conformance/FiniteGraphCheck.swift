@@ -42,11 +42,25 @@ package struct FiniteGraphCheck: Sendable {
   }
 
   package func run(
-    `case` finiteGraphCase: FiniteGraphCase,
-    swiftExploration: () throws -> ModelExplorationResult,
+    compilation: CompiledSpecification,
     tlcRequest: TLCProcessRequest,
     outputDirectory: URL
   ) -> FiniteGraphCheckOutput {
+    let finiteGraphCase = tlcRequest.finiteGraphCase
+    guard case .disabled = finiteGraphCase.exploration.symmetryReduction else {
+      let failure = diagnostic(
+        phase: .preflight,
+        code: "symmetry-reduction-enabled",
+        error: FiniteGraphCheckError.symmetryReductionEnabled,
+        request: tlcRequest
+      )
+      return .init(
+        exitCode: .failure,
+        evidenceDirectory: nil,
+        comparison: nil,
+        diagnostic: failure
+      )
+    }
     guard !FileManager.default.fileExists(atPath: outputDirectory.path) else {
       let failure = diagnostic(
         phase: .preflight,
@@ -67,10 +81,13 @@ package struct FiniteGraphCheck: Sendable {
       )
       staging = directory
       try tlcProcess.retain(request: tlcRequest, in: directory)
-      guard finiteGraphCase == tlcRequest.finiteGraphCase else { throw FiniteGraphCheckError.tlcCaseMismatch }
 
       phase = .swiftExport
-      let swiftRun = try swiftExporter.export(swiftExploration(), for: finiteGraphCase)
+      let exploration = try ModelChecker(
+        compilation: compilation,
+        configuration: finiteGraphCase.exploration
+      ).explore()
+      let swiftRun = try swiftExporter.export(exploration, for: finiteGraphCase)
       try CompletedGraphRunRecords.write(
         swiftRun,
         to: directory.appendingPathComponent("swift-graph.jsonl")
@@ -278,7 +295,7 @@ package struct FiniteGraphCheck: Sendable {
 
 private enum FiniteGraphCheckError: Error {
   case outputAlreadyExists
-  case tlcCaseMismatch
+  case symmetryReductionEnabled
   case stagingDirectoryUnavailable
 }
 

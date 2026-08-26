@@ -4,6 +4,7 @@ package enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
   case emptyPermutationGroup
   case incompatiblePermutationDomains
   case permutationDoesNotPreserveStateSpace
+  case permutationLimitExceeded(required: Int, limit: Int)
   case incompleteOrbit(String)
   case reducedStateOutsideOrbit(source: SymmetryGraphSource, stateID: String)
   case multipleReducedRepresentatives(source: SymmetryGraphSource, representative: String)
@@ -71,14 +72,25 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
 
   package init(
     states: [CanonicalState],
-    permutations: [SymmetryPermutation]
+    permutations: [SymmetryPermutation],
+    maximumPermutationCount: Int
   ) throws {
     guard !permutations.isEmpty else { throw SymmetryOrbitAdapterError.emptyPermutationGroup }
+    guard maximumPermutationCount > 0 else {
+      throw SymmetryOrbitAdapterError.permutationLimitExceeded(
+        required: 1,
+        limit: maximumPermutationCount
+      )
+    }
     let domain = Set(permutations[0].constantMapping.keys)
     guard permutations.allSatisfy({ Set($0.constantMapping.keys) == domain }) else {
       throw SymmetryOrbitAdapterError.incompatiblePermutationDomains
     }
-    let closure = try Self.closure(generators: permutations, domain: domain)
+    let closure = try Self.closure(
+      generators: permutations,
+      domain: domain,
+      maximumPermutationCount: maximumPermutationCount
+    )
     let stateTable = Dictionary(uniqueKeysWithValues: states.map { ($0.key, $0) })
     var unseen = Set(stateTable.keys)
     var derived: [[CanonicalStateKey]] = []
@@ -101,7 +113,9 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
   }
 
   private static func closure(
-    generators: [SymmetryPermutation], domain: Set<String>
+    generators: [SymmetryPermutation],
+    domain: Set<String>,
+    maximumPermutationCount: Int
   ) throws -> [SymmetryPermutation] {
     let identity = try SymmetryPermutation.identity(on: domain)
     var known = [identity.key: identity]
@@ -110,6 +124,13 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
       for generator in generators {
         let next = try generator.composing(after: current)
         if known[next.key] == nil {
+          let (required, overflow) = known.count.addingReportingOverflow(1)
+          guard overflow == false, required <= maximumPermutationCount else {
+            throw SymmetryOrbitAdapterError.permutationLimitExceeded(
+              required: overflow ? .max : required,
+              limit: maximumPermutationCount
+            )
+          }
           known[next.key] = next
           frontier.append(next)
         }

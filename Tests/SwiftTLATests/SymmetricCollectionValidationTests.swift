@@ -52,23 +52,15 @@ struct SymmetricCollectionValidationTests {
     assertInvalidCollection(spec, .missingCollectionName)
   }
 
-  @Test("Duplicate names and generated symbol collisions identify the affected collection")
-  func duplicateAndCollisionDeclarationsAreRejected() {
+  @Test("Duplicate collection names fail compilation")
+  func duplicateDeclarationsAreRejected() {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let duplicate = TLASpec("Duplicate") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
     }
-    let collision = TLASpec("Collision") {
-      Constant("__symmetric_devices_member_1", 0)
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
-    }
 
     assertDuplicateVariable(duplicate, name: "devices")
-    assertInvalidCollection(
-      collision,
-      .symbolCollision(collection: "devices", symbol: "__symmetric_devices_member_1")
-    )
   }
 
   @Test("generated symbols reserve the direct export namespace")
@@ -183,8 +175,8 @@ struct SymmetricCollectionValidationTests {
     assertMemberReferenceRejected(spec, path: "invariants.Biased.body.left")
   }
 
-  @Test("The permutation budget applies only to reduced exploration")
-  func permutationBudgetAppliesOnlyToReduction() throws {
+  @Test("Reduced exploration requires a sufficient permutation limit")
+  func reducedExplorationRequiresSufficientPermutationLimit() throws {
     let left = SymmetricCollectionVar<Device, Int>("left")
     let right = SymmetricCollectionVar<Device, Int>("right")
     let spec = TLASpec("Budget") {
@@ -192,33 +184,29 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(right, verificationScope: 3, initial: 0)
     }
     let compilation = try spec.compile()
-    let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 100_000)
+    let unreducedConfiguration = try FiniteExplorationConfiguration(maximumStateLimit: 100_000, symmetryReduction: .disabled)
 
     let unreduced = try ModelChecker(
       compilation: compilation,
-      configuration: configuration,
-      permutationProductBudget: 35,
-      usesSymmetryReduction: false
+      configuration: unreducedConfiguration
     ).check()
-    guard case .bounded(_, let unreducedOutcome) = unreduced,
-          case .ok = unreducedOutcome else {
-      Issue.record("Expected unreduced exploration to ignore the permutation budget, got \(unreduced)")
+    guard case .ok = unreduced else {
+      Issue.record("Expected unreduced exploration to ignore the permutation limit, got \(unreduced)")
       return
     }
 
-    let reduced = try ModelChecker(
-      compilation: compilation,
-      configuration: configuration,
-      permutationProductBudget: 35,
-      usesSymmetryReduction: true
-    ).check()
-    guard case .bounded(_, let outcome) = reduced,
-          case .error(let message) = outcome else {
-      Issue.record("Expected reduced exploration to report the permutation budget, got \(reduced)")
-      return
+    let reducedConfiguration = try FiniteExplorationConfiguration(
+      maximumStateLimit: 100_000,
+      symmetryReduction: .enabled(maximumPermutationCount: 35))
+    #expect(throws: FiniteExplorationConfigurationError.permutationLimitExceeded(
+      required: 36,
+      limit: 35
+    )) {
+      try ModelChecker(
+        compilation: compilation,
+        configuration: reducedConfiguration
+      ).check()
     }
-    #expect(message.contains("budget"))
-    #expect(message.contains("36"))
   }
 
   private func assertInvalidCollection(

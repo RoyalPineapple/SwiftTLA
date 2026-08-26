@@ -95,6 +95,7 @@ extension Example {
         upstreamModule: "specifications/Prisoners_Single_Switch/Prisoner.tla",
         upstreamCfg: "specifications/Prisoners_Single_Switch/Prisoner.cfg",
         expectedDistinct: 16,
+        maximumStateLimit: 50_000,
         spec: PrisonerModel.spec,
         notes: "N=3, typed signalling function, visited set, and formal visitor choice. TLC = 16."
     )

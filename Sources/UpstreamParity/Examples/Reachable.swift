@@ -74,6 +74,7 @@ extension Example {
         upstreamModule: "specifications/MisraReachability/Reachable.tla",
         upstreamCfg: "specifications/MisraReachability/MCReachable.cfg",
         expectedDistinct: 8,
+        maximumStateLimit: 50_000,
         spec: ReachableModel.spec,
         notes: "Bounded source port with the published four-node, two-successor graph constraint; native count pinned pending external TLC graph comparison."
     )

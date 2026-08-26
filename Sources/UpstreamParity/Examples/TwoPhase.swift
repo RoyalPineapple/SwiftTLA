@@ -176,6 +176,7 @@ extension Example {
         upstreamModule: "specifications/transaction_commit/TwoPhase.tla",
         upstreamCfg: "specifications/transaction_commit/TwoPhase.cfg",
         expectedDistinct: 288,
+        maximumStateLimit: 50_000,
         spec: TwoPhaseModel.spec,
         notes: "Lamport TwoPhase safety. Typed resource-manager and message records. TLC = 288."
     )

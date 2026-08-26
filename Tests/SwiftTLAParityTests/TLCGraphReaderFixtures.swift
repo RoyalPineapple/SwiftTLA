@@ -176,11 +176,12 @@ func fixtureCase(
 )
   throws -> FiniteGraphCase {
   try FiniteGraphCase(
-    id: "fixture", moduleSHA256: String(repeating: "c", count: 64),
+    id: "fixture",
+    exploration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled),
+    moduleSHA256: String(repeating: "c", count: 64),
     cfgSHA256: String(repeating: "d", count: 64),
     arguments: arguments, argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-    workers: 1,
-    fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos", architecture: "arm64",
+    operatingSystem: "macos", architecture: "arm64",
     environment: [:], pin: pin, renderedActions: renderedActions
   )
 }
@@ -254,11 +255,12 @@ func caseForFiles(
 )
   throws -> FiniteGraphCase {
   try FiniteGraphCase(
-    id: id, moduleSHA256: SHA256.hex(try Data(contentsOf: module)),
+    id: id,
+    exploration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled),
+    moduleSHA256: SHA256.hex(try Data(contentsOf: module)),
     cfgSHA256: SHA256.hex(try Data(contentsOf: configuration)),
     arguments: arguments, argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-    workers: 1,
-    fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos", architecture: "arm64",
+    operatingSystem: "macos", architecture: "arm64",
     environment: environment, pin: try testReferencePin()
   )
 }
@@ -284,7 +286,6 @@ func helperProcessRequest(
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("trace.json"),
     workingDirectory: directory,
-    arguments: [],
     finiteGraphCase: try caseForFiles(
       id: "helper", module: module, configuration: configuration, arguments: [],
       environment: environment
@@ -293,7 +294,7 @@ func helperProcessRequest(
   )
 }
 func launchRequest(
-  finiteGraphCase: FiniteGraphCase, module: URL, configuration: URL, arguments: [String]
+  finiteGraphCase: FiniteGraphCase, module: URL, configuration: URL
 ) throws -> TLCProcessRequest {
   try TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
@@ -303,7 +304,7 @@ func launchRequest(
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
     workingDirectory: module.deletingLastPathComponent(),
-    arguments: arguments, finiteGraphCase: finiteGraphCase, runID: UUID()
+    finiteGraphCase: finiteGraphCase, runID: UUID()
   )
 }
 func requestWithReferenceArtifacts(
@@ -317,7 +318,6 @@ func requestWithReferenceArtifacts(
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
     workingDirectory: URL(fileURLWithPath: "/tmp"),
-    arguments: ["-workers", "1", "-fp", "1"],
     finiteGraphCase: try fixtureCase(try testReferencePin(), arguments: ["-workers", "1", "-fp", "1"]),
     runID: UUID(), referencePin: try testReferencePin(), referenceArtifacts: artifacts
   )
@@ -336,9 +336,6 @@ func header(_ finiteGraphCase: FiniteGraphCase) throws -> String {
       "bridgeBinarySha256": pin.bridgeBinarySHA256,
       "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
       "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-      "workers": finiteGraphCase.workers,
-      "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
-      "deadlock": finiteGraphCase.deadlock,
       "os": finiteGraphCase.operatingSystem, "architecture": finiteGraphCase.architecture,
       "environment": finiteGraphCase.environment
     ]

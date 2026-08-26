@@ -239,6 +239,7 @@ extension Example {
         upstreamModule: "specifications/lamport_mutex/LamportMutex.tla",
         upstreamCfg: "specifications/lamport_mutex/MCLamportMutex.cfg",
         expectedDistinct: 19,
+        maximumStateLimit: 50_000,
         spec: LamportMutexModel.spec,
         notes: "N=2, maxClock=2. Typed finite nodes, records, functions, and parameterized actions.",
     )

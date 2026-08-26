@@ -12,7 +12,8 @@ struct DiningPhilosophersCorpusStateGraphTests {
         let exploration = try ModelChecker(
             compilation: compilation,
             configuration: try FiniteExplorationConfiguration(
-                maximumStateLimit: entry.maximumStateLimit
+                maximumStateLimit: entry.maximumStateLimit,
+                symmetryReduction: .disabled
             )
         ).explore()
 
