@@ -93,6 +93,7 @@ extension Example {
         upstreamModule: "specifications/transaction_commit/TCommit.tla",
         upstreamCfg: "specifications/transaction_commit/TCommit.cfg",
         expectedDistinct: 34,
+        maximumStateLimit: 50_000,
         spec: TCommitModel.spec,
         notes: "Lamport TCommit. Typed resource-manager function and parameterized actions. TLC = 34."
     )

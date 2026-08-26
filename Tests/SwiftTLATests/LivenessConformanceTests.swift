@@ -483,8 +483,8 @@ struct LivenessConformanceTests {
             Variable(x, 0)
             Eventually("reachesOne", x == 1)
         }
-        let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).checkLiveness()
-        if case .livenessViolated = liveness.underlyingOutcome {
+        let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).checkLiveness()
+        if case .livenessViolated = liveness {
         } else {
             Issue.record("Expected liveness violation, got \(liveness)")
         }
@@ -494,8 +494,8 @@ struct LivenessConformanceTests {
             Action("step") { x.becomes(x + 1).when(x < 2) }
             Eventually("reachesTwo", x == 2)
         }
-        let incomplete = try ModelChecker(compilation: try completeSpec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).checkLiveness()
-        if case .depthExceeded = incomplete.underlyingOutcome {
+        let incomplete = try ModelChecker(compilation: try completeSpec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).checkLiveness()
+        if case .depthExceeded = incomplete {
         } else {
             Issue.record("Expected depth-exceeded result, got \(incomplete)")
         }

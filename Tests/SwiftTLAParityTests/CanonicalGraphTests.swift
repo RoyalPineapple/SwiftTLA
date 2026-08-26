@@ -98,17 +98,15 @@ struct CanonicalGraphTests {
             initialStateIDs: [first],
             result: .ok(statesCount: 2),
             compilationIdentity: compilationIdentity,
-            configuration: try .init(maximumStateLimit: 10)
+            configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
         )
         let finiteGraphCase = try FiniteGraphCase(
             id: "normalized-fixture",
+            exploration: exploration.configuration,
             moduleSHA256: String(repeating: "a", count: 64),
             cfgSHA256: String(repeating: "b", count: 64),
             arguments: [],
             argumentsSHA256: try FiniteGraphCase.argumentsDigest([]),
-            workers: 1,
-            fingerprintPolynomial: 1,
-            deadlock: false,
             operatingSystem: "macos",
             architecture: "arm64",
             environment: [:],

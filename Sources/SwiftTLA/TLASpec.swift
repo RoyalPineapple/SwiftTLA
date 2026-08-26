@@ -712,7 +712,11 @@ public enum SpecBuilder {
       return [VarDecl(expr.name, initExpr: .sourceIssue(issue))]
     }
     guard let initial = expr.initial else { return [] }
-    return [VarDecl(expr.name, initial)]
+    return [VarDecl(
+      expr.name,
+      initial,
+      generatedSwiftType: swiftSurfaceTypeName(for: T.self)
+    )]
   }
   public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] {
     component ?? []
@@ -774,10 +778,10 @@ public func Variable(_ name: String, in values: some Sequence<some TLAValueConve
   let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
   return VarDecl(name, .set(set), initialSet: stateSet)
 }
-private func swiftSurfaceTypeName<T>(for type: T.Type) -> String {
+func swiftSurfaceTypeName<T>(for type: T.Type) -> String {
   ObjectIdentifier(type) == ObjectIdentifier(TLAValue.self)
     ? "TLAValue"
-    : String(reflecting: type)
+    : String(describing: type)
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>) -> VarDecl {

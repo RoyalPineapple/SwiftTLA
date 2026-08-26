@@ -74,6 +74,7 @@ extension Example {
         upstreamModule: "specifications/ewd840/SyncTerminationDetection.tla",
         upstreamCfg: "specifications/ewd840/SyncTerminationDetection.cfg",
         expectedDistinct: 9,
+        maximumStateLimit: 50_000,
         spec: SyncTerminationDetectionModel.spec,
         notes: "Three-node abstract termination detection, using typed finite functions. TLC = 9."
     )

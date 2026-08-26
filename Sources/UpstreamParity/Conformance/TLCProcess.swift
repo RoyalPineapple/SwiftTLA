@@ -70,7 +70,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package let graphEvents: URL
   package let traceOutput: URL
   package let workingDirectory: URL
-  package let arguments: [String]
   package let finiteGraphCase: FiniteGraphCase
   package let runID: UUID
   package let timeout: TimeInterval
@@ -86,7 +85,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     graphEvents: URL,
     traceOutput: URL,
     workingDirectory: URL,
-    arguments: [String],
     finiteGraphCase: FiniteGraphCase,
     runID: UUID,
     timeout: TimeInterval = 60,
@@ -101,7 +99,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.graphEvents = graphEvents
     self.traceOutput = traceOutput
     self.workingDirectory = workingDirectory
-    self.arguments = arguments
     self.finiteGraphCase = finiteGraphCase
     self.runID = runID
     self.timeout = timeout
@@ -127,13 +124,11 @@ package struct TLCProcessRequest: Equatable, Sendable {
       "-Dswifttla.tlc.graph.case-id=\(caseID)",
       "-cp", "\(jar.path):\(bridgeClasses.path)",
       "tlc2.TLC", "-dump", "class,org.swifttla.conformance.LosslessStateWriter"
-    ] + traceArguments(traceMode) + arguments + ["-config", configuration.path, module.path]
+    ] + traceArguments(traceMode) + finiteGraphCase.arguments + ["-config", configuration.path, module.path]
   }
 
   package func validateLaunchBinding(module: URL, configuration: URL) throws {
-    try finiteGraphCase.validateLaunch(
-      module: module, configuration: configuration, arguments: arguments, caseID: caseID
-    )
+    try finiteGraphCase.validateLaunch(module: module, configuration: configuration)
   }
 
   /// Validates the declared module closure before TLC launch.
@@ -247,8 +242,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
       "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
       "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
       "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-      "workers": finiteGraphCase.workers, "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
-      "deadlock": finiteGraphCase.deadlock, "os": finiteGraphCase.operatingSystem,
+      "os": finiteGraphCase.operatingSystem,
       "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
     ]
     let data = try JSONSerialization.data(withJSONObject: provenance, options: [.sortedKeys])
@@ -468,7 +462,7 @@ package struct TLCProcessAdapter: Sendable {
       bundle: request.bundle,
       graphEvents: traceGraphEvents(for: request.graphEvents),
       traceOutput: request.traceOutput,
-      workingDirectory: request.workingDirectory, arguments: request.arguments,
+      workingDirectory: request.workingDirectory,
       finiteGraphCase: request.finiteGraphCase, runID: request.runID,
       timeout: request.timeout, traceMode: .dumpJSON, referencePin: request.referencePin,
       referenceArtifacts: request.referenceArtifacts
@@ -499,7 +493,7 @@ package struct TLCProcessAdapter: Sendable {
   ) throws {
     let phases: [TLCInvocationPhase] = [.primary, .trace]
     var record: [String: Any] = [
-      "request": processRequestJSON(request),
+      "request": try processRequestJSON(request),
       "attempted": phases.compactMap { phase in
         results[phase] != nil || failures[phase] != nil ? phase.rawValue : nil
       }
@@ -562,11 +556,10 @@ func processJSON(_ result: TLCProcessResult) -> [String: Any] {
   ]
 }
 
-private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
+private func processRequestJSON(_ request: TLCProcessRequest) throws -> [String: Any] {
   [
-    "case": finiteGraphCaseJSON(request.finiteGraphCase),
+    "case": try finiteGraphCaseJSON(request.finiteGraphCase),
     "toolchain": toolchainJSON(request),
-    "arguments": request.arguments,
     "bundle": [
       "root": request.bundle.root.name,
       "files": request.bundle.files.map {
@@ -579,16 +572,16 @@ private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
   ]
 }
 
-private func finiteGraphCaseJSON(_ finiteGraphCase: FiniteGraphCase) -> [String: Any] {
+private func finiteGraphCaseJSON(_ finiteGraphCase: FiniteGraphCase) throws -> [String: Any] {
   let record: [String: Any] = [
     "id": finiteGraphCase.id,
+    "exploration": try JSONSerialization.jsonObject(
+      with: JSONEncoder().encode(finiteGraphCase.exploration)
+    ),
     "moduleSHA256": finiteGraphCase.moduleSHA256,
     "cfgSHA256": finiteGraphCase.cfgSHA256,
     "arguments": finiteGraphCase.arguments,
     "argumentsSHA256": finiteGraphCase.argumentsSHA256,
-    "workers": finiteGraphCase.workers,
-    "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
-    "deadlock": finiteGraphCase.deadlock,
     "operatingSystem": finiteGraphCase.operatingSystem,
     "architecture": finiteGraphCase.architecture,
     "environment": finiteGraphCase.environment,

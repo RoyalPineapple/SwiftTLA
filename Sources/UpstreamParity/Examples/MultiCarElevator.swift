@@ -237,6 +237,7 @@ extension Example {
         upstreamModule: "Verification/FiniteGraph/fixtures/multicar-elevator/MultiCarElevator.tla",
         upstreamCfg: nil,
         expectedDistinct: 3_276,
+        maximumStateLimit: 50_000,
         spec: MultiCarElevator.spec,
         notes: "Bounded two-person, two-car, three-floor typed safety fixture."
     )

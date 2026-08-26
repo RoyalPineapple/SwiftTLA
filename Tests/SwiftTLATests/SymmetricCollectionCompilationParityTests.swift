@@ -14,17 +14,16 @@ struct SymmetricCollectionCompilationParityTests {
     for scope in 2...4 {
       let spec = oracleSpec(scope: scope)
       let compilation = try spec.compile()
-      let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 100_000)
+      let reducedConfiguration = try FiniteExplorationConfiguration(
+        maximumStateLimit: 100_000,
+        symmetryReduction: .enabled(maximumPermutationCount: 100_000))
       let reduced = try ModelChecker(
         compilation: compilation,
-        configuration: configuration,
-        usesSymmetryReduction: true
+        configuration: reducedConfiguration
       ).explore()
 
       #expect(reduced.graph.states.count == scope + 1)
-      #expect(reduced.result.boundedScopes == [
-        SymmetricCollectionScope(collectionName: "devices", verificationScope: scope)
-      ])
+      #expect({ if case .ok = reduced.result { true } else { false } }())
       let bundle = compilation.renderedTLAModuleBundle()
       #expect(bundle.tla.contains("DevicesKeys == {DevicesMember0"))
       #expect(bundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))
@@ -33,14 +32,13 @@ struct SymmetricCollectionCompilationParityTests {
 
       let rawGraph = try ModelChecker(
         compilation: compilation,
-        configuration: configuration,
-        usesSymmetryReduction: false
+        configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100_000, symmetryReduction: .disabled)
       ).exploreGraph()
       #expect(rawGraph.states.count == 1 << scope)
     }
   }
 
-  @Test("Parser and runtime collection specifications retain metadata, AST, states, and bounded outcomes")
+  @Test("Parser and runtime collection specifications retain metadata, AST, states, and checking outcomes")
   func parserRuntimeParityUsesTheSameOpaqueMemberSemantics() throws {
     let source = """
     {
@@ -68,7 +66,11 @@ struct SymmetricCollectionCompilationParityTests {
     let runtimeInitialStates = try CompiledRuntime(compilation: runtimeCompilation).initialStates()
       .map { try $0.projection(using: runtimeCompilation.layout) }
     #expect(parsedInitialStates == runtimeInitialStates)
-    #expect(try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description == ModelChecker(compilation: runtimeCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description)
+    let configuration = try FiniteExplorationConfiguration(
+      maximumStateLimit: 100_000,
+      symmetryReduction: .enabled(maximumPermutationCount: 100_000))
+    #expect(try ModelChecker(compilation: parsedCompilation, configuration: configuration).check().description
+      == ModelChecker(compilation: runtimeCompilation, configuration: configuration).check().description)
   }
 
   private func oracleSpec(scope: Int) -> TLASpec {

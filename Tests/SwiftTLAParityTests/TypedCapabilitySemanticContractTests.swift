@@ -25,17 +25,15 @@ struct TypedCapabilitySemanticContractTests {
         let plusCal = try compilation.renderedPlusCalBundle()
         let exploration = try ModelChecker(
             compilation: compilation,
-            configuration: .init(maximumStateLimit: 10)
+            configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
         ).explore()
         let matchingCase = try FiniteGraphCase(
             id: "typed-capability-contract",
+            exploration: exploration.configuration,
             moduleSHA256: String(repeating: "a", count: 64),
             cfgSHA256: String(repeating: "b", count: 64),
             arguments: [],
             argumentsSHA256: try FiniteGraphCase.argumentsDigest([]),
-            workers: 1,
-            fingerprintPolynomial: 1,
-            deadlock: false,
             operatingSystem: "macos",
             architecture: "arm64",
             environment: [:],

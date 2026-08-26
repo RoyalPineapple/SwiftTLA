@@ -183,13 +183,11 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             let arguments = ["-workers", "1", "-fp", "1"]
             let finiteGraphCase = try FiniteGraphCase(
                 id: declaration.id,
+                exploration: declaration.exploration,
                 moduleSHA256: declaration.moduleSHA256,
                 cfgSHA256: declaration.cfgSHA256,
                 arguments: arguments,
                 argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-                workers: 1,
-                fingerprintPolynomial: 1,
-                deadlock: false,
                 operatingSystem: "macos",
                 architecture: architecture,
                 environment: [:],
@@ -209,22 +207,13 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 graphEvents: runRoot.appendingPathComponent("\(declaration.id).events.jsonl"),
                 traceOutput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
                 workingDirectory: runRoot,
-                arguments: finiteGraphCase.arguments,
                 finiteGraphCase: finiteGraphCase,
                 runID: options.runID ?? UUID(),
                 referencePin: pin,
                 referenceArtifacts: referenceArtifacts
             )
             let check = FiniteGraphCheck().run(
-                case: finiteGraphCase,
-                swiftExploration: {
-                    try ModelChecker(
-                        compilation: compilation,
-                        configuration: try FiniteExplorationConfiguration(
-                            maximumStateLimit: 100_000
-                        )
-                    ).explore()
-                },
+                compilation: compilation,
                 tlcRequest: request,
                 outputDirectory: caseOutput
             )
@@ -247,7 +236,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             }
             if selected.count == 1 {
                 exitCode = check.exitCode.rawValue
-            } else if check.exitCode != .exact {
+            } else {
                 exitCode = max(exitCode, check.exitCode.rawValue)
             }
         }

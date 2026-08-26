@@ -103,6 +103,7 @@ extension Example {
         upstreamModule: "specifications/MisraReachability/ParReach.tla",
         upstreamCfg: "specifications/MisraReachability/MCParReach.cfg",
         expectedDistinct: 393,
+        maximumStateLimit: 50_000,
         spec: ParallelReachableModel.spec,
         notes: "Bounded source port with four nodes, two workers, and a static two-successors-per-node graph selection."
     )

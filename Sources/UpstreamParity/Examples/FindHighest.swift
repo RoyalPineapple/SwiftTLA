@@ -57,6 +57,7 @@ extension Example {
         upstreamModule: "specifications/LearnProofs/FindHighest.tla",
         upstreamCfg: "specifications/LearnProofs/MCFindHighest.cfg",
         expectedDistinct: 742,
+        maximumStateLimit: 50_000,
         spec: FindHighestModel.spec,
         notes: "Published FindHighest with MaxLength = 3 and MaxNat = 4."
     )

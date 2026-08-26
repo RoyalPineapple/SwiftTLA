@@ -250,34 +250,69 @@ extension TLAValue: ExpressibleByBooleanLiteral {
 
 extension TLAValue: Comparable {
     public static func < (lhs: TLAValue, rhs: TLAValue) -> Bool {
+        guard lhs.orderingKind == rhs.orderingKind else {
+            return lhs.orderingKind < rhs.orderingKind
+        }
+
         switch (lhs, rhs) {
         case (.int(let a), .int(let b)): return a < b
-        case (.int, _): return false
-        case (_, .int): return true
         case (.bool(let a), .bool(let b)): return (a ? 1 : 0) < (b ? 1 : 0)
-        case (.bool, _): return false
-        case (_, .bool): return true
         case (.string(let a), .string(let b)): return a < b
-        case (.string, _): return false
-        case (_, .string): return true
-        case (.set(let a), .set(let b)): return a.count < b.count
-        case (.set, _): return false
-        case (_, .set): return true
-        case (.tuple(let a), .tuple(let b)): return a.count < b.count
-        case (.tuple, _): return false
-        case (_, .tuple): return true
-        case (.record(let a), .record(let b)): return a.fields.count < b.fields.count
-        case (.record, _): return false
-        case (_, .record): return true
-        case (.function(let a), .function(let b)): return a.count < b.count
-        case (.function, _): return false
-        case (_, .function): return true
+        case (.set(let a), .set(let b)):
+            return sorted(a).lexicographicallyPrecedes(sorted(b))
+        case (.tuple(let a), .tuple(let b)):
+            return a.lexicographicallyPrecedes(b)
+        case (.record(let a), .record(let b)):
+            return recordFields(a.fields, precede: b.fields)
+        case (.function(let a), .function(let b)):
+            return functionEntries(a, precede: b)
         case (.constant(let a), .constant(let b)): return a < b
+        default: return false
         }
     }
 
     public static func sorted(_ values: Set<TLAValue>) -> [TLAValue] {
         Array(values).sorted()
+    }
+
+    private var orderingKind: Int {
+        switch self {
+        case .int: 0
+        case .bool: 1
+        case .string: 2
+        case .set: 3
+        case .tuple: 4
+        case .record: 5
+        case .function: 6
+        case .constant: 7
+        }
+    }
+
+    private static func recordFields(
+        _ lhs: [TLARecord.Field],
+        precede rhs: [TLARecord.Field]
+    ) -> Bool {
+        for (left, right) in zip(lhs, rhs) {
+            if (left.name == right.name) == false { return left.name < right.name }
+            if (left.value == right.value) == false { return left.value < right.value }
+        }
+        return lhs.count < rhs.count
+    }
+
+    private static func functionEntries(
+        _ lhs: [TLAValue: TLAValue],
+        precede rhs: [TLAValue: TLAValue]
+    ) -> Bool {
+        let leftKeys = sorted(Set(lhs.keys))
+        let rightKeys = sorted(Set(rhs.keys))
+        for (leftKey, rightKey) in zip(leftKeys, rightKeys) {
+            if (leftKey == rightKey) == false { return leftKey < rightKey }
+            guard let leftValue = lhs[leftKey], let rightValue = rhs[rightKey] else {
+                return leftKeys.count < rightKeys.count
+            }
+            if (leftValue == rightValue) == false { return leftValue < rightValue }
+        }
+        return leftKeys.count < rightKeys.count
     }
 
     public static func functionSet(domain: Set<TLAValue>, range: Set<TLAValue>) -> Set<TLAValue> {

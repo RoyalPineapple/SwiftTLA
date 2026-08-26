@@ -96,6 +96,7 @@ extension Example {
         upstreamModule: "specifications/barriers/Barriers.tla",
         upstreamCfg: "specifications/barriers/Barriers.cfg",
         expectedDistinct: 29_279,
+        maximumStateLimit: 50_000,
         spec: BarriersN6Model.spec,
         notes: "N=6 two-chamber PlusCal barrier with typed statement-macro expansion."
     )

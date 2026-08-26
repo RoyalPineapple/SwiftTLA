@@ -4,6 +4,13 @@ import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    private enum GeneratedSurfaceKey: String, FiniteTLAValueDomain {
+        case value
+
+        static let defaultValue = Self.value
+        static let finiteValues = [Self.value]
+    }
+
     private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, CompiledState) {
         let compilation = try spec.compile()
         let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
@@ -56,6 +63,24 @@ struct AlgorithmBuilderTests {
         let compilation = try source.compile()
         #expect(compilation.description.variables.map(\.name) == ["pc", "count"])
         #expect(compilation.description.actions.map(\.name).contains("advance"))
+    }
+
+    @Test("top-level typed expression initialization retains its generated state type")
+    func topLevelExpressionInitializationRetainsGeneratedStateType() throws {
+        let source = #spec("TypedTopLevelFunction") { scope in
+            let values = scope.sharedVar(
+                "values",
+                initial: Function<GeneratedSurfaceKey, Bool>.mapping { _ in false }
+            )
+            SwiftTLA.Action("Stay") { values.stays }
+        }
+
+        let compilation = try source.compile()
+        let variable = try #require(
+            compilation.machineSurfacePlan.variables.first { $0.formalName == "values" }
+        )
+
+        #expect(variable.swiftType == "Function<GeneratedSurfaceKey, Bool>")
     }
 
     @Test("unsupported Algorithm fairness fails before lowering")
@@ -1138,15 +1163,11 @@ struct AlgorithmBuilderTests {
             )
         )
 
-        let spec = TLASpec(
-            name: "ShortCircuitFixture",
-            variables: [
-                NamedVar(name: "sequence", initial: .tuple([])),
-                NamedVar(name: "result", initial: .int(0))
-            ],
-            actions: [NamedAction(name: "step", body: action)],
-            invariants: []
-        )
+        let spec = TLASpec("ShortCircuitFixture") {
+            Var("sequence", TupleExpr<Int>())
+            Var("result", 0)
+            SwiftTLA.Action("step") { action }
+        }
         let (compilation, initial) = try initialState(of: spec)
         let successors = try successors(named: "step", in: compilation, from: initial)
         #expect(successors.isEmpty)
@@ -1191,7 +1212,7 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let result = try ModelChecker(compilation: try loweredSourceSpecification(algorithm).compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
+        let result = try ModelChecker(compilation: try loweredSourceSpecification(algorithm).compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
         guard case .invariantViolated(let name, _, _) = result else {
             Issue.record("Expected Assert to produce an invariant violation, got \(result)")
             return

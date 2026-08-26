@@ -9,6 +9,7 @@ extension Example {
         upstreamModule: "specifications/CoffeeCan/CoffeeCan.tla",
         upstreamCfg: nil,
         expectedDistinct: 5150,
+        maximumStateLimit: 50_000,
         spec: coffeeCanSpec(maxBeanCount: 100),
         notes: "M=100. Same spec shape as M=5.",
     )

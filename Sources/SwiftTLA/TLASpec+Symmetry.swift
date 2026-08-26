@@ -51,3 +51,93 @@ public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConverti
   -> SymmetrySetDecl {
   SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
 }
+
+extension TLASpec {
+  func renderedDeclarationNames() -> Set<String> {
+    Set(
+      variables.map(\.name)
+        + constants.map(\.name)
+        + formalParameters.map(\.name)
+        + actions.map(\.name)
+        + invariants.map(\.name)
+        + temporalProperties.map(\.name)
+        + recursiveFuncs.map(\.name)
+        + formalOperatorDefinitions.map(\.name)
+        + theorems.map(\.name)
+        + moduleInstances.map(\.name)
+        + refinements.map(\.name)
+    )
+  }
+
+  func validateSymmetryDeclarations() throws {
+    var renderedSymbols = renderedDeclarationNames()
+    renderedSymbols.formUnion(symmetricCollections.flatMap(\.metadata.generatedSymbols))
+
+    var names = Set<String>()
+    var domainOwner = Dictionary(uniqueKeysWithValues: symmetricCollections.flatMap { collection in
+      collection.metadata.members.map { ($0, "symmetric collection '\(collection.name)'") }
+    })
+
+    for (index, symmetry) in symmetrySets.enumerated() {
+      let path = "symmetrySets[\(index)]"
+      guard symmetry.variableName.isEmpty == false,
+            case .some = TLAStateProjection.Token(validating: symmetry.variableName) else {
+        throw symmetryDiagnostic(
+          path: "\(path).name",
+          expected: "a non-empty formal identifier",
+          actual: symmetry.variableName.isEmpty ? "an empty name" : "'\(symmetry.variableName)'"
+        )
+      }
+      guard names.insert(symmetry.variableName).inserted else {
+        throw symmetryDiagnostic(
+          path: "\(path).name",
+          expected: "one direct symmetry declaration named '\(symmetry.variableName)'",
+          actual: "a duplicate declaration"
+        )
+      }
+      guard symmetry.values.isEmpty == false else {
+        throw symmetryDiagnostic(
+          path: "\(path).values",
+          expected: "at least one symmetric value",
+          actual: "an empty domain"
+        )
+      }
+
+      let renderedSymbol = "Symm\(symmetry.variableName)"
+      guard renderedSymbols.insert(renderedSymbol).inserted else {
+        throw symmetryDiagnostic(
+          path: "\(path).renderedName",
+          expected: "an unclaimed rendered symbol",
+          actual: "'\(renderedSymbol)' is already declared"
+        )
+      }
+
+      if let overlap = TLAValue.sorted(symmetry.values).first(where: domainOwner.keys.contains),
+         let owner = domainOwner[overlap] {
+        throw symmetryDiagnostic(
+          path: "\(path).values",
+          expected: "a domain disjoint from every other symmetry declaration",
+          actual: "\(overlap) is already owned by \(owner)"
+        )
+      }
+      for value in symmetry.values {
+        domainOwner[value] = "direct symmetry '\(symmetry.variableName)'"
+      }
+    }
+  }
+
+  private func symmetryDiagnostic(
+    path: String,
+    expected: String,
+    actual: String
+  ) -> CompilationDiagnostic {
+    CompilationDiagnostic(
+      code: .invalidSymmetryDeclaration,
+      stage: .validation,
+      path: path,
+      expected: expected,
+      actual: actual,
+      nextSafeAction: "Correct the direct symmetry declaration, then compile again."
+    )
+  }
+}

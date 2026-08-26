@@ -15,7 +15,7 @@ import UpstreamParity
       Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
     }
     let compilation = try spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20)).explore()
+    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
     let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
     let sccs = lc.computeSCCs()
     #expect(sccs.count == 1)
@@ -30,7 +30,7 @@ import UpstreamParity
       Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
     }
     let compilation = try spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20)).explore()
+    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
     let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
     let sccs = lc.computeSCCs()
     let terminals = lc.terminalSCCs(from: sccs)
@@ -47,7 +47,7 @@ import UpstreamParity
       WeakFairness("tick")
     }
     let compilation = try spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20)).explore()
+    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
     let results = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
       .analyze(initialStateIDs: exploration.initialStateIDs)
     #expect(results.map(\.status) == [.satisfied])
@@ -62,7 +62,7 @@ import UpstreamParity
       Eventually("reachesThirteen", hr == 13)
     }
     let compilation = try spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20)).explore()
+    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
     let results = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
       .analyze(initialStateIDs: exploration.initialStateIDs)
     #expect(results.map(\.status) == [.violated])
@@ -88,7 +88,7 @@ import UpstreamParity
       StrongFairness("A")
     }
     let weakCompilation = try weakSpec.compile()
-    let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).explore()
+    let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
     let initialStateIDs = exploration.initialStateIDs
     let weak = try #require(
       LivenessChecker(compilation: weakCompilation, graph: exploration.graph, states: exploration.compiledStates)
@@ -97,7 +97,7 @@ import UpstreamParity
     let strongCompilation = try strongSpec.compile()
     let strongExploration = try ModelChecker(
       compilation: strongCompilation,
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
+      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
     ).explore()
     let strong = try #require(
       LivenessChecker(
@@ -119,7 +119,7 @@ import UpstreamParity
 func changRobertsLiveness() throws {
   let spec = Example.changRobertsN3.spec
   let compilation = try spec.compile()
-  let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500)).explore()
+  let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled)).explore()
   let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
   // Verify temporal property exists
   #expect(spec.temporalProperties.count == 1)
@@ -132,7 +132,7 @@ func changRobertsLiveness() throws {
 func changRobertsLivenessParity() throws {
   let spec = Example.changRobertsN3.spec
   let compilation = try spec.compile()
-  let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500)).explore()
+  let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled)).explore()
   let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
   let results = lc.analyze(initialStateIDs: exploration.initialStateIDs)
   #expect(results.count == 1)

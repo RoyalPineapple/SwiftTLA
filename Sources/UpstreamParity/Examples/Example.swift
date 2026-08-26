@@ -12,7 +12,7 @@ package enum Example {
         package let notes: String
 
         package init(id: String, upstreamSpec: String, upstreamModule: String, upstreamCfg: String?,
-                    expectedDistinct: Int, maximumStateLimit: Int = 50_000,
+                    expectedDistinct: Int, maximumStateLimit: Int,
                     spec: TLASpec, notes: String) {
             self.id = id; self.upstreamSpec = upstreamSpec; self.upstreamModule = upstreamModule
             self.upstreamCfg = upstreamCfg; self.expectedDistinct = expectedDistinct

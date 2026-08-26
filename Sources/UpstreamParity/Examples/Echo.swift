@@ -133,6 +133,7 @@ extension Example {
         upstreamModule: "specifications/echo/Echo.tla",
         upstreamCfg: "specifications/echo/MCEcho.cfg",
         expectedDistinct: 75,
+        maximumStateLimit: 50_000,
         spec: EchoModel.spec,
         notes: "Bounded Echo source port on the three-node fully connected graph. Native and upstream TLC state count = 75; exact graph comparison remains separate evidence."
     )

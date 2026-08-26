@@ -4,7 +4,6 @@ package enum SwiftGraphExporterError: Error, Equatable, Sendable {
   case initialStateMissing(Int)
   case transitionStateMissing(Int)
   case traceStateMissing
-  case invalidUnderlyingOutcome
 }
 
 package struct SwiftGraphExporter: Sendable {
@@ -89,7 +88,7 @@ package struct SwiftGraphExporter: Sendable {
     _ result: CheckResult,
     states: [StateGraph.StateID: CanonicalState]
   ) throws -> GraphRunOutcome {
-    switch result.underlyingOutcome {
+    switch result {
     case .ok:
       return .exhaustiveSuccess
     case .invariantViolated(let invariant, _, _):
@@ -110,8 +109,6 @@ package struct SwiftGraphExporter: Sendable {
       return .invariantViolation(refinement)
     case .refinementUnproven:
       return .incomplete(reason: result.description)
-    case .bounded:
-      throw SwiftGraphExporterError.invalidUnderlyingOutcome
     }
   }
 
@@ -119,7 +116,7 @@ package struct SwiftGraphExporter: Sendable {
     _ result: CheckResult,
     states: [StateGraph.StateID: CanonicalState]
   ) throws -> GraphTrace? {
-    guard case .invariantViolated(_, _, let trace) = result.underlyingOutcome else { return nil }
+    guard case .invariantViolated(_, _, let trace) = result else { return nil }
     return GraphTrace(
       id: "swift-invariant-trace",
       steps: try trace.map { step in

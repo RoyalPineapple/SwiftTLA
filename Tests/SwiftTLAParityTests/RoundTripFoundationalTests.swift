@@ -424,7 +424,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     }
 
     #expect(spec.actions[0].bindings.map(\.name) == ["person", "elevator", "direction"])
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let labels = try #require(graph.transitions[.init(0)]).map(\.label)
     let expectedArguments: [[TLAValue]] = [
       [.int(1), .int(10), .int(100)], [.int(1), .int(10), .int(200)],
@@ -466,7 +466,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
     #expect(spec.actions[0].bindings.map(\.name) == ["id"])
     #expect(spec.actions[0].bindings[0].values == [.int(1), .int(2)])
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
     let labels = transitions.map(\.label)
     #expect(
@@ -490,7 +490,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       }
     }
 
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
 
     #expect(transitions.map(\.action) == ["openDoor(0)", "openDoor(1)"])
@@ -503,7 +503,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(from: x.name, StateExpr.set([1, 2]))
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let checker = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
+    let checker = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
 
     let exploration = try checker.explore()
     let graph = try checker.exploreGraph()
@@ -519,7 +519,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     #expect(exploration.result.description == result.description)
     #expect(exploration.isComplete)
 
-    let incomplete = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).explore()
+    let incomplete = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).explore()
     #expect(!incomplete.isComplete)
   }
 
@@ -529,7 +529,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 4)
   }
 
@@ -539,7 +539,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("toggle") { x.becomes((x + 1) % 2) }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -550,7 +550,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Action("inc") { x.becomes(x + 1).when(x < 5) }
       Invariant("nonNeg") { x >= 0 }
     }
-    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check() {
+    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check() {
       #expect(count == 6)
     } else {
       #expect(Bool(false))
@@ -564,7 +564,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Action("inc") { x.becomes(x + 1) }
       Invariant("lt3") { x < 3 }
     }
-    if case .invariantViolated(let name, _, _) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
+    if case .invariantViolated(let name, _, _) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
       .check() {
       #expect(name == "lt3")
     } else {
@@ -580,7 +580,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Invariant("mustStayZero") { x == 0 }
     }
 
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
     let diagnostic = try #require(result.diagnostic)
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
 
@@ -600,7 +600,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1) }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled)).exploreGraph()
     // Processes 3 states, discovers 4 (successors of last processed also stored)
     #expect(graph.states.count >= 3 && graph.states.count <= 4)
   }
@@ -611,7 +611,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Variable(x, 0)
       Action("once") { x.becomes(1).when(x == 0) }
     }
-    if case .ok(let c) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check() {
+    if case .ok(let c) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check() {
       #expect(c == 2)
     } else {
       #expect(Bool(false))
@@ -627,7 +627,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       Action("incA") { a.becomes(a + 1).when(a < 2) }
       Action("incB") { b.becomes(b + 1).when(b < 2) }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 9)
   }
 
@@ -645,7 +645,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     }
     let expectedValues: Set<TLAValue> = [.int(1), .int(2), .int(3)]
     #expect(Set(initialValues) == expectedValues)
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph().states.count == 3)
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph().states.count == 3)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
 
@@ -668,7 +668,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
           || (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
       }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 16)
   }
 }
@@ -766,7 +766,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     let compilation = try spec.compile()
     let exploration = try ModelChecker(
       compilation: compilation,
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
+      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
     ).explore()
     let resultToken = try #require(TLAStateProjection.Token(validating: "result"))
     let results = Set(exploration.graph.states.values.compactMap { $0.value(for: resultToken) })
@@ -789,7 +789,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     let compilation = try spec.compile()
     let exploration = try ModelChecker(
       compilation: compilation,
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
+      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
     ).explore()
     let clockToken = try #require(TLAStateProjection.Token(validating: "clock"))
     var found = false
@@ -817,7 +817,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
             Expr(.setDifference(source.stateExpr, StateExpr.singleton(picked.stateExpr))))
       }
     }
-    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20)).check() {
+    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).check() {
       #expect(count > 0)
     } else {
       #expect(Bool(false))

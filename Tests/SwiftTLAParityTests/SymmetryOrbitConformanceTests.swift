@@ -135,10 +135,24 @@ struct SymmetryOrbitConformanceTests {
   func orbitDerivationUsesGeneratorClosure() throws {
     let derivation = try SymmetryOrbitDerivation(
       states: [state("A"), state("B"), state("C")],
-      permutations: [try SymmetryPermutation(constantMapping: ["A": "B", "B": "C", "C": "A"])]
+      permutations: [try SymmetryPermutation(constantMapping: ["A": "B", "B": "C", "C": "A"])],
+      maximumPermutationCount: 3
     )
     #expect(derivation.orbits.count == 1)
     #expect(derivation.orbits[0].count == 3)
+  }
+
+  @Test("Orbit derivation stops at the declared permutation limit")
+  func orbitDerivationEnforcesPermutationLimit() throws {
+    #expect(throws: SymmetryOrbitAdapterError.permutationLimitExceeded(required: 3, limit: 2)) {
+      _ = try SymmetryOrbitDerivation(
+        states: [state("A"), state("B"), state("C")],
+        permutations: [try SymmetryPermutation(
+          constantMapping: ["A": "B", "B": "C", "C": "A"]
+        )],
+        maximumPermutationCount: 2
+      )
+    }
   }
 
   @Test("Quotient projection deduplicates equivalent labeled raw edges")
@@ -214,7 +228,8 @@ struct SymmetryOrbitConformanceTests {
       permutations: [
         try SymmetryPermutation(constantMapping: ["A": "A", "B": "B"]),
         try SymmetryPermutation(constantMapping: ["A": "B", "B": "A"])
-      ]
+      ],
+      maximumPermutationCount: 2
     )
   }
 }

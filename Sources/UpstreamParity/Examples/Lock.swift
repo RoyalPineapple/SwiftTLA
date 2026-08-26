@@ -66,6 +66,7 @@ extension Example {
         upstreamModule: "specifications/locks_auxiliary_vars/Lock.tla",
         upstreamCfg: "specifications/locks_auxiliary_vars/Lock.cfg",
         expectedDistinct: 12,
+        maximumStateLimit: 50_000,
         spec: LockModel.spec,
         notes: "Two-process PlusCal lock. TLC = 12."
     )

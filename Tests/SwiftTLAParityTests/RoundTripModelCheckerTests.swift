@@ -131,8 +131,8 @@ private func value(
       }
       Invariant("HCini") { hr >= 1 && hr <= 12 }
     }
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 12)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count == 12)
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -157,8 +157,8 @@ private func value(
           || (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
       }
     }
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 16)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count == 16)
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -173,21 +173,21 @@ private func value(
       Action("Deallocate") { a.becomes(a + 1).when(b > 0) && b.becomes(b - 1) }
       Invariant("ResourceCount") { a + b == 3 }
     }
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count == 4)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count == 4)
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
   @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
   func coffeeCanMax5() throws {
-    let count = try ModelChecker(compilation: try Example.coffeeCanMax5.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
+    let count = try ModelChecker(compilation: try Example.coffeeCanMax5.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled))
       .exploreGraph().states.count
     #expect(count == 20)
   }
 
   @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
   func movingCatEven() throws {
-    let count = try ModelChecker(compilation: try Example.catEvenBoxes.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500))
+    let count = try ModelChecker(compilation: try Example.catEvenBoxes.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled))
       .exploreGraph().states.count
     #expect(count == 48)
   }
@@ -200,7 +200,7 @@ private func value(
       Action("once") { x.becomes(1).when(x == 0) }
       DeadlockCheck()
     }
-    let r = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let r = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     if case .deadlocked(let state) = r {
       let token = try #require(TLAStateProjection.Token(validating: "x"))
       #expect(state.value(for: token) == .int(1))
@@ -228,9 +228,9 @@ private func value(
             || cnt != 0 && cand != i && cnt.becomes(cnt - 1))
       }
     }
-    let count = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph().states.count
+    let count = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count
     #expect(count >= 1)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -345,7 +345,7 @@ private func value(
       }
       Constraint(counter <= StateExpr.value(.constant("limit")))
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let compilation = try spec.compile()
 
     for (sourceID, source) in graph.states {
@@ -437,6 +437,25 @@ private func value(
 }
 
 @Suite(.serialized) struct CheckerSelfProofTests {
+  @Test("Exploration rejects non-positive resource limits")
+  func rejectsNonPositiveResourceLimits() {
+    #expect(throws: FiniteExplorationConfigurationError.nonPositiveStateLimit(0)) {
+      _ = try FiniteExplorationConfiguration(
+        maximumStateLimit: 0,
+        symmetryReduction: .disabled)
+    }
+    #expect(throws: FiniteExplorationConfigurationError.nonPositiveStateLimit(-1)) {
+      _ = try FiniteExplorationConfiguration(
+        maximumStateLimit: -1,
+        symmetryReduction: .disabled)
+    }
+    #expect(throws: FiniteExplorationConfigurationError.nonPositivePermutationLimit(0)) {
+      _ = try FiniteExplorationConfiguration(
+        maximumStateLimit: 1,
+        symmetryReduction: .enabled(maximumPermutationCount: 0))
+    }
+  }
+
   @Test("All explored states are reachable from initial")
   func reachability() throws {
     let x = Var<Int>("x")
@@ -444,7 +463,7 @@ private func value(
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 4) }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 5)  // 0,1,2,3,4
     let values = try Set(graph.states.values.compactMap { try value("x", in: $0) })
     #expect(values == Set([.int(0), .int(1), .int(2), .int(3), .int(4)]))
@@ -460,7 +479,7 @@ private func value(
       Action("incA") { a.becomes(a + 1).when(a < 3) }
       Action("incB") { b.becomes(b + 1).when(b < 3) }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     for (_, ts) in graph.transitions {
       for t in ts {
         #expect(graph.states[t.target] != nil)
@@ -475,7 +494,7 @@ private func value(
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1) }
     }
-    let g = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 5)).exploreGraph()
+    let g = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 5, symmetryReduction: .disabled)).exploreGraph()
     // maxStates limits processed, last state may discover one extra
     #expect(g.states.count <= 5 + 1)
   }
@@ -488,7 +507,7 @@ private func value(
       Action("inc") { x.becomes(x + 1).when(x < 5) }
       Invariant("nonNeg") { x >= 0 }
     }
-    if case .ok(let c) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check() {
+    if case .ok(let c) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check() {
       #expect(c == 6)
     } else {
       #expect(Bool(false))
@@ -520,7 +539,7 @@ private func value(
       Action("a") { x.becomes(2).when(x == 1) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     var dead = false
     if case .deadlocked = result { dead = true } else { dead = false }
     #expect(dead)
@@ -534,7 +553,7 @@ private func value(
       Action("a") { x.becomes(x + 1).when(x < 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
     var val: TLAValue = .int(-1)
     if case .deadlocked(let state) = result { val = state.value(for: xToken) ?? .int(-1) }
@@ -549,7 +568,7 @@ private func value(
       Action("a") { x.becomes((x + 1) % 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     var ok = false
     if case .ok = result { ok = true }
     #expect(ok)
@@ -562,7 +581,7 @@ private func value(
       Variable(x, 0)
       Action("a") { x.becomes(x + 1) }
     }
-    let g = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).exploreGraph()
+    let g = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).exploreGraph()
     #expect(g.states.count <= 2)
   }
 }
@@ -676,7 +695,7 @@ private func value(
           )
       }
     }
-    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50)).check() {
+    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50, symmetryReduction: .disabled)).check() {
       #expect(count >= 2)
     } else {
       #expect(Bool(false))

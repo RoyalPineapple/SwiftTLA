@@ -27,6 +27,10 @@ SwiftTLA compiles a typed model from the case's
 declared by that case, with a configuration rendered from the same property and
 fairness values.
 
+Each temporal case declares one `exploration` value. It disables symmetry and
+sets the maximum stored-state count. Requiring more states than that limit makes
+the case incomplete.
+
 The comparison checks these facts:
 
 - Both tools evaluated the property.
@@ -65,6 +69,9 @@ The comparison checks these facts:
 - The applicable invariant and deadlock results match.
 
 The declared cases cover one binary symmetric collection at scopes 2 through 5.
+Each symmetry case declares `rawExploration` with symmetry disabled and
+`reducedExploration` with symmetry enabled and a maximum permutation count.
+The checker passes those values unchanged to their respective Swift runs.
 
 ## Evidence
 

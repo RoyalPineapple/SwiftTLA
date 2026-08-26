@@ -3,46 +3,92 @@ import Foundation
 import Testing
 import UpstreamParity
 
+private enum LeftNode: String, CaseIterable, FiniteTLAValueDomain {
+  case first = "LeftFirst"
+  case second = "LeftSecond"
+
+  static var defaultValue: Self { .first }
+  static let finiteValues = allCases
+  var tlaValue: TLAValue { .constant(rawValue) }
+
+  init?(formalValue: TLAValue) {
+    guard case .constant(let value) = formalValue else { return nil }
+    self.init(rawValue: value)
+  }
+}
+
+private enum RightNode: String, CaseIterable, FiniteTLAValueDomain {
+  case first = "RightFirst"
+  case second = "RightSecond"
+
+  static var defaultValue: Self { .first }
+  static let finiteValues = allCases
+  var tlaValue: TLAValue { .constant(rawValue) }
+
+  init?(formalValue: TLAValue) {
+    guard case .constant(let value) = formalValue else { return nil }
+    self.init(rawValue: value)
+  }
+}
+
 struct SymmetryReductionTests {
-  @Test("Symmetry with direct-value variable reduces state count")
+  @Test("Direct symmetry produces the exact orbit graph")
   func directValueSymmetry() throws {
     let spec = TLASpec("SymTest") {
-      let x = Var<Int>("x")
-      Variable(x, in: [1, 2, 3])
-      Action("inc") { x < 3 && x.becomes(x + 1) }
-      Invariant("TypeOK") { x >= 1 && x <= 3 }
-      Symmetry("x", [1, 2, 3] as Set<Int>)
+      let owner = Var<LeftNode>("owner")
+      Variable(owner, in: LeftNode.allCases)
+      Action("stay") { owner.stays }
+      Symmetry("owner", Set(LeftNode.allCases))
     }
-    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
-    let result = try mc.check()
-    guard case .ok(let count) = result else {
-      #expect(Bool(false))
-      return
-    }
-    #expect(count < 3)
+    let compilation = try spec.compile()
+    let raw = try ModelChecker(
+      compilation: compilation,
+      configuration: FiniteExplorationConfiguration(
+        maximumStateLimit: 100,
+        symmetryReduction: .disabled)
+    ).explore().graph
+    let reduced = try ModelChecker(
+      compilation: compilation,
+      configuration: FiniteExplorationConfiguration(
+      maximumStateLimit: 100,
+      symmetryReduction: .enabled(maximumPermutationCount: 2))
+    ).explore().graph
+
+    #expect(raw.states.count == 2)
+    #expect(raw.transitions.values.flatMap { $0 }.count == 2)
+    #expect(reduced.states.count == 1)
+    #expect(reduced.transitions.values.flatMap { $0 }.count == 1)
   }
 
-  @Test("Symmetry chains multiple sets")
+  @Test("Independent direct symmetry domains produce the exact product orbit")
   func multipleSymmetrySets() throws {
     let spec = TLASpec("MultiSym") {
-      let x = Var<Int>("x")
-      let y = Var<Int>("y")
-      Variable(x, in: [1, 2])
-      Variable(y, in: [10, 20])
-      Action("bump") {
-        (x == 1 && x.becomes(2) && y.stays)
-          || (y == 10 && y.becomes(20) && x.stays)
-      }
-      Invariant("TypeOK") { x >= 1 && x <= 2 && y >= 10 && y <= 20 }
-      Symmetry("x", [1, 2] as Set<Int>)
-      Symmetry("y", [10, 20] as Set<Int>)
+      let left = Var<LeftNode>("left")
+      let right = Var<RightNode>("right")
+      Variable(left, in: LeftNode.allCases)
+      Variable(right, in: RightNode.allCases)
+      Action("stay") { left.stays && right.stays }
+      Symmetry("left", Set(LeftNode.allCases))
+      Symmetry("right", Set(RightNode.allCases))
     }
-    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
-    let result = try mc.check()
-    guard case .ok = result else {
-      #expect(Bool(false))
-      return
-    }
+    let compilation = try spec.compile()
+    let raw = try ModelChecker(
+      compilation: compilation,
+      configuration: FiniteExplorationConfiguration(
+        maximumStateLimit: 100,
+        symmetryReduction: .disabled)
+    ).explore().graph
+    let reduced = try ModelChecker(
+      compilation: compilation,
+      configuration: FiniteExplorationConfiguration(
+        maximumStateLimit: 100,
+        symmetryReduction: .enabled(maximumPermutationCount: 4))
+    ).explore().graph
+
+    #expect(raw.states.count == 4)
+    #expect(raw.transitions.values.flatMap { $0 }.count == 4)
+    #expect(reduced.states.count == 1)
+    #expect(reduced.transitions.values.flatMap { $0 }.count == 1)
   }
 
   @Test("Empty symmetry sets are no-op")
@@ -53,13 +99,29 @@ struct SymmetryReductionTests {
       Action("inc") { x < 3 && x.becomes(x + 1) }
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
-    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100))
+    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
     let result = try mc.check()
     guard case .ok(let count) = result else {
       #expect(Bool(false))
       return
     }
     #expect(count == 3)
+  }
+
+  @Test("Symmetry reduction requires a declared symmetry domain")
+  func reductionRequiresSymmetry() throws {
+    let x = Var<Int>("x")
+    let spec = TLASpec("NoSymmetry") {
+      Variable(x, 0)
+      Action("stay") { x.stays }
+    }
+    let configuration = try FiniteExplorationConfiguration(
+      maximumStateLimit: 10,
+      symmetryReduction: .enabled(maximumPermutationCount: 1))
+
+    #expect(throws: FiniteExplorationConfigurationError.symmetryReductionWithoutDeclarations) {
+      try ModelChecker(compilation: try spec.compile(), configuration: configuration).explore()
+    }
   }
 
   @Test("TLA+ symmetry operator and config directive are emitted")
@@ -75,6 +137,74 @@ struct SymmetryReductionTests {
     #expect(tla.contains("Symmx == Permutations({1, 2, 3})"))
     #expect(tla.contains("Symmx"))
     #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY Symmx"))
+  }
+
+  @Test("Direct symmetry names and domains are validated during compilation")
+  func invalidDirectSymmetryFailsCompilation() {
+    let invalidName = TLASpec("InvalidSymmetryName") {
+      Symmetry("not-a-name", [1] as Set<Int>)
+    }
+    let emptyDomain = TLASpec("EmptySymmetryDomain") {
+      Symmetry("empty", Set<Int>())
+    }
+
+    assertInvalidSymmetry(invalidName, path: "symmetrySets[0].name")
+    assertInvalidSymmetry(emptyDomain, path: "symmetrySets[0].values")
+  }
+
+  @Test("Direct symmetry rendered names cannot collide with declarations")
+  func directSymmetryRenderedNameCollisionFailsCompilation() {
+    let collision = TLASpec("SymmetryCollision") {
+      FormalDefinition("Symmowner", parameters: [], body: .value(.bool(true)))
+      Symmetry("owner", [1, 2] as Set<Int>)
+    }
+
+    assertInvalidSymmetry(collision, path: "symmetrySets[0].renderedName")
+  }
+
+  @Test("Direct symmetry domains must be disjoint")
+  func overlappingDirectSymmetryFailsCompilation() {
+    let overlap = TLASpec("OverlappingSymmetry") {
+      Symmetry("left", [1, 2] as Set<Int>)
+      Symmetry("right", [2, 3] as Set<Int>)
+    }
+
+    assertInvalidSymmetry(overlap, path: "symmetrySets[1].values")
+  }
+
+  @Test("Formal value ordering distinguishes same-sized composite values")
+  func formalValueOrderingIsStructural() throws {
+    let tupleOne = TLAValue.tuple([.int(1)])
+    let tupleTwo = TLAValue.tuple([.int(2)])
+    let setOne = TLAValue.set([.int(1)])
+    let setTwo = TLAValue.set([.int(2)])
+    let recordOne = TLAValue.record(["value": .int(1)])
+    let recordTwo = TLAValue.record(["value": .int(2)])
+    let functionOne = TLAValue.function([.int(0): .int(1)])
+    let functionTwo = TLAValue.function([.int(0): .int(2)])
+
+    #expect(TLAValue.sorted([tupleTwo, tupleOne]) == [tupleOne, tupleTwo])
+    #expect(TLAValue.sorted([setTwo, setOne]) == [setOne, setTwo])
+    #expect(TLAValue.sorted([recordTwo, recordOne]) == [recordOne, recordTwo])
+    #expect(TLAValue.sorted([functionTwo, functionOne]) == [functionOne, functionTwo])
+
+    let rendered = try TLASpec("CompositeSymmetry") {
+      Symmetry("value", Set([tupleTwo, tupleOne]))
+    }.compile().renderedTLAModuleBundle().tla
+    #expect(rendered.contains("Symmvalue == Permutations({<<1>>, <<2>>})"))
+  }
+
+  private func assertInvalidSymmetry(_ spec: TLASpec, path: String) {
+    do {
+      _ = try spec.compile()
+      Issue.record("Expected direct symmetry compilation to fail")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .invalidSymmetryDeclaration)
+      #expect(diagnostic.stage == .validation)
+      #expect(diagnostic.path == path)
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error)")
+    }
   }
 }
 // MARK: - Initialized-variable parity
@@ -92,12 +222,12 @@ struct SymmetryReductionTests {
       Action("inc") { sv.becomes(sv + 1).when(sv < 5) }
       Invariant("ok") { sv >= 0 && sv <= 5 }
     }
-    let graph1 = try ModelChecker(compilation: try spec1.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
-    let graph2 = try ModelChecker(compilation: try spec2.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph1 = try ModelChecker(compilation: try spec1.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
+    let graph2 = try ModelChecker(compilation: try spec2.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph1.states.count == graph2.states.count)
     #expect(graph1.states.count == 6)
-    let result1 = try ModelChecker(compilation: try spec1.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
-    let result2 = try ModelChecker(compilation: try spec2.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let result1 = try ModelChecker(compilation: try spec1.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
+    let result2 = try ModelChecker(compilation: try spec2.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     if case .ok(let c1) = result1, case .ok(let c2) = result2 {
       #expect(c1 == c2)
     } else {
@@ -127,7 +257,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (mode == Mode.active) && mode.becomes(Mode.idle)
       }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -141,7 +271,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (mode == Mode.active) && mode.becomes(Mode.idle)
       }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -155,7 +285,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (state == Status.off) && state.becomes(Status.on)
       }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -169,7 +299,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (state == Status.off) && state.becomes(Status.on)
       }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     #expect(graph.states.count == 2)
   }
 
@@ -214,7 +344,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       }
       Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     if case .ok(let count) = result {
       #expect(count == 2)
     } else {
@@ -247,7 +377,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       Action("activate") { phase.becomes(Mode.active).when(phase == Mode.idle) }
       Action("deactivate") { phase.becomes(Mode.idle).when(phase == Mode.active) }
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
     let values = try Set(graph.states.values.compactMap { try value("phase", in: $0) })
     #expect(values == Set([TLAValue.int(0), TLAValue.int(1)]))
   }
@@ -291,6 +421,6 @@ enum Status: String, TLAValueType, StateExprConvertible {
     #expect(spec.variables.count == 1)
     #expect(spec.variables[0].name == "x")
     #expect(spec.variables[0].initial == .int(0))
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).exploreGraph().states.count == 4)
+    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).exploreGraph().states.count == 4)
   }
 }

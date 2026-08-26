@@ -7,7 +7,7 @@ struct VoteProofCorpusRenderingTests {
     func nestedTypedBindersExecute() throws {
         let exploration = try ModelChecker(
             compilation: try VoteProofModel.spec.compile(),
-            configuration: try .init(maximumStateLimit: 1)
+            configuration: try .init(maximumStateLimit: 1, symmetryReduction: .disabled)
         ).explore()
 
         #expect(exploration.graph.states.count == 1)

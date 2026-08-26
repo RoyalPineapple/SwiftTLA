@@ -149,6 +149,7 @@ extension Example {
         upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",
         upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",
         expectedDistinct: 2303,
+        maximumStateLimit: 50_000,
         spec: BakeryN2Model.spec,
         notes: "N=2, MaxNat=2. One fair PlusCal process family lowered to typed functions and program counters."
     )

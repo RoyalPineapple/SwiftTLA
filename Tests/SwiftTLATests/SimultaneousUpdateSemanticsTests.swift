@@ -19,13 +19,13 @@ struct SimultaneousUpdateSemanticsTests {
         let initial = try firstCompiledState(in: compilation)
 
         let successor = try #require(try compiledSuccessors(named: "swap", arguments: [], in: compilation, from: initial).first)
-        let verification = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
+        let verification = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
 
         #expect(try renderedValue(named: "left", in: successor, compilation: compilation) == .int(2))
         #expect(try renderedValue(named: "right", in: successor, compilation: compilation) == .int(1))
         #expect(try renderedValue(named: "left", in: initial, compilation: compilation) == .int(1))
         #expect(try renderedValue(named: "right", in: initial, compilation: compilation) == .int(2))
-        guard case .ok(let stateCount) = verification.underlyingOutcome else {
+        guard case .ok(let stateCount) = verification else {
             Issue.record("Expected the model checker to verify the two-state swap graph, found \(verification)")
             return
         }

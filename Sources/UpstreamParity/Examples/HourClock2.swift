@@ -40,6 +40,7 @@ extension Example {
         upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
         upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",
         expectedDistinct: 12,
+        maximumStateLimit: 50_000,
         spec: HourClock2Model.spec,
         notes: "PlusCal-shaped singleton process. Upstream checks HC => HC2 as a property; HC2 alone has 12 states.",
     )

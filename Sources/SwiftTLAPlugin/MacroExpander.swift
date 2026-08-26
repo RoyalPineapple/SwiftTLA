@@ -61,7 +61,6 @@ enum MacroExpander {
             symmetricCollections: plan.symmetricCollections
         ))
         decls.append(contentsOf: generateActorMembers(model: model))
-        decls.append(contentsOf: generateVariableProperties(variables: plan.variables).map(DeclSyntax.init))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         public static func makeMachine(\(collectionParameters.joined(separator: ", "))) throws -> Self {
@@ -343,24 +342,6 @@ extension MacroExpander {
                 )
             }
         )
-    }
-
-    static func generateVariableProperties(
-        variables: [MachineSurfacePlan.Variable]
-    ) -> [VariableDeclSyntax] {
-        variables.map { v in
-            return VariableDeclSyntax(
-                modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                bindingSpecifier: .keyword(.var),
-                bindings: [PatternBindingSyntax(
-                    pattern: IdentifierPatternSyntax(identifier: .identifier(v.formalName)),
-                    typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: v.swiftType)),
-                    accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_state.\(v.formalName)") }
-                    ))
-                )]
-            )
-        }
     }
 
     static func stateDecodingStatements(

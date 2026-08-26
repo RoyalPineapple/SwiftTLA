@@ -61,6 +61,7 @@ extension Example {
         upstreamModule: "specifications/byzpaxos/Consensus.tla",
         upstreamCfg: "specifications/byzpaxos/Consensus.cfg",
         expectedDistinct: 4,
+        maximumStateLimit: 50_000,
         spec: ConsensusModel.spec,
         notes: "Published PlusCal consensus safety model with Value = {v1, v2, v3}."
     )

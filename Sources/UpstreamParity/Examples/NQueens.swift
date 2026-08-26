@@ -68,6 +68,7 @@ extension Example {
         upstreamModule: "specifications/N-Queens/QueensPluscal.tla",
         upstreamCfg: "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.cfg",
         expectedDistinct: 786,
+        maximumStateLimit: 50_000,
         spec: NQueensModel.spec,
         notes: "Published sequential PlusCal N-Queens algorithm, specialized to N=4."
     )

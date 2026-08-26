@@ -11,7 +11,7 @@ struct ChangRobertsCorpusContractTests {
         let compilation = try entry.spec.compile()
         let exploration = try ModelChecker(
             compilation: compilation,
-            configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50_000)
+            configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50_000, symmetryReduction: .disabled)
         ).explore()
         let states = exploration.graph.states
         #expect(states.count == entry.expectedDistinct)

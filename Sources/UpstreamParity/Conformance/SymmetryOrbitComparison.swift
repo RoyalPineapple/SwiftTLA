@@ -111,6 +111,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
   package let tlcRaw: CompletedGraphRun
   package let tlcReduced: CompletedGraphRun
   package let permutations: [SymmetryPermutation]
+  package let maximumPermutationCount: Int
 
   package init(
     caseID: String,
@@ -118,9 +119,12 @@ package struct SymmetryOrbitComparisonInput: Sendable {
     swiftReduced: CompletedGraphRun,
     tlcRaw: CompletedGraphRun,
     tlcReduced: CompletedGraphRun,
-    permutations: [SymmetryPermutation]
+    permutations: [SymmetryPermutation],
+    maximumPermutationCount: Int
   ) throws {
-    guard caseID.isEmpty == false, permutations.isEmpty == false else {
+    guard caseID.isEmpty == false,
+          permutations.isEmpty == false,
+          maximumPermutationCount > 0 else {
       throw EvidenceFormatError.invalidField(record: caseID, field: "symmetry comparison input")
     }
     self.caseID = caseID
@@ -129,6 +133,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
     self.tlcRaw = tlcRaw
     self.tlcReduced = tlcReduced
     self.permutations = permutations
+    self.maximumPermutationCount = maximumPermutationCount
   }
 }
 
@@ -166,7 +171,8 @@ package func compareSymmetryOrbits(
 
   let derivation = try SymmetryOrbitDerivation(
     states: Array(input.swiftRaw.graph.states.values),
-    permutations: input.permutations
+    permutations: input.permutations,
+    maximumPermutationCount: input.maximumPermutationCount
   )
   let swiftRepresentatives = try reducedRepresentatives(
     input.swiftReduced, source: .swift, derivation: derivation

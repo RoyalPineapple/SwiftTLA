@@ -11,6 +11,7 @@ extension Example {
         upstreamModule: "specifications/Paxos/Paxos.tla",
         upstreamCfg: "specifications/Paxos/MCPaxos.cfg",
         expectedDistinct: 81,
+        maximumStateLimit: 50_000,
         spec: paxosSpec(),
         notes: "1 acceptor, 1 value, 2 ballots. Phase1a/b + Phase2a/b.",
     )

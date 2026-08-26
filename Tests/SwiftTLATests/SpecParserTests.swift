@@ -2584,6 +2584,14 @@ private let cameraModeDefinition = parserEnum(
         ])
     }
 
+    @Test("macro parser and result builder produce one generated surface identity")
+    func macroParserAndResultBuilderShareGeneratedSurfaceIdentity() throws {
+        let compilation = try TypedFacadeEnumDomainMacro.spec.compile()
+
+        #expect(compilation.identity.value == TypedFacadeEnumDomainMacro._expectedCompilationIdentity)
+        _ = try TypedFacadeEnumDomainMacro.makeMachine()
+    }
+
     @Test func rejectsUnsupportedInvariantSource() throws {
         let source = """
         {

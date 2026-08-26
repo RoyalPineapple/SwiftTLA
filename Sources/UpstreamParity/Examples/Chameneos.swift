@@ -13,6 +13,7 @@ extension Example {
         upstreamModule: "specifications/Chameneos/Chameneos.tla",
         upstreamCfg: "specifications/Chameneos/Chameneos.cfg",
         expectedDistinct: 34534,
+        maximumStateLimit: 50_000,
         spec: chameneosSpec(),
         notes: "M=4, N=4. RECURSIVE Sum for SumMet. Tuple @ self-ref in EXCEPT. 81 init states → 34,534 reachable.",
     )

@@ -4,6 +4,49 @@ import SwiftTLA
 import Testing
 import UpstreamParity
 struct FiniteGraphCheckTests {
+  @Test("finite graph manifests reject unknown exploration fields")
+  func rejectsUnknownExplorationFields() {
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(FiniteGraphManifest.self, from: manifest(exploration: """
+        {
+          "maximumStateLimit": 10,
+          "symmetryReduction": "disabled",
+          "maximumStateLmit": 10
+        }
+        """))
+    }
+  }
+
+  @Test("finite graph manifests require unreduced Swift exploration")
+  func rejectsSymmetryReduction() {
+    #expect(throws: EvidenceFormatError.self) {
+      try JSONDecoder().decode(FiniteGraphManifest.self, from: manifest(exploration: """
+        {
+          "maximumStateLimit": 10,
+          "symmetryReduction": "enabled",
+          "maximumPermutationCount": 2
+        }
+        """))
+    }
+  }
+
+  private func manifest(exploration: String) -> Data {
+    Data("""
+      {
+        "schema": "FiniteGraphCases",
+        "cases": [{
+          "id": "fixture",
+          "module": "Fixture.tla",
+          "configuration": "Fixture.cfg",
+          "imports": [],
+          "exploration": \(exploration),
+          "moduleSHA256": "\(String(repeating: "a", count: 64))",
+          "cfgSHA256": "\(String(repeating: "b", count: 64))"
+        }]
+      }
+      """.utf8)
+  }
+
   @Test("finite graph check retains complete graphs and reports same-count edge differences")
   func retainsIndependentRunsAtomically() throws {
     let fileManager = FileManager.default
@@ -16,8 +59,7 @@ struct FiniteGraphCheckTests {
     let check = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: executor))
     let output = root.appendingPathComponent("evidence")
     let result = check.run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration() },
+      compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -33,7 +75,10 @@ struct FiniteGraphCheckTests {
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     let processRequest = try #require(process["request"] as? [String: Any])
     #expect((processRequest["case"] as? [String: Any])?["id"] as? String == request.finiteGraphCase.id)
-    #expect(processRequest["arguments"] as? [String] == request.finiteGraphCase.arguments)
+    let retainedExploration = try #require(
+      (processRequest["case"] as? [String: Any])?["exploration"] as? [String: Any])
+    #expect(retainedExploration["maximumStateLimit"] as? Int == 10)
+    #expect(retainedExploration["symmetryReduction"] as? String == "disabled")
     #expect((processRequest["toolchain"] as? [String: Any])?["declaredPin"] != nil)
     #expect((processRequest["bundle"] as? [String: Any])?["root"] as? String == "Fixture")
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
@@ -46,6 +91,7 @@ struct FiniteGraphCheckTests {
     #expect(report.actual.contains("SwiftTLA permits"))
     #expect(report.nextSafeAction.contains("guard"))
   }
+
   @Test("finite graph check publishes partial evidence and a diagnostic after TLC capture failure")
   func retainsFailureEvidenceAtomically() throws {
     let fileManager = FileManager.default
@@ -57,8 +103,7 @@ struct FiniteGraphCheckTests {
       tlcProcess: TLCProcessAdapter(executor: FailingTLCExecutor()))
     let output = root.appendingPathComponent("failed-evidence")
     let result = check.run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration() },
+      compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -72,7 +117,6 @@ struct FiniteGraphCheckTests {
     #expect(
       fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.stderr.log").path))
     let diagnostic = try json(at: output.appendingPathComponent("diagnostic.json"))
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     #expect(diagnostic["code"] as? String == "tlc-execution-failed")
     #expect(diagnostic["phase"] as? String == "tlc-execution")
     let report = try #require(diagnostic["report"] as? [String: Any])
@@ -81,7 +125,6 @@ struct FiniteGraphCheckTests {
     #expect((report["actual"] as? String)?.contains("terminated") == true)
     #expect((report["nextSafeAction"] as? String)?.contains("retained stdout") == true)
     #expect((report["toolOutput"] as? [[String: Any]])?.count == 2)
-    #expect((process["request"] as? [String: Any])?["arguments"] as? [String] == request.arguments)
     #expect(
       (try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "partial stdout"))
@@ -111,8 +154,7 @@ struct FiniteGraphCheckTests {
     let result = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: executor)
     ).run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration() },
+      compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -140,8 +182,7 @@ struct FiniteGraphCheckTests {
           stream: try graphStream(for: request.finiteGraphCase, runID: otherRun))))
     let output = root.appendingPathComponent("wrong-tlc-run")
     let result = check.run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration() },
+      compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -164,8 +205,7 @@ struct FiniteGraphCheckTests {
     let result = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: FixtureTLCExecutor(stream: stream))
     ).run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration(action: "Next") },
+      compilation: try fixtureCompilation(action: "Next"),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -190,8 +230,7 @@ struct FiniteGraphCheckTests {
       tlcProcess: TLCProcessAdapter(
         executor: FixtureTLCExecutor(stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
     )).run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration(action: "Next") },
+      compilation: try fixtureCompilation(action: "Next"),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -227,8 +266,7 @@ extension FiniteGraphCheckTests {
       )
     )
     let result = check.run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration() },
+      compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -261,8 +299,7 @@ extension FiniteGraphCheckTests {
         )
       )
     ).run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration() },
+      compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -285,8 +322,7 @@ extension FiniteGraphCheckTests {
     try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
     try Data("keep".utf8).write(to: output.appendingPathComponent("existing.txt"))
     let result = FiniteGraphCheck().run(
-      case: request.finiteGraphCase,
-      swiftExploration: { try swiftExploration() },
+      compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
@@ -312,11 +348,11 @@ extension FiniteGraphCheckTests {
         executor: BarrierTLCExecutor(stream: stream, barrier: barrier)))
     let output = root.appendingPathComponent("shared-evidence")
     let results = ResultBox()
+    let compilation = try fixtureCompilation(action: "Next")
     DispatchQueue.concurrentPerform(iterations: 2) { _ in
       results.append(
         check.run(
-          case: request.finiteGraphCase,
-          swiftExploration: { try exactSwiftExploration() },
+          compilation: compilation,
           tlcRequest: request,
           outputDirectory: output
         ))
@@ -347,27 +383,12 @@ extension FiniteGraphCheckTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-graph.jsonl").path))
     #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
   }
-  private func swiftExploration(
-    action: String = "SwiftNext",
-    maximumStateLimit: Int = 10
-  ) throws -> ModelExplorationResult {
-    let first = StateGraph.StateID(0)
-    let second = StateGraph.StateID(1)
-    return ModelExplorationResult(
-      graph: StateGraph(
-        specName: "Fixture",
-        variableNames: ["x"],
-        transitions: [first: [.init(label: .init(.init(name: action)), target: second)]],
-        states: [
-          first: try fixtureProjection([("x", .int(1))]),
-          second: try fixtureProjection([("x", .int(2))])
-        ]
-      ),
-      initialStateIDs: [first],
-      result: .ok(statesCount: 2),
-      compilationIdentity: try fixtureCompilationIdentity(),
-      configuration: try .init(maximumStateLimit: maximumStateLimit)
-    )
+  private func fixtureCompilation(action: String = "SwiftNext") throws -> CompiledSpecification {
+    let value = Var<Int>("x")
+    return try TLASpec("Fixture") {
+      Variable(value, 1)
+      Action(action) { value.becomes(2).when(value == 1) }
+    }.compile()
   }
   private func temporaryRequest(in root: URL) throws -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")
@@ -376,13 +397,11 @@ extension FiniteGraphCheckTests {
     try Data().write(to: configuration)
     let finiteGraphCase = try FiniteGraphCase(
       id: "fixture",
+      exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
       moduleSHA256: String(repeating: "c", count: 64),
       cfgSHA256: String(repeating: "d", count: 64),
       arguments: ["-workers", "1"],
       argumentsSHA256: try FiniteGraphCase.argumentsDigest(["-workers", "1"]),
-      workers: 1,
-      fingerprintPolynomial: 1,
-      deadlock: false,
       operatingSystem: "macos",
       architecture: "arm64",
       environment: [:],
@@ -396,7 +415,6 @@ extension FiniteGraphCheckTests {
       graphEvents: root.appendingPathComponent("events.jsonl"),
       traceOutput: root.appendingPathComponent("trace.json"),
       workingDirectory: root,
-      arguments: ["-workers", "1"],
       finiteGraphCase: finiteGraphCase,
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000005"))
     )
@@ -524,25 +542,6 @@ private final class ResultBox: Sendable {
     storage.withLock { $0.append(value) }
   }
 }
-private func exactSwiftExploration() throws -> ModelExplorationResult {
-  let first = StateGraph.StateID(0)
-  let second = StateGraph.StateID(1)
-  return ModelExplorationResult(
-    graph: StateGraph(
-      specName: "Fixture",
-      variableNames: ["x"],
-      transitions: [first: [.init(label: .init(.init(name: "Next")), target: second)]],
-      states: [
-        first: try fixtureProjection([("x", .int(1))]),
-        second: try fixtureProjection([("x", .int(2))])
-      ]
-      ),
-      initialStateIDs: [first],
-      result: .ok(statesCount: 2),
-      compilationIdentity: try fixtureCompilationIdentity(),
-      configuration: try .init(maximumStateLimit: 10)
-  )
-}
 private func json(at url: URL) throws -> [String: Any] {
   try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
 }
@@ -557,16 +556,6 @@ private func graphCompletion(at url: URL) throws -> [String: Any] {
   try #require(graphRecords(at: url).last)
 }
 
-private func fixtureProjection(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
-  try projection(entries)
-}
-
-private func fixtureCompilationIdentity() throws -> CompilationIdentity {
-  let value = Var<Int>("fixture")
-  return try TLASpec("Fixture") {
-    Variable(value, 0)
-  }.compile().identity
-}
 private func graphStream(for finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {
   let first = state(fingerprint: "1", value: "1")
   let second = state(fingerprint: "2", value: "2")
@@ -584,9 +573,6 @@ private func graphStream(for finiteGraphCase: FiniteGraphCase, runID: UUID) thro
     "cfgSha256": finiteGraphCase.cfgSHA256,
     "arguments": finiteGraphCase.arguments,
     "argumentsSha256": finiteGraphCase.argumentsSHA256,
-    "workers": finiteGraphCase.workers,
-    "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
-    "deadlock": finiteGraphCase.deadlock,
     "os": finiteGraphCase.operatingSystem,
     "architecture": finiteGraphCase.architecture,
     "environment": finiteGraphCase.environment

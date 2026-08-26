@@ -39,7 +39,6 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
       workingDirectory: directory.appendingPathComponent("work"),
-      arguments: [],
       finiteGraphCase: try fixtureCase(try toolchainPin()),
       runID: UUID()
     )
@@ -179,7 +178,6 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
       traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
       workingDirectory: URL(fileURLWithPath: "/tmp"),
-      arguments: ["-workers", "1"],
       finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1"]),
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
       traceMode: .dumpJSON
@@ -267,7 +265,6 @@ extension TLCGraphReaderTests {
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
       workingDirectory: directory,
-      arguments: [],
       finiteGraphCase: try caseForFiles(
         id: "timeout", module: module, configuration: configuration, arguments: []),
       runID: UUID(), timeout: 0.25
@@ -471,8 +468,6 @@ extension TLCGraphReaderTests {
     let mutations = [
       { (line: String) in line.replacingOccurrences(of: "\"version\":1", with: "\"version\":true")
       },
-      { (line: String) in line.replacingOccurrences(of: "\"workers\":1", with: "\"workers\":true")
-      },
       { (line: String) in line.replacingOccurrences(of: "\"seen\":false", with: "\"seen\":0") },
       { (line: String) in
         line.replacingOccurrences(of: "\"notInModel\":false", with: "\"notInModel\":1")
@@ -488,7 +483,7 @@ extension TLCGraphReaderTests {
     }
   }
 
-  @Test("launch binding hashes the actual inputs and derives provenance from the declared case")
+  @Test("launch binding hashes the declared inputs and derives provenance from the declared case")
   func rejectsLaunchBindingMismatches() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(
       UUID().uuidString)
@@ -501,8 +496,7 @@ extension TLCGraphReaderTests {
     let finiteGraphCase = try caseForFiles(
       id: "bound", module: module, configuration: configuration, arguments: ["-workers", "1"])
     let valid = try launchRequest(
-      finiteGraphCase: finiteGraphCase, module: module, configuration: configuration,
-      arguments: ["-workers", "1"])
+      finiteGraphCase: finiteGraphCase, module: module, configuration: configuration)
     let staged = try valid.stageDeclaredBundle()
     try valid.validateLaunchBinding(module: staged.module, configuration: staged.configuration)
     let command = try valid.commandArguments(module: staged.module, configuration: staged.configuration)
@@ -517,7 +511,7 @@ extension TLCGraphReaderTests {
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongModule, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-module"),
-      arguments: valid.arguments, finiteGraphCase: finiteGraphCase, runID: UUID()
+      finiteGraphCase: finiteGraphCase, runID: UUID()
     )
     #expect(throws: FiniteGraphCaseError.moduleDigestMismatch) {
       let wrongStaged = try wrongModuleRequest.stageDeclaredBundle()
@@ -530,18 +524,11 @@ extension TLCGraphReaderTests {
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongConfiguration, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-configuration"),
-      arguments: valid.arguments, finiteGraphCase: finiteGraphCase, runID: UUID()
+      finiteGraphCase: finiteGraphCase, runID: UUID()
     )
     #expect(throws: FiniteGraphCaseError.cfgDigestMismatch) {
       let wrongStaged = try wrongConfigurationRequest.stageDeclaredBundle()
       try wrongConfigurationRequest.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
-    }
-    let wrongArguments = try launchRequest(
-      finiteGraphCase: finiteGraphCase, module: module, configuration: configuration,
-      arguments: ["-workers", "2"])
-    #expect(throws: FiniteGraphCaseError.executionArgumentsMismatch) {
-      let wrongStaged = try wrongArguments.stageDeclaredBundle()
-      try wrongArguments.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
   }
 }
@@ -578,7 +565,6 @@ private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessReque
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("counterexample.json"),
     workingDirectory: directory.appendingPathComponent("work"),
-    arguments: ["-workers", "1", "-fp", "1"],
     finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1", "-fp", "1"]),
     runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001"))
   )

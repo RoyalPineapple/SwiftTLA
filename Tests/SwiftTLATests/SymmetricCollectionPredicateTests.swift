@@ -68,8 +68,8 @@ struct SymmetricCollectionPredicateTests {
       == direct.symmetricCollections.map(\.metadata))
     #expect(parsedCompilation.identity == directCompilation.identity)
     #expect(try renderedInitialStates(in: parsedCompilation) == renderedInitialStates(in: directCompilation))
-    #expect(try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description
-      == ModelChecker(compilation: directCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description)
+    #expect(try ModelChecker(compilation: parsedCompilation, configuration: symmetricExplorationConfiguration()).check().description
+      == ModelChecker(compilation: directCompilation, configuration: symmetricExplorationConfiguration()).check().description)
   }
 
   @Test("macro and source-model compilation share collection binder identity")
@@ -92,8 +92,8 @@ struct SymmetricCollectionPredicateTests {
     let generatedCompilation = try generated.compile()
     let directCompilation = try direct.compile()
     #expect(try renderedInitialStates(in: generatedCompilation) == renderedInitialStates(in: directCompilation))
-    #expect(try ModelChecker(compilation: try generated.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description
-      == ModelChecker(compilation: try direct.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description)
+    #expect(try ModelChecker(compilation: try generated.compile(), configuration: symmetricExplorationConfiguration()).check().description
+      == ModelChecker(compilation: try direct.compile(), configuration: symmetricExplorationConfiguration()).check().description)
     #expect(!generated.invariants.description.contains("PredicateMacroDevice"))
   }
 
@@ -144,7 +144,10 @@ struct SymmetricCollectionPredicateTests {
 
     #expect(generated.actions.count == 2)
     #expect(generated.invariants.count == 2)
-    #expect(try ModelChecker(compilation: try generated.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description.contains("OK"))
+    #expect(try ModelChecker(
+      compilation: try generated.compile(),
+      configuration: symmetricExplorationConfiguration()
+    ).check().description.contains("OK"))
   }
 
   @Test("Parsed collection predicates preserve invariant violations")
@@ -163,11 +166,17 @@ struct SymmetricCollectionPredicateTests {
     }
 
     #expect(parsed.diagnostics.isEmpty)
-    let parsedResult = try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check()
-    let directResult = try ModelChecker(compilation: try direct.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
+    let parsedResult = try ModelChecker(
+      compilation: parsedCompilation,
+      configuration: symmetricExplorationConfiguration()
+    ).check()
+    let directResult = try ModelChecker(
+      compilation: try direct.compile(),
+      configuration: symmetricExplorationConfiguration()
+    ).check()
     #expect(parsedResult.description == directResult.description)
-    guard case .bounded(_, .invariantViolated(let name, _, _)) = parsedResult else {
-      Issue.record("Expected a bounded invariant violation, got: \(parsedResult)")
+    guard case .invariantViolated(let name, _, _) = parsedResult else {
+      Issue.record("Expected an invariant violation, got: \(parsedResult)")
       return
     }
     #expect(name == "validPhase")
@@ -283,6 +292,12 @@ struct SymmetricCollectionPredicateTests {
 
   private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
     try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+  }
+
+  private func symmetricExplorationConfiguration() throws -> FiniteExplorationConfiguration {
+    try FiniteExplorationConfiguration(
+      maximumStateLimit: 100_000,
+      symmetryReduction: .enabled(maximumPermutationCount: 100_000))
   }
 
   private func directPredicateSpec() -> TLASpec {

@@ -108,6 +108,7 @@ extension Example {
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
         upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",
         expectedDistinct: 12,
+        maximumStateLimit: 50_000,
         spec: AsynchInterfaceModel.spec,
         notes: "Asynchronous interface record, authored as a typed record and finite formal initial domain. TLC = 12."
     )
