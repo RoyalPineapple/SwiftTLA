@@ -224,6 +224,10 @@ private func parserEnum(
                 parserEnum(
                     "Phase",
                     cases: ["ready": .string("ready"), "done": .string("done")]
+                ),
+                parserEnum(
+                    "OtherPhase",
+                    cases: ["ready": .string("otherReady")]
                 )
             ]
         )
