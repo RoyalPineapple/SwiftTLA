@@ -369,12 +369,15 @@ extension ParserSession {
 
             let args = Array(fc.arguments)
 
-            if callName == "Var" && args.count < 2,
-               isDefaultConstructibleVarType(fc),
+            if callName == "Var", args.count == 1,
                let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
                 result.variables.append(.init(
                     name: name,
                     initial: .int(0),
+                    initExpr: .sourceIssue(.missingVariableInitializer(
+                        name: name,
+                        type: varTypeName ?? "formal value"
+                    )),
                     generatedSwiftType: varTypeName,
                     origin: .source
                 ))
@@ -424,20 +427,15 @@ extension ParserSession {
                     ))
                     continue
                 }
-                let initial: TLAValue
-                if args.count >= 2 {
-                    guard let parsed = parsedInitialValue(args[1].expression) else {
-                        result.diagnostics.append(.init(
-                            message: "Var requires a supported initial formal value.",
-                            source: fc
-                        ))
-                        continue
-                    }
-                    initial = parsed
-                } else {
-                    initial = .int(0)
+                guard args.count >= 2,
+                      let initial = parsedInitialValue(args[1].expression) else {
+                    result.diagnostics.append(.init(
+                        message: "Var requires a supported initial formal value.",
+                        source: fc
+                    ))
+                    continue
                 }
-                let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
+                let inferredType = initialValueTypeName(from: args[1].expression)
                 result.variables.append(.init(
                     name: varName,
                     initial: initial,
@@ -518,17 +516,6 @@ extension ParserSession {
             return Self.sourceTypeSpelling(argument)
         }
         return Self.sourceTypeSpelling(type)
-    }
-
-    func isDefaultConstructibleVarType(_ call: FunctionCallExprSyntax) -> Bool {
-        guard let generic = call.calledExpression.as(GenericSpecializationExprSyntax.self),
-              terminalTypeName(in: generic.expression) == "Var",
-              let type = generic.genericArgumentClause.arguments.first?.argument
-        else { return false }
-        switch facadeTypeName(type) {
-        case "Function", "Record", "SetExpr": return true
-        default: return false
-        }
     }
 
     func parseIntegerClosedRange(_ expression: ExprSyntax) -> ClosedRange<Int>? {

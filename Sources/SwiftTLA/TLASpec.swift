@@ -711,7 +711,16 @@ public enum SpecBuilder {
     if let issue = expr.sourceIssue {
       return [VarDecl(expr.name, initExpr: .sourceIssue(issue))]
     }
-    guard let initial = expr.initial else { return [] }
+    guard let initial = expr.initial else {
+      return [VarDecl(
+        expr.name,
+        initExpr: .sourceIssue(.missingVariableInitializer(
+          name: expr.name,
+          type: swiftSurfaceTypeName(for: T.self)
+        )),
+        generatedSwiftType: swiftSurfaceTypeName(for: T.self)
+      )]
+    }
     return [VarDecl(
       expr.name,
       initial,
@@ -788,7 +797,17 @@ public func Variable<T>(_ ref: Var<T>) -> VarDecl {
   if let issue = ref.sourceIssue {
     return VarDecl(ref.name, initExpr: .sourceIssue(issue))
   }
-    return VarDecl(ref.name, ref.initial ?? .int(0), generatedSwiftType: swiftSurfaceTypeName(for: T.self))
+  guard let initial = ref.initial else {
+    return VarDecl(
+      ref.name,
+      initExpr: .sourceIssue(.missingVariableInitializer(
+        name: ref.name,
+        type: swiftSurfaceTypeName(for: T.self)
+      )),
+      generatedSwiftType: swiftSurfaceTypeName(for: T.self)
+    )
+  }
+  return VarDecl(ref.name, initial, generatedSwiftType: swiftSurfaceTypeName(for: T.self))
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {

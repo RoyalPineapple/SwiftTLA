@@ -56,7 +56,7 @@ package struct VoteProofModel: Sendable {
             let consensusChosen = FormalCall(as: SetExpr<Value>.self, "chosen")
             let consensusModule = TLASpec("Consensus") {
                 Parameter("Value")
-                let chosen = Var<SetExpr<Value>>("chosen")
+                let chosen = Var<SetExpr<Value>>("chosen", SetExpr<Value>())
                 Variable(chosen)
                 SwiftTLA.Action("Next") {
                     ActionExpr.exists("candidate", from: Parameter("Value")) { candidate in

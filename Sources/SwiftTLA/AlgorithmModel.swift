@@ -101,15 +101,19 @@ internal struct AlgorithmModel: Sendable {
             }
         })
 
+        func lowerAnonymousLambdas(_ value: StateExpr) -> StateExpr {
+            StateExpr.renamingRecursiveCalls(
+                in: value,
+                using: { $0 },
+                lowerAnonymousLambdaApplications: true
+            )
+        }
+
         func expression(_ value: StateExpr) -> StateExpr {
             let family = localRoots.reduce(value) { result, root in
                 result.replacingProcessLocalFamily(named: root, with: .variable(root))
             }
-            return StateExpr.renamingRecursiveCalls(
-                in: family.replacingCurrentProcess(with: .variable("self")),
-                using: { $0 },
-                lowerAnonymousLambdaApplications: true
-            )
+            return lowerAnonymousLambdas(family.replacingCurrentProcess(with: .variable("self")))
         }
 
         func temporal(_ value: TemporalExpr) -> TemporalExpr {
@@ -139,6 +143,8 @@ internal struct AlgorithmModel: Sendable {
                 localRoots.reduce(statement) { result, root in
                     result.replacingProcessLocalFamily(named: root, with: .variable(root))
                 }
+            }.map { statement in
+                statement.mappingExpressions(lowerAnonymousLambdas)
             }
         }
 

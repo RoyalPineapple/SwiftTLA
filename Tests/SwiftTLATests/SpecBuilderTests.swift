@@ -25,4 +25,25 @@ struct SpecBuilderTests {
       "seventh", "eighth", "ninth", "tenth", "eleventh", "twelfth"
     ])
   }
+
+  @Test("variable declarations require an explicit initial value")
+  func variableDeclarationsRequireExplicitInitialValue() {
+    let values = Var<SetExpr<Int>>("values")
+    let specifications = [
+      TLASpec("VariableDeclaration") { Variable(values) },
+      TLASpec("VariableComponent") { values }
+    ]
+
+    for specification in specifications {
+      do {
+        _ = try specification.compile()
+        Issue.record("Expected compilation to reject the variable declaration")
+      } catch let diagnostic as CompilationDiagnostic {
+        #expect(diagnostic.code == .missingVariableInitializer)
+        #expect(diagnostic.path == "variables.values.initExpr")
+      } catch {
+        Issue.record("Expected CompilationDiagnostic, got \(error)")
+      }
+    }
+  }
 }

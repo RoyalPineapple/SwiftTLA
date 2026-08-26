@@ -71,7 +71,7 @@ struct RefinementDeclarationTests {
     {
       let consensus = TLASpec("Consensus") {
         Parameter("Value")
-        let chosen = Var<SetExpr<Int>>("chosen")
+        let chosen = Var<SetExpr<Int>>("chosen", SetExpr<Int>())
         Variable(chosen)
         Action("Next") { chosen.stays }
       }
@@ -90,7 +90,7 @@ struct RefinementDeclarationTests {
     #expect(parsed.refinements.first?.instance.resolves(parsed.moduleInstances[0]) == true)
 
     let value = FormalModuleParameter("Value")
-    let chosen = Var<SetExpr<Int>>("chosen")
+    let chosen = Var<SetExpr<Int>>("chosen", SetExpr<Int>())
     let consensus = TLASpec("Consensus") {
       value
       Variable(chosen)

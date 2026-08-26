@@ -491,6 +491,10 @@ extension ParserSession {
                     return
                 }
             }
+            if let initial = decodeTypedFacadeValue(valExpr, scope: sourceScope) {
+                result.variables.append(.init(name: firstName, initial: .int(0), initExpr: initial))
+                return
+            }
         }
 
         if args.count >= 2 {

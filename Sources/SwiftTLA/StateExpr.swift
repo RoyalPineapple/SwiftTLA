@@ -194,6 +194,7 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
     case finiteDomainValue(type: String, value: String)
     case actionBinding(action: String, parameter: String?, problem: String)
     case formalDeclaration(kind: String, name: String?, problem: String)
+    case missingVariableInitializer(name: String, type: String)
     case symmetricMember(collection: String, owner: String)
 
     private var diagnostic: (code: CompilationDiagnostic.Code, expected: String, actual: String, nextSafeAction: String) {
@@ -235,6 +236,13 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
         case .formalDeclaration(let kind, let name, let problem):
             let location = name.map { "\(kind) '\($0)'" } ?? kind
             return (.invalidFormalDeclaration, "a valid \(kind) declaration", "\(location): \(problem)", "Correct the declaration, then compile again.")
+        case .missingVariableInitializer(let name, let type):
+            return (
+                .missingVariableInitializer,
+                "an explicit \(type) initial value for variable '\(name)'",
+                "variable '\(name)' has no initial value",
+                "Provide the initial value in Var or Variable, then compile again."
+            )
         case .symmetricMember(let collection, let owner):
             return (.invalidSymmetricMember, "a member declared by symmetric collection '\(collection)'", "the member belongs to symmetric collection '\(owner)'", "Use a member from '\(collection)', then compile again.")
         }
