@@ -111,19 +111,20 @@ struct TLAModuleBundleTests {
     let rotated = ZSequences.rotation(of: sequence, leftBy: Expr(.int(1)))
     let configured = TLASpec("ConfiguredZSequences") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Algorithm("ConfiguredZSequences", scoped: { scope in
+        let rotatedState = scope.sharedVar("rotated", initial: rotated)
+        Do(TestControlLabel.keep) { Assign(rotatedState, to: rotatedState.expr) }
+      })
     }
-    let result = try compiledValue(
-      rotated.raw,
-      recursiveFunctions: try FormalModuleClosure.resolve(root: configured)
-        .linkedOperators.recursiveFunctions
-    )
-    #expect(result == .function([
+    let compilation = try configured.compile()
+    let initial = try firstCompiledState(in: compilation)
+    #expect(try renderedValue(named: "rotated", in: initial, compilation: compilation) == .function([
       .int(0): .int(1), .int(1): .int(2), .int(2): .int(3)
     ]))
 
     let corpus = Var<ZeroBasedSequence<Int>>("corpus", .init())
     let consumer = TLASpec("UsesZSequences") {
-      Import(ZSequences.module)
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Variable(corpus, ZeroBasedSequence<Int>())
       Invariant("RotationOrdering") {
         ZSequences.lexicographicallyPrecedesOrEquals(

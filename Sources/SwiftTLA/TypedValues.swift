@@ -980,10 +980,22 @@ extension Var {
     Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(.value(value.tlaValue))))
   }
 
+  public func updating<Schema: TLARecordSchema, Value>(
+    _ field: TLAField<Schema, Value>, to value: Expr<Value>
+  ) -> Expr<Record<Schema>> where T == Record<Schema> {
+    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(value.raw)))
+  }
+
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: Domain, to value: Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(.except(stateExpr, finiteDomainIndex(index), value.raw))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, to value: Range
+  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+    updating(index, to: Expr(.value(value.tlaValue)))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
@@ -998,6 +1010,12 @@ extension Var {
     _ index: Expr<Domain>, to value: Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(.except(stateExpr, index.raw, value.raw))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Expr<Domain>, to value: Range
+  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+    updating(index, to: Expr(.value(value.tlaValue)))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(

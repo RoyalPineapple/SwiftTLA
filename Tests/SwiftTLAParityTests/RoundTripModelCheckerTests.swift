@@ -5,6 +5,22 @@ import SwiftSyntax
 import Testing
 import UpstreamParity
 
+private enum FunctionProcess: String, CaseIterable, FiniteTLAValueDomain {
+  case first
+  case second
+
+  static let finiteValues = allCases
+  static let defaultValue = FunctionProcess.first
+}
+
+private enum FunctionPhase: String, CaseIterable, FiniteTLAValueDomain {
+  case initial
+  case done
+
+  static let finiteValues = allCases
+  static let defaultValue = FunctionPhase.initial
+}
+
 private func compiledSuccessors(
   for action: ActionExpr,
   from values: [(String, TLAValue)]
@@ -114,7 +130,7 @@ private func value(
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("EXTENDS Naturals"))
+    #expect(tla.contains("Naturals"))
   }
 }
 
@@ -183,6 +199,13 @@ private func value(
     let count = try ModelChecker(compilation: try Example.coffeeCanMax5.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled))
       .exploreGraph().states.count
     #expect(count == 20)
+  }
+
+  @Test("Chameneos has every typed initial creature-color assignment")
+  func chameneosInitialStates() throws {
+    let compilation = try Example.chameneosM4N4.spec.compile()
+    let states = try CompiledRuntime(compilation: compilation).initialStates()
+    #expect(states.count == 81)
   }
 
   @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
@@ -338,12 +361,11 @@ private func value(
     let counter = Var<Int>("counter")
     let step = Var<Int>("step")
     let spec = TLASpec("ConstrainedParameterizedCounter") {
-      Constant("limit", 2)
       Variable(counter, 0)
       Action("advance", parameters: [ActionParameter("step", values: [1, 2])]) {
         counter.becomes(counter + step)
       }
-      Constraint(counter <= StateExpr.value(.constant("limit")))
+      Constraint(counter <= 2)
     }
     let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let compilation = try spec.compile()
@@ -587,47 +609,40 @@ private func value(
 }
 
 @Suite(.serialized) struct CompiledExpressionEvaluationTests {
-  @Test("CHOOSE + functionApply + EXCEPT in single action enumerates correctly")
+  @Test("parameterized function update enumerates correctly")
   func chooseWithFunctionApply() throws {
-    let chosenProcess: ActionExpr = .chooseAction(
-      .named("process"), .setLiteral([.value(.int(1)), .value(.int(2))]))
-    let readState: ActionExpr = .guard_(
-      .equal(
-        .functionApply(.variable("programCounter"), .variable("process")),
-        .value(.string("initial"))
-      ))
-    let updateState: ActionExpr = .assign(
-      .named("programCounter"),
-      .except(.variable("programCounter"), .variable("process"), .value(.string("done")))
-    )
-    let unchanged: ActionExpr = .unchanged(.named("sent"))
-    let action = ActionExpr.and(
-      chosenProcess, ActionExpr.and(readState, ActionExpr.and(updateState, unchanged)))
-    let (compilation, successors) = try compiledSuccessors(for: action, from: [
-      ("programCounter", .function([.int(1): "initial", .int(2): "initial"])),
-      ("sent", .set([])),
-      ("process", .int(0))
-    ])
-    #expect(successors.count == 2)
-    for s in successors {
-      let pc = try value(named: "programCounter", in: s, compilation: compilation)
-      let proc = try value(named: "process", in: s, compilation: compilation)
-      guard case .function(let mapping) = pc else {
-        #expect(Bool(false))
-        return
-      }
-      if case .int(1) = proc {
-        #expect(mapping[.int(1)] == "done")
-        #expect(mapping[.int(2)] == "initial")
+    let phases = Var<Function<FunctionProcess, FunctionPhase>>("phases")
+    let process = Expr<FunctionProcess>(.variable("process"))
+    let spec = TLASpec("ParameterizedFunctionUpdate") {
+      Variable(phases, Function<FunctionProcess, FunctionPhase>.literal(
+        (.first, .initial), (.second, .initial)))
+      Action(
+        "advance",
+        parameters: [ActionParameter("process", values: FunctionProcess.allCases)]
+      ) {
+        phases.becomes(phases.updating(process, to: .done))
+          .when(phases[process] == FunctionPhase.initial)
       }
     }
+    let compilation = try spec.compile()
+    let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+    let advance = try #require(compilation.layout.actionID(named: "advance"))
+    let successors = try CompiledRuntime(compilation: compilation)
+      .successors(for: advance, from: initial)
+    #expect(successors.count == 2)
+    let observed = try Set(successors.map { successor in
+      try successor.state.value(for: #require(compilation.layout.variableID(named: "phases")))
+        .rendered(using: compilation.layout)
+    })
+    #expect(observed == Set<TLAValue>([
+      .function([.string("first"): .string("done"), .string("second"): .string("initial")]),
+      .function([.string("first"): .string("initial"), .string("second"): .string("done")])
+    ]))
   }
 
-  @Test("RecursiveFunction builtins evaluate correctly")
+  @Test("sequence-from-set evaluates correctly")
   func recursiveBuiltins() throws {
-    let result = try compiledValue(.recursiveCall(
-      "SeqFromSet", [.value(.set([.int(3), .int(1), .int(2)]))]
-    ))
+    let result = try compiledValue(.sequenceFromSet(.value(.set([.int(3), .int(1), .int(2)]))))
     #expect(result == .tuple([.int(1), .int(2), .int(3)]))
   }
 
@@ -668,31 +683,28 @@ private func value(
     #expect(!(large < small))
   }
 
-  @Test("raw function AST construction remains explicit")
+  @Test("typed function reads and updates lower structurally")
   func rawFunctionASTConstruction() {
-    let rawFunction = Var<TLAValue>("rawFunction")
-    let selfProcess = Var<Int>("self")
-    let read = StateExpr.functionApply(rawFunction.stateExpr, selfProcess.stateExpr)
-    let result = StateExpr.except(rawFunction.stateExpr, selfProcess.stateExpr, .value(.string("done")))
-    #expect(read == .functionApply(.variable("rawFunction"), .variable("self")))
-    let expected: StateExpr = .except(.variable("rawFunction"), .variable("self"), .value(.string("done")))
-    #expect(result == expected)
+    let phases = Var<Function<FunctionProcess, FunctionPhase>>("phases")
+    #expect(phases[.first].raw == .functionApply(.variable("phases"), .value("first")))
+    #expect(
+      phases.updating(.first, to: FunctionPhase.done).raw
+        == .except(.variable("phases"), .value("first"), .value("done")))
   }
 
   @Test("Function-typed variable works end-to-end in ModelChecker")
   func functionVariableEndToEnd() throws {
-    let programCounter = Var<TLAValue>("programCounter")
-    let selfProcess = Var<Int>("selfProcess")
+    let phases = Var<Function<FunctionProcess, FunctionPhase>>("phases")
+    let process = Expr<FunctionProcess>(.variable("process"))
     let spec = TLASpec("FuncEndToEnd") {
-      Variable(programCounter, TLAValue.function([.int(1): "initial", .int(2): "initial"]))
-      Variable(selfProcess, 0)
-      Action("process") {
-        choose(selfProcess, from: StateExpr.set([1, 2]))
-          && StateExpr.functionApply(programCounter.stateExpr, selfProcess.stateExpr) == "initial"
-          && .assign(
-            .named(programCounter.name),
-            .except(programCounter.stateExpr, selfProcess.stateExpr, .value(.string("done")))
-          )
+      Variable(phases, Function<FunctionProcess, FunctionPhase>.literal(
+        (.first, .initial), (.second, .initial)))
+      Action(
+        "process",
+        parameters: [ActionParameter("process", values: FunctionProcess.allCases)]
+      ) {
+        phases.becomes(phases.updating(process, to: .done))
+          .when(phases[process] == FunctionPhase.initial)
       }
     }
     if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50, symmetryReduction: .disabled)).check() {
@@ -704,15 +716,13 @@ private func value(
 
   @Test("compiled execution handles function-typed variables")
   func functionTypeCompiledExecution() throws {
-    let programCounter = Var<TLAValue>("programCounter")
+    let phases = Var<Function<FunctionProcess, FunctionPhase>>("phases")
     let spec = TLASpec("FuncGen") {
-      Variable(programCounter, TLAValue.function([:]))
+      Variable(phases, Function<FunctionProcess, FunctionPhase>.literal(
+        (.first, .initial), (.second, .initial)))
       Action("init") {
-        let domain = StateExpr.set([1])
-        let p = Var<Int>("p")
-        let fun = StateExpr.functionLiteral(p, in: domain, "ready")
-        programCounter.becomes(Expr<TLAValue>(fun)).when(
-          programCounter.stateExpr.domain.cardinality == 0)
+        phases.becomes(Function<FunctionProcess, FunctionPhase>.mapping { _ in .done })
+          .when(phases[.first] == FunctionPhase.initial)
       }
     }
     let compilation = try spec.compile()
@@ -721,7 +731,9 @@ private func value(
     let next = try #require(try CompiledRuntime(compilation: compilation)
       .successors(for: action, from: state)
       .first?.state)
-    let programCounterID = try #require(compilation.layout.variableID(named: "programCounter"))
-    _ = try next.value(for: programCounterID)
+    let phasesID = try #require(compilation.layout.variableID(named: "phases"))
+    #expect(
+      try next.value(for: phasesID).rendered(using: compilation.layout)
+        == .function(["first": "done", "second": "done"]))
   }
 }

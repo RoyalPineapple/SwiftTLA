@@ -56,8 +56,8 @@ package struct SimpleAllocatorModel: Sendable {
 
         return #spec("SimpleAllocator") {
             Extends(.integers, .finiteSets)
-            Variable(computed: unsat) { emptyAllocation.raw }
-            Variable(computed: alloc) { emptyAllocation.raw }
+            Variable(unsat, emptyAllocation)
+            Variable(alloc, emptyAllocation)
 
             SwiftTLA.Action("Request", parameters: [
                 ActionParameter("client", values: Client.finiteValues),

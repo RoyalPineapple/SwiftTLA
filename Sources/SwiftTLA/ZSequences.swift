@@ -4,6 +4,30 @@
 /// zero. Import `ZSequences.module` into a model before using these calls.
 /// The generated bundle emits `ZSequences.tla` as a separate dependency.
 public enum ZSequences {
+  public struct RotationFields<Element: TLAValueType> {
+    public let shift: Int
+    public let sequence: ZeroBasedSequence<Element>
+  }
+
+  public enum Rotation<Element: TLAValueType>: TLARecordSchema {
+    public typealias Fields = RotationFields<Element>
+
+    public static var fieldNames: Set<String> { ["shift", "seq"] }
+    public static var defaultRecord: TLAValue {
+      .record(["shift": .int(0), "seq": ZeroBasedSequence<Element>().tlaValue])
+    }
+
+    public static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
+      let key = field as AnyKeyPath
+      if key == \Fields.shift { return "shift" }
+      if key == \Fields.sequence { return "seq" }
+      return nil
+    }
+
+    public static var shift: TLAField<Self, Int> { field(\Fields.shift) }
+    public static var sequence: TLAField<Self, ZeroBasedSequence<Element>> { field(\Fields.sequence) }
+  }
+
   /// The formal module exported as `ZSequences.tla`.
   ///
   /// `ZSeq` follows the upstream definition and ranges over `Nat`. A model
@@ -172,7 +196,7 @@ public enum ZSequences {
   /// set `{ [shift |-> r, seq |-> Rotation(s, r)] : r \in ZIndices(s) }`.
   public static func rotations<Element: TLAValueType>(
     of sequence: Expr<ZeroBasedSequence<Element>>
-  ) -> Expr<SetExpr<TLAValue>> {
+  ) -> Expr<SetExpr<Record<Rotation<Element>>>> {
     Expr(.recursiveCall("Rotations", [sequence.raw]))
   }
 
