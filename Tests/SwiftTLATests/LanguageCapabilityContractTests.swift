@@ -102,7 +102,7 @@ struct LanguageCapabilityContractTests {
             actual: "unregistered declaration 'UnsupportedAlgorithm'",
             nextSafeAction: "Use an admitted Algorithm declaration."
         )
-        let parserDiagnostic = SpecParser.SourceParseDiagnostic(
+        let sourceDiagnostic = SpecParser.SourceParseDiagnostic(
             capability: capability
         )
         let source = Parser.parse(source: "struct Example {}")
@@ -111,7 +111,7 @@ struct LanguageCapabilityContractTests {
             return
         }
 
-        let emitted = SwiftTLAPlugin.parserDiagnostic(parserDiagnostic, in: declaration).message
+        let emitted = parserDiagnostic(sourceDiagnostic, in: declaration).message
         let requiredFacts = [
             "Code: unsupported-language-capability",
             "Construct: UnsupportedAlgorithm.",
@@ -123,7 +123,7 @@ struct LanguageCapabilityContractTests {
         ]
 
         #expect(requiredFacts.allSatisfy(emitted.contains))
-        #expect(!requiredFacts.allSatisfy(capability.headline.contains))
+        #expect(requiredFacts.allSatisfy(capability.headline.contains) == false)
     }
 
     @Test("Unsupported capabilities cannot advertise compilation support")
