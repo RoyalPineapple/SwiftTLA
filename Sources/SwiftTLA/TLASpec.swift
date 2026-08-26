@@ -798,6 +798,14 @@ public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> V
     return VarDecl(ref.name, initial.tlaValue, generatedSwiftType: swiftSurfaceTypeName(for: T.self))
 }
 @discardableResult
+public func Variable<T>(_ ref: Var<T>, _ initial: Expr<T>) -> VarDecl {
+  VarDecl(
+    ref.name,
+    initExpr: initial.raw,
+    generatedSwiftType: swiftSurfaceTypeName(for: T.self)
+  )
+}
+@discardableResult
 public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueConvertible>)
   -> VarDecl {
   let set = Set(values.map(\.tlaValue))
@@ -806,6 +814,19 @@ public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueCon
     ref.name,
     .set(set),
     initialSet: stateSet,
+    generatedSwiftType: swiftSurfaceTypeName(for: T.self)
+  )
+}
+@discardableResult
+public func Variable<T>(_ ref: Var<T>, in values: Expr<SetExpr<T>>) -> VarDecl {
+  let defaultValue = T.defaultValue
+  if let issue = defaultValue.sourceIssue {
+    return VarDecl(ref.name, initExpr: .sourceIssue(issue))
+  }
+  return VarDecl(
+    ref.name,
+    defaultValue.tlaValue,
+    initialSet: values.raw,
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
@@ -860,10 +881,6 @@ public func WeakFairnessNext() -> FairnessDecl {
 }
 public func StrongFairnessNext() -> FairnessDecl {
   FairnessDecl(.strongFairnessNext)
-}
-@discardableResult
-public func Variable<T>(computed ref: Var<T>, @InvariantBuilder _ body: () -> StateExpr) -> VarDecl {
-  VarDecl(ref.name, initExpr: body())
 }
 public struct DeadlockDecl: SpecComponent { init() {} }
 public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }

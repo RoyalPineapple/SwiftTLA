@@ -21,9 +21,9 @@ struct LeastCircularSubstringCorpusModuleContractTests {
   }
 
   @Test("preserves the published small-model state-space declaration")
-  func retainsPublishedStateCount() {
+  func retainsPublishedStateCount() throws {
     #expect(Example.leastCircularSubstring.expectedDistinct == 8_554)
-    #expect(LeastCircularSubstringModel.spec.actions.map(\.name) == [
+    #expect(try LeastCircularSubstringModel.spec.compile().description.actions.map(\.name) == [
       "L3", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L14", "LVR", "Terminating"
     ])
   }

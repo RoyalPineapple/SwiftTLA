@@ -1,5 +1,38 @@
 import SwiftTLA
 
+private struct FailureTable: TLAValueType {
+    private let values: [Int: Int]
+
+    static var defaultValue: Self { Self(values: [:]) }
+
+    private init(values: [Int: Int]) {
+        self.values = values
+    }
+
+    init?(formalValue: TLAValue) {
+        guard case .function(let entries) = formalValue else { return nil }
+        var values: [Int: Int] = [:]
+        for (key, value) in entries {
+            guard case .int(let index) = key, case .int(let failure) = value else { return nil }
+            values[index] = failure
+        }
+        self.values = values
+    }
+
+    var tlaValue: TLAValue {
+        .function(Dictionary(uniqueKeysWithValues: values.map { (.int($0.key), .int($0.value)) }))
+    }
+
+    static func filled(through upperBound: Expr<Int>, with value: Int) -> Expr<Self> {
+        let index = "__failureTableIndex"
+        return Expr(.functionLiteral(
+            .integerRange(.int(0), upperBound.raw),
+            index,
+            .int(value)
+        ))
+    }
+}
+
 /// Kellogg Booth's published least-circular-substring algorithm.
 ///
 /// This is the upstream PlusCal control flow with its labels preserved. The
@@ -30,10 +63,18 @@ package enum LeastCircularSubstringModel {
     }
 
     private static func failure(
-        in table: SharedVariable<TLAValue>,
+        in table: SharedVariable<FailureTable>,
         at index: StateExpr
     ) -> StateExpr {
         .functionApply(table.stateExpr, index)
+    }
+
+    private static func updatingFailure(
+        in table: SharedVariable<FailureTable>,
+        at index: StateExpr,
+        to value: StateExpr
+    ) -> Expr<FailureTable> {
+        Expr(.except(table.stateExpr, index, value))
     }
 
     private static func mismatch(
@@ -61,10 +102,8 @@ package enum LeastCircularSubstringModel {
         return .or(
             .not(Finished()),
             All(in: ZSequences.rotations(of: sequence.expr)) { other in
-                let otherSequence = Expr<ZeroBasedSequence<Int>>(
-                    .recordAccess(other.stateExpr, "seq")
-                )
-                let otherShift = Expr<Int>(.recordAccess(other.stateExpr, "shift"))
+                let otherSequence = other[ZSequences.Rotation<Int>.sequence]
+                let otherShift = other[ZSequences.Rotation<Int>.shift]
                 return StateExpr.and(
                     ZSequences.lexicographicallyPrecedesOrEquals(candidate, otherSequence),
                     StateExpr.or(
@@ -85,24 +124,17 @@ package enum LeastCircularSubstringModel {
                 "b",
                 in: ZSequences.sequences(over: characterSet)
             )
-            b
             let n = scope.sharedVar("n", initial: ZSequences.length(of: b.expr))
-            n
             let f = scope.sharedVar(
                 "f",
-                initial: Expr<TLAValue>(.functionLiteral(
-                    .integerRange(.int(0), .multiply(.int(2), n.stateExpr)),
-                    "index",
-                    .int(-1)
-                ))
+                initial: FailureTable.filled(
+                    through: n.expr * 2,
+                    with: -1
+                )
             )
-            f
             let i = scope.sharedVar("i", initial: -1)
-            i
             let j = scope.sharedVar("j", initial: 1)
-            j
             let k = scope.sharedVar("k", initial: 0)
-            k
 
             Do(Step.l3) {
                 If(j < n * 2) {
@@ -159,19 +191,19 @@ package enum LeastCircularSubstringModel {
                 Assign(k, to: j.expr)
             }
             Do(Step.l13) {
-                Assign(f, to: Expr<TLAValue>(.except(
-                    f.stateExpr,
-                    .subtract(j.stateExpr, k.stateExpr),
-                    .int(-1)
-                )))
+                Assign(f, to: updatingFailure(
+                    in: f,
+                    at: .subtract(j.stateExpr, k.stateExpr),
+                    to: .int(-1)
+                ))
                 Goto(Step.loopReturn)
             }
             Do(Step.l14) {
-                Assign(f, to: Expr<TLAValue>(.except(
-                    f.stateExpr,
-                    .subtract(j.stateExpr, k.stateExpr),
-                    .add(i.stateExpr, .int(1))
-                )))
+                Assign(f, to: updatingFailure(
+                    in: f,
+                    at: .subtract(j.stateExpr, k.stateExpr),
+                    to: .add(i.stateExpr, .int(1))
+                ))
             }
             Do(Step.loopReturn) {
                 Assign(j, to: j + 1)

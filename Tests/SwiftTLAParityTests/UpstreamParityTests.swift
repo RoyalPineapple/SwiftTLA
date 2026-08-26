@@ -223,6 +223,17 @@ struct UpstreamParityTests {
         #expect(result.graph.states.count == Example.consensus.expectedDistinct)
     }
 
+    @Test("Paxos typed state preserves its bounded TLC graph")
+    func paxosTypedStateParity() throws {
+        let result = try explore(
+            PaxosModel.spec,
+            maximumStateLimit: Example.paxosSmall.maximumStateLimit
+        )
+
+        #expect(result.graph.states.count == Example.paxosSmall.expectedDistinct)
+        #expect(isSuccessful(result))
+    }
+
     @Test("SumSequence bounded source port verifies")
     func sumSequenceBoundedPort() throws {
         let result = try explore(SumSequenceModel.spec, maximumStateLimit: 100_000)

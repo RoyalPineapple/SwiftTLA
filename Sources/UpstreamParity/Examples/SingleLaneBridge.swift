@@ -52,15 +52,16 @@ package struct SingleLaneBridgeModel: Sendable {
 
             let location = Var<Function<Car, Int>>("Location")
             let waiting = Var<TupleExpr<Car>>("WaitingBeforeBridge")
-            Variable(computed: location) {
+            Variable(
+                location,
                 Function<Car, Int>.literal(
-                (.rightOne, 8),
-                (.rightTwo, 8),
-                (.leftOne, 1),
-                (.leftTwo, 1)
-                ).raw
-            }
-            Variable(computed: waiting) { Expr<TupleExpr<Car>>(TupleExpr<Car>()).raw }
+                    (.rightOne, 8),
+                    (.rightTwo, 8),
+                    (.leftOne, 1),
+                    (.leftTwo, 1)
+                )
+            )
+            Variable(waiting, Expr(TupleExpr<Car>()))
 
             Invariant("Invariants") {
                 All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { first in

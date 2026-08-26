@@ -133,54 +133,16 @@ public enum LanguageConstructReference: Sendable, Hashable {
     }
 }
 
-public enum LanguageCapabilityLedgerError: Error, Sendable, Hashable {
-    case duplicateRecord(DeclaredLanguageConstruct)
-    case missingRecord(DeclaredLanguageConstruct)
-    case unsupportedCompilation(DeclaredLanguageConstruct)
-    case supportedCapabilityWithoutConstructionRoute(DeclaredLanguageConstruct)
-}
-
 public enum LanguageCapabilityLedger {
-    public static let all: [LanguageCapability] = {
-        let records = DeclaredLanguageConstruct.allCases.map(record(for:))
-        do {
-            try validate(records)
-        } catch {
-            preconditionFailure("Language capability ledger invariant failed: \(error)")
-        }
-        return records
-    }()
+    public static let all = DeclaredLanguageConstruct.allCases.map(record(for:))
 
     public static func capability(for construct: DeclaredLanguageConstruct) -> LanguageCapability {
-        guard let capability = all.first(where: { $0.construct == construct }) else {
-            preconditionFailure("Language capability ledger omitted \(construct.rawValue).")
-        }
-        return capability
+        record(for: construct)
     }
 
     public static func capability(for reference: LanguageConstructReference) -> LanguageCapability? {
         guard case .declared(let construct, _) = reference else { return nil }
         return capability(for: construct)
-    }
-
-    public static func validate(_ records: [LanguageCapability]) throws {
-        var constructs = Set<DeclaredLanguageConstruct>()
-        for record in records {
-            guard constructs.insert(record.construct).inserted else {
-                throw LanguageCapabilityLedgerError.duplicateRecord(record.construct)
-            }
-            if record.status == .unsupported, record.dimensions.compilation == .supported {
-                throw LanguageCapabilityLedgerError.unsupportedCompilation(record.construct)
-            }
-            if record.status == .supported,
-               record.dimensions.sourceDecoding != .supported,
-               record.dimensions.resultBuilderConstruction != .supported {
-                throw LanguageCapabilityLedgerError.supportedCapabilityWithoutConstructionRoute(record.construct)
-            }
-        }
-        for construct in DeclaredLanguageConstruct.allCases where !constructs.contains(construct) {
-            throw LanguageCapabilityLedgerError.missingRecord(construct)
-        }
     }
 
     private static func record(for construct: DeclaredLanguageConstruct) -> LanguageCapability {
