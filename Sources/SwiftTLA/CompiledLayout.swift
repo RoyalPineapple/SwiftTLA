@@ -673,6 +673,7 @@ struct BindingValidator {
     private let incomingModuleParameters: [FormalModuleReplacement]
     private var operators: [String: OperatorID]
     private var operatorNames: [OperatorID: String]
+    private var operatorArities: [OperatorID: Int]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal = 0
     private var knownBinderNames: Set<String> = []
@@ -692,14 +693,19 @@ struct BindingValidator {
         formalParameters = Set(spec.formalParameters.map(\.name))
         symmetricMembers = spec.symmetricCollections.flatMap { $0.metadata.members }
         self.incomingModuleParameters = incomingModuleParameters
-        let names = spec.formalOperatorDefinitions.map(\.name)
-            + spec.recursiveFuncs.map(\.name)
-            + closure.linkedOperators.formalOperatorDefinitions.map(\.name)
-            + closure.linkedOperators.recursiveFunctions.map(\.name)
-        operators = names.reduce(into: [:]) { result, name in
-            guard result[name] == nil else { return }
-            result[name] = OperatorID(ordinal: result.count)
+        let signatures = spec.formalOperatorDefinitions.map { ($0.name, $0.parameters.count) }
+            + spec.recursiveFuncs.map { ($0.name, $0.params.count) }
+            + closure.linkedOperators.formalOperatorDefinitions.map { ($0.name, $0.parameters.count) }
+            + closure.linkedOperators.recursiveFunctions.map { ($0.name, $0.params.count) }
+        var allocated: [String: OperatorID] = [:]
+        var arities: [OperatorID: Int] = [:]
+        for (name, arity) in signatures where allocated[name] == nil {
+            let id = OperatorID(ordinal: allocated.count)
+            allocated[name] = id
+            arities[id] = arity
         }
+        operators = allocated
+        operatorArities = arities
         operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
         nextOperatorOrdinal = operators.count
     }
@@ -997,6 +1003,26 @@ struct BindingValidator {
             try validateExpression(initial, at: "\(path).initial", scope: scope)
             try validateExpression(sequence, at: "\(path).sequence", scope: scope)
         case .operatorApplication(let operation, let arguments):
+            guard operation.arity == arguments.count else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "\(operation.arity) formal operator arguments",
+                    actual: "\(arguments.count) arguments"
+                )
+            }
+            if case .lambda = operation,
+               arguments.contains(where: {
+                   if case .operator = $0 { return true }
+                   return false
+               }) {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "formal value arguments for a lambda",
+                    actual: "a formal operator argument"
+                )
+            }
             try formalOperator(operation, at: "\(path).operator", scope: scope)
             for (index, argument) in arguments.enumerated() {
                 switch argument {
@@ -1013,6 +1039,22 @@ struct BindingValidator {
                     path: path,
                     expected: "a linked recursive or formal operator",
                     actual: "unresolved symbol '\(name)'"
+                )
+            }
+            guard let declaredArity = operatorArities[id] else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "a bound recursive operator signature",
+                    actual: "recursive call '\(name)' has no bound signature"
+                )
+            }
+            guard declaredArity == arguments.count else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "\(declaredArity) formal operator arguments",
+                    actual: "\(arguments.count) arguments"
                 )
             }
             references[path] = .operator(id)
@@ -1042,13 +1084,29 @@ struct BindingValidator {
 
     private mutating func formalOperator(_ operation: FormalOperator, at path: String, scope: [String: BinderID]) throws {
         switch operation {
-        case .reference(let name, _):
+        case .reference(let name, let arity):
             guard let id = operators[name] else {
                 throw diagnostic(
                     code: .unresolvedImportedSymbol,
                     path: path,
                     expected: "a linked formal operator",
                     actual: "unresolved symbol '\(name)'"
+                )
+            }
+            guard let declaredArity = operatorArities[id] else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "a bound formal operator signature",
+                    actual: "reference '\(name)' has no bound signature"
+                )
+            }
+            guard declaredArity == arity else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "\(declaredArity) formal operator arguments",
+                    actual: "reference '\(name)' declares arity \(arity)"
                 )
             }
             references[path] = .operator(id)
@@ -1081,6 +1139,9 @@ struct BindingValidator {
         for local in localOperators {
             self.operators[local.0] = local.1
             operatorNames[local.1] = local.0
+        }
+        for (operation, local) in zip(operators, localOperators) {
+            operatorArities[local.1] = operation.parameters.count
         }
         defer { self.operators = outerOperators }
         for operation in operators {
@@ -1246,11 +1307,12 @@ struct BindingValidator {
                 knownBinderNames.insert(name)
                 nested[name] = id
                 references["\(path).\(name)"] = .binder(id)
-            case .operator(let name, _):
+            case .operator(let name, let arity):
                 let id = OperatorID(ordinal: nextOperatorOrdinal)
                 nextOperatorOrdinal += 1
                 operators[name] = id
                 operatorNames[id] = name
+                operatorArities[id] = arity
                 references["\(path).\(name)"] = .operator(id)
             }
         }

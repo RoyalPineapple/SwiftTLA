@@ -94,19 +94,73 @@ struct FormalOperatorTests {
     #expect(rendered.contains("(LAMBDA") == false)
   }
 
+  @Test("compilation rejects formal operator arity mismatches")
+  func rejectsFormalOperatorArityMismatches() {
+    let specifications = [
+      TLASpec(
+        name: "LambdaArity",
+        variables: [.init(name: "counter", initial: .int(0))],
+        actions: [.init(name: "advance", body: .assign(
+          .named("counter"),
+          .operatorApplication(.lambda(.init(parameters: ["value"], body: .variable("value"))), [])
+        ))],
+        invariants: []
+      ),
+      TLASpec(
+        name: "ReferenceArity",
+        variables: [.init(name: "counter", initial: .int(0))],
+        actions: [.init(name: "advance", body: .assign(
+          .named("counter"),
+          .operatorApplication(.reference("increment", arity: 0), [])
+        ))],
+        invariants: [],
+        formalOperatorDefinitions: [.init(
+          name: "increment",
+          parameters: [.value("value")],
+          body: .add(.variable("value"), .int(1))
+        )]
+      ),
+      TLASpec(
+        name: "RecursiveArity",
+        variables: [.init(name: "counter", initial: .int(0))],
+        actions: [.init(name: "advance", body: .assign(
+          .named("counter"),
+          .recursiveCall("increment", [])
+        ))],
+        invariants: [],
+        recursiveFuncs: [.init(
+          name: "increment",
+          params: ["value"],
+          body: .add(.variable("value"), .int(1))
+        )]
+      )
+    ]
+
+    for specification in specifications {
+      do {
+        _ = try specification.compile()
+        Issue.record("Expected compilation to reject the formal operator call")
+      } catch let diagnostic as CompilationDiagnostic {
+        #expect(diagnostic.code == .invalidFormalOperatorApplication)
+      } catch {
+        Issue.record("Expected CompilationDiagnostic, got \(error)")
+      }
+    }
+  }
+
   @Test("a formal reference resolves through the formal operator environment")
   func appliesNamedFormalOperator() throws {
     let expression = StateExpr.operatorApplication(
       .reference("increment", arity: 1),
       [.value(.int(4))]
     )
-    let increment = RecursiveFunc(
+    let increment = FormalOperatorDefinition(
       name: "increment",
-      params: ["value"],
+      parameters: [.value("value")],
       body: .add(.variable("value"), .int(1))
     )
 
-    #expect(try compiledValue(expression, recursiveFunctions: [increment]) == .int(5))
+    #expect(try compiledValue(expression, formalOperators: [increment]) == .int(5))
   }
 
   @Test("a formal definition receives an operator as formal data")

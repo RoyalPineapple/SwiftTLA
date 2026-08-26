@@ -739,6 +739,9 @@ private func parserEnum(
         let specification = try loweredSource(parsed, named: "ScopedFormalLambda")
         #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
         #expect(specification.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
+        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
+        #expect(rendered.contains("counters[self] + 1"))
+        #expect(rendered.contains("LAMBDA") == false)
     }
 
     @Test("formal operator parsing failure retains all six diagnostic fields")
@@ -1403,6 +1406,31 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.variables[1].name == "phase")
         #expect(parsed.variables[1].initial == .int(0))
         #expect(parsed.variables[1].generatedSwiftType == "Int")
+    }
+
+    @Test("an explicit declaration initializer replaces the unresolved Var initializer")
+    func explicitVariableInitializerReplacesUnresolvedInitializer() throws {
+        let unresolved = SpecParser.parseSpecClosure(try parseClosure("""
+        {
+            let values = Var<SetExpr<Int>>("values")
+            Variable(values)
+        }
+        """))
+        let resolved = SpecParser.parseSpecClosure(try parseClosure("""
+        {
+            let values = Var<SetExpr<Int>>("values")
+            Variable(values, SetExpr<Int>())
+        }
+        """))
+
+        do {
+            _ = try unresolved.compile(specificationName: "UnresolvedInitializer")
+            Issue.record("Expected compilation to reject the unresolved initializer")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .missingVariableInitializer)
+        }
+        let compilation = try resolved.compile(specificationName: "ResolvedInitializer")
+        #expect(compilation.description.variables.map(\.name) == ["values"])
     }
 
     @Test("generic variable types retain their structural Swift spelling")
@@ -2475,8 +2503,17 @@ private let cameraModeDefinition = parserEnum(
             let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
             let calls = Var<SetExpr<Record<CarSchema>>>("calls")
             Variable(floor, 0)
-            Variable(cars)
-            Variable(calls)
+            Variable(cars, Function<CarID, Record<CarSchema>>.literal(
+                (CarID.carA, Record<CarSchema>.literal(
+                    .init(CarSchema.floor, 0),
+                    .init(CarSchema.doorsOpen, false)
+                )),
+                (CarID.carB, Record<CarSchema>.literal(
+                    .init(CarSchema.floor, 1),
+                    .init(CarSchema.doorsOpen, true)
+                ))
+            ))
+            Variable(calls, SetExpr<Record<CarSchema>>())
             Action("move", parameters: [
                 ActionParameter("person", values: PersonID.finiteValues),
                 ActionParameter("car", values: CarID.finiteValues),

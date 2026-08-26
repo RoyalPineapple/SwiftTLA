@@ -49,6 +49,8 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("ASSUME Acceptor = {\"a1\", \"a2\", \"a3\"}"))
         #expect(bundle.root.tla.contains("C == INSTANCE Consensus"))
         #expect(bundle.imports.map(\.name).contains("Consensus"))
+        let consensus = try #require(bundle.imports.first(where: { $0.name == "Consensus" }))
+        #expect(consensus.tla.contains("Init == chosen = {}"))
         #expect(bundle.root.tla.contains("SafeAt(value0, value1) =="))
         #expect(bundle.root.tla.contains("LET SA["))
         #expect(!bundle.root.tla.contains("LET RECURSIVE SA"))

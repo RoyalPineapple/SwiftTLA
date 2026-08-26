@@ -329,6 +329,8 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFiniteDomainValue
         case invalidActionBinding
         case invalidFormalDeclaration
+        case invalidFormalOperatorApplication
+        case missingVariableInitializer
         case invalidSymmetricMember
         case emptySpecificationName
         case invalidSpecificationName

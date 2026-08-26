@@ -9,17 +9,21 @@ extension AlgorithmStatementModel {
         named name: String,
         with replacement: StateExpr
     ) -> AlgorithmStatementModel {
-        replacingExpressions(with: replacement) {
+        mappingExpressions(avoidingCaptureOf: replacement) {
             $0.replacingProcessLocalFamily(named: name, with: replacement)
         }
     }
 
     func replacingCurrentProcess(with replacement: StateExpr) -> AlgorithmStatementModel {
-        replacingExpressions(with: replacement) { $0.replacingCurrentProcess(with: replacement) }
+        mappingExpressions(avoidingCaptureOf: replacement) { $0.replacingCurrentProcess(with: replacement) }
     }
 
-    private func replacingExpressions(
-        with replacement: StateExpr,
+    func mappingExpressions(_ transform: (StateExpr) -> StateExpr) -> AlgorithmStatementModel {
+        mappingExpressions(avoidingCaptureOf: nil, transform)
+    }
+
+    private func mappingExpressions(
+        avoidingCaptureOf replacement: StateExpr?,
         _ transform: (StateExpr) -> StateExpr
     ) -> AlgorithmStatementModel {
         func expression(_ value: StateExpr) -> StateExpr { transform(value) }
@@ -37,8 +41,8 @@ extension AlgorithmStatementModel {
             variable: String,
             body: [AlgorithmStatementModel]
         ) -> (variable: String, body: [AlgorithmStatementModel]) {
-            guard replacement.freeVariableNames.contains(variable) else {
-                return (variable, body.map { $0.replacingExpressions(with: replacement, transform) })
+            guard let replacement, replacement.freeVariableNames.contains(variable) else {
+                return (variable, body.map { $0.mappingExpressions(avoidingCaptureOf: replacement, transform) })
             }
             let fresh = StateExpr.freshBoundName(
                 variable,
@@ -53,7 +57,7 @@ extension AlgorithmStatementModel {
                     assignmentTargets: .replaceWhenVariable
                 )
             }
-            return (fresh, renamed.map { $0.replacingExpressions(with: replacement, transform) })
+            return (fresh, renamed.map { $0.mappingExpressions(avoidingCaptureOf: replacement, transform) })
         }
 
         return switch self {
@@ -78,13 +82,13 @@ extension AlgorithmStatementModel {
         case .ifElse(let condition, let then, let otherwise):
             .ifElse(
                 expression(condition),
-                then.map { $0.replacingExpressions(with: replacement, transform) },
-                otherwise.map { $0.replacingExpressions(with: replacement, transform) }
+                then.map { $0.mappingExpressions(avoidingCaptureOf: replacement, transform) },
+                otherwise.map { $0.mappingExpressions(avoidingCaptureOf: replacement, transform) }
             )
         case .either(let first, let second):
             .either(
-                first.map { $0.replacingExpressions(with: replacement, transform) },
-                second.map { $0.replacingExpressions(with: replacement, transform) }
+                first.map { $0.mappingExpressions(avoidingCaptureOf: replacement, transform) },
+                second.map { $0.mappingExpressions(avoidingCaptureOf: replacement, transform) }
             )
         case .choose(let variable, let domain, let body):
             { () -> AlgorithmStatementModel in
