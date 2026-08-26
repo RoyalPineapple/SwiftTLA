@@ -17,28 +17,12 @@ package enum TemporalSymmetryOutcome: String, Codable, Sendable {
   case unavailable
 }
 
-package enum TemporalPropertyOutcome: String, Codable, Sendable {
-  case satisfied
-  case violated
-}
-
-package enum TemporalEvaluationAvailability: String, Codable, Sendable {
-  case evaluated
-  case unavailable
-}
-
-package enum TemporalTraceAvailability: String, Codable, Sendable {
-  case available
-  case unavailable
-  case notApplicable
-}
-
-package enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
-  case exactAgreement
+package enum TemporalComparisonStatus: String, Codable, Sendable {
+  case exact
   case propertyOutcomeDifference
   case graphDifference
   case incompleteGraph
-  case temporalEvidenceUnavailable
+  case unavailable
 }
 
 package enum SymmetryExplorationEngine: String, Codable, Sendable {
@@ -251,63 +235,46 @@ package struct TemporalLassoWitness: Equatable, Codable, Sendable {
   }
 }
 
-package struct TemporalPropertyResult: Equatable, Codable, Sendable {
-  package let availability: TemporalEvaluationAvailability
-  package let outcome: TemporalPropertyOutcome?
-  package let traceAvailability: TemporalTraceAvailability
-  package let lasso: TemporalLassoWitness?
+package enum TemporalPropertyResult: Equatable, Codable, Sendable {
+  case satisfied
+  case violated(TemporalLassoWitness)
+  case unavailable
 
-  package init(
-    availability: TemporalEvaluationAvailability,
-    outcome: TemporalPropertyOutcome?,
-    traceAvailability: TemporalTraceAvailability,
-    lasso: TemporalLassoWitness? = nil
-  ) throws {
-    self.availability = availability
-    self.outcome = outcome
-    self.traceAvailability = traceAvailability
-    self.lasso = lasso
-    try validate()
-  }
-
-  package func validate() throws {
-    switch availability {
-    case .evaluated:
-      guard outcome != nil else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "missing property outcome")
-      }
-    case .unavailable:
-      guard outcome == nil, traceAvailability == .unavailable, lasso == nil else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable evaluation")
-      }
-      return
-    }
-    switch traceAvailability {
-    case .available:
-      if outcome == .violated, lasso == nil {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "lasso")
-      }
-    case .unavailable:
-      guard lasso == nil else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable trace")
-      }
-    case .notApplicable:
-      guard outcome == .satisfied, lasso == nil else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "not applicable trace")
-      }
-    }
-  }
-
-  private enum CodingKeys: String, CodingKey, CaseIterable {
-    case availability, outcome, traceAvailability, lasso
-  }
+  private enum Status: String, Codable { case satisfied, violated, unavailable }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case status, lasso }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(
-      availability: container.decode(TemporalEvaluationAvailability.self, forKey: .availability),
-      outcome: try container.decodeIfPresent(TemporalPropertyOutcome.self, forKey: .outcome),
-      traceAvailability: container.decode(TemporalTraceAvailability.self, forKey: .traceAvailability),
-      lasso: try container.decodeIfPresent(TemporalLassoWitness.self, forKey: .lasso))
+    let lasso = try container.decodeIfPresent(TemporalLassoWitness.self, forKey: .lasso)
+    switch try container.decode(Status.self, forKey: .status) {
+    case .satisfied:
+      guard lasso == nil else {
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "satisfied lasso")
+      }
+      self = .satisfied
+    case .violated:
+      guard let lasso else {
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "violated lasso")
+      }
+      self = .violated(lasso)
+    case .unavailable:
+      guard lasso == nil else {
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable lasso")
+      }
+      self = .unavailable
+    }
+  }
+
+  package func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    switch self {
+    case .satisfied:
+      try container.encode(Status.satisfied, forKey: .status)
+    case .violated(let lasso):
+      try container.encode(Status.violated, forKey: .status)
+      try container.encode(lasso, forKey: .lasso)
+    case .unavailable:
+      try container.encode(Status.unavailable, forKey: .status)
+    }
   }
 }

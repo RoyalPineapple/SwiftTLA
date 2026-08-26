@@ -65,7 +65,7 @@ package struct TemporalSymmetryCheck: Sendable {
           }
           if temporalCase.kind == .temporal {
             do {
-              let result = try captureTemporal(
+              let capture = try captureTemporal(
                 compilation: compilation, temporalCase: temporalCase,
                 model: model,
                 exploration: exploration,
@@ -74,8 +74,21 @@ package struct TemporalSymmetryCheck: Sendable {
                 projectRoot: root,
                 evidenceRoot: output,
                 outputDirectory: directory)
-              outcome = result.comparison?.outcome ?? .unavailable
-              code = result.diagnostic?.code ?? "captured"
+              switch capture {
+              case .comparison(let comparison):
+                switch comparison.status {
+                case .exact:
+                  outcome = .exact
+                case .propertyOutcomeDifference, .graphDifference:
+                  outcome = .difference
+                case .incompleteGraph, .unavailable:
+                  outcome = .unavailable
+                }
+                code = comparison.status.rawValue
+              case .failure(let diagnostic):
+                outcome = .unavailable
+                code = diagnostic.code
+              }
             } catch {
               outcome = .unavailable
               code = "pinned-tlc-runtime-unavailable: \(String(describing: error))"
@@ -112,7 +125,7 @@ package struct TemporalSymmetryCheck: Sendable {
     projectRoot: URL,
     evidenceRoot: URL,
     outputDirectory: URL
-  ) throws -> TLCTemporalCaptureResult {
+  ) throws -> TLCTemporalCapture {
     let swiftRun = try SwiftGraphExporter().export(exploration)
     let swiftResult = try temporalResult(
       compilation: compilation, temporalCase: temporalCase, model: model, exploration: exploration)
@@ -347,9 +360,7 @@ extension TemporalSymmetryCheck {
     }
     switch analysis.status {
     case .satisfied:
-      return try TemporalPropertyResult(
-        availability: .evaluated, outcome: .satisfied,
-        traceAvailability: .notApplicable)
+      return .satisfied
     case .violated:
       guard let witness = analysis.witness else {
         throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso")
@@ -362,13 +373,9 @@ extension TemporalSymmetryCheck {
       let closedCycle = cycle.first == cycle.last ? cycle : cycle + [cycle[0]]
       let lasso = try TemporalLassoWitness(
         prefixStateIDs: witness.prefix.compactMap { keys[$0] }, cycleStateIDs: closedCycle)
-      return try TemporalPropertyResult(
-        availability: .evaluated, outcome: .violated,
-        traceAvailability: .available, lasso: lasso)
+      return .violated(lasso)
     case .unavailable:
-      return try TemporalPropertyResult(
-        availability: .unavailable, outcome: nil,
-        traceAvailability: .unavailable)
+      return .unavailable
     }
   }
 
