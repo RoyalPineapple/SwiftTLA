@@ -275,7 +275,8 @@ public final class ParserSession {
             return .functionApply(function, argument)
         }
         if let intLit = expression.as(IntegerLiteralExprSyntax.self) {
-            return .value(.int(Int(intLit.literal.text) ?? 0))
+            guard let value = Int(intLit.literal.text) else { return nil }
+            return .value(.int(value))
         }
         if let boolLit = expression.as(BooleanLiteralExprSyntax.self) {
             return .value(.bool(boolLit.literal.text == "true"))
@@ -415,7 +416,7 @@ public final class ParserSession {
     private func controlLocation(_ expression: ExprSyntax?) -> String? {
         guard let expression else { return nil }
         if let literal = expression.as(StringLiteralExprSyntax.self) {
-            return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
+            return literal.representedLiteralValue
         }
         guard let access = expression.as(MemberAccessExprSyntax.self) else { return nil }
         if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
@@ -749,7 +750,7 @@ public final class ParserSession {
              || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall") {
             let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
             guard let name = argumentsSyntax.first?.expression.as(StringLiteralExprSyntax.self)?
-                .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+                .representedLiteralValue
             else { return nil }
             let arguments = argumentsSyntax.dropFirst().compactMap {
                 decodeTypedFacadeValue($0.expression, scope: scope)
@@ -782,9 +783,9 @@ public final class ParserSession {
             let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
             guard argumentsSyntax.count >= 2 else { return nil }
             guard let instance = argumentsSyntax[0].expression.as(StringLiteralExprSyntax.self)?
-            .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined(),
+                .representedLiteralValue,
                   let operation = argumentsSyntax[1].expression.as(StringLiteralExprSyntax.self)?
-                    .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+                    .representedLiteralValue
             else { return nil }
             let arguments = argumentsSyntax.dropFirst(2).compactMap {
                 decodeTypedFacadeValue($0.expression, scope: scope)
@@ -1581,8 +1582,9 @@ public final class ParserSession {
             else { return nil }
             return .negate(value)
         case "enabled":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
-            let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? ""
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
+            else { return nil }
             return .enabledAction(name)
         case "letValue":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
@@ -2126,11 +2128,15 @@ extension ParserSession {
         } else {
             return nil
         }
-        let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
-            .representedLiteralValue ?? ""
         switch name {
-        case "weakFairness", "WeakFairness": return .weakFairness(actionName)
-        case "strongFairness", "StrongFairness": return .strongFairness(actionName)
+        case "weakFairness", "WeakFairness":
+            guard let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+                .representedLiteralValue else { return nil }
+            return .weakFairness(actionName)
+        case "strongFairness", "StrongFairness":
+            guard let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+                .representedLiteralValue else { return nil }
+            return .strongFairness(actionName)
         case "weakFairnessNext", "WeakFairnessNext": return .weakFairnessNext
         case "strongFairnessNext", "StrongFairnessNext": return .strongFairnessNext
         default: return nil

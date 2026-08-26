@@ -1451,7 +1451,7 @@ extension ParserSession {
     private func algorithmLabel(_ expression: ExprSyntax?) -> String? {
         guard let expression else { return nil }
         if let literal = expression.as(StringLiteralExprSyntax.self) {
-            return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
+            return literal.representedLiteralValue
         }
         if let access = expression.as(MemberAccessExprSyntax.self) {
             if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,

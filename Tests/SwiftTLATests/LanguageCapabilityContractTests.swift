@@ -1,12 +1,31 @@
 import Testing
 import SwiftParser
 import SwiftSyntax
-import SwiftTLAPlugin
+@testable import SwiftTLAPlugin
 
 @testable import SwiftTLA
 
 @Suite("Language capability contract")
 struct LanguageCapabilityContractTests {
+    @Test("Explicit unsupported enum raw values are rejected")
+    func explicitUnsupportedEnumRawValueIsRejected() throws {
+        let source = Parser.parse(source: """
+        struct Model {
+            enum Phase: Int, FiniteTLAValueDomain {
+                case waiting = 1_000
+            }
+        }
+        """)
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+
+        do {
+            _ = try TLASpecVerifier.collectEnumVariables(from: model.memberBlock.members)
+            Issue.record("Expected an explicit unsupported enum raw value to fail.")
+        } catch {
+            #expect(String(describing: error).contains("requires a supported literal raw value"))
+        }
+    }
+
     @Test("The ledger covers every declared construct exactly once")
     func ledgerCoversEveryDeclaredConstructExactlyOnce() {
         let capabilities = LanguageCapabilityLedger.all

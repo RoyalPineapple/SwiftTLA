@@ -1226,6 +1226,20 @@ private func parserEnum(
         #expect(specification.actions.map(\.name) == ["RS", "Terminating"])
     }
 
+    @Test("algorithm labels must be static")
+    func rejectsInterpolatedAlgorithmLabel() throws {
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(#"""
+        {
+            Algorithm("DynamicLabel") {
+                Do("step\(suffix)") { Stop() }
+            }
+        }
+        """#))
+
+        #expect(parsed.sourceAlgorithms.isEmpty)
+        #expect(parsed.diagnostics.count == 1)
+    }
+
     @Test("parsed and result-builder algorithms compile to the same declarations")
     func parserTreeMatchesRuntimeAlgorithm() throws {
         let source = """
@@ -1332,6 +1346,11 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     @Test func parseInts() throws {
         #expect(SpecParser.decodeStateExpr(try parseExpression("0")) == .value(.int(0)))
         #expect(SpecParser.decodeStateExpr(try parseExpression("42")) == .value(.int(42)))
+    }
+
+    @Test("unsupported integer spelling is rejected")
+    func rejectsUnsupportedIntegerSpelling() throws {
+        #expect(SpecParser.decodeStateExpr(try parseExpression("1_000")) == nil)
     }
 
     @Test func parseBools() throws {
@@ -1932,6 +1951,19 @@ private enum ParserNode: String, FiniteTLAValueDomain {
                 == .value(.set([]))
         )
     }
+
+    @Test("formal names must be static")
+    func rejectsInterpolatedFormalNames() throws {
+        #expect(SpecParser.decodeTypedFacadeValue(
+            try parseExpression(#"FormalCall(as: Bool.self, "Safe\(suffix)")"#)
+        ) == nil)
+        #expect(SpecParser.decodeTypedFacadeValue(
+            try parseExpression(#"ModuleCall("Instance\(suffix)", "Value")"#)
+        ) == nil)
+        #expect(SpecParser.decodeStateExpr(
+            try parseExpression(#"At("step\(suffix)", worker)"#)
+        ) == nil)
+    }
 }
 
 // MARK: - StateExpr: method calls (binary)
@@ -2004,6 +2036,14 @@ private enum ParserNode: String, FiniteTLAValueDomain {
 
     @Test func parseStaticEnabled() throws {
         #expect(SpecParser.decodeStateExpr(try parseExpression("StateExpr.enabled(\"Next\")")) == StateExpr.enabledAction("Next"))
+    }
+
+    @Test("enabled action names must be static")
+    func rejectsDynamicEnabledActionName() throws {
+        #expect(SpecParser.decodeStateExpr(
+            try parseExpression(#"StateExpr.enabled("Next\(suffix)")"#)
+        ) == nil)
+        #expect(SpecParser.decodeStateExpr(try parseExpression("StateExpr.enabled()")) == nil)
     }
 
     @Test func parseStaticFunction() throws {
@@ -2233,6 +2273,19 @@ private enum ParserNode: String, FiniteTLAValueDomain {
             SpecParser.decodeFairness(try #require(try parseExpression("WeakFairnessNext()").as(FunctionCallExprSyntax.self)))
                 == FairnessCondition.weakFairnessNext
         )
+    }
+
+    @Test("action fairness requires a static action name")
+    func rejectsDynamicFairnessActionName() throws {
+        let dynamic = try #require(try parseExpression(
+            #"x.weakFairness("Tick\(suffix)")"#
+        ).as(FunctionCallExprSyntax.self))
+        let missing = try #require(try parseExpression(
+            "x.strongFairness()"
+        ).as(FunctionCallExprSyntax.self))
+
+        #expect(SpecParser.decodeFairness(dynamic) == nil)
+        #expect(SpecParser.decodeFairness(missing) == nil)
     }
 
     @Test func parseUnknownReturnsNil() throws {
