@@ -46,7 +46,6 @@ package struct FiniteGraphCheck: Sendable {
     `case` finiteGraphCase: FiniteGraphCase,
     swiftExploration: () throws -> ModelExplorationResult,
     tlcRequest: TLCProcessRequest,
-    replay: TLCReplayPolicy,
     outputDirectory: URL
   ) -> FiniteGraphCheckOutput {
     guard !FileManager.default.fileExists(atPath: outputDirectory.path) else {
@@ -79,11 +78,7 @@ package struct FiniteGraphCheck: Sendable {
       )
 
       phase = .tlcExecution
-      let tlcCapture = try tlcProcess.capture(
-        tlcRequest,
-        replay: replay,
-        retainingIn: directory
-      )
+      let tlcCapture = try tlcProcess.capture(tlcRequest, retainingIn: directory)
 
       phase = .tlcParsing
       let tlcRun = tlcCapture.graph

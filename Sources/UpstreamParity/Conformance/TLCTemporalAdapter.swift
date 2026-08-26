@@ -82,8 +82,7 @@ package struct TLCTemporalAdapter: Sendable {
       let completeGraph = try captureCompleteGraph(input)
       try clearTraceOutput(for: input.request)
 
-      let capture = try processAdapter.capture(
-        input.request, replay: .none, retainingIn: input.outputDirectory)
+      let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
       let run = capture.run
       try CanonicalGraphRecords.write(
         completeGraph,
@@ -193,7 +192,7 @@ package struct TLCTemporalAdapter: Sendable {
     try clearTraceOutput(for: request)
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
     try RetainedEvidence.createDirectory(directory, beneath: input.outputDirectory)
-    let capture = try processAdapter.capture(request, replay: .none, retainingIn: directory)
+    let capture = try processAdapter.capture(request, retainingIn: directory)
     guard capture.run.primary.reportedExhaustiveCompletion, capture.graph.isPassEligible else {
       throw TLCTemporalAdapterError.incompleteGraph
     }
@@ -278,8 +277,7 @@ extension TLCTemporalAdapter {
       request.javaExecutable,
       request.jar,
       request.bridgeClasses,
-      request.graphEvents,
-      request.replayInput
+      request.graphEvents
     ].map(resolvedURL)
   }
 

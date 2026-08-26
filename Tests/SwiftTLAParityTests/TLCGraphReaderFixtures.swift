@@ -276,7 +276,6 @@ func helperProcessRequest(
     bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("trace.json"),
-    replayInput: directory.appendingPathComponent("replay.json"),
     workingDirectory: directory,
     arguments: [],
     expectedCase: try caseForFiles(
@@ -296,7 +295,6 @@ func launchRequest(
     bundle: TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
-    replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
     workingDirectory: module.deletingLastPathComponent(),
     arguments: arguments, expectedCase: expectedCase, runID: UUID()
   )
@@ -311,7 +309,6 @@ func requestWithReferenceArtifacts(
     bundle: .external(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
-    replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
     workingDirectory: URL(fileURLWithPath: "/tmp"),
     arguments: ["-workers", "1", "-fp", "1"],
     expectedCase: try fixtureCase(try testReferencePin(), arguments: ["-workers", "1", "-fp", "1"]),

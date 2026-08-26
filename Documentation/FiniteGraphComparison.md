@@ -56,10 +56,9 @@ When a run fails, inspect `comparison.json`, then `swift-graph.jsonl`,
 mismatch is classified by relation, such as observable names, initial state,
 state binding, edge, or outcome.
 
-Counterexample traces have a different job. They explain an invariant or
-other checker failure and may be replayed, but they are not proof that the
-complete graph was explored. Complete-graph evidence comes from a successful,
-exhaustive declared run and its bridge stream.
+Counterexample traces explain an invariant or other checker failure. Complete
+graph evidence comes from a successful, exhaustive declared run and its bridge
+stream.
 
 ## Controls and limits
 

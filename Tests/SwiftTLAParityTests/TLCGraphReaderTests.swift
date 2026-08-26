@@ -38,7 +38,6 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       bundle: try TLCProcessRequest.declaredBundle(root: root, configuration: cfg),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
-      replayInput: directory.appendingPathComponent("replay.json"),
       workingDirectory: directory.appendingPathComponent("work"),
       arguments: [],
       expectedCase: try fixtureCase(try toolchainPin()),
@@ -179,16 +178,15 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       bundle: fixtureBundle(),
       graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
       traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
-      replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
       workingDirectory: URL(fileURLWithPath: "/tmp"),
       arguments: ["-workers", "1"],
       expectedCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1"]),
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
+      traceMode: .dumpJSON
     )
     let command = try request.commandArguments(
       module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
-      configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg"),
-      traceMode: .dumpJSON
+      configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg")
     )
     #expect(command.contains("-Dswifttla.tlc.graph.path=/tmp/events.jsonl"))
     #expect(
@@ -230,25 +228,6 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
     }
   }
 
-  @Test("required replay fails when its TLC execution does not succeed")
-  func requiredReplayFailureIsExplicit() throws {
-    let directory = try helperProcessDirectory()
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let request = try retainedCaptureRequest(in: directory)
-    let executor = RecordingTLCExecutor(results: [
-      .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
-      .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
-      .init(status: 1, stdout: "", stderr: "cannot replay")
-    ])
-    #expect(throws: TLCProcessError.self) {
-      _ = try TLCProcessAdapter(executor: executor).capture(
-        request,
-        replay: .required,
-        retainingIn: directory.appendingPathComponent("evidence")
-      )
-    }
-  }
-
   @Test("TLC v1.8.0 counterexample parses as trace-only evidence")
   func parsesCounterexampleFixture() throws {
     let testFile = URL(fileURLWithPath: #filePath)
@@ -287,7 +266,7 @@ extension TLCGraphReaderTests {
       bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
-      replayInput: directory.appendingPathComponent("replay.json"), workingDirectory: directory,
+      workingDirectory: directory,
       arguments: [],
       expectedCase: try caseForFiles(
         id: "timeout", module: module, configuration: configuration, arguments: []),
@@ -458,7 +437,7 @@ extension TLCGraphReaderTests {
     }
   }
 
-  @Test("process adapter adds trace and replay only after a violation")
+  @Test("process adapter adds trace capture only after a violation")
   func onlyRequestsTraceAfterViolation() throws {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -466,24 +445,20 @@ extension TLCGraphReaderTests {
     try completeGraphStream(request.expectedCase).write(to: request.graphEvents, options: .atomic)
     let executor = RecordingTLCExecutor(results: [
       .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
-      .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
       .init(status: 12, stdout: "Error: Invariant broken", stderr: "")
     ])
     let adapter = TLCProcessAdapter(executor: executor)
     let capture = try adapter.capture(
       request,
-      replay: .required,
       retainingIn: directory.appendingPathComponent("evidence")
     )
     #expect(capture.run.primary.isViolation)
-    #expect(executor.requests.count == 3)
+    #expect(executor.requests.count == 2)
     #expect(executor.requests[0].traceMode == .none)
     #expect(executor.requests[1].traceMode == .dumpJSON)
-    #expect(executor.requests[2].traceMode == .loadJSON)
     #expect(executor.requests[0].graphEvents == request.graphEvents)
     #expect(executor.requests[1].graphEvents.lastPathComponent == "events.trace.jsonl")
-    #expect(executor.requests[2].graphEvents.lastPathComponent == "events.replay.jsonl")
-    #expect(capture.run.replay == .init(status: 12, stdout: "Error: Invariant broken", stderr: ""))
+    #expect(capture.run.trace == .init(status: 12, stdout: "Error: Invariant broken", stderr: ""))
   }
 
   @Test("graph event reader rejects booleans for integers and numbers for booleans")
@@ -538,7 +513,7 @@ extension TLCGraphReaderTests {
     let wrongModuleRequest = TLCProcessRequest(
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongModule, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
-      replayInput: valid.replayInput, workingDirectory: directory.appendingPathComponent("wrong-module"),
+      workingDirectory: directory.appendingPathComponent("wrong-module"),
       arguments: valid.arguments, expectedCase: expectedCase, runID: UUID()
     )
     #expect(throws: FiniteGraphCaseError.moduleDigestMismatch) {
@@ -551,7 +526,7 @@ extension TLCGraphReaderTests {
     let wrongConfigurationRequest = TLCProcessRequest(
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongConfiguration, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
-      replayInput: valid.replayInput, workingDirectory: directory.appendingPathComponent("wrong-configuration"),
+      workingDirectory: directory.appendingPathComponent("wrong-configuration"),
       arguments: valid.arguments, expectedCase: expectedCase, runID: UUID()
     )
     #expect(throws: FiniteGraphCaseError.cfgDigestMismatch) {
@@ -599,7 +574,6 @@ private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessReque
     bundle: fixtureBundle(),
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("counterexample.json"),
-    replayInput: directory.appendingPathComponent("counterexample.json"),
     workingDirectory: directory.appendingPathComponent("work"),
     arguments: ["-workers", "1", "-fp", "1"],
     expectedCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1", "-fp", "1"]),

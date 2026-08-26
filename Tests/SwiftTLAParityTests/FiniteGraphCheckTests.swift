@@ -19,7 +19,6 @@ struct FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
     #expect(result.exitCode == .semanticDifference)
@@ -61,7 +60,6 @@ struct FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
     #expect(result.exitCode == .failure)
@@ -92,8 +90,8 @@ struct FiniteGraphCheckTests {
         "secret"))
   }
 
-  @Test("finite graph check isolates a stale staging directory and retains trace replay evidence")
-  func isolatesStagingAndRetainsTraceReplayEvidence() throws {
+  @Test("finite graph check isolates a stale staging directory and retains trace evidence")
+  func isolatesStagingAndRetainsTraceEvidence() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
@@ -104,20 +102,18 @@ struct FiniteGraphCheckTests {
     try fileManager.createDirectory(at: stale, withIntermediateDirectories: true)
     try Data("stale".utf8).write(to: stale.appendingPathComponent("contamination.txt"))
     try Data("trace".utf8).write(to: request.traceOutput)
-    try Data("replay".utf8).write(to: request.replayInput)
     let executor = FixtureTLCExecutor(
       stream: try graphStream(for: request.expectedCase, runID: request.runID),
       status: 12,
       stdout: "Invariant violation"
     )
-    let output = root.appendingPathComponent("trace-replay-evidence")
+    let output = root.appendingPathComponent("trace-evidence")
     let result = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: executor)
     ).run(
       case: request.expectedCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
-      replay: .required,
       outputDirectory: output
     )
     #expect(result.evidenceDirectory == output)
@@ -128,11 +124,7 @@ struct FiniteGraphCheckTests {
       fileManager.fileExists(
         atPath: output.appendingPathComponent("logs/tlc.trace.stdout.log").path))
     #expect(
-      fileManager.fileExists(
-        atPath: output.appendingPathComponent("logs/tlc.replay.stdout.log").path))
-    #expect(
       fileManager.fileExists(atPath: output.appendingPathComponent("counterexample.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("replay.json").path))
   }
   @Test("finite graph check rejects a complete graph stream from another TLC run")
   func rejectsWrongTLCStreamRunBinding() throws {
@@ -151,7 +143,6 @@ struct FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
     #expect(result.exitCode == .failure)
@@ -176,7 +167,6 @@ struct FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration(action: "Next") },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
     #expect(result.exitCode == .exact)
@@ -203,7 +193,6 @@ struct FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration(action: "Next") },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
 
@@ -221,37 +210,6 @@ struct FiniteGraphCheckTests {
 }
 
 extension FiniteGraphCheckTests {
-  @Test("finite graph check retains completed TLC invocations when required replay fails")
-  func retainsCompletedInvocationsAfterReplayFailure() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let violation = TLCProcessResult(status: 12, stdout: "Error: invariant", stderr: "")
-    let replayFailure = TLCProcessResult(status: 1, stdout: "replay output", stderr: "replay error")
-    let output = root.appendingPathComponent("replay-failure")
-    let result = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: SequencedTLCExecutor(
-          stream: try graphStream(for: request.expectedCase, runID: request.runID),
-          results: [violation, violation, replayFailure])))
-      .run(
-        case: request.expectedCase,
-        swiftExploration: { try swiftExploration() },
-        tlcRequest: request,
-        replay: .required,
-        outputDirectory: output
-      )
-    #expect(result.exitCode == .failure)
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((process["trace"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((process["replay"] as? [String: Any])?["status"] as? Int == 1)
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.stdout.log").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.trace.stdout.log").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.replay.stdout.log").path))
-  }
   @Test("finite graph check preserves primary logs and the trace stream after a thrown trace execution failure")
   func retainsThrownTraceExecutionEvidenceByPhase() throws {
     let fileManager = FileManager.default
@@ -272,7 +230,6 @@ extension FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
     #expect(result.exitCode == .failure)
@@ -287,41 +244,6 @@ extension FiniteGraphCheckTests {
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
     #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
-  }
-  @Test("finite graph check preserves completed trace logs and the replay stream after a thrown replay failure")
-  func retainsThrownReplayExecutionEvidenceByPhase() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let output = root.appendingPathComponent("replay-execution-failure")
-    let check = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: ThrowingFollowupTLCExecutor(
-          stream: try graphStream(for: request.expectedCase, runID: request.runID),
-          failure: .replay
-        )
-      )
-    )
-    let result = check.run(
-      case: request.expectedCase,
-      swiftExploration: { try swiftExploration() },
-      tlcRequest: request,
-      replay: .required,
-      outputDirectory: output
-    )
-    #expect(result.exitCode == .failure)
-    #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
-    #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))).contains("trace stdout"))
-    #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.replay.stdout.log"))).contains("replay partial stdout"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.trace.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.replay.jsonl").path))
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((process["trace"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((process["replay"] as? [String: Any])?["executionError"] as? String != nil)
   }
   @Test("finite graph check retains completed primary evidence after an arbitrary trace execution error")
   func retainsArbitraryTraceExecutionEvidenceByPhase() throws {
@@ -342,7 +264,6 @@ extension FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
     #expect(result.exitCode == .failure)
@@ -352,37 +273,6 @@ extension FiniteGraphCheckTests {
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
     #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
-  }
-  @Test("finite graph check retains completed trace evidence after an arbitrary replay execution error")
-  func retainsArbitraryReplayExecutionEvidenceByPhase() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let output = root.appendingPathComponent("arbitrary-replay-execution-failure")
-    let result = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: ArbitraryFollowupFailureTLCExecutor(
-          stream: try graphStream(for: request.expectedCase, runID: request.runID),
-          failure: .replay
-        )
-      )
-    ).run(
-      case: request.expectedCase,
-      swiftExploration: { try swiftExploration() },
-      tlcRequest: request,
-      replay: .required,
-      outputDirectory: output
-    )
-    #expect(result.exitCode == .failure)
-    #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
-    #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))).contains("trace stdout"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.replay.failure.log").path))
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((process["trace"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((process["replay"] as? [String: Any])?["executionError"] as? String != nil)
   }
   @Test("finite graph check rejects an existing output without touching it")
   func rejectsExistingOutput() throws {
@@ -398,7 +288,6 @@ extension FiniteGraphCheckTests {
       case: request.expectedCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
-      replay: .none,
       outputDirectory: output
     )
     #expect(result.exitCode == .failure)
@@ -429,7 +318,6 @@ extension FiniteGraphCheckTests {
           case: request.expectedCase,
           swiftExploration: { try exactSwiftExploration() },
           tlcRequest: request,
-          replay: .required,
           outputDirectory: output
         ))
     }
@@ -445,7 +333,6 @@ extension FiniteGraphCheckTests {
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-process.json").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.trace.stdout.log").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.replay.stdout.log").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("raw-artifacts.json").path))
     #expect(!fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.primary.failure.log").path))
     let loserDiagnostic = try json(at: losingEvidence.appendingPathComponent("diagnostic.json"))
@@ -453,7 +340,6 @@ extension FiniteGraphCheckTests {
     let loserProcess = try json(at: losingEvidence.appendingPathComponent("tlc-process.json"))
     #expect((loserProcess["primary"] as? [String: Any])?["status"] as? Int == 12)
     #expect((loserProcess["trace"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((loserProcess["replay"] as? [String: Any])?["status"] as? Int == 12)
     #expect(
       (try String(contentsOf: losingEvidence.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "primary invocation"))
@@ -509,7 +395,6 @@ extension FiniteGraphCheckTests {
       bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
       graphEvents: root.appendingPathComponent("events.jsonl"),
       traceOutput: root.appendingPathComponent("trace.json"),
-      replayInput: root.appendingPathComponent("trace.json"),
       workingDirectory: root,
       arguments: ["-workers", "1"],
       expectedCase: finiteGraphCase,
@@ -571,7 +456,6 @@ private struct BarrierTLCExecutor: TLCProcessExecuting {
     switch request.traceMode {
     case .none: phase = "primary"
     case .dumpJSON: phase = "trace"
-    case .loadJSON: phase = "replay"
     }
     return TLCProcessResult(
       status: 12,
@@ -586,21 +470,8 @@ private struct FailingTLCExecutor: TLCProcessExecuting {
       partialStdout: "partial stdout TOKEN=secret", partialStderr: "partial stderr")
   }
 }
-private final class SequencedTLCExecutor: TLCProcessExecuting, Sendable {
-  let stream: Data
-  private let results: OSAllocatedUnfairLock<[TLCProcessResult]>
-  init(stream: Data, results: [TLCProcessResult]) {
-    self.stream = stream
-    self.results = OSAllocatedUnfairLock(initialState: results)
-  }
-  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-    try stream.write(to: request.graphEvents)
-    return results.withLock { $0.removeFirst() }
-  }
-}
 private enum FollowupFailure: Sendable {
   case trace
-  case replay
 }
 private final class ThrowingFollowupTLCExecutor: TLCProcessExecuting, Sendable {
   let stream: Data
@@ -619,9 +490,6 @@ private final class ThrowingFollowupTLCExecutor: TLCProcessExecuting, Sendable {
         partialStdout: "trace partial stdout TOKEN=trace-secret", partialStderr: "trace partial stderr")
     case .dumpJSON:
       return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
-    case .loadJSON:
-      throw TLCProcessError.timedOut(
-        partialStdout: "replay partial stdout TOKEN=replay-secret", partialStderr: "replay partial stderr")
     }
   }
 }
@@ -644,8 +512,6 @@ private final class ArbitraryFollowupFailureTLCExecutor: TLCProcessExecuting, Se
       throw ArbitraryTLCExecutorFailure.launchValidation
     case .dumpJSON:
       return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
-    case .loadJSON:
-      throw ArbitraryTLCExecutorFailure.launchValidation
     }
   }
 }

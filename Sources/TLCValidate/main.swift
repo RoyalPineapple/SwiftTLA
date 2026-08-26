@@ -208,7 +208,6 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 bundle: bundle,
                 graphEvents: runRoot.appendingPathComponent("\(declaration.id).events.jsonl"),
                 traceOutput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
-                replayInput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
                 workingDirectory: runRoot,
                 arguments: finiteGraphCase.arguments,
                 expectedCase: finiteGraphCase,
@@ -227,7 +226,6 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                     ).explore()
                 },
                 tlcRequest: request,
-                replay: .none,
                 outputDirectory: caseOutput
             )
             let label = "finite-graph \(declaration.id)"

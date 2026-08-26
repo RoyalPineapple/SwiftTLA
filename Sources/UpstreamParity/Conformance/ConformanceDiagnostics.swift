@@ -164,23 +164,11 @@ extension TLCProcessError {
           evidence: evidence + [.init(role: "missing imported module", location: expectedFile)]
         )
       }
-    case .requiredReplayFailed(let completed, let failed):
-      return processFailureReport(
-        what: "TLC replay did not reproduce the required trace.", phase: "replay", request: request,
-        expected: "The replay exits with the same violation status as the captured primary run.",
-        actual: "Primary status \(completed.primary.status); replay status \(failed.status).",
-        outputs: failed
-      )
     case .traceCaptureFailed(let completed, let failed):
       return processFailureReport(
         what: "TLC did not capture the required trace.", phase: "trace capture", request: request,
         expected: "The trace-capture invocation exits with the primary violation status \(completed.primary.status).",
         actual: "Trace-capture status \(failed.status).", outputs: failed
-      )
-    case .requiredReplayExecutionFailed(let completed, let error):
-      return executionFailureReport(
-        what: "TLC replay could not execute.", phase: "replay", request: request,
-        expected: "The replay launches after primary status \(completed.primary.status).", error: error
       )
     case .traceCaptureExecutionFailed(let completed, let error):
       return executionFailureReport(

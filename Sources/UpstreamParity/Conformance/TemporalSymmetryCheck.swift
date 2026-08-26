@@ -144,7 +144,7 @@ package struct TemporalSymmetryCheck: Sendable {
       bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"),
       traceOutput: work.appendingPathComponent("counterexample.json"),
-      replayInput: work.appendingPathComponent("replay-input.json"), workingDirectory: work,
+      workingDirectory: work,
       arguments: arguments, expectedCase: launch,
       runID: UUID(), referencePin: referencePin, referenceArtifacts: context.artifacts)
     let graphBundle = try externalBundle(
@@ -162,7 +162,7 @@ package struct TemporalSymmetryCheck: Sendable {
       bundle: graphBundle,
       graphEvents: work.appendingPathComponent("complete-graph-events.jsonl"),
       traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
-      replayInput: work.appendingPathComponent("complete-graph-replay.json"), workingDirectory: work,
+      workingDirectory: work,
       arguments: graphCase.arguments, expectedCase: graphCase, runID: UUID(),
       referencePin: referencePin, referenceArtifacts: context.artifacts)
     return TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
@@ -214,10 +214,10 @@ package struct TemporalSymmetryCheck: Sendable {
     try validateSymmetryRequests(raw: rawRequest, reduced: reducedRequest)
     let processAdapter = TLCProcessAdapter()
     let rawTLC = try processAdapter.capture(
-      rawRequest, replay: .none,
+      rawRequest,
       retainingIn: outputDirectory.appendingPathComponent("tlc-raw", isDirectory: true)).graph
     let reducedTLC = try processAdapter.capture(
-      reducedRequest, replay: .none,
+      reducedRequest,
       retainingIn: outputDirectory.appendingPathComponent("tlc-reduced", isDirectory: true)).graph
     let explorationConfiguration = try FiniteExplorationConfiguration(
       maximumStateLimit: 1 << (scope + 1))
@@ -312,7 +312,7 @@ extension TemporalSymmetryCheck {
       javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
       bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
-      replayInput: work.appendingPathComponent("replay-input.json"), workingDirectory: work,
+      workingDirectory: work,
       arguments: declared.arguments, expectedCase: declared, runID: runID, referencePin: declared.pin, referenceArtifacts: context.artifacts)
   }
 
