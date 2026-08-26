@@ -64,9 +64,9 @@ func inputPath(_ relativePath: String, within root: String) throws -> URL {
     guard !relativePath.hasPrefix("/") else {
         throw FiniteGraphCLIError.invalidManifest("input paths must be relative")
     }
-    let rootURL = try RetainedEvidence.projectRoot(URL(fileURLWithPath: root))
+    let rootURL = try RetainedFiles.projectRoot(URL(fileURLWithPath: root))
     do {
-        return try RetainedEvidence.resolve(
+        return try RetainedFiles.resolve(
             rootURL.appendingPathComponent(relativePath),
             beneath: rootURL)
     } catch {

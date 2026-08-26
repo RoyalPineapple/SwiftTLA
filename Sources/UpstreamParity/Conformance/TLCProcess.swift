@@ -71,7 +71,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package let traceOutput: URL
   package let workingDirectory: URL
   package let arguments: [String]
-  package let expectedCase: FiniteGraphCase
+  package let finiteGraphCase: FiniteGraphCase
   package let runID: UUID
   package let timeout: TimeInterval
   package let traceMode: TLCTraceMode
@@ -87,7 +87,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     traceOutput: URL,
     workingDirectory: URL,
     arguments: [String],
-    expectedCase: FiniteGraphCase,
+    finiteGraphCase: FiniteGraphCase,
     runID: UUID,
     timeout: TimeInterval = 60,
     traceMode: TLCTraceMode = .none,
@@ -102,7 +102,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.traceOutput = traceOutput
     self.workingDirectory = workingDirectory
     self.arguments = arguments
-    self.expectedCase = expectedCase
+    self.finiteGraphCase = finiteGraphCase
     self.runID = runID
     self.timeout = timeout
     self.traceMode = traceMode
@@ -110,9 +110,9 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.referenceArtifacts = referenceArtifacts
   }
 
-  package var caseID: String { expectedCase.id }
+  package var caseID: String { finiteGraphCase.id }
 
-  package var effectiveEnvironment: [String: String] { expectedCase.environment }
+  package var effectiveEnvironment: [String: String] { finiteGraphCase.environment }
   package var moduleFileName: String { "\(bundle.root.name).tla" }
   package var configurationFileName: String { "\(bundle.root.name).cfg" }
 
@@ -131,7 +131,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
   }
 
   package func validateLaunchBinding(module: URL, configuration: URL) throws {
-    try expectedCase.validateLaunch(
+    try finiteGraphCase.validateLaunch(
       module: module, configuration: configuration, arguments: arguments, caseID: caseID
     )
   }
@@ -223,7 +223,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
 
   package func validateReferenceBinding(pin: TLCReferencePin, artifacts: TLCReferenceArtifacts)
     throws {
-    guard expectedCase.pin == pin else {
+    guard finiteGraphCase.pin == pin else {
       throw FiniteGraphCaseError.pinMismatch("declared case reference pin")
     }
     guard sameFile(jar, artifacts.jar) else {
@@ -239,17 +239,17 @@ package struct TLCProcessRequest: Equatable, Sendable {
   }
 
   private func provenanceJSON() throws -> String {
-    let pin = expectedCase.pin
+    let pin = finiteGraphCase.pin
     let provenance: [String: Any] = [
       "tlcTag": pin.tag, "tlcCommit": pin.commit, "tlcJarSha256": pin.jarSHA256,
       "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion,
       "javaArchiveSha256": pin.javaArchiveSHA256, "bridgeClass": pin.bridgeClass,
       "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
-      "moduleSha256": expectedCase.moduleSHA256, "cfgSha256": expectedCase.cfgSHA256,
-      "arguments": expectedCase.arguments, "argumentsSha256": expectedCase.argumentsSHA256,
-      "workers": expectedCase.workers, "fingerprintPolynomial": expectedCase.fingerprintPolynomial,
-      "deadlock": expectedCase.deadlock, "os": expectedCase.operatingSystem,
-      "architecture": expectedCase.architecture, "environment": expectedCase.environment
+      "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
+      "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
+      "workers": finiteGraphCase.workers, "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
+      "deadlock": finiteGraphCase.deadlock, "os": finiteGraphCase.operatingSystem,
+      "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
     ]
     let data = try JSONSerialization.data(withJSONObject: provenance, options: [.sortedKeys])
     return String(decoding: data, as: UTF8.self)
@@ -324,7 +324,7 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
       timeout: request.timeout,
       environment: request.effectiveEnvironment
     )
-    try request.expectedCase.pin.validateReportedTLCBanner(result.stdout + "\n" + result.stderr)
+    try request.finiteGraphCase.pin.validateReportedTLCBanner(result.stdout + "\n" + result.stderr)
     return result
   }
 }
@@ -371,7 +371,7 @@ package struct TLCProcessAdapter: Sendable {
     _ request: TLCProcessRequest,
     retainingIn directory: URL
   ) throws -> TLCProcessCapture {
-    try RetainedEvidence.createDirectory(directory, beneath: directory.deletingLastPathComponent())
+    try RetainedFiles.createDirectory(directory, beneath: directory.deletingLastPathComponent())
     let run: TLCProcessRun
     do {
       run = try self.run(request)
@@ -386,7 +386,7 @@ package struct TLCProcessAdapter: Sendable {
   private func capture(_ run: TLCProcessRun, request: TLCProcessRequest) throws
     -> TLCProcessCapture {
     let graphEvents = try Data(contentsOf: request.graphEvents)
-    let reader = TLCGraphReader(expectedCase: request.expectedCase)
+    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
     let stream = try reader.parse(graphEvents)
     guard stream.runID == request.runID else {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
@@ -410,7 +410,7 @@ package struct TLCProcessAdapter: Sendable {
     var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: run.primary]
     if let trace = run.trace { results[.trace] = trace }
     try writeProcessRecord(request: request, results: results, failures: [:], to: directory)
-    let logs = try RetainedEvidence.createDirectory(
+    let logs = try RetainedFiles.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
     try retain(run.primary, phase: .primary, in: logs)
     if let trace = run.trace { try retain(trace, phase: .trace, in: logs) }
@@ -425,7 +425,7 @@ package struct TLCProcessAdapter: Sendable {
     let lifecycle = processLifecycle(for: error)
     try writeProcessRecord(
       request: request, results: lifecycle.results, failures: lifecycle.failures, to: directory)
-    let logs = try RetainedEvidence.createDirectory(
+    let logs = try RetainedFiles.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
     switch error {
     case TLCProcessError.traceCaptureFailed(let completed, let failed):
@@ -455,10 +455,10 @@ package struct TLCProcessAdapter: Sendable {
         if FileManager.default.fileExists(atPath: destination.path) {
           try FileManager.default.removeItem(at: destination)
         }
-        try RetainedEvidence.copy(source, to: destination)
+        try FileManager.default.copyItem(at: source, to: destination)
       }
     }
-    try RetainedEvidence.writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
+    try RetainedFiles.writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
   }
 
   private func traceRequest(_ request: TLCProcessRequest) -> TLCProcessRequest {
@@ -469,7 +469,7 @@ package struct TLCProcessAdapter: Sendable {
       graphEvents: traceGraphEvents(for: request.graphEvents),
       traceOutput: request.traceOutput,
       workingDirectory: request.workingDirectory, arguments: request.arguments,
-      expectedCase: request.expectedCase, runID: request.runID,
+      finiteGraphCase: request.finiteGraphCase, runID: request.runID,
       timeout: request.timeout, traceMode: .dumpJSON, referencePin: request.referencePin,
       referenceArtifacts: request.referenceArtifacts
     )
@@ -513,15 +513,15 @@ package struct TLCProcessAdapter: Sendable {
         record[phase.rawValue] = NSNull()
       }
     }
-    try RetainedEvidence.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
+    try RetainedFiles.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
   }
 
   private func retain(_ result: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
-    try RetainedEvidence.writeText(
+    try RetainedFiles.writeText(
       redactingSecrets(in: result.stdout),
       to: directory.appendingPathComponent(phase.stdoutLog)
     )
-    try RetainedEvidence.writeText(
+    try RetainedFiles.writeText(
       redactingSecrets(in: result.stderr),
       to: directory.appendingPathComponent(phase.stderrLog)
     )
@@ -533,16 +533,16 @@ package struct TLCProcessAdapter: Sendable {
     in directory: URL
   ) throws {
     if let stdout = failure.partialStdout, let stderr = failure.partialStderr {
-      try RetainedEvidence.writeText(
+      try RetainedFiles.writeText(
         redactingSecrets(in: stdout),
         to: directory.appendingPathComponent(phase.stdoutLog)
       )
-      try RetainedEvidence.writeText(
+      try RetainedFiles.writeText(
         redactingSecrets(in: stderr),
         to: directory.appendingPathComponent(phase.stderrLog)
       )
     } else {
-      try RetainedEvidence.writeText(
+      try RetainedFiles.writeText(
         redactingSecrets(in: failure.message),
         to: directory.appendingPathComponent("tlc.\(phase.rawValue).failure.log")
       )
@@ -564,7 +564,7 @@ func processJSON(_ result: TLCProcessResult) -> [String: Any] {
 
 private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
   [
-    "case": finiteGraphCaseJSON(request.expectedCase),
+    "case": finiteGraphCaseJSON(request.finiteGraphCase),
     "toolchain": toolchainJSON(request),
     "arguments": request.arguments,
     "bundle": [
@@ -605,7 +605,7 @@ private func finiteGraphCaseJSON(_ finiteGraphCase: FiniteGraphCase) -> [String:
 }
 
 private func toolchainJSON(_ request: TLCProcessRequest) -> [String: Any] {
-  var record: [String: Any] = ["declaredPin": pinJSON(request.expectedCase.pin)]
+  var record: [String: Any] = ["declaredPin": pinJSON(request.finiteGraphCase.pin)]
   if let referencePin = request.referencePin {
     record["referencePin"] = pinJSON(referencePin)
   }

@@ -1,9 +1,6 @@
 import Foundation
 
-/// A retained input or output that explains a conformance decision.
-///
-/// `location` identifies the recorded module, configuration, graph, or log.
-package struct RetainedEvidenceLocation: Equatable, Sendable {
+package struct RetainedFileLocation: Equatable, Sendable {
   package let role: String
   package let location: String
 
@@ -13,8 +10,7 @@ package struct RetainedEvidenceLocation: Equatable, Sendable {
   }
 }
 
-/// Captured tool output retained with a failure report.
-package struct ConformanceToolOutput: Equatable, Sendable {
+package struct CapturedToolOutput: Equatable, Sendable {
   package let stream: String
   package let content: String
 
@@ -24,17 +20,14 @@ package struct ConformanceToolOutput: Equatable, Sendable {
   }
 }
 
-/// A diagnostic that answers the next useful investigation question.
-///
-/// The fields let a UI present the diagnostic and retained evidence directly.
-package struct ConformanceFailureReport: Equatable, Sendable {
+package struct CheckFailureReport: Equatable, Sendable {
   package let whatFailed: String
   package let whereItFailed: String
   package let expected: String
   package let actual: String
   package let nextSafeAction: String
-  package let evidence: [RetainedEvidenceLocation]
-  package let toolOutput: [ConformanceToolOutput]
+  package let evidence: [RetainedFileLocation]
+  package let toolOutput: [CapturedToolOutput]
 
   package init(
     whatFailed: String,
@@ -42,8 +35,8 @@ package struct ConformanceFailureReport: Equatable, Sendable {
     expected: String,
     actual: String,
     nextSafeAction: String,
-    evidence: [RetainedEvidenceLocation] = [],
-    toolOutput: [ConformanceToolOutput] = []
+    evidence: [RetainedFileLocation] = [],
+    toolOutput: [CapturedToolOutput] = []
   ) {
     self.whatFailed = whatFailed
     self.whereItFailed = whereItFailed
@@ -56,49 +49,45 @@ package struct ConformanceFailureReport: Equatable, Sendable {
 }
 
 extension GraphDifference {
-  /// A concrete explanation of this exact graph difference.
-  ///
-  /// In finite graph comparison, `expected` is TLC and `actual` is SwiftTLA.
-  /// `tlc-graph.jsonl` and `swift-graph.jsonl` contain the complete graph records.
-  package var failureReport: ConformanceFailureReport {
+  package var failureReport: CheckFailureReport {
     switch self {
     case .observableNames(
-      let expectedVariables,
-      let actualVariables,
-      let expectedActions,
-      let actualActions
+      let tlcVariables,
+      let swiftVariables,
+      let tlcActions,
+      let swiftActions
     ):
       return .init(
         whatFailed: "The observable names differ.",
         whereItFailed: "canonical variables or actions",
-        expected: "TLC variables \(expectedVariables.sorted()); actions \(expectedActions.sorted()).",
-        actual: "SwiftTLA variables \(actualVariables.sorted()); actions \(actualActions.sorted()).",
+        expected: "TLC variables \(tlcVariables.sorted()); actions \(tlcActions.sorted()).",
+        actual: "SwiftTLA variables \(swiftVariables.sorted()); actions \(swiftActions.sorted()).",
         nextSafeAction: "Make the compiled Swift and rendered TLC declarations use the same names."
       )
-    case .initialStates(let expected, let actual):
+    case .initialStates(let tlc, let swift):
       return setDifferenceReport(
         what: "The initial-state sets differ.",
         where: "canonical initial states",
-        expected: expected,
-        actual: actual,
+        expected: tlc,
+        actual: swift,
         next: "Inspect the first differing state in tlc-graph.jsonl and swift-graph.jsonl, then compare the Init predicates."
       )
-    case .states(let expected, let actual):
+    case .states(let tlc, let swift):
       return setDifferenceReport(
         what: "The reachable-state sets differ.",
         where: "canonical state space",
-        expected: expected,
-        actual: actual,
+        expected: tlc,
+        actual: swift,
         next: "Inspect the first differing state in tlc-graph.jsonl and swift-graph.jsonl, then compare the action guards and assignments that can reach it."
       )
-    case .edges(let expected, let actual):
-      return edgeDifferenceReport(expected: expected, actual: actual)
-    case .outcome(let expected, let actual):
+    case .edges(let tlc, let swift):
+      return edgeDifferenceReport(expected: tlc, actual: swift)
+    case .outcome(let tlc, let swift):
       return .init(
         whatFailed: "The verification outcomes differ.",
         whereItFailed: "finite conformance outcome",
-        expected: "TLC outcome: \(describe(expected))",
-        actual: "SwiftTLA outcome: \(describe(actual))",
+        expected: "TLC outcome: \(describe(tlc))",
+        actual: "SwiftTLA outcome: \(describe(swift))",
         nextSafeAction: "Inspect tlc-graph.jsonl and swift-graph.jsonl outcomes and their retained traces before changing the model."
       )
     }
@@ -106,19 +95,17 @@ extension GraphDifference {
 }
 
 extension GraphComparison {
-  /// One actionable report per detected difference, in comparison order.
-  package var failureReports: [ConformanceFailureReport] {
+  package var failureReports: [CheckFailureReport] {
     differences.map(\.failureReport)
   }
 }
 
 extension TLCProcessError {
-  /// A structured tool failure with source inputs and any captured output.
-  package func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
+  package func failureReport(for request: TLCProcessRequest) -> CheckFailureReport {
     let evidence = [
-      RetainedEvidenceLocation(role: "TLA+ module", location: request.moduleFileName),
-      RetainedEvidenceLocation(role: "TLC configuration", location: request.configurationFileName),
-      RetainedEvidenceLocation(role: "TLC graph event output", location: request.graphEvents.path)
+      RetainedFileLocation(role: "TLA+ module", location: request.moduleFileName),
+      RetainedFileLocation(role: "TLC configuration", location: request.configurationFileName),
+      RetainedFileLocation(role: "TLC graph event output", location: request.graphEvents.path)
     ]
     switch self {
     case .timedOut(let stdout, let stderr):
@@ -185,7 +172,7 @@ private func setDifferenceReport(
   expected: Set<CanonicalStateKey>,
   actual: Set<CanonicalStateKey>,
   next: String
-) -> ConformanceFailureReport {
+) -> CheckFailureReport {
   let onlyExpected = expected.subtracting(actual).sorted().first
   let onlyActual = actual.subtracting(expected).sorted().first
   return .init(
@@ -199,7 +186,7 @@ private func setDifferenceReport(
 
 private func edgeDifferenceReport(
   expected: [CanonicalEdge: Int], actual: [CanonicalEdge: Int]
-) -> ConformanceFailureReport {
+) -> CheckFailureReport {
   let witness = Set(expected.keys).union(actual.keys).sorted().first { expected[$0, default: 0] != actual[$0, default: 0] }
   guard let witness else {
     return .init(
@@ -221,7 +208,7 @@ private func edgeDifferenceReport(
 private func processFailureReport(
   what: String, phase: String, request: TLCProcessRequest, expected: String, actual: String,
   outputs: TLCProcessResult
-) -> ConformanceFailureReport {
+) -> CheckFailureReport {
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
     expected: expected, actual: actual,
@@ -237,7 +224,7 @@ private func processFailureReport(
 private func executionFailureReport(
   what: String, phase: String, request: TLCProcessRequest, expected: String,
   error: TLCProcessExecutionFailure
-) -> ConformanceFailureReport {
+) -> CheckFailureReport {
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
     expected: expected, actual: redactingSecrets(in: error.message),
@@ -250,7 +237,7 @@ private func executionFailureReport(
   )
 }
 
-private func toolEvidence(for request: TLCProcessRequest) -> [RetainedEvidenceLocation] {
+private func toolEvidence(for request: TLCProcessRequest) -> [RetainedFileLocation] {
   [
     .init(role: "TLA+ module", location: request.moduleFileName),
     .init(role: "TLC configuration", location: request.configurationFileName),
@@ -258,7 +245,7 @@ private func toolEvidence(for request: TLCProcessRequest) -> [RetainedEvidenceLo
   ]
 }
 
-private func describe(_ value: CanonicalOutcome) -> String {
+private func describe(_ value: GraphRunOutcome) -> String {
   switch value {
   case .exhaustiveSuccess: "exhaustive success"
   case .invariantViolation(let message): "invariant violation: \(message)"
@@ -266,15 +253,4 @@ private func describe(_ value: CanonicalOutcome) -> String {
   case .incomplete(let reason): "incomplete: \(reason)"
   case .executionError(let reason): "execution error: \(reason)"
   }
-}
-
-private func describe(_ diagnostics: [CanonicalDiagnostic]) -> String {
-  diagnostics.isEmpty ? "no diagnostics" : diagnostics.map { "\($0.code): \($0.message)" }.joined(separator: "; ")
-}
-
-private func describe(_ traces: [CanonicalTrace]) -> String {
-  guard let trace = traces.first else { return "no traces" }
-  let first = trace.steps.first
-  return first.map { "trace \(trace.id) begins at \($0.state.canonicalEncoding) via \($0.action)" }
-    ?? "trace \(trace.id) has no steps"
 }

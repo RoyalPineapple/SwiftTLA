@@ -36,7 +36,16 @@ documentation, diagnostics, and reviews use these terms.
 | render | Convert compiled declarations to TLA+ or PlusCal text. | compile, export |
 | serialize | Encode boundary data such as JSON, graph records, or manifests. | render |
 | exploration | A bounded traversal of a compiled machine graph. | checking |
+| finite graph case | One declared SwiftTLA and TLC comparison case. | core case, conformance case |
+| finite graph manifest | The source-controlled list of finite graph cases. | cases registry |
+| finite graph check | One execution of a declared finite graph case. | runner, gate |
+| completed graph run | One complete or explicitly incomplete explored graph and its outcome. | canonical run, evidence |
 | canonical graph | Deterministically ordered states and labeled edges. | evidence |
+| graph comparison | The exact comparison of two completed graph runs. | conformance result |
+| graph difference | One exact mismatch in observable names, initial states, states, edges, or outcome. | diagnostic result |
+| TLC graph reader | The boundary decoder from TLC graph events to a completed graph run. | parser, adapter |
+| Swift graph exporter | The boundary conversion from Swift exploration to a completed graph run. | adapter |
+| rendered action | The declared correspondence between one source action call and its rendered TLA+ action name. | action normalization |
 | evidence | Retained inputs, commands, outputs, and graphs from a check. | result |
 | conformance | An exact SwiftTLA and TLC graph comparison for one finite case. | evidence |
 

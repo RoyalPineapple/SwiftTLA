@@ -1,12 +1,8 @@
 import Foundation
 
-package enum CanonicalGraphRecords {
+package enum CompletedGraphRunRecords {
   package static func write(_ run: CompletedGraphRun, to url: URL) throws {
     try encoded(records(for: run)).write(to: url, options: .atomic)
-  }
-
-  package static func digest(for graph: CanonicalGraph) throws -> String {
-    SHA256.hex(try encoded(graphRecords(for: graph)))
   }
 
   private static func graphRecords(for graph: CanonicalGraph) -> [[String: Any]] {
@@ -40,23 +36,14 @@ package enum CanonicalGraphRecords {
       "observableActions": run.observableActions.sorted()
     ]]
     records += graphRecords(for: run.graph)
-    records += run.errors.enumerated().map { index, error in
-      [
-        "type": "error",
-        "index": index,
-        "code": error.code,
-        "message": error.message
-      ]
-    }
-    records += run.traces.enumerated().map { index, trace in
-      [
+    if let trace = run.trace {
+      records.append([
         "type": "trace",
-        "index": index,
         "id": trace.id,
         "steps": trace.steps.map {
           ["state": $0.state.canonicalEncoding, "action": $0.action]
         }
-      ]
+      ])
     }
     records.append([
       "type": "complete",
@@ -65,13 +52,12 @@ package enum CanonicalGraphRecords {
       "initialStateCount": run.graph.initialStateKeys.count,
       "stateCount": run.graph.states.count,
       "edgeCount": run.graph.edgeOccurrences.values.reduce(0, +),
-      "errorCount": run.errors.count,
-      "traceCount": run.traces.count
+      "traceCount": run.trace == nil ? 0 : 1
     ])
     return records
   }
 
-  private static func outcome(_ outcome: CanonicalOutcome) -> [String: String] {
+  private static func outcome(_ outcome: GraphRunOutcome) -> [String: String] {
     switch outcome {
     case .exhaustiveSuccess:
       ["kind": "exhaustiveSuccess"]

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import UpstreamParity
 
-struct CanonicalGraphRecordsTests {
+struct CompletedGraphRunRecordsTests {
   @Test("canonical graph records ignore traversal and collection insertion order")
   func recordsAreStableAcrossEquivalentGraphs() throws {
     let first = state(counter: 1, values: [.integer(2), .integer(1)])
@@ -18,33 +18,12 @@ struct CanonicalGraphRecordsTests {
       .init(source: first.key, action: "advance", target: second.key)
     ])
 
-    #expect(try CanonicalGraphRecords.digest(for: forward) == CanonicalGraphRecords.digest(for: reversed))
+    #expect(try encodedGraph(forward) == encodedGraph(reversed))
 
     let changed = try graph(first, second, edges: [
       .init(source: first.key, action: "reset", target: second.key)
     ])
-    #expect(try CanonicalGraphRecords.digest(for: forward) != CanonicalGraphRecords.digest(for: changed))
-
-    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: root) }
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    let url = root.appendingPathComponent("graph.jsonl")
-    try CanonicalGraphRecords.write(
-      CompletedGraphRun(
-        graph: forward,
-        observableActions: ["advance", "reset"],
-        outcome: .exhaustiveSuccess
-      ),
-      to: url
-    )
-    let graphRecordTypes = Set(["initial", "state", "edge"])
-    let retainedGraphRecords = try records(in: Data(contentsOf: url)).filter {
-      graphRecordTypes.contains($0["type"] as? String ?? "")
-    }
-    #expect(
-      try CanonicalGraphRecords.digest(for: forward)
-        == SHA256.hex(data(for: retainedGraphRecords))
-    )
+    #expect((try encodedGraph(forward) == encodedGraph(changed)) == false)
   }
 
   @Test("canonical graph stream declares completion and exact counts")
@@ -67,7 +46,7 @@ struct CanonicalGraphRecordsTests {
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let url = root.appendingPathComponent("swift-graph.jsonl")
-    try CanonicalGraphRecords.write(run, to: url)
+    try CompletedGraphRunRecords.write(run, to: url)
 
     let data = try Data(contentsOf: url)
     let streamRecords = try records(in: data)
@@ -89,14 +68,14 @@ struct CanonicalGraphRecordsTests {
       outcome: .incomplete(reason: "state limit reached")
     )
     let incompleteURL = root.appendingPathComponent("incomplete-graph.jsonl")
-    try CanonicalGraphRecords.write(incomplete, to: incompleteURL)
+    try CompletedGraphRunRecords.write(incomplete, to: incompleteURL)
     let incompleteRecords = try records(in: Data(contentsOf: incompleteURL))
     #expect(incompleteRecords.last?["eligible"] as? Bool == false)
     #expect((incompleteRecords.last?["outcome"] as? [String: String])?["kind"] == "incomplete")
   }
 
-  @Test("canonical graph stream retains diagnostics and traces")
-  func graphStreamRetainsDiagnosticsAndTraces() throws {
+  @Test("completed graph run retains its counterexample trace")
+  func graphStreamRetainsTrace() throws {
     let first = state(counter: 1, values: [.integer(1)])
     let second = state(counter: 2, values: [.integer(2)])
     let run = try CompletedGraphRun(
@@ -107,33 +86,24 @@ struct CanonicalGraphRecordsTests {
       ),
       observableActions: ["advance"],
       outcome: .invariantViolation("counter escaped its range"),
-      errors: [.init(code: "range", message: "counter is 2")],
-      traces: [
-        .init(
-          id: "counterexample",
-          steps: [
-            .init(state: first.key, action: "advance"),
-            .init(state: second.key, action: "")
-          ]
-        )
-      ]
+      trace: .init(
+        id: "counterexample",
+        steps: [
+          .init(state: first.key, action: "advance"),
+          .init(state: second.key, action: "")
+        ]
+      )
     )
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let url = root.appendingPathComponent("graph.jsonl")
-    try CanonicalGraphRecords.write(run, to: url)
+    try CompletedGraphRunRecords.write(run, to: url)
 
     let streamRecords = try records(in: Data(contentsOf: url))
-    let error = try #require(streamRecords.first { $0["type"] as? String == "error" })
-    #expect(error["index"] as? Int == 0)
-    #expect(error["code"] as? String == "range")
-    #expect(error["message"] as? String == "counter is 2")
     let trace = try #require(streamRecords.first { $0["type"] as? String == "trace" })
-    #expect(trace["index"] as? Int == 0)
     #expect(trace["id"] as? String == "counterexample")
     #expect((trace["steps"] as? [[String: String]])?.count == 2)
-    #expect(streamRecords.last?["errorCount"] as? Int == 1)
     #expect(streamRecords.last?["traceCount"] as? Int == 1)
     #expect(streamRecords.last?["eligible"] as? Bool == false)
   }
@@ -161,6 +131,25 @@ struct CanonicalGraphRecordsTests {
       data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
       data.append(0x0a)
     }
+  }
+
+  private func encodedGraph(_ graph: CanonicalGraph) throws -> Data {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let url = root.appendingPathComponent("graph.jsonl")
+    try CompletedGraphRunRecords.write(
+      CompletedGraphRun(
+        graph: graph,
+        observableActions: Set(graph.edgeOccurrences.keys.map(\.action)),
+        outcome: .exhaustiveSuccess
+      ),
+      to: url
+    )
+    let graphRecordTypes = Set(["initial", "state", "edge"])
+    return try data(for: records(in: Data(contentsOf: url)).filter {
+      graphRecordTypes.contains($0["type"] as? String ?? "")
+    })
   }
 
 }

@@ -47,8 +47,8 @@ package struct TemporalSymmetryCheck: Sendable {
 
   @discardableResult
   package func run(_ input: TemporalSymmetryCheckRequest) throws -> [TemporalSymmetryCheckOutcome] {
-    let root = try RetainedEvidence.projectRoot(input.projectRoot)
-    let output = try RetainedEvidence.outputDirectory(input.outputDirectory, beneath: root)
+    let root = try RetainedFiles.projectRoot(input.projectRoot)
+    let output = try RetainedFiles.outputDirectory(input.outputDirectory, beneath: root)
     let temporalOutcomes = try input.manifest.temporalCases.map { temporalCase in
       let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
       let exploration = try ModelChecker(
@@ -121,11 +121,11 @@ package struct TemporalSymmetryCheck: Sendable {
       compilation: compilation, temporalCase: temporalCase, exploration: exploration)
     let casesURL = projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")
     let toolchainURL = projectRoot.appendingPathComponent("Verification/FiniteGraph/toolchain.json")
-    let context = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
+    let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
-    try RetainedEvidence.createDirectory(work, beneath: projectRoot)
+    try RetainedFiles.createDirectory(work, beneath: projectRoot)
     let sourceInput = temporalCase.sourceInput
-    let source = try RetainedEvidence.resolve(
+    let source = try RetainedFiles.resolve(
       projectRoot.appendingPathComponent(sourceInput.path), beneath: projectRoot)
     let bundle = try externalBundle(
       source: source,
@@ -138,15 +138,15 @@ package struct TemporalSymmetryCheck: Sendable {
       arguments: arguments,
       argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
       workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
-      architecture: context.architecture, environment: [:], pin: referencePin)
+      architecture: toolchain.architecture, environment: [:], pin: referencePin)
     let request = TLCProcessRequest(
-      javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
+      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
       bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"),
       traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
-      arguments: arguments, expectedCase: launch,
-      runID: UUID(), referencePin: referencePin, referenceArtifacts: context.artifacts)
+      arguments: arguments, finiteGraphCase: launch,
+      runID: UUID(), referencePin: referencePin, referenceArtifacts: toolchain.artifacts)
     let graphBundle = try externalBundle(
       source: source,
       renderedConfiguration: TemporalCaseConfiguration.renderedGraphConfiguration)
@@ -156,15 +156,15 @@ package struct TemporalSymmetryCheck: Sendable {
       arguments: arguments,
       argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
       workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
-      architecture: context.architecture, environment: [:], pin: referencePin)
+      architecture: toolchain.architecture, environment: [:], pin: referencePin)
     let completeGraphRequest = TLCProcessRequest(
-      javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
+      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
       bundle: graphBundle,
       graphEvents: work.appendingPathComponent("complete-graph-events.jsonl"),
       traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
       workingDirectory: work,
-      arguments: graphCase.arguments, expectedCase: graphCase, runID: UUID(),
-      referencePin: referencePin, referenceArtifacts: context.artifacts)
+      arguments: graphCase.arguments, finiteGraphCase: graphCase, runID: UUID(),
+      referencePin: referencePin, referenceArtifacts: toolchain.artifacts)
     return TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, request: request,
       completeGraphRequest: completeGraphRequest, swiftRun: swiftRun, swiftResult: swiftResult,
@@ -193,23 +193,23 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TemporalSymmetryOutcome {
     let scope = symmetryCase.scope
-    let context = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
-    try RetainedEvidence.createDirectory(outputDirectory, beneath: projectRoot)
+    let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
+    try RetainedFiles.createDirectory(outputDirectory, beneath: projectRoot)
     let rawRunID = UUID()
     let reducedRunID = UUID()
     let rawBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: false)
     let reducedBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: true)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(symmetryCase.id, isDirectory: true)
-    try RetainedEvidence.createDirectory(work, beneath: projectRoot)
+    try RetainedFiles.createDirectory(work, beneath: projectRoot)
     let rawCase = try makeFiniteGraphCase(
-      id: symmetryCase.id, bundle: rawBundle, pin: referencePin, architecture: context.architecture)
+      id: symmetryCase.id, bundle: rawBundle, pin: referencePin, architecture: toolchain.architecture)
     let reducedCase = try makeFiniteGraphCase(
-      id: symmetryCase.id, bundle: reducedBundle, pin: referencePin, architecture: context.architecture)
+      id: symmetryCase.id, bundle: reducedBundle, pin: referencePin, architecture: toolchain.architecture)
     let rawRequest = try request(
-      context: context, bundle: rawBundle, work: work.appendingPathComponent("raw"),
+      toolchain: toolchain, bundle: rawBundle, work: work.appendingPathComponent("raw"),
       declared: rawCase, runID: rawRunID, projectRoot: projectRoot)
     let reducedRequest = try request(
-      context: context, bundle: reducedBundle, work: work.appendingPathComponent("reduced"),
+      toolchain: toolchain, bundle: reducedBundle, work: work.appendingPathComponent("reduced"),
       declared: reducedCase, runID: reducedRunID, projectRoot: projectRoot)
     try validateSymmetryRequests(raw: rawRequest, reduced: reducedRequest)
     let processAdapter = TLCProcessAdapter()
@@ -242,10 +242,10 @@ package struct TemporalSymmetryCheck: Sendable {
     let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.jsonl")
     let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.jsonl")
     let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.jsonl")
-    try CanonicalGraphRecords.write(swiftRaw, to: rawSwiftURL)
-    try CanonicalGraphRecords.write(swiftReduced, to: reducedSwiftURL)
-    try CanonicalGraphRecords.write(rawTLC, to: rawTLCURL)
-    try CanonicalGraphRecords.write(reducedTLC, to: reducedTLCURL)
+    try CompletedGraphRunRecords.write(swiftRaw, to: rawSwiftURL)
+    try CompletedGraphRunRecords.write(swiftReduced, to: reducedSwiftURL)
+    try CompletedGraphRunRecords.write(rawTLC, to: rawTLCURL)
+    try CompletedGraphRunRecords.write(reducedTLC, to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
       caseID: symmetryCase.id,
       swiftRaw: swiftRaw,
@@ -256,11 +256,11 @@ package struct TemporalSymmetryCheck: Sendable {
     )
     switch try compareSymmetryOrbits(input) {
     case .exact(let comparison):
-      try RetainedEvidence.writeCanonical(
+      try RetainedFiles.writeCanonical(
         comparison, to: outputDirectory.appendingPathComponent("symmetry-orbit-comparison.json"))
       return .exact
     case .difference(let differences):
-      try RetainedEvidence.writeCanonical(
+      try RetainedFiles.writeCanonical(
         differences, to: outputDirectory.appendingPathComponent("symmetry-differences.json"))
       return .difference
     }
@@ -272,8 +272,8 @@ extension TemporalSymmetryCheck {
   private func validateSymmetryRequests(raw: TLCProcessRequest, reduced: TLCProcessRequest) throws {
     guard raw.caseID == reduced.caseID,
           raw.runID != reduced.runID,
-          raw.expectedCase.moduleSHA256 == reduced.expectedCase.moduleSHA256,
-          raw.expectedCase.pin == reduced.expectedCase.pin,
+          raw.finiteGraphCase.moduleSHA256 == reduced.finiteGraphCase.moduleSHA256,
+          raw.finiteGraphCase.pin == reduced.finiteGraphCase.pin,
           raw.bundle.root.name == reduced.bundle.root.name,
           raw.bundle.root.tla == reduced.bundle.root.tla,
           raw.bundle.imports == reduced.bundle.imports,
@@ -300,20 +300,20 @@ extension TemporalSymmetryCheck {
   }
 
   private func request(
-    context: ResolvedTLCToolchain,
+    toolchain: ResolvedTLCToolchain,
     bundle: TLAModuleBundle,
     work: URL,
     declared: FiniteGraphCase,
     runID: UUID,
     projectRoot: URL
   ) throws -> TLCProcessRequest {
-    try RetainedEvidence.createDirectory(work, beneath: projectRoot)
+    try RetainedFiles.createDirectory(work, beneath: projectRoot)
     return TLCProcessRequest(
-      javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
+      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
       bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
-      arguments: declared.arguments, expectedCase: declared, runID: runID, referencePin: declared.pin, referenceArtifacts: context.artifacts)
+      arguments: declared.arguments, finiteGraphCase: declared, runID: runID, referencePin: declared.pin, referenceArtifacts: toolchain.artifacts)
   }
 
   private func symmetryPermutations(members: [TLAValue]) throws -> [SymmetryPermutation] {

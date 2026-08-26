@@ -210,7 +210,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 traceOutput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
                 workingDirectory: runRoot,
                 arguments: finiteGraphCase.arguments,
-                expectedCase: finiteGraphCase,
+                finiteGraphCase: finiteGraphCase,
                 runID: options.runID ?? UUID(),
                 referencePin: pin,
                 referenceArtifacts: referenceArtifacts
@@ -294,7 +294,7 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
     }
 
     do {
-        let projectRoot = try RetainedEvidence.projectRoot(
+        let projectRoot = try RetainedFiles.projectRoot(
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         let environment = ProcessInfo.processInfo.environment
         let casesURL = governanceURL(

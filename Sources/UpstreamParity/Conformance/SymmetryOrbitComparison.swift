@@ -143,12 +143,12 @@ package func compareSymmetryOrbits(
     )])
   }
 
-  let rawComparison = compareFiniteGraphs(expected: input.tlcRaw, actual: input.swiftRaw)
-  guard rawComparison.isConformant else {
+  let rawComparison = compareFiniteGraphs(tlc: input.tlcRaw, swift: input.swiftRaw)
+  guard rawComparison.matches else {
     return .difference(rawComparison.differences.map { difference in
       SymmetryOrbitDifference(
         kind: .rawGraph,
-        detail: "SwiftTLA and TLC raw graphs differ in \(difference.category.rawValue)"
+        detail: difference.failureReport.whatFailed
       )
     })
   }

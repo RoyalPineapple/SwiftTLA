@@ -1,34 +1,16 @@
 import Foundation
 
-package enum GraphDifferenceCategory: String, Codable, Hashable, Sendable {
-    case observableNames
-    case initialStates
-    case states
-    case edges
-    case outcome
-}
-
 package enum GraphDifference: Equatable, Sendable {
     case observableNames(
-        expectedVariables: Set<String>,
-        actualVariables: Set<String>,
-        expectedActions: Set<String>,
-        actualActions: Set<String>
+        tlcVariables: Set<String>,
+        swiftVariables: Set<String>,
+        tlcActions: Set<String>,
+        swiftActions: Set<String>
     )
-    case initialStates(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
-    case states(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
-    case edges(expected: [CanonicalEdge: Int], actual: [CanonicalEdge: Int])
-    case outcome(expected: CanonicalOutcome, actual: CanonicalOutcome)
-
-    package var category: GraphDifferenceCategory {
-        switch self {
-        case .observableNames: .observableNames
-        case .initialStates: .initialStates
-        case .states: .states
-        case .edges: .edges
-        case .outcome: .outcome
-        }
-    }
+    case initialStates(tlc: Set<CanonicalStateKey>, swift: Set<CanonicalStateKey>)
+    case states(tlc: Set<CanonicalStateKey>, swift: Set<CanonicalStateKey>)
+    case edges(tlc: [CanonicalEdge: Int], swift: [CanonicalEdge: Int])
+    case outcome(tlc: GraphRunOutcome, swift: GraphRunOutcome)
 }
 
 package struct GraphComparison: Equatable, Sendable {
@@ -38,36 +20,38 @@ package struct GraphComparison: Equatable, Sendable {
         self.differences = differences
     }
 
-    package var isConformant: Bool { differences.isEmpty }
+    package var matches: Bool { differences.isEmpty }
 }
 
 package func compareFiniteGraphs(
-    expected: CompletedGraphRun,
-    actual: CompletedGraphRun
+    tlc: CompletedGraphRun,
+    swift: CompletedGraphRun
 ) -> GraphComparison {
     var differences: [GraphDifference] = []
-    if expected.graph.variableNames != actual.graph.variableNames
-        || expected.observableActions != actual.observableActions {
+    if (tlc.graph.variableNames == swift.graph.variableNames) == false
+        || (tlc.observableActions == swift.observableActions) == false {
         differences.append(
             .observableNames(
-                expectedVariables: expected.graph.variableNames,
-                actualVariables: actual.graph.variableNames,
-                expectedActions: expected.observableActions,
-                actualActions: actual.observableActions
+                tlcVariables: tlc.graph.variableNames,
+                swiftVariables: swift.graph.variableNames,
+                tlcActions: tlc.observableActions,
+                swiftActions: swift.observableActions
             )
         )
     }
-    if expected.graph.initialStateKeys != actual.graph.initialStateKeys {
-        differences.append(.initialStates(expected: expected.graph.initialStateKeys, actual: actual.graph.initialStateKeys))
+    if (tlc.graph.initialStateKeys == swift.graph.initialStateKeys) == false {
+        differences.append(.initialStates(tlc: tlc.graph.initialStateKeys, swift: swift.graph.initialStateKeys))
     }
-    if Set(expected.graph.states.keys) != Set(actual.graph.states.keys) {
-        differences.append(.states(expected: Set(expected.graph.states.keys), actual: Set(actual.graph.states.keys)))
+    if (Set(tlc.graph.states.keys) == Set(swift.graph.states.keys)) == false {
+        differences.append(.states(tlc: Set(tlc.graph.states.keys), swift: Set(swift.graph.states.keys)))
     }
-    if expected.graph.edgeOccurrences != actual.graph.edgeOccurrences {
-        differences.append(.edges(expected: expected.graph.edgeOccurrences, actual: actual.graph.edgeOccurrences))
+    if (tlc.graph.edgeOccurrences == swift.graph.edgeOccurrences) == false {
+        differences.append(.edges(tlc: tlc.graph.edgeOccurrences, swift: swift.graph.edgeOccurrences))
     }
-    if expected.outcome != actual.outcome || !expected.isPassEligible || !actual.isPassEligible {
-        differences.append(.outcome(expected: expected.outcome, actual: actual.outcome))
+    if (tlc.outcome == swift.outcome) == false
+        || tlc.isPassEligible == false
+        || swift.isPassEligible == false {
+        differences.append(.outcome(tlc: tlc.outcome, swift: swift.outcome))
     }
     return GraphComparison(differences: differences)
 }
@@ -76,41 +60,47 @@ func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
     comparison.differences.map { difference in
         switch difference {
         case .observableNames(
-            let expectedVariables,
-            let actualVariables,
-            let expectedActions,
-            let actualActions
+            let tlcVariables,
+            let swiftVariables,
+            let tlcActions,
+            let swiftActions
         ):
             [
-                "category": difference.category.rawValue,
-                "expected": [
-                    "variables": expectedVariables.sorted(),
-                    "actions": expectedActions.sorted()
+                "kind": "observableNames",
+                "tlc": [
+                    "variables": tlcVariables.sorted(),
+                    "actions": tlcActions.sorted()
                 ],
-                "actual": [
-                    "variables": actualVariables.sorted(),
-                    "actions": actualActions.sorted()
+                "swift": [
+                    "variables": swiftVariables.sorted(),
+                    "actions": swiftActions.sorted()
                 ]
             ]
-        case .initialStates(let expected, let actual), .states(let expected, let actual):
+        case .initialStates(let tlc, let swift):
             [
-                "category": difference.category.rawValue,
-                "expected": expected.subtracting(actual).sorted().prefix(1).map(\.canonicalEncoding),
-                "actual": actual.subtracting(expected).sorted().prefix(1).map(\.canonicalEncoding)
+                "kind": "initialStates",
+                "tlc": tlc.subtracting(swift).sorted().prefix(1).map(\.canonicalEncoding),
+                "swift": swift.subtracting(tlc).sorted().prefix(1).map(\.canonicalEncoding)
             ]
-        case .edges(let expected, let actual):
+        case .states(let tlc, let swift):
             [
-                "category": difference.category.rawValue,
-                "expected": firstDifferentEdgeOccurrenceJSON(expected, actual),
-                "actual": firstDifferentEdgeOccurrenceJSON(actual, expected)
+                "kind": "states",
+                "tlc": tlc.subtracting(swift).sorted().prefix(1).map(\.canonicalEncoding),
+                "swift": swift.subtracting(tlc).sorted().prefix(1).map(\.canonicalEncoding)
             ]
-        case .outcome(let expected, let actual):
-            ["category": difference.category.rawValue, "expected": outcomeJSON(expected), "actual": outcomeJSON(actual)]
+        case .edges(let tlc, let swift):
+            [
+                "kind": "edges",
+                "tlc": firstDifferentEdgeOccurrenceJSON(tlc, swift),
+                "swift": firstDifferentEdgeOccurrenceJSON(swift, tlc)
+            ]
+        case .outcome(let tlc, let swift):
+            ["kind": "outcome", "tlc": outcomeJSON(tlc), "swift": outcomeJSON(swift)]
         }
     }
 }
 
-private func outcomeJSON(_ outcome: CanonicalOutcome) -> [String: String] {
+private func outcomeJSON(_ outcome: GraphRunOutcome) -> [String: String] {
     switch outcome {
     case .exhaustiveSuccess: ["kind": "exhaustiveSuccess"]
     case .invariantViolation(let message): ["kind": "invariantViolation", "message": message]
@@ -121,10 +111,10 @@ private func outcomeJSON(_ outcome: CanonicalOutcome) -> [String: String] {
 }
 
 private func firstDifferentEdgeOccurrenceJSON(
-    _ expected: [CanonicalEdge: Int], _ actual: [CanonicalEdge: Int]
+    _ graph: [CanonicalEdge: Int], _ other: [CanonicalEdge: Int]
 ) -> [[String: Any]] {
-    guard let edge = Set(expected.keys).union(actual.keys).sorted().first(where: {
-        expected[$0] != actual[$0]
-    }), let count = expected[edge] else { return [] }
+    guard let edge = Set(graph.keys).union(other.keys).sorted().first(where: {
+        (graph[$0] == other[$0]) == false
+    }), let count = graph[edge] else { return [] }
     return [["edge": edge.canonicalEncoding, "count": count]]
 }

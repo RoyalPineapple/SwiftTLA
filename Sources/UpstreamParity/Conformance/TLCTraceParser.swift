@@ -39,10 +39,10 @@ package struct TLCCounterexampleEvidence: Equatable, Sendable {
         self.transitions = transitions
     }
 
-    package func canonicalTrace(id: String) -> CanonicalTrace {
-        CanonicalTrace(
+    package func canonicalTrace(id: String) -> GraphTrace {
+        GraphTrace(
             id: id,
-            steps: transitions.map { CanonicalTraceStep(state: $0.source.key, action: $0.name) }
+            steps: transitions.map { GraphTraceStep(state: $0.source.key, action: $0.name) }
         )
     }
 }

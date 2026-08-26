@@ -206,7 +206,7 @@ package struct CanonicalGraph: Equatable, Sendable {
 
 }
 
-package enum CanonicalOutcome: Hashable, Sendable {
+package enum GraphRunOutcome: Hashable, Sendable {
     case exhaustiveSuccess
     case invariantViolation(String)
     case deadlock(CanonicalStateKey)
@@ -219,17 +219,7 @@ package enum CanonicalOutcome: Hashable, Sendable {
     }
 }
 
-package struct CanonicalDiagnostic: Hashable, Sendable {
-    package let code: String
-    package let message: String
-
-    package init(code: String, message: String) {
-        self.code = code
-        self.message = message
-    }
-}
-
-package struct CanonicalTraceStep: Hashable, Sendable {
+package struct GraphTraceStep: Hashable, Sendable {
     package let state: CanonicalStateKey
     package let action: String
 
@@ -239,18 +229,17 @@ package struct CanonicalTraceStep: Hashable, Sendable {
     }
 }
 
-package struct CanonicalTrace: Hashable, Sendable {
+package struct GraphTrace: Hashable, Sendable {
     package let id: String
-    package let steps: [CanonicalTraceStep]
+    package let steps: [GraphTraceStep]
 
-    package init(id: String, steps: [CanonicalTraceStep]) {
+    package init(id: String, steps: [GraphTraceStep]) {
         self.id = id
         self.steps = steps
     }
 }
 
 package enum CompletedGraphRunError: Error, Equatable, Sendable {
-    case duplicateTraceID(String)
     case graphActionUndeclared(String)
     case deadlockStateMissing(CanonicalStateKey)
     case traceStateMissing(CanonicalStateKey)
@@ -259,28 +248,22 @@ package enum CompletedGraphRunError: Error, Equatable, Sendable {
 package struct CompletedGraphRun: Equatable, Sendable {
     package let graph: CanonicalGraph
     package let observableActions: Set<String>
-    package let outcome: CanonicalOutcome
-    package let errors: [CanonicalDiagnostic]
-    package let traces: [CanonicalTrace]
+    package let outcome: GraphRunOutcome
+    package let trace: GraphTrace?
 
     package init(
         graph: CanonicalGraph,
         observableActions: Set<String>,
-        outcome: CanonicalOutcome,
-        errors: [CanonicalDiagnostic] = [],
-        traces: [CanonicalTrace] = []
+        outcome: GraphRunOutcome,
+        trace: GraphTrace? = nil
     ) throws {
-        let traceIDs = traces.map(\.id)
-        guard Set(traceIDs).count == traceIDs.count else {
-            throw CompletedGraphRunError.duplicateTraceID(traceIDs.sorted().first ?? "")
-        }
         for edge in graph.edgeOccurrences.keys where !observableActions.contains(edge.action) {
             throw CompletedGraphRunError.graphActionUndeclared(edge.action)
         }
         if case .deadlock(let state) = outcome, graph.states[state] == nil {
             throw CompletedGraphRunError.deadlockStateMissing(state)
         }
-        for trace in traces {
+        if let trace {
             for step in trace.steps where graph.states[step.state] == nil {
                 throw CompletedGraphRunError.traceStateMissing(step.state)
             }
@@ -289,12 +272,11 @@ package struct CompletedGraphRun: Equatable, Sendable {
         self.graph = graph
         self.observableActions = observableActions
         self.outcome = outcome
-        self.errors = errors
-        self.traces = traces
+        self.trace = trace
     }
 
     package var isPassEligible: Bool {
-        outcome.isExhaustiveSuccess && errors.isEmpty
+        outcome.isExhaustiveSuccess
     }
 }
 

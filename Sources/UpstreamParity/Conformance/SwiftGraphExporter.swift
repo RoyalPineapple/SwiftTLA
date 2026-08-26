@@ -68,7 +68,7 @@ package struct SwiftGraphExporter: Sendable {
       observableActions: Set(edges.map(\.action)),
       outcome: try canonicalOutcome(
         exploration.result, states: states),
-      traces: try canonicalTraces(
+      trace: try canonicalTrace(
         exploration.result, states: states)
     )
   }
@@ -88,7 +88,7 @@ package struct SwiftGraphExporter: Sendable {
   private func canonicalOutcome(
     _ result: CheckResult,
     states: [StateGraph.StateID: CanonicalState]
-  ) throws -> CanonicalOutcome {
+  ) throws -> GraphRunOutcome {
     switch result.underlyingOutcome {
     case .ok:
       return .exhaustiveSuccess
@@ -115,23 +115,21 @@ package struct SwiftGraphExporter: Sendable {
     }
   }
 
-  private func canonicalTraces(
+  private func canonicalTrace(
     _ result: CheckResult,
     states: [StateGraph.StateID: CanonicalState]
-  ) throws -> [CanonicalTrace] {
-    guard case .invariantViolated(_, _, let trace) = result.underlyingOutcome else { return [] }
-    return [
-      CanonicalTrace(
-        id: "swift-invariant-trace",
-        steps: try trace.map { step in
-          let canonical = try canonicalState(step.state)
-          guard states.values.contains(canonical) else {
-            throw SwiftGraphExporterError.traceStateMissing
-          }
-          return CanonicalTraceStep(state: canonical.key, action: step.action)
+  ) throws -> GraphTrace? {
+    guard case .invariantViolated(_, _, let trace) = result.underlyingOutcome else { return nil }
+    return GraphTrace(
+      id: "swift-invariant-trace",
+      steps: try trace.map { step in
+        let canonical = try canonicalState(step.state)
+        guard states.values.contains(canonical) else {
+          throw SwiftGraphExporterError.traceStateMissing
         }
-      )
-    ]
+        return GraphTraceStep(state: canonical.key, action: step.action)
+      }
+    )
   }
 
 }

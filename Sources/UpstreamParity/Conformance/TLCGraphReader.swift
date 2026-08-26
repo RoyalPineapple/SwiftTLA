@@ -43,13 +43,13 @@ package struct TLCGraphEventStream: Equatable, Sendable {
 }
 
 package struct TLCGraphReader: Sendable {
-    private let expectedCase: FiniteGraphCase
+    private let finiteGraphCase: FiniteGraphCase
     private let invocationWrappers: [String: String]
 
-    package init(expectedCase: FiniteGraphCase) {
-        self.expectedCase = expectedCase
+    package init(finiteGraphCase: FiniteGraphCase) {
+        self.finiteGraphCase = finiteGraphCase
         self.invocationWrappers = Dictionary(
-            uniqueKeysWithValues: expectedCase.renderedActions.compactMap {
+            uniqueKeysWithValues: finiteGraphCase.renderedActions.compactMap {
                 guard $0.sourceInvocationName != $0.renderedName else { return nil }
                 return (
                     tlaInvocationLocationIdentity(
@@ -141,10 +141,9 @@ package struct TLCGraphReader: Sendable {
                           object["predicateLocation"] is NSNull,
                           !notInModel
                     else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid reachable transition") }
+                    try validateReference(source, in: representatives, line: line)
                     if seen {
-                        guard representatives[target.fingerprint] != nil else {
-                            throw TLCGraphEventError.invalidRecord(line: line, reason: "seen fingerprint without representative")
-                        }
+                        try validateReference(target, in: representatives, line: line)
                     } else {
                         try registerRepresentative(target, in: &representatives, line: line)
                     }
@@ -192,18 +191,18 @@ package struct TLCGraphReader: Sendable {
         }
         guard counts["header"] == 1, footerCounts.count == counts.count else { throw TLCGraphEventError.invalidFooter("counts") }
         guard let runID else { throw TLCGraphEventError.invalidRecord(line: 1, reason: "missing run ID") }
-        func normalized(_ state: TLCGraphState) throws -> TLCGraphState {
+        func resolvedState(_ state: TLCGraphState) throws -> TLCGraphState {
             guard let representative = representatives[state.fingerprint] else {
                 throw TLCGraphEventError.invalidRecord(line: 0, reason: "unmapped fingerprint")
             }
             return representative
         }
         return TLCGraphEventStream(
-            runID: runID, caseID: expectedCase.id,
+            runID: runID, caseID: finiteGraphCase.id,
             fingerprintRepresentatives: representatives,
-            initialStates: try initialStates.map(normalized),
+            initialStates: try initialStates.map(resolvedState),
             transitions: try transitions.map {
-                TLCGraphTransition(source: try normalized($0.source), target: try normalized($0.target), action: $0.action, seen: $0.seen)
+                TLCGraphTransition(source: try resolvedState($0.source), target: try resolvedState($0.target), action: $0.action, seen: $0.seen)
             })
     }
 
@@ -242,7 +241,7 @@ package struct TLCGraphReader: Sendable {
         )
     }
 
-    private func canonicalOutcome(_ result: TLCProcessResult) -> CanonicalOutcome {
+    private func canonicalOutcome(_ result: TLCProcessResult) -> GraphRunOutcome {
         if result.reportedExhaustiveCompletion { return .exhaustiveSuccess }
         if result.isViolation {
             let message = (result.stdout + "\n" + result.stderr)
@@ -265,7 +264,7 @@ package struct TLCGraphReader: Sendable {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "schema")
         }
         guard try int(object, "seq", line) == expectedSequence else { throw TLCGraphEventError.invalidRecord(line: line, reason: "sequence gap") }
-        guard try string(object, "caseId", line) == expectedCase.id else { throw TLCGraphEventError.invalidRecord(line: line, reason: "case ID") }
+        guard try string(object, "caseId", line) == finiteGraphCase.id else { throw TLCGraphEventError.invalidRecord(line: line, reason: "case ID") }
         guard let parsed = UUID(uuidString: try string(object, "runId", line)) else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "run ID")
         }
@@ -280,26 +279,26 @@ package struct TLCGraphReader: Sendable {
             "arguments", "argumentsSha256", "workers", "fingerprintPolynomial", "deadlock", "os", "architecture", "environment"
         ], 1)
         let expected: [String: String] = [
-            "tlcTag": expectedCase.pin.tag, "tlcCommit": expectedCase.pin.commit, "tlcJarSha256": expectedCase.pin.jarSHA256,
-            "javaDistribution": expectedCase.pin.javaDistribution, "javaVersion": expectedCase.pin.javaVersion,
-            "javaArchiveSha256": expectedCase.pin.javaArchiveSHA256, "bridgeClass": expectedCase.pin.bridgeClass,
-            "bridgeSourceSha256": expectedCase.pin.bridgeSourceSHA256, "bridgeBinarySha256": expectedCase.pin.bridgeBinarySHA256
+            "tlcTag": finiteGraphCase.pin.tag, "tlcCommit": finiteGraphCase.pin.commit, "tlcJarSha256": finiteGraphCase.pin.jarSHA256,
+            "javaDistribution": finiteGraphCase.pin.javaDistribution, "javaVersion": finiteGraphCase.pin.javaVersion,
+            "javaArchiveSha256": finiteGraphCase.pin.javaArchiveSHA256, "bridgeClass": finiteGraphCase.pin.bridgeClass,
+            "bridgeSourceSha256": finiteGraphCase.pin.bridgeSourceSHA256, "bridgeBinarySha256": finiteGraphCase.pin.bridgeBinarySHA256
         ]
         for (key, expectedValue) in expected {
             guard try string(value, key, 1) == expectedValue else {
                 throw TLCGraphEventError.provenanceMismatch(key)
             }
         }
-        guard try string(value, "moduleSha256", 1) == expectedCase.moduleSHA256,
-              try string(value, "cfgSha256", 1) == expectedCase.cfgSHA256,
-              try strings(value, "arguments", 1) == expectedCase.arguments,
-              try string(value, "argumentsSha256", 1) == expectedCase.argumentsSHA256,
-              try int(value, "workers", 1) == expectedCase.workers,
-              try int(value, "fingerprintPolynomial", 1) == expectedCase.fingerprintPolynomial,
-              try bool(value, "deadlock", 1) == expectedCase.deadlock,
-              try string(value, "os", 1) == expectedCase.operatingSystem,
-              try string(value, "architecture", 1) == expectedCase.architecture,
-              try stringDictionary(value, "environment", 1) == expectedCase.environment
+        guard try string(value, "moduleSha256", 1) == finiteGraphCase.moduleSHA256,
+              try string(value, "cfgSha256", 1) == finiteGraphCase.cfgSHA256,
+              try strings(value, "arguments", 1) == finiteGraphCase.arguments,
+              try string(value, "argumentsSha256", 1) == finiteGraphCase.argumentsSHA256,
+              try int(value, "workers", 1) == finiteGraphCase.workers,
+              try int(value, "fingerprintPolynomial", 1) == finiteGraphCase.fingerprintPolynomial,
+              try bool(value, "deadlock", 1) == finiteGraphCase.deadlock,
+              try string(value, "os", 1) == finiteGraphCase.operatingSystem,
+              try string(value, "architecture", 1) == finiteGraphCase.architecture,
+              try stringDictionary(value, "environment", 1) == finiteGraphCase.environment
         else { throw TLCGraphEventError.provenanceMismatch("case provenance") }
     }
 
@@ -329,10 +328,24 @@ package struct TLCGraphReader: Sendable {
     private func registerRepresentative(
         _ state: TLCGraphState, in representatives: inout [String: TLCGraphState], line: Int
     ) throws {
-        if let existing = representatives[state.fingerprint], existing != state {
-            throw TLCGraphEventError.invalidRecord(line: line, reason: "ambiguous fingerprint representative")
+        if let existing = representatives[state.fingerprint] {
+            guard try canonicalState(existing) == canonicalState(state) else {
+                throw TLCGraphEventError.invalidRecord(line: line, reason: "fingerprint binding mismatch")
+            }
+            return
         }
         representatives[state.fingerprint] = state
+    }
+
+    private func validateReference(
+        _ state: TLCGraphState, in representatives: [String: TLCGraphState], line: Int
+    ) throws {
+        guard let representative = representatives[state.fingerprint] else {
+            throw TLCGraphEventError.invalidRecord(line: line, reason: "seen fingerprint without representative")
+        }
+        guard try canonicalState(representative) == canonicalState(state) else {
+            throw TLCGraphEventError.invalidRecord(line: line, reason: "fingerprint binding mismatch")
+        }
     }
 
     private func canonicalState(_ state: TLCGraphState) throws -> CanonicalState {

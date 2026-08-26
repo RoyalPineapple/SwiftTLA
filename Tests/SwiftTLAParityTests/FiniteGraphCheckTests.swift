@@ -12,17 +12,17 @@ struct FiniteGraphCheckTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
     let executor = FixtureTLCExecutor(
-      stream: try graphStream(for: request.expectedCase, runID: request.runID))
+      stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
     let check = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: executor))
     let output = root.appendingPathComponent("evidence")
     let result = check.run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
       outputDirectory: output
     )
     #expect(result.exitCode == .semanticDifference)
-    #expect(result.comparison?.differences.contains { $0.category == .edges } == true)
+    #expect(result.comparison?.differences.contains { if case .edges = $0 { true } else { false } } == true)
     let swiftCompletion = try graphCompletion(
       at: output.appendingPathComponent("swift-graph.jsonl"))
     let tlcCompletion = try graphCompletion(
@@ -32,8 +32,8 @@ struct FiniteGraphCheckTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     let processRequest = try #require(process["request"] as? [String: Any])
-    #expect((processRequest["case"] as? [String: Any])?["id"] as? String == request.expectedCase.id)
-    #expect(processRequest["arguments"] as? [String] == request.expectedCase.arguments)
+    #expect((processRequest["case"] as? [String: Any])?["id"] as? String == request.finiteGraphCase.id)
+    #expect(processRequest["arguments"] as? [String] == request.finiteGraphCase.arguments)
     #expect((processRequest["toolchain"] as? [String: Any])?["declaredPin"] != nil)
     #expect((processRequest["bundle"] as? [String: Any])?["root"] as? String == "Fixture")
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
@@ -57,7 +57,7 @@ struct FiniteGraphCheckTests {
       tlcProcess: TLCProcessAdapter(executor: FailingTLCExecutor()))
     let output = root.appendingPathComponent("failed-evidence")
     let result = check.run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
       outputDirectory: output
@@ -103,7 +103,7 @@ struct FiniteGraphCheckTests {
     try Data("stale".utf8).write(to: stale.appendingPathComponent("contamination.txt"))
     try Data("trace".utf8).write(to: request.traceOutput)
     let executor = FixtureTLCExecutor(
-      stream: try graphStream(for: request.expectedCase, runID: request.runID),
+      stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
       status: 12,
       stdout: "Invariant violation"
     )
@@ -111,7 +111,7 @@ struct FiniteGraphCheckTests {
     let result = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: executor)
     ).run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
       outputDirectory: output
@@ -137,10 +137,10 @@ struct FiniteGraphCheckTests {
     let check = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
         executor: FixtureTLCExecutor(
-          stream: try graphStream(for: request.expectedCase, runID: otherRun))))
+          stream: try graphStream(for: request.finiteGraphCase, runID: otherRun))))
     let output = root.appendingPathComponent("wrong-tlc-run")
     let result = check.run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
       outputDirectory: output
@@ -159,12 +159,12 @@ struct FiniteGraphCheckTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
     try Data("stale graph stream".utf8).write(to: request.graphEvents)
-    let stream = try graphStream(for: request.expectedCase, runID: request.runID)
+    let stream = try graphStream(for: request.finiteGraphCase, runID: request.runID)
     let output = root.appendingPathComponent("exact-evidence")
     let result = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: FixtureTLCExecutor(stream: stream))
     ).run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration(action: "Next") },
       tlcRequest: request,
       outputDirectory: output
@@ -188,9 +188,9 @@ struct FiniteGraphCheckTests {
     let output = root.appendingPathComponent("matching-evidence")
     let result = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
-        executor: FixtureTLCExecutor(stream: try graphStream(for: request.expectedCase, runID: request.runID))
+        executor: FixtureTLCExecutor(stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
     )).run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration(action: "Next") },
       tlcRequest: request,
       outputDirectory: output
@@ -221,13 +221,13 @@ extension FiniteGraphCheckTests {
     let check = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
         executor: ThrowingFollowupTLCExecutor(
-          stream: try graphStream(for: request.expectedCase, runID: request.runID),
+          stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
           failure: .trace
         )
       )
     )
     let result = check.run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
       outputDirectory: output
@@ -256,12 +256,12 @@ extension FiniteGraphCheckTests {
     let result = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
         executor: ArbitraryFollowupFailureTLCExecutor(
-          stream: try graphStream(for: request.expectedCase, runID: request.runID),
+          stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
           failure: .trace
         )
       )
     ).run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
       outputDirectory: output
@@ -285,7 +285,7 @@ extension FiniteGraphCheckTests {
     try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
     try Data("keep".utf8).write(to: output.appendingPathComponent("existing.txt"))
     let result = FiniteGraphCheck().run(
-      case: request.expectedCase,
+      case: request.finiteGraphCase,
       swiftExploration: { try swiftExploration() },
       tlcRequest: request,
       outputDirectory: output
@@ -305,7 +305,7 @@ extension FiniteGraphCheckTests {
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
-    let stream = try graphStream(for: request.expectedCase, runID: request.runID)
+    let stream = try graphStream(for: request.finiteGraphCase, runID: request.runID)
     let barrier = PublicationRaceBarrier(parties: 2)
     let check = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
@@ -315,7 +315,7 @@ extension FiniteGraphCheckTests {
     DispatchQueue.concurrentPerform(iterations: 2) { _ in
       results.append(
         check.run(
-          case: request.expectedCase,
+          case: request.finiteGraphCase,
           swiftExploration: { try exactSwiftExploration() },
           tlcRequest: request,
           outputDirectory: output
@@ -397,7 +397,7 @@ extension FiniteGraphCheckTests {
       traceOutput: root.appendingPathComponent("trace.json"),
       workingDirectory: root,
       arguments: ["-workers", "1"],
-      expectedCase: finiteGraphCase,
+      finiteGraphCase: finiteGraphCase,
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000005"))
     )
   }

@@ -174,7 +174,7 @@ struct SymmetryOrbitConformanceTests {
   private func run(
     states: [CanonicalState],
     edges: [CanonicalEdge]? = nil,
-    outcome: CanonicalOutcome = .exhaustiveSuccess
+    outcome: GraphRunOutcome = .exhaustiveSuccess
   ) throws -> CompletedGraphRun {
     let edges = edges ?? (states.count > 1
       ? [CanonicalEdge(source: states[0].key, action: "step", target: states[1].key)]

@@ -6,14 +6,14 @@ import UpstreamParity
 @Suite(.serialized)
 struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCompletedGraphRun() throws {
-    let expectedCase = try fixtureCase(try toolchainPin())
-    let reader = TLCGraphReader(expectedCase: expectedCase)
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let result = TLCProcessResult(
       status: 0,
       stdout: "Model checking completed. No error has been found.",
       stderr: ""
     )
-    let run = try reader.readCompletedGraph(try completeGraphStream(expectedCase), result: result)
+    let run = try reader.readCompletedGraph(try completeGraphStream(finiteGraphCase), result: result)
     #expect(run.isPassEligible)
     #expect(run.graph.initialStateKeys.count == 1)
     #expect(run.graph.edgeOccurrences.values.sorted() == [1])
@@ -40,7 +40,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       traceOutput: directory.appendingPathComponent("trace.json"),
       workingDirectory: directory.appendingPathComponent("work"),
       arguments: [],
-      expectedCase: try fixtureCase(try toolchainPin()),
+      finiteGraphCase: try fixtureCase(try toolchainPin()),
       runID: UUID()
     )
 
@@ -65,9 +65,9 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
 
   @Test("TLC violations remain non-passing canonical outcomes")
   func preservesViolationOutcome() throws {
-    let expectedCase = try fixtureCase(try toolchainPin())
-    let run = try TLCGraphReader(expectedCase: expectedCase).readCompletedGraph(
-      try completeGraphStream(expectedCase),
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let run = try TLCGraphReader(finiteGraphCase: finiteGraphCase).readCompletedGraph(
+      try completeGraphStream(finiteGraphCase),
       result: TLCProcessResult(
         status: 12,
         stdout: "Error: Invariant broken is violated.",
@@ -80,9 +80,9 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
 
   @Test("a violation path cannot replace TLC's invariant diagnostic")
   func ignoresViolationInInputPath() throws {
-    let expectedCase = try fixtureCase(try toolchainPin())
-    let run = try TLCGraphReader(expectedCase: expectedCase).readCompletedGraph(
-      try completeGraphStream(expectedCase),
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let run = try TLCGraphReader(finiteGraphCase: finiteGraphCase).readCompletedGraph(
+      try completeGraphStream(finiteGraphCase),
       result: TLCProcessResult(
         status: 12,
         stdout: "Parsing file /tmp/invariant-violation/DieHard.tla\nError: Invariant NotSolved is violated.",
@@ -180,7 +180,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
       workingDirectory: URL(fileURLWithPath: "/tmp"),
       arguments: ["-workers", "1"],
-      expectedCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1"]),
+      finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1"]),
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
       traceMode: .dumpJSON
     )
@@ -268,7 +268,7 @@ extension TLCGraphReaderTests {
       traceOutput: directory.appendingPathComponent("trace.json"),
       workingDirectory: directory,
       arguments: [],
-      expectedCase: try caseForFiles(
+      finiteGraphCase: try caseForFiles(
         id: "timeout", module: module, configuration: configuration, arguments: []),
       runID: UUID(), timeout: 0.25
     )
@@ -315,8 +315,8 @@ extension TLCGraphReaderTests {
   @Test("graph event reader rejects malformed footer and unsupported callbacks")
   func rejectsMalformedStreams() throws {
     let pin = try toolchainPin()
-    let expectedCase = try fixtureCase(pin)
-    let stream = TLCGraphReader(expectedCase: expectedCase)
+    let finiteGraphCase = try fixtureCase(pin)
+    let stream = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     #expect(throws: TLCGraphEventError.self) {
       try stream.parse(Data("{\"not\":\"jsonl footer\"}\n".utf8))
     }
@@ -327,7 +327,7 @@ extension TLCGraphReaderTests {
       try stream.parse(Data("{\"schema\":\"x\",\"sche\\u006da\":\"x\"}\n".utf8))
     }
     let invalidInitial = [
-      "\(try header(expectedCase))\n",
+      "\(try header(finiteGraphCase))\n",
       "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":1,\"type\":\"initial\",",
       "\"callback\":\"writeState.initial\",\"seq\":2,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",\"state\":{}}\n"
@@ -336,7 +336,7 @@ extension TLCGraphReaderTests {
       try stream.parse(Data(invalidInitial.utf8))
     }
     let unsupportedCallback = [
-      "\(try header(expectedCase))\n",
+      "\(try header(finiteGraphCase))\n",
       "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":1,\"type\":\"unsupported\",",
       "\"callback\":\"writeState.flags\",\"seq\":1,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",",
@@ -357,9 +357,9 @@ extension TLCGraphReaderTests {
 
   @Test("graph event reader accepts only TLC's exact actionless stuttering observation")
   func acceptsExactStutteringObservation() throws {
-    let expectedCase = try fixtureCase(try toolchainPin())
-    let reader = TLCGraphReader(expectedCase: expectedCase)
-    let stream = try completeGraphStreamWithStutteringObservation(expectedCase)
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let stream = try completeGraphStreamWithStutteringObservation(finiteGraphCase)
     #expect(try reader.parse(stream).transitions.count == 1)
     let rejected = Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "STUTTERING", with: "ARBITRARY").utf8)
@@ -370,9 +370,9 @@ extension TLCGraphReaderTests {
 
   @Test("graph event reader retains only exact excluded predicate observations")
   func acceptsExcludedPredicateObservationsWithoutAddingGraphEdges() throws {
-    let expectedCase = try fixtureCase(try toolchainPin())
-    let reader = TLCGraphReader(expectedCase: expectedCase)
-    let stream = try completeGraphStreamWithExcludedPredicateObservation(expectedCase)
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let stream = try completeGraphStreamWithExcludedPredicateObservation(finiteGraphCase)
     #expect(try reader.parse(stream).transitions.count == 1)
     let wrongFlags = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "\"raw\":2", with: "\"raw\":3").utf8))
@@ -391,7 +391,7 @@ extension TLCGraphReaderTests {
     let call = RenderedAction(
       sourceName: "Step", arguments: [.int(0)], renderedName: "Step__0")
     let expected = try fixtureCase(try toolchainPin(), renderedActions: [call])
-    let reader = TLCGraphReader(expectedCase: expected)
+    let reader = TLCGraphReader(finiteGraphCase: expected)
     let stream = try functionRecordNormalizationStream(expected, actionLocation: "<Step(0) line 1, col 1 to line 1, col 2 of module Fixture>")
     let run = try reader.readCompletedGraph(
       stream,
@@ -408,32 +408,35 @@ extension TLCGraphReaderTests {
   @Test("an unchanged action name does not require invocation decoding")
   func retainsUnchangedActionNames() throws {
     let action = RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next")
-    let expectedCase = try fixtureCase(try toolchainPin(), renderedActions: [action])
+    let finiteGraphCase = try fixtureCase(try toolchainPin(), renderedActions: [action])
     let stream = try refreshedFooterDigest(Data(String(
-      decoding: completeGraphStream(expectedCase), as: UTF8.self
+      decoding: completeGraphStream(finiteGraphCase), as: UTF8.self
     ).replacingOccurrences(
       of: "\"location\":\"\"",
       with: "\"location\":\"<Next line 1, col 1 to line 1, col 2 of module Fixture>\""
     ).utf8))
 
-    let parsed = try TLCGraphReader(expectedCase: expectedCase).parse(stream)
+    let parsed = try TLCGraphReader(finiteGraphCase: finiteGraphCase).parse(stream)
 
     #expect(parsed.transitions.map(\.action) == ["Next"])
   }
 
   @Test("graph event reader resolves a reduced TLC alias only through its retained fingerprint representative")
   func resolvesFingerprintAliasesFromSameStream() throws {
-    let expectedCase = try fixtureCase(try toolchainPin())
-    let reader = TLCGraphReader(expectedCase: expectedCase)
-    let parsed = try reader.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true))
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let parsed = try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true))
     #expect(parsed.transitions.count == 2)
     #expect(parsed.transitions[0].target == parsed.transitions[1].target)
     #expect(parsed.fingerprintRepresentatives["2"] == parsed.transitions[0].target)
-    #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "ambiguous fingerprint representative")) {
-      try reader.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: false))
+    #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "fingerprint binding mismatch")) {
+      try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: false, aliasValue: "2"))
+    }
+    #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "fingerprint binding mismatch")) {
+      try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true, aliasValue: "2"))
     }
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "seen fingerprint without representative")) {
-      try reader.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true, aliasFingerprint: "foreign"))
+      try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true, aliasFingerprint: "foreign"))
     }
   }
 
@@ -442,7 +445,7 @@ extension TLCGraphReaderTests {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
     let request = try retainedCaptureRequest(in: directory)
-    try completeGraphStream(request.expectedCase).write(to: request.graphEvents, options: .atomic)
+    try completeGraphStream(request.finiteGraphCase).write(to: request.graphEvents, options: .atomic)
     let executor = RecordingTLCExecutor(results: [
       .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
       .init(status: 12, stdout: "Error: Invariant broken", stderr: "")
@@ -463,8 +466,8 @@ extension TLCGraphReaderTests {
 
   @Test("graph event reader rejects booleans for integers and numbers for booleans")
   func rejectsWrongJSONPrimitiveTypes() throws {
-    let expectedCase = try fixtureCase(try toolchainPin())
-    let reader = TLCGraphReader(expectedCase: expectedCase)
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let mutations = [
       { (line: String) in line.replacingOccurrences(of: "\"version\":1", with: "\"version\":true")
       },
@@ -480,7 +483,7 @@ extension TLCGraphReaderTests {
     ]
     for mutation in mutations {
       #expect(throws: TLCGraphEventError.self) {
-        try reader.parse(try mutatedCompleteGraphStream(expectedCase, mutation: mutation))
+        try reader.parse(try mutatedCompleteGraphStream(finiteGraphCase, mutation: mutation))
       }
     }
   }
@@ -495,17 +498,17 @@ extension TLCGraphReaderTests {
     let configuration = directory.appendingPathComponent("Module.cfg")
     try "module bytes".write(to: module, atomically: true, encoding: .utf8)
     try "cfg bytes".write(to: configuration, atomically: true, encoding: .utf8)
-    let expectedCase = try caseForFiles(
+    let finiteGraphCase = try caseForFiles(
       id: "bound", module: module, configuration: configuration, arguments: ["-workers", "1"])
     let valid = try launchRequest(
-      expectedCase: expectedCase, module: module, configuration: configuration,
+      finiteGraphCase: finiteGraphCase, module: module, configuration: configuration,
       arguments: ["-workers", "1"])
     let staged = try valid.stageDeclaredBundle()
     try valid.validateLaunchBinding(module: staged.module, configuration: staged.configuration)
     let command = try valid.commandArguments(module: staged.module, configuration: staged.configuration)
     #expect(
       command.contains(where: {
-        $0.contains(expectedCase.moduleSHA256) && $0.contains(expectedCase.argumentsSHA256)
+        $0.contains(finiteGraphCase.moduleSHA256) && $0.contains(finiteGraphCase.argumentsSHA256)
       }))
     let wrongModule = TLAModuleBundle.external(
       root: TLAModuleFile(name: "Module", tla: "wrong module", cfg: "cfg bytes")
@@ -514,7 +517,7 @@ extension TLCGraphReaderTests {
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongModule, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-module"),
-      arguments: valid.arguments, expectedCase: expectedCase, runID: UUID()
+      arguments: valid.arguments, finiteGraphCase: finiteGraphCase, runID: UUID()
     )
     #expect(throws: FiniteGraphCaseError.moduleDigestMismatch) {
       let wrongStaged = try wrongModuleRequest.stageDeclaredBundle()
@@ -527,14 +530,14 @@ extension TLCGraphReaderTests {
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongConfiguration, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-configuration"),
-      arguments: valid.arguments, expectedCase: expectedCase, runID: UUID()
+      arguments: valid.arguments, finiteGraphCase: finiteGraphCase, runID: UUID()
     )
     #expect(throws: FiniteGraphCaseError.cfgDigestMismatch) {
       let wrongStaged = try wrongConfigurationRequest.stageDeclaredBundle()
       try wrongConfigurationRequest.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
     let wrongArguments = try launchRequest(
-      expectedCase: expectedCase, module: module, configuration: configuration,
+      finiteGraphCase: finiteGraphCase, module: module, configuration: configuration,
       arguments: ["-workers", "2"])
     #expect(throws: FiniteGraphCaseError.executionArgumentsMismatch) {
       let wrongStaged = try wrongArguments.stageDeclaredBundle()
@@ -576,7 +579,7 @@ private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessReque
     traceOutput: directory.appendingPathComponent("counterexample.json"),
     workingDirectory: directory.appendingPathComponent("work"),
     arguments: ["-workers", "1", "-fp", "1"],
-    expectedCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1", "-fp", "1"]),
+    finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1", "-fp", "1"]),
     runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001"))
   )
 }
