@@ -6,12 +6,11 @@ import UpstreamParity
 struct TemporalSymmetryCheckTests {
   @Test("Temporal cases preserve bounded fairness outcomes")
   func temporalCasesPreserveFairnessOutcomes() throws {
-    for temporalCase in try registeredCases().cases where temporalCase.kind == .temporal {
-      let model = try TemporalSymmetryModelCatalog.model(for: temporalCase)
-      let compilation = try model.spec.compile()
+    for temporalCase in try registeredManifest().temporalCases {
+      let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
       let exploration = try ModelChecker(
         compilation: compilation,
-        configuration: try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)
+        configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
       ).explore()
       let analyses = exploration.analyzeTemporalProperties(in: compilation)
       #expect(analyses.allSatisfy { $0.status == .violated })
@@ -20,11 +19,10 @@ struct TemporalSymmetryCheckTests {
 
   @Test("Symmetry cases use the compiled runtime for raw and reduced exploration")
   func symmetryCasesUseCompiledReduction() throws {
-    for temporalCase in try registeredCases().cases where temporalCase.kind == .symmetry {
-      let model = try TemporalSymmetryModelCatalog.model(for: temporalCase)
-      let scope = try #require(temporalCase.configuration.symmetryScope)
-      let compilation = try model.spec.compile()
-      let configuration = try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)
+    for symmetryCase in try registeredManifest().symmetryCases {
+      let scope = symmetryCase.scope
+      let compilation = try symmetryConformanceSpec(scope: scope).compile()
+      let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 1 << (scope + 1))
       let raw = try ModelChecker(
         compilation: compilation,
         configuration: configuration,
@@ -45,9 +43,9 @@ struct TemporalSymmetryCheckTests {
     }
   }
 
-  private func registeredCases() throws -> TemporalSymmetryCases {
+  private func registeredManifest() throws -> TemporalSymmetryManifest {
     try JSONDecoder().decode(
-      TemporalSymmetryCases.self,
+      TemporalSymmetryManifest.self,
       from: Data(contentsOf: projectRoot().appendingPathComponent(
         "Verification/TemporalSymmetryConformance/cases.json"))
     )

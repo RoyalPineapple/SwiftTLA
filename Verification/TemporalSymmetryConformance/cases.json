@@ -1,56 +1,95 @@
 {
-  "schema": "TemporalSymmetryCases",
-  "cases": [
+  "schema": "TemporalSymmetryManifest",
+  "temporalCases": [
     {
-      "id": "temporal-always-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "AlwaysP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false, "allowsImplicitStuttering": true, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
+      "id": "temporal-always-none",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+      },
+      "configuration": {
+        "property": "always",
+        "fairness": "none",
+        "allowsImplicitStuttering": true
+      }
     },
     {
-      "id": "temporal-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "EventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
+      "id": "temporal-eventually-none",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+      },
+      "configuration": {
+        "property": "eventually",
+        "fairness": "none",
+        "allowsImplicitStuttering": false
+      }
     },
     {
-      "id": "temporal-always-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "AlwaysEventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
+      "id": "temporal-always-eventually-none",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+      },
+      "configuration": {
+        "property": "alwaysEventually",
+        "fairness": "none",
+        "allowsImplicitStuttering": false
+      }
     },
     {
-      "id": "temporal-eventually-always-weak", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "EventuallyAlwaysP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
+      "id": "temporal-eventually-always-weak",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+      },
+      "configuration": {
+        "property": "eventuallyAlways",
+        "fairness": "weak",
+        "allowsImplicitStuttering": false
+      }
     },
     {
-      "id": "temporal-leads-to-strong", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "LeadsToPQ", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
+      "id": "temporal-leads-to-strong",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+      },
+      "configuration": {
+        "property": "leadsTo",
+        "fairness": "strong",
+        "allowsImplicitStuttering": true
+      }
     },
     {
-      "id": "temporal-weak-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "AlwaysEventuallyP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
+      "id": "temporal-weak-fairness-boundary",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+      },
+      "configuration": {
+        "property": "alwaysEventually",
+        "fairness": "weak",
+        "allowsImplicitStuttering": false
+      }
     },
     {
-      "id": "temporal-strong-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "AlwaysEventuallyP", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
-    },
-    {
-      "id": "symmetry-single-collection-scope-2", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope2",
-      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 2, "symmetryEnabled": true }
-    },
-    {
-      "id": "symmetry-single-collection-scope-3", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope3",
-      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 3, "symmetryEnabled": true }
-    },
-    {
-      "id": "symmetry-single-collection-scope-4", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope4",
-      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 4, "symmetryEnabled": true }
-    },
-    {
-      "id": "symmetry-single-collection-scope-5", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope5",
-      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 5, "symmetryEnabled": true }
+      "id": "temporal-strong-fairness-boundary",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+      },
+      "configuration": {
+        "property": "alwaysEventually",
+        "fairness": "strong",
+        "allowsImplicitStuttering": true
+      }
     }
+  ],
+  "symmetryCases": [
+    { "id": "symmetry-single-collection-scope-2", "scope": 2 },
+    { "id": "symmetry-single-collection-scope-3", "scope": 3 },
+    { "id": "symmetry-single-collection-scope-4", "scope": 4 },
+    { "id": "symmetry-single-collection-scope-5", "scope": 5 }
   ]
 }

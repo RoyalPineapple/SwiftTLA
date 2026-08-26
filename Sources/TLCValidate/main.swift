@@ -316,7 +316,7 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
             throw FiniteGraphCLIError.invalidManifest("no locked archive for \(architecture)")
         }
         let records = try TemporalSymmetryCheck().run(.init(
-            cases: try decode(TemporalSymmetryCases.self, at: casesURL),
+            manifest: try decode(TemporalSymmetryManifest.self, at: casesURL),
             projectRoot: projectRoot,
             outputDirectory: options.output,
             toolRoot: toolRoot,
