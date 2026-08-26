@@ -1,14 +1,27 @@
 import Foundation
 
-package enum TemporalSymmetryCaseKind: String, Codable, Sendable {
-  case temporal
-  case symmetry
-}
-
 package enum TemporalFairnessMode: String, Codable, Sendable {
   case none
   case weak
   case strong
+}
+
+package enum TemporalPropertyKind: String, Codable, Sendable {
+  case always
+  case eventually
+  case alwaysEventually
+  case eventuallyAlways
+  case leadsTo
+
+  package var renderedName: String {
+    switch self {
+    case .always: "AlwaysP"
+    case .eventually: "EventuallyP"
+    case .alwaysEventually: "AlwaysEventuallyP"
+    case .eventuallyAlways: "EventuallyAlwaysP"
+    case .leadsTo: "LeadsToPQ"
+    }
+  }
 }
 
 package enum TemporalSymmetryOutcome: String, Codable, Sendable {
@@ -21,7 +34,6 @@ package enum TemporalComparisonStatus: String, Codable, Sendable {
   case exact
   case propertyOutcomeDifference
   case graphDifference
-  case incompleteGraph
   case unavailable
 }
 
@@ -30,185 +42,139 @@ package enum SymmetryExplorationEngine: String, Codable, Sendable {
   case tlc
 }
 
-package struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendable {
-  package let configuration: RetainedFileReference
-
-  package init(configuration: RetainedFileReference) throws {
-    self.configuration = configuration
-    try configuration.validate()
-  }
-
-  private enum CodingKeys: String, CodingKey, CaseIterable { case configuration }
-
-  package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(configuration: container.decode(RetainedFileReference.self, forKey: .configuration))
-  }
-}
-
-package struct TemporalSymmetryConfiguration: Equatable, Codable, Sendable {
-  package let property: String?
-  package let fairness: TemporalFairnessMode?
-  package let fairnessActions: [String]
-  package let symmetryCollection: String?
-  package let symmetryScope: Int?
-  package let symmetryEnabled: Bool
+package struct TemporalCaseConfiguration: Equatable, Codable, Sendable {
+  package let property: TemporalPropertyKind
+  package let fairness: TemporalFairnessMode
   package let allowsImplicitStuttering: Bool
-  package let completeGraphPass: TemporalCompleteGraphPassDeclaration?
 
   package init(
-    property: String? = nil,
-    fairness: TemporalFairnessMode? = nil,
-    fairnessActions: [String] = [],
-    symmetryCollection: String? = nil,
-    symmetryScope: Int? = nil,
-    symmetryEnabled: Bool = false,
-    allowsImplicitStuttering: Bool = false,
-    completeGraphPass: TemporalCompleteGraphPassDeclaration? = nil
-  ) throws {
+    property: TemporalPropertyKind,
+    fairness: TemporalFairnessMode,
+    allowsImplicitStuttering: Bool
+  ) {
     self.property = property
     self.fairness = fairness
-    self.fairnessActions = fairnessActions
-    self.symmetryCollection = symmetryCollection
-    self.symmetryScope = symmetryScope
-    self.symmetryEnabled = symmetryEnabled
     self.allowsImplicitStuttering = allowsImplicitStuttering
-    self.completeGraphPass = completeGraphPass
-    try validate()
   }
 
-  package func validate() throws {
-    guard Set(fairnessActions).count == fairnessActions.count,
-          fairnessActions.allSatisfy({ !$0.isEmpty }) else {
-      throw EvidenceFormatError.invalidField(record: "configuration", field: "fairnessActions")
+  package var renderedPropertyConfiguration: String {
+    let specification = switch fairness {
+    case .none: "Spec"
+    case .weak: "WFSpec"
+    case .strong: "SFSpec"
     }
-    if property == nil {
-      guard fairness == nil, fairnessActions.isEmpty, !allowsImplicitStuttering, completeGraphPass == nil else {
-        throw EvidenceFormatError.invalidField(record: "configuration", field: "temporal fields")
-      }
-    } else {
-      guard property?.isEmpty == false, fairness != nil else {
-        throw EvidenceFormatError.invalidField(record: "configuration", field: "property or fairness")
-      }
-    }
-    if completeGraphPass != nil {
-      guard property != nil else {
-        throw EvidenceFormatError.invalidField(record: "configuration", field: "complete graph pass")
-      }
-    }
-    if symmetryEnabled {
-      guard symmetryCollection?.isEmpty == false, (symmetryScope ?? 0) > 0 else {
-        throw EvidenceFormatError.invalidField(record: "configuration", field: "symmetry")
-      }
-    } else {
-      guard symmetryCollection == nil, symmetryScope == nil else {
-        throw EvidenceFormatError.invalidField(record: "configuration", field: "disabled symmetry")
-      }
-    }
+    return "SPECIFICATION \(specification)\nPROPERTY \(property.renderedName)\n"
   }
+
+  package static let renderedGraphConfiguration = "SPECIFICATION Spec\n"
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case property, fairness, fairnessActions, symmetryCollection, symmetryScope, symmetryEnabled
-    case allowsImplicitStuttering, completeGraphPass
+    case property, fairness, allowsImplicitStuttering
   }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(
-      property: try container.decodeIfPresent(String.self, forKey: .property),
-      fairness: try container.decodeIfPresent(TemporalFairnessMode.self, forKey: .fairness),
-      fairnessActions: try container.decodeIfPresent([String].self, forKey: .fairnessActions) ?? [],
-      symmetryCollection: try container.decodeIfPresent(String.self, forKey: .symmetryCollection),
-      symmetryScope: try container.decodeIfPresent(Int.self, forKey: .symmetryScope),
-      symmetryEnabled: try container.decode(Bool.self, forKey: .symmetryEnabled),
-      allowsImplicitStuttering: try container.decodeIfPresent(Bool.self, forKey: .allowsImplicitStuttering) ?? false,
-      completeGraphPass: try container.decodeIfPresent(TemporalCompleteGraphPassDeclaration.self, forKey: .completeGraphPass))
+    self.init(
+      property: try container.decode(TemporalPropertyKind.self, forKey: .property),
+      fairness: try container.decode(TemporalFairnessMode.self, forKey: .fairness),
+      allowsImplicitStuttering: try container.decode(Bool.self, forKey: .allowsImplicitStuttering))
   }
 }
 
-package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
+package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
-  package let kind: TemporalSymmetryCaseKind
-  package let swiftSpec: String
-  package let sourceInput: RetainedFileReference?
-  package let configuration: TemporalSymmetryConfiguration
+  package let sourceInput: RetainedFileReference
+  package let configuration: TemporalCaseConfiguration
 
   package init(
     id: String,
-    kind: TemporalSymmetryCaseKind,
-    swiftSpec: String,
-    sourceInput: RetainedFileReference? = nil,
-    configuration: TemporalSymmetryConfiguration
+    sourceInput: RetainedFileReference,
+    configuration: TemporalCaseConfiguration
   ) throws {
     self.id = id
-    self.kind = kind
-    self.swiftSpec = swiftSpec
     self.sourceInput = sourceInput
     self.configuration = configuration
     try validate()
   }
 
-  package func validate() throws {
-    try sourceInput?.validate()
-    try configuration.validate()
-    guard !id.isEmpty, !swiftSpec.isEmpty else {
-      throw EvidenceFormatError.invalidField(record: id, field: "case declaration")
-    }
-    switch kind {
-    case .temporal:
-      guard configuration.property != nil, configuration.fairness != nil,
-            configuration.symmetryEnabled == false, sourceInput != nil else {
-        throw EvidenceFormatError.inconsistentReference(record: id, field: "temporal configuration")
-      }
-    case .symmetry:
-      guard configuration.property == nil, configuration.symmetryEnabled, sourceInput == nil else {
-        throw EvidenceFormatError.inconsistentReference(record: id, field: "symmetry configuration")
-      }
+  private func validate() throws {
+    try sourceInput.validate()
+    guard !id.isEmpty else {
+      throw EvidenceFormatError.invalidField(record: id, field: "temporal case")
     }
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable {
-    case id, kind, swiftSpec, sourceInput, configuration
-  }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case id, sourceInput, configuration }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
-      id: container.decode(String.self, forKey: .id),
-      kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
-      swiftSpec: container.decode(String.self, forKey: .swiftSpec),
-      sourceInput: try container.decodeIfPresent(RetainedFileReference.self, forKey: .sourceInput),
-      configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration))
+      id: try container.decode(String.self, forKey: .id),
+      sourceInput: try container.decode(RetainedFileReference.self, forKey: .sourceInput),
+      configuration: try container.decode(TemporalCaseConfiguration.self, forKey: .configuration))
   }
 }
 
-package struct TemporalSymmetryCases: Equatable, Codable, Sendable {
-  package static let schema = "TemporalSymmetryCases"
-  package let schema: String
-  package let cases: [TemporalSymmetryCase]
+package struct SymmetryCase: Equatable, Codable, Sendable {
+  package let id: String
+  package let scope: Int
 
-  package init(cases: [TemporalSymmetryCase]) throws {
-    try self.init(schema: Self.schema, cases: cases)
+  package init(id: String, scope: Int) throws {
+    guard !id.isEmpty, scope > 0 else {
+      throw EvidenceFormatError.invalidField(record: id, field: "symmetry case")
+    }
+    self.id = id
+    self.scope = scope
   }
 
-  package init(schema: String, cases: [TemporalSymmetryCase]) throws {
-    guard schema == Self.schema else { throw EvidenceFormatError.invalidSchema(schema) }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case id, scope }
+
+  package init(from decoder: Decoder) throws {
+    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    try self.init(
+      id: try container.decode(String.self, forKey: .id),
+      scope: try container.decode(Int.self, forKey: .scope))
+  }
+}
+
+package struct TemporalSymmetryManifest: Equatable, Codable, Sendable {
+  package static let schema = "TemporalSymmetryManifest"
+  package let schema: String
+  package let temporalCases: [TemporalCase]
+  package let symmetryCases: [SymmetryCase]
+
+  package init(temporalCases: [TemporalCase], symmetryCases: [SymmetryCase]) throws {
+    try self.init(schema: Self.schema, temporalCases: temporalCases, symmetryCases: symmetryCases)
+  }
+
+  package init(schema: String, temporalCases: [TemporalCase], symmetryCases: [SymmetryCase]) throws {
+    guard schema == Self.schema, !temporalCases.isEmpty, !symmetryCases.isEmpty else {
+      throw EvidenceFormatError.invalidSchema(schema)
+    }
     var ids = Set<String>()
-    for item in cases {
-      try item.validate()
+    for item in temporalCases {
+      guard ids.insert(item.id).inserted else {
+        throw EvidenceFormatError.duplicateID(kind: "case", id: item.id)
+      }
+    }
+    for item in symmetryCases {
       guard ids.insert(item.id).inserted else {
         throw EvidenceFormatError.duplicateID(kind: "case", id: item.id)
       }
     }
     self.schema = schema
-    self.cases = cases
+    self.temporalCases = temporalCases
+    self.symmetryCases = symmetryCases
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case schema, temporalCases, symmetryCases }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(schema: container.decode(String.self, forKey: .schema), cases: container.decode([TemporalSymmetryCase].self, forKey: .cases))
+    try self.init(
+      schema: try container.decode(String.self, forKey: .schema),
+      temporalCases: try container.decode([TemporalCase].self, forKey: .temporalCases),
+      symmetryCases: try container.decode([SymmetryCase].self, forKey: .symmetryCases))
   }
 }
 

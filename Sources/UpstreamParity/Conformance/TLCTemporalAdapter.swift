@@ -16,9 +16,9 @@ package enum TLCTemporalCapture: Sendable {
 }
 
 package struct TLCTemporalCaptureInput: Sendable {
-  package let temporalCase: TemporalSymmetryCase
+  package let temporalCase: TemporalCase
   package let request: TLCProcessRequest
-  package let completeGraphRequest: TLCProcessRequest?
+  package let completeGraphRequest: TLCProcessRequest
   package let swiftRun: CompletedGraphRun
   package let swiftResult: TemporalPropertyResult
   package let manifestURL: URL
@@ -27,9 +27,9 @@ package struct TLCTemporalCaptureInput: Sendable {
   package let outputDirectory: URL
 
   package init(
-    temporalCase: TemporalSymmetryCase,
+    temporalCase: TemporalCase,
     request: TLCProcessRequest,
-    completeGraphRequest: TLCProcessRequest? = nil,
+    completeGraphRequest: TLCProcessRequest,
     swiftRun: CompletedGraphRun,
     swiftResult: TemporalPropertyResult,
     manifestURL: URL,
@@ -51,6 +51,7 @@ package struct TLCTemporalCaptureInput: Sendable {
 
 package enum TLCTemporalAdapterError: Error, Equatable, Sendable {
   case outputAlreadyExists
+  case configurationMismatch
   case requestMismatch
   case provenanceMismatch
   case sourceInputMismatch
@@ -84,22 +85,20 @@ package struct TLCTemporalAdapter: Sendable {
       let capture = try processAdapter.capture(
         input.request, replay: .none, retainingIn: input.outputDirectory)
       let run = capture.run
-      let propertyGraph = capture.graph
-      let graph = completeGraph ?? propertyGraph
       try CanonicalGraphRecords.write(
-        graph,
+        completeGraph,
         to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")
       )
       let result = try temporalResult(
         run: run,
-        graph: graph,
+        graph: completeGraph,
         outputDirectory: input.outputDirectory,
         allowsImplicitStuttering: input.temporalCase.configuration.allowsImplicitStuttering)
       let comparison = try TemporalComparison(
         caseID: input.temporalCase.id,
         configuration: input.temporalCase.configuration,
         swiftRun: input.swiftRun,
-        tlcRun: graph,
+        tlcRun: completeGraph,
         swiftResult: input.swiftResult,
         tlcResult: result)
       try RetainedEvidence.writeCanonical(
@@ -123,50 +122,48 @@ package struct TLCTemporalAdapter: Sendable {
   }
 
   private func validate(_ input: TLCTemporalCaptureInput) throws {
-    guard let sourceInput = input.temporalCase.sourceInput else {
-      throw TLCTemporalAdapterError.sourceInputMismatch
-    }
+    let sourceInput = input.temporalCase.sourceInput
     try validateTraceOutput(input)
-    try input.temporalCase.validate()
     guard input.swiftRun.isPassEligible else {
       throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
-    guard input.temporalCase.kind == .temporal,
-          input.temporalCase.configuration.property != nil,
-          input.request.caseID == input.temporalCase.id else {
+    guard input.request.caseID == input.temporalCase.id else {
       throw TLCTemporalAdapterError.requestMismatch
     }
     let request = input.request.expectedCase
+    let propertyConfiguration = input.temporalCase.configuration.renderedPropertyConfiguration
+    guard input.request.bundle.cfg == propertyConfiguration,
+          request.cfgSHA256 == SHA256.hex(Data(propertyConfiguration.utf8)) else {
+      throw TLCTemporalAdapterError.configurationMismatch
+    }
     guard request.pin == input.request.referencePin,
           request.moduleSHA256 == sourceInput.sha256,
-          request.cfgSHA256 == SHA256.hex(Data(input.request.bundle.cfg.utf8)),
           request.argumentsSHA256 == (try FiniteGraphCase.argumentsDigest(input.request.arguments)) else {
       throw TLCTemporalAdapterError.provenanceMismatch
     }
     guard try SHA256.hex(Data(contentsOf: input.sourceInputURL)) == sourceInput.sha256 else {
       throw TLCTemporalAdapterError.sourceInputMismatch
     }
-    if let graphRequest = input.completeGraphRequest {
-      guard graphRequest.runID != input.request.runID,
-            graphRequest.caseID == input.request.caseID,
-            graphRequest.bundle.root.name == input.request.bundle.root.name,
-            graphRequest.bundle.root.tla == input.request.bundle.root.tla,
-            graphRequest.arguments == input.request.arguments,
-            graphRequest.expectedCase.pin == input.request.expectedCase.pin,
-            graphRequest.expectedCase.workers == input.request.expectedCase.workers,
-            graphRequest.expectedCase.fingerprintPolynomial == input.request.expectedCase.fingerprintPolynomial,
-            graphRequest.expectedCase.deadlock == input.request.expectedCase.deadlock,
-            graphRequest.expectedCase.operatingSystem == input.request.expectedCase.operatingSystem,
-            graphRequest.expectedCase.architecture == input.request.expectedCase.architecture,
-            graphRequest.expectedCase.environment == input.request.expectedCase.environment,
-            graphRequest.expectedCase.moduleSHA256 == sourceInput.sha256,
-            let declaration = input.temporalCase.configuration.completeGraphPass,
-            graphRequest.expectedCase.cfgSHA256 == declaration.configuration.sha256,
-            graphRequest.expectedCase.cfgSHA256 == SHA256.hex(Data(graphRequest.bundle.cfg.utf8)),
-            graphRequest.expectedCase.argumentsSHA256 == (try FiniteGraphCase.argumentsDigest(graphRequest.arguments)) else {
-        throw TLCTemporalAdapterError.requestMismatch
-      }
-    } else if input.temporalCase.configuration.completeGraphPass != nil {
+    let graphRequest = input.completeGraphRequest
+    let graphConfiguration = TemporalCaseConfiguration.renderedGraphConfiguration
+    guard graphRequest.bundle.cfg == graphConfiguration,
+          graphRequest.expectedCase.cfgSHA256 == SHA256.hex(Data(graphConfiguration.utf8)) else {
+      throw TLCTemporalAdapterError.configurationMismatch
+    }
+    guard graphRequest.runID != input.request.runID,
+          graphRequest.caseID == input.request.caseID,
+          graphRequest.bundle.root.name == input.request.bundle.root.name,
+          graphRequest.bundle.root.tla == input.request.bundle.root.tla,
+          graphRequest.arguments == input.request.arguments,
+          graphRequest.expectedCase.pin == input.request.expectedCase.pin,
+          graphRequest.expectedCase.workers == input.request.expectedCase.workers,
+          graphRequest.expectedCase.fingerprintPolynomial == input.request.expectedCase.fingerprintPolynomial,
+          graphRequest.expectedCase.deadlock == input.request.expectedCase.deadlock,
+          graphRequest.expectedCase.operatingSystem == input.request.expectedCase.operatingSystem,
+          graphRequest.expectedCase.architecture == input.request.expectedCase.architecture,
+          graphRequest.expectedCase.environment == input.request.expectedCase.environment,
+          graphRequest.expectedCase.moduleSHA256 == sourceInput.sha256,
+          graphRequest.expectedCase.argumentsSHA256 == (try FiniteGraphCase.argumentsDigest(graphRequest.arguments)) else {
       throw TLCTemporalAdapterError.requestMismatch
     }
   }
@@ -191,16 +188,13 @@ package struct TLCTemporalAdapter: Sendable {
 
   private func captureCompleteGraph(
     _ input: TLCTemporalCaptureInput
-  ) throws -> CompletedGraphRun? {
-    guard let request = input.completeGraphRequest else { return nil }
-    guard input.temporalCase.configuration.completeGraphPass != nil else {
-      throw TLCTemporalAdapterError.requestMismatch
-    }
+  ) throws -> CompletedGraphRun {
+    let request = input.completeGraphRequest
     try clearTraceOutput(for: request)
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
     try RetainedEvidence.createDirectory(directory, beneath: input.outputDirectory)
     let capture = try processAdapter.capture(request, replay: .none, retainingIn: directory)
-    guard capture.run.primary.reportedExhaustiveCompletion else {
+    guard capture.run.primary.reportedExhaustiveCompletion, capture.graph.isPassEligible else {
       throw TLCTemporalAdapterError.incompleteGraph
     }
     return capture.graph
@@ -321,6 +315,7 @@ extension TLCTemporalAdapter {
   private func diagnosticCode(for error: Error) -> String {
     switch error {
     case TLCTemporalAdapterError.outputAlreadyExists: "output-already-exists"
+    case TLCTemporalAdapterError.configurationMismatch: "configuration-mismatch"
     case TLCTemporalAdapterError.requestMismatch: "request-mismatch"
     case TLCTemporalAdapterError.provenanceMismatch: "toolchain-mismatch"
     case TLCTemporalAdapterError.sourceInputMismatch: "source-input-mismatch"
@@ -331,10 +326,6 @@ extension TLCTemporalAdapter {
 
   private func diagnostic(for status: TemporalComparisonStatus) -> TLCTemporalCaptureDiagnostic? {
     switch status {
-    case .incompleteGraph:
-      .init(
-        code: "incomplete-graph",
-        message: "TLC did not report exhaustive completion for the graph used in comparison.")
     case .unavailable:
       .init(
         code: "temporal-evidence-unavailable",

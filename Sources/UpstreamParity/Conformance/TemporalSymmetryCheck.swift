@@ -1,7 +1,7 @@
 import Foundation
 import SwiftTLA
 
-package struct TemporalSymmetryCaseOutcome: Equatable, Sendable {
+package struct TemporalSymmetryCheckOutcome: Equatable, Sendable {
   package let caseID: String
   package let outcome: TemporalSymmetryOutcome
   package let diagnostic: String
@@ -21,20 +21,20 @@ package struct TemporalSymmetryCaseOutcome: Equatable, Sendable {
 }
 
 package struct TemporalSymmetryCheckRequest: Sendable {
-  package let cases: TemporalSymmetryCases
+  package let manifest: TemporalSymmetryManifest
   package let projectRoot: URL
   package let outputDirectory: URL
   package let toolRoot: URL
   package let referencePin: TLCReferencePin
 
   package init(
-    cases: TemporalSymmetryCases,
+    manifest: TemporalSymmetryManifest,
     projectRoot: URL,
     outputDirectory: URL,
     toolRoot: URL,
     referencePin: TLCReferencePin
   ) {
-    self.cases = cases
+    self.manifest = manifest
     self.projectRoot = projectRoot
     self.outputDirectory = outputDirectory
     self.toolRoot = toolRoot
@@ -46,79 +46,69 @@ package struct TemporalSymmetryCheck: Sendable {
   package init() {}
 
   @discardableResult
-  package func run(_ input: TemporalSymmetryCheckRequest) throws -> [TemporalSymmetryCaseOutcome] {
+  package func run(_ input: TemporalSymmetryCheckRequest) throws -> [TemporalSymmetryCheckOutcome] {
     let root = try RetainedEvidence.projectRoot(input.projectRoot)
     let output = try RetainedEvidence.outputDirectory(input.outputDirectory, beneath: root)
-    return try input.cases.cases.map { temporalCase in
-      let directory = output.appendingPathComponent(temporalCase.id, isDirectory: true)
+    let temporalOutcomes = try input.manifest.temporalCases.map { temporalCase in
+      let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
+      let exploration = try ModelChecker(
+        compilation: compilation,
+        configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)
+      ).explore()
       let outcome: TemporalSymmetryOutcome
       let code: String
-      let model = try TemporalSymmetryModelCatalog.model(for: temporalCase)
-      let compilation = try model.spec.compile()
-          let exploration = try ModelChecker(
-            compilation: compilation,
-            configuration: try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)
-          ).explore()
-          guard exploration.graph.states.count == model.expectedStateCount else {
-            throw EvidenceFormatError.invalidField(
-              record: temporalCase.id, field: "bounded Swift graph expectation")
+      do {
+        let capture = try captureTemporal(
+          compilation: compilation, temporalCase: temporalCase,
+          exploration: exploration, toolRoot: input.toolRoot,
+          referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
+          outputDirectory: output.appendingPathComponent(temporalCase.id, isDirectory: true))
+        switch capture {
+        case .comparison(let comparison):
+          switch comparison.status {
+          case .exact: outcome = .exact
+          case .propertyOutcomeDifference, .graphDifference: outcome = .difference
+          case .unavailable: outcome = .unavailable
           }
-          if temporalCase.kind == .temporal {
-            do {
-              let capture = try captureTemporal(
-                compilation: compilation, temporalCase: temporalCase,
-                model: model,
-                exploration: exploration,
-                toolRoot: input.toolRoot,
-                referencePin: input.referencePin,
-                projectRoot: root,
-                evidenceRoot: output,
-                outputDirectory: directory)
-              switch capture {
-              case .comparison(let comparison):
-                switch comparison.status {
-                case .exact:
-                  outcome = .exact
-                case .propertyOutcomeDifference, .graphDifference:
-                  outcome = .difference
-                case .incompleteGraph, .unavailable:
-                  outcome = .unavailable
-                }
-                code = comparison.status.rawValue
-              case .failure(let diagnostic):
-                outcome = .unavailable
-                code = diagnostic.code
-              }
-            } catch {
-              outcome = .unavailable
-              code = "pinned-tlc-runtime-unavailable: \(String(describing: error))"
-            }
-          } else {
-            do {
-              let result = try captureSymmetry(
-                compilation: compilation, model: model, temporalCase: temporalCase,
-                toolRoot: input.toolRoot, referencePin: input.referencePin,
-                projectRoot: root, evidenceRoot: output,
-                outputDirectory: directory)
-              outcome = result
-              code = result == .exact ? "exact" : "symmetry-comparison-difference"
-            } catch {
-              outcome = .unavailable
-              code = "pinned-tlc-symmetry-unavailable: \(String(describing: error))"
-            }
-          }
-      let record = try TemporalSymmetryCaseOutcome(
-        caseID: temporalCase.id,
-        outcome: outcome,
-        diagnostic: code)
-      return record
+          code = comparison.status.rawValue
+        case .failure(let diagnostic):
+          outcome = .unavailable
+          code = diagnostic.code
+        }
+      } catch {
+        outcome = .unavailable
+        code = "pinned-tlc-runtime-unavailable: \(String(describing: error))"
+      }
+      return try TemporalSymmetryCheckOutcome(
+        caseID: temporalCase.id, outcome: outcome, diagnostic: code)
     }
+
+    let symmetryOutcomes = try input.manifest.symmetryCases.map { symmetryCase in
+      let spec = symmetryConformanceSpec(scope: symmetryCase.scope)
+      let compilation = try spec.compile()
+      let outcome: TemporalSymmetryOutcome
+      let code: String
+      do {
+        let result = try captureSymmetry(
+          compilation: compilation, spec: spec, symmetryCase: symmetryCase,
+          toolRoot: input.toolRoot, referencePin: input.referencePin,
+          projectRoot: root, evidenceRoot: output,
+          outputDirectory: output.appendingPathComponent(symmetryCase.id, isDirectory: true))
+        outcome = result
+        code = result == .exact ? "exact" : "symmetry-comparison-difference"
+      } catch {
+        outcome = .unavailable
+        code = "pinned-tlc-symmetry-unavailable: \(String(describing: error))"
+      }
+      return try TemporalSymmetryCheckOutcome(
+        caseID: symmetryCase.id, outcome: outcome, diagnostic: code)
+    }
+    return temporalOutcomes + symmetryOutcomes
   }
 
   private func captureTemporal(
     compilation: CompiledSpecification,
-    temporalCase: TemporalSymmetryCase,
-    model: TemporalSymmetryModelDefinition,
+    temporalCase: TemporalCase,
     exploration: ModelExplorationResult,
     toolRoot: URL,
     referencePin: TLCReferencePin,
@@ -128,19 +118,18 @@ package struct TemporalSymmetryCheck: Sendable {
   ) throws -> TLCTemporalCapture {
     let swiftRun = try SwiftGraphExporter().export(exploration)
     let swiftResult = try temporalResult(
-      compilation: compilation, temporalCase: temporalCase, model: model, exploration: exploration)
+      compilation: compilation, temporalCase: temporalCase, exploration: exploration)
     let casesURL = projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")
     let toolchainURL = projectRoot.appendingPathComponent("Verification/FiniteGraph/toolchain.json")
     let context = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
     try RetainedEvidence.createDirectory(work, beneath: projectRoot)
-    guard let sourceInput = temporalCase.sourceInput else {
-      throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "temporal source input")
-    }
+    let sourceInput = temporalCase.sourceInput
     let source = try RetainedEvidence.resolve(
       projectRoot.appendingPathComponent(sourceInput.path), beneath: projectRoot)
-    let config = try configurationURL(for: temporalCase, projectRoot: projectRoot)
-    let bundle = try TLCProcessRequest.declaredBundle(root: source, configuration: config)
+    let bundle = try externalBundle(
+      source: source,
+      renderedConfiguration: temporalCase.configuration.renderedPropertyConfiguration)
     let arguments = ["-workers", "1", "-fp", "1"]
     let launch = try FiniteGraphCase(
       id: temporalCase.id,
@@ -158,29 +147,24 @@ package struct TemporalSymmetryCheck: Sendable {
       replayInput: work.appendingPathComponent("replay-input.json"), workingDirectory: work,
       arguments: arguments, expectedCase: launch,
       runID: UUID(), referencePin: referencePin, referenceArtifacts: context.artifacts)
-    let completeGraphRequest: TLCProcessRequest?
-    if let graphPass = temporalCase.configuration.completeGraphPass {
-      let graphConfig = try RetainedEvidence.resolve(
-        projectRoot.appendingPathComponent(graphPass.configuration.path), beneath: projectRoot)
-      let graphBundle = try TLCProcessRequest.declaredBundle(root: source, configuration: graphConfig)
-      let graphCase = try FiniteGraphCase(
-        id: temporalCase.id, moduleSHA256: sourceInput.sha256,
-        cfgSHA256: graphPass.configuration.sha256,
-        arguments: arguments,
-        argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-        workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
-        architecture: context.architecture, environment: [:], pin: referencePin)
-      completeGraphRequest = TLCProcessRequest(
-        javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
-        bundle: graphBundle,
-        graphEvents: work.appendingPathComponent("complete-graph-events.jsonl"),
-        traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
-        replayInput: work.appendingPathComponent("complete-graph-replay.json"), workingDirectory: work,
-        arguments: graphCase.arguments, expectedCase: graphCase, runID: UUID(),
-        referencePin: referencePin, referenceArtifacts: context.artifacts)
-    } else {
-      completeGraphRequest = nil
-    }
+    let graphBundle = try externalBundle(
+      source: source,
+      renderedConfiguration: TemporalCaseConfiguration.renderedGraphConfiguration)
+    let graphCase = try FiniteGraphCase(
+      id: temporalCase.id, moduleSHA256: sourceInput.sha256,
+      cfgSHA256: SHA256.hex(Data(graphBundle.cfg.utf8)),
+      arguments: arguments,
+      argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
+      workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
+      architecture: context.architecture, environment: [:], pin: referencePin)
+    let completeGraphRequest = TLCProcessRequest(
+      javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
+      bundle: graphBundle,
+      graphEvents: work.appendingPathComponent("complete-graph-events.jsonl"),
+      traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
+      replayInput: work.appendingPathComponent("complete-graph-replay.json"), workingDirectory: work,
+      arguments: graphCase.arguments, expectedCase: graphCase, runID: UUID(),
+      referencePin: referencePin, referenceArtifacts: context.artifacts)
     return TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, request: request,
       completeGraphRequest: completeGraphRequest, swiftRun: swiftRun, swiftResult: swiftResult,
@@ -188,31 +172,39 @@ package struct TemporalSymmetryCheck: Sendable {
       sourceInputURL: source, outputDirectory: outputDirectory))
   }
 
+  private func externalBundle(
+    source: URL,
+    renderedConfiguration: String
+  ) throws -> TLAModuleBundle {
+    TLAModuleBundle.external(root: TLAModuleFile(
+      name: source.deletingPathExtension().lastPathComponent,
+      tla: try String(contentsOf: source, encoding: .utf8),
+      cfg: renderedConfiguration))
+  }
+
   private func captureSymmetry(
     compilation: CompiledSpecification,
-    model: TemporalSymmetryModelDefinition,
-    temporalCase: TemporalSymmetryCase,
+    spec: TLASpec,
+    symmetryCase: SymmetryCase,
     toolRoot: URL,
     referencePin: TLCReferencePin,
     projectRoot: URL,
     evidenceRoot: URL,
     outputDirectory: URL
   ) throws -> TemporalSymmetryOutcome {
-    guard let scope = temporalCase.configuration.symmetryScope else {
-      throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "symmetry scope")
-    }
+    let scope = symmetryCase.scope
     let context = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     try RetainedEvidence.createDirectory(outputDirectory, beneath: projectRoot)
     let rawRunID = UUID()
     let reducedRunID = UUID()
     let rawBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: false)
     let reducedBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: true)
-    let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id, isDirectory: true)
+    let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(symmetryCase.id, isDirectory: true)
     try RetainedEvidence.createDirectory(work, beneath: projectRoot)
     let rawCase = try launchCase(
-      id: temporalCase.id, bundle: rawBundle, pin: referencePin, architecture: context.architecture)
+      id: symmetryCase.id, bundle: rawBundle, pin: referencePin, architecture: context.architecture)
     let reducedCase = try launchCase(
-      id: temporalCase.id, bundle: reducedBundle, pin: referencePin, architecture: context.architecture)
+      id: symmetryCase.id, bundle: reducedBundle, pin: referencePin, architecture: context.architecture)
     let rawRequest = try request(
       context: context, bundle: rawBundle, work: work.appendingPathComponent("raw"),
       declared: rawCase, runID: rawRunID, projectRoot: projectRoot)
@@ -227,7 +219,8 @@ package struct TemporalSymmetryCheck: Sendable {
     let reducedTLC = try processAdapter.capture(
       reducedRequest, replay: .none,
       retainingIn: outputDirectory.appendingPathComponent("tlc-reduced", isDirectory: true)).graph
-    let explorationConfiguration = try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)
+    let explorationConfiguration = try FiniteExplorationConfiguration(
+      maximumStateLimit: 1 << (scope + 1))
     let swiftRaw = try SwiftGraphExporter().export(ModelChecker(
       compilation: compilation,
       configuration: explorationConfiguration,
@@ -238,11 +231,11 @@ package struct TemporalSymmetryCheck: Sendable {
       configuration: explorationConfiguration,
       usesSymmetryReduction: true
     ).explore())
-    guard model.spec.symmetricCollections.count == 1,
-          let collection = model.spec.symmetricCollections.first,
+    guard spec.symmetricCollections.count == 1,
+          let collection = spec.symmetricCollections.first,
           collection.verificationScope == scope else {
       throw EvidenceFormatError.invalidField(
-        record: temporalCase.id, field: "symmetric collection")
+        record: symmetryCase.id, field: "symmetric collection")
     }
     let permutations = try symmetryPermutations(members: collection.metadata.members)
     let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.jsonl")
@@ -254,7 +247,7 @@ package struct TemporalSymmetryCheck: Sendable {
     try CanonicalGraphRecords.write(rawTLC, to: rawTLCURL)
     try CanonicalGraphRecords.write(reducedTLC, to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
-      caseID: temporalCase.id,
+      caseID: symmetryCase.id,
       swiftRaw: swiftRaw,
       swiftReduced: swiftReduced,
       tlcRaw: rawTLC,
@@ -347,13 +340,9 @@ extension TemporalSymmetryCheck {
 
   private func temporalResult(
     compilation: CompiledSpecification,
-    temporalCase: TemporalSymmetryCase,
-    model: TemporalSymmetryModelDefinition,
+    temporalCase: TemporalCase,
     exploration: ModelExplorationResult
   ) throws -> TemporalPropertyResult {
-    guard model.spec.temporalProperties.isEmpty == false else {
-      throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "temporal property")
-    }
     let analyses = exploration.analyzeTemporalProperties(in: compilation)
     guard let analysis = analyses.first else {
       throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "compiled temporal property")
@@ -389,22 +378,6 @@ extension TemporalSymmetryCheck {
     })
   }
 
-  private func configurationURL(for temporalCase: TemporalSymmetryCase, projectRoot: URL) throws -> URL {
-    let names = [
-      "temporal-always-none": "always-none.cfg",
-      "temporal-eventually-none": "eventually-none.cfg",
-      "temporal-always-eventually-none": "always-eventually-none.cfg",
-      "temporal-eventually-always-weak": "eventually-always-weak.cfg",
-      "temporal-leads-to-strong": "leads-to-strong.cfg",
-      "temporal-weak-fairness-boundary": "weak-boundary.cfg",
-      "temporal-strong-fairness-boundary": "strong-boundary.cfg"
-    ]
-    guard let name = names[temporalCase.id] else {
-      throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "TLC configuration")
-    }
-    return projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/fixtures/temporal/\(name)")
-  }
-
 }
 
 private struct ResolvedTLCToolchain {
@@ -437,86 +410,55 @@ private extension Dictionary where Key == StateGraph.StateID, Value == Bool {
   }
 }
 
-package struct TemporalSymmetryModelDefinition: Sendable {
-  package let spec: TLASpec
-  package let expectedStateCount: Int
-  package let maxStates: Int
-}
-
 private struct ConformanceMember: Identifiable, Sendable {
   let id: Int
 }
 
-package enum TemporalSymmetryModelCatalog {
-  package static func model(for temporalCase: TemporalSymmetryCase) throws -> TemporalSymmetryModelDefinition {
-    switch temporalCase.swiftSpec {
-    case "TemporalMatrix":
-      return try temporalMatrix(configuration: temporalCase.configuration)
-    case "SymmetricCollectionScope2":
-      return try symmetricCollection(scope: 2)
-    case "SymmetricCollectionScope3":
-      return try symmetricCollection(scope: 3)
-    case "SymmetricCollectionScope4":
-      return try symmetricCollection(scope: 4)
-    case "SymmetricCollectionScope5":
-      return try symmetricCollection(scope: 5)
-    default:
-      throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift model")
-    }
-  }
+package func temporalConformanceSpec(configuration: TemporalCaseConfiguration) -> TLASpec {
+  let x = Var<Int>("x")
+  let p = x == 2
+  let q = x == 1
+  let temporal = temporalProperty(property: configuration.property, p: p, q: q)
+  return TLASpec(
+    name: "TemporalMatrix",
+    variables: [NamedVar(name: x.name, initial: 0)],
+    actions: [
+      NamedAction(name: "A", body: .and(.guard_(x == 0), x.becomes(2))),
+      NamedAction(name: "B", body: .and(.guard_(x == 0), x.becomes(1))),
+      NamedAction(name: "C", body: .and(.guard_(x == 1), x.becomes(0))),
+      NamedAction(name: "Stay", body: .and(.guard_(x == 2), x.becomes(2)))
+    ],
+    invariants: [],
+    temporalProperties: [NamedTemporal(name: temporal.0, expr: temporal.1)],
+    fairness: fairness(configuration.fairness))
+}
 
-  private static func temporalMatrix(
-    configuration: TemporalSymmetryConfiguration
-  ) throws -> TemporalSymmetryModelDefinition {
-    let x = Var<Int>("x")
-    let p = x == 2
-    let q = x == 1
-    let temporal = try temporalProperty(property: configuration.property, p: p, q: q)
-    let spec = TLASpec(
-      name: "TemporalMatrix",
-      variables: [NamedVar(name: x.name, initial: 0)],
-      actions: [
-        NamedAction(name: "A", body: .and(.guard_(x == 0), x.becomes(2))),
-        NamedAction(name: "B", body: .and(.guard_(x == 0), x.becomes(1))),
-        NamedAction(name: "C", body: .and(.guard_(x == 1), x.becomes(0))),
-        NamedAction(name: "Stay", body: .and(.guard_(x == 2), x.becomes(2)))
-      ],
-      invariants: [],
-      temporalProperties: [NamedTemporal(name: temporal.0, expr: temporal.1)],
-      fairness: fairness(configuration.fairness))
-    return .init(spec: spec, expectedStateCount: 3, maxStates: 10)
+private func temporalProperty(
+  property: TemporalPropertyKind, p: StateExpr, q: StateExpr
+) -> (String, TemporalExpr) {
+  switch property {
+  case .always: return ("AlwaysP", .always(p))
+  case .eventually: return ("EventuallyP", .eventually(p))
+  case .alwaysEventually: return ("AlwaysEventuallyP", .alwaysEventually(p))
+  case .eventuallyAlways: return ("EventuallyAlwaysP", .eventuallyAlways(p))
+  case .leadsTo: return ("LeadsToPQ", .leadsTo(p, q))
   }
+}
 
-  private static func temporalProperty(
-    property: String?, p: StateExpr, q: StateExpr
-  ) throws -> (String, TemporalExpr) {
-    switch property {
-    case "AlwaysP": return ("AlwaysP", .always(p))
-    case "EventuallyP": return ("EventuallyP", .eventually(p))
-    case "AlwaysEventuallyP": return ("AlwaysEventuallyP", .alwaysEventually(p))
-    case "EventuallyAlwaysP": return ("EventuallyAlwaysP", .eventuallyAlways(p))
-    case "LeadsToPQ": return ("LeadsToPQ", .leadsTo(p, q))
-    default:
-      throw EvidenceFormatError.invalidField(record: property ?? "", field: "temporal property")
-    }
+private func fairness(_ fairness: TemporalFairnessMode) -> [FairnessCondition] {
+  switch fairness {
+  case .weak: return [.weakFairness("A")]
+  case .strong: return [.strongFairness("A")]
+  case .none: return []
   }
+}
 
-  private static func fairness(_ fairness: TemporalFairnessMode?) -> [FairnessCondition] {
-    switch fairness {
-    case .weak: return [.weakFairness("A")]
-    case .strong: return [.strongFairness("A")]
-    case .some(.none), nil: return []
+package func symmetryConformanceSpec(scope: Int) -> TLASpec {
+  let chosen = SymmetricCollectionVar<ConformanceMember, Int>("chosen")
+  return TLASpec("SymmetricCollectionScope\(scope)") {
+    SymmetricCollection(chosen, verificationScope: scope, initial: 0)
+    CollectionAction("Choose", on: chosen) { member in
+      chosen[member] == 0 && chosen.update(member, to: 1)
     }
-  }
-
-  private static func symmetricCollection(scope: Int) throws -> TemporalSymmetryModelDefinition {
-    let chosen = SymmetricCollectionVar<ConformanceMember, Int>("chosen")
-    let spec = TLASpec("SymmetricCollectionScope\(scope)") {
-      SymmetricCollection(chosen, verificationScope: scope, initial: 0)
-      CollectionAction("Choose", on: chosen) { member in
-        chosen[member] == 0 && chosen.update(member, to: 1)
-      }
-    }
-    return .init(spec: spec, expectedStateCount: scope + 1, maxStates: 1 << (scope + 1))
   }
 }
