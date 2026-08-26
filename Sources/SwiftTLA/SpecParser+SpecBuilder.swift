@@ -355,23 +355,17 @@ extension ParserSession {
                     ))
                     continue
                 }
-                let lowerBound = parseRangeLowerBound(rangeExpr)
-                result.variables.append(.init(
-                    name: patternName,
-                    initial: .int(lowerBound),
-                    generatedSwiftType: varTypeName,
-                    origin: .source
+                result.diagnostics.append(.init(
+                    message: "SharedVar '\(patternName)' requires a supported finite set expression.",
+                    source: rangeExpr
                 ))
                 continue
             }
 
             if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
-                let firstValue = parseValuesFirst(valuesArg)
-                result.variables.append(.init(
-                    name: patternName,
-                    initial: .string(firstValue),
-                    generatedSwiftType: varTypeName,
-                    origin: .source
+                result.diagnostics.append(.init(
+                    message: "SharedVar '\(patternName)' does not support a values argument.",
+                    source: valuesArg
                 ))
                 continue
             }
@@ -560,32 +554,6 @@ extension ParserSession {
         else { return nil }
         guard let type = typedFacadeType(base), type.name == "SetExpr" else { return nil }
         return type.argument(at: 0).flatMap(Self.sourceTypeSpelling)
-    }
-
-    /// Extracts the lower bound from a range expression like `1...12`.
-    func parseRangeLowerBound(_ expression: ExprSyntax) -> Int {
-        if let seq = expression.as(SequenceExprSyntax.self) {
-            let elements = Array(seq.elements)
-            if let firstInt = elements.first?.as(IntegerLiteralExprSyntax.self),
-               let lower = Int(firstInt.literal.text) {
-                return lower
-            }
-        }
-        if let infix = expression.as(InfixOperatorExprSyntax.self),
-           let firstInt = infix.leftOperand.as(IntegerLiteralExprSyntax.self),
-           let lower = Int(firstInt.literal.text) {
-            return lower
-        }
-        return 0
-    }
-
-    /// Extracts the first string value from `["a", "b"]`.
-    func parseValuesFirst(_ expression: ExprSyntax) -> String {
-        if let array = expression.as(ArrayExprSyntax.self),
-           let first = array.elements.first?.expression.as(StringLiteralExprSyntax.self) {
-            return first.representedLiteralValue ?? ""
-        }
-        return ""
     }
 
     /// Converts a Swift initializer expression to a TLAValue.
