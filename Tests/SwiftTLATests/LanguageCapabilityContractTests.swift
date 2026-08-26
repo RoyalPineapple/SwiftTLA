@@ -12,7 +12,7 @@ struct LanguageCapabilityContractTests {
         let source = Parser.parse(source: """
         struct Model {
             enum Phase: Int, FiniteTLAValueDomain {
-                case waiting = 1_000
+                case waiting = true
             }
         }
         """)

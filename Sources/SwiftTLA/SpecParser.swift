@@ -187,6 +187,10 @@ public final class ParserSession {
 
     // MARK: - Compact expression decoder
 
+    static func integerLiteralValue(_ literal: IntegerLiteralExprSyntax) -> Int? {
+        Int(literal.literal.text.filter { $0 != "_" })
+    }
+
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let precedingMembers = decodePrecedingFormalMembers(expression) {
             return precedingMembers
@@ -275,7 +279,7 @@ public final class ParserSession {
             return .functionApply(function, argument)
         }
         if let intLit = expression.as(IntegerLiteralExprSyntax.self) {
-            guard let value = Int(intLit.literal.text) else { return nil }
+            guard let value = Self.integerLiteralValue(intLit) else { return nil }
             return .value(.int(value))
         }
         if let boolLit = expression.as(BooleanLiteralExprSyntax.self) {
@@ -291,6 +295,11 @@ public final class ParserSession {
             return .variable(name)
         }
         if let enumCase = decodeEnumCase(expression) { return enumCase }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = terminalTypeName(in: member.base),
+           enumDefinition(named: type) != nil {
+            return nil
+        }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base,
            let selfExpr = decodeStateExpr(base) {
@@ -668,6 +677,23 @@ public final class ParserSession {
         if let reference = expression.as(DeclReferenceExprSyntax.self),
            let value = scope.value(for: reference) {
             return value
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+           member.declName.baseName.text == "operatorApplication",
+           call.arguments.count == 2,
+           let operation = decodeFormalOperator(call.arguments[call.arguments.startIndex].expression),
+           let argumentArray = call.arguments[call.arguments.index(after: call.arguments.startIndex)]
+            .expression.as(ArrayExprSyntax.self) {
+            let arguments = argumentArray.elements.compactMap {
+                decodeFormalCallArgument(
+                    $0.expression,
+                    valueDecoder: { self.decodeTypedFacadeValue($0, scope: scope) }
+                )
+            }
+            guard arguments.count == argumentArray.elements.count else { return nil }
+            return .operatorApplication(operation, arguments)
         }
         // `Expr<T>` is a phantom type wrapper. Its one value argument is
         // already a formal expression, including the canonical formal
@@ -1152,7 +1178,7 @@ public final class ParserSession {
             if let state = sourceScope.value(for: reference) { return state }
         }
         if let literal = expression.as(IntegerLiteralExprSyntax.self),
-           let value = Int(literal.literal.text) {
+           let value = Self.integerLiteralValue(literal) {
             return .value(.int(value))
         }
         if let literal = expression.as(BooleanLiteralExprSyntax.self) {
@@ -1164,6 +1190,11 @@ public final class ParserSession {
         }
         if let enumCase = decodeEnumCase(expression, expectedType: expectedEnumType) {
             return enumCase
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = terminalTypeName(in: member.base),
+           enumDefinition(named: type) != nil {
+            return nil
         }
         if let decoded = decodeTypedFacadeExpr(expression, scope: scope) {
             return decoded
@@ -1289,6 +1320,11 @@ public final class ParserSession {
         }
         if let type = typedFacadeType(call.calledExpression) {
             return typedFacadeValueShape(type)
+        }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           ["appending", "concatenating"].contains(member.declName.baseName.text),
+           let base = member.base {
+            return typedFacadeValueShape(base, scope: scope)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            let type = typedFacadeType(member.base) {
@@ -1463,7 +1499,13 @@ public final class ParserSession {
         for argument in call.arguments {
             guard let entry = argument.expression.as(TupleExprSyntax.self),
                   entry.elements.count == 2,
-                  let key = entry.elements.first.flatMap({ decodeTypedFacadeValue($0.expression, scope: scope) }),
+                  let key = entry.elements.first.flatMap({
+                      decodeTypedFacadeValue(
+                          $0.expression,
+                          scope: scope,
+                          expectedEnumType: domainType
+                      )
+                  }),
                   let value = entry.elements.dropFirst().first.flatMap({ decodeTypedFacadeValue($0.expression, scope: scope) })
             else { return nil }
             pairs += [.equal(.variable("_typedFunctionEntry"), key), value]
@@ -1543,7 +1585,7 @@ public final class ParserSession {
             return .except(selfExpr, key, val)
         case "at":
             guard let selfExpr,
-                  let idx = args.first?.expression.as(IntegerLiteralExprSyntax.self).flatMap({ Int($0.literal.text) })
+                  let idx = args.first?.expression.as(IntegerLiteralExprSyntax.self).flatMap(Self.integerLiteralValue)
             else { return nil }
             return .tupleAccess(selfExpr, idx)
         case "set", "tuple", "singleton":
@@ -1611,7 +1653,9 @@ public final class ParserSession {
                   let operation = decodeFormalOperator(args[0].expression),
                   let argumentArray = args[1].expression.as(ArrayExprSyntax.self)
             else { return nil }
-            let arguments = argumentArray.elements.compactMap { decodeFormalCallArgument($0.expression) }
+            let arguments = argumentArray.elements.compactMap {
+                decodeFormalCallArgument($0.expression, valueDecoder: decodeStateExpr)
+            }
             guard arguments.count == argumentArray.elements.count else { return nil }
             return .operatorApplication(operation, arguments)
         case "setFilter", "setMap", "forAll":
@@ -1635,7 +1679,7 @@ public final class ParserSession {
             default:
                 return nil
             }
-        case "function", "for", "exists", "choose", "any", "functionLiteral":
+        case "exists", "choose", "any", "functionLiteral":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
             if args.count == 3,
                let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
@@ -1650,10 +1694,6 @@ public final class ParserSession {
             }
             let exprs = args.compactMap { decodeStateExpr($0.expression) }
             switch methodName {
-            case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], generatedBinderName(), exprs[1]) : nil
-            case "for": return exprs.count >= 2 ? .forAll(exprs[0], generatedBinderName(), exprs[1]) : nil
-            case "exists": return exprs.count >= 2 ? .exists(exprs[0], generatedBinderName(), exprs[1]) : nil
-            case "choose": return exprs.count >= 2 ? .choose(exprs[0], generatedBinderName(), exprs[1]) : nil
             case "any": return exprs.count >= 1 ? .choose(exprs[0], generatedBinderName(), .value(.bool(true))) : nil
             default: return nil
             }
@@ -1712,7 +1752,7 @@ public final class ParserSession {
                     .representedLiteralValue,
                   let aritySyntax = call.arguments.first(where: { $0.label?.text == "arity" })?
                     .expression.as(IntegerLiteralExprSyntax.self),
-                  let arity = Int(aritySyntax.literal.text), arity >= 0
+                  let arity = Self.integerLiteralValue(aritySyntax), arity >= 0
             else { return nil }
             return .reference(name, arity: arity)
         case "lambda":
@@ -1744,7 +1784,10 @@ public final class ParserSession {
         return FormalLambda(parameters: parameters, body: body)
     }
 
-    private func decodeFormalCallArgument(_ expression: ExprSyntax) -> FormalCallArgument? {
+    private func decodeFormalCallArgument(
+        _ expression: ExprSyntax,
+        valueDecoder: (ExprSyntax) -> StateExpr?
+    ) -> FormalCallArgument? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
               let argument = call.arguments.first?.expression
@@ -1752,7 +1795,7 @@ public final class ParserSession {
 
         switch member.declName.baseName.text {
         case "value":
-            return decodeStateExpr(argument).map(FormalCallArgument.value)
+            return valueDecoder(argument).map(FormalCallArgument.value)
         case "operator":
             return decodeFormalOperator(argument).map(FormalCallArgument.operator)
         default:

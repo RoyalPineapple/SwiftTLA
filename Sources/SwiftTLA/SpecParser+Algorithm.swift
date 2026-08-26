@@ -836,34 +836,21 @@ extension ParserSession {
             )
             shape = typedFacadeValueShape(initialSyntax, scope: scope)
         } else if kind == .shared,
-                  let rangeSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
-                  let range = parseIntegerClosedRange(rangeSyntax) {
-            state = AlgorithmStateModel(
-                root: declaredName,
-                initial: .value(.int(range.lowerBound)),
-                initialSet: .setLiteral(range.map { .value(.int($0)) }),
-                swiftTypeName: "Int"
-            )
-            shape = nil
-        } else if kind == .shared,
-                  let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
-            guard let initialSet = decodeStateExpr(setSyntax),
-                  case .set(let elements) = try? evaluateClosed(initialSet),
-                  !elements.isEmpty,
-                  let typeName = setExpressionElementTypeName(setSyntax)
+                  let domainSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
+            guard let domain = finiteSharedVariableDomain(domainSyntax)
             else {
                 algorithmParseFailure = algorithmParseFailure
                     ?? ("SharedVar(_:in:) requires a non-empty static formal domain; "
-                        + "could not decode '\(setSyntax.description.trimmingCharacters(in: .whitespacesAndNewlines))'.")
+                        + "could not decode '\(domainSyntax.description.trimmingCharacters(in: .whitespacesAndNewlines))'.")
                 return nil
             }
             state = AlgorithmStateModel(
                 root: declaredName,
-                initial: .value(.int(0)),
-                initialSet: initialSet,
-                swiftTypeName: typeName
+                initial: .value(domain.initial),
+                initialSet: domain.expression,
+                swiftTypeName: domain.elementType
             )
-            shape = typedFacadeValueShape(setSyntax, scope: scope)?.selectedElement
+            shape = typedFacadeValueShape(domainSyntax, scope: scope)?.selectedElement
         } else {
             algorithmParseFailure = "\(kind.sourceName) declaration must use an explicit initial value or finite domain."
             return nil
@@ -1033,21 +1020,23 @@ extension ParserSession {
                 }
                 return nil
             }
-            if let expanded = parseMacroInvocation(
-                expression,
-                processParameter: processParameter,
-                macros: macros,
-                scope: scope
-            ) {
-                result += expanded
-                continue
-            }
             guard let call = expression.as(FunctionCallExprSyntax.self) else {
                 if algorithmParseFailure == nil {
                     algorithmParseFailure = "Statement \(index + 1) could not be decoded: "
                         + "'\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 }
                 return nil
+            }
+            if let name = AlgorithmSourceConstruct.referenceName(in: call.calledExpression),
+               macros[name] != nil {
+                guard let expanded = parseMacroInvocation(
+                    expression,
+                    processParameter: processParameter,
+                    macros: macros,
+                    scope: scope
+                ) else { return nil }
+                result += expanded
+                continue
             }
             guard let construct = AlgorithmSourceConstruct(call.calledExpression) else {
                 guard let sourceName = AlgorithmSourceConstruct.referenceName(in: call.calledExpression) else {
@@ -1319,11 +1308,17 @@ extension ParserSession {
                   let bound = closureParameterNames(in: closure).first
             else { return nil }
             let replacement = generatedBinderName()
+            let shape = typedFacadeValueShape(valueSyntax, scope: scope)
             guard let body = parseAlgorithmStatements(
                 closure.statements,
                 processParameter: processParameter,
                 macros: macros,
-                scope: typedFacadeScope(scope, binding: bound, to: .variable(replacement))
+                scope: typedFacadeScope(
+                    scope,
+                    binding: bound,
+                    to: .variable(replacement),
+                    shape: shape
+                )
             ) else { return nil }
             return .letBinding(
                 variable: replacement,
@@ -1454,15 +1449,14 @@ extension ParserSession {
             return literal.representedLiteralValue
         }
         if let access = expression.as(MemberAccessExprSyntax.self) {
-            if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-               case .string(let rawLabel) = enumDefinition(named: type)?
-                    .value(named: access.declName.baseName.text) {
+            guard let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text else {
+                return nil
+            }
+            if case .string(let rawLabel) = enumDefinition(named: type)?
+                .value(named: access.declName.baseName.text) {
                 return rawLabel
             }
             return access.declName.baseName.text
-        }
-        if let reference = expression.as(DeclReferenceExprSyntax.self) {
-            return reference.baseName.text
         }
         return nil
     }
