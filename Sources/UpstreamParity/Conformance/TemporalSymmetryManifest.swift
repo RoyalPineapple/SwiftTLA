@@ -37,7 +37,7 @@ package enum TemporalComparisonStatus: String, Codable, Sendable {
   case unavailable
 }
 
-package enum SymmetryExplorationEngine: String, Codable, Sendable {
+package enum SymmetryGraphSource: String, Codable, Sendable {
   case swift
   case tlc
 }

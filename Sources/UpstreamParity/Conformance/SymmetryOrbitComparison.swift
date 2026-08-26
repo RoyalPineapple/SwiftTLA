@@ -1,5 +1,91 @@
 import Foundation
 
+package struct SymmetryOrbit: Equatable, Encodable, Sendable {
+  package let members: [String]
+  package let semanticRepresentative: String
+  package let swiftExecutableRepresentative: String
+  package let tlcExecutableRepresentative: String
+
+  package init(
+    members: [String],
+    semanticRepresentative: String,
+    swiftExecutableRepresentative: String,
+    tlcExecutableRepresentative: String
+  ) throws {
+    let orderedMembers = members.sorted()
+    guard orderedMembers.isEmpty == false,
+          Set(orderedMembers).count == orderedMembers.count,
+          orderedMembers.allSatisfy({ $0.isEmpty == false }),
+          semanticRepresentative == orderedMembers.first,
+          orderedMembers.contains(swiftExecutableRepresentative),
+          orderedMembers.contains(tlcExecutableRepresentative) else {
+      throw EvidenceFormatError.invalidField(record: "orbit", field: "members or representative")
+    }
+    self.members = orderedMembers
+    self.semanticRepresentative = semanticRepresentative
+    self.swiftExecutableRepresentative = swiftExecutableRepresentative
+    self.tlcExecutableRepresentative = tlcExecutableRepresentative
+  }
+}
+
+package struct SymmetryQuotientTransition: Hashable, Encodable, Sendable, Comparable {
+  package let sourceRepresentative: String
+  package let action: String
+  package let targetRepresentative: String
+
+  package init(sourceRepresentative: String, action: String, targetRepresentative: String) throws {
+    guard sourceRepresentative.isEmpty == false,
+          action.isEmpty == false,
+          targetRepresentative.isEmpty == false else {
+      throw EvidenceFormatError.invalidField(record: "quotient transition", field: "transition")
+    }
+    self.sourceRepresentative = sourceRepresentative
+    self.action = action
+    self.targetRepresentative = targetRepresentative
+  }
+
+  package static func < (lhs: Self, rhs: Self) -> Bool {
+    if lhs.sourceRepresentative != rhs.sourceRepresentative {
+      return lhs.sourceRepresentative < rhs.sourceRepresentative
+    }
+    if lhs.action != rhs.action { return lhs.action < rhs.action }
+    return lhs.targetRepresentative < rhs.targetRepresentative
+  }
+}
+
+package struct SymmetryOrbitComparison: Equatable, Encodable, Sendable {
+  package static let schema = "SymmetryOrbitComparison"
+
+  package let schema: String
+  package let caseID: String
+  package let orbits: [SymmetryOrbit]
+  package let quotientTransitions: [SymmetryQuotientTransition]
+
+  package init(
+    caseID: String,
+    orbits: [SymmetryOrbit],
+    quotientTransitions: [SymmetryQuotientTransition]
+  ) throws {
+    let members = orbits.flatMap(\.members)
+    let representatives = Set(orbits.map(\.semanticRepresentative))
+    let orderedTransitions = quotientTransitions.sorted()
+    guard caseID.isEmpty == false,
+          orbits.isEmpty == false,
+          Set(members).count == members.count,
+          Set(orderedTransitions).count == orderedTransitions.count,
+          orderedTransitions.allSatisfy({
+            representatives.contains($0.sourceRepresentative)
+              && representatives.contains($0.targetRepresentative)
+          }) else {
+      throw EvidenceFormatError.invalidField(record: caseID, field: "orbit comparison")
+    }
+    schema = Self.schema
+    self.caseID = caseID
+    self.orbits = orbits.sorted { $0.semanticRepresentative < $1.semanticRepresentative }
+    self.quotientTransitions = orderedTransitions
+  }
+}
+
 package enum SymmetryOrbitDifferenceKind: String, Encodable, Sendable {
   case incompleteRun
   case rawGraph
@@ -83,10 +169,10 @@ package func compareSymmetryOrbits(
     permutations: input.permutations
   )
   let swiftRepresentatives = try reducedRepresentatives(
-    input.swiftReduced, engine: .swift, derivation: derivation
+    input.swiftReduced, source: .swift, derivation: derivation
   )
   let tlcRepresentatives = try reducedRepresentatives(
-    input.tlcReduced, engine: .tlc, derivation: derivation
+    input.tlcReduced, source: .tlc, derivation: derivation
   )
 
   let rawInitialRepresentatives = try initialRepresentatives(input.swiftRaw, derivation: derivation)
@@ -135,21 +221,21 @@ package func compareSymmetryOrbits(
 
 private func reducedRepresentatives(
   _ run: CompletedGraphRun,
-  engine: SymmetryExplorationEngine,
+  source: SymmetryGraphSource,
   derivation: SymmetryOrbitDerivation
 ) throws -> [String: String] {
   var representatives: [String: String] = [:]
   for state in run.graph.states.keys {
     guard let orbit = derivation.representativeForState[state] else {
       throw SymmetryOrbitAdapterError.reducedStateOutsideOrbit(
-        engine: engine,
+        source: source,
         stateID: state.canonicalEncoding
       )
     }
     let orbitID = orbit.canonicalEncoding
     guard representatives[orbitID] == nil else {
       throw SymmetryOrbitAdapterError.multipleReducedRepresentatives(
-        engine: engine,
+        source: source,
         representative: orbitID
       )
     }
@@ -159,7 +245,7 @@ private func reducedRepresentatives(
     let orbitID = orbit[0].canonicalEncoding
     guard representatives[orbitID] != nil else {
       throw SymmetryOrbitAdapterError.missingReducedRepresentative(
-        engine: engine,
+        source: source,
         representative: orbitID
       )
     }

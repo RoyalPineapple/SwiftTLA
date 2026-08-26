@@ -6,7 +6,7 @@ struct SymmetryOrbitConformanceTests {
   func reducedRepresentativeOutsideOrbitIsRejected() throws {
     let input = try fixture(reducedStates: [state("C")])
     #expect(throws: SymmetryOrbitAdapterError.reducedStateOutsideOrbit(
-      engine: .swift,
+      source: .swift,
       stateID: state("C").key.canonicalEncoding
     )) {
       _ = try compareSymmetryOrbits(input)

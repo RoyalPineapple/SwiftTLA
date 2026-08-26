@@ -201,9 +201,9 @@ package struct TemporalSymmetryCheck: Sendable {
     let reducedBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: true)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(symmetryCase.id, isDirectory: true)
     try RetainedEvidence.createDirectory(work, beneath: projectRoot)
-    let rawCase = try launchCase(
+    let rawCase = try makeFiniteGraphCase(
       id: symmetryCase.id, bundle: rawBundle, pin: referencePin, architecture: context.architecture)
-    let reducedCase = try launchCase(
+    let reducedCase = try makeFiniteGraphCase(
       id: symmetryCase.id, bundle: reducedBundle, pin: referencePin, architecture: context.architecture)
     let rawRequest = try request(
       context: context, bundle: rawBundle, work: work.appendingPathComponent("raw"),
@@ -283,7 +283,7 @@ extension TemporalSymmetryCheck {
     }
   }
 
-  private func launchCase(
+  private func makeFiniteGraphCase(
     id: String,
     bundle: TLAModuleBundle,
     pin: TLCReferencePin,
