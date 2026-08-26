@@ -13,7 +13,7 @@ The declared semantic source and retained hosted evidence are authoritative.
 GitHub Actions runs exact finite graph comparison.
 Local use is diagnostic-only: use the approved narrow validation wrapper, or
 obtain explicit authorization for a broader command. Do not treat a local run
-as admission evidence.
+as hosted validation evidence.
 
 ## What is pinned
 
