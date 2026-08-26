@@ -192,11 +192,9 @@ struct FormalOperatorTests {
     )
 
     let compilation = try spec.compile()
-    let action = try #require(compilation.layout.actionID(named: "advance"))
-    let initial = try #require(try compilation.initialStateProjections().first)
-    let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
-    let token = try #require(TLAStateProjection.Token(validating: "counter"))
-    #expect(successor.value(for: token) == .int(2))
+    let initial = try firstCompiledState(in: compilation)
+    let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
+    #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
     let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
@@ -243,11 +241,9 @@ struct FormalOperatorTests {
     )
 
     let compilation = try consumer.compile()
-    let action = try #require(compilation.layout.actionID(named: "advance"))
-    let initial = try #require(try compilation.initialStateProjections().first)
-    let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
-    let token = try #require(TLAStateProjection.Token(validating: "counter"))
-    #expect(successor.value(for: token) == .int(2))
+    let initial = try firstCompiledState(in: compilation)
+    let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
+    #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
     let result = try ModelChecker(compilation: try consumer.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }

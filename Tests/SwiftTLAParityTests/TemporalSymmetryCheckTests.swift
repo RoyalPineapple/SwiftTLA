@@ -13,10 +13,7 @@ struct TemporalSymmetryCheckTests {
         compilation: compilation,
         configuration: try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)
       ).explore()
-      let analyses = LivenessChecker(compilation: compilation, graph: exploration.graph).analyze(
-        initialStateIDs: exploration.initialStateIDs,
-        isComplete: exploration.isComplete
-      )
+      let analyses = exploration.analyzeTemporalProperties(in: compilation)
       #expect(analyses.allSatisfy { $0.status == .violated })
     }
   }

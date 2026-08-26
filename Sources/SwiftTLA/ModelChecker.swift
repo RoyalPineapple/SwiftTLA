@@ -61,11 +61,7 @@ package struct ModelChecker {
             guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
             guard !self.spec.temporalProperties.isEmpty else { return exploration.result }
 
-            let graph = exploration.graph
-            let analyses = LivenessChecker(compilation: compilation, graph: graph).analyze(
-                initialStateIDs: exploration.initialStateIDs,
-                isComplete: exploration.isComplete
-            )
+            let analyses = exploration.analyzeTemporalProperties(in: compilation)
             for (property, result) in zip(self.spec.temporalProperties, analyses) {
                 switch result.status {
                 case .satisfied:
@@ -123,7 +119,8 @@ package struct ModelChecker {
             initialStateIDs: exploration.initialStateIDs,
             result: bounded(exploration.result),
             compilationIdentity: compilation.identity,
-            configuration: configuration
+            configuration: configuration,
+            compiledStates: exploration.compiledStates
         )
     }
 

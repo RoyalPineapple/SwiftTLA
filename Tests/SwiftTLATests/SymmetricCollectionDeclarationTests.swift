@@ -36,12 +36,11 @@ struct SymmetricCollectionDeclarationTests {
     #expect(Set(initial.values) == Set([TLAValue.int(0)]))
 
     let compilation = try spec.compile()
-    let initialState = try #require(try compilation.initialStateProjections().first)
-    let begin = try #require(compilation.compiledActions.first).id
-    let successors = try compilation.successors(for: begin, arguments: [], from: initialState)
+    let initialState = try firstCompiledState(in: compilation)
+    let successors = try compiledSuccessors(named: "begin", arguments: [], in: compilation, from: initialState)
     #expect(successors.count == 2)
     for successor in successors {
-      let phaseValue = try #require(try value("phases", in: successor))
+      let phaseValue = try renderedValue(named: "phases", in: successor, compilation: compilation)
       guard case .function(let values) = phaseValue else {
         Issue.record("Expected the symmetric collection state to be a function")
         return

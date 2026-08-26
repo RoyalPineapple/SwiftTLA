@@ -142,25 +142,3 @@ struct CompiledSuccessor: Sendable {
     let arguments: [CompiledValue]
     let state: CompiledState
 }
-
-package enum CompiledPropertyOutcome: Sendable, Equatable {
-    case satisfied(name: String)
-    case violated(name: String)
-    case evaluationFailed(name: String, diagnostic: CompiledPropertyDiagnostic)
-    case evaluationUnavailable(name: String, diagnostic: CompiledPropertyDiagnostic)
-}
-
-package struct CompiledPropertyDiagnostic: Sendable, Equatable {
-    package enum Code: String, Sendable, Equatable {
-        case evaluationError
-        case evaluatorUnavailable
-    }
-
-    package let code: Code
-    package let message: String
-
-    package init(code: Code, message: String) {
-        self.code = code
-        self.message = message
-    }
-}

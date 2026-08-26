@@ -67,7 +67,7 @@ struct SymmetricCollectionPredicateTests {
     #expect(parsed.symmetricCollections.map(\.metadata)
       == direct.symmetricCollections.map(\.metadata))
     #expect(parsedCompilation.identity == directCompilation.identity)
-    #expect(try parsedCompilation.initialStateProjections() == directCompilation.initialStateProjections())
+    #expect(try renderedInitialStates(in: parsedCompilation) == renderedInitialStates(in: directCompilation))
     #expect(try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description
       == ModelChecker(compilation: directCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description)
   }
@@ -89,7 +89,9 @@ struct SymmetricCollectionPredicateTests {
 
     #expect(generated.symmetricCollections.map(\.metadata) == direct.symmetricCollections.map(\.metadata))
     #expect(generated.invariants == direct.invariants)
-    #expect(try generated.compile().initialStateProjections() == direct.compile().initialStateProjections())
+    let generatedCompilation = try generated.compile()
+    let directCompilation = try direct.compile()
+    #expect(try renderedInitialStates(in: generatedCompilation) == renderedInitialStates(in: directCompilation))
     #expect(try ModelChecker(compilation: try generated.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description
       == ModelChecker(compilation: try direct.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().description)
     #expect(!generated.invariants.description.contains("PredicateMacroDevice"))

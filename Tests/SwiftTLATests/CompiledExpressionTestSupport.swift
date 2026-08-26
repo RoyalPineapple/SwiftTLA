@@ -19,9 +19,9 @@ func compiledValue(
     recursiveFuncs: recursiveFunctions,
     formalOperatorDefinitions: formalOperators
   )
-  let initial = try #require(try specification.compile().initialStateProjections().first)
-  let result = try #require(TLAStateProjection.Token(validating: resultName))
-  return try #require(initial.value(for: result))
+  let compilation = try specification.compile()
+  let initial = try firstCompiledState(in: compilation)
+  return try renderedValue(named: resultName, in: initial, compilation: compilation)
 }
 
 func projection(_ values: [(String, TLAValue)]) throws -> TLAStateProjection {

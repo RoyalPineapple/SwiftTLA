@@ -141,15 +141,12 @@ public struct GeneratedContainsPredicateRuntime {
 struct SymmetricCollectionMacroRuntimeTests {
   private func compiledSuccessors(
     in compilation: CompiledSpecification,
-    from projection: TLAStateProjection
-  ) throws -> [TLAStateProjection] {
-    let state = try CompiledState(
-      projection: projection,
-      compilation: compilation
-    )
+    from value: TLAValue
+  ) throws -> [CompiledState] {
+    let state = try CompiledState(formalValues: [value], compilation: compilation)
     return try CompiledRuntime(compilation: compilation)
       .successors(from: state)
-      .map { try $0.state.projection(using: compilation.layout) }
+      .map(\.state)
   }
 
   private struct Device: Identifiable {
@@ -210,10 +207,8 @@ struct SymmetricCollectionMacroRuntimeTests {
     """
     let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
-    let initial = parsed.variables.map { ($0.name, $0.initial) }
-    let advanced: [(String, TLAValue)] = [
-      ("devices", .function([TLAValue.constant("DevicesMember0"): TLAValue.int(1)]))
-    ]
+    let initial = try #require(parsed.variables.first?.initial)
+    let advanced = TLAValue.function([.constant("DevicesMember0"): .int(1)])
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let runtimeBuilt = TLASpec("CollectionActionBehavior") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
@@ -226,9 +221,9 @@ struct SymmetricCollectionMacroRuntimeTests {
     let runtimeCompilation = try runtimeBuilt.compile()
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(try compiledSuccessors(in: parsedCompilation, from: projection(initial))
-      == compiledSuccessors(in: runtimeCompilation, from: projection(initial)))
-    #expect(try compiledSuccessors(in: parsedCompilation, from: projection(advanced)).isEmpty)
+    #expect(try compiledSuccessors(in: parsedCompilation, from: initial)
+      == compiledSuccessors(in: runtimeCompilation, from: initial))
+    #expect(try compiledSuccessors(in: parsedCompilation, from: advanced).isEmpty)
   }
 
   @Test("Parser preserves collection action precedence from syntax nodes")
@@ -441,18 +436,16 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing preserves ActionBuilder statement precedence")
   func macroPreservesMultiStatementActionPrecedence() throws {
-    let boundedState: [(String, TLAValue)] = [
-      ("devices", .function([
+    let boundedState = TLAValue.function([
         .constant("DevicesMember0"): .int(0),
         .constant("DevicesMember1"): .int(1)
-      ]))
-    ]
+      ])
+    let compilation = try GeneratedMultiStatementSymmetricRuntime.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
-      in: GeneratedMultiStatementSymmetricRuntime.spec.compile(),
-      from: projection(boundedState)
+      in: compilation,
+      from: boundedState
     )
-    let devices = try #require(TLAStateProjection.Token(validating: "devices"))
-    #expect(boundedSuccessors.map { $0.value(for: devices) } == [
+    #expect(try boundedSuccessors.map { try renderedValue(named: "devices", in: $0, compilation: compilation) } == [
       .function([
         .constant("DevicesMember0"): .int(0),
         .constant("DevicesMember1"): .int(11)
@@ -480,18 +473,16 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing applies the update from the enabled disjunct only")
   func macroPreservesBranchSpecificCollectionUpdates() throws {
-    let boundedState: [(String, TLAValue)] = [
-      ("devices", .function([
+    let boundedState = TLAValue.function([
         .constant("DevicesMember0"): .int(2),
         .constant("DevicesMember1"): .int(1)
-      ]))
-    ]
+      ])
+    let compilation = try GeneratedDisjunctiveSymmetricRuntime.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
-      in: GeneratedDisjunctiveSymmetricRuntime.spec.compile(),
-      from: projection(boundedState)
+      in: compilation,
+      from: boundedState
     )
-    let devices = try #require(TLAStateProjection.Token(validating: "devices"))
-    #expect(boundedSuccessors.map { $0.value(for: devices) } == [
+    #expect(try boundedSuccessors.map { try renderedValue(named: "devices", in: $0, compilation: compilation) } == [
       .function([
         .constant("DevicesMember0"): .int(22),
         .constant("DevicesMember1"): .int(1)

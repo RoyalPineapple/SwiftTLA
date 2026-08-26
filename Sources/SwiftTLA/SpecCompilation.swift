@@ -162,16 +162,6 @@ public struct CompiledSpecification: Sendable {
         )
     }
 
-    package func initialStateProjections() throws -> [TLAStateProjection] {
-        try CompiledRuntime(compilation: self).initialStates().map {
-            try $0.projection(using: layout)
-        }
-    }
-
-    package var compiledActions: [(id: ActionID, renderedName: String)] {
-        layout.actions.map { (id: $0.id, renderedName: $0.renderedName) }
-    }
-
     package func renderedActions() throws -> [RenderedAction] {
         guard let plan = moduleSectionPlans[formalModuleClosure.root.id] else {
             throw CompilationDiagnostic(
@@ -226,56 +216,6 @@ public struct CompiledSpecification: Sendable {
             ordinal: action.id.ordinal,
             formalArguments: try request.arguments.map { try $0.rendered(using: layout) }
         )
-    }
-
-    package func successors(
-        for action: ActionID,
-        arguments: [TLAValue],
-        from state: TLAStateProjection
-    ) throws -> [TLAStateProjection] {
-        let formalState = try CompiledState(projection: state, compilation: self)
-        return try CompiledRuntime(compilation: self)
-            .successors(for: action, from: formalState)
-            .filter { try $0.arguments.map { try $0.rendered(using: layout) } == arguments }
-            .map { try $0.state.projection(using: layout) }
-    }
-
-    package func propertyOutcomes(
-        in state: TLAStateProjection
-    ) -> [CompiledPropertyOutcome] {
-        let runtime = CompiledRuntime(compilation: self)
-        let formalState: CompiledState
-        do {
-            formalState = try CompiledState(projection: state, compilation: self)
-        } catch {
-            return semantics.invariants.map {
-                .evaluationFailed(
-                    name: $0.name,
-                    diagnostic: .init(code: .evaluationError, message: String(describing: error))
-                )
-            }
-        }
-        let invariants = semantics.invariants.map { invariant -> CompiledPropertyOutcome in
-            do {
-                return try runtime.invariantHolds(invariant, in: formalState)
-                    ? .satisfied(name: invariant.name)
-                    : .violated(name: invariant.name)
-            } catch {
-                return .evaluationFailed(
-                    name: invariant.name,
-                    diagnostic: .init(code: .evaluationError, message: String(describing: error))
-                )
-            }
-        }
-        return invariants + semantics.temporalProperties.map {
-            .evaluationUnavailable(
-                name: $0.name,
-                diagnostic: .init(
-                    code: .evaluatorUnavailable,
-                    message: "Temporal properties require a complete graph evaluation"
-                )
-            )
-        }
     }
 
     init(

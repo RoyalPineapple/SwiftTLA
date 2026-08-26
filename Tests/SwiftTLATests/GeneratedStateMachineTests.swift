@@ -747,21 +747,21 @@ struct GeneratedStateMachineTests {
         ])
 
         let compilation = try builder.compile()
-        let action = try #require(compilation.layout.actionID(named: "board"))
-        let initial = try #require(try compilation.initialStateProjections().first)
-        let formalFloor = try #require(TLAStateProjection.Token(validating: "floor"))
-        let successor = try #require(try compilation.successors(
-            for: action,
+        let initial = try firstCompiledState(in: compilation)
+        let successor = try #require(try compiledSuccessors(
+            named: "board",
             arguments: [.int(2), .int(20), .int(200)],
+            in: compilation,
             from: initial
         ).first)
-        #expect(successor.value(for: formalFloor) == .int(222))
-        #expect(try compilation.successors(
-            for: action,
+        #expect(try renderedValue(named: "floor", in: successor, compilation: compilation) == .int(222))
+        #expect(try compiledSuccessors(
+            named: "board",
             arguments: [.int(2), .int(30), .int(200)],
+            in: compilation,
             from: initial
         ).isEmpty)
-        #expect(initial.value(for: formalFloor) == .int(0))
+        #expect(try renderedValue(named: "floor", in: initial, compilation: compilation) == .int(0))
 
         var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = generatedMachine.state

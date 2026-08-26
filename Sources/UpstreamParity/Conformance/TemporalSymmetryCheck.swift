@@ -392,13 +392,7 @@ extension TemporalSymmetryCheck {
     guard model.spec.temporalProperties.isEmpty == false else {
       throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "temporal property")
     }
-    let analyses = LivenessChecker(
-      compilation: compilation,
-      graph: exploration.graph
-    ).analyze(
-      initialStateIDs: exploration.initialStateIDs,
-      isComplete: exploration.isComplete
-    )
+    let analyses = exploration.analyzeTemporalProperties(in: compilation)
     guard let analysis = analyses.first else {
       throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "compiled temporal property")
     }
