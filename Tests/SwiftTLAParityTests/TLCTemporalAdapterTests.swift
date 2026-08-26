@@ -4,10 +4,10 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCTemporalAdapterTests {
-  @Test("TLC temporal adapter retains current exact evidence")
-  func capturesCorrelatedExactEvidence() throws {
+  @Test("TLC temporal adapter retains exact graph evidence")
+  func retainsExactEvidence() throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
@@ -32,8 +32,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter rejects equal property outcomes over different graphs")
   func rejectsDifferentGraphWithEqualPropertyOutcome() throws {
     let fixture = try Fixture()
-    let tlcStream = try graphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
-    let swiftStream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let tlcStream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let swiftStream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let swiftGraph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       swiftStream,
       result: Fixture.success
@@ -76,31 +76,21 @@ struct TLCTemporalAdapterTests {
     #expect(result.comparison == nil)
   }
 
-  @Test("TLC temporal adapter blocks foreign and incomplete evidence before comparison")
-  func blocksForeignOrIncompleteEvidence() throws {
-    let foreign = try Fixture()
-    let foreignCorrelation = try TemporalSymmetryRunReferences(
-      caseID: foreign.launchCase.id, runID: foreign.correlation.runID, swiftRunID: foreign.correlation.swiftRunID,
-      tlcRunID: UUID(), comparisonRunID: foreign.correlation.comparisonRunID)
+  @Test("TLC temporal adapter rejects changed source before comparison")
+  func rejectsChangedSource() throws {
+    let fixture = try Fixture()
+    try Data("changed".utf8).write(to: fixture.module, options: .atomic)
     let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
-      .capture(try foreign.input(correlation: foreignCorrelation))
+      .capture(try fixture.input())
     #expect(result.status == .unavailable)
     #expect(result.comparison == nil)
-    #expect(result.diagnostic?.code == "foreign-run")
-
-    let incomplete = try Fixture()
-    try Data("changed".utf8).write(to: incomplete.module, options: .atomic)
-    let incompleteResult = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
-      .capture(try incomplete.input())
-    #expect(incompleteResult.status == .unavailable)
-    #expect(incompleteResult.comparison == nil)
-    #expect(incompleteResult.diagnostic?.code == "source-input-mismatch")
+    #expect(result.diagnostic?.code == "source-input-mismatch")
   }
 
   @Test("TLC temporal adapter does not invent a lasso from an open trace")
   func recordsUnattributableTemporalTraceAsUnavailable() throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
@@ -117,60 +107,81 @@ struct TLCTemporalAdapterTests {
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("diagnostic.json").path))
   }
 
+  @Test("TLC temporal adapter rejects an incomplete declared complete-graph pass")
+  func rejectsIncompleteCompleteGraphPass() throws {
+    let fixture = try Fixture()
+    let stream = try temporalGraphStream(
+      case: fixture.completeGraphCase,
+      runID: fixture.completeGraphRequest.runID)
+    let result = TLCTemporalAdapter(
+      processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(
+        primaryStream: stream,
+        trace: try numberedLoopBackTrace())))
+      .capture(try fixture.input(usesCompleteGraphPass: true))
+
+    #expect(result.status == .unavailable)
+    #expect(result.comparison == nil)
+    #expect(result.diagnostic?.code == "incomplete-graph")
+  }
+
   @Test("TLC temporal adapter accepts a numbered two-state loop-back lasso")
   func capturesPinnedLoopBackLasso() throws {
     let fixture = try Fixture()
-    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
       traceAvailability: .available,
-      traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
     let result = TLCTemporalAdapter(
-      processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(
-        primaryStream: stream, trace: try numberedLoopBackTrace())))
-      .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
+      processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
+        propertyStream: stream,
+        graphStream: try temporalGraphStream(
+          case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID),
+        graphRunID: fixture.completeGraphRequest.runID,
+        trace: try numberedLoopBackTrace())))
+      .capture(try fixture.input(
+        swiftRun: completedSwiftRun(graph), swiftResult: swiftResult, usesCompleteGraphPass: true))
 
     #expect(result.status == .captured)
     #expect(result.comparison?.outcome == .exact)
     #expect(result.comparison?.tlcResult.lasso?.cycleStateIDs.count == 3)
   }
 
-  @Test("TLC temporal adapter binds an exact actionless stuttering lasso to a retained state")
-  func capturesPinnedStutteringLasso() throws {
+  @Test("TLC temporal adapter binds an actionless lasso but does not admit an incomplete graph")
+  func bindsLassoWithoutAdmittingIncompleteGraph() throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
       traceAvailability: .available,
-      traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
     let trace = try numberedStutteringTrace()
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: stream, trace: trace)))
       .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
 
-    #expect(result.status == .captured)
-    #expect(result.comparison?.outcome == .exact)
+    #expect(result.status == .unavailable)
+    #expect(result.comparison?.outcome == .unavailable)
+    #expect(result.comparison?.tlcResult.lasso != nil)
+    #expect(result.diagnostic?.code == "incomplete-graph")
   }
 
   @Test("TLC temporal adapter binds a named same-state dump step only when the declared behavior allows stuttering")
   func bindsNamedSameStateDumpStepOnlyWithDeclaredStuttering() throws {
     let rejectedFixture = try Fixture()
-    let stream = try graphStream(case: rejectedFixture.launchCase, runID: rejectedFixture.correlation.tlcRunID)
+    let stream = try graphStream(case: rejectedFixture.launchCase, runID: rejectedFixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: rejectedFixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
       traceAvailability: .available,
-      traceEvidence: try Fixture.reference(rejectedFixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
     let namedTrace = try numberedStutteringTrace(action: "A")
     let rejected = TLCTemporalAdapter(
@@ -179,14 +190,13 @@ struct TLCTemporalAdapterTests {
     #expect(rejected.status == .unavailable)
 
     let admittedFixture = try Fixture()
-    let admittedStream = try graphStream(case: admittedFixture.launchCase, runID: admittedFixture.correlation.tlcRunID)
+    let admittedStream = try graphStream(case: admittedFixture.launchCase, runID: admittedFixture.request.runID)
     let admittedGraph = try TLCGraphReader(expectedCase: admittedFixture.launchCase).readCompletedGraph(
       admittedStream, result: Fixture.temporalViolation)
     let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
     let admittedSwiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
       traceAvailability: .available,
-      traceEvidence: try Fixture.reference(admittedFixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
     let admitted = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: admittedStream, trace: namedTrace)))
@@ -195,21 +205,21 @@ struct TLCTemporalAdapterTests {
         swiftResult: admittedSwiftResult,
         allowsImplicitStuttering: true
       ))
-    #expect(admitted.status == .captured)
-    #expect(admitted.comparison?.outcome == .exact)
+    #expect(admitted.status == .unavailable)
+    #expect(admitted.comparison?.outcome == .unavailable)
+    #expect(admitted.comparison?.tlcResult.lasso != nil)
   }
 
   @Test("TLC temporal adapter rejects a lasso that is foreign to the captured graph")
   func rejectsForeignTraceEvenWhenItsLoopCloses() throws {
     let fixture = try Fixture()
-    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .violated,
       traceAvailability: .available,
-      traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(
@@ -223,7 +233,7 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter retains primary evidence when trace capture throws")
   func retainsPrimaryEvidenceAfterTraceCaptureFailure() throws {
     let fixture = try Fixture()
-    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     try Data("stale trace".utf8).write(to: fixture.request.traceOutput, options: .atomic)
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TraceFailingExecutor(primaryStream: stream)))
@@ -312,6 +322,33 @@ struct TLCTemporalAdapterTests {
     }
   }
 
+  private final class CompleteGraphExecutor: TLCProcessExecuting, Sendable {
+    let propertyStream: Data
+    let graphStream: Data
+    let graphRunID: UUID
+    let trace: Data
+
+    init(propertyStream: Data, graphStream: Data, graphRunID: UUID, trace: Data) {
+      self.propertyStream = propertyStream
+      self.graphStream = graphStream
+      self.graphRunID = graphRunID
+      self.trace = trace
+    }
+
+    func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
+      if request.traceMode == .dumpJSON {
+        try trace.write(to: request.traceOutput, options: .atomic)
+        return Fixture.temporalViolation
+      }
+      if request.runID == graphRunID {
+        try graphStream.write(to: request.graphEvents, options: .atomic)
+        return Fixture.success
+      }
+      try propertyStream.write(to: request.graphEvents, options: .atomic)
+      return Fixture.temporalViolation
+    }
+  }
+
   private final class TraceFailingExecutor: TLCProcessExecuting, Sendable {
     let primaryStream: Data
 
@@ -334,25 +371,29 @@ struct TLCTemporalAdapterTests {
     let root: URL
     let module: URL
     let configuration: URL
+    let graphConfiguration: URL
     let manifest: URL
     let toolchain: URL
     let output: URL
     let launchCase: FiniteGraphCase
+    let completeGraphCase: FiniteGraphCase
     let temporalCase: TemporalSymmetryCase
-    let correlation: TemporalSymmetryRunReferences
     let request: TLCProcessRequest
+    let completeGraphRequest: TLCProcessRequest
     let swiftRun: CompletedGraphRun
 
     init() throws {
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCTemporalAdapterTests-\(UUID())")
       module = root.appendingPathComponent("TemporalFixture.tla")
       configuration = root.appendingPathComponent("TemporalFixture.cfg")
+      graphConfiguration = root.appendingPathComponent("TemporalFixtureGraph.cfg")
       manifest = root.appendingPathComponent("manifest.json")
       toolchain = root.appendingPathComponent("toolchain.json")
       output = root.appendingPathComponent("evidence")
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       try Data("---- MODULE TemporalFixture ----\n====\n".utf8).write(to: module)
       try Data("SPECIFICATION Spec\n".utf8).write(to: configuration)
+      try Data("SPECIFICATION Spec\n\\* complete graph\n".utf8).write(to: graphConfiguration)
       try Data("{\"schema\":\"TemporalSymmetryCases\"}".utf8).write(to: manifest)
       try Data("{\"toolchain\":\"locked\"}".utf8).write(to: toolchain)
       launchCase = try FiniteGraphCase(
@@ -360,21 +401,32 @@ struct TLCTemporalAdapterTests {
         cfgSHA256: SHA256.hex(Data(contentsOf: configuration)), arguments: [],
         argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
         deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: try testReferencePin())
+      completeGraphCase = try FiniteGraphCase(
+        id: "temporal", moduleSHA256: SHA256.hex(Data(contentsOf: module)),
+        cfgSHA256: SHA256.hex(Data(contentsOf: graphConfiguration)), arguments: [],
+        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
+        deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: try testReferencePin())
       temporalCase = try TemporalSymmetryCase(
         id: launchCase.id, kind: .temporal, swiftSpec: "TemporalFixture",
         sourceInput: try Fixture.reference(module, path: "Verification/TemporalSymmetryConformance/TemporalFixture.tla"),
         configuration: try TemporalSymmetryConfiguration(property: "[] P", fairness: TemporalFairnessMode.none))
-      correlation = try TemporalSymmetryRunReferences(
-        caseID: temporalCase.id, runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
         replayInput: root.appendingPathComponent("replay.json"), workingDirectory: root, arguments: [],
-        expectedCase: launchCase, runID: correlation.tlcRunID, referencePin: launchCase.pin)
+        expectedCase: launchCase, runID: UUID(), referencePin: launchCase.pin)
+      completeGraphRequest = TLCProcessRequest(
+        javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
+        bridgeClasses: root.appendingPathComponent("bridge"),
+        bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: graphConfiguration),
+        graphEvents: root.appendingPathComponent("complete-events.jsonl"),
+        traceOutput: root.appendingPathComponent("complete-trace.json"),
+        replayInput: root.appendingPathComponent("complete-replay.json"), workingDirectory: root, arguments: [],
+        expectedCase: completeGraphCase, runID: UUID(), referencePin: completeGraphCase.pin)
       swiftRun = try TLCGraphReader(expectedCase: launchCase).readCompletedGraph(
-        graphStream(case: launchCase, runID: correlation.tlcRunID),
+        graphStream(case: launchCase, runID: request.runID),
         result: Self.success
       )
     }
@@ -382,22 +434,42 @@ struct TLCTemporalAdapterTests {
     func input(
       swiftRun: CompletedGraphRun? = nil,
       swiftResult: TemporalPropertyResult? = nil,
-      correlation: TemporalSymmetryRunReferences? = nil,
       request: TLCProcessRequest? = nil,
-      allowsImplicitStuttering: Bool = false
+      allowsImplicitStuttering: Bool = false,
+      usesCompleteGraphPass: Bool = false
     ) throws -> TLCTemporalCaptureInput {
       let graphResult = try swiftResult ?? TemporalPropertyResult(
         availability: .unavailable, outcome: nil, traceAvailability: .unavailable)
+      let selectedCase: TemporalSymmetryCase
+      if allowsImplicitStuttering || usesCompleteGraphPass {
+        selectedCase = try TemporalSymmetryCase(
+          id: temporalCase.id,
+          kind: temporalCase.kind,
+          swiftSpec: temporalCase.swiftSpec,
+          sourceInput: temporalCase.sourceInput,
+          configuration: try TemporalSymmetryConfiguration(
+            property: "[] P",
+            fairness: TemporalFairnessMode.none,
+            allowsImplicitStuttering: allowsImplicitStuttering,
+            completeGraphPass: usesCompleteGraphPass
+              ? try TemporalCompleteGraphPassDeclaration(
+                configuration: Fixture.reference(
+                  graphConfiguration,
+                  path: "Verification/TemporalSymmetryConformance/TemporalFixtureGraph.cfg"))
+              : nil))
+      } else {
+        selectedCase = temporalCase
+      }
       return TLCTemporalCaptureInput(
-        temporalCase: temporalCase, referencePin: launchCase.pin,
-        correlation: correlation ?? self.correlation, request: request ?? self.request,
+        temporalCase: selectedCase,
+        request: request ?? self.request,
+        completeGraphRequest: usesCompleteGraphPass ? completeGraphRequest : nil,
         swiftRun: swiftRun ?? self.swiftRun,
         swiftResult: graphResult,
-        swiftEvidence: try Fixture.reference(module, path: "runs/swift.json"),
-        allowsImplicitStuttering: allowsImplicitStuttering,
-        manifest: try Fixture.reference(manifest, path: "runs/manifest.json"), manifestURL: manifest,
-        toolchain: try Fixture.reference(toolchain, path: "runs/toolchain.json"), toolchainURL: toolchain,
-        sourceInputURL: module, outputDirectory: output, relativeOutputDirectory: "runs/temporal")
+        manifestURL: manifest,
+        toolchainURL: toolchain,
+        sourceInputURL: module,
+        outputDirectory: output)
     }
 
     func makeRequest(traceOutput: URL) -> TLCProcessRequest {

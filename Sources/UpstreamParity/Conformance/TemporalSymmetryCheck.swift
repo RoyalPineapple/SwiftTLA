@@ -22,7 +22,6 @@ package struct TemporalSymmetryCaseOutcome: Equatable, Sendable {
 
 package struct TemporalSymmetryCheckRequest: Sendable {
   package let cases: TemporalSymmetryCases
-  package let runID: UUID
   package let projectRoot: URL
   package let outputDirectory: URL
   package let toolRoot: URL
@@ -30,14 +29,12 @@ package struct TemporalSymmetryCheckRequest: Sendable {
 
   package init(
     cases: TemporalSymmetryCases,
-    runID: UUID,
     projectRoot: URL,
     outputDirectory: URL,
     toolRoot: URL,
     referencePin: TLCReferencePin
   ) {
     self.cases = cases
-    self.runID = runID
     self.projectRoot = projectRoot
     self.outputDirectory = outputDirectory
     self.toolRoot = toolRoot
@@ -72,7 +69,6 @@ package struct TemporalSymmetryCheck: Sendable {
                 compilation: compilation, temporalCase: temporalCase,
                 model: model,
                 exploration: exploration,
-                runID: input.runID,
                 toolRoot: input.toolRoot,
                 referencePin: input.referencePin,
                 projectRoot: root,
@@ -111,7 +107,6 @@ package struct TemporalSymmetryCheck: Sendable {
     temporalCase: TemporalSymmetryCase,
     model: TemporalSymmetryModelDefinition,
     exploration: ModelExplorationResult,
-    runID: UUID,
     toolRoot: URL,
     referencePin: TLCReferencePin,
     projectRoot: URL,
@@ -119,16 +114,8 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TLCTemporalCaptureResult {
     let swiftRun = try SwiftGraphExporter().export(exploration)
-    let correlation = try TemporalSymmetryRunReferences(
-      caseID: temporalCase.id, runID: runID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
-    let inputs = evidenceRoot.appendingPathComponent("swift-inputs", isDirectory: true)
-      .appendingPathComponent(temporalCase.id, isDirectory: true)
-    try RetainedEvidence.createDirectory(inputs, beneath: projectRoot)
     let swiftResult = try temporalResult(
-      compilation: compilation, temporalCase: temporalCase, model: model, exploration: exploration,
-      correlation: correlation, inputs: inputs, projectRoot: projectRoot)
-    let swiftEvidence = try RetainedEvidence.reference(
-      for: inputs.appendingPathComponent("swift-result.json"), beneath: projectRoot)
+      compilation: compilation, temporalCase: temporalCase, model: model, exploration: exploration)
     let casesURL = projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")
     let toolchainURL = projectRoot.appendingPathComponent("Verification/FiniteGraph/toolchain.json")
     let context = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
@@ -157,7 +144,7 @@ package struct TemporalSymmetryCheck: Sendable {
       traceOutput: work.appendingPathComponent("counterexample.json"),
       replayInput: work.appendingPathComponent("replay-input.json"), workingDirectory: work,
       arguments: arguments, expectedCase: launch,
-      runID: correlation.tlcRunID, referencePin: referencePin, referenceArtifacts: context.artifacts)
+      runID: UUID(), referencePin: referencePin, referenceArtifacts: context.artifacts)
     let completeGraphRequest: TLCProcessRequest?
     if let graphPass = temporalCase.configuration.completeGraphPass {
       let graphConfig = try RetainedEvidence.resolve(
@@ -182,14 +169,10 @@ package struct TemporalSymmetryCheck: Sendable {
       completeGraphRequest = nil
     }
     return TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
-      temporalCase: temporalCase, referencePin: referencePin, correlation: correlation, request: request,
+      temporalCase: temporalCase, request: request,
       completeGraphRequest: completeGraphRequest, swiftRun: swiftRun, swiftResult: swiftResult,
-      swiftEvidence: swiftEvidence,
-      allowsImplicitStuttering: temporalCase.configuration.allowsImplicitStuttering,
-      manifest: try RetainedEvidence.reference(for: casesURL, beneath: projectRoot), manifestURL: casesURL,
-      toolchain: try RetainedEvidence.reference(for: toolchainURL, beneath: projectRoot), toolchainURL: toolchainURL,
-      sourceInputURL: source, outputDirectory: outputDirectory,
-      relativeOutputDirectory: try RetainedEvidence.relativePath(for: outputDirectory, beneath: projectRoot)))
+      manifestURL: casesURL, toolchainURL: toolchainURL,
+      sourceInputURL: source, outputDirectory: outputDirectory))
   }
 
   private func captureSymmetry(
@@ -353,10 +336,7 @@ extension TemporalSymmetryCheck {
     compilation: CompiledSpecification,
     temporalCase: TemporalSymmetryCase,
     model: TemporalSymmetryModelDefinition,
-    exploration: ModelExplorationResult,
-    correlation: TemporalSymmetryRunReferences,
-    inputs: URL,
-    projectRoot: URL
+    exploration: ModelExplorationResult
   ) throws -> TemporalPropertyResult {
     guard model.spec.temporalProperties.isEmpty == false else {
       throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "temporal property")
@@ -365,12 +345,6 @@ extension TemporalSymmetryCheck {
     guard let analysis = analyses.first else {
       throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "compiled temporal property")
     }
-    let resultURL = inputs.appendingPathComponent("swift-result.json")
-    try RetainedEvidence.writeJSON([
-      "caseID": temporalCase.id,
-      "correlation": correlation.tlcRunID.uuidString.lowercased(),
-      "status": String(describing: analysis.status)
-    ], to: resultURL)
     switch analysis.status {
     case .satisfied:
       return try TemporalPropertyResult(
@@ -388,11 +362,9 @@ extension TemporalSymmetryCheck {
       let closedCycle = cycle.first == cycle.last ? cycle : cycle + [cycle[0]]
       let lasso = try TemporalLassoWitness(
         prefixStateIDs: witness.prefix.compactMap { keys[$0] }, cycleStateIDs: closedCycle)
-      let traceURL = inputs.appendingPathComponent("swift-lasso.json")
-      try RetainedEvidence.writeCanonical(lasso, to: traceURL)
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .violated,
-        traceAvailability: .available, traceEvidence: try RetainedEvidence.reference(for: traceURL, beneath: projectRoot), lasso: lasso)
+        traceAvailability: .available, lasso: lasso)
     case .unavailable:
       return try TemporalPropertyResult(
         availability: .unavailable, outcome: nil,

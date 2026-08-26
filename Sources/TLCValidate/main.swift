@@ -320,7 +320,6 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
         }
         let records = try TemporalSymmetryCheck().run(.init(
             cases: try decode(TemporalSymmetryCases.self, at: casesURL),
-            runID: UUID(),
             projectRoot: projectRoot,
             outputDirectory: options.output,
             toolRoot: toolRoot,

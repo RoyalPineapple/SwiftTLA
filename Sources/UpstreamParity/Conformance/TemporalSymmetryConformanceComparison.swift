@@ -6,59 +6,36 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
   package let schema: String
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let correlation: TemporalSymmetryRunReferences
   package let outcome: TemporalSymmetryOutcome
   package let swiftResult: TemporalPropertyResult
   package let tlcResult: TemporalPropertyResult
-  package let swiftEvidence: RetainedFileReference
-  package let tlcEvidence: RetainedFileReference
-  package let completeGraphEvidence: TemporalCompleteGraphEvidence?
   package let diagnosticCode: TemporalSymmetryDiagnosticCode
 
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    correlation: TemporalSymmetryRunReferences,
     outcome: TemporalSymmetryOutcome,
     swiftResult: TemporalPropertyResult,
     tlcResult: TemporalPropertyResult,
-    swiftEvidence: RetainedFileReference,
-    tlcEvidence: RetainedFileReference,
-    completeGraphEvidence: TemporalCompleteGraphEvidence? = nil,
     diagnosticCode: TemporalSymmetryDiagnosticCode
   ) throws {
     self.schema = Self.schema
     self.caseID = caseID
     self.configuration = configuration
-    self.correlation = correlation
     self.outcome = outcome
     self.swiftResult = swiftResult
     self.tlcResult = tlcResult
-    self.swiftEvidence = swiftEvidence
-    self.tlcEvidence = tlcEvidence
-    self.completeGraphEvidence = completeGraphEvidence
     self.diagnosticCode = diagnosticCode
     try validate()
   }
 
   private func validate() throws {
     try configuration.validate()
-    try swiftEvidence.validate()
-    try tlcEvidence.validate()
-    try completeGraphEvidence?.validate()
     try swiftResult.validate()
     try tlcResult.validate()
-    guard !caseID.isEmpty, correlation.caseID == caseID, configuration.property != nil,
+    guard !caseID.isEmpty, configuration.property != nil,
           !configuration.symmetryEnabled else {
       throw EvidenceFormatError.inconsistentReference(record: caseID, field: "temporal comparison")
-    }
-    if let declared = configuration.completeGraphPass {
-      guard let evidence = completeGraphEvidence,
-            evidence.configuration == declared.configuration else {
-        throw EvidenceFormatError.inconsistentReference(record: caseID, field: "complete graph evidence")
-      }
-    } else if completeGraphEvidence != nil {
-      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "unexpected complete graph evidence")
     }
     switch outcome {
     case .exact:
@@ -68,8 +45,7 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
         throw EvidenceFormatError.invalidField(record: caseID, field: "exact temporal result")
       }
     case .unavailable:
-      guard swiftResult.availability == .unavailable || tlcResult.availability == .unavailable,
-            diagnosticCode == .temporalEvidenceUnavailable else {
+      guard diagnosticCode == .temporalEvidenceUnavailable || diagnosticCode == .incompleteGraph else {
         throw EvidenceFormatError.invalidField(record: caseID, field: "unavailable temporal result")
       }
     case .difference:
