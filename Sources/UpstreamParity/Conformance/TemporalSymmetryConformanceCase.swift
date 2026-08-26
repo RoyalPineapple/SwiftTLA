@@ -36,23 +36,13 @@ package enum TemporalTraceAvailability: String, Codable, Sendable {
 package enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
   case exactAgreement
   case propertyOutcomeDifference
-  case applicableOutcomeDifference
   case graphDifference
   case temporalEvidenceUnavailable
-  case orbitEvidenceUnavailable
-  case orbitDifference
 }
 
 package enum SymmetryExplorationEngine: String, Codable, Sendable {
   case swift
   case tlc
-}
-
-package enum SymmetryApplicableOutcome: String, Codable, Sendable {
-  case notApplicable
-  case satisfied
-  case violated
-  case deadlocked
 }
 
 package struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendable {

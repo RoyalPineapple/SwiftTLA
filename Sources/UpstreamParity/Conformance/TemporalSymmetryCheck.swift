@@ -87,7 +87,7 @@ package struct TemporalSymmetryCheck: Sendable {
           } else {
             do {
               let result = try captureSymmetry(
-                compilation: compilation, model: model, temporalCase: temporalCase, runID: input.runID,
+                compilation: compilation, model: model, temporalCase: temporalCase,
                 toolRoot: input.toolRoot, referencePin: input.referencePin,
                 projectRoot: root, evidenceRoot: output,
                 outputDirectory: directory)
@@ -196,7 +196,6 @@ package struct TemporalSymmetryCheck: Sendable {
     compilation: CompiledSpecification,
     model: TemporalSymmetryModelDefinition,
     temporalCase: TemporalSymmetryCase,
-    runID: UUID,
     toolRoot: URL,
     referencePin: TLCReferencePin,
     projectRoot: URL,
@@ -208,8 +207,7 @@ package struct TemporalSymmetryCheck: Sendable {
     }
     let context = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     try RetainedEvidence.createDirectory(outputDirectory, beneath: projectRoot)
-    let correlation = try TemporalSymmetryRunReferences(
-      caseID: temporalCase.id, runID: runID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
+    let rawRunID = UUID()
     let reducedRunID = UUID()
     let rawBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: false)
     let reducedBundle = compilation.renderedTLAModuleBundle(usesSymmetryReduction: true)
@@ -221,7 +219,7 @@ package struct TemporalSymmetryCheck: Sendable {
       id: temporalCase.id, bundle: reducedBundle, pin: referencePin, architecture: context.architecture)
     let rawRequest = try request(
       context: context, bundle: rawBundle, work: work.appendingPathComponent("raw"),
-      declared: rawCase, runID: correlation.tlcRunID, projectRoot: projectRoot)
+      declared: rawCase, runID: rawRunID, projectRoot: projectRoot)
     let reducedRequest = try request(
       context: context, bundle: reducedBundle, work: work.appendingPathComponent("reduced"),
       declared: reducedCase, runID: reducedRunID, projectRoot: projectRoot)
@@ -251,30 +249,22 @@ package struct TemporalSymmetryCheck: Sendable {
         record: temporalCase.id, field: "symmetric collection")
     }
     let permutations = try symmetryPermutations(members: collection.metadata.members)
-    let configurationURL = outputDirectory.appendingPathComponent("symmetry-configuration.json")
-    try RetainedEvidence.writeJSON([
-      "raw": SHA256.hex(Data(rawBundle.cfg.utf8)),
-      "reduced": SHA256.hex(Data(reducedBundle.cfg.utf8))
-    ], to: configurationURL)
     let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.jsonl")
     let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.jsonl")
     let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.jsonl")
     let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.jsonl")
-    let configurationDigest = SHA256.hex(try Data(contentsOf: configurationURL))
-    let swiftReducedRunID = UUID()
     try CanonicalGraphRecords.write(swiftRaw, to: rawSwiftURL)
     try CanonicalGraphRecords.write(swiftReduced, to: reducedSwiftURL)
     try CanonicalGraphRecords.write(rawTLC, to: rawTLCURL)
     try CanonicalGraphRecords.write(reducedTLC, to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
-      caseID: temporalCase.id, configuration: temporalCase.configuration, correlation: correlation,
-      swiftRaw: try symmetryExploration(.swift, false, correlation.swiftRunID, swiftRaw, configurationDigest, rawSwiftURL, projectRoot),
-      swiftReduced: try symmetryExploration(.swift, true, swiftReducedRunID, swiftReduced, configurationDigest, reducedSwiftURL, projectRoot),
-      tlcRaw: try symmetryExploration(.tlc, false, correlation.tlcRunID, rawTLC, configurationDigest, rawTLCURL, projectRoot),
-      tlcReduced: try symmetryExploration(.tlc, true, reducedRunID, reducedTLC, configurationDigest, reducedTLCURL, projectRoot),
-      swiftRawRun: swiftRaw, swiftReducedRun: swiftReduced, tlcRawRun: rawTLC, tlcReducedRun: reducedTLC,
-      configurationEvidence: try RetainedEvidence.reference(for: configurationURL, beneath: projectRoot),
-      quotientEvidence: try RetainedEvidence.reference(for: reducedSwiftURL, beneath: projectRoot), permutations: permutations)
+      caseID: temporalCase.id,
+      swiftRaw: swiftRaw,
+      swiftReduced: swiftReduced,
+      tlcRaw: rawTLC,
+      tlcReduced: reducedTLC,
+      permutations: permutations
+    )
     switch try SymmetryOrbitComparator().compare(input) {
     case .exact(let comparison):
       try RetainedEvidence.writeCanonical(
@@ -357,26 +347,6 @@ extension TemporalSymmetryCheck {
       permutations.append(try SymmetryPermutation(constantMapping: mapping))
     }
     return permutations
-  }
-
-  private func symmetryExploration(
-    _ engine: SymmetryExplorationEngine, _ reduced: Bool, _ runID: UUID, _ run: CompletedGraphRun,
-    _ configurationSHA256: String, _ graphURL: URL, _ projectRoot: URL
-  ) throws -> SymmetryExploration {
-    try SymmetryExploration(
-      engine: engine, reduced: reduced, runID: runID,
-      graphID: try CanonicalGraphRecords.digest(for: run.graph),
-      initialStateIDs: run.graph.initialStateKeys.map(\.canonicalEncoding), stateIDs: run.graph.states.keys.map(\.canonicalEncoding),
-      transitions: try run.graph.edgeOccurrences.map {
-        try SymmetryRawTransitionWitness(
-          engine: engine,
-          sourceStateID: $0.key.source.canonicalEncoding,
-          action: $0.key.action,
-          targetStateID: $0.key.target.canonicalEncoding,
-          occurrences: $0.value
-        )
-      }, declaredConfigurationSHA256: configurationSHA256, graphEvidence: try RetainedEvidence.reference(for: graphURL, beneath: projectRoot),
-      invariantOutcome: .notApplicable, deadlockOutcome: .notApplicable)
   }
 
   private func temporalResult(
