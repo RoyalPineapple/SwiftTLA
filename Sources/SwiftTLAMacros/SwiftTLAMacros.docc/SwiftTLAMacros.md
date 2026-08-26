@@ -7,11 +7,14 @@ Generate typed Swift machines from a `TLASpec` declaration.
 Apply ``TLAModel()`` to a model declaration. The generated model includes an
 `Actor` type for serialized access.
 
-The macro parses the supported builder syntax, lowers it once to `TLASpec`,
-compiles that model, and generates the public machine surface described in the
-`SwiftTLA` DocC catalog. After lowering, `TLASpec` is the only formal semantic
-model. Swift-only facts provide generated Swift type names and source labels.
-They do not contain a second action or invariant representation.
+During expansion, `@TLAModel` parses the supported builder syntax into typed
+source declarations, compiles them, and derives the public machine surface from
+that compilation. Generated machine creation compiles `Self.spec` and requires
+its `CompilationIdentity` to equal the identity recorded during expansion. A
+mismatch throws `CompilationDiagnostic` before machine creation.
+
+Swift-only enum metadata supplies generated Swift type names and source labels.
+Transition and property meaning comes from compiled declarations.
 
 ## Supported authoring form
 
@@ -41,8 +44,9 @@ struct Counter {
 }
 ```
 
-`Var`, `Variable`, and `Action` remain formal-core tools for imported modules
-and parity fixtures. They are not a second application authoring style.
+`Var`, `Variable`, and `Action` are direct formal-declaration builders for
+imported modules and parity fixtures. They are not an application authoring
+style.
 
 ## Compiler outcomes
 

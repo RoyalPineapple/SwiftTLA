@@ -23,10 +23,10 @@ var machine = try Counter.makeMachine()
 try machine.send(.advance)
 ```
 
-`CompiledSpecification` contains the compiled declaration plan, its
-`FormalModuleClosure`, and a stable `CompilationIdentity`. The closure records
-the root module, every required import or instance, its owner, and the path
-that requires each module.
+`CompiledSpecification` contains the compiled layout and semantics, the
+compiler-produced module bundle, and a stable `CompilationIdentity`. Its
+`description` exposes declared imports and their structural paths without
+exposing private compiler identities or linker storage.
 
 Compilation can throw `CompilationDiagnostic`. The diagnostic identifies the
 stage, code, source path, expected value, actual value, and next safe action.
@@ -55,9 +55,10 @@ let compilation = try Counter.spec.compile()
 try compilation.materializeModuleBundle(to: outputDirectory)
 ```
 
-`TLAModuleBundle` is source-owned input for a formal tool. The compiler links
-imports and instances before rendering, checks the rendered closure, writes it
-to an isolated sibling staging directory, and publishes it with one rename.
+The materialized files come from the compiler-produced, tool-ready
+`TLAModuleBundle`. The compiler links imports and instances before rendering,
+validates the rendered closure, writes it to an isolated sibling staging
+directory, and publishes it with one rename.
 Diagnostics identify the named source relationship or destination to correct.
 
 If a model has `Algorithm` source, its authored PlusCal export is also
@@ -89,7 +90,6 @@ and `Documentation/PublicAPIValidation.md` for direct generated-API checks.
 - ``CompiledSpecification``
 - ``CompilationIdentity``
 - ``CompilationDiagnostic``
-- ``FormalModuleClosure``
 - ``TLAModuleBundle``
 - ``TLAModuleBundleIntegrityError``
 

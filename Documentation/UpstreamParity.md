@@ -1,8 +1,9 @@
 # Upstream parity
 
 Upstream parity is repository validation tooling. It keeps one canonical
-SwiftTLA source model for each selected example. The canonical corpus owns its
-source model, module closure, configuration, and provenance.
+SwiftTLA source model for each selected example. Each corpus entry owns that
+source model and its direct-TLA and authored-PlusCal configurations.
+Compilation resolves the module closure and records compiled bundle provenance.
 
 ```text
 Swift source model → compile → SwiftTLA exploration → canonical graph
@@ -16,12 +17,16 @@ pinned TLA+ fixture → TLC exploration → canonical graph
 
 The corpus entries are in
 [`Sources/UpstreamParity/CanonicalCorpus`](../Sources/UpstreamParity/CanonicalCorpus).
-Each entry provides one typed Swift source model and its declared configuration.
+Each entry provides one typed Swift source model and its two declared configurations.
 Corpus export materializes the bundle from the compiled specification.
 
-Upstream `.tla` and `.cfg` files are external formal input. The compiler
-links them as named modules in a module closure. The closure preserves module
-ownership, import edges, configuration, and provenance.
+Typed `Import` and `Instance` declarations are linked during compilation and
+become the compiled specification's module closure.
+
+Pinned `.tla` and `.cfg` fixtures are a separate TLC boundary. The TLC adapter
+reads the root, configuration, and import files declared by the case, validates
+that external bundle, and stages exactly those files. These fixtures do not
+become part of the Swift compilation.
 
 ## Exact finite graph conformance
 
@@ -51,12 +56,16 @@ Temporal and symmetry conformance uses cases in
 It retains the pinned tool identity, finite configuration, graph data, and
 direct comparison. Every case must complete and match.
 
+Temporal cases pair a typed Swift model with a pinned external TLA+ input.
+Symmetry cases render unreduced and reduced TLC bundles from one compiled
+specification.
+
 See [Temporal and symmetry conformance](TemporalSymmetryConformance.md).
 
 ## Evidence scope
 
 TLC supplies independent evidence for the declared finite model and
 configuration. The exact comparison determines whether that case passes. The
-declared case and retained TLC invocation identify the source model,
-configuration, module closure, and tool. The graph streams retain the compared
-behavior.
+declared case identifies the Swift source model and finite configuration. The
+retained TLC invocation identifies the independent root module, configuration,
+declared imports, and pinned tool. The graph streams retain the compared behavior.

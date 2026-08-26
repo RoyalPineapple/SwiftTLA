@@ -22,7 +22,10 @@ The workflow fails for exits `1` and `2`.
 
 ## Temporal cases
 
-SwiftTLA analyzes the complete bounded graph with `LivenessChecker`. TLC analyzes the rendered specification with the pinned toolchain.
+SwiftTLA compiles a typed model from the case's
+`TemporalCaseConfiguration`. TLC runs the pinned `TemporalMatrix.tla` source
+declared by that case, with a configuration rendered from the same property and
+fairness values.
 
 The comparison checks these facts:
 
@@ -33,7 +36,12 @@ The comparison checks these facts:
 - The labeled edge multisets match.
 - Each reported lasso belongs to its retained graph.
 
-A property run can stop after a violation. Such a case uses a second TLC run to capture the complete graph.
+Each temporal case has a complete-graph check and a property check. The
+complete-graph check uses `SPECIFICATION Spec` and must report exhaustive
+completion. The property check uses the case's property and fairness
+configuration and may report a lasso violation. A violation launches trace
+capture. Comparison uses the complete graph for state and edge equality and the
+property check for the temporal outcome.
 
 ## Symmetry cases
 
@@ -60,7 +68,11 @@ The declared cases cover one binary symmetric collection at scopes 2 through 5.
 
 ## Evidence
 
-Each temporal case directory contains `swift-graph.jsonl`, `tlc-graph.jsonl`,
-`temporal-comparison.json`, TLC output, command data, and diagnostics.
+Each successful temporal case directory contains `swift-graph.jsonl`,
+`tlc-graph.jsonl`, `temporal-comparison.json`, TLC output, and command data.
+Failures and unavailable comparisons also retain diagnostics. Violations retain
+a counterexample when TLC produces one.
+The `complete-graph-pass` directory contains the exhaustive TLC invocation.
+The case root contains the property invocation.
 
 Read the case directory when a command reports exit `1` or `2`. The retained files identify the first incomplete or different result.

@@ -4,20 +4,23 @@
 
 Define explicit state, permitted actions, and rules that must hold. SwiftTLA
 generates a typed Swift machine your application can run. The same model can
-also explore bounded behavior and render TLA+/PlusCal for independent TLC
-comparison.
+also drive bounded exploration and TLA+/PlusCal rendering. Selected finite
+cases compare SwiftTLA's exploration with independent pinned TLC fixtures.
 
 **One model. Typed application state. Bounded formal evidence.**
 
 ```text
 Swift source model
-        │
+        │ compile()
         ▼
-Generated Swift machine
- ├── State and Action
- ├── value machine in SwiftUI `@State`
- ├── generated `Actor` around that value
- └── bounded exploration and formal bundles
+CompiledSpecification
+ ├── generated State, Action, Transition, and machine
+ ├── bounded exploration
+ └── rendered TLA+ and PlusCal bundles
+
+Generated machine
+ ├── value stored in SwiftUI @State
+ └── generated Actor around the same value
 ```
 
 ## Write the system rules
@@ -139,10 +142,10 @@ struct ClockView: View {
 }
 ```
 
-`machine` is the generated value stored by the view. A failed action is explicit
-application state, not a discarded error. Use the generated actor when the
-application needs shared asynchronous state; it stores the same generated
-machine value behind actor isolation.
+`machine` is the generated value stored by the view. A failed action throws and
+leaves the machine state unchanged; this view stores the diagnostic for display.
+Use the generated actor when the application needs shared asynchronous state;
+it stores the same generated machine value behind actor isolation.
 
 ## Add bounded assurance
 

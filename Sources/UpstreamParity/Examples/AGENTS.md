@@ -16,9 +16,6 @@ configuration. It is not a place to invent a friendlier algorithm.
    stop. Do not emulate it with raw `TLAValue`, `StateExpr`, `ActionExpr`, or
    Swift control flow in a new port.
 
-The older raw ports remain evidence while they are being migrated. Do not use
-them as templates for new work.
-
 ## Typed authoring rules
 
 - Give every finite domain a named `CaseIterable` raw-value enum. The model
@@ -53,22 +50,20 @@ them as templates for new work.
 `Do` is atomic. Every accepted `DoBuilder` statement becomes part of one
 formal transition. Do not put an ordinary Swift side effect in a `Do` block.
 
-## Fidelity and validation
+## Compilation and validation
 
-The macro parser and the constrained runtime builder independently construct
-the formal model. Their semantic alpha-equivalence gate must pass before the
-generated runtime is trusted. A structural fingerprint may speed diagnostics,
-but it is not the authority.
+For an `@TLAModel` port, macro expansion compiles the parsed builder syntax and
+records its `CompilationIdentity`. `makeMachine()` compiles `Self.spec` and
+requires the same identity before it creates the generated machine.
 
 After a port:
 
-1. Add or preserve the `Example.Entry` metadata and expected finite outcome.
-2. Run the focused `UpstreamParityTests` case. It must check the declared
-   state count through the parser–builder fidelity gate.
-3. Run the relevant TLC parity command when the upstream module and bounded
-   configuration are available.
-4. For a supported core case, refresh only the declared evidence through the
-   finite-graph workflow maintains these pins.
+1. Add or preserve the `Example.Entry` metadata and declared finite outcome.
+2. Compile the source model and run its focused bounded-exploration test.
+3. For an `@TLAModel` port, exercise `makeMachine()` so its compilation-identity
+   contract runs.
+4. When a pinned reference fixture exists, declare or update its
+   `FiniteGraphCase` and run the hosted finite-graph workflow.
 
 ## Names and source mapping
 
