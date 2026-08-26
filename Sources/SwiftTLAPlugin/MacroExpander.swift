@@ -17,19 +17,11 @@ enum MacroExpander {
         }
     }
 
-    static func publicBindings(for action: NamedAction) -> [ActionBinding] {
-        action.bindings.filter { $0.values.count > 1 }
-    }
-
-    static func generate(model: MacroCompilation) -> [DeclSyntax] {
-        generateStateMachineMembers(model: model)
-    }
-
     // MARK: - State machine code generation (model / actor)
 
     static func generateStateMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
-        let plan = model.machineSurface
+        let plan = model.compilation.machineSurfacePlan
         let collectionParameters = plan.symmetricCollections.map {
             "\($0.formalName): IdentifiedModelCollection<\($0.elementType), \($0.valueType)>"
         }
@@ -78,10 +70,7 @@ enum MacroExpander {
         ))
         decls.append(contentsOf: generateActorMembers(model: model))
         decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
-        decls.append(contentsOf: generateVariableProperties(
-            variables: ordinaryVariables,
-            enumInfos: model.enumInfos
-        ).map(DeclSyntax.init))
+        decls.append(contentsOf: generateVariableProperties(variables: ordinaryVariables).map(DeclSyntax.init))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         private static func _makeMachine(
@@ -269,16 +258,9 @@ enum MacroExpander {
 }
 
 extension MacroExpander {
-    static func stateType(
-        for variable: MachineSurfacePlan.Variable,
-        enumInfos _: [ParsedEnumInfo]
-    ) -> String {
-        variable.swiftType
-    }
-
     static func generateStateStruct(
         variables: [MachineSurfacePlan.Variable],
-        enumInfos: [ParsedEnumInfo] = []
+        enumInfos: [ParsedEnum]
     ) -> StructDeclSyntax {
         StructDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
@@ -295,7 +277,7 @@ extension MacroExpander {
                         bindings: [PatternBindingSyntax(
                             pattern: IdentifierPatternSyntax(identifier: .identifier(v.formalName)),
                             typeAnnotation: TypeAnnotationSyntax(
-                                type: TypeSyntax(stringLiteral: stateType(for: v, enumInfos: enumInfos))
+                                type: TypeSyntax(stringLiteral: v.swiftType)
                             )
                         )]
                     )
@@ -307,7 +289,7 @@ extension MacroExpander {
                             for v in variables {
                                 FunctionParameterSyntax(
                                     firstName: .identifier(v.formalName),
-                                    type: TypeSyntax(stringLiteral: stateType(for: v, enumInfos: enumInfos))
+                                    type: TypeSyntax(stringLiteral: v.swiftType)
                                 )
                             }
                         }
@@ -344,17 +326,15 @@ extension MacroExpander {
     }
 
     static func generateVariableProperties(
-        variables: [MachineSurfacePlan.Variable],
-        enumInfos: [ParsedEnumInfo] = []
+        variables: [MachineSurfacePlan.Variable]
     ) -> [VariableDeclSyntax] {
         variables.map { v in
-            let propType = stateType(for: v, enumInfos: enumInfos)
             return VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 bindingSpecifier: .keyword(.var),
                 bindings: [PatternBindingSyntax(
                     pattern: IdentifierPatternSyntax(identifier: .identifier(v.formalName)),
-                    typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: propType)),
+                    typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: v.swiftType)),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
                         CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_state.\(v.formalName)") }
                     ))
@@ -365,11 +345,11 @@ extension MacroExpander {
 
     static func stateDecodingStatements(
         variables: [MachineSurfacePlan.Variable],
-        enumInfos: [ParsedEnumInfo]
+        enumInfos: [ParsedEnum]
     ) -> String {
         variables.map { variable in
             let key = String(reflecting: variable.formalName)
-            let typeName = stateType(for: variable, enumInfos: enumInfos)
+            let typeName = variable.swiftType
             if let info = enumInfos.first(where: { $0.typeName == typeName }) {
                 let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.formalName) = \(typeName).\($0.name)" }
                     .joined(separator: "\n")

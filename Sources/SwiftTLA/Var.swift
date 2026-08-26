@@ -1,10 +1,3 @@
-/// A typed TLA+ variable. Holds a name and typed initial value.
-/// Used in `@TLAModel` spec bodies and builder DSL closures.
-///
-/// ```swift
-/// let isLocked = Var<Bool>()              // name injected by @TLAModel macro
-/// let isLocked = Var<Bool>(value: true)   // name injected, explicit initial
-/// ```
 import SwiftSyntaxMacros
 
 public protocol TLAValueType: TLAValueConvertible, StateExprConvertible, Sendable {
@@ -73,34 +66,6 @@ extension StateExprConvertible where Self: TLAValueType {
   public var stateExpr: StateExpr { .value(tlaValue) }
 }
 
-// MARK: - VarConstraint
-
-public enum VarConstraint: Hashable, Sendable {
-  case intRange(ClosedRange<Int>)
-  case enumValues([String])
-
-  public func tlaExpr(for name: String) -> StateExpr {
-    let v = StateExpr.variable(name)
-    switch self {
-    case .intRange(let r):
-      return (v >= r.lowerBound) && (v <= r.upperBound)
-    case .enumValues(let vals):
-      return StateExpr.in(v, .setLiteral(vals.map { .value(.string($0)) }))
-    }
-  }
-
-  public func check(_ value: TLAValue) -> Bool {
-    switch self {
-    case .intRange(let r):
-      if case .int(let v) = value { return r.contains(v) }
-      return false
-    case .enumValues(let vals):
-      if case .string(let s) = value { return vals.contains(s) }
-      return false
-    }
-  }
-}
-
 // MARK: - Expr<T>
 
 /// Phantom-typed expression: `Expr<Int>` can only be assigned to `Var<Int>`.
@@ -132,31 +97,16 @@ public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecComponent {
   public let name: String
   public let initial: TLAValue?
-  public let constraint: VarConstraint?
   public let sourceIssue: SourceModelIssue?
 
   public init(_ name: String, _ value: T) {
     self.name = name
     self.initial = value.tlaValue
-    self.constraint = nil
     self.sourceIssue = value.sourceIssue
   }
-  public init(_ name: String? = nil, _ initial: TLAValue? = nil, constraint: VarConstraint? = nil) {
+  public init(_ name: String? = nil, _ initial: TLAValue? = nil) {
     self.name = name ?? ""
     self.initial = initial
-    self.constraint = constraint
-    self.sourceIssue = nil
-  }
-  public init(_ name: String? = nil, bounded range: ClosedRange<Int>) where T == Int {
-    self.name = name ?? ""
-    self.initial = nil
-    self.constraint = .intRange(range)
-    self.sourceIssue = nil
-  }
-  public init(_ name: String? = nil, values: [String]) where T == String {
-    self.name = name ?? ""
-    self.initial = nil
-    self.constraint = .enumValues(values)
     self.sourceIssue = nil
   }
   public var description: String { name }
@@ -429,16 +379,6 @@ extension StateExpr {
     let qv = generatedBinderName()
     return .forAll(set, qv, body(.variable(qv)))
   }
-  public static func existsIn(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr)
-    -> StateExpr {
-    let qv = generatedBinderName()
-    return .exists(set, qv, body(.variable(qv)))
-  }
-  public static func filterSet(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr)
-    -> StateExpr {
-    let qv = generatedBinderName()
-    return .setFilter(set, qv, body(.variable(qv)))
-  }
 }
 
 extension ActionExpr {
@@ -458,13 +398,6 @@ extension ActionExpr {
     then: ActionExpr, else: ActionExpr
   ) -> ActionExpr {
     .ifElse(condition.stateExpr, then, `else`)
-  }
-
-  public static func existsSubset(
-    _ name: String, of set: some StateExprConvertible,
-    _ body: (StateExpr) -> ActionExpr
-  ) -> ActionExpr {
-    .existsAction(name, .powerSet(set.stateExpr), body(.variable(name)))
   }
 
   public static func define(

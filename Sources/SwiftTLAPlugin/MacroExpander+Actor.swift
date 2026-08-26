@@ -4,7 +4,7 @@ import SwiftTLA
 extension MacroExpander {
     static func generateActorMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
-        let actionMembers = model.machineSurface.actions.isEmpty ? "" : """
+        let actionMembers = model.compilation.machineSurfacePlan.actions.isEmpty ? "" : """
 
                 public func isEnabled(_ action: Action) throws -> Bool {
                     try machine.isEnabled(action)
