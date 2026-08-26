@@ -7,13 +7,13 @@ import UpstreamParity
 struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCompletedGraphRun() throws {
     let expectedCase = try fixtureCase(try toolchainPin())
-    let parser = TLCGraphReader(expectedCase: expectedCase)
+    let reader = TLCGraphReader(expectedCase: expectedCase)
     let result = TLCProcessResult(
       status: 0,
       stdout: "Model checking completed. No error has been found.",
       stderr: ""
     )
-    let run = try parser.readCompletedGraph(try completeGraphStream(expectedCase), result: result)
+    let run = try reader.readCompletedGraph(try completeGraphStream(expectedCase), result: result)
     #expect(run.isPassEligible)
     #expect(run.graph.initialStateKeys.count == 1)
     #expect(run.graph.edgeOccurrences.values.sorted() == [1])
@@ -333,7 +333,7 @@ extension TLCGraphReaderTests {
     #expect(result.stdout.contains("home=unset allowed=declared"))
   }
 
-  @Test("graph event parser rejects malformed footer and unsupported callbacks")
+  @Test("graph event reader rejects malformed footer and unsupported callbacks")
   func rejectsMalformedStreams() throws {
     let pin = try toolchainPin()
     let expectedCase = try fixtureCase(pin)
@@ -376,34 +376,34 @@ extension TLCGraphReaderTests {
     }
   }
 
-  @Test("graph event parser accepts only TLC's exact actionless stuttering observation")
+  @Test("graph event reader accepts only TLC's exact actionless stuttering observation")
   func acceptsExactStutteringObservation() throws {
     let expectedCase = try fixtureCase(try toolchainPin())
-    let parser = TLCGraphReader(expectedCase: expectedCase)
+    let reader = TLCGraphReader(expectedCase: expectedCase)
     let stream = try completeGraphStreamWithStutteringObservation(expectedCase)
-    #expect(try parser.parse(stream).transitions.count == 1)
+    #expect(try reader.parse(stream).transitions.count == 1)
     let rejected = Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "STUTTERING", with: "ARBITRARY").utf8)
     #expect(throws: TLCGraphEventError.unsupportedCallback("writeState.visualization")) {
-      try parser.parse(rejected)
+      try reader.parse(rejected)
     }
   }
 
-  @Test("graph event parser retains only exact excluded predicate observations")
+  @Test("graph event reader retains only exact excluded predicate observations")
   func acceptsExcludedPredicateObservationsWithoutAddingGraphEdges() throws {
     let expectedCase = try fixtureCase(try toolchainPin())
-    let parser = TLCGraphReader(expectedCase: expectedCase)
+    let reader = TLCGraphReader(expectedCase: expectedCase)
     let stream = try completeGraphStreamWithExcludedPredicateObservation(expectedCase)
-    #expect(try parser.parse(stream).transitions.count == 1)
+    #expect(try reader.parse(stream).transitions.count == 1)
     let wrongFlags = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "\"raw\":2", with: "\"raw\":3").utf8))
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "invalid excluded predicate transition")) {
-      try parser.parse(wrongFlags)
+      try reader.parse(wrongFlags)
     }
     let wrongSourceIdentity = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "<Next(", with: "<Other(").utf8))
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "invalid excluded predicate transition")) {
-      try parser.parse(wrongSourceIdentity)
+      try reader.parse(wrongSourceIdentity)
     }
   }
 
@@ -412,9 +412,9 @@ extension TLCGraphReaderTests {
     let call = RenderedAction(
       sourceName: "Step", arguments: [.int(0)], renderedName: "Step__0")
     let expected = try fixtureCase(try toolchainPin(), renderedActions: [call])
-    let parser = TLCGraphReader(expectedCase: expected)
+    let reader = TLCGraphReader(expectedCase: expected)
     let stream = try functionRecordNormalizationStream(expected, actionLocation: "<Step(0) line 1, col 1 to line 1, col 2 of module Fixture>")
-    let run = try parser.readCompletedGraph(
+    let run = try reader.readCompletedGraph(
       stream,
       result: TLCProcessResult(status: 0, stdout: "Model checking completed. No error has been found.", stderr: ""))
     #expect(run.observableActions == ["Step__0"])
@@ -422,7 +422,7 @@ extension TLCGraphReaderTests {
     let undeclared = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
       .replacingOccurrences(of: "<Step(0)", with: "<Step(1)").utf8))
     #expect(throws: TLCGraphEventError.invalidRecord(line: 3, reason: "undeclared invocation identity")) {
-      try parser.parse(undeclared)
+      try reader.parse(undeclared)
     }
   }
 
@@ -442,19 +442,19 @@ extension TLCGraphReaderTests {
     #expect(parsed.transitions.map(\.action) == ["Next"])
   }
 
-  @Test("graph event parser resolves a reduced TLC alias only through its retained fingerprint representative")
+  @Test("graph event reader resolves a reduced TLC alias only through its retained fingerprint representative")
   func resolvesFingerprintAliasesFromSameStream() throws {
     let expectedCase = try fixtureCase(try toolchainPin())
-    let parser = TLCGraphReader(expectedCase: expectedCase)
-    let parsed = try parser.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true))
+    let reader = TLCGraphReader(expectedCase: expectedCase)
+    let parsed = try reader.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true))
     #expect(parsed.transitions.count == 2)
     #expect(parsed.transitions[0].target == parsed.transitions[1].target)
     #expect(parsed.fingerprintRepresentatives["2"] == parsed.transitions[0].target)
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "ambiguous fingerprint representative")) {
-      try parser.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: false))
+      try reader.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: false))
     }
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "seen fingerprint without representative")) {
-      try parser.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true, aliasFingerprint: "foreign"))
+      try reader.parse(try fingerprintAliasGraphStream(expectedCase, aliasSeen: true, aliasFingerprint: "foreign"))
     }
   }
 
@@ -486,10 +486,10 @@ extension TLCGraphReaderTests {
     #expect(capture.run.replay == .init(status: 12, stdout: "Error: Invariant broken", stderr: ""))
   }
 
-  @Test("graph event parser rejects booleans for integers and numbers for booleans")
+  @Test("graph event reader rejects booleans for integers and numbers for booleans")
   func rejectsWrongJSONPrimitiveTypes() throws {
     let expectedCase = try fixtureCase(try toolchainPin())
-    let parser = TLCGraphReader(expectedCase: expectedCase)
+    let reader = TLCGraphReader(expectedCase: expectedCase)
     let mutations = [
       { (line: String) in line.replacingOccurrences(of: "\"version\":1", with: "\"version\":true")
       },
@@ -505,7 +505,7 @@ extension TLCGraphReaderTests {
     ]
     for mutation in mutations {
       #expect(throws: TLCGraphEventError.self) {
-        try parser.parse(try mutatedCompleteGraphStream(expectedCase, mutation: mutation))
+        try reader.parse(try mutatedCompleteGraphStream(expectedCase, mutation: mutation))
       }
     }
   }

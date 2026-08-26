@@ -422,15 +422,15 @@ package struct TLCProcessAdapter: Sendable {
   private func capture(_ run: TLCProcessRun, request: TLCProcessRequest) throws
     -> TLCProcessCapture {
     let graphEvents = try Data(contentsOf: request.graphEvents)
-    let parser = TLCGraphReader(expectedCase: request.expectedCase)
-    let stream = try parser.parse(graphEvents)
+    let reader = TLCGraphReader(expectedCase: request.expectedCase)
+    let stream = try reader.parse(graphEvents)
     guard stream.runID == request.runID else {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
     }
     return TLCProcessCapture(
       run: run,
       graphEvents: graphEvents,
-      graph: try parser.makeCompletedGraphRun(stream, result: run.primary)
+      graph: try reader.makeCompletedGraphRun(stream, result: run.primary)
     )
   }
 
@@ -624,7 +624,7 @@ func processJSON(_ result: TLCProcessResult) -> [String: Any] {
 
 private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
   [
-    "case": conformanceCaseJSON(request.expectedCase),
+    "case": finiteGraphCaseJSON(request.expectedCase),
     "toolchain": toolchainJSON(request),
     "arguments": request.arguments,
     "bundle": [
@@ -639,7 +639,7 @@ private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
   ]
 }
 
-private func conformanceCaseJSON(_ finiteGraphCase: FiniteGraphCase) -> [String: Any] {
+private func finiteGraphCaseJSON(_ finiteGraphCase: FiniteGraphCase) -> [String: Any] {
   let record: [String: Any] = [
     "id": finiteGraphCase.id,
     "moduleSHA256": finiteGraphCase.moduleSHA256,

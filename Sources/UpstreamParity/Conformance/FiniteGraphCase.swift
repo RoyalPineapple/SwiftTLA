@@ -8,6 +8,7 @@ package enum FiniteGraphCaseError: Error, Equatable, Sendable {
     case invalidWorkers(Int)
     case invalidFingerprintPolynomial(Int)
     case invalidArgumentsDigest
+    case invalidRenderedActions
     case executionCaseMismatch
     case moduleDigestMismatch
     case cfgDigestMismatch
@@ -154,6 +155,10 @@ package struct FiniteGraphCase: Equatable, Sendable {
         guard fingerprintPolynomial >= 0 else { throw FiniteGraphCaseError.invalidFingerprintPolynomial(fingerprintPolynomial) }
         let computedArgumentsDigest = try Self.argumentsDigest(arguments)
         guard argumentsSHA256 == computedArgumentsDigest else { throw FiniteGraphCaseError.invalidArgumentsDigest }
+        guard Set(renderedActions.map(\.sourceInvocationName)).count == renderedActions.count,
+              Set(renderedActions.map(\.renderedName)).count == renderedActions.count else {
+            throw FiniteGraphCaseError.invalidRenderedActions
+        }
         self.id = id
         self.moduleSHA256 = moduleSHA256
         self.cfgSHA256 = cfgSHA256

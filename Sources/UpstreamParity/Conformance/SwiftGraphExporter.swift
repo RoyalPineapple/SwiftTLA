@@ -1,49 +1,37 @@
 import SwiftTLA
 
 package enum SwiftGraphExporterError: Error, Equatable, Sendable {
-  case finiteGraphCaseMismatch(expected: String, actual: String)
   case initialStateMissing(Int)
   case transitionStateMissing(Int)
   case traceStateMissing
   case invalidUnderlyingOutcome
 }
 
-package struct SwiftExplorationEvidence {
-  package let caseID: String
-  package let exploration: ModelExplorationResult
-
-  package init(
-    caseID: String,
-    exploration: ModelExplorationResult
-  ) {
-    self.caseID = caseID
-    self.exploration = exploration
-  }
-}
-
 package struct SwiftGraphExporter: Sendable {
   package init() {}
 
   package func export(
-    _ evidence: SwiftExplorationEvidence,
-    for finiteGraphCase: FiniteGraphCase,
-    actionNames: [String: String] = [:]
+    _ exploration: ModelExplorationResult,
+    for finiteGraphCase: FiniteGraphCase
   ) throws -> CompletedGraphRun {
-    guard evidence.caseID == finiteGraphCase.id else {
-      throw SwiftGraphExporterError.finiteGraphCaseMismatch(
-        expected: finiteGraphCase.id,
-        actual: evidence.caseID
-      )
-    }
+    let renderedActionNames = Dictionary(uniqueKeysWithValues: finiteGraphCase.renderedActions.map {
+      ($0.sourceInvocationName, $0.renderedName)
+    })
     return try export(
-      evidence.exploration,
-      actionNames: actionNames
+      exploration,
+      renderedActionNames: renderedActionNames
     )
   }
 
   package func export(
+    _ exploration: ModelExplorationResult
+  ) throws -> CompletedGraphRun {
+    try export(exploration, renderedActionNames: [:])
+  }
+
+  private func export(
     _ exploration: ModelExplorationResult,
-    actionNames: [String: String] = [:]
+    renderedActionNames: [String: String]
   ) throws -> CompletedGraphRun {
     let states = Dictionary(
       uniqueKeysWithValues: try exploration.graph.states.map { identifier, projection in
@@ -65,7 +53,7 @@ package struct SwiftGraphExporter: Sendable {
         }
         return CanonicalEdge(
           source: sourceState.key,
-          action: actionNames[transition.action] ?? transition.action,
+          action: renderedActionNames[transition.action] ?? transition.action,
           target: targetState.key
         )
       }

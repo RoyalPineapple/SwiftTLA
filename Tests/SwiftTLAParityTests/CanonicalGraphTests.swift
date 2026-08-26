@@ -112,16 +112,13 @@ struct CanonicalGraphTests {
             operatingSystem: "macos",
             architecture: "arm64",
             environment: [:],
-            pin: try testReferencePin()
+            pin: try testReferencePin(),
+            renderedActions: [
+                RenderedAction(sourceName: "move", arguments: [], renderedName: "Move")
+            ]
         )
 
-        let run = try SwiftGraphExporter().export(
-            SwiftExplorationEvidence(
-                caseID: finiteGraphCase.id,
-                exploration: exploration
-            ),
-            for: finiteGraphCase
-        )
+        let run = try SwiftGraphExporter().export(exploration, for: finiteGraphCase)
         let expectedFirst = CanonicalState(bindings: [
             "cars": .record(["carA": .integer(0), "carB": .integer(1)])
         ])
@@ -132,7 +129,23 @@ struct CanonicalGraphTests {
         #expect(Set(run.graph.states.values) == Set([expectedFirst, expectedSecond]))
         #expect(run.graph.initialStateKeys == Set([expectedFirst.key]))
         #expect(run.graph.edgeOccurrences == [
-            CanonicalEdge(source: expectedFirst.key, action: "move", target: expectedSecond.key): 1
+            CanonicalEdge(source: expectedFirst.key, action: "Move", target: expectedSecond.key): 1
         ])
+    }
+
+    @Test("finite graph cases require unique rendered action identities and names")
+    func rejectsDuplicateRenderedActions() throws {
+        #expect(throws: FiniteGraphCaseError.invalidRenderedActions) {
+            _ = try fixtureCase(try testReferencePin(), renderedActions: [
+                RenderedAction(sourceName: "Move", arguments: [], renderedName: "MoveA"),
+                RenderedAction(sourceName: "Move", arguments: [], renderedName: "MoveB")
+            ])
+        }
+        #expect(throws: FiniteGraphCaseError.invalidRenderedActions) {
+            _ = try fixtureCase(try testReferencePin(), renderedActions: [
+                RenderedAction(sourceName: "MoveA", arguments: [], renderedName: "Move"),
+                RenderedAction(sourceName: "MoveB", arguments: [], renderedName: "Move")
+            ])
+        }
     }
 }
