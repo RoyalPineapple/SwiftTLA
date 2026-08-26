@@ -4,22 +4,38 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCTemporalAdapterTests {
+  private enum CaptureExpectationError: Error {
+    case comparison
+    case failure
+  }
+
+  @Test("Temporal property results encode only valid states")
+  func temporalPropertyResultIsClosed() throws {
+    let lasso = try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ["s", "s"])
+    let violated = TemporalPropertyResult.violated(lasso)
+    #expect(try JSONDecoder().decode(
+      TemporalPropertyResult.self,
+      from: JSONEncoder().encode(violated)) == violated)
+
+    let impossible = Data(#"{"status":"satisfied","lasso":{"prefixStateIDs":[],"cycleStateIDs":["s","s"]}}"#.utf8)
+    #expect(throws: EvidenceFormatError.self) {
+      try JSONDecoder().decode(TemporalPropertyResult.self, from: impossible)
+    }
+  }
+
   @Test("TLC temporal adapter retains exact graph evidence")
   func retainsExactEvidence() throws {
     let fixture = try Fixture()
     let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.success)
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .satisfied,
-      traceAvailability: .notApplicable)
+    let swiftResult = TemporalPropertyResult.satisfied
     let input = try fixture.input(swiftRun: graph, swiftResult: swiftResult)
-    let result = TLCTemporalAdapter(
+    let capture = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: FixtureExecutor(stream: stream, result: Fixture.success)))
       .capture(input)
 
-    #expect(result.status == .captured)
-    #expect(result.comparison?.outcome == .exact)
+    #expect(try comparison(capture).status == .exact)
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("manifest.json").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("toolchain.json").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("graph-events.jsonl").path))
@@ -38,21 +54,15 @@ struct TLCTemporalAdapterTests {
       swiftStream,
       result: Fixture.success
     )
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated,
-      outcome: .satisfied,
-      traceAvailability: .notApplicable
-    )
+    let swiftResult = TemporalPropertyResult.satisfied
 
-    let result = TLCTemporalAdapter(
+    let capture = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(
         executor: FixtureExecutor(stream: tlcStream, result: Fixture.success)
       )
     ).capture(try fixture.input(swiftRun: swiftGraph, swiftResult: swiftResult))
 
-    #expect(result.status == .captured)
-    #expect(result.comparison?.outcome == .difference)
-    #expect(result.comparison?.diagnosticCode == .graphDifference)
+    #expect(try comparison(capture).status == .graphDifference)
   }
 
   @Test("TLC temporal adapter rejects an incomplete Swift graph")
@@ -63,47 +73,42 @@ struct TLCTemporalAdapterTests {
       observableActions: fixture.swiftRun.observableActions,
       outcome: .incomplete(reason: "test bound")
     )
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated,
-      outcome: .satisfied,
-      traceAvailability: .notApplicable
-    )
+    let swiftResult = TemporalPropertyResult.satisfied
 
-    let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
+    let capture = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
       .capture(try fixture.input(swiftRun: incomplete, swiftResult: swiftResult))
 
-    #expect(result.status == .unavailable)
-    #expect(result.comparison == nil)
+    #expect(try failure(capture).code == "temporal-evidence-unavailable")
   }
 
   @Test("TLC temporal adapter rejects changed source before comparison")
   func rejectsChangedSource() throws {
     let fixture = try Fixture()
     try Data("changed".utf8).write(to: fixture.module, options: .atomic)
-    let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
+    let capture = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
       .capture(try fixture.input())
-    #expect(result.status == .unavailable)
-    #expect(result.comparison == nil)
-    #expect(result.diagnostic?.code == "source-input-mismatch")
+    #expect(try failure(capture).code == "source-input-mismatch")
   }
 
   @Test("TLC temporal adapter does not invent a lasso from an open trace")
   func recordsUnattributableTemporalTraceAsUnavailable() throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.success)
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .satisfied,
-      traceAvailability: .notApplicable)
-    let temporalViolation = TLCProcessResult(status: 12, stdout: "Error: Temporal property is violated.", stderr: "")
-    let result = TLCTemporalAdapter(
-      processAdapter: TLCProcessAdapter(executor: FixtureExecutor(stream: stream, result: temporalViolation)))
-      .capture(try fixture.input(swiftRun: graph, swiftResult: swiftResult))
+      stream, result: Fixture.temporalViolation)
+    let swiftResult = TemporalPropertyResult.satisfied
+    let capture = TLCTemporalAdapter(
+      processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
+        propertyStream: stream,
+        graphStream: try temporalGraphStream(
+          case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID),
+        graphRunID: fixture.completeGraphRequest.runID)))
+      .capture(try fixture.input(
+        swiftRun: completedSwiftRun(graph), swiftResult: swiftResult, usesCompleteGraphPass: true))
 
-    #expect(result.status == .unavailable)
-    #expect(result.comparison?.outcome == .unavailable)
-    #expect(result.comparison?.tlcResult.availability == .unavailable)
+    let comparison = try comparison(capture)
+    #expect(comparison.status == .unavailable)
+    #expect(comparison.tlcResult == .unavailable)
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("diagnostic.json").path))
   }
 
@@ -113,15 +118,13 @@ struct TLCTemporalAdapterTests {
     let stream = try temporalGraphStream(
       case: fixture.completeGraphCase,
       runID: fixture.completeGraphRequest.runID)
-    let result = TLCTemporalAdapter(
+    let capture = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(
         primaryStream: stream,
         trace: try numberedLoopBackTrace())))
       .capture(try fixture.input(usesCompleteGraphPass: true))
 
-    #expect(result.status == .unavailable)
-    #expect(result.comparison == nil)
-    #expect(result.diagnostic?.code == "incomplete-graph")
+    #expect(try failure(capture).code == "incomplete-graph")
   }
 
   @Test("TLC temporal adapter accepts a numbered two-state loop-back lasso")
@@ -131,11 +134,9 @@ struct TLCTemporalAdapterTests {
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated,
-      traceAvailability: .available,
-      lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
-    let result = TLCTemporalAdapter(
+    let swiftResult = TemporalPropertyResult.violated(
+      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
+    let capture = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
         propertyStream: stream,
         graphStream: try temporalGraphStream(
@@ -145,9 +146,30 @@ struct TLCTemporalAdapterTests {
       .capture(try fixture.input(
         swiftRun: completedSwiftRun(graph), swiftResult: swiftResult, usesCompleteGraphPass: true))
 
-    #expect(result.status == .captured)
-    #expect(result.comparison?.outcome == .exact)
-    #expect(result.comparison?.tlcResult.lasso?.cycleStateIDs.count == 3)
+    let comparison = try comparison(capture)
+    #expect(comparison.status == .exact)
+    #expect(lasso(in: comparison.tlcResult)?.cycleStateIDs.count == 3)
+  }
+
+  @Test("TLC temporal adapter reports different property outcomes over a complete graph")
+  func reportsPropertyOutcomeDifference() throws {
+    let fixture = try Fixture()
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
+      stream, result: Fixture.temporalViolation)
+    let capture = TLCTemporalAdapter(
+      processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
+        propertyStream: stream,
+        graphStream: try temporalGraphStream(
+          case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID),
+        graphRunID: fixture.completeGraphRequest.runID,
+        trace: try numberedLoopBackTrace())))
+      .capture(try fixture.input(
+        swiftRun: completedSwiftRun(graph),
+        swiftResult: .satisfied,
+        usesCompleteGraphPass: true))
+
+    #expect(try comparison(capture).status == .propertyOutcomeDifference)
   }
 
   @Test("TLC temporal adapter binds an actionless lasso but does not admit an incomplete graph")
@@ -157,19 +179,16 @@ struct TLCTemporalAdapterTests {
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated,
-      traceAvailability: .available,
-      lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
+    let swiftResult = TemporalPropertyResult.violated(
+      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
     let trace = try numberedStutteringTrace()
-    let result = TLCTemporalAdapter(
+    let capture = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: stream, trace: trace)))
       .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
 
-    #expect(result.status == .unavailable)
-    #expect(result.comparison?.outcome == .unavailable)
-    #expect(result.comparison?.tlcResult.lasso != nil)
-    #expect(result.diagnostic?.code == "incomplete-graph")
+    let comparison = try comparison(capture)
+    #expect(comparison.status == .incompleteGraph)
+    #expect(lasso(in: comparison.tlcResult) != nil)
   }
 
   @Test("TLC temporal adapter binds a named same-state dump step only when the declared behavior allows stuttering")
@@ -179,25 +198,21 @@ struct TLCTemporalAdapterTests {
     let graph = try TLCGraphReader(expectedCase: rejectedFixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated,
-      traceAvailability: .available,
-      lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
+    let swiftResult = TemporalPropertyResult.violated(
+      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
     let namedTrace = try numberedStutteringTrace(action: "A")
     let rejected = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: stream, trace: namedTrace)))
       .capture(try rejectedFixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
-    #expect(rejected.status == .unavailable)
+    #expect(try comparison(rejected).tlcResult == .unavailable)
 
     let admittedFixture = try Fixture()
     let admittedStream = try graphStream(case: admittedFixture.launchCase, runID: admittedFixture.request.runID)
     let admittedGraph = try TLCGraphReader(expectedCase: admittedFixture.launchCase).readCompletedGraph(
       admittedStream, result: Fixture.temporalViolation)
     let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
-    let admittedSwiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated,
-      traceAvailability: .available,
-      lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
+    let admittedSwiftResult = TemporalPropertyResult.violated(
+      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
     let admitted = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(primaryStream: admittedStream, trace: namedTrace)))
       .capture(try admittedFixture.input(
@@ -205,9 +220,9 @@ struct TLCTemporalAdapterTests {
         swiftResult: admittedSwiftResult,
         allowsImplicitStuttering: true
       ))
-    #expect(admitted.status == .unavailable)
-    #expect(admitted.comparison?.outcome == .unavailable)
-    #expect(admitted.comparison?.tlcResult.lasso != nil)
+    let admittedComparison = try comparison(admitted)
+    #expect(admittedComparison.status == .incompleteGraph)
+    #expect(lasso(in: admittedComparison.tlcResult) != nil)
   }
 
   @Test("TLC temporal adapter rejects a lasso that is foreign to the captured graph")
@@ -217,17 +232,14 @@ struct TLCTemporalAdapterTests {
     let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
-    let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated,
-      traceAvailability: .available,
-      lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
-    let result = TLCTemporalAdapter(
+    let swiftResult = TemporalPropertyResult.violated(
+      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
+    let capture = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TemporalFixtureExecutor(
         primaryStream: stream, trace: try numberedLoopBackTrace(secondValue: 99))))
       .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
 
-    #expect(result.status == .unavailable)
-    #expect(result.comparison?.tlcResult.availability == .unavailable)
+    #expect(try comparison(capture).tlcResult == .unavailable)
   }
 
   @Test("TLC temporal adapter retains primary evidence when trace capture throws")
@@ -235,11 +247,11 @@ struct TLCTemporalAdapterTests {
     let fixture = try Fixture()
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     try Data("stale trace".utf8).write(to: fixture.request.traceOutput, options: .atomic)
-    let result = TLCTemporalAdapter(
+    let capture = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TraceFailingExecutor(primaryStream: stream)))
       .capture(try fixture.input())
 
-    #expect(result.status == .unavailable)
+    #expect(try failure(capture).code == "temporal-evidence-unavailable")
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("graph-events.jsonl").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("tlc-process.json").path))
@@ -258,10 +270,10 @@ struct TLCTemporalAdapterTests {
     let fixture = try Fixture()
     let request = fixture.makeRequest(traceOutput: fixture.output.appendingPathComponent("manifest.json"))
     let manifest = try Data(contentsOf: fixture.manifest)
-    let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
+    let capture = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
       .capture(try fixture.input(request: request))
 
-    #expect(result.status == .unavailable)
+    #expect(try failure(capture).code == "temporal-evidence-unavailable")
     #expect(!FileManager.default.fileExists(atPath: fixture.output.path))
     #expect(try Data(contentsOf: fixture.manifest) == manifest)
   }
@@ -272,12 +284,31 @@ struct TLCTemporalAdapterTests {
     let traceAlias = fixture.root.appendingPathComponent("trace-alias.json")
     try FileManager.default.createSymbolicLink(at: traceAlias, withDestinationURL: fixture.module)
     let module = try Data(contentsOf: fixture.module)
-    let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
+    let capture = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
       .capture(try fixture.input(request: fixture.makeRequest(traceOutput: traceAlias)))
 
-    #expect(result.status == .unavailable)
+    #expect(try failure(capture).code == "temporal-evidence-unavailable")
     #expect(try Data(contentsOf: fixture.module) == module)
     #expect(FileManager.default.fileExists(atPath: traceAlias.path))
+  }
+
+  private func comparison(_ capture: TLCTemporalCapture) throws -> TemporalComparison {
+    switch capture {
+    case .comparison(let comparison): return comparison
+    case .failure: throw CaptureExpectationError.comparison
+    }
+  }
+
+  private func failure(_ capture: TLCTemporalCapture) throws -> TLCTemporalCaptureDiagnostic {
+    switch capture {
+    case .comparison: throw CaptureExpectationError.failure
+    case .failure(let diagnostic): return diagnostic
+    }
+  }
+
+  private func lasso(in result: TemporalPropertyResult) -> TemporalLassoWitness? {
+    if case .violated(let lasso) = result { return lasso }
+    return nil
   }
 
   private func completedSwiftRun(_ run: CompletedGraphRun) throws -> CompletedGraphRun {
@@ -326,9 +357,9 @@ struct TLCTemporalAdapterTests {
     let propertyStream: Data
     let graphStream: Data
     let graphRunID: UUID
-    let trace: Data
+    let trace: Data?
 
-    init(propertyStream: Data, graphStream: Data, graphRunID: UUID, trace: Data) {
+    init(propertyStream: Data, graphStream: Data, graphRunID: UUID, trace: Data? = nil) {
       self.propertyStream = propertyStream
       self.graphStream = graphStream
       self.graphRunID = graphRunID
@@ -337,7 +368,7 @@ struct TLCTemporalAdapterTests {
 
     func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
       if request.traceMode == .dumpJSON {
-        try trace.write(to: request.traceOutput, options: .atomic)
+        if let trace { try trace.write(to: request.traceOutput, options: .atomic) }
         return Fixture.temporalViolation
       }
       if request.runID == graphRunID {
@@ -438,8 +469,7 @@ struct TLCTemporalAdapterTests {
       allowsImplicitStuttering: Bool = false,
       usesCompleteGraphPass: Bool = false
     ) throws -> TLCTemporalCaptureInput {
-      let graphResult = try swiftResult ?? TemporalPropertyResult(
-        availability: .unavailable, outcome: nil, traceAvailability: .unavailable)
+      let graphResult = swiftResult ?? .unavailable
       let selectedCase: TemporalSymmetryCase
       if allowsImplicitStuttering || usesCompleteGraphPass {
         selectedCase = try TemporalSymmetryCase(

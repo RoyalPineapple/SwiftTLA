@@ -6,64 +6,43 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
   package let schema: String
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let outcome: TemporalSymmetryOutcome
+  package let status: TemporalComparisonStatus
   package let swiftResult: TemporalPropertyResult
   package let tlcResult: TemporalPropertyResult
-  package let diagnosticCode: TemporalSymmetryDiagnosticCode
 
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    outcome: TemporalSymmetryOutcome,
+    swiftRun: CompletedGraphRun,
+    tlcRun: CompletedGraphRun,
     swiftResult: TemporalPropertyResult,
-    tlcResult: TemporalPropertyResult,
-    diagnosticCode: TemporalSymmetryDiagnosticCode
+    tlcResult: TemporalPropertyResult
   ) throws {
+    guard swiftRun.isPassEligible else {
+      throw EvidenceFormatError.invalidField(record: caseID, field: "incomplete Swift graph")
+    }
     self.schema = Self.schema
     self.caseID = caseID
     self.configuration = configuration
-    self.outcome = outcome
     self.swiftResult = swiftResult
     self.tlcResult = tlcResult
-    self.diagnosticCode = diagnosticCode
-    try validate()
-  }
-
-  private func validate() throws {
     try configuration.validate()
-    try swiftResult.validate()
-    try tlcResult.validate()
     guard !caseID.isEmpty, configuration.property != nil,
           !configuration.symmetryEnabled else {
       throw EvidenceFormatError.inconsistentReference(record: caseID, field: "temporal comparison")
     }
-    switch outcome {
-    case .exact:
-      guard swiftResult.availability == .evaluated, tlcResult.availability == .evaluated,
-            swiftResult.outcome == tlcResult.outcome,
-            diagnosticCode == .exactAgreement else {
-        throw EvidenceFormatError.invalidField(record: caseID, field: "exact temporal result")
-      }
-    case .unavailable:
-      guard diagnosticCode == .temporalEvidenceUnavailable || diagnosticCode == .incompleteGraph else {
-        throw EvidenceFormatError.invalidField(record: caseID, field: "unavailable temporal result")
-      }
-    case .difference:
-      let validDifference: Bool
-      switch diagnosticCode {
-      case .propertyOutcomeDifference:
-        validDifference = swiftResult.availability == .evaluated
-          && tlcResult.availability == .evaluated
-          && swiftResult.outcome != tlcResult.outcome
-      case .graphDifference:
-        validDifference = swiftResult.availability == .evaluated
-          && tlcResult.availability == .evaluated
-          && swiftResult.outcome == tlcResult.outcome
-      default:
-        validDifference = false
-      }
-      guard validDifference else {
-        throw EvidenceFormatError.invalidField(record: caseID, field: "temporal difference diagnostic")
+    if tlcRun.isPassEligible == false {
+      status = .incompleteGraph
+    } else {
+      switch (swiftResult, tlcResult) {
+      case (.unavailable, _), (_, .unavailable):
+        status = .unavailable
+      case (.satisfied, .violated), (.violated, .satisfied):
+        status = .propertyOutcomeDifference
+      case (.satisfied, .satisfied), (.violated, .violated):
+        status = compareFiniteGraphs(expected: tlcRun, actual: swiftRun).isConformant
+          ? .exact
+          : .graphDifference
       }
     }
   }

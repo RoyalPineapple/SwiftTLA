@@ -1,10 +1,5 @@
 import Foundation
 
-package enum TLCTemporalCaptureStatus: Equatable, Sendable {
-  case captured
-  case unavailable
-}
-
 package struct TLCTemporalCaptureDiagnostic: Equatable, Sendable {
   package let code: String
   package let message: String
@@ -15,23 +10,9 @@ package struct TLCTemporalCaptureDiagnostic: Equatable, Sendable {
   }
 }
 
-package struct TLCTemporalCaptureResult: Sendable {
-  package let status: TLCTemporalCaptureStatus
-  package let comparison: TemporalComparison?
-  package let evidenceDirectory: URL
-  package let diagnostic: TLCTemporalCaptureDiagnostic?
-
-  package init(
-    status: TLCTemporalCaptureStatus,
-    comparison: TemporalComparison?,
-    evidenceDirectory: URL,
-    diagnostic: TLCTemporalCaptureDiagnostic?
-  ) {
-    self.status = status
-    self.comparison = comparison
-    self.evidenceDirectory = evidenceDirectory
-    self.diagnostic = diagnostic
-  }
+package enum TLCTemporalCapture: Sendable {
+  case comparison(TemporalComparison)
+  case failure(TLCTemporalCaptureDiagnostic)
 }
 
 package struct TLCTemporalCaptureInput: Sendable {
@@ -84,7 +65,7 @@ package struct TLCTemporalAdapter: Sendable {
     self.processAdapter = processAdapter
   }
 
-  package func capture(_ input: TLCTemporalCaptureInput) -> TLCTemporalCaptureResult {
+  package func capture(_ input: TLCTemporalCaptureInput) -> TLCTemporalCapture {
     do {
       guard !FileManager.default.fileExists(atPath: input.outputDirectory.path) else {
         throw TLCTemporalAdapterError.outputAlreadyExists
@@ -114,23 +95,22 @@ package struct TLCTemporalAdapter: Sendable {
         graph: graph,
         outputDirectory: input.outputDirectory,
         allowsImplicitStuttering: input.temporalCase.configuration.allowsImplicitStuttering)
-      let comparison = try comparison(
-        input: input,
+      let comparison = try TemporalComparison(
+        caseID: input.temporalCase.id,
+        configuration: input.temporalCase.configuration,
+        swiftRun: input.swiftRun,
         tlcRun: graph,
+        swiftResult: input.swiftResult,
         tlcResult: result)
       try RetainedEvidence.writeCanonical(
         comparison, to: input.outputDirectory.appendingPathComponent("temporal-comparison.json"))
-      let diagnostic = comparison.outcome == .unavailable ? unavailableDiagnostic(for: comparison) : nil
+      let diagnostic = diagnostic(for: comparison.status)
       if let diagnostic {
         try RetainedEvidence.writeJSON(
           ["code": diagnostic.code, "message": diagnostic.message],
           to: input.outputDirectory.appendingPathComponent("diagnostic.json"))
       }
-      return TLCTemporalCaptureResult(
-        status: comparison.outcome == .unavailable ? .unavailable : .captured,
-        comparison: comparison,
-        evidenceDirectory: input.outputDirectory,
-        diagnostic: diagnostic)
+      return .comparison(comparison)
     } catch {
       let directory = retainedFailureDirectory(for: input)
       _ = try? RetainedEvidence.createDirectory(
@@ -138,8 +118,7 @@ package struct TLCTemporalAdapter: Sendable {
       let diagnostic = TLCTemporalCaptureDiagnostic(
         code: diagnosticCode(for: error), message: String(describing: error))
       _ = try? RetainedEvidence.writeJSON(["code": diagnostic.code, "message": diagnostic.message], to: directory.appendingPathComponent("diagnostic.json"))
-      return TLCTemporalCaptureResult(
-        status: .unavailable, comparison: nil, evidenceDirectory: directory, diagnostic: diagnostic)
+      return .failure(diagnostic)
     }
   }
 
@@ -149,7 +128,6 @@ package struct TLCTemporalAdapter: Sendable {
     }
     try validateTraceOutput(input)
     try input.temporalCase.validate()
-    try input.swiftResult.validate()
     guard input.swiftRun.isPassEligible else {
       throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
@@ -238,8 +216,7 @@ extension TLCTemporalAdapter {
     allowsImplicitStuttering: Bool
   ) throws -> TemporalPropertyResult {
     if run.primary.reportedExhaustiveCompletion {
-      return try TemporalPropertyResult(
-        availability: .evaluated, outcome: .satisfied, traceAvailability: .notApplicable)
+      return .satisfied
     }
     guard isTemporalViolation(run.primary),
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path),
@@ -247,54 +224,9 @@ extension TLCTemporalAdapter {
             Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json"))),
           traceIsBound(counterexample, to: graph, allowsImplicitStuttering: allowsImplicitStuttering),
           let lasso = lasso(from: counterexample, allowsImplicitStuttering: allowsImplicitStuttering) else {
-      return try TemporalPropertyResult(
-        availability: .unavailable, outcome: nil, traceAvailability: .unavailable)
+      return .unavailable
     }
-    return try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated,
-      traceAvailability: .available, lasso: lasso)
-  }
-
-  private func comparison(
-    input: TLCTemporalCaptureInput,
-    tlcRun: CompletedGraphRun,
-    tlcResult: TemporalPropertyResult
-  ) throws -> TemporalComparison {
-    let outcome: TemporalSymmetryOutcome
-    let diagnostic: TemporalSymmetryDiagnosticCode
-    if tlcRun.isPassEligible == false {
-      outcome = .unavailable
-      diagnostic = .incompleteGraph
-    } else if input.swiftResult.availability == .unavailable || tlcResult.availability == .unavailable {
-      outcome = .unavailable
-      diagnostic = .temporalEvidenceUnavailable
-    } else if input.swiftResult.outcome != tlcResult.outcome {
-      outcome = .difference
-      diagnostic = .propertyOutcomeDifference
-    } else {
-      let graphComparison = try exactGraphComparison(expected: tlcRun, actual: input.swiftRun)
-      if graphComparison.isConformant {
-        outcome = .exact
-        diagnostic = .exactAgreement
-      } else {
-        outcome = .difference
-        diagnostic = .graphDifference
-      }
-    }
-    return try TemporalComparison(
-      caseID: input.temporalCase.id,
-      configuration: input.temporalCase.configuration,
-      outcome: outcome,
-      swiftResult: input.swiftResult,
-      tlcResult: tlcResult,
-      diagnosticCode: diagnostic)
-  }
-
-  private func exactGraphComparison(
-    expected: CompletedGraphRun,
-    actual: CompletedGraphRun
-  ) throws -> GraphComparison {
-    compareFiniteGraphs(expected: expected, actual: actual)
+    return .violated(lasso)
   }
 
   private func lasso(
@@ -397,15 +329,19 @@ extension TLCTemporalAdapter {
     }
   }
 
-  private func unavailableDiagnostic(for comparison: TemporalComparison) -> TLCTemporalCaptureDiagnostic {
-    if comparison.diagnosticCode == .incompleteGraph {
-      return .init(
+  private func diagnostic(for status: TemporalComparisonStatus) -> TLCTemporalCaptureDiagnostic? {
+    switch status {
+    case .incompleteGraph:
+      .init(
         code: "incomplete-graph",
         message: "TLC did not report exhaustive completion for the graph used in comparison.")
+    case .unavailable:
+      .init(
+        code: "temporal-evidence-unavailable",
+        message: "SwiftTLA or TLC could not produce a bound temporal result.")
+    case .exact, .propertyOutcomeDifference, .graphDifference:
+      nil
     }
-    return .init(
-      code: "temporal-evidence-unavailable",
-      message: "SwiftTLA or TLC could not produce a bound temporal result.")
   }
 
 }
