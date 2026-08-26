@@ -1,10 +1,6 @@
 import Foundation
 import SwiftTLA
 
-package enum CanonicalSchemaError: Error, Equatable, Sendable {
-    case unknownSchema(String)
-}
-
 package enum CanonicalValueError: Error, Equatable, Sendable, CustomStringConvertible {
     case duplicateFunctionKey(CanonicalValue)
 
@@ -13,17 +9,6 @@ package enum CanonicalValueError: Error, Equatable, Sendable, CustomStringConver
         case .duplicateFunctionKey(let key):
             return "Canonical function contains duplicate key \(key.canonicalEncoding)."
         }
-    }
-}
-
-package enum CanonicalSchema: String, Hashable, Sendable {
-    case exactFiniteTLCGraph
-
-    package init(validating rawValue: String) throws {
-        guard let schema = Self(rawValue: rawValue) else {
-            throw CanonicalSchemaError.unknownSchema(rawValue)
-        }
-        self = schema
     }
 }
 
@@ -58,7 +43,12 @@ package enum CanonicalValue: Hashable, Sendable {
                 throw CanonicalValueError.duplicateFunctionKey(entry.key)
             }
         }
-        return .orderedFunction(ordered)
+        var fields: [String: CanonicalValue] = [:]
+        for entry in ordered {
+            guard case .string(let name) = entry.key else { return .orderedFunction(ordered) }
+            fields[name] = entry.value
+        }
+        return .record(fields)
     }
 
     package init(_ value: TLAValue) throws {
@@ -259,15 +249,14 @@ package struct CanonicalTrace: Hashable, Sendable {
     }
 }
 
-package enum CanonicalRunError: Error, Equatable, Sendable {
+package enum CompletedGraphRunError: Error, Equatable, Sendable {
     case duplicateTraceID(String)
     case graphActionUndeclared(String)
     case deadlockStateMissing(CanonicalStateKey)
     case traceStateMissing(CanonicalStateKey)
 }
 
-package struct CanonicalRun: Equatable, Sendable {
-    package let schema: CanonicalSchema
+package struct CompletedGraphRun: Equatable, Sendable {
     package let graph: CanonicalGraph
     package let observableActions: Set<String>
     package let outcome: CanonicalOutcome
@@ -275,7 +264,6 @@ package struct CanonicalRun: Equatable, Sendable {
     package let traces: [CanonicalTrace]
 
     package init(
-        schema: CanonicalSchema = .exactFiniteTLCGraph,
         graph: CanonicalGraph,
         observableActions: Set<String>,
         outcome: CanonicalOutcome,
@@ -284,21 +272,20 @@ package struct CanonicalRun: Equatable, Sendable {
     ) throws {
         let traceIDs = traces.map(\.id)
         guard Set(traceIDs).count == traceIDs.count else {
-            throw CanonicalRunError.duplicateTraceID(traceIDs.sorted().first ?? "")
+            throw CompletedGraphRunError.duplicateTraceID(traceIDs.sorted().first ?? "")
         }
         for edge in graph.edgeOccurrences.keys where !observableActions.contains(edge.action) {
-            throw CanonicalRunError.graphActionUndeclared(edge.action)
+            throw CompletedGraphRunError.graphActionUndeclared(edge.action)
         }
         if case .deadlock(let state) = outcome, graph.states[state] == nil {
-            throw CanonicalRunError.deadlockStateMissing(state)
+            throw CompletedGraphRunError.deadlockStateMissing(state)
         }
         for trace in traces {
             for step in trace.steps where graph.states[step.state] == nil {
-                throw CanonicalRunError.traceStateMissing(step.state)
+                throw CompletedGraphRunError.traceStateMissing(step.state)
             }
         }
 
-        self.schema = schema
         self.graph = graph
         self.observableActions = observableActions
         self.outcome = outcome

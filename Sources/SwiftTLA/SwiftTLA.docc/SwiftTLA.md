@@ -74,12 +74,12 @@ source-faithful PlusCal spelling. Change that typed model construct.
 
 Compilation produces an executable formal model. It does not prove every
 possible TLA+ module or every behavior outside the configured finite bounds.
-For a declared finite case, core conformance compares the complete SwiftTLA
+For a declared finite case, finite graph comparison compares the complete SwiftTLA
 and TLC graphs directly. It retains `swift-graph.jsonl`, `tlc-graph.jsonl`, and
 one `comparison.json`. Each graph stream declares its outcome and record
 counts; incomplete streams cannot match.
 Read <doc:GeneratedMachineSurface> for the generated-machine
-contract, `Documentation/CoreGraphConformance.md` for the comparison record,
+contract, `Documentation/FiniteGraphComparison.md` for the comparison record,
 and `Documentation/PublicAPIValidation.md` for direct generated-API checks.
 
 ## Topics

@@ -738,16 +738,12 @@ struct GeneratedStateMachineTests {
         #expect(try machine.isEnabled(.board(person: 2, elevator: 20, direction: 200)))
         #expect(try machine.isEnabled(.board(person: 2, elevator: 30, direction: 200)) == false)
 
-        let wrappers = try builder.compile().renderedTLAModuleBundle().tla.split(separator: "\n").filter { $0.hasPrefix("board__") }
-        #expect(wrappers == [
-            "board__0_0_0 == board(1, 10, 100)",
-            "board__0_0_1 == board(1, 10, 200)",
-            "board__0_1_0 == board(1, 20, 100)",
-            "board__0_1_1 == board(1, 20, 200)",
-            "board__1_0_0 == board(2, 10, 100)",
-            "board__1_0_1 == board(2, 10, 200)",
-            "board__1_1_0 == board(2, 20, 100)",
-            "board__1_1_1 == board(2, 20, 200)"
+        let renderedCalls = try builder.compile().renderedActions()
+        #expect(renderedCalls.map(\.sourceName) == Array(repeating: "board", count: 8))
+        #expect(renderedCalls.map(\.arguments) == expectedArguments)
+        #expect(renderedCalls.map(\.renderedName) == [
+            "board__0_0_0", "board__0_0_1", "board__0_1_0", "board__0_1_1",
+            "board__1_0_0", "board__1_0_1", "board__1_1_0", "board__1_1_1"
         ])
 
         let compilation = try builder.compile()

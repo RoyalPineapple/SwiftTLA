@@ -1,7 +1,7 @@
 import Foundation
 
 package enum CanonicalGraphRecords {
-  package static func write(_ run: CanonicalRun, to url: URL) throws {
+  package static func write(_ run: CompletedGraphRun, to url: URL) throws {
     try encoded(records(for: run)).write(to: url, options: .atomic)
   }
 
@@ -32,10 +32,11 @@ package enum CanonicalGraphRecords {
     }
   }
 
-  private static func records(for run: CanonicalRun) -> [[String: Any]] {
+  private static func records(for run: CompletedGraphRun) -> [[String: Any]] {
     var records: [[String: Any]] = [[
       "type": "header",
-      "schema": run.schema.rawValue,
+      "schema": "swifttla.finite-graph",
+      "version": 1,
       "observableActions": run.observableActions.sorted()
     ]]
     records += graphRecords(for: run.graph)

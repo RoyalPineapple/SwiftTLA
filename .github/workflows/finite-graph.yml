@@ -1,0 +1,31 @@
+name: Finite Graph Comparison
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finite-graph:
+    runs-on: macos-15
+    env:
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+
+      - name: Run exact finite graph comparison
+        run: make finite-graph
+
+      - name: Upload finite-graph evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: finite-graph-${{ github.run_id }}
+          path: |
+            .build/finite-graph-evidence
+          if-no-files-found: warn

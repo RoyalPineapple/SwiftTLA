@@ -81,7 +81,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package let replayInput: URL
   package let workingDirectory: URL
   package let arguments: [String]
-  package let expectedCase: CoreConformanceCase
+  package let expectedCase: FiniteGraphCase
   package let runID: UUID
   package let timeout: TimeInterval
   package let traceMode: TLCTraceMode
@@ -98,7 +98,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     replayInput: URL,
     workingDirectory: URL,
     arguments: [String],
-    expectedCase: CoreConformanceCase,
+    expectedCase: FiniteGraphCase,
     runID: UUID,
     timeout: TimeInterval = 60,
     traceMode: TLCTraceMode = .none,
@@ -238,17 +238,17 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package func validateReferenceBinding(pin: TLCReferencePin, artifacts: TLCReferenceArtifacts)
     throws {
     guard expectedCase.pin == pin else {
-      throw CoreConformanceCaseError.pinMismatch("declared case reference pin")
+      throw FiniteGraphCaseError.pinMismatch("declared case reference pin")
     }
     guard sameFile(jar, artifacts.jar) else {
-      throw CoreConformanceCaseError.pinMismatch("execution TLC JAR")
+      throw FiniteGraphCaseError.pinMismatch("execution TLC JAR")
     }
     let bridgeClassFile =
       bridgeClasses
       .appendingPathComponent(pin.bridgeClass.replacingOccurrences(of: ".", with: "/"))
       .appendingPathExtension("class")
     guard sameFile(bridgeClassFile, artifacts.bridgeBinary) else {
-      throw CoreConformanceCaseError.pinMismatch("execution bridge class")
+      throw FiniteGraphCaseError.pinMismatch("execution bridge class")
     }
   }
 
@@ -323,7 +323,7 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
     try request.validateLaunchBinding(module: input.module, configuration: input.configuration)
     if validatesReferences {
       guard let pin = request.referencePin, let artifacts = request.referenceArtifacts else {
-        throw CoreConformanceCaseError.missingArtifact("reference pin and artifacts")
+        throw FiniteGraphCaseError.missingArtifact("reference pin and artifacts")
       }
       try request.validateReferenceBinding(pin: pin, artifacts: artifacts)
       try pin.validate(
@@ -353,7 +353,7 @@ package struct TLCProcessRun: Equatable, Sendable {
 package struct TLCProcessCapture: Sendable {
   package let run: TLCProcessRun
   package let graphEvents: Data
-  package let graph: CanonicalRun
+  package let graph: CompletedGraphRun
 }
 
 package struct TLCProcessAdapter: Sendable {
@@ -422,7 +422,7 @@ package struct TLCProcessAdapter: Sendable {
   private func capture(_ run: TLCProcessRun, request: TLCProcessRequest) throws
     -> TLCProcessCapture {
     let graphEvents = try Data(contentsOf: request.graphEvents)
-    let parser = TLCGraphEventParser(expectedCase: request.expectedCase)
+    let parser = TLCGraphReader(expectedCase: request.expectedCase)
     let stream = try parser.parse(graphEvents)
     guard stream.runID == request.runID else {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
@@ -430,7 +430,7 @@ package struct TLCProcessAdapter: Sendable {
     return TLCProcessCapture(
       run: run,
       graphEvents: graphEvents,
-      graph: try parser.canonicalRun(stream, result: run.primary)
+      graph: try parser.makeCompletedGraphRun(stream, result: run.primary)
     )
   }
 
@@ -639,32 +639,25 @@ private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
   ]
 }
 
-private func conformanceCaseJSON(_ declaredCase: CoreConformanceCase) -> [String: Any] {
+private func conformanceCaseJSON(_ finiteGraphCase: FiniteGraphCase) -> [String: Any] {
   let record: [String: Any] = [
-    "id": declaredCase.id,
-    "moduleSHA256": declaredCase.moduleSHA256,
-    "cfgSHA256": declaredCase.cfgSHA256,
-    "arguments": declaredCase.arguments,
-    "argumentsSHA256": declaredCase.argumentsSHA256,
-    "workers": declaredCase.workers,
-    "fingerprintPolynomial": declaredCase.fingerprintPolynomial,
-    "deadlock": declaredCase.deadlock,
-    "operatingSystem": declaredCase.operatingSystem,
-    "architecture": declaredCase.architecture,
-    "environment": declaredCase.environment,
-    "pin": pinJSON(declaredCase.pin),
-    "invocationMappings": declaredCase.invocationMappings.map { mapping in
+    "id": finiteGraphCase.id,
+    "moduleSHA256": finiteGraphCase.moduleSHA256,
+    "cfgSHA256": finiteGraphCase.cfgSHA256,
+    "arguments": finiteGraphCase.arguments,
+    "argumentsSHA256": finiteGraphCase.argumentsSHA256,
+    "workers": finiteGraphCase.workers,
+    "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
+    "deadlock": finiteGraphCase.deadlock,
+    "operatingSystem": finiteGraphCase.operatingSystem,
+    "architecture": finiteGraphCase.architecture,
+    "environment": finiteGraphCase.environment,
+    "pin": pinJSON(finiteGraphCase.pin),
+    "renderedActions": finiteGraphCase.renderedActions.map { call in
       [
-        "wrapper": mapping.wrapper,
-        "action": mapping.action,
-        "arguments": mapping.arguments,
-        "indices": mapping.indices
-      ]
-    },
-    "valueNormalizations": declaredCase.valueNormalizations.map { normalization in
-      [
-        "binding": normalization.binding,
-        "functionKeys": normalization.functionKeys
+        "sourceName": call.sourceName,
+        "arguments": call.arguments.map(\.description),
+        "renderedName": call.renderedName
       ]
     }
   ]
@@ -727,23 +720,23 @@ package enum TLCReferenceInspector {
       timeout: 10
     )
     guard manifest.status == 0 else {
-      throw CoreConformanceCaseError.pinMismatch("TLC JAR manifest")
+      throw FiniteGraphCaseError.pinMismatch("TLC JAR manifest")
     }
     let runtime = try executeProcess(
       executable: javaExecutable, arguments: ["-XshowSettings:properties", "-version"],
       directory: directory, timeout: 10
     )
-    guard runtime.status == 0 else { throw CoreConformanceCaseError.pinMismatch("Java runtime") }
+    guard runtime.status == 0 else { throw FiniteGraphCaseError.pinMismatch("Java runtime") }
     let properties = parseProperties(runtime.stdout + "\n" + runtime.stderr)
     let architecture: String
     switch properties["os.arch"] {
     case "aarch64", "arm64": architecture = "arm64"
     case "amd64", "x86_64": architecture = "x86_64"
-    default: throw CoreConformanceCaseError.pinMismatch("Java architecture")
+    default: throw FiniteGraphCaseError.pinMismatch("Java architecture")
     }
     guard let version = properties["java.runtime.version"], let vendor = properties["java.vendor"]
     else {
-      throw CoreConformanceCaseError.pinMismatch("Java runtime properties")
+      throw FiniteGraphCaseError.pinMismatch("Java runtime properties")
     }
     return TLCReferenceArtifacts(
       jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,

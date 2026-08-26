@@ -6,8 +6,8 @@ import UpstreamParity
 struct TemporalSymmetryConformanceRunnerTests {
   @Test("Temporal cases preserve bounded fairness outcomes")
   func temporalCasesPreserveFairnessOutcomes() throws {
-    for declaredCase in try registeredCases().cases where declaredCase.kind == .temporal {
-      let model = try TemporalSymmetryModelCatalog.model(for: declaredCase)
+    for temporalCase in try registeredCases().cases where temporalCase.kind == .temporal {
+      let model = try TemporalSymmetryModelCatalog.model(for: temporalCase)
       let compilation = try model.spec.compile()
       let exploration = try ModelChecker(
         compilation: compilation,
@@ -23,9 +23,9 @@ struct TemporalSymmetryConformanceRunnerTests {
 
   @Test("Symmetry cases use the compiled runtime for raw and reduced exploration")
   func symmetryCasesUseCompiledReduction() throws {
-    for declaredCase in try registeredCases().cases where declaredCase.kind == .symmetry {
-      let model = try TemporalSymmetryModelCatalog.model(for: declaredCase)
-      let scope = try #require(declaredCase.configuration.symmetryScope)
+    for temporalCase in try registeredCases().cases where temporalCase.kind == .symmetry {
+      let model = try TemporalSymmetryModelCatalog.model(for: temporalCase)
+      let scope = try #require(temporalCase.configuration.symmetryScope)
       let compilation = try model.spec.compile()
       let configuration = try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)
       let raw = try ModelChecker(

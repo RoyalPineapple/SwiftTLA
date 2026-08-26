@@ -7,8 +7,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter retains current exact evidence")
   func capturesCorrelatedExactEvidence() throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.coreCase, runID: fixture.correlation.tlcRunID)
-    let graph = try TLCGraphEventParser(expectedCase: fixture.coreCase).parseCanonicalRun(
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .satisfied,
@@ -32,7 +32,7 @@ struct TLCTemporalAdapterTests {
   func blocksForeignOrIncompleteEvidence() throws {
     let foreign = try Fixture()
     let foreignCorrelation = try TemporalSymmetryCaseRunCorrelation(
-      caseID: foreign.declaredCase.id, runID: foreign.correlation.runID, swiftRunID: foreign.correlation.swiftRunID,
+      caseID: foreign.launchCase.id, runID: foreign.correlation.runID, swiftRunID: foreign.correlation.swiftRunID,
       tlcRunID: UUID(), comparisonRunID: foreign.correlation.comparisonRunID)
     let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
       .capture(try foreign.input(correlation: foreignCorrelation))
@@ -52,8 +52,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter does not invent a lasso from an open trace")
   func recordsUnattributableTemporalTraceAsUnavailable() throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.coreCase, runID: fixture.correlation.tlcRunID)
-    let graph = try TLCGraphEventParser(expectedCase: fixture.coreCase).parseCanonicalRun(
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
       availability: .evaluated, outcome: .satisfied,
@@ -73,8 +73,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter accepts a numbered two-state loop-back lasso")
   func capturesPinnedLoopBackLasso() throws {
     let fixture = try Fixture()
-    let stream = try temporalGraphStream(case: fixture.coreCase, runID: fixture.correlation.tlcRunID)
-    let graph = try TLCGraphEventParser(expectedCase: fixture.coreCase).parseCanonicalRun(
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
@@ -96,8 +96,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter binds an exact actionless stuttering lasso to a retained state")
   func capturesPinnedStutteringLasso() throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.coreCase, runID: fixture.correlation.tlcRunID)
-    let graph = try TLCGraphEventParser(expectedCase: fixture.coreCase).parseCanonicalRun(
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
@@ -118,8 +118,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter binds a named same-state dump step only when the declared behavior allows stuttering")
   func bindsNamedSameStateDumpStepOnlyWithDeclaredStuttering() throws {
     let rejectedFixture = try Fixture()
-    let stream = try graphStream(case: rejectedFixture.coreCase, runID: rejectedFixture.correlation.tlcRunID)
-    let graph = try TLCGraphEventParser(expectedCase: rejectedFixture.coreCase).parseCanonicalRun(
+    let stream = try graphStream(case: rejectedFixture.launchCase, runID: rejectedFixture.correlation.tlcRunID)
+    let graph = try TLCGraphReader(expectedCase: rejectedFixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
@@ -135,8 +135,8 @@ struct TLCTemporalAdapterTests {
     #expect(rejected.status == .unavailable)
 
     let admittedFixture = try Fixture()
-    let admittedStream = try graphStream(case: admittedFixture.coreCase, runID: admittedFixture.correlation.tlcRunID)
-    let admittedGraph = try TLCGraphEventParser(expectedCase: admittedFixture.coreCase).parseCanonicalRun(
+    let admittedStream = try graphStream(case: admittedFixture.launchCase, runID: admittedFixture.correlation.tlcRunID)
+    let admittedGraph = try TLCGraphReader(expectedCase: admittedFixture.launchCase).readCompletedGraph(
       admittedStream, result: Fixture.temporalViolation)
     let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
     let admittedSwiftResult = try TemporalPropertyResult(
@@ -159,8 +159,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter rejects a lasso that is foreign to the captured graph")
   func rejectsForeignTraceEvenWhenItsLoopCloses() throws {
     let fixture = try Fixture()
-    let stream = try temporalGraphStream(case: fixture.coreCase, runID: fixture.correlation.tlcRunID)
-    let graph = try TLCGraphEventParser(expectedCase: fixture.coreCase).parseCanonicalRun(
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
+    let graph = try TLCGraphReader(expectedCase: fixture.launchCase).readCompletedGraph(
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
@@ -181,7 +181,7 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter retains primary evidence when trace capture throws")
   func retainsPrimaryEvidenceAfterTraceCaptureFailure() throws {
     let fixture = try Fixture()
-    let stream = try temporalGraphStream(case: fixture.coreCase, runID: fixture.correlation.tlcRunID)
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.correlation.tlcRunID)
     try Data("stale trace".utf8).write(to: fixture.request.traceOutput, options: .atomic)
     let result = TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: TraceFailingExecutor(primaryStream: stream)))
@@ -287,11 +287,11 @@ struct TLCTemporalAdapterTests {
     let manifest: URL
     let toolchain: URL
     let output: URL
-    let coreCase: CoreConformanceCase
-    let declaredCase: TemporalSymmetryCase
+    let launchCase: FiniteGraphCase
+    let temporalCase: TemporalSymmetryCase
     let correlation: TemporalSymmetryCaseRunCorrelation
     let request: TLCProcessRequest
-    let swiftRun: CanonicalRun
+    let swiftRun: CompletedGraphRun
 
     init() throws {
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCTemporalAdapterTests-\(UUID())")
@@ -305,33 +305,33 @@ struct TLCTemporalAdapterTests {
       try Data("SPECIFICATION Spec\n".utf8).write(to: configuration)
       try Data("{\"schema\":\"TemporalSymmetryCases\"}".utf8).write(to: manifest)
       try Data("{\"toolchain\":\"locked\"}".utf8).write(to: toolchain)
-      coreCase = try CoreConformanceCase(
+      launchCase = try FiniteGraphCase(
         id: "temporal", moduleSHA256: SHA256.hex(Data(contentsOf: module)),
         cfgSHA256: SHA256.hex(Data(contentsOf: configuration)), arguments: [],
-        argumentsSHA256: try CoreConformanceCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
+        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), workers: 1, fingerprintPolynomial: 1,
         deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:], pin: try testReferencePin())
-      declaredCase = try TemporalSymmetryCase(
-        id: coreCase.id, kind: .temporal, swiftSpec: "TemporalFixture",
-        finiteBounds: try CoreFiniteBounds(summary: "two states", limits: ["states": 2]),
+      temporalCase = try TemporalSymmetryCase(
+        id: launchCase.id, kind: .temporal, swiftSpec: "TemporalFixture",
+        finiteBounds: try FiniteBounds(summary: "two states", limits: ["states": 2]),
         sourceInput: try Fixture.reference(module, path: "Verification/TemporalSymmetryConformance/TemporalFixture.tla"),
         configuration: try TemporalSymmetryConfiguration(property: "[] P", fairness: TemporalFairnessMode.none))
       correlation = try TemporalSymmetryCaseRunCorrelation(
-        caseID: coreCase.id, runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
+        caseID: temporalCase.id, runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
         replayInput: root.appendingPathComponent("replay.json"), workingDirectory: root, arguments: [],
-        expectedCase: coreCase, runID: correlation.tlcRunID, referencePin: coreCase.pin)
-      swiftRun = try TLCGraphEventParser(expectedCase: coreCase).parseCanonicalRun(
-        graphStream(case: coreCase, runID: correlation.tlcRunID),
+        expectedCase: launchCase, runID: correlation.tlcRunID, referencePin: launchCase.pin)
+      swiftRun = try TLCGraphReader(expectedCase: launchCase).readCompletedGraph(
+        graphStream(case: launchCase, runID: correlation.tlcRunID),
         result: Self.success
       )
     }
 
     func input(
-      swiftRun: CanonicalRun? = nil,
+      swiftRun: CompletedGraphRun? = nil,
       swiftResult: TemporalPropertyResult? = nil,
       correlation: TemporalSymmetryCaseRunCorrelation? = nil,
       request: TLCProcessRequest? = nil,
@@ -341,7 +341,7 @@ struct TLCTemporalAdapterTests {
         availability: .unavailable, outcome: nil, graphID: "unavailable", initialStateIDs: ["unavailable"],
         traceAvailability: .unavailable)
       return TLCTemporalCaptureInput(
-        declaredCase: declaredCase, referencePin: coreCase.pin,
+        temporalCase: temporalCase, referencePin: launchCase.pin,
         correlation: correlation ?? self.correlation, request: request ?? self.request,
         swiftRun: swiftRun ?? self.swiftRun,
         swiftResult: graphResult,
@@ -372,29 +372,29 @@ struct TLCTemporalAdapterTests {
       )
     }
 
-    static func reference(_ url: URL, path: String) throws -> CoreEvidenceReference {
-      try CoreEvidenceReference(path: path, sha256: SHA256.hex(Data(contentsOf: url)))
+    static func reference(_ url: URL, path: String) throws -> RetainedFileReference {
+      try RetainedFileReference(path: path, sha256: SHA256.hex(Data(contentsOf: url)))
     }
   }
 }
 
-private func graphStream(case declaredCase: CoreConformanceCase, runID: UUID) throws -> Data {
+private func graphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {
   let state: [String: Any] = [
     "fingerprint": "1", "level": 1,
     "bindings": [["ordinal": 0, "name": "x", "tla": "1", "tlaSha256": SHA256.hex(Data("1".utf8))]]
   ]
-  let pin = declaredCase.pin
+  let pin = finiteGraphCase.pin
   let provenance: [String: Any] = [
     "tlcTag": pin.tag, "tlcCommit": pin.commit, "tlcJarSha256": pin.jarSHA256,
     "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion, "javaArchiveSha256": pin.javaArchiveSHA256,
     "bridgeClass": pin.bridgeClass, "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
-    "moduleSha256": declaredCase.moduleSHA256, "cfgSha256": declaredCase.cfgSHA256,
-    "arguments": declaredCase.arguments, "argumentsSha256": declaredCase.argumentsSHA256,
-    "workers": declaredCase.workers, "fingerprintPolynomial": declaredCase.fingerprintPolynomial, "deadlock": declaredCase.deadlock,
-    "os": declaredCase.operatingSystem, "architecture": declaredCase.architecture, "environment": declaredCase.environment
+    "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
+    "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
+    "workers": finiteGraphCase.workers, "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial, "deadlock": finiteGraphCase.deadlock,
+    "os": finiteGraphCase.operatingSystem, "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
   ]
   let common: [String: Any] = [
-    "schema": "swifttla.tlc.graph-events", "version": 1, "runId": runID.uuidString.lowercased(), "caseId": declaredCase.id
+    "schema": "swifttla.tlc.graph-events", "version": 1, "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
   ]
   let records = [
     common.merging(["type": "header", "callback": "writer.header", "seq": 0, "provenance": provenance]) { $1 },
@@ -412,12 +412,12 @@ private func graphStream(case declaredCase: CoreConformanceCase, runID: UUID) th
   return body + footerData + Data([10])
 }
 
-private func temporalGraphStream(case declaredCase: CoreConformanceCase, runID: UUID) throws -> Data {
+private func temporalGraphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {
   let first = graphState(fingerprint: "1", value: 1)
   let second = graphState(fingerprint: "2", value: 2)
-  let common = graphCommon(case: declaredCase, runID: runID)
+  let common = graphCommon(case: finiteGraphCase, runID: runID)
   let records = [
-    common.merging(["type": "header", "callback": "writer.header", "seq": 0, "provenance": graphProvenance(declaredCase)]) { $1 },
+    common.merging(["type": "header", "callback": "writer.header", "seq": 0, "provenance": graphProvenance(finiteGraphCase)]) { $1 },
     common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": first]) { $1 },
     graphTransition(common: common, sequence: 2, source: first, target: second, action: "A"),
     graphTransition(common: common, sequence: 3, source: second, target: first, action: "B")
@@ -479,23 +479,23 @@ private func graphTransition(
   ]) { $1 }
 }
 
-private func graphCommon(case declaredCase: CoreConformanceCase, runID: UUID) -> [String: Any] {
+private func graphCommon(case finiteGraphCase: FiniteGraphCase, runID: UUID) -> [String: Any] {
   [
     "schema": "swifttla.tlc.graph-events", "version": 1,
-    "runId": runID.uuidString.lowercased(), "caseId": declaredCase.id
+    "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
   ]
 }
 
-private func graphProvenance(_ declaredCase: CoreConformanceCase) -> [String: Any] {
-  let pin = declaredCase.pin
+private func graphProvenance(_ finiteGraphCase: FiniteGraphCase) -> [String: Any] {
+  let pin = finiteGraphCase.pin
   return [
     "tlcTag": pin.tag, "tlcCommit": pin.commit, "tlcJarSha256": pin.jarSHA256,
     "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion, "javaArchiveSha256": pin.javaArchiveSHA256,
     "bridgeClass": pin.bridgeClass, "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
-    "moduleSha256": declaredCase.moduleSHA256, "cfgSha256": declaredCase.cfgSHA256,
-    "arguments": declaredCase.arguments, "argumentsSha256": declaredCase.argumentsSHA256,
-    "workers": declaredCase.workers, "fingerprintPolynomial": declaredCase.fingerprintPolynomial,
-    "deadlock": declaredCase.deadlock, "os": declaredCase.operatingSystem,
-    "architecture": declaredCase.architecture, "environment": declaredCase.environment
+    "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
+    "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
+    "workers": finiteGraphCase.workers, "fingerprintPolynomial": finiteGraphCase.fingerprintPolynomial,
+    "deadlock": finiteGraphCase.deadlock, "os": finiteGraphCase.operatingSystem,
+    "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
   ]
 }

@@ -234,7 +234,7 @@ extension Example {
     package static let multiCarElevator = Entry(
         id: "elevator/MultiCarElevator",
         upstreamSpec: "multicar-elevator",
-        upstreamModule: "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla",
+        upstreamModule: "Verification/FiniteGraph/fixtures/multicar-elevator/MultiCarElevator.tla",
         upstreamCfg: nil,
         expectedDistinct: 3_276,
         spec: MultiCarElevator.spec,

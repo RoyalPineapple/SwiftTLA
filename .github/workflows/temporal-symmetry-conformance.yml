@@ -39,7 +39,7 @@ jobs:
     if: needs.check-head.outputs.run_expensive == 'true'
     runs-on: macos-15
     env:
-      CORE_CONFORMANCE_TOOL_ROOT: ${{ github.workspace }}/.build/core-conformance-tools
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
     steps:
       - uses: actions/checkout@v5
 

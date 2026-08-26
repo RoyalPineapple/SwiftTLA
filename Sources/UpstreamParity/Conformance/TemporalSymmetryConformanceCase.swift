@@ -57,9 +57,9 @@ package enum SymmetryApplicableOutcome: String, Codable, Sendable {
 }
 
 package struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendable {
-  package let configuration: CoreEvidenceReference
+  package let configuration: RetainedFileReference
 
-  package init(configuration: CoreEvidenceReference) throws {
+  package init(configuration: RetainedFileReference) throws {
     self.configuration = configuration
     try configuration.validate()
   }
@@ -68,7 +68,7 @@ package struct TemporalCompleteGraphPassDeclaration: Equatable, Codable, Sendabl
 
   package init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(configuration: container.decode(CoreEvidenceReference.self, forKey: .configuration))
+    try self.init(configuration: container.decode(RetainedFileReference.self, forKey: .configuration))
   }
 }
 
@@ -156,16 +156,16 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   package let id: String
   package let kind: TemporalSymmetryCaseKind
   package let swiftSpec: String
-  package let finiteBounds: CoreFiniteBounds
-  package let sourceInput: CoreEvidenceReference?
+  package let finiteBounds: FiniteBounds
+  package let sourceInput: RetainedFileReference?
   package let configuration: TemporalSymmetryConfiguration
 
   package init(
     id: String,
     kind: TemporalSymmetryCaseKind,
     swiftSpec: String,
-    finiteBounds: CoreFiniteBounds,
-    sourceInput: CoreEvidenceReference? = nil,
+    finiteBounds: FiniteBounds,
+    sourceInput: RetainedFileReference? = nil,
     configuration: TemporalSymmetryConfiguration
   ) throws {
     self.id = id
@@ -207,8 +207,8 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
       swiftSpec: container.decode(String.self, forKey: .swiftSpec),
-      finiteBounds: container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
-      sourceInput: try container.decodeIfPresent(CoreEvidenceReference.self, forKey: .sourceInput),
+      finiteBounds: container.decode(FiniteBounds.self, forKey: .finiteBounds),
+      sourceInput: try container.decodeIfPresent(RetainedFileReference.self, forKey: .sourceInput),
       configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration))
   }
 }
@@ -306,7 +306,7 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
   package let graphID: String
   package let initialStateIDs: [String]
   package let traceAvailability: TemporalTraceAvailability
-  package let traceEvidence: CoreEvidenceReference?
+  package let traceEvidence: RetainedFileReference?
   package let lasso: TemporalLassoWitness?
 
   package init(
@@ -315,7 +315,7 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
     graphID: String,
     initialStateIDs: [String],
     traceAvailability: TemporalTraceAvailability,
-    traceEvidence: CoreEvidenceReference? = nil,
+    traceEvidence: RetainedFileReference? = nil,
     lasso: TemporalLassoWitness? = nil
   ) throws {
     self.availability = availability
@@ -377,7 +377,7 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
       graphID: container.decode(String.self, forKey: .graphID),
       initialStateIDs: container.decode([String].self, forKey: .initialStateIDs),
       traceAvailability: container.decode(TemporalTraceAvailability.self, forKey: .traceAvailability),
-      traceEvidence: try container.decodeIfPresent(CoreEvidenceReference.self, forKey: .traceEvidence),
+      traceEvidence: try container.decodeIfPresent(RetainedFileReference.self, forKey: .traceEvidence),
       lasso: try container.decodeIfPresent(TemporalLassoWitness.self, forKey: .lasso))
   }
 }
@@ -390,10 +390,10 @@ package struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
   package let operatingSystem: String
   package let architecture: String
   package let environment: [String: String]
-  package let sourceInput: CoreEvidenceReference
-  package let configuration: CoreEvidenceReference
-  package let graphEvents: CoreEvidenceReference
-  package let result: CoreEvidenceReference
+  package let sourceInput: RetainedFileReference
+  package let configuration: RetainedFileReference
+  package let graphEvents: RetainedFileReference
+  package let result: RetainedFileReference
 
   package init(
     propertyRunID: UUID,
@@ -403,10 +403,10 @@ package struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
     operatingSystem: String,
     architecture: String,
     environment: [String: String],
-    sourceInput: CoreEvidenceReference,
-    configuration: CoreEvidenceReference,
-    graphEvents: CoreEvidenceReference,
-    result: CoreEvidenceReference
+    sourceInput: RetainedFileReference,
+    configuration: RetainedFileReference,
+    graphEvents: RetainedFileReference,
+    result: RetainedFileReference
   ) throws {
     guard propertyRunID != graphRunID else {
       throw ConformanceGovernanceError.inconsistentReference(record: "complete graph evidence", field: "run IDs")
@@ -443,10 +443,10 @@ package struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
       operatingSystem: container.decode(String.self, forKey: .operatingSystem),
       architecture: container.decode(String.self, forKey: .architecture),
       environment: container.decode([String: String].self, forKey: .environment),
-      sourceInput: container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
-      configuration: container.decode(CoreEvidenceReference.self, forKey: .configuration),
-      graphEvents: container.decode(CoreEvidenceReference.self, forKey: .graphEvents),
-      result: container.decode(CoreEvidenceReference.self, forKey: .result))
+      sourceInput: container.decode(RetainedFileReference.self, forKey: .sourceInput),
+      configuration: container.decode(RetainedFileReference.self, forKey: .configuration),
+      graphEvents: container.decode(RetainedFileReference.self, forKey: .graphEvents),
+      result: container.decode(RetainedFileReference.self, forKey: .result))
   }
 
   package func validate() throws {

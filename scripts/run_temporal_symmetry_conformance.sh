@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CASES_FILE="${TEMPORAL_SYMMETRY_CASES:-$PROJECT_ROOT/Verification/TemporalSymmetryConformance/cases.json}"
-TOOL_ROOT="${CORE_CONFORMANCE_TOOL_ROOT:-$PROJECT_ROOT/.build/core-conformance-tools}"
+TOOL_ROOT="${FINITE_GRAPH_TOOL_ROOT:-$PROJECT_ROOT/.build/finite-graph-tools}"
 
 usage() {
     echo "Usage: $0 --output <directory>" >&2
@@ -26,9 +26,9 @@ if [ -e "$OUTPUT" ]; then
 fi
 
 export TEMPORAL_SYMMETRY_CASES="$CASES_FILE"
-export CORE_CONFORMANCE_TOOL_ROOT="$TOOL_ROOT"
+export FINITE_GRAPH_TOOL_ROOT="$TOOL_ROOT"
 
-"$SCRIPT_DIR/setup-core-conformance-tools.sh" --tool-root "$TOOL_ROOT" >/dev/null
+"$SCRIPT_DIR/setup-finite-graph-tools.sh" --tool-root "$TOOL_ROOT" >/dev/null
 
 (
     cd "$PROJECT_ROOT"

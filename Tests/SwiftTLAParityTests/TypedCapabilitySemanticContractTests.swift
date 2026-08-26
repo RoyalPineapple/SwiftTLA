@@ -27,12 +27,12 @@ struct TypedCapabilitySemanticContractTests {
             compilation: compilation,
             configuration: .init(maximumStateLimit: 10)
         ).explore()
-        let matchingCase = try CoreConformanceCase(
+        let matchingCase = try FiniteGraphCase(
             id: "typed-capability-contract",
             moduleSHA256: String(repeating: "a", count: 64),
             cfgSHA256: String(repeating: "b", count: 64),
             arguments: [],
-            argumentsSHA256: try CoreConformanceCase.argumentsDigest([]),
+            argumentsSHA256: try FiniteGraphCase.argumentsDigest([]),
             workers: 1,
             fingerprintPolynomial: 1,
             deadlock: false,
@@ -45,7 +45,7 @@ struct TypedCapabilitySemanticContractTests {
             caseID: matchingCase.id,
             exploration: exploration
         )
-        let canonicalRun = try SwiftGraphAdapter().adapt(evidence, for: matchingCase)
+        let canonicalRun = try SwiftGraphExporter().export(evidence, for: matchingCase)
 
         #expect(tla.root.tla.contains("MODULE TypedCapabilitySemanticContract"))
         #expect(plusCal.root.tla.contains("--algorithm TypedCapabilitySemanticContract"))

@@ -30,7 +30,7 @@ struct CanonicalGraphRecordsTests {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let url = root.appendingPathComponent("graph.jsonl")
     try CanonicalGraphRecords.write(
-      CanonicalRun(
+      CompletedGraphRun(
         graph: forward,
         observableActions: ["advance", "reset"],
         outcome: .exhaustiveSuccess
@@ -54,7 +54,7 @@ struct CanonicalGraphRecordsTests {
     }
     let initial = try #require(states.first)
     let second = try #require(states.dropFirst().first)
-    let run = try CanonicalRun(
+    let run = try CompletedGraphRun(
       graph: CanonicalGraph(
         initialStates: [initial],
         states: states,
@@ -83,7 +83,7 @@ struct CanonicalGraphRecordsTests {
     let truncated = streamRecords.dropLast()
     #expect(truncated.last?["type"] as? String != "complete")
 
-    let incomplete = try CanonicalRun(
+    let incomplete = try CompletedGraphRun(
       graph: run.graph,
       observableActions: run.observableActions,
       outcome: .incomplete(reason: "state limit reached")
@@ -99,7 +99,7 @@ struct CanonicalGraphRecordsTests {
   func graphStreamRetainsDiagnosticsAndTraces() throws {
     let first = state(counter: 1, values: [.integer(1)])
     let second = state(counter: 2, values: [.integer(2)])
-    let run = try CanonicalRun(
+    let run = try CompletedGraphRun(
       graph: graph(
         first,
         second,
