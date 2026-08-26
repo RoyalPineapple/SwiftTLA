@@ -6,18 +6,11 @@ import SwiftTLA
 package enum TLCTraceMode: Equatable, Sendable {
   case none
   case dumpJSON
-  case loadJSON
-}
-
-package enum TLCReplayPolicy: Equatable, Sendable {
-  case none
-  case required
 }
 
 enum TLCInvocationPhase: String, Hashable {
   case primary
   case trace
-  case replay
 
   var stdoutLog: String {
     self == .primary ? "tlc.stdout.log" : "tlc.\(rawValue).stdout.log"
@@ -60,13 +53,11 @@ package enum TLCModuleBundleError: Error, Equatable, Sendable {
   )
 }
 
-package indirect enum TLCProcessError: Error, Equatable, Sendable {
+package enum TLCProcessError: Error, Equatable, Sendable {
   case timedOut(partialStdout: String, partialStderr: String)
   case failedToStart(String)
   case invalidModuleBundle(TLCModuleBundleError)
-  case requiredReplayFailed(completed: TLCProcessRun, failed: TLCProcessResult)
   case traceCaptureFailed(completed: TLCProcessRun, failed: TLCProcessResult)
-  case requiredReplayExecutionFailed(completed: TLCProcessRun, error: TLCProcessExecutionFailure)
   case traceCaptureExecutionFailed(completed: TLCProcessRun, error: TLCProcessExecutionFailure)
 }
 
@@ -78,7 +69,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package let bundle: TLAModuleBundle
   package let graphEvents: URL
   package let traceOutput: URL
-  package let replayInput: URL
   package let workingDirectory: URL
   package let arguments: [String]
   package let expectedCase: FiniteGraphCase
@@ -95,7 +85,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     bundle: TLAModuleBundle,
     graphEvents: URL,
     traceOutput: URL,
-    replayInput: URL,
     workingDirectory: URL,
     arguments: [String],
     expectedCase: FiniteGraphCase,
@@ -111,7 +100,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.bundle = bundle
     self.graphEvents = graphEvents
     self.traceOutput = traceOutput
-    self.replayInput = replayInput
     self.workingDirectory = workingDirectory
     self.arguments = arguments
     self.expectedCase = expectedCase
@@ -130,10 +118,8 @@ package struct TLCProcessRequest: Equatable, Sendable {
 
   package func commandArguments(
     module: URL,
-    configuration: URL,
-    traceMode: TLCTraceMode? = nil
+    configuration: URL
   ) throws -> [String] {
-    let mode = traceMode ?? self.traceMode
     return [
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
       "-Dswifttla.tlc.graph.provenance=\(try provenanceJSON())",
@@ -141,7 +127,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
       "-Dswifttla.tlc.graph.case-id=\(caseID)",
       "-cp", "\(jar.path):\(bridgeClasses.path)",
       "tlc2.TLC", "-dump", "class,org.swifttla.conformance.LosslessStateWriter"
-    ] + traceArguments(mode) + arguments + ["-config", configuration.path, module.path]
+    ] + traceArguments(traceMode) + arguments + ["-config", configuration.path, module.path]
   }
 
   package func validateLaunchBinding(module: URL, configuration: URL) throws {
@@ -273,7 +259,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     switch mode {
     case .none: []
     case .dumpJSON: ["-dumpTrace", "json", traceOutput.path]
-    case .loadJSON: ["-loadTrace", "json", replayInput.path]
     }
   }
 
@@ -347,12 +332,10 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
 package struct TLCProcessRun: Equatable, Sendable {
   package let primary: TLCProcessResult
   package let trace: TLCProcessResult?
-  package let replay: TLCProcessResult?
 }
 
 package struct TLCProcessCapture: Sendable {
   package let run: TLCProcessRun
-  package let graphEvents: Data
   package let graph: CompletedGraphRun
 }
 
@@ -363,54 +346,35 @@ package struct TLCProcessAdapter: Sendable {
     self.executor = executor
   }
 
-  private func run(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
-    -> TLCProcessRun {
+  private func run(_ request: TLCProcessRequest) throws -> TLCProcessRun {
     let primary = try executor.execute(request)
     guard primary.isViolation else {
-      return TLCProcessRun(primary: primary, trace: nil, replay: nil)
+      return TLCProcessRun(primary: primary, trace: nil)
     }
 
     let trace: TLCProcessResult
     do {
-      trace = try executor.execute(updating(request, traceMode: .dumpJSON))
+      trace = try executor.execute(traceRequest(request))
     } catch {
       throw TLCProcessError.traceCaptureExecutionFailed(
-        completed: TLCProcessRun(primary: primary, trace: nil, replay: nil),
+        completed: TLCProcessRun(primary: primary, trace: nil),
         error: TLCProcessExecutionFailure(error))
     }
     guard trace.isViolation || trace.status == 0 else {
       throw TLCProcessError.traceCaptureFailed(
-        completed: TLCProcessRun(primary: primary, trace: nil, replay: nil), failed: trace)
+        completed: TLCProcessRun(primary: primary, trace: nil), failed: trace)
     }
-    guard replay == .required else {
-      return TLCProcessRun(primary: primary, trace: trace, replay: nil)
-    }
-
-    let replayResult: TLCProcessResult
-    do {
-      replayResult = try executor.execute(updating(request, traceMode: .loadJSON))
-    } catch {
-      throw TLCProcessError.requiredReplayExecutionFailed(
-        completed: TLCProcessRun(primary: primary, trace: trace, replay: nil),
-        error: TLCProcessExecutionFailure(error))
-    }
-    guard replayResult.faithfullyReproduces(primary) else {
-      throw TLCProcessError.requiredReplayFailed(
-        completed: TLCProcessRun(primary: primary, trace: trace, replay: nil), failed: replayResult
-      )
-    }
-    return TLCProcessRun(primary: primary, trace: trace, replay: replayResult)
+    return TLCProcessRun(primary: primary, trace: trace)
   }
 
   package func capture(
     _ request: TLCProcessRequest,
-    replay: TLCReplayPolicy,
     retainingIn directory: URL
   ) throws -> TLCProcessCapture {
     try RetainedEvidence.createDirectory(directory, beneath: directory.deletingLastPathComponent())
     let run: TLCProcessRun
     do {
-      run = try self.run(request, replay: replay)
+      run = try self.run(request)
     } catch {
       try retain(error, request: request, in: directory)
       throw error
@@ -429,7 +393,6 @@ package struct TLCProcessAdapter: Sendable {
     }
     return TLCProcessCapture(
       run: run,
-      graphEvents: graphEvents,
       graph: try reader.makeCompletedGraphRun(stream, result: run.primary)
     )
   }
@@ -446,13 +409,11 @@ package struct TLCProcessAdapter: Sendable {
   ) throws {
     var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: run.primary]
     if let trace = run.trace { results[.trace] = trace }
-    if let replay = run.replay { results[.replay] = replay }
     try writeProcessRecord(request: request, results: results, failures: [:], to: directory)
     let logs = try RetainedEvidence.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
     try retain(run.primary, phase: .primary, in: logs)
     if let trace = run.trace { try retain(trace, phase: .trace, in: logs) }
-    if let replay = run.replay { try retain(replay, phase: .replay, in: logs) }
     try retainRawArtifacts(from: request, in: directory)
   }
 
@@ -470,17 +431,9 @@ package struct TLCProcessAdapter: Sendable {
     case TLCProcessError.traceCaptureFailed(let completed, let failed):
       try retain(completed.primary, phase: .primary, in: logs)
       try retain(failed, phase: .trace, in: logs)
-    case TLCProcessError.requiredReplayFailed(let completed, let failed):
-      try retain(completed.primary, phase: .primary, in: logs)
-      if let trace = completed.trace { try retain(trace, phase: .trace, in: logs) }
-      try retain(failed, phase: .replay, in: logs)
     case TLCProcessError.traceCaptureExecutionFailed(let completed, let failure):
       try retain(completed.primary, phase: .primary, in: logs)
       try retain(failure, phase: .trace, in: logs)
-    case TLCProcessError.requiredReplayExecutionFailed(let completed, let failure):
-      try retain(completed.primary, phase: .primary, in: logs)
-      if let trace = completed.trace { try retain(trace, phase: .trace, in: logs) }
-      try retain(failure, phase: .replay, in: logs)
     default:
       try retain(TLCProcessExecutionFailure(error), phase: .primary, in: logs)
     }
@@ -490,10 +443,8 @@ package struct TLCProcessAdapter: Sendable {
   private func retainRawArtifacts(from request: TLCProcessRequest, in directory: URL) throws {
     let artifacts = [
       (request.graphEvents, "graph-events.jsonl"),
-      (graphEvents(for: request.graphEvents, mode: .dumpJSON), "graph-events.trace.jsonl"),
-      (graphEvents(for: request.graphEvents, mode: .loadJSON), "graph-events.replay.jsonl"),
-      (request.traceOutput, "counterexample.json"),
-      (request.replayInput, "replay.json")
+      (traceGraphEvents(for: request.graphEvents), "graph-events.trace.jsonl"),
+      (request.traceOutput, "counterexample.json")
     ]
     var availability: [String: Bool] = [:]
     for (source, name) in artifacts {
@@ -510,17 +461,16 @@ package struct TLCProcessAdapter: Sendable {
     try RetainedEvidence.writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
   }
 
-  private func updating(_ request: TLCProcessRequest, traceMode: TLCTraceMode)
-    -> TLCProcessRequest {
+  private func traceRequest(_ request: TLCProcessRequest) -> TLCProcessRequest {
     TLCProcessRequest(
       javaExecutable: request.javaExecutable, jar: request.jar,
       bridgeClasses: request.bridgeClasses,
       bundle: request.bundle,
-      graphEvents: graphEvents(for: request.graphEvents, mode: traceMode),
-      traceOutput: request.traceOutput, replayInput: request.replayInput,
+      graphEvents: traceGraphEvents(for: request.graphEvents),
+      traceOutput: request.traceOutput,
       workingDirectory: request.workingDirectory, arguments: request.arguments,
       expectedCase: request.expectedCase, runID: request.runID,
-      timeout: request.timeout, traceMode: traceMode, referencePin: request.referencePin,
+      timeout: request.timeout, traceMode: .dumpJSON, referencePin: request.referencePin,
       referenceArtifacts: request.referenceArtifacts
     )
   }
@@ -534,16 +484,8 @@ package struct TLCProcessAdapter: Sendable {
     switch error {
     case TLCProcessError.traceCaptureFailed(let completed, let failed):
       return ([.primary: completed.primary, .trace: failed], [:])
-    case TLCProcessError.requiredReplayFailed(let completed, let failed):
-      var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: completed.primary, .replay: failed]
-      if let trace = completed.trace { results[.trace] = trace }
-      return (results, [:])
     case TLCProcessError.traceCaptureExecutionFailed(let completed, let failure):
       return ([.primary: completed.primary], [.trace: failure])
-    case TLCProcessError.requiredReplayExecutionFailed(let completed, let failure):
-      var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: completed.primary]
-      if let trace = completed.trace { results[.trace] = trace }
-      return (results, [.replay: failure])
     default:
       return ([:], [.primary: TLCProcessExecutionFailure(error)])
     }
@@ -555,7 +497,7 @@ package struct TLCProcessAdapter: Sendable {
     failures: [TLCInvocationPhase: TLCProcessExecutionFailure],
     to directory: URL
   ) throws {
-    let phases: [TLCInvocationPhase] = [.primary, .trace, .replay]
+    let phases: [TLCInvocationPhase] = [.primary, .trace]
     var record: [String: Any] = [
       "request": processRequestJSON(request),
       "attempted": phases.compactMap { phase in
@@ -607,10 +549,8 @@ package struct TLCProcessAdapter: Sendable {
     }
   }
 
-  private func graphEvents(for primary: URL, mode: TLCTraceMode) -> URL {
-    guard mode != .none else { return primary }
-    let suffix = mode == .dumpJSON ? "trace" : "replay"
-    return primary.deletingPathExtension().appendingPathExtension("\(suffix).jsonl")
+  private func traceGraphEvents(for primary: URL) -> URL {
+    return primary.deletingPathExtension().appendingPathExtension("trace.jsonl")
   }
 }
 
@@ -699,12 +639,6 @@ private func pinJSON(_ pin: TLCReferencePin) -> [String: String] {
     "bridgeSourceSHA256": pin.bridgeSourceSHA256,
     "bridgeBinarySHA256": pin.bridgeBinarySHA256
   ]
-}
-
-extension TLCProcessResult {
-  fileprivate func faithfullyReproduces(_ primary: TLCProcessResult) -> Bool {
-    primary.isViolation && status == primary.status && isViolation
-  }
 }
 
 package enum TLCReferenceInspector {

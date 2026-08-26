@@ -446,7 +446,7 @@ struct TLCTemporalAdapterTests {
         bridgeClasses: root.appendingPathComponent("bridge"),
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
-        replayInput: root.appendingPathComponent("replay.json"), workingDirectory: root, arguments: [],
+        workingDirectory: root, arguments: [],
         expectedCase: launchCase, runID: UUID(), referencePin: launchCase.pin)
       completeGraphRequest = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
@@ -454,7 +454,7 @@ struct TLCTemporalAdapterTests {
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: graphConfiguration),
         graphEvents: root.appendingPathComponent("complete-events.jsonl"),
         traceOutput: root.appendingPathComponent("complete-trace.json"),
-        replayInput: root.appendingPathComponent("complete-replay.json"), workingDirectory: root, arguments: [],
+        workingDirectory: root, arguments: [],
         expectedCase: completeGraphCase, runID: UUID(), referencePin: completeGraphCase.pin)
       swiftRun = try TLCGraphReader(expectedCase: launchCase).readCompletedGraph(
         graphStream(case: launchCase, runID: request.runID),
@@ -497,7 +497,6 @@ struct TLCTemporalAdapterTests {
         bundle: request.bundle,
         graphEvents: request.graphEvents,
         traceOutput: traceOutput,
-        replayInput: request.replayInput,
         workingDirectory: request.workingDirectory,
         arguments: request.arguments,
         expectedCase: request.expectedCase,
