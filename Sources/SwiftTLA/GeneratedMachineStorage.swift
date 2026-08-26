@@ -105,19 +105,6 @@ public struct _GeneratedMachineStorage: Sendable {
             .map { State($0.state) }
     }
 
-    /// Applies the only compiled successor for one generated action call.
-    public func apply(
-        actionOrdinal: Int,
-        arguments: [any TLAValueConvertible],
-        from state: State
-    ) throws -> State {
-        try Self.onlySuccessor(try successors(
-            actionOrdinal: actionOrdinal,
-            arguments: arguments,
-            from: state
-        ))
-    }
-
     /// Resolves the generated actions enabled in one stored state.
     public func availableActions<Action: Hashable>(
         in state: State,
@@ -150,27 +137,6 @@ public struct _GeneratedMachineStorage: Sendable {
             ordinal: actionOrdinal,
             formalArguments: arguments.map(\.tlaValue)
         )
-    }
-
-    package static func onlySuccessor(_ candidates: [State]) throws -> State {
-        switch candidates.count {
-        case 0: throw GeneratedMachineError.noMatchingSuccessor
-        case 1: return candidates[0]
-        default: throw GeneratedMachineError.ambiguousAction
-        }
-    }
-
-    package func successor(
-        actionOrdinal: Int,
-        arguments: [any TLAValueConvertible],
-        from state: State,
-        matching predicate: (State) throws -> Bool
-    ) throws -> State {
-        try Self.onlySuccessor(try successors(
-            actionOrdinal: actionOrdinal,
-            arguments: arguments,
-            from: state
-        ).filter(predicate))
     }
 
     private static func decode<Value: TLAValueType>(

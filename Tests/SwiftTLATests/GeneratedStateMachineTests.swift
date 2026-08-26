@@ -663,14 +663,14 @@ struct GeneratedStateMachineTests {
     func modelParameterizedAction() throws {
         var elevator = try TwoCarElevatorMachine.makeMachine()
         _ = try elevator.send(.moveElevator(id: 1))
-        #expect(elevator.floor == 1)
+        #expect(elevator.state.floor == 1)
     }
 
     @Test("Generated actions retain every declared parameter")
     func generatedActionsRetainEveryDeclaredParameter() throws {
         var enabled = try ThreeParameterActionMachine.makeMachine()
         _ = try enabled.send(.board(person: 2, elevator: 20, direction: 200))
-        #expect(enabled.floor == 1)
+        #expect(enabled.state.floor == 1)
         #expect(ThreeParameterActionMachine.spec.actions[0].bindings.map(\.name) == [
             "person", "elevator", "direction"
         ])
@@ -680,7 +680,7 @@ struct GeneratedStateMachineTests {
         #expect(throws: GeneratedMachineError.self) {
             try invalidMiddleParameter.send(.board(person: 2, elevator: 30, direction: 200))
         }
-        #expect(invalidMiddleParameter.floor == 0)
+        #expect(invalidMiddleParameter.state.floor == 0)
         #expect(invalidMiddleParameter.state == before)
     }
 
