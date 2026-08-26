@@ -899,7 +899,7 @@ public func SharedVar<Value: TLAValueType>(
         name: name,
         initial: .value(initial.tlaValue),
         initialSet: nil,
-        swiftTypeName: String(reflecting: Value.self)
+        swiftTypeName: swiftSurfaceTypeName(for: Value.self)
     )
 }
 
@@ -926,7 +926,7 @@ public func SharedVar<Value: TLAValueType>(
         name: name,
         initial: .value(.int(0)),
         initialSet: values.raw,
-        swiftTypeName: String(reflecting: Value.self)
+        swiftTypeName: swiftSurfaceTypeName(for: Value.self)
     )
 }
 
@@ -935,7 +935,7 @@ public func SharedVar<Value: TLAValueType>(
     _ name: String,
     initial: Expr<Value>
 ) -> SharedVariable<Value> {
-    SharedVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
+    SharedVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: swiftSurfaceTypeName(for: Value.self))
 }
 
 /// Declares a process-local PlusCal-shaped variable.
@@ -943,7 +943,7 @@ public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
 ) -> LocalVariable<Value> {
-    LocalVariable(name: name, initial: .value(initial.tlaValue), initialSet: nil, swiftTypeName: String(reflecting: Value.self))
+    LocalVariable(name: name, initial: .value(initial.tlaValue), initialSet: nil, swiftTypeName: swiftSurfaceTypeName(for: Value.self))
 }
 
 /// Declares a process-local variable with a typed formal initial expression.
@@ -951,7 +951,7 @@ public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Expr<Value>
 ) -> LocalVariable<Value> {
-    LocalVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
+    LocalVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: swiftSurfaceTypeName(for: Value.self))
 }
 
 /// Declares a process-local Boolean from a formal condition.
@@ -1022,9 +1022,14 @@ private struct SharedVariableDeclaration: Sendable {
 
     var specificationDeclaration: VarDecl {
         if let initialSet {
-            VarDecl(name, .int(0), initialSet: initialSet)
+            VarDecl(
+                name,
+                .int(0),
+                initialSet: initialSet,
+                generatedSwiftType: swiftTypeName
+            )
         } else {
-            VarDecl(name, initExpr: initial)
+            VarDecl(name, initExpr: initial, generatedSwiftType: swiftTypeName)
         }
     }
 }
@@ -1372,7 +1377,7 @@ public func Each<Value: FiniteTLAValueDomain>(
     let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
     let components = body(identifier, scope)
     return AlgorithmElement(model: .process(.init(
-        typeName: String(describing: Value.self),
+        typeName: swiftSurfaceTypeName(for: Value.self),
         domain: domain.values.map(\.tlaValue),
         fairness: fairness.model,
         components: scope.declarations.map(\.model) + components.map(\.model)
@@ -1388,7 +1393,7 @@ private func process<Value: FiniteTLAValueDomain>(
     return AlgorithmElement(
         model: .process(
             AlgorithmProcessModel(
-                typeName: String(describing: Value.self),
+                typeName: swiftSurfaceTypeName(for: Value.self),
                 domain: domain.values.map(\.tlaValue),
                 fairness: fairness,
                 components: body(identifier).map(\.model)
@@ -1467,7 +1472,7 @@ public func Procedure<Value: TLAValueType>(
     let parameterName = "parameter0"
     return procedure(
         name: name,
-        parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: String(reflecting: Value.self))],
+        parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: Value.self))],
         components: body(ProcedureParameter(name: parameterName))
     )
 }
@@ -1482,7 +1487,7 @@ public func Procedure<Value: TLAValueType>(
     let body = body(ProcedureParameter(name: parameterName), scope)
     return procedure(
         name: name,
-        parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: String(reflecting: Value.self))],
+        parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: Value.self))],
         components: scope.declarations + body
     )
 }
@@ -1507,8 +1512,8 @@ public func Procedure<First: TLAValueType, Second: TLAValueType>(
     procedure(
         name: name,
         parameters: [
-            .init(root: "parameter0", initial: .value(First.defaultValue.tlaValue), swiftTypeName: String(reflecting: First.self)),
-            .init(root: "parameter1", initial: .value(Second.defaultValue.tlaValue), swiftTypeName: String(reflecting: Second.self))
+            .init(root: "parameter0", initial: .value(First.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: First.self)),
+            .init(root: "parameter1", initial: .value(Second.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: Second.self))
         ],
         components: body(.init(name: "parameter0"), .init(name: "parameter1"))
     )
@@ -1521,9 +1526,9 @@ public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType>(
     procedure(
         name: name,
         parameters: [
-            .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)),
-            .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)),
-            .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self))
+            .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: A.self)),
+            .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: B.self)),
+            .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: C.self))
         ],
         components: body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2"))
     )
@@ -1536,10 +1541,10 @@ public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType, D: TLAV
     procedure(
         name: name,
         parameters: [
-            .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)),
-            .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)),
-            .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self)),
-            .init(root: "parameter3", initial: .value(D.defaultValue.tlaValue), swiftTypeName: String(reflecting: D.self))
+            .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: A.self)),
+            .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: B.self)),
+            .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: C.self)),
+            .init(root: "parameter3", initial: .value(D.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: D.self))
         ],
         components: body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2"), .init(name: "parameter3"))
     )

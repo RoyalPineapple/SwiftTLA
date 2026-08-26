@@ -16,6 +16,20 @@ private enum CompilerPipelineNode: String, FiniteTLAValueDomain, CaseIterable {
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
+private enum FirstGeneratedSurfaceValue: String, FiniteTLAValueDomain {
+    case value
+
+    static let defaultValue = Self.value
+    static let finiteValues = [Self.value]
+}
+
+private enum SecondGeneratedSurfaceValue: String, FiniteTLAValueDomain {
+    case value
+
+    static let defaultValue = Self.value
+    static let finiteValues = [Self.value]
+}
+
 @TLAModel
 private struct CompilerPipelineGeneratedModel {
     static var spec: TLASpec {
@@ -89,6 +103,38 @@ private struct CompilerPipelineCollectionModel {
 
 @Suite("Compiler pipeline canonicalization")
 struct CompilerPipelineCanonicalizationTests {
+    @Test("generated Swift value types contribute to compilation identity")
+    func generatedSwiftValueTypesContributeToCompilationIdentity() throws {
+        let first = try TLASpec("GeneratedSurfaceIdentity") {
+            Var("value", FirstGeneratedSurfaceValue.value)
+        }.compile()
+        let second = try TLASpec("GeneratedSurfaceIdentity") {
+            Var("value", SecondGeneratedSurfaceValue.value)
+        }.compile()
+
+        #expect(first.renderedTLAModuleBundle().tla == second.renderedTLAModuleBundle().tla)
+        #expect(first.machineSurfacePlan.variables.map(\.swiftType) == ["FirstGeneratedSurfaceValue"])
+        #expect((first.identity == second.identity) == false)
+
+        let firstAction = try TLASpec("GeneratedActionSurfaceIdentity") {
+            Var("value", 0)
+            Action(
+                "Choose",
+                parameters: [ActionParameter("choice", values: FirstGeneratedSurfaceValue.finiteValues)]
+            ) { StateExpr.value(.bool(true)) }
+        }.compile()
+        let secondAction = try TLASpec("GeneratedActionSurfaceIdentity") {
+            Var("value", 0)
+            Action(
+                "Choose",
+                parameters: [ActionParameter("choice", values: SecondGeneratedSurfaceValue.finiteValues)]
+            ) { StateExpr.value(.bool(true)) }
+        }.compile()
+
+        #expect(firstAction.renderedTLAModuleBundle().tla == secondAction.renderedTLAModuleBundle().tla)
+        #expect((firstAction.identity == secondAction.identity) == false)
+    }
+
     @Test("equivalent source models retain stable binder names")
     func equivalentSourceModelsRetainStableBinderNames() throws {
         func sourceModel() -> TLASpec {
@@ -155,7 +201,7 @@ struct CompilerPipelineCanonicalizationTests {
         }
 
         let compilation = try spec.compile()
-        let checker = ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3))
+        let checker = ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled))
 
         #expect(checker.compilation.identity == compilation.identity)
         let initial = try firstCompiledState(in: compilation)
@@ -183,7 +229,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
             return try ModelChecker(
                 compilation: spec.compile(),
-                configuration: FiniteExplorationConfiguration(maximumStateLimit: 3)
+                configuration: FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled)
             ).explore()
         }
 
@@ -566,7 +612,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstSuccessor.count == 1)
         #expect(invariantHolds)
 
-        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).explore()
+        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
         #expect(exploration.graph.states.count == 5)
         #expect(exploration.isComplete)
     }
@@ -905,55 +951,6 @@ struct CompilerPipelineCanonicalizationTests {
         let firstIdentity = try first.compile().identity
         let secondIdentity = try second.compile().identity
         #expect(firstIdentity != secondIdentity)
-    }
-
-    @Test("generated host types change the machine surface without changing formal identity")
-    func generatedHostTypesStayOutsideFormalIdentity() throws {
-        func specification(
-            variableType: String = "Count",
-            bindingType: String = "Worker"
-        ) -> TLASpec {
-            let collection = SymmetricCollectionDecl(
-                name: "devices",
-                verificationScope: 1,
-                initial: .int(0),
-                generatedElementType: "Device",
-                generatedValueType: "Int"
-            )
-            let action = NamedAction(
-                name: "advance",
-                body: .guard_(.value(.bool(true))),
-                bindings: [.init(
-                    name: "worker",
-                    values: [.int(0)],
-                    generatedSwiftType: bindingType
-                )]
-            )
-            return TLASpec(
-                name: "GeneratedSchemaIdentity",
-                variables: [
-                    .init(
-                        name: "count",
-                        initial: .int(0),
-                        generatedSwiftType: variableType,
-                        origin: .source
-                    ),
-                    collection.variable
-                ],
-                actions: [action],
-                invariants: [],
-                symmetricCollections: [collection]
-            )
-        }
-
-        let baseline = try specification().compile()
-        let variableType = try specification(variableType: "Counter").compile()
-        let bindingType = try specification(bindingType: "Process").compile()
-
-        #expect(variableType.identity == baseline.identity)
-        #expect(bindingType.identity == baseline.identity)
-        #expect(variableType.machineSurfacePlan != baseline.machineSurfacePlan)
-        #expect(bindingType.machineSurfacePlan != baseline.machineSurfacePlan)
     }
 
     @Test("compiled descriptions preserve declaration order without exposing runtime slots")

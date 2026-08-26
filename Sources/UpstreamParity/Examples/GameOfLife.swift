@@ -1,8 +1,112 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// Conway's Game of Life — N=4 grid, blinker start.
-/// Upstream uses function constructor `[p \in Pos |-> ...]` — we use `functionLiteral`.
+package struct GameOfLifeModel: Sendable {
+    package struct Position: FiniteTLAValueDomain {
+        package let column: Int
+        package let row: Int
+
+        private init(column: Int, row: Int) {
+            self.column = column
+            self.row = row
+        }
+
+        package static let defaultValue = Self(column: 1, row: 1)
+        package static let finiteValues = (1...4).flatMap { column in
+            (1...4).map { row in Self(column: column, row: row) }
+        }
+
+        package init?(formalValue: TLAValue) {
+            guard case .tuple(let coordinates) = formalValue,
+                  coordinates.count == 2,
+                  case .int(let column) = coordinates[0],
+                  case .int(let row) = coordinates[1],
+                  (1...4).contains(column),
+                  (1...4).contains(row)
+            else { return nil }
+            self.init(column: column, row: row)
+        }
+
+        package var tlaValue: TLAValue {
+            .tuple([.int(column), .int(row)])
+        }
+    }
+}
+
+private extension Expr where T == GameOfLifeModel.Position {
+    var column: Expr<Int> { Expr<Int>(.tupleAccess(raw, 1)) }
+    var row: Expr<Int> { Expr<Int>(.tupleAccess(raw, 2)) }
+}
+
+extension GameOfLifeModel {
+    package static var spec: TLASpec {
+        #spec("GameOfLife") { scope in
+            Extends(.integers)
+            let grid = scope.sharedVar(
+                "grid",
+                initial: Function<Position, Bool>.mapping { boundPosition in
+                    let position = boundPosition.expr
+                    return Expr(
+                        position.column == 2
+                            && position.row >= 2
+                            && position.row <= 4
+                    )
+                }
+            )
+
+            Invariant("TypeOK") {
+                for position in Position.finiteValues {
+                    StateExpr.in(
+                        grid[position].stateExpr,
+                        SetExpr<Bool>.literal(false, true).stateExpr
+                    )
+                }
+            }
+
+            SwiftTLA.Action("Next") {
+                grid.becomes(Function<Position, Bool>.mapping { position in
+                    nextCell(in: grid, at: position.expr)
+                })
+            }
+        }
+    }
+
+    private static func nextCell(
+        in grid: SharedVariable<Function<Position, Bool>>,
+        at position: Expr<Position>
+    ) -> Expr<Bool> {
+        var neighborCount = StateExpr.int(0)
+        let neighborOffsets = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1), (0, 1),
+            (1, -1), (1, 0), (1, 1),
+        ]
+        for (columnOffset, rowOffset) in neighborOffsets {
+            let neighborColumn = position.column + columnOffset
+            let neighborRow = position.row + rowOffset
+            let isInBounds = neighborColumn >= 1
+                && neighborColumn <= 4
+                && neighborRow >= 1
+                && neighborRow <= 4
+            let neighbor = Expr<Position>(.tupleLiteral([
+                neighborColumn.stateExpr,
+                neighborRow.stateExpr,
+            ]))
+            neighborCount = neighborCount + If(
+                isInBounds,
+                then: If(grid[neighbor], then: 1, else: 0),
+                else: 0
+            )
+        }
+
+        let alive = grid[position]
+        return Expr(
+            alive == true && neighborCount >= 2 && neighborCount <= 3
+                || alive == false && neighborCount == 3
+        )
+    }
+}
+
 extension Example {
     package static let gameOfLife = Entry(
         id: "GameOfLife/N4",
@@ -10,65 +114,8 @@ extension Example {
         upstreamModule: "specifications/GameOfLife/GameOfLife.tla",
         upstreamCfg: "specifications/GameOfLife/GameOfLife.cfg",
         expectedDistinct: 2,
-        spec: gameOfLifeSpec(),
-        notes: "N=4 blinker. Uses functionLiteral for Next — upstream pattern, zero except chains.",
+        maximumStateLimit: 50_000,
+        spec: GameOfLifeModel.spec,
+        notes: "N=4 blinker over a typed finite position domain and total-function grid."
     )
-}
-
-private func gameOfLifeSpec() -> TLASpec {
-    let N = 4
-    let grid = Var<TLAValue>("grid")
-    let positions = (1...N).flatMap { x in (1...N).map { y in (x, y) } }
-    let allTiles: [StateExpr] = positions.map { .tupleLiteral([.int($0.0), .int($0.1)]) }
-
-    // Init: blinker at row 2, columns 2-4
-    var initCells: [TLAValue: TLAValue] = [:]
-    for (x, y) in positions {
-        let alive = (x == 2 && y == 2) || (x == 2 && y == 3) || (x == 2 && y == 4)
-        initCells[.tuple([.int(x), .int(y)])] = .bool(alive)
-    }
-    let initFunc = TLAValue.function(Dictionary(uniqueKeysWithValues: initCells.map { ($0.key, $0.value) }))
-
-    // The cell-update body used inside functionLiteral
-    func nextValue(at p: StateExpr) -> StateExpr {
-        let x = StateExpr.tupleAccess(p, 1)
-        let y = StateExpr.tupleAccess(p, 2)
-        let alive = grid.stateExpr.applying(p)
-        var score = StateExpr.int(0)
-        for dx in -1...1 {
-            for dy in -1...1 where !(dx == 0 && dy == 0) {
-                let nx = StateExpr.add(x, StateExpr.int(dx)); let ny = StateExpr.add(y, StateExpr.int(dy))
-                let inBounds = StateExpr.greaterOrEqual(nx, StateExpr.int(1))
-                    && StateExpr.lessOrEqual(nx, StateExpr.int(N))
-                    && StateExpr.greaterOrEqual(ny, StateExpr.int(1))
-                    && StateExpr.lessOrEqual(ny, StateExpr.int(N))
-                let neighbor = StateExpr.tupleLiteral([nx, ny])
-                score = StateExpr.add(score, StateExpr.ifThenElse(inBounds,
-                    StateExpr.ifThenElse(grid.stateExpr.applying(neighbor), StateExpr.int(1), StateExpr.int(0)), StateExpr.int(0)))
-            }
-        }
-        return (alive
-            && StateExpr.greaterOrEqual(score, StateExpr.int(2))
-            && StateExpr.lessOrEqual(score, StateExpr.int(3)))
-            || StateExpr.not(alive) && StateExpr.equal(score, StateExpr.int(3))
-    }
-
-    return #spec("GameOfLife") {
-        Extends(.integers)
-        Variable(grid, initFunc)
-
-        Invariant("TypeOK") {
-            for (x, y) in positions {
-                StateExpr.in(grid.stateExpr.applying(StateExpr.tupleLiteral([.int(x), .int(y)])),
-                    StateExpr.setLiteral([.bool(false), .bool(true)]))
-            }
-        }
-
-        // grid' = [p \in Pos |-> nextValue(p)]  — the upstream pattern
-        let pVar = Var<Int>("p")
-        SwiftTLA.Action("Next") {
-            grid.becomes(Expr<TLAValue>(StateExpr.functionLiteral(pVar, in: StateExpr.setLiteral(allTiles),
-                nextValue(at: pVar.stateExpr))))
-        }
-    }
 }
