@@ -61,7 +61,11 @@ struct SymmetricCollectionTLCOracleTests {
     #expect(parsed.symmetricCollections.map(\.metadata)
       == runtime.symmetricCollections.map(\.metadata))
     #expect(parsedCompilation.spec.actions == runtime.actions)
-    #expect(try parsedCompilation.initialStateProjections() == runtimeCompilation.initialStateProjections())
+    let parsedInitialStates = try CompiledRuntime(compilation: parsedCompilation).initialStates()
+      .map { try $0.projection(using: parsedCompilation.layout) }
+    let runtimeInitialStates = try CompiledRuntime(compilation: runtimeCompilation).initialStates()
+      .map { try $0.projection(using: runtimeCompilation.layout) }
+    #expect(parsedInitialStates == runtimeInitialStates)
     #expect(try ModelChecker(compilation: parsedCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description == ModelChecker(compilation: runtimeCompilation, configuration: try .init(maximumStateLimit: 100_000)).check().description)
   }
 

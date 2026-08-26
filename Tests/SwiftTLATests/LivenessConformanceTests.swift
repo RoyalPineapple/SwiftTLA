@@ -20,7 +20,7 @@ struct LivenessConformanceTests {
         values: [StateGraph.StateID: Int]
     ) throws -> StateGraph {
         StateGraph(
-            specName: "liveness-conformance",
+            specName: "LivenessConformance",
             variableNames: ["x"],
             transitions: transitions,
             states: Dictionary(
@@ -70,7 +70,16 @@ struct LivenessConformanceTests {
                 variableNames: graph.variableNames,
                 transitions: transitions,
                 states: graph.states
-            )
+            ),
+            states: try graph.states.mapValues { projection in
+                try CompiledState(
+                    formalValues: graph.variableNames.compactMap { name in
+                        guard let token = TLAStateProjection.Token(validating: name) else { return nil }
+                        return projection.value(for: token)
+                    },
+                    compilation: compilation
+                )
+            }
         )
         return try #require(checker.analyze(
             initialStateIDs: initialStateIDs,
@@ -85,7 +94,7 @@ struct LivenessConformanceTests {
         let right = StateGraph.StateID(2)
         let terminal = StateGraph.StateID(3)
         let graph = StateGraph(
-            specName: "nonterminal-subcycle",
+            specName: "NonterminalSubcycle",
             variableNames: ["x"],
             transitions: [
                 initial: [.init(label: .init(.init(name: "enter")), target: left)],
@@ -348,8 +357,10 @@ struct LivenessConformanceTests {
                 actions: actions,
                 initialStateIDs: [initial]
             )
-            #expect(result.enabledActions["A"]?[initial] == true)
-            #expect(result.enabledActions["A"]?[disabled] == false)
+            if fairness.isEmpty == false {
+                #expect(result.enabledActions["A"]?[initial] == true)
+                #expect(result.enabledActions["A"]?[disabled] == false)
+            }
             #expect(result.status == .violated)
         }
 
@@ -377,22 +388,11 @@ struct LivenessConformanceTests {
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
-        let invalidProjectionGraph = StateGraph(
-            specName: "liveness-conformance",
-            variableNames: ["x"],
-            transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
-            states: [initial: try projection([("other", .int(0))])]
-        )
         let unavailable: [(String, TemporalAnalysisResult, TemporalDiagnosticReason)] = [
             (
                 "unknown action",
                 try analyze(unknownActionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),
                 .unknownAction
-            ),
-            (
-                "evaluation failure",
-                try analyze(invalidProjectionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),
-                .evaluationFailed
             ),
             (
                 "incomplete exploration",
@@ -420,8 +420,15 @@ struct LivenessConformanceTests {
             invariants: [],
             temporalProperties: [NamedTemporal(name: "property", expr: .eventually(predicate(1)))]
         )
+        let compilation = try specification.compile()
         let result = try #require(
-            LivenessChecker(compilation: try specification.compile(), graph: sourceGraph)
+            LivenessChecker(
+                compilation: compilation,
+                graph: sourceGraph,
+                states: try sourceGraph.states.mapValues {
+                    try CompiledState(projection: $0, compilation: compilation)
+                }
+            )
                 .analyze(initialStateIDs: [initial])
                 .first
         )
@@ -433,7 +440,7 @@ struct LivenessConformanceTests {
     @Test("compilation binds each fairness condition to a declared action")
     func fairnessRequiresDeclaredAction() {
         let spec = TLASpec(
-            name: "fairness-binding",
+            name: "FairnessBinding",
             variables: [NamedVar(name: "x", initial: .int(0))],
             actions: [action("known")],
             invariants: [],
@@ -454,7 +461,7 @@ struct LivenessConformanceTests {
     @Test("compiled fairness retains an action identity")
     func compiledFairnessUsesBoundAction() throws {
         let spec = TLASpec(
-            name: "fairness-identity",
+            name: "FairnessIdentity",
             variables: [NamedVar(name: "x", initial: .int(0))],
             actions: [action("advance")],
             invariants: [],

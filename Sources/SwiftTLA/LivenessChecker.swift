@@ -21,7 +21,7 @@ package struct FairLassoWitness: Equatable, Sendable {
     public let prefixActions: [String]
     public let cycleActions: [String]
 
-    public init(
+    init(
         prefix: [StateGraph.StateID],
         cycle: [StateGraph.StateID],
         prefixActions: [String],
@@ -31,6 +31,21 @@ package struct FairLassoWitness: Equatable, Sendable {
         self.cycle = cycle
         self.prefixActions = prefixActions
         self.cycleActions = cycleActions
+    }
+}
+
+extension ModelExplorationResult {
+    package func analyzeTemporalProperties(
+        in compilation: CompiledSpecification
+    ) -> [TemporalAnalysisResult] {
+        LivenessChecker(
+            compilation: compilation,
+            graph: graph,
+            states: compiledStates
+        ).analyze(
+            initialStateIDs: initialStateIDs,
+            isComplete: isComplete
+        )
     }
 }
 
@@ -72,10 +87,16 @@ package struct TemporalAnalysisResult: Equatable, Sendable {
 package struct LivenessChecker {
     public let graph: StateGraph
     private let compilation: CompiledSpecification
+    private let states: [StateGraph.StateID: CompiledState]
 
-    public init(compilation: CompiledSpecification, graph: StateGraph) {
+    init(
+        compilation: CompiledSpecification,
+        graph: StateGraph,
+        states: [StateGraph.StateID: CompiledState]
+    ) {
         self.graph = graph
         self.compilation = compilation
+        self.states = states
     }
 
     public func analyze(
@@ -116,23 +137,23 @@ package struct LivenessChecker {
             initialStateIDs: initialStateIDs,
             isComplete: isComplete,
             predicate: { state in
-                guard let projection = graph.states[state] else {
+                guard let compiledState = states[state] else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .validation,
                         path: "liveness.graph.state",
-                        expected: "a state projection",
-                        actual: "no projection",
+                        expected: "a compiled state",
+                        actual: "no compiled state",
                         nextSafeAction: "Explore the compiled model again before checking liveness."
                     )
                 }
-                return try predicateHolds(predicate, in: projection, compilation: compilation)
+                return try predicateHolds(predicate, in: compiledState, compilation: compilation)
             },
             trigger: trigger.map { trigger in
                 { state in
-                    guard let projection = graph.states[state] else { return false }
-                    return try predicateHolds(trigger, in: projection, compilation: compilation)
-                        && !predicateHolds(predicate, in: projection, compilation: compilation)
+                    guard let compiledState = states[state] else { return false }
+                    return try predicateHolds(trigger, in: compiledState, compilation: compilation)
+                        && !predicateHolds(predicate, in: compiledState, compilation: compilation)
                 }
             }
         )
@@ -261,10 +282,9 @@ package struct LivenessChecker {
 
     private func predicateHolds(
         _ predicate: CompiledStateExpr,
-        in projection: TLAStateProjection,
+        in state: CompiledState,
         compilation: CompiledSpecification
     ) throws -> Bool {
-        let state = try CompiledState(projection: projection, compilation: compilation)
         return try CompiledRuntime(compilation: compilation).predicateHolds(predicate, in: state)
     }
 

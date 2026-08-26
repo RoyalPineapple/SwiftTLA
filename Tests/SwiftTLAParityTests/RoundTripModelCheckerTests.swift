@@ -259,19 +259,22 @@ private func value(
     _ compilation: CompiledSpecification,
     named name: String,
     arguments: [TLAValue] = [],
-    from state: TLAStateProjection
-  ) throws -> TLAStateProjection {
+    from state: CompiledState
+  ) throws -> CompiledState {
     let action = try #require(compilation.layout.actionID(named: name))
-    return try #require(try compilation.successors(for: action, arguments: arguments, from: state).first)
+    return try #require(try CompiledRuntime(compilation: compilation)
+      .successors(for: action, from: state)
+      .first { successor in
+        try successor.arguments.map { try $0.rendered(using: compilation.layout) } == arguments
+      }?.state)
   }
 
   private func successors(
     _ compilation: CompiledSpecification,
-    from state: TLAStateProjection
+    from state: CompiledState
   ) throws -> [(action: String, arguments: [TLAValue], state: TLAStateProjection)] {
-    let formalState = try CompiledState(projection: state, compilation: compilation)
     return try CompiledRuntime(compilation: compilation)
-      .successors(from: formalState)
+      .successors(from: state)
       .map { successor in
         (
           action: compilation.layout.actions[successor.action.ordinal].declaration.name,
@@ -281,12 +284,13 @@ private func value(
       }
   }
 
-  private func value(_ name: String, in state: TLAStateProjection) throws -> TLAValue {
-    guard let token = TLAStateProjection.Token(validating: name),
-          let value = state.value(for: token) else {
-      throw TLAStateProjectionDiagnostic.missingValue(path: name)
-    }
-    return value
+  private func value(
+    _ name: String,
+    in state: CompiledState,
+    compilation: CompiledSpecification
+  ) throws -> TLAValue {
+    let variable = try #require(compilation.layout.variableID(named: name))
+    return try state.value(for: variable).rendered(using: compilation.layout)
   }
 
   @Test("compiled execution applies an action")
@@ -297,9 +301,9 @@ private func value(
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
     let compilation = try spec.compile()
-    let state = try #require(try compilation.initialStateProjections().first)
+    let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
     let next = try successor(compilation, named: "Tick", from: state)
-    #expect(try value("hr", in: next) == .int(2))
+    #expect(try value("hr", in: next, compilation: compilation) == .int(2))
   }
 
   @Test("compiled execution checks invariants")
@@ -311,8 +315,9 @@ private func value(
       Invariant("Positive") { hr > 0 }
     }
     let compilation = try spec.compile()
-    let state = try #require(try compilation.initialStateProjections().first)
-    #expect(compilation.propertyOutcomes(in: state) == [.satisfied(name: "Positive")])
+    let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+    let invariant = try #require(compilation.semantics.invariants.first)
+    #expect(try CompiledRuntime(compilation: compilation).invariantHolds(invariant, in: state))
   }
 
   @Test("compiled execution lists available actions")
@@ -323,7 +328,7 @@ private func value(
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
     let compilation = try spec.compile()
-    let state = try #require(try compilation.initialStateProjections().first)
+    let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
     let available = try successors(compilation, from: state).map(\.action)
     #expect(available.contains("Tick"))
   }
@@ -348,7 +353,8 @@ private func value(
         guard let successor = graph.states[transition.target] else { return nil }
         return (transition.label.action, transition.label.arguments, successor)
       }
-      let runtimeSuccessors = try successors(compilation, from: source)
+      let runtimeState = try CompiledState(projection: source, compilation: compilation)
+      let runtimeSuccessors = try successors(compilation, from: runtimeState)
 
       #expect(multiset(runtimeSuccessors) == multiset(checked))
     }
@@ -374,7 +380,7 @@ private func value(
       }
     }
     let compilation = try spec.compile()
-    let initial = try #require(try compilation.initialStateProjections().first)
+    let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
     let available: [(action: String, arguments: [TLAValue])] = [
       (action: "advance", arguments: [.int(1)]),
       (action: "advance", arguments: [.int(2)])
@@ -389,8 +395,13 @@ private func value(
 
     let advanced = try successor(compilation, named: "advance", arguments: [.int(1)], from: initial)
     let action = try #require(compilation.layout.actionID(named: "advance"))
-    #expect(try compilation.successors(for: action, arguments: [.int(1)], from: advanced).isEmpty)
-    #expect(try compilation.successors(for: action, arguments: [.int(3)], from: initial).isEmpty)
+    let runtime = CompiledRuntime(compilation: compilation)
+    #expect(try runtime.successors(for: action, from: advanced).contains { successor in
+      try successor.arguments.map { try $0.rendered(using: compilation.layout) } == [.int(1)]
+    } == false)
+    #expect(try runtime.successors(for: action, from: initial).contains { successor in
+      try successor.arguments.map { try $0.rendered(using: compilation.layout) } == [.int(3)]
+    } == false)
   }
 
   @Test("free action reference blocks compilation")
@@ -419,9 +430,9 @@ private func value(
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
     let compilation = try spec.compile()
-    let state = try #require(try compilation.initialStateProjections().first)
+    let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
     let next = try successor(compilation, named: "Tick", from: state)
-    #expect(try value("hr", in: next) == .int(2))
+    #expect(try value("hr", in: next, compilation: compilation) == .int(2))
   }
 }
 
@@ -687,11 +698,11 @@ private func value(
     }
     let compilation = try spec.compile()
     let action = try #require(compilation.layout.actionID(named: "init"))
-    let state = try #require(try compilation.initialStateProjections().first)
-    let next = try #require(try compilation.successors(for: action, arguments: [], from: state).first)
-    let programCounterToken = try #require(TLAStateProjection.Token(validating: "programCounter"))
-    if next.value(for: programCounterToken) == nil {
-      Issue.record("Expected programCounter in successor")
-    }
+    let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+    let next = try #require(try CompiledRuntime(compilation: compilation)
+      .successors(for: action, from: state)
+      .first?.state)
+    let programCounterID = try #require(compilation.layout.variableID(named: "programCounter"))
+    _ = try next.value(for: programCounterID)
   }
 }

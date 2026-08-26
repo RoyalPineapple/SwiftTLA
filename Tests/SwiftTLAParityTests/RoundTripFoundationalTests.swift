@@ -438,20 +438,20 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
     let compilation = try spec.compile()
     let action = try #require(compilation.layout.actionID(named: "board"))
-    let initial = try #require(try compilation.initialStateProjections().first)
-    let next = try #require(try compilation.successors(
-      for: action,
-      arguments: [.int(2), .int(20), .int(200)],
-      from: initial
-    ).first)
-    let floorToken = try #require(TLAStateProjection.Token(validating: "floor"))
-    #expect(next.value(for: floorToken) == .int(222))
-    #expect(try compilation.successors(
-      for: action,
-      arguments: [.int(3), .int(20), .int(200)],
-      from: initial
-    ).isEmpty)
-    #expect(initial.value(for: floorToken) == .int(0))
+    let runtime = CompiledRuntime(compilation: compilation)
+    let initial = try #require(try runtime.initialStates().first)
+    let successors = try runtime.successors(for: action, from: initial)
+    let next = try #require(successors.first { successor in
+      try successor.arguments.map { try $0.rendered(using: compilation.layout) }
+        == [.int(2), .int(20), .int(200)]
+    })
+    let floorID = try #require(compilation.layout.variableID(named: "floor"))
+    #expect(try next.state.value(for: floorID).rendered(using: compilation.layout) == .int(222))
+    #expect(try successors.contains { successor in
+      try successor.arguments.map { try $0.rendered(using: compilation.layout) }
+        == [.int(3), .int(20), .int(200)]
+    } == false)
+    #expect(try initial.value(for: floorID).rendered(using: compilation.layout) == .int(0))
   }
 
   @Test func parameterizedActionExpandsFiniteDomainAndLabelsTransitions() throws {

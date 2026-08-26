@@ -62,16 +62,6 @@ public struct _GeneratedMachineStorage: Sendable {
         return matches[0]
     }
 
-    /// Resolves one formal projection to a state owned by this storage.
-    package func state(from projection: TLAStateProjection) throws -> State {
-        State(try CompiledState(projection: projection, compilation: compilation))
-    }
-
-    /// Returns the guarded formal projection for one storage state.
-    package func projection(of state: State) throws -> TLAStateProjection {
-        try state.compiled.projection(using: compilation.layout)
-    }
-
     /// Replaces one generated variable value in a storage state.
     public func replacing<Value: TLAValueConvertible>(
         value: Value,

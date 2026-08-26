@@ -3,14 +3,6 @@ import Testing
 
 @Suite("Simultaneous update semantics")
 struct SimultaneousUpdateSemanticsTests {
-    private func value(_ name: String, in state: TLAStateProjection) throws -> TLAValue {
-        guard let token = TLAStateProjection.Token(validating: name),
-              let value = state.value(for: token) else {
-            throw TLAStateProjectionDiagnostic.missingValue(path: name)
-        }
-        return value
-    }
-
     @Test("swap reads both right-hand sides from the old state")
     func swapUsesOldStateForEveryRightHandSide() throws {
         let left = Var<Int>("left")
@@ -24,16 +16,15 @@ struct SimultaneousUpdateSemanticsTests {
             }
         }
         let compilation = try spec.compile()
-        let action = try #require(compilation.layout.actionID(named: "swap"))
-        let initial = try #require(try compilation.initialStateProjections().first)
+        let initial = try firstCompiledState(in: compilation)
 
-        let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
+        let successor = try #require(try compiledSuccessors(named: "swap", arguments: [], in: compilation, from: initial).first)
         let verification = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
 
-        #expect(try value("left", in: successor) == .int(2))
-        #expect(try value("right", in: successor) == .int(1))
-        #expect(try value("left", in: initial) == .int(1))
-        #expect(try value("right", in: initial) == .int(2))
+        #expect(try renderedValue(named: "left", in: successor, compilation: compilation) == .int(2))
+        #expect(try renderedValue(named: "right", in: successor, compilation: compilation) == .int(1))
+        #expect(try renderedValue(named: "left", in: initial, compilation: compilation) == .int(1))
+        #expect(try renderedValue(named: "right", in: initial, compilation: compilation) == .int(2))
         guard case .ok(let stateCount) = verification.underlyingOutcome else {
             Issue.record("Expected the model checker to verify the two-state swap graph, found \(verification)")
             return
@@ -54,15 +45,14 @@ struct SimultaneousUpdateSemanticsTests {
             }
         }
         let compilation = try spec.compile()
-        let action = try #require(compilation.layout.actionID(named: "advance"))
-        let initial = try #require(try compilation.initialStateProjections().first)
+        let initial = try firstCompiledState(in: compilation)
 
-        let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
+        let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
 
-        #expect(try value("source", in: successor) == .int(5))
-        #expect(try value("mirror", in: successor) == .int(5))
-        #expect(try value("source", in: initial) == .int(4))
-        #expect(try value("mirror", in: initial) == .int(0))
+        #expect(try renderedValue(named: "source", in: successor, compilation: compilation) == .int(5))
+        #expect(try renderedValue(named: "mirror", in: successor, compilation: compilation) == .int(5))
+        #expect(try renderedValue(named: "source", in: initial, compilation: compilation) == .int(4))
+        #expect(try renderedValue(named: "mirror", in: initial, compilation: compilation) == .int(0))
     }
 
     @Test("an undefined right-hand side blocks compilation")
