@@ -31,7 +31,7 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter blocks foreign and incomplete evidence before comparison")
   func blocksForeignOrIncompleteEvidence() throws {
     let foreign = try Fixture()
-    let foreignCorrelation = try TemporalSymmetryCaseRunCorrelation(
+    let foreignCorrelation = try TemporalSymmetryRunReferences(
       caseID: foreign.launchCase.id, runID: foreign.correlation.runID, swiftRunID: foreign.correlation.swiftRunID,
       tlcRunID: UUID(), comparisonRunID: foreign.correlation.comparisonRunID)
     let result = TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
@@ -289,7 +289,7 @@ struct TLCTemporalAdapterTests {
     let output: URL
     let launchCase: FiniteGraphCase
     let temporalCase: TemporalSymmetryCase
-    let correlation: TemporalSymmetryCaseRunCorrelation
+    let correlation: TemporalSymmetryRunReferences
     let request: TLCProcessRequest
     let swiftRun: CompletedGraphRun
 
@@ -315,7 +315,7 @@ struct TLCTemporalAdapterTests {
         finiteBounds: try FiniteBounds(summary: "two states", limits: ["states": 2]),
         sourceInput: try Fixture.reference(module, path: "Verification/TemporalSymmetryConformance/TemporalFixture.tla"),
         configuration: try TemporalSymmetryConfiguration(property: "[] P", fairness: TemporalFairnessMode.none))
-      correlation = try TemporalSymmetryCaseRunCorrelation(
+      correlation = try TemporalSymmetryRunReferences(
         caseID: temporalCase.id, runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
@@ -333,7 +333,7 @@ struct TLCTemporalAdapterTests {
     func input(
       swiftRun: CompletedGraphRun? = nil,
       swiftResult: TemporalPropertyResult? = nil,
-      correlation: TemporalSymmetryCaseRunCorrelation? = nil,
+      correlation: TemporalSymmetryRunReferences? = nil,
       request: TLCProcessRequest? = nil,
       allowsImplicitStuttering: Bool = false
     ) throws -> TLCTemporalCaptureInput {

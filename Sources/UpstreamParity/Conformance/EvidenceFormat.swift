@@ -1,15 +1,13 @@
 import Foundation
 
-package enum ConformanceGovernanceError: Error, Equatable, Sendable {
+package enum EvidenceFormatError: Error, Equatable, Sendable {
   case invalidSchema(String)
   case duplicateID(kind: String, id: String)
   case invalidField(record: String, field: String)
-  case unknownCaseID(String)
   case inconsistentReference(record: String, field: String)
-  case unsupportedCategory(String)
 }
 
-enum ConformanceDecoding {
+enum StrictEvidenceDecoding {
   private struct AnyCodingKey: CodingKey {
     let stringValue: String
     let intValue: Int?
@@ -33,7 +31,7 @@ enum ConformanceDecoding {
     let known = Set(Key.allCases.map(\.stringValue))
     let unknown = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
     guard unknown.isEmpty else {
-      throw ConformanceGovernanceError.invalidField(
+      throw EvidenceFormatError.invalidField(
         record: "decode", field: "unknown field \(unknown.sorted().joined(separator: ","))")
     }
     return try decoder.container(keyedBy: keyType)

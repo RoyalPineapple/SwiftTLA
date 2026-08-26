@@ -28,7 +28,8 @@ archive for local reproducibility. It is not a distribution mechanism. If a
 fresh machine cannot retrieve or provide the exact pinned artifacts, setup
 fails instead of accepting a changed artifact.
 
-Use `make finite-graph` for exact graph comparison. The bridge spike below
+Use `./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence`
+for exact graph comparison. The bridge spike below
 is a focused schema and provenance transport check, not a complete comparison.
 
 Run the bounded spike with:

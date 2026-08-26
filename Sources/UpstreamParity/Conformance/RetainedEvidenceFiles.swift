@@ -1,11 +1,11 @@
 import Foundation
 
-package enum ConformanceEvidence {
+package enum RetainedEvidence {
   package static func projectRoot(_ url: URL) throws -> URL {
     let root = url.resolvingSymlinksInPath().standardizedFileURL
     var isDirectory: ObjCBool = false
     guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-      throw ConformanceGovernanceError.invalidField(record: url.path, field: "project root")
+      throw EvidenceFormatError.invalidField(record: url.path, field: "project root")
     }
     return root
   }
@@ -25,25 +25,16 @@ package enum ConformanceEvidence {
     }.standardizedFileURL
     guard resolved.path == root.path || resolved.path.hasPrefix(root.path + "/") else {
       let field = url.path.hasPrefix("/") ? "path outside project root" : "path escape"
-      throw ConformanceGovernanceError.invalidField(record: url.path, field: field)
+      throw EvidenceFormatError.invalidField(record: url.path, field: field)
     }
     return resolved
-  }
-
-  static func data(for reference: RetainedFileReference, beneath root: URL) throws -> Data {
-    let url = try resolve(root.appendingPathComponent(reference.path), beneath: root)
-    let data = try Data(contentsOf: url)
-    guard SHA256.hex(data) == reference.sha256 else {
-      throw ConformanceGovernanceError.inconsistentReference(record: reference.path, field: "SHA-256")
-    }
-    return data
   }
 
   package static func relativePath(for url: URL, beneath root: URL) throws -> String {
     let resolved = try resolve(url, beneath: root)
     let prefix = root.path + "/"
     guard resolved.path.hasPrefix(prefix) else {
-      throw ConformanceGovernanceError.invalidField(record: resolved.path, field: "project-relative evidence")
+      throw EvidenceFormatError.invalidField(record: resolved.path, field: "project-relative evidence")
     }
     return String(resolved.path.dropFirst(prefix.count))
   }
@@ -52,7 +43,7 @@ package enum ConformanceEvidence {
   static func outputDirectory(_ url: URL, beneath root: URL) throws -> URL {
     let directory = try resolve(url, beneath: root)
     guard !FileManager.default.fileExists(atPath: directory.path) else {
-      throw ConformanceGovernanceError.invalidField(record: directory.path, field: "output already exists")
+      throw EvidenceFormatError.invalidField(record: directory.path, field: "output already exists")
     }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     return directory
@@ -82,14 +73,9 @@ package enum ConformanceEvidence {
     try write(data, to: url)
   }
 
-  package static func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> RetainedFileReference {
+  package static func reference(for url: URL, beneath root: URL) throws -> RetainedFileReference {
     let url = try resolve(url, beneath: root)
-    let bytes: Data
-    if let data {
-      bytes = data
-    } else {
-      bytes = try Data(contentsOf: url)
-    }
+    let bytes = try Data(contentsOf: url)
     return try RetainedFileReference(
       path: relativePath(for: url, beneath: root),
       sha256: SHA256.hex(bytes))
@@ -100,7 +86,7 @@ package enum ConformanceEvidence {
     return try RetainedFileReference(path: "\(pathPrefix)/\(reference.path)", sha256: reference.sha256)
   }
 
-  static func canonicalData<T: Encodable>(_ value: T, trailingNewline: Bool = false) throws -> Data {
+  private static func canonicalData<T: Encodable>(_ value: T, trailingNewline: Bool = false) throws -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     var data = try encoder.encode(value)
@@ -112,12 +98,4 @@ package enum ConformanceEvidence {
     try write(canonicalData(value, trailingNewline: trailingNewline), to: url)
   }
 
-  package static func writePrettyCanonical<T: Encodable>(_ value: T, to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    var data = try encoder.encode(value)
-    data.append(0x0A)
-    try write(data, to: url)
-  }
 }

@@ -5,7 +5,7 @@ This check compares bounded SwiftTLA behavior with TLC behavior. Each case in `c
 The hosted workflow runs:
 
 ```sh
-make temporal-symmetry-conformance
+./scripts/run_temporal_symmetry_conformance.sh --output .build/temporal-symmetry-conformance
 ```
 
 The command writes evidence to `.build/temporal-symmetry-conformance`.

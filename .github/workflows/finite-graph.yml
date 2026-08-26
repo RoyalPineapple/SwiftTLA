@@ -19,7 +19,7 @@ jobs:
           submodules: false
 
       - name: Run exact finite graph comparison
-        run: make finite-graph
+        run: ./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence
 
       - name: Upload finite-graph evidence
         if: always()

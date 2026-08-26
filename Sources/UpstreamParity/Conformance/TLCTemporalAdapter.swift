@@ -37,7 +37,7 @@ package struct TLCTemporalCaptureResult: Sendable {
 package struct TLCTemporalCaptureInput: Sendable {
   package let temporalCase: TemporalSymmetryCase
   package let referencePin: TLCReferencePin
-  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let correlation: TemporalSymmetryRunReferences
   package let request: TLCProcessRequest
   package let completeGraphRequest: TLCProcessRequest?
   package let swiftRun: CompletedGraphRun
@@ -55,7 +55,7 @@ package struct TLCTemporalCaptureInput: Sendable {
   package init(
     temporalCase: TemporalSymmetryCase,
     referencePin: TLCReferencePin,
-    correlation: TemporalSymmetryCaseRunCorrelation,
+    correlation: TemporalSymmetryRunReferences,
     request: TLCProcessRequest,
     completeGraphRequest: TLCProcessRequest? = nil,
     swiftRun: CompletedGraphRun,
@@ -113,7 +113,7 @@ package struct TLCTemporalAdapter: Sendable {
         throw TLCTemporalAdapterError.outputAlreadyExists
       }
       try validate(input)
-      try ConformanceEvidence.outputDirectory(
+      try RetainedEvidence.outputDirectory(
         input.outputDirectory, beneath: input.outputDirectory.deletingLastPathComponent())
       try retainInput(input)
       let completeGraph = try captureCompleteGraph(input)
@@ -126,7 +126,7 @@ package struct TLCTemporalAdapter: Sendable {
       let graph = completeGraph?.graph ?? propertyGraph
       let graphID = try CanonicalGraphRecords.digest(for: graph.graph)
       let initialStateIDs = graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
-      let tlcEvidence = try ConformanceEvidence.reference(
+      let tlcEvidence = try RetainedEvidence.reference(
         for: input.outputDirectory.appendingPathComponent("tlc-process.json"),
         beneath: input.outputDirectory,
         pathPrefix: input.relativeOutputDirectory)
@@ -144,10 +144,10 @@ package struct TLCTemporalAdapter: Sendable {
         tlcResult: result,
         tlcEvidence: tlcEvidence,
         completeGraphEvidence: completeGraph?.evidence)
-      try ConformanceEvidence.writeCanonical(
+      try RetainedEvidence.writeCanonical(
         comparison, to: input.outputDirectory.appendingPathComponent("temporal-comparison.json"))
       if comparison.outcome == .unavailable {
-        try ConformanceEvidence.writeJSON(
+        try RetainedEvidence.writeJSON(
           ["code": "temporal-evidence-unavailable", "message": "TLC did not retain an attributable temporal lasso."],
           to: input.outputDirectory.appendingPathComponent("diagnostic.json"))
       }
@@ -160,11 +160,11 @@ package struct TLCTemporalAdapter: Sendable {
           : nil)
     } catch {
       let directory = retainedFailureDirectory(for: input)
-      _ = try? ConformanceEvidence.createDirectory(
+      _ = try? RetainedEvidence.createDirectory(
         directory, beneath: input.outputDirectory.deletingLastPathComponent())
       let diagnostic = TLCTemporalCaptureDiagnostic(
         code: diagnosticCode(for: error), message: String(describing: error))
-      _ = try? ConformanceEvidence.writeJSON(["code": diagnostic.code, "message": diagnostic.message], to: directory.appendingPathComponent("diagnostic.json"))
+      _ = try? RetainedEvidence.writeJSON(["code": diagnostic.code, "message": diagnostic.message], to: directory.appendingPathComponent("diagnostic.json"))
       return TLCTemporalCaptureResult(
         status: .unavailable, comparison: nil, evidenceDirectory: directory, diagnostic: diagnostic)
     }
@@ -245,10 +245,10 @@ package struct TLCTemporalAdapter: Sendable {
   }
 
   private func retainInput(_ input: TLCTemporalCaptureInput) throws {
-    try ConformanceEvidence.copy(input.sourceInputURL, to: input.outputDirectory.appendingPathComponent("source-input"))
-    try ConformanceEvidence.copy(input.manifestURL, to: input.outputDirectory.appendingPathComponent("manifest.json"))
-    try ConformanceEvidence.copy(input.toolchainURL, to: input.outputDirectory.appendingPathComponent("toolchain.json"))
-    try ConformanceEvidence.writeJSON([
+    try RetainedEvidence.copy(input.sourceInputURL, to: input.outputDirectory.appendingPathComponent("source-input"))
+    try RetainedEvidence.copy(input.manifestURL, to: input.outputDirectory.appendingPathComponent("manifest.json"))
+    try RetainedEvidence.copy(input.toolchainURL, to: input.outputDirectory.appendingPathComponent("toolchain.json"))
+    try RetainedEvidence.writeJSON([
       "caseID": input.temporalCase.id,
       "runID": input.correlation.runID.uuidString.lowercased(),
       "tlcRunID": input.correlation.tlcRunID.uuidString.lowercased(),
@@ -268,12 +268,12 @@ package struct TLCTemporalAdapter: Sendable {
     }
     try clearTraceOutput(for: request)
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
-    try ConformanceEvidence.createDirectory(directory, beneath: input.outputDirectory)
+    try RetainedEvidence.createDirectory(directory, beneath: input.outputDirectory)
     let capture = try processAdapter.capture(request, replay: .none, retainingIn: directory)
     guard capture.run.primary.reportedExhaustiveCompletion else {
       throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
-    try ConformanceEvidence.writeJSON([
+    try RetainedEvidence.writeJSON([
       "caseID": request.caseID,
       "graphRunID": request.runID.uuidString.lowercased(),
       "propertyRunID": input.request.runID.uuidString.lowercased(),
@@ -330,7 +330,7 @@ extension TLCTemporalAdapter {
         availability: .unavailable, outcome: nil, graphID: graphID, initialStateIDs: initialStateIDs,
         traceAvailability: .unavailable)
     }
-    let traceEvidence = try ConformanceEvidence.reference(
+    let traceEvidence = try RetainedEvidence.reference(
       for: outputDirectory.appendingPathComponent("counterexample.json"),
       beneath: outputDirectory,
       pathPrefix: relativeOutputDirectory)

@@ -41,7 +41,7 @@ struct SymmetryOrbitConformanceTests {
   func rawStateSetDifferenceIsStructured() throws {
     let rawStates = [state("A"), state("B")]
     let reducedStates = [state("A")]
-    let correlation = try TemporalSymmetryCaseRunCorrelation(
+    let correlation = try TemporalSymmetryRunReferences(
       caseID: "scope-2", runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     let input = try SymmetryOrbitComparisonInput(
       caseID: "scope-2", configuration: try TemporalSymmetryConfiguration(
@@ -86,7 +86,7 @@ struct SymmetryOrbitConformanceTests {
     let tlcRawRun = try run(states: rawStates, edges: rawEdges)
     let swiftReducedRun = try run(states: reducedStates, edges: reducedEdges)
     let tlcReducedRun = try run(states: reducedStates, edges: reducedEdges)
-    let correlation = try TemporalSymmetryCaseRunCorrelation(
+    let correlation = try TemporalSymmetryRunReferences(
       caseID: "scope-2", runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     let input = try SymmetryOrbitComparisonInput(
       caseID: "scope-2", configuration: try TemporalSymmetryConfiguration(
@@ -110,7 +110,7 @@ struct SymmetryOrbitConformanceTests {
   func orbitEvidenceRejectsCollidingRunIdentities() throws {
     let input = try fixture(reducedStates: [state("A")])
     let collidingSwiftReduced = try exploration(.swift, true, input.correlation.swiftRunID, states: [state("A")])
-    #expect(throws: ConformanceGovernanceError.inconsistentReference(
+    #expect(throws: EvidenceFormatError.inconsistentReference(
       record: "scope-2", field: "symmetry pair configuration")) {
       _ = try SymmetryOrbitComparisonInput(
         caseID: input.caseID, configuration: input.configuration, correlation: input.correlation,
@@ -165,7 +165,7 @@ struct SymmetryOrbitConformanceTests {
   ) throws -> SymmetryOrbitComparisonInput {
     let rawStates = [state("A"), state("B")]
     let tlcReducedStates = tlcReducedStates ?? reducedStates
-    let correlation = try TemporalSymmetryCaseRunCorrelation(
+    let correlation = try TemporalSymmetryRunReferences(
       caseID: "scope-2", runID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     return try SymmetryOrbitComparisonInput(
       caseID: "scope-2", configuration: try TemporalSymmetryConfiguration(

@@ -13,7 +13,7 @@ package struct SymmetryOrbitDifference: Equatable, Codable, Sendable {
 
   package init(kind: SymmetryOrbitDifferenceKind, detail: String) throws {
     guard !detail.isEmpty else {
-      throw ConformanceGovernanceError.invalidField(record: "symmetry difference", field: "detail")
+      throw EvidenceFormatError.invalidField(record: "symmetry difference", field: "detail")
     }
     self.kind = kind
     self.detail = detail
@@ -28,7 +28,7 @@ package enum SymmetryOrbitComparisonResult: Equatable, Sendable {
 package struct SymmetryOrbitComparisonInput: Sendable {
   package let caseID: String
   package let configuration: TemporalSymmetryConfiguration
-  package let correlation: TemporalSymmetryCaseRunCorrelation
+  package let correlation: TemporalSymmetryRunReferences
   package let swiftRaw: SymmetryExploration
   package let swiftReduced: SymmetryExploration
   package let tlcRaw: SymmetryExploration
@@ -44,7 +44,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
   package init(
     caseID: String,
     configuration: TemporalSymmetryConfiguration,
-    correlation: TemporalSymmetryCaseRunCorrelation,
+    correlation: TemporalSymmetryRunReferences,
     swiftRaw: SymmetryExploration,
     swiftReduced: SymmetryExploration,
     tlcRaw: SymmetryExploration,
@@ -80,7 +80,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
     try quotientEvidence.validate()
     guard !caseID.isEmpty, correlation.caseID == caseID, configuration.property == nil,
           configuration.symmetryEnabled, !permutations.isEmpty else {
-      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "symmetry input")
+      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "symmetry input")
     }
     let explorations = [swiftRaw, swiftReduced, tlcRaw, tlcReduced]
     guard Set(explorations.map { "\($0.engine.rawValue):\($0.reduced)" }).count == 4,
@@ -89,7 +89,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
           Set([correlation.runID, correlation.comparisonRunID, swiftRaw.runID, swiftReduced.runID,
                tlcRaw.runID, tlcReduced.runID]).count == 6,
           Set(explorations.map(\.declaredConfigurationSHA256)).count == 1 else {
-      throw ConformanceGovernanceError.inconsistentReference(record: caseID, field: "symmetry pair configuration")
+      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "symmetry pair configuration")
     }
   }
 }
@@ -190,7 +190,7 @@ package struct SymmetryOrbitComparator: Sendable {
     guard Set(exploration.stateIDs) == stateIDs,
           Set(exploration.initialStateIDs) == initialStateIDs,
           Set(exploration.transitions) == transitions else {
-      throw ConformanceGovernanceError.invalidField(
+      throw EvidenceFormatError.invalidField(
         record: exploration.graphID, field: "canonical graph evidence")
     }
   }
