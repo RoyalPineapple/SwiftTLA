@@ -23,6 +23,35 @@ public struct ParserEnumDefinition: Sendable {
 }
 
 public final class ParserSession {
+    enum FormalModuleProvider: Equatable {
+        case folds
+        case functions
+        case keyValueStoreUtil
+        case clientCentric
+        case zeroBasedSequences
+
+        init?(sourceType: String) {
+            switch sourceType {
+            case "Folds": self = .folds
+            case "FunctionsModule": self = .functions
+            case "KeyValueStoreUtil": self = .keyValueStoreUtil
+            case "ClientCentric": self = .clientCentric
+            case "ZSequences": self = .zeroBasedSequences
+            default: return nil
+            }
+        }
+
+        var module: TLASpec {
+            switch self {
+            case .folds: Folds.module
+            case .functions: FunctionsModule.module
+            case .keyValueStoreUtil: KeyValueStoreUtil.module
+            case .clientCentric: ClientCentric.module
+            case .zeroBasedSequences: ZSequences.module
+            }
+        }
+    }
+
     indirect enum TypedFacadeValueShape: Sendable {
         case enumeration(String)
         case function(TypedFacadeValueShape)
@@ -975,7 +1004,7 @@ public final class ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let type = typedFacadeType(call.calledExpression),
            type.name == "SetExpr" {
-            return decodeTypedSetLiteral(
+            return decodeTypedSetValue(
                 call,
                 elementType: type.terminalArgumentName(at: 0),
                 scope: scope
@@ -1213,6 +1242,12 @@ public final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let constructor = terminalTypeName(in: call.calledExpression),
+           constructor == "FormalModuleParameter" || constructor == "Parameter",
+           let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
+            return .variable(name)
+        }
         if let filledSequence = decodeZeroBasedSequenceFill(expression, scope: scope) {
             return filledSequence
         }
@@ -1553,6 +1588,24 @@ public final class ParserSession {
         return .setLiteral(elements)
     }
 
+    func decodeTypedSetValue(
+        _ call: FunctionCallExprSyntax,
+        elementType: String?,
+        scope: TypedFacadeScope
+    ) -> StateExpr? {
+        guard case .setLiteral(let elements) = decodeTypedSetLiteral(
+            call,
+            elementType: elementType,
+            scope: scope
+        ) else { return nil }
+        let values = elements.compactMap { element -> TLAValue? in
+            guard case .value(let value) = element else { return nil }
+            return value
+        }
+        guard values.count == elements.count else { return nil }
+        return .value(.set(Set(values)))
+    }
+
     func decodeTypedFunctionLiteral(
         _ call: FunctionCallExprSyntax,
         domainType: String?,
@@ -1603,7 +1656,8 @@ public final class ParserSession {
         let methodName = memberAccess.declName.baseName.text
         let args = Array(call.arguments)
         let base = memberAccess.base
-        if base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences" {
+        if let sourceType = base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           FormalModuleProvider(sourceType: sourceType) == .zeroBasedSequences {
             switch methodName {
             case "indices":
                 guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }) else { return nil }
@@ -2021,6 +2075,24 @@ extension ParserSession {
     ) -> ActionExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ActionExpr",
+           access.declName.baseName.text == "exists",
+           let binder = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+           let domainSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+           let domain = decodeTypedFacadeValue(domainSyntax, scope: scope),
+           let closure = call.trailingClosure,
+           let parameter = closureParameterNames(in: closure).first,
+           closureParameterNames(in: closure).count == 1,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           let body = decodeActionExpr(
+                bodySyntax,
+                scope: typedFacadeScope(scope, binding: parameter, to: .variable(binder))
+           ) {
+            return .existsAction(binder, domain, body)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            access.declName.baseName.text == "becomes",
            let baseRef = access.base?.as(DeclReferenceExprSyntax.self) {
             let varName = baseRef.baseName.text
@@ -2238,19 +2310,42 @@ extension ParserSession {
         case contains
     }
 
-    func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
-        guard let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
-        let name = ref.declName.baseName.text
-        let firstArg = call.arguments.first.flatMap { decodeStateExpr($0.expression) }
-        switch name {
-        case "leadsTo":
-            let source = ref.base.flatMap { decodeStateExpr($0) } ?? .value(.bool(true))
-            return firstArg.map { .leadsTo(source, $0) }
-        case "always": return firstArg.map { .always($0) }
-        case "eventually": return firstArg.map { .eventually($0) }
-        case "alwaysEventually": return firstArg.map { .alwaysEventually($0) }
-        case "eventuallyAlways": return firstArg.map { .eventuallyAlways($0) }
-        default: return nil
+    func decodeTemporal(
+        _ call: FunctionCallExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> TemporalExpr? {
+        let operation: String
+        let syntax: [ExprSyntax]
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let base = member.base {
+            operation = member.declName.baseName.text
+            syntax = [base] + call.arguments.map(\.expression)
+        } else if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+            operation = reference.baseName.text
+            syntax = call.arguments.dropFirst().map(\.expression)
+        } else {
+            return nil
+        }
+        let values = syntax.compactMap { decodeTypedFacadeValue($0, scope: scope) }
+        guard values.count == syntax.count else { return nil }
+        switch operation {
+        case "leadsTo", "LeadsTo":
+            guard values.count == 2 else { return nil }
+            return .leadsTo(values[0], values[1])
+        case "always", "Always":
+            guard values.count == 1 else { return nil }
+            return .always(values[0])
+        case "eventually", "Eventually":
+            guard values.count == 1 else { return nil }
+            return .eventually(values[0])
+        case "alwaysEventually", "AlwaysEventually":
+            guard values.count == 1 else { return nil }
+            return .alwaysEventually(values[0])
+        case "eventuallyAlways", "EventuallyAlways":
+            guard values.count == 1 else { return nil }
+            return .eventuallyAlways(values[0])
+        default:
+            return nil
         }
     }
 

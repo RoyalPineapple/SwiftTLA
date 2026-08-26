@@ -921,16 +921,3 @@ public func Instance(
   FormalModuleInstance(name, of: module, with: arguments, plusCalPhase: plusCalPhase, dependsOn: dependsOn)
 }
 // swiftlint:enable identifier_name
-
-enum BuiltInFormalModules {
-  static func resolve(_ sourceName: String) -> TLASpec? {
-    switch sourceName {
-    case "Folds": Folds.module
-    case "Functions", "FunctionsModule": FunctionsModule.module
-    case "Util", "KeyValueStoreUtil": KeyValueStoreUtil.module
-    case "ClientCentric": ClientCentric.module
-    case "ZSequences": ZSequences.module
-    default: nil
-    }
-  }
-}

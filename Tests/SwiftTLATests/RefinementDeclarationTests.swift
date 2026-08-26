@@ -69,9 +69,15 @@ struct RefinementDeclarationTests {
   func parserBindsDeclaredInstance() throws {
     let source = """
     {
-      let C = Instance("C", of: ByzPaxosConsensus.module(for: Int.self))
+      let consensus = TLASpec("Consensus") {
+        Parameter("Value")
+        let chosen = Var<SetExpr<Int>>("chosen")
+        Variable(chosen)
+        Action("Next") { chosen.stays }
+      }
+      let C = Instance("C", of: consensus)
       C
-      Refinement(name: "Refines", instance: C, operator: .spec, mappings: [.init(ByzPaxosConsensus.valueParameter, from: 0), .init(ByzPaxosConsensus.chosen(for: Int.self), from: 0)])
+      Refinement(name: "Refines", instance: C, operator: .spec, mappings: [.init(FormalModuleParameter("Value"), from: SetExpr<Int>(0)), .init(Var<SetExpr<Int>>("chosen"), from: SetExpr<Int>())])
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
@@ -83,20 +89,37 @@ struct RefinementDeclarationTests {
     #expect(parsed.refinements.first?.name == "Refines")
     #expect(parsed.refinements.first?.instance.resolves(parsed.moduleInstances[0]) == true)
 
-    let instance = Instance("C", of: ByzPaxosConsensus.module(for: Int.self))
+    let value = FormalModuleParameter("Value")
+    let chosen = Var<SetExpr<Int>>("chosen")
+    let consensus = TLASpec("Consensus") {
+      value
+      Variable(chosen)
+      Action("Next") { chosen.stays }
+    }
+    let instance = Instance("C", of: consensus)
     let builder = TLASpec("Parsed") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(ByzPaxosConsensus.valueParameter, from: 0), .init(ByzPaxosConsensus.chosen(for: Int.self), from: 0)])
+      Refinement(name: "Refines", instance: instance, mappings: [
+        .init(value, from: SetExpr<Int>(0)),
+        .init(chosen, from: SetExpr<Int>())
+      ])
     }
     #expect(parsed.moduleInstances == builder.moduleInstances)
-    #expect(parsed.refinements == builder.refinements)
+    let parsedCompilation = try parsed.compile(specificationName: "Parsed")
+    let builderCompilation = try builder.compile()
+    #expect(parsedCompilation.identity == builderCompilation.identity)
   }
 
   @Test("parser retains typed temporal refinement target")
   func parserRetainsTemporalTarget() throws {
     let source = """
     {
-      let C = Instance("C", of: ByzPaxosConsensus.module(for: Int.self))
+      let consensus = TLASpec("Consensus") {
+        let chosen = Var<Int>("chosen", 0)
+        Variable(chosen)
+        Action("Next") { chosen.stays }
+      }
+      let C = Instance("C", of: consensus)
       C
       Refinement(name: "Refines", instance: C, operator: .liveSpec, mappings: [])
     }

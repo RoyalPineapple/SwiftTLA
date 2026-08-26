@@ -1434,6 +1434,26 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.variables.map(\.generatedSwiftType) == ["CameraMode"])
     }
 
+    @Test("top-level temporal declarations bind typed variables")
+    func bindsTopLevelTemporalDeclarations() throws {
+        let source = """
+        {
+            let count = Var<Int>("count", 0)
+            Variable(count)
+            LeadsTo("progress", count == 0, count > 0)
+            Eventually("eventual", count > 0)
+            Always("safe", count >= 0)
+            AlwaysEventually("recurs", count > 0)
+            EventuallyAlways("settles", count >= 0)
+        }
+        """
+
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.temporal.map(\.name) == ["progress", "eventual", "safe", "recurs", "settles"])
+    }
+
     @Test func finiteVariableDomainsCompareAsFormalSets() throws {
         func specification(_ values: [StateExpr]) -> TLASpec {
             TLASpec(
