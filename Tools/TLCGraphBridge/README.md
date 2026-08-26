@@ -29,15 +29,4 @@ fresh machine cannot retrieve or provide the exact pinned artifacts, setup
 fails instead of accepting a changed artifact.
 
 Use `./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence`
-for exact graph comparison. The bridge spike below
-is a focused schema and provenance transport check, not a complete comparison.
-
-Run the bounded spike with:
-
-```sh
-Tools/TLCGraphBridge/spike/run.sh --output /tmp/tlc-bridge-spike
-```
-
-The spike requires the pinned TLC JAR and Temurin JDK cached below
-`Tools/TLCGraphBridge/.tool-cache`. The script verifies their SHA-256 digests
-before compilation or execution.
+for exact graph comparison.
