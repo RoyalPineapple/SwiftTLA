@@ -146,10 +146,11 @@ machine value behind actor isolation.
 
 ## Add bounded assurance
 
-The same compiled specification renders the TLA+ and PlusCal bundles. Core
-conformance explores the compiled machine and compares its complete bounded
-graph with TLC. See [Core graph conformance](Documentation/CoreGraphConformance.md)
-for the retained audit evidence and precise claim.
+The same compiled specification renders the TLA+ and PlusCal bundles. Finite
+graph comparison compares its bounded exploration with TLC's exploration of a
+pinned reference fixture. See
+[Finite graph comparison](Documentation/FiniteGraphComparison.md) for the
+retained evidence and precise claim.
 
 ## Use it where state order matters
 
@@ -165,7 +166,7 @@ running state, use the generated `Actor`. See
 ## Learn more
 
 - [Supported language fragment](Documentation/Design.md)
-- [Core graph conformance](Documentation/CoreGraphConformance.md)
+- [Finite graph comparison](Documentation/FiniteGraphComparison.md)
 - [Temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md)
 - [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
 - [Demonstrations app](Examples/SwiftTLADemoApp)

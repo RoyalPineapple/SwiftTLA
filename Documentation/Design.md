@@ -109,10 +109,11 @@ The conformance harness explores the compiled specification with a declared
 finite exploration configuration. The runtime evaluates compiled expressions,
 values, state slots, and action identities.
 
-Finite graph comparison runs SwiftTLA exploration and TLC against the same rendered
-bundle. Both sides produce a canonical graph. Exact graph comparison decides
-the declared finite case. Deterministic graph records retain the complete
-states and labeled edges and provide the difference explanation.
+Finite graph comparison explores the compiled Swift source model and runs TLC
+against the pinned reference fixture declared for the case. Both sides produce
+a canonical graph. Exact graph comparison decides the declared finite case.
+Deterministic graph records retain the complete states and labeled edges and
+provide the difference explanation.
 
 See [Finite graph comparison](FiniteGraphComparison.md) and
 [Upstream parity](UpstreamParity.md).

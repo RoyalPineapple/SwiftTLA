@@ -5,11 +5,11 @@ SwiftTLA source model for each selected example. The canonical corpus owns its
 source model, module closure, configuration, and provenance.
 
 ```text
-canonical Swift source model → compile → rendered module bundle
-                                      ├→ SwiftTLA exploration
-                                      └→ TLC exploration
-                                             ↓
-                                    canonical graph comparison
+Swift source model → compile → SwiftTLA exploration → canonical graph
+
+pinned TLA+ fixture → TLC exploration → canonical graph
+
+                         exact graph comparison
 ```
 
 ## Canonical corpus
@@ -28,7 +28,9 @@ ownership, import edges, configuration, and provenance.
 Finite graph comparison runs a bounded SwiftTLA exploration and a pinned TLC run for
 each case in
 [`Verification/FiniteGraph/cases.json`](../Verification/FiniteGraph/cases.json).
-Both explorations use the canonical graph schema.
+SwiftTLA explores the compiled Swift source model. TLC explores the independent
+TLA+ fixture and configuration declared by the manifest. Both explorations use
+the canonical graph schema.
 
 The comparator evaluates canonical initial states, state bindings, labeled
 edge multiplicities, and outcomes.
@@ -54,7 +56,7 @@ See [Temporal and symmetry conformance](TemporalSymmetryConformance.md).
 ## Evidence scope
 
 TLC supplies independent evidence for the declared finite model and
-configuration. The exact comparison supplies the admission fact for that
-case. The declared case and retained TLC invocation identify the source model,
+configuration. The exact comparison determines whether that case passes. The
+declared case and retained TLC invocation identify the source model,
 configuration, module closure, and tool. The graph streams retain the compared
 behavior.

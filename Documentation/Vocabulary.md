@@ -38,8 +38,7 @@ documentation, diagnostics, and reviews use these terms.
 | exploration | A bounded traversal of a compiled machine graph. | checking |
 | canonical graph | Deterministically ordered states and labeled edges. | evidence |
 | evidence | Retained inputs, commands, outputs, and graphs from a check. | result |
-| admission | A policy decision from declared evidence. | conformance |
-| conformance | An exact SwiftTLA and TLC graph comparison for one finite case. | admission |
+| conformance | An exact SwiftTLA and TLC graph comparison for one finite case. | evidence |
 
 ## Compiler path
 
