@@ -127,8 +127,7 @@ extension ParserSession {
                 .domain(.variable(collection.formalName)),
                 renameVar(collectionReference, to: collection.formalName, in: actionBody)
             ),
-            controlOwner: nil,
-            generatedSymmetricCollectionName: collection.formalName
+            controlOwner: nil
         ))
     }
 

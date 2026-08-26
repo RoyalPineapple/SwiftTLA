@@ -177,9 +177,9 @@ struct GeneratedRestrictedProcessDomainTests {
     @Test("a process declaration keeps its explicit member subset")
     func generatedModelUsesOnlyDeclaredProcessMembers() throws {
         let compilation = try GeneratedRestrictedProcessDomain.spec.compile()
-        #expect(compilation.layout.actions.first?.bindings == [
-            ActionBinding(name: "process", values: [.int(1)])
-        ])
+        let binding = try #require(compilation.semantics.actions.first?.bindings.first)
+        #expect(binding.sourceName == "process")
+        #expect(binding.values == [.int(1)])
     }
 }
 

@@ -74,9 +74,6 @@ struct CompiledActionLayout: Hashable, Sendable {
     let id: ActionID
     let declaration: CompiledDeclaration
     let renderedName: String
-    let bindings: [ActionBinding]
-    let symmetricCollection: VariableID?
-    let unresolvedSymmetricCollectionName: String?
 }
 
 struct CompiledPropertyLayout: Hashable, Sendable {
@@ -211,7 +208,6 @@ struct CompiledLayout: Hashable, Sendable {
         )
         actions = Self.actions(
             spec.actions,
-            variables: variables,
             controlLocations: controlLocations
         )
         stateProperties = spec.invariants.enumerated().map { ordinal, invariant in
@@ -592,7 +588,6 @@ struct CompiledLayout: Hashable, Sendable {
 
     private static func actions(
         _ declarations: [NamedAction],
-        variables: [CompiledVariableLayout],
         controlLocations: [CompiledControlLocation]
     ) -> [CompiledActionLayout] {
         let actionNames = Set(declarations.map(\.name))
@@ -626,18 +621,10 @@ struct CompiledLayout: Hashable, Sendable {
                 renderedName = "\(stem)__\(suffix)"
                 suffix += 1
             }
-            let symmetricCollection = action.generatedSymmetricCollectionName.flatMap { name in
-                variables.first { $0.declaration.name == name && $0.symmetricCollection != nil }?.id
-            }
             return .init(
                 id: .init(ordinal: ordinal),
                 declaration: .init(kind: .action, name: action.name, sourceOffset: nil),
-                renderedName: renderedName,
-                bindings: action.bindings,
-                symmetricCollection: symmetricCollection,
-                unresolvedSymmetricCollectionName: symmetricCollection == nil
-                    ? action.generatedSymmetricCollectionName
-                    : nil
+                renderedName: renderedName
             )
         }
     }
@@ -745,10 +732,8 @@ struct BindingValidator {
                 )
             }
             references["actions.\(action.name).declaration"] = .action(id)
-            if action.generatedSymmetricCollectionName == nil {
-                for (index, value) in action.bindings.flatMap(\.values).enumerated() {
-                    try validateValue(value, at: "actions.\(action.name).bindings[\(index)]")
-                }
+            for (index, value) in action.bindings.flatMap(\.values).enumerated() {
+                try validateValue(value, at: "actions.\(action.name).bindings[\(index)]")
             }
             let scope = try bind(action.bindings.map(\.name), at: "actions.\(action.name).bindings", scope: [:])
             try actionExpression(action.body, at: "actions.\(action.name).body", scope: scope)

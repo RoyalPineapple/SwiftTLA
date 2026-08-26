@@ -100,10 +100,11 @@ package struct RenderedAction: Sendable, Equatable {
 }
 
 struct DirectModuleAction: Sendable, Equatable {
-    let declaration: NamedAction
+    let sourceName: String
     let renderedName: String
     let renderedParameters: [String]
     let renderedBody: String
+    let calls: [RenderedAction]
 }
 
 struct CompiledRefinement: Sendable {
@@ -486,7 +487,7 @@ public extension TLASpec {
         let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
         let compiledRefinements = try compiledRefinements(bindings: bindings, closure: closure, layout: layout)
         let identity = compilationIdentity
-        let machineSurfacePlan = try MachineSurfacePlan(layout: layout)
+        let machineSurfacePlan = try MachineSurfacePlan(layout: layout, semantics: semantics)
         let directModuleSections = try directModuleSectionPlan(
             layout: layout,
             bindings: bindings,
@@ -746,10 +747,18 @@ public extension TLASpec {
                 )
             }
             return DirectModuleAction(
-                declaration: declaration,
+                sourceName: declaration.name,
                 renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
-                renderedBody: try renderer.action(compiled.body)
+                renderedBody: try renderer.action(compiled.body),
+                calls: emittedActionCalls.compactMap { emitted in
+                    guard emitted.call.action == compiled.id else { return nil }
+                    return RenderedAction(
+                        sourceName: declaration.name,
+                        arguments: emitted.call.arguments,
+                        renderedName: emitted.renderedName
+                    )
+                }
             )
         }
         return DirectModuleSectionPlan(
@@ -838,9 +847,8 @@ public extension TLASpec {
         semantics: CompiledSemantics
     ) throws -> String {
         let varNames = variables.map(\.name)
-        let renderedActionDeclarations = renderedActions.map(\.declaration)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
-        let isLibraryModule = variables.isEmpty && renderedActionDeclarations.isEmpty
+        let isLibraryModule = variables.isEmpty && renderedActions.isEmpty
         var lines: [String] = []
 
         lines.append("---- MODULE \(name) ----")
@@ -974,26 +982,21 @@ public extension TLASpec {
         }
         lines.append("")
 
-        for renderedAction in renderedActions where !renderedAction.declaration.name.isEmpty {
-            let action = renderedAction.declaration
+        for renderedAction in renderedActions where renderedAction.sourceName.isEmpty == false {
             let parameters = renderedAction.renderedParameters.joined(separator: ", ")
             let emittedName = renderedAction.renderedName
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
             lines.append("\(header) == \(renderedAction.renderedBody)")
-            for variant in actionVariants(action) where !variant.indices.isEmpty {
-                let suffix = variant.indices.map(String.init).joined(separator: "_")
-                lines.append("\(emittedName)__\(suffix) == \(formalActionCall(named: emittedName, arguments: variant.arguments))")
+            for call in renderedAction.calls where call.arguments.isEmpty == false {
+                lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")
             }
         }
         lines.append("")
 
-        let invocations = renderedActions.filter { !$0.declaration.name.isEmpty }.flatMap { renderedAction in
-            actionVariants(renderedAction.declaration).map { variant -> String in
-                let emittedName = renderedAction.renderedName
-                guard !variant.indices.isEmpty else { return emittedName }
-                return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
-            }
-        }
+        let invocations = renderedActions
+            .filter { $0.sourceName.isEmpty == false }
+            .flatMap(\.calls)
+            .map(\.renderedName)
         if invocations.count != 1 || invocations[0] != "Next" {
             if invocations.count == 1 {
                 lines.append("Next == \(invocations[0])")
@@ -1497,28 +1500,15 @@ private struct CanonicalSpecificationEncoder {
     }
 
     private func canonicalAction(_ action: NamedAction) -> String {
-        let compilerOwnedBindings = action.generatedSymmetricCollectionName == nil
-            ? []
-            : action.bindings.map(\.name)
         return node("action", [
             action.name,
-            canonicalActionExpression(
-                action.body,
-                bindingNames: compilerOwnedBindings
-            ),
+            canonicalActionExpression(action.body),
             canonicalList(action.bindings.map {
-                if action.generatedSymmetricCollectionName == nil {
-                    node("action-binding", [
-                        $0.name,
-                        canonicalList($0.values.map(canonicalValue))
-                    ])
-                } else {
-                    node("action-binding", [
-                        canonicalList($0.values.map(canonicalValue))
-                    ])
-                }
-            }),
-            canonicalOptional(action.generatedSymmetricCollectionName)
+                node("action-binding", [
+                    $0.name,
+                    canonicalList($0.values.map(canonicalValue))
+                ])
+            })
         ])
     }
 

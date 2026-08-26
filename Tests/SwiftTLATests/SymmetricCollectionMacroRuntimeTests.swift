@@ -170,7 +170,12 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(parsed.symmetricCollections[0].generatedElementType == "Device")
     #expect(parsed.symmetricCollections[0].generatedValueType == "Int")
     #expect(parsed.symmetricCollections[0].verificationScope == 2)
-    #expect(parsed.actions.compactMap(\.generatedSymmetricCollectionName) == ["devices"])
+    let action = try #require(parsed.actions.first)
+    guard case .existsAction(_, .domain(.variable(let collection)), _) = action.body else {
+      Issue.record("Expected a collection-member existential")
+      return
+    }
+    #expect(collection == "devices")
     #expect(parsed.diagnostics.isEmpty)
   }
 
@@ -205,8 +210,15 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.symmetricCollections.map(\.name) == ["phases"])
-    #expect(parsed.actions.compactMap(\.generatedSymmetricCollectionName) == ["phases"])
+    let action = try #require(parsed.actions.first)
+    guard case .existsAction(_, .domain(.variable(let collection)), _) = action.body else {
+      Issue.record("Expected a collection-member existential")
+      return
+    }
+    #expect(collection == "phases")
     #expect(parsedCompilation.identity == builtCompilation.identity)
+    #expect(parsedCompilation.semantics.actions.first?.bindings.first?.values
+      == builtCompilation.semantics.actions.first?.bindings.first?.values)
     #expect(parsedCompilation.renderedTLAModuleBundle().root.tla
       == builtCompilation.renderedTLAModuleBundle().root.tla)
   }
