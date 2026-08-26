@@ -71,7 +71,9 @@ the action type and argument types selected by the source model.
 ## Declare modules and refinement structurally
 
 Use `Import` and `Instance` for TLA+ modules. Compilation links their complete
-module closure. Direct TLA+, PlusCal, and TLC staging use the same closure.
+module closure. Direct TLA+ and authored PlusCal bundles use that closure. TLC
+invocations that consume compiled bundles stage those declared files.
+Conformance fixtures remain independent external bundles.
 
 Use `FormalDefinition` and `Invariant` for typed formal claims. Use
 `Refinement` with a typed abstract model and state mapping. The local checker
@@ -92,8 +94,8 @@ exact comparison explains a mismatch from retained state and edge records.
 | `CompiledLayout` | canonical IDs and slots |
 | `CompiledEvaluator` | compiled expressions and values |
 | `CompiledRuntime` | compiled state and action execution |
-| private runtime explorer | finite graph exploration |
-| compilation and macros | generated Swift surface |
-| `TLASpec+PrettyPrint` | compiled TLA+ declaration plan |
-| TLC adapter | declared bundle staging and event parsing |
-| canonical graph | exact finite conformance records |
+| `ModelChecker` | bounded reachable-state exploration |
+| compilation and `@TLAModel` | generated Swift surface |
+| `CompiledTLARenderer` | compiled expressions and declarations to TLA+ text |
+| `TLCProcessAdapter` and `TLCGraphReader` | declared bundle execution and TLC event decoding |
+| `CanonicalGraph` and `GraphComparison` | deterministic finite records and exact equality |
