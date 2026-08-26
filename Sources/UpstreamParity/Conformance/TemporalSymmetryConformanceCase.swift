@@ -37,8 +37,7 @@ package enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
   case exactAgreement
   case propertyOutcomeDifference
   case applicableOutcomeDifference
-  case graphIdentityDifference
-  case initialStateDifference
+  case graphDifference
   case temporalEvidenceUnavailable
   case orbitEvidenceUnavailable
   case orbitDifference
@@ -156,7 +155,6 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   package let id: String
   package let kind: TemporalSymmetryCaseKind
   package let swiftSpec: String
-  package let finiteBounds: FiniteBounds
   package let sourceInput: RetainedFileReference?
   package let configuration: TemporalSymmetryConfiguration
 
@@ -164,21 +162,18 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
     id: String,
     kind: TemporalSymmetryCaseKind,
     swiftSpec: String,
-    finiteBounds: FiniteBounds,
     sourceInput: RetainedFileReference? = nil,
     configuration: TemporalSymmetryConfiguration
   ) throws {
     self.id = id
     self.kind = kind
     self.swiftSpec = swiftSpec
-    self.finiteBounds = finiteBounds
     self.sourceInput = sourceInput
     self.configuration = configuration
     try validate()
   }
 
   package func validate() throws {
-    try finiteBounds.validate()
     try sourceInput?.validate()
     try configuration.validate()
     guard !id.isEmpty, !swiftSpec.isEmpty else {
@@ -198,7 +193,7 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case id, kind, swiftSpec, finiteBounds, sourceInput, configuration
+    case id, kind, swiftSpec, sourceInput, configuration
   }
 
   package init(from decoder: Decoder) throws {
@@ -207,7 +202,6 @@ package struct TemporalSymmetryCase: Equatable, Codable, Sendable {
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
       swiftSpec: container.decode(String.self, forKey: .swiftSpec),
-      finiteBounds: container.decode(FiniteBounds.self, forKey: .finiteBounds),
       sourceInput: try container.decodeIfPresent(RetainedFileReference.self, forKey: .sourceInput),
       configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration))
   }
@@ -303,8 +297,6 @@ package struct TemporalLassoWitness: Equatable, Codable, Sendable {
 package struct TemporalPropertyResult: Equatable, Codable, Sendable {
   package let availability: TemporalEvaluationAvailability
   package let outcome: TemporalPropertyOutcome?
-  package let graphID: String
-  package let initialStateIDs: [String]
   package let traceAvailability: TemporalTraceAvailability
   package let traceEvidence: RetainedFileReference?
   package let lasso: TemporalLassoWitness?
@@ -312,16 +304,12 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
   package init(
     availability: TemporalEvaluationAvailability,
     outcome: TemporalPropertyOutcome?,
-    graphID: String,
-    initialStateIDs: [String],
     traceAvailability: TemporalTraceAvailability,
     traceEvidence: RetainedFileReference? = nil,
     lasso: TemporalLassoWitness? = nil
   ) throws {
     self.availability = availability
     self.outcome = outcome
-    self.graphID = graphID
-    self.initialStateIDs = initialStateIDs.sorted()
     self.traceAvailability = traceAvailability
     self.traceEvidence = traceEvidence
     self.lasso = lasso
@@ -329,11 +317,6 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
   }
 
   package func validate() throws {
-    guard !graphID.isEmpty, !initialStateIDs.isEmpty,
-          Set(initialStateIDs).count == initialStateIDs.count,
-          initialStateIDs.allSatisfy({ !$0.isEmpty }) else {
-      throw EvidenceFormatError.invalidField(record: "temporal result", field: "graph or initial states")
-    }
     try traceEvidence?.validate()
     switch availability {
     case .evaluated:
@@ -366,7 +349,7 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case availability, outcome, graphID, initialStateIDs, traceAvailability, traceEvidence, lasso
+    case availability, outcome, traceAvailability, traceEvidence, lasso
   }
 
   package init(from decoder: Decoder) throws {
@@ -374,8 +357,6 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
     try self.init(
       availability: container.decode(TemporalEvaluationAvailability.self, forKey: .availability),
       outcome: try container.decodeIfPresent(TemporalPropertyOutcome.self, forKey: .outcome),
-      graphID: container.decode(String.self, forKey: .graphID),
-      initialStateIDs: container.decode([String].self, forKey: .initialStateIDs),
       traceAvailability: container.decode(TemporalTraceAvailability.self, forKey: .traceAvailability),
       traceEvidence: try container.decodeIfPresent(RetainedFileReference.self, forKey: .traceEvidence),
       lasso: try container.decodeIfPresent(TemporalLassoWitness.self, forKey: .lasso))

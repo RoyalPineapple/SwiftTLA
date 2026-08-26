@@ -1,6 +1,6 @@
 import Foundation
 
-package struct TemporalComparison: Equatable, Codable, Sendable {
+package struct TemporalComparison: Equatable, Encodable, Sendable {
   package static let schema = "TemporalComparison"
 
   package let schema: String
@@ -41,7 +41,7 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
     try validate()
   }
 
-  package func validate() throws {
+  private func validate() throws {
     try configuration.validate()
     try swiftEvidence.validate()
     try tlcEvidence.validate()
@@ -64,8 +64,6 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
     case .exact:
       guard swiftResult.availability == .evaluated, tlcResult.availability == .evaluated,
             swiftResult.outcome == tlcResult.outcome,
-            swiftResult.graphID == tlcResult.graphID,
-            swiftResult.initialStateIDs == tlcResult.initialStateIDs,
             diagnosticCode == .exactAgreement else {
         throw EvidenceFormatError.invalidField(record: caseID, field: "exact temporal result")
       }
@@ -75,39 +73,25 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
         throw EvidenceFormatError.invalidField(record: caseID, field: "unavailable temporal result")
       }
     case .difference:
-      let different = swiftResult.availability != tlcResult.availability
-        || swiftResult.outcome != tlcResult.outcome
-        || swiftResult.graphID != tlcResult.graphID
-        || swiftResult.initialStateIDs != tlcResult.initialStateIDs
-      guard different, diagnosticCode != .exactAgreement,
-            diagnosticCode != .temporalEvidenceUnavailable else {
+      let validDifference: Bool
+      switch diagnosticCode {
+      case .propertyOutcomeDifference:
+        validDifference = swiftResult.availability == .evaluated
+          && tlcResult.availability == .evaluated
+          && swiftResult.outcome != tlcResult.outcome
+      case .graphDifference:
+        validDifference = swiftResult.availability == .evaluated
+          && tlcResult.availability == .evaluated
+          && swiftResult.outcome == tlcResult.outcome
+      default:
+        validDifference = false
+      }
+      guard validDifference else {
         throw EvidenceFormatError.invalidField(record: caseID, field: "temporal difference diagnostic")
       }
     }
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable {
-    case schema, caseID, configuration, correlation, outcome, swiftResult, tlcResult, swiftEvidence, tlcEvidence
-    case completeGraphEvidence, diagnosticCode
-  }
-
-  package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    guard try container.decode(String.self, forKey: .schema) == Self.schema else {
-      throw EvidenceFormatError.invalidSchema("TemporalComparison")
-    }
-    try self.init(
-      caseID: container.decode(String.self, forKey: .caseID),
-      configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
-      correlation: container.decode(TemporalSymmetryRunReferences.self, forKey: .correlation),
-      outcome: container.decode(TemporalSymmetryOutcome.self, forKey: .outcome),
-      swiftResult: container.decode(TemporalPropertyResult.self, forKey: .swiftResult),
-      tlcResult: container.decode(TemporalPropertyResult.self, forKey: .tlcResult),
-      swiftEvidence: container.decode(RetainedFileReference.self, forKey: .swiftEvidence),
-      tlcEvidence: container.decode(RetainedFileReference.self, forKey: .tlcEvidence),
-      completeGraphEvidence: try container.decodeIfPresent(TemporalCompleteGraphEvidence.self, forKey: .completeGraphEvidence),
-      diagnosticCode: container.decode(TemporalSymmetryDiagnosticCode.self, forKey: .diagnosticCode))
-  }
 }
 
 package struct SymmetryOrbit: Equatable, Codable, Sendable {
@@ -427,7 +411,7 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
       switch diagnosticCode {
       case .orbitDifference:
         diagnosticMatchesDifference = !orbitPartitionMatches
-      case .graphIdentityDifference:
+      case .graphDifference:
         diagnosticMatchesDifference = !quotientMatches
       case .applicableOutcomeDifference, .propertyOutcomeDifference:
         diagnosticMatchesDifference = !applicableOutcomesAgree
