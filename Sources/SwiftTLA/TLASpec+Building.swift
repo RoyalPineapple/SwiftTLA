@@ -125,7 +125,6 @@ extension TLASpec {
 extension TLASpec {
   func loweredSourceModel() throws -> TLASpec {
     try validateCapabilityAdmission()
-    guard algorithmPhase == .source else { return self }
     var variables = variables
     var actions = actions
     var invariants = invariants
@@ -134,30 +133,41 @@ extension TLASpec {
     var constraint = constraint
     var formalOperatorDefinitions = formalOperatorDefinitions
 
-    for algorithm in sourceAlgorithms {
-      try algorithm.requireValid()
-      let lowered = try AlgorithmLowerer.lower(
-        algorithm.model,
-        formalOperatorDefinitions: formalOperatorDefinitions
-      )
-      variables += lowered.variables
-      actions += lowered.actions
-      invariants += lowered.invariants
-      temporalProperties += lowered.temporalProperties
-      fairness += lowered.fairness
-      formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
-      if let loweredConstraint = lowered.constraint {
-        constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
+    if algorithmPhase == .source {
+      for algorithm in sourceAlgorithms {
+        try algorithm.requireValid()
+        let lowered = try AlgorithmLowerer.lower(
+          algorithm.model,
+          formalOperatorDefinitions: formalOperatorDefinitions
+        )
+        variables += lowered.variables
+        actions += lowered.actions
+        invariants += lowered.invariants
+        temporalProperties += lowered.temporalProperties
+        fairness += lowered.fairness
+        formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
+        if let loweredConstraint = lowered.constraint {
+          constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
+        }
       }
     }
 
-    actions = actions.map { action in
-      NamedAction(
-        name: action.name,
-        body: ActionNormalization.complete(action.body, variables: variables),
-        bindings: action.bindings,
-        controlOwner: action.controlOwner,
-        generatedSymmetricCollectionName: action.generatedSymmetricCollectionName
+    actions = try actions.map { action in
+      let lowered = try lowerSymmetricCollectionAction(action)
+      let body: ActionExpr
+      if algorithmPhase == .source {
+        body = ActionNormalization.complete(lowered.body, variables: variables)
+      } else if lowered.generatedSymmetricCollectionName == nil {
+        body = lowered.body
+      } else {
+        body = ActionNormalization.complete(lowered.body, variables: variables)
+      }
+      return NamedAction(
+        name: lowered.name,
+        body: body,
+        bindings: lowered.bindings,
+        controlOwner: lowered.controlOwner,
+        generatedSymmetricCollectionName: lowered.generatedSymmetricCollectionName
       )
     }
 
@@ -188,6 +198,67 @@ extension TLASpec {
     )
     lowered.algorithmPhase = .lowered
     return lowered
+  }
+
+  private func lowerSymmetricCollectionAction(_ action: NamedAction) throws -> NamedAction {
+    guard let collectionName = action.generatedSymmetricCollectionName else { return action }
+    guard let collection = symmetricCollections.first(where: { $0.name == collectionName }) else {
+      throw symmetricCollectionActionDiagnostic(
+        action: action,
+        expected: "a declared symmetric collection named '\(collectionName)'",
+        actual: "no matching symmetric collection declaration"
+      )
+    }
+
+    if action.bindings.count == 1,
+       action.bindings[0].values == collection.metadata.members {
+      return action
+    }
+
+    guard case .existsAction(let member, let domain, let body) = action.body else {
+      throw symmetricCollectionActionDiagnostic(
+        action: action,
+        expected: "one outer collection-member existential",
+        actual: "a different action expression"
+      )
+    }
+    guard action.bindings.isEmpty else {
+      throw symmetricCollectionActionDiagnostic(
+        action: action,
+        expected: "one outer collection-member binding supplied by compilation",
+        actual: "\(action.bindings.count) authored action binding(s)"
+      )
+    }
+    guard domain == .domain(.variable(collectionName)) else {
+      throw symmetricCollectionActionDiagnostic(
+        action: action,
+        expected: "the declared member domain of symmetric collection '\(collectionName)'",
+        actual: String(describing: domain)
+      )
+    }
+
+    return NamedAction(
+      name: action.name,
+      body: body,
+      bindings: [ActionBinding(name: member, values: collection.metadata.members)],
+      controlOwner: action.controlOwner,
+      generatedSymmetricCollectionName: collectionName
+    )
+  }
+
+  private func symmetricCollectionActionDiagnostic(
+    action: NamedAction,
+    expected: String,
+    actual: String
+  ) -> CompilationDiagnostic {
+    CompilationDiagnostic(
+      code: .invalidSymmetricCollection,
+      stage: .lowering,
+      path: "actions.\(action.name).body",
+      expected: expected,
+      actual: actual,
+      nextSafeAction: "Declare the action with CollectionAction(_:on:_:)."
+    )
   }
 
   private func validateCapabilityAdmission() throws {

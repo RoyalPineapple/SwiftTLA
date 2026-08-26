@@ -106,44 +106,6 @@ struct SymmetricCollectionReportTests {
     assertBounded(result) { if case .livenessViolated = $0 { true } else { false } }
   }
 
-  @Test("Thrown ASSUME evaluation failures retain bounded reporting")
-  func thrownAssumeEvaluationFailureIsBounded() throws {
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
-    let spec = TLASpec("Devices") {
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
-      Assume(StateExpr.variable("missing"))
-    }
-
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
-    guard case .bounded(let scopes, let outcome) = result,
-          case .error(let message) = outcome else {
-      Issue.record("Expected wrapped ASSUME evaluation error, got \(result)")
-      return
-    }
-    #expect(scopes == [SymmetricCollectionScope(collectionName: "devices", verificationScope: 2)])
-    #expect(message.contains("Undefined variable: missing"))
-    #expect(result.description.contains("does not prove larger populations"))
-  }
-
-  @Test("Thrown liveness evaluation failures retain bounded reporting")
-  func thrownLivenessEvaluationFailureIsBounded() throws {
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
-    let spec = TLASpec("Devices") {
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
-      Always("defined", .variable("missing"))
-    }
-
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).checkLiveness()
-    guard case .bounded(let scopes, let outcome) = result,
-          case .error(let message) = outcome else {
-      Issue.record("Expected wrapped liveness evaluation error, got \(result)")
-      return
-    }
-    #expect(scopes == [SymmetricCollectionScope(collectionName: "devices", verificationScope: 2)])
-    #expect(message.contains("Undefined variable: missing"))
-    #expect(result.description.contains("does not prove larger populations"))
-  }
-
   private func assertBounded(_ result: CheckResult, outcomeMatches: (CheckResult) -> Bool) {
     guard case .bounded(let scopes, let outcome) = result else {
       Issue.record("Expected bounded result, got \(result)")

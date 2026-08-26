@@ -153,6 +153,12 @@ extension ParserSession {
       func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
+        sourceScope = typedFacadeScope(
+            .empty,
+            bindings: collectionTypes.map {
+                (sourceName: $0.key, value: StateExpr.variable($0.value.formalName))
+            }
+        )
         let declarationScope = closureParameterNames(in: closure).first
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
@@ -697,7 +703,7 @@ extension ParserSession {
         case "SymmetricCollection":
             parseSymmetricCollectionDecl(call, into: &result, collectionTypes: collectionTypes)
         case "CollectionAction":
-            parseCollectionAction(call, into: &result)
+            parseCollectionAction(call, into: &result, collectionTypes: collectionTypes)
         case "Variable":
             let existingVariable = call.arguments.first.flatMap { parsedVariableName($0.expression) }
             parseVariableDecl(call, into: &result)

@@ -8,78 +8,63 @@ import SwiftParser
 import SwiftTLA
 
 enum MacroExpander {
-    static func literalExpr(for value: TLAValue) -> String {
-        switch value {
-        case .int(let value): "\(value)"
-        case .bool(let value): "\(value)"
-        case .string(let value): "\"\(value)\""
-        case .set, .tuple, .record, .function, .constant: codegenTLAValue(value)
-        }
-    }
-
     // MARK: - State machine code generation (model / actor)
 
     static func generateStateMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
         let plan = model.compilation.machineSurfacePlan
         let collectionParameters = plan.symmetricCollections.map {
-            "\($0.formalName): IdentifiedModelCollection<\($0.elementType), \($0.valueType)>"
+            "\($0.formalName): [\($0.elementType).ID]"
         }
+        let appendedCollectionParameters = collectionParameters.isEmpty
+            ? ""
+            : ", \(collectionParameters.joined(separator: ", "))"
+        let collectionArguments = plan.symmetricCollections.map {
+            ", \($0.formalName): \($0.formalName)"
+        }.joined()
         let machineInitializerParameters = ([
             "storage: _GeneratedMachineStorage",
             "storageState: _GeneratedMachineStorage.State"
         ] + collectionParameters)
             .joined(separator: ", ")
         let collectionAssignments = plan.symmetricCollections.map {
-            "self.\($0.formalName) = \($0.formalName)"
+            "_\($0.formalName)Members = \($0.formalName)"
         }
         let machineInitializerAssignments = ([
             "_storage = storage",
-            "_storageState = storageState",
-            "_state = try State(storage: storage, storageState: storageState)"
-        ] + collectionAssignments)
+            "_storageState = storageState"
+        ] + collectionAssignments + [
+            "_state = try State(storage: storage, storageState: storageState\(collectionArguments))"
+        ])
             .joined(separator: "\n            ")
-        let collectionInitializers = plan.symmetricCollections.map { collection in
-            """
-            ,
-                \(collection.formalName): try IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>(
-                    name: \"\(collection.formalName)\",
-                    verificationScope: \(collection.verificationScope),
-                    initial: \(literalExpr(for: collection.initial))
-                )
-            """
-        }.joined()
 
         decls.append(DeclSyntax(stringLiteral: "private let _storage: _GeneratedMachineStorage"))
         decls.append(DeclSyntax(stringLiteral: "private var _storageState: _GeneratedMachineStorage.State"))
         decls.append(DeclSyntax(stringLiteral: "private var _state: State"))
+        decls.append(contentsOf: plan.symmetricCollections.map { collection in
+            DeclSyntax(stringLiteral: "private let _\(collection.formalName)Members: [\(collection.elementType).ID]")
+        })
         decls.append(DeclSyntax(stringLiteral: """
         private init(\(machineInitializerParameters)) throws {
             \(machineInitializerAssignments)
         }
         """))
 
-        let ordinaryVariables = plan.variables.filter { $0.isSymmetricCollection == false }
-
         decls.append(contentsOf: generateAction(actions: plan.actions))
-        decls.append(DeclSyntax(generateStateStruct(variables: ordinaryVariables, enumInfos: model.enumInfos)))
+        decls.append(DeclSyntax(generateStateStruct(
+            variables: plan.variables,
+            symmetricCollections: plan.symmetricCollections,
+            enumInfos: model.enumInfos
+        )))
         decls.append(contentsOf: generateGeneratedMachineStorageMembers(
-            hasActions: !plan.actions.isEmpty,
             actions: plan.actions,
             symmetricCollections: plan.symmetricCollections
         ))
         decls.append(contentsOf: generateActorMembers(model: model))
-        decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
-        decls.append(contentsOf: generateVariableProperties(variables: ordinaryVariables).map(DeclSyntax.init))
+        decls.append(contentsOf: generateVariableProperties(variables: plan.variables).map(DeclSyntax.init))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
-        private static func _makeMachine(
-            storage: _GeneratedMachineStorage,
-            storageState: _GeneratedMachineStorage.State
-        ) throws -> Self {
-            try Self(storage: storage, storageState: storageState\(collectionInitializers))
-        }
-        public static func makeMachine() throws -> Self {
+        public static func makeMachine(\(collectionParameters.joined(separator: ", "))) throws -> Self {
             let storage = _GeneratedMachineStorage(compilation: try _compiledSpecification())
             let initialStates = try storage.initialStates()
             guard initialStates.count == 1 else {
@@ -88,18 +73,18 @@ enum MacroExpander {
                 }
                 throw GeneratedMachineError.ambiguousInitialState
             }
-            return try _makeMachine(
+            return try Self(
                 storage: storage,
-                storageState: initialStates[0]
+                storageState: initialStates[0]\(collectionArguments)
             )
         }
-        public static func makeMachine(_ initial: State) throws -> Self {
+        public static func makeMachine(_ initial: State\(appendedCollectionParameters)) throws -> Self {
             let storage = _GeneratedMachineStorage(compilation: try _compiledSpecification())
-            return try _makeMachine(
+            return try Self(
                 storage: storage,
                 storageState: try storage.initialState { candidate in
-                    try State(storage: storage, storageState: candidate) == initial
-                }
+                    try State(storage: storage, storageState: candidate\(collectionArguments)) == initial
+                }\(collectionArguments)
             )
         }
         """))
@@ -192,8 +177,20 @@ enum MacroExpander {
         }.joined(separator: "\n        ")
 
         let actionArgumentCases = actions.map { action in
-            if action.symmetricCollection != nil {
-                return "case .\(action.swiftIdentifier)(member: _): return []"
+            if let collection = action.symmetricCollection {
+                let formalMembers = collection.members.map(codegenTLAValue).joined(separator: ", ")
+                return """
+                case .\(action.swiftIdentifier)(member: let member):
+                    guard let memberOrdinal = _\(collection.formalName)Members.firstIndex(of: member) else {
+                        throw GeneratedMachineStateDiagnostic.typeMismatch(
+                            path: "\(collection.formalName).member",
+                            expected: "an application ID bound when the machine was created",
+                            actual: String(describing: member)
+                        )
+                    }
+                    let formalMembers: [TLAValue] = [\(formalMembers)]
+                    return [formalMembers[memberOrdinal]]
+                """
             }
             let publicBindings = action.bindings.filter(\.isPublic)
             let arguments = action.bindings.map { binding in
@@ -207,8 +204,20 @@ enum MacroExpander {
             return "case \(pattern): return [\(arguments)]"
         }.joined(separator: "\n        ")
 
-        let labelCases = actions.enumerated().compactMap { ordinal, action -> String? in
-            guard action.symmetricCollection == nil else { return nil }
+        let labelCases = actions.enumerated().map { ordinal, action -> String in
+            if let collection = action.symmetricCollection {
+                let formalMembers = collection.members.map(codegenTLAValue).joined(separator: ", ")
+                return """
+                case \(ordinal) where arguments.count == 1:
+                    let formalMembers: [TLAValue] = [\(formalMembers)]
+                    guard let memberOrdinal = formalMembers.firstIndex(where: {
+                        arguments.matches($0, at: 0)
+                    }), _\(collection.formalName)Members.indices.contains(memberOrdinal) else {
+                        return nil
+                    }
+                    return .\(action.swiftIdentifier)(member: _\(collection.formalName)Members[memberOrdinal])
+                """
+            }
             let publicBindings = action.bindings.filter(\.isPublic)
             if action.bindings.isEmpty {
                 return "case \(ordinal) where arguments.isEmpty: return .\(action.swiftIdentifier)"
@@ -238,14 +247,14 @@ enum MacroExpander {
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionArguments(for action: Action) -> [any TLAValueConvertible] {
+        private func _actionArguments(for action: Action) throws -> [any TLAValueConvertible] {
             switch action {
             \(actionArgumentCases)
             }
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _action(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> Action? {
+        private func _action(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> Action? {
             switch ordinal {
             \(labelCases)
             default: return nil
@@ -260,6 +269,7 @@ enum MacroExpander {
 extension MacroExpander {
     static func generateStateStruct(
         variables: [MachineSurfacePlan.Variable],
+        symmetricCollections: [MachineSurfacePlan.SymmetricCollection],
         enumInfos: [ParsedEnum]
     ) -> StructDeclSyntax {
         StructDeclSyntax(
@@ -312,13 +322,23 @@ extension MacroExpander {
                                 firstName: "storageState",
                                 type: TypeSyntax(stringLiteral: "_GeneratedMachineStorage.State")
                             )
+                            for collection in symmetricCollections {
+                                FunctionParameterSyntax(
+                                    firstName: .identifier(collection.formalName),
+                                    type: TypeSyntax(stringLiteral: "[\(collection.elementType).ID]")
+                                )
+                            }
                         },
                         effectSpecifiers: FunctionEffectSpecifiersSyntax(
                             throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
                         )
                     ),
                     body: CodeBlockSyntax {
-                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos))
+                        ExprSyntax(stringLiteral: stateDecodingStatements(
+                            variables: variables,
+                            symmetricCollections: symmetricCollections,
+                            enumInfos: enumInfos
+                        ))
                     }
                 )
             }
@@ -345,11 +365,44 @@ extension MacroExpander {
 
     static func stateDecodingStatements(
         variables: [MachineSurfacePlan.Variable],
+        symmetricCollections: [MachineSurfacePlan.SymmetricCollection],
         enumInfos: [ParsedEnum]
     ) -> String {
         variables.map { variable in
             let key = String(reflecting: variable.formalName)
             let typeName = variable.swiftType
+            if let collection = symmetricCollections.first(where: {
+                $0.storageOrdinal == variable.storageOrdinal
+            }) {
+                let formalMembers = collection.members.map(codegenTLAValue).joined(separator: ", ")
+                return """
+                guard \(collection.formalName).count == \(collection.members.count),
+                      Set(\(collection.formalName)).count == \(collection.formalName).count else {
+                    throw GeneratedMachineStateDiagnostic.typeMismatch(
+                        path: \(key),
+                        expected: "\(collection.members.count) unique application IDs",
+                        actual: "\\(\(collection.formalName).count) supplied IDs"
+                    )
+                }
+                self.\(collection.formalName) = try Dictionary(uniqueKeysWithValues: zip(
+                    \(collection.formalName),
+                    [\(formalMembers)]
+                ).map { id, formalMember in
+                    guard let value: \(collection.valueType) = try storage.collectionValue(
+                        at: \(collection.storageOrdinal),
+                        for: formalMember,
+                        as: \(collection.valueType).self,
+                        in: storageState
+                    ) else {
+                        throw GeneratedMachineStateDiagnostic.missingRequiredValue(
+                            path: \(key),
+                            expected: "a compiled value for every symmetric member"
+                        )
+                    }
+                    return (id, value)
+                })
+                """
+            }
             if let info = enumInfos.first(where: { $0.typeName == typeName }) {
                 let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.formalName) = \(typeName).\($0.name)" }
                     .joined(separator: "\n")
@@ -379,24 +432,6 @@ extension MacroExpander {
             self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: \(type).self, in: storageState)
             """
         }.joined(separator: "\n")
-    }
-
-    static func generateCollectionRuntimeMembers(
-        _ collections: [MachineSurfacePlan.SymmetricCollection]
-    ) -> [DeclSyntax] {
-        var declarations = collections.map { collection -> DeclSyntax in
-            DeclSyntax(stringLiteral: """
-            public var \(collection.formalName): IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>
-            """)
-        }
-        guard !collections.isEmpty else { return declarations }
-        let scopes = collections.map {
-            "SymmetricCollectionScope(collectionName: \"\($0.formalName)\", verificationScope: \($0.verificationScope))"
-        }.joined(separator: ", ")
-        declarations.append(DeclSyntax(stringLiteral: """
-        public static let symmetricCollectionScopes: [SymmetricCollectionScope] = [\(scopes)]
-        """))
-        return declarations
     }
 
 }

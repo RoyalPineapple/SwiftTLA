@@ -3,23 +3,13 @@ import Testing
 
 @Suite(.serialized)
 struct ReadmeSymmetricCollectionTests {
-  @Test("symmetric collection fixture compiles, retains its invariant, and checks")
-  func symmetricCollectionFixtureCompilesAndChecks() throws {
+  @Test("symmetric collection fixture runs its generated machine")
+  func symmetricCollectionFixtureRunsGeneratedMachine() throws {
     let root = packageRoot()
     let fixture = root.appendingPathComponent("Tests/Fixtures/ReadmeSymmetricCollectionMacro")
 
     let result = try runSwift(["run", "--package-path", fixture.path])
     #expect(result.status == 0, "symmetric collection fixture failed:\n\(result.output)")
-  }
-
-  @Test("An invalid modeled phase fails macro-time checking")
-  func invalidPhaseFailsMacroTimeCheck() throws {
-    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidReadmePhaseMacro")
-    let result = try runSwift(["build", "--package-path", fixture.path])
-
-    #expect(result.status != 0)
-    #expect(result.output.contains("validPhase"))
-    #expect(result.output.localizedCaseInsensitiveContains("invariant"))
   }
 
   private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {

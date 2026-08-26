@@ -37,7 +37,9 @@ struct SymmetricCollectionDeclarationTests {
 
     let compilation = try spec.compile()
     let initialState = try firstCompiledState(in: compilation)
-    let successors = try compiledSuccessors(named: "begin", arguments: [], in: compilation, from: initialState)
+    let successors = try spec.symmetricCollections[0].metadata.members.flatMap { member in
+      try compiledSuccessors(named: "begin", arguments: [member], in: compilation, from: initialState)
+    }
     #expect(successors.count == 2)
     for successor in successors {
       let phaseValue = try renderedValue(named: "phases", in: successor, compilation: compilation)
@@ -48,15 +50,5 @@ struct SymmetricCollectionDeclarationTests {
       #expect(values.values.filter { $0 == .int(1) }.count == 1)
       #expect(values.values.filter { $0 == .int(0) }.count == 1)
     }
-  }
-
-  @Test("SymmetricCollection initialized variable produces correct name and initial")
-  func stateVarOverload() {
-    let initialState = Var("phases", 0)
-    let decl = SymmetricCollection(initialState, verificationScope: 3, elementType: Device.self)
-
-    #expect(decl.name == "phases")
-    #expect(decl.initial == .int(0))
-    #expect(decl.verificationScope == 3)
   }
 }

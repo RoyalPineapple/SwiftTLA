@@ -62,20 +62,6 @@ public struct _GeneratedMachineStorage: Sendable {
         return matches[0]
     }
 
-    /// Replaces one generated variable value in a storage state.
-    public func replacing<Value: TLAValueConvertible>(
-        value: Value,
-        at variableOrdinal: Int,
-        in state: State
-    ) throws -> State {
-        guard compilation.layout.variables.indices.contains(variableOrdinal) else {
-            throw GeneratedMachineError.invalidGeneratedVariableOrdinal
-        }
-        let variable = compilation.layout.variables[variableOrdinal]
-        let compiledValue = CompiledValue(formal: value.tlaValue)
-        return State(try state.compiled.updating(variable.id, to: compiledValue))
-    }
-
     /// Returns the formal value at one generated variable ordinal.
     public func value<Value: TLAValueType>(
         at variableOrdinal: Int,
@@ -96,26 +82,14 @@ public struct _GeneratedMachineStorage: Sendable {
         as _: Value.Type = Value.self,
         in state: State
     ) throws -> Value? {
-        guard let value = try collectionValues(at: variableOrdinal, in: state)?[member.tlaValue] else {
+        guard case .function(let values) = try value(
+            at: variableOrdinal,
+            as: TLAValue.self,
+            in: state
+        ), let value = values[member.tlaValue] else {
             return nil
         }
         return try Self.decode(value, at: "collection member")
-    }
-
-    public func collectionChangesOnly<Member: TLAValueConvertible>(
-        at variableOrdinal: Int,
-        selected member: Member,
-        from state: State,
-        to candidate: State
-    ) throws -> Bool {
-        guard let original = try collectionValues(at: variableOrdinal, in: state),
-              let values = try collectionValues(at: variableOrdinal, in: candidate),
-              values[member.tlaValue] != nil else {
-            return false
-        }
-        return values.allSatisfy { key, value in
-            key == member.tlaValue || original[key] == value
-        }
     }
 
     /// Returns every successor for one generated action call.
@@ -197,20 +171,6 @@ public struct _GeneratedMachineStorage: Sendable {
             arguments: arguments,
             from: state
         ).filter(predicate))
-    }
-
-    private func collectionValues(
-        at variableOrdinal: Int,
-        in state: State
-    ) throws -> [TLAValue: TLAValue]? {
-        guard case .function(let values) = try value(
-            at: variableOrdinal,
-            as: TLAValue.self,
-            in: state
-        ) else {
-            return nil
-        }
-        return values
     }
 
     private static func decode<Value: TLAValueType>(

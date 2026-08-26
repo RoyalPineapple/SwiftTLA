@@ -908,6 +908,29 @@ struct CompilerPipelineCanonicalizationTests {
                 generatedElementType: "Device",
                 generatedValueType: "Int"
             )
+            let action: NamedAction
+            if let collectionAction {
+                action = .init(
+                    name: "advance",
+                    body: .existsAction(
+                        "member",
+                        .domain(.variable(collectionAction)),
+                        .guard_(.value(.bool(true)))
+                    ),
+                    controlOwner: nil,
+                    generatedSymmetricCollectionName: collectionAction
+                )
+            } else {
+                action = .init(
+                    name: "advance",
+                    body: .guard_(.value(.bool(true))),
+                    bindings: [.init(
+                        name: "worker",
+                        values: [.int(0)],
+                        generatedSwiftType: bindingType
+                    )]
+                )
+            }
             return TLASpec(
                 name: "GeneratedSchemaIdentity",
                 variables: [
@@ -919,19 +942,7 @@ struct CompilerPipelineCanonicalizationTests {
                     ),
                     collection.variable
                 ],
-                actions: [
-                    .init(
-                        name: "advance",
-                        body: .guard_(.value(.bool(true))),
-                        bindings: [.init(
-                            name: "worker",
-                            values: [.int(0)],
-                            generatedSwiftType: bindingType
-                        )],
-                        controlOwner: nil,
-                        generatedSymmetricCollectionName: collectionAction
-                    )
-                ],
+                actions: [action],
                 invariants: [],
                 symmetricCollections: [collection]
             )
@@ -1146,18 +1157,119 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(repeated.identity == compilation.identity)
     }
 
-    @Test("#spec lowering preserves symmetric collection metadata")
-    func specMacroRetainsSymmetricCollectionMetadata() throws {
+    @Test("symmetric collection actions lower to the declared finite member binding")
+    func symmetricCollectionActionsUseDeclaredMemberBindings() throws {
         let source = try CompilerPipelineCollectionModel.spec.loweredSourceModel()
         let compilation = try source.compile()
         let devices = try #require(source.variables.first { $0.name == "devices" })
         let declaration = try #require(source.symmetricCollections.first { $0.name == "devices" })
+        let action = try #require(source.actions.first { $0.name == "advance" })
+        let compiledAction = try #require(compilation.semantics.actions.first)
+        let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let successors = try CompiledRuntime(compilation: compilation)
+            .successors(for: compiledAction.id, from: initialState)
         let repeated = try CompilerPipelineCollectionModel.spec.compile()
+        let hasOuterExistential: Bool
+        if case .existsAction = action.body {
+            hasOuterExistential = true
+        } else {
+            hasOuterExistential = false
+        }
 
         #expect(devices.collectionType == .dictionary(2))
         #expect(declaration.variable == devices)
         #expect(declaration.verificationScope == 2)
+        #expect(action.bindings.count == 1)
+        #expect(action.bindings[0].values == declaration.metadata.members)
+        #expect(hasOuterExistential == false)
+        #expect(try successors.map { successor in
+            try successor.arguments.map { try $0.rendered(using: compilation.layout) }
+        } == declaration.metadata.members.map { [$0] })
         #expect(repeated.identity == compilation.identity)
+    }
+
+    @Test("lowered collection actions retain nested existential bodies")
+    func loweredCollectionActionsRetainNestedExistentials() throws {
+        let devices = SymmetricCollectionVar<CompilerPipelineMember, Int>("devices")
+        let specification = TLASpec("NestedCollectionExistential") {
+            SymmetricCollection(devices, verificationScope: 2, initial: 0)
+            CollectionAction("advance", on: devices) { member in
+                .existsAction(
+                    "choice",
+                    .setLiteral([.int(1)]),
+                    devices.update(member, to: 1)
+                )
+            }
+        }
+
+        let first = try specification.loweredSourceModel()
+        let second = try first.loweredSourceModel()
+        let firstAction = try #require(first.actions.first)
+        let secondAction = try #require(second.actions.first)
+
+        #expect(firstAction == secondAction)
+        #expect(firstAction.bindings[0].values == specification.symmetricCollections[0].metadata.members)
+        #expect(try first.compile().identity == second.compile().identity)
+    }
+
+    @Test("malformed marked collection actions fail during lowering")
+    func malformedCollectionActionsFailDuringLowering() {
+        let collection = SymmetricCollectionDecl(
+            name: "devices",
+            verificationScope: 2,
+            initial: .int(0),
+            generatedElementType: "CompilerPipelineMember",
+            generatedValueType: "Int"
+        )
+        let malformedActions = [
+            NamedAction(
+                name: "missingExistential",
+                body: .unchanged(.named("devices")),
+                controlOwner: nil,
+                generatedSymmetricCollectionName: "devices"
+            ),
+            NamedAction(
+                name: "wrongDomain",
+                body: .existsAction(
+                    "member",
+                    .setLiteral([.value(.constant("OtherMember"))]),
+                    .unchanged(.named("devices"))
+                ),
+                controlOwner: nil,
+                generatedSymmetricCollectionName: "devices"
+            ),
+            NamedAction(
+                name: "authoredBinding",
+                body: .existsAction(
+                    "member",
+                    .domain(.variable("devices")),
+                    .unchanged(.named("devices"))
+                ),
+                bindings: [.init(name: "other", values: [.int(0)])],
+                controlOwner: nil,
+                generatedSymmetricCollectionName: "devices"
+            )
+        ]
+
+        for action in malformedActions {
+            let specification = TLASpec(
+                name: "MalformedCollectionAction",
+                variables: [collection.variable],
+                actions: [action],
+                invariants: [],
+                symmetricCollections: [collection]
+            )
+            do {
+                _ = try specification.compile()
+                Issue.record("Expected malformed collection action '\(action.name)' to fail lowering")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .invalidSymmetricCollection)
+                #expect(diagnostic.stage == .lowering)
+                #expect(diagnostic.path == "actions.\(action.name).body")
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, received \(error)")
+            }
+        }
     }
 
     @Test("semantic compilation fields change the identity")

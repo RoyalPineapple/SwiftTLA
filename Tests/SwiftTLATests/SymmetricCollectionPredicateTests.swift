@@ -178,7 +178,12 @@ struct SymmetricCollectionPredicateTests {
     let parsed = SpecParser.parseSpecClosure(try unsupportedPredicateClosure())
 
     #expect(parsed.invariants.isEmpty)
-    #expect(parsed.diagnostics.isEmpty)
+    let diagnostic = try #require(parsed.diagnostics.first)
+    #expect(parsed.diagnostics.count == 1)
+    #expect(diagnostic.message == "Invariant 'unsupported' contains an unsupported invariant expression.")
+    #expect(diagnostic.source == "devices.allSatisfy { phase in unmodeledPredicate(phase) }")
+    #expect((diagnostic.sourceSpan.location == .unavailable) == false)
+    #expect(diagnostic.sourceSpan.utf8Length == diagnostic.source.utf8.count)
   }
 
   @Test("Macro diagnostics anchor unsupported predicates at the authored expression")

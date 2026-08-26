@@ -19,13 +19,30 @@ struct SymmetricCollectionCanonicalizationTests {
     let canonicalState = { projection in
       independentlyCanonicalizedState(projection, groups: groups)
     }
+    let mappings = permutationMappings(groups)
     var transitions = Set<String>()
     for (sourceID, edges) in graph.transitions {
       guard let source = graph.states[sourceID] else { continue }
       for edge in edges {
         guard let target = graph.states[edge.target] else { continue }
+        let targetAndArguments = mappings.map { mapping in
+          (
+            target: encode(applyPermutation(target.entries, mapping: mapping)),
+            arguments: edge.label.arguments.map {
+              encode(applyPermutation($0, mapping: mapping))
+            }
+          )
+        }.min {
+          let lhs = $0.target + "|arguments:" + $0.arguments.joined(separator: "|")
+          let rhs = $1.target + "|arguments:" + $1.arguments.joined(separator: "|")
+          return lhs < rhs
+        }
+        guard let targetAndArguments else { continue }
+        let action = targetAndArguments.arguments.isEmpty
+          ? edge.label.action
+          : "\(edge.label.action)(\(targetAndArguments.arguments.joined(separator: ",")))"
         transitions.insert(
-          "\(canonicalState(source)) --\(edge.action)--> \(canonicalState(target))"
+          "\(canonicalState(source)) --\(action)--> \(targetAndArguments.target)"
         )
       }
     }
@@ -33,6 +50,16 @@ struct SymmetricCollectionCanonicalizationTests {
       states: Set(graph.states.values.map(canonicalState)),
       transitions: transitions
     )
+  }
+
+  private func permutationMappings(_ groups: [[TLAValue]]) -> [[TLAValue: TLAValue]] {
+    groups.reduce([[:]]) { partial, group in
+      partial.flatMap { existing in
+        permutations(group).map { permutation in
+          existing.merging(Dictionary(uniqueKeysWithValues: zip(group, permutation))) { current, _ in current }
+        }
+      }
+    }
   }
 
   private func independentlyCanonicalizedState(
@@ -112,6 +139,29 @@ struct SymmetricCollectionCanonicalizationTests {
     }
   }
 
+  private func explorationGraphs(for spec: TLASpec) throws -> (raw: StateGraph, reduced: StateGraph) {
+    let compilation = try spec.compile()
+    let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 100_000)
+    return (
+      raw: try ModelChecker(
+        compilation: compilation,
+        configuration: configuration,
+        usesSymmetryReduction: false
+      ).exploreGraph(),
+      reduced: try ModelChecker(
+        compilation: compilation,
+        configuration: configuration,
+        usesSymmetryReduction: true
+      ).exploreGraph()
+    )
+  }
+
+  private func storesCanonicalStates(_ graph: StateGraph, groups: [[TLAValue]]) -> Bool {
+    graph.states.values.allSatisfy {
+      encode($0.entries) == independentlyCanonicalizedState($0, groups: groups)
+    }
+  }
+
   @Test("Nested symmetric values are quotient-canonicalized without collapsing identities")
   func nestedValuesUseFullStatePermutations() throws {
     let members = SymmetricCollectionVar<Device, TLAValue>("members")
@@ -137,18 +187,11 @@ struct SymmetricCollectionCanonicalizationTests {
         )
       }
     }
-    let unreduced = TLASpec(
-      name: "NestedMembersUnreduced",
-      variables: symmetric.variables,
-      actions: symmetric.actions,
-      invariants: []
-    )
-
-    let rawGraph = try ModelChecker(compilation: try unreduced.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
-    let reducedGraph = try ModelChecker(compilation: try symmetric.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+    let graphs = try explorationGraphs(for: symmetric)
     let groups = symmetric.symmetricCollections.map { $0.metadata.members }
-    #expect(independentlyCanonicalizedGraph(rawGraph, groups: groups)
-      == independentlyCanonicalizedGraph(reducedGraph, groups: groups))
+    #expect(storesCanonicalStates(graphs.reduced, groups: groups))
+    #expect(independentlyCanonicalizedGraph(graphs.raw, groups: groups)
+      == independentlyCanonicalizedGraph(graphs.reduced, groups: groups))
   }
 
   @Test("Independent collection groups preserve the exhaustive orbit quotient at scopes one through four")
@@ -166,18 +209,11 @@ struct SymmetricCollectionCanonicalizationTests {
           (right[member] == 0) && right.update(member, to: 1)
         }
       }
-      let unreduced = TLASpec(
-        name: "IndependentMembers\(scope)Unreduced",
-        variables: symmetric.variables,
-        actions: symmetric.actions,
-        invariants: []
-      )
-
+      let graphs = try explorationGraphs(for: symmetric)
       let groups = symmetric.symmetricCollections.map { $0.metadata.members }
-      let rawGraph = try ModelChecker(compilation: try unreduced.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
-      let reducedGraph = try ModelChecker(compilation: try symmetric.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
-      #expect(independentlyCanonicalizedGraph(rawGraph, groups: groups)
-        == independentlyCanonicalizedGraph(reducedGraph, groups: groups))
+      #expect(storesCanonicalStates(graphs.reduced, groups: groups))
+      #expect(independentlyCanonicalizedGraph(graphs.raw, groups: groups)
+        == independentlyCanonicalizedGraph(graphs.reduced, groups: groups))
     }
   }
 
@@ -196,7 +232,7 @@ struct SymmetricCollectionCanonicalizationTests {
     #expect(bundle.cfg.contains("CONSTANT DevicePhasesMember0 = DevicePhasesMember0"))
     #expect(bundle.cfg.contains("CONSTANT DevicePhasesMember1 = DevicePhasesMember1"))
     #expect(bundle.cfg.contains("SYMMETRY SymmDevicePhases"))
-    #expect(!bundle.tla.contains("\"DevicePhasesMember0\""))
+    #expect(bundle.tla.contains("\"DevicePhasesMember0\"") == false)
   }
 
   @Test("Compiled symmetric collections retain their declared variable identity")

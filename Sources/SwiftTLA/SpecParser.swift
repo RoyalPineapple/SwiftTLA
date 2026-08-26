@@ -2076,10 +2076,13 @@ extension ParserSession {
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
 
-        let collectionName = collectionReference.baseName.text
-        if let collectionNames, !collectionNames.contains(collectionName) { return nil }
-
-        let collection = StateExpr.variable(collectionName)
+        let sourceName = collectionReference.baseName.text
+        let collection = sourceScope.value(for: collectionReference) ?? .variable(sourceName)
+        if let collectionNames {
+            guard case .variable(let formalName) = collection,
+                  collectionNames.contains(formalName)
+            else { return nil }
+        }
         let selectedValue = StateExpr.functionApply(collection, .variable(parameter))
         guard let body = decodeBody(
             bodySyntax,
