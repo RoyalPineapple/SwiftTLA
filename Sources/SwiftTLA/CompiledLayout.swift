@@ -804,16 +804,7 @@ struct BindingValidator {
             let scope = try bind(function.params, at: "linkedRecursiveFunctions.\(function.name).parameters", scope: [:])
             try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
         }
-        return CompiledBindingTable(
-            operatorNames: operatorNames,
-            binders: binders,
-            localOperatorDependencies: localOperatorDependencies,
-            references: references
-        )
-    }
-
-    mutating func validateRefinementMappings(_ refinements: [RefinementDecl]) throws {
-        for refinement in refinements {
+        for refinement in spec.refinements {
             for mapping in refinement.mappings {
                 try validateExpression(
                     mapping.source,
@@ -822,10 +813,7 @@ struct BindingValidator {
                 )
             }
         }
-    }
-
-    func bindingTable() -> CompiledBindingTable {
-        CompiledBindingTable(
+        return CompiledBindingTable(
             operatorNames: operatorNames,
             binders: binders,
             localOperatorDependencies: localOperatorDependencies,

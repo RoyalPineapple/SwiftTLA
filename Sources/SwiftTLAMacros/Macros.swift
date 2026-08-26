@@ -12,7 +12,6 @@ import SwiftTLA
 /// execution, and a typed actor that owns the generated machine value.
 @attached(member, names: arbitrary)
 @attached(memberAttribute)
-@attached(extension, conformances: TLAModelType, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 @attached(member, names: named(defaultValue), named(finiteValues))

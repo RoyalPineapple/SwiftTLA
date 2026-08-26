@@ -155,59 +155,6 @@ extension Int: TLAValueConvertible { public var tlaValue: TLAValue { .int(self) 
 extension Bool: TLAValueConvertible { public var tlaValue: TLAValue { .bool(self) } }
 extension String: TLAValueConvertible { public var tlaValue: TLAValue { .string(self) } }
 
-// MARK: - TLABridgeable protocol
-
-public protocol TLABridgeable {
-  var tlaValue: TLAValue { get }
-  init(tlaValue: TLAValue)
-}
-
-extension Bool: TLABridgeable {
-  public init(tlaValue: TLAValue) {
-    if case .bool(let v) = tlaValue { self = v } else { self = false }
-  }
-}
-
-extension Int: TLABridgeable {
-  public init(tlaValue: TLAValue) {
-    if case .int(let v) = tlaValue { self = v } else { self = 0 }
-  }
-}
-
-extension String: TLABridgeable {
-  public init(tlaValue: TLAValue) {
-    if case .string(let v) = tlaValue { self = v } else { self = "" }
-  }
-}
-
-extension Array: TLABridgeable where Element: TLABridgeable {
-  public init(tlaValue: TLAValue) {
-    if case .tuple(let elements) = tlaValue {
-      self = elements.map { Element.init(tlaValue: $0) }
-    } else {
-      self = []
-    }
-  }
-  public var tlaValue: TLAValue {
-    .tuple(self.map { $0.tlaValue })
-  }
-}
-
-extension Set: TLABridgeable where Element: TLABridgeable & Hashable {
-  public init(tlaValue: TLAValue) {
-    if case .set(let elements) = tlaValue {
-      self = Set(elements.compactMap { Element.init(tlaValue: $0) })
-    } else {
-      self = []
-    }
-  }
-  public var tlaValue: TLAValue {
-    var mapped = Set<TLAValue>()
-    for elem in self { mapped.insert(elem.tlaValue) }
-    return .set(mapped)
-  }
-}
-
 // MARK: - Arithmetic (Var<Int> only)
 
 // MARK: - Generic operators (StateExprConvertible level)

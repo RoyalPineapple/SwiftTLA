@@ -214,7 +214,7 @@ struct SimpleError: Error, CustomStringConvertible {
 
 // MARK: - Macros
 
-public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
+public struct ModelMacro: MemberMacro, MemberAttributeMacro {
     public static func expansion(
         of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
@@ -244,19 +244,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
             return ["@_TLAValueEnum"]
         }
         return []
-    }
-
-    public static func expansion(
-        of node: AttributeSyntax,
-        attachedTo declaration: some DeclGroupSyntax,
-        providingExtensionsOf type: some TypeSyntaxProtocol,
-        conformingTo protocols: [TypeSyntax],
-        in context: some MacroExpansionContext
-    ) throws -> [ExtensionDeclSyntax] {
-        guard let extensionDeclaration = ("""
-            extension \(type.trimmed): TLAModelType {}
-            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-        return [extensionDeclaration]
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
