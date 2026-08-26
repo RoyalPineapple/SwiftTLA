@@ -37,6 +37,7 @@ package enum TemporalSymmetryDiagnosticCode: String, Codable, Sendable {
   case exactAgreement
   case propertyOutcomeDifference
   case graphDifference
+  case incompleteGraph
   case temporalEvidenceUnavailable
 }
 
@@ -227,40 +228,6 @@ package struct TemporalSymmetryCases: Equatable, Codable, Sendable {
   }
 }
 
-package struct TemporalSymmetryRunReferences: Equatable, Codable, Sendable {
-  package let caseID: String
-  package let runID: UUID
-  package let swiftRunID: UUID
-  package let tlcRunID: UUID
-  package let comparisonRunID: UUID
-
-  package init(caseID: String, runID: UUID, swiftRunID: UUID, tlcRunID: UUID, comparisonRunID: UUID) throws {
-    guard !caseID.isEmpty,
-          Set([runID, swiftRunID, tlcRunID, comparisonRunID]).count == 4 else {
-      throw EvidenceFormatError.invalidField(record: "correlation", field: "caseID")
-    }
-    self.caseID = caseID
-    self.runID = runID
-    self.swiftRunID = swiftRunID
-    self.tlcRunID = tlcRunID
-    self.comparisonRunID = comparisonRunID
-  }
-
-  private enum CodingKeys: String, CodingKey, CaseIterable {
-    case caseID, runID, swiftRunID, tlcRunID, comparisonRunID
-  }
-
-  package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(
-      caseID: container.decode(String.self, forKey: .caseID),
-      runID: container.decode(UUID.self, forKey: .runID),
-      swiftRunID: container.decode(UUID.self, forKey: .swiftRunID),
-      tlcRunID: container.decode(UUID.self, forKey: .tlcRunID),
-      comparisonRunID: container.decode(UUID.self, forKey: .comparisonRunID))
-  }
-}
-
 package struct TemporalLassoWitness: Equatable, Codable, Sendable {
   package let prefixStateIDs: [String]
   package let cycleStateIDs: [String]
@@ -288,58 +255,51 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
   package let availability: TemporalEvaluationAvailability
   package let outcome: TemporalPropertyOutcome?
   package let traceAvailability: TemporalTraceAvailability
-  package let traceEvidence: RetainedFileReference?
   package let lasso: TemporalLassoWitness?
 
   package init(
     availability: TemporalEvaluationAvailability,
     outcome: TemporalPropertyOutcome?,
     traceAvailability: TemporalTraceAvailability,
-    traceEvidence: RetainedFileReference? = nil,
     lasso: TemporalLassoWitness? = nil
   ) throws {
     self.availability = availability
     self.outcome = outcome
     self.traceAvailability = traceAvailability
-    self.traceEvidence = traceEvidence
     self.lasso = lasso
     try validate()
   }
 
   package func validate() throws {
-    try traceEvidence?.validate()
     switch availability {
     case .evaluated:
       guard outcome != nil else {
         throw EvidenceFormatError.invalidField(record: "temporal result", field: "missing property outcome")
       }
     case .unavailable:
-      guard outcome == nil, traceAvailability == .unavailable, traceEvidence == nil, lasso == nil else {
+      guard outcome == nil, traceAvailability == .unavailable, lasso == nil else {
         throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable evaluation")
       }
       return
     }
     switch traceAvailability {
     case .available:
-      guard traceEvidence != nil else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "traceEvidence")
-      }
       if outcome == .violated, lasso == nil {
         throw EvidenceFormatError.invalidField(record: "temporal result", field: "lasso")
       }
     case .unavailable:
-      guard traceEvidence == nil, lasso == nil else {
+      guard lasso == nil else {
         throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable trace")
       }
     case .notApplicable:
-      guard outcome == .satisfied, traceEvidence == nil, lasso == nil else {
+      guard outcome == .satisfied, lasso == nil else {
         throw EvidenceFormatError.invalidField(record: "temporal result", field: "not applicable trace")
       }
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case availability, outcome, traceAvailability, traceEvidence, lasso
+    case availability, outcome, traceAvailability, lasso
   }
 
   package init(from decoder: Decoder) throws {
@@ -348,83 +308,6 @@ package struct TemporalPropertyResult: Equatable, Codable, Sendable {
       availability: container.decode(TemporalEvaluationAvailability.self, forKey: .availability),
       outcome: try container.decodeIfPresent(TemporalPropertyOutcome.self, forKey: .outcome),
       traceAvailability: container.decode(TemporalTraceAvailability.self, forKey: .traceAvailability),
-      traceEvidence: try container.decodeIfPresent(RetainedFileReference.self, forKey: .traceEvidence),
       lasso: try container.decodeIfPresent(TemporalLassoWitness.self, forKey: .lasso))
-  }
-}
-
-package struct TemporalCompleteGraphEvidence: Equatable, Codable, Sendable {
-  package let propertyRunID: UUID
-  package let graphRunID: UUID
-  package let arguments: [String]
-  package let fingerprintPolynomial: Int
-  package let operatingSystem: String
-  package let architecture: String
-  package let environment: [String: String]
-  package let sourceInput: RetainedFileReference
-  package let configuration: RetainedFileReference
-  package let graphEvents: RetainedFileReference
-  package let result: RetainedFileReference
-
-  package init(
-    propertyRunID: UUID,
-    graphRunID: UUID,
-    arguments: [String],
-    fingerprintPolynomial: Int,
-    operatingSystem: String,
-    architecture: String,
-    environment: [String: String],
-    sourceInput: RetainedFileReference,
-    configuration: RetainedFileReference,
-    graphEvents: RetainedFileReference,
-    result: RetainedFileReference
-  ) throws {
-    guard propertyRunID != graphRunID else {
-      throw EvidenceFormatError.inconsistentReference(record: "complete graph evidence", field: "run IDs")
-    }
-    try sourceInput.validate()
-    try configuration.validate()
-    try graphEvents.validate()
-    try result.validate()
-    self.propertyRunID = propertyRunID
-    self.graphRunID = graphRunID
-    self.arguments = arguments
-    self.fingerprintPolynomial = fingerprintPolynomial
-    self.operatingSystem = operatingSystem
-    self.architecture = architecture
-    self.environment = environment
-    self.sourceInput = sourceInput
-    self.configuration = configuration
-    self.graphEvents = graphEvents
-    self.result = result
-  }
-
-  private enum CodingKeys: String, CodingKey, CaseIterable {
-    case propertyRunID, graphRunID, arguments, fingerprintPolynomial, operatingSystem, architecture, environment
-    case sourceInput, configuration, graphEvents, result
-  }
-
-  package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(
-      propertyRunID: container.decode(UUID.self, forKey: .propertyRunID),
-      graphRunID: container.decode(UUID.self, forKey: .graphRunID),
-      arguments: container.decode([String].self, forKey: .arguments),
-      fingerprintPolynomial: container.decode(Int.self, forKey: .fingerprintPolynomial),
-      operatingSystem: container.decode(String.self, forKey: .operatingSystem),
-      architecture: container.decode(String.self, forKey: .architecture),
-      environment: container.decode([String: String].self, forKey: .environment),
-      sourceInput: container.decode(RetainedFileReference.self, forKey: .sourceInput),
-      configuration: container.decode(RetainedFileReference.self, forKey: .configuration),
-      graphEvents: container.decode(RetainedFileReference.self, forKey: .graphEvents),
-      result: container.decode(RetainedFileReference.self, forKey: .result))
-  }
-
-  package func validate() throws {
-    _ = try Self(
-      propertyRunID: propertyRunID, graphRunID: graphRunID, arguments: arguments,
-      fingerprintPolynomial: fingerprintPolynomial, operatingSystem: operatingSystem, architecture: architecture,
-      environment: environment, sourceInput: sourceInput,
-      configuration: configuration, graphEvents: graphEvents, result: result)
   }
 }

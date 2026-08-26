@@ -9,32 +9,32 @@
     {
       "id": "temporal-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "EventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false }
+      "configuration": { "property": "EventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
     },
     {
       "id": "temporal-always-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "AlwaysEventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false }
+      "configuration": { "property": "AlwaysEventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
     },
     {
       "id": "temporal-eventually-always-weak", "kind": "temporal", "swiftSpec": "TemporalMatrix",
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "EventuallyAlwaysP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false }
+      "configuration": { "property": "EventuallyAlwaysP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
     },
     {
       "id": "temporal-leads-to-strong", "kind": "temporal", "swiftSpec": "TemporalMatrix",
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "LeadsToPQ", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true }
+      "configuration": { "property": "LeadsToPQ", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
     },
     {
       "id": "temporal-weak-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "AlwaysEventuallyP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false }
+      "configuration": { "property": "AlwaysEventuallyP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
     },
     {
       "id": "temporal-strong-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
-      "configuration": { "property": "AlwaysEventuallyP", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true }
+      "configuration": { "property": "AlwaysEventuallyP", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
     },
     {
       "id": "symmetry-single-collection-scope-2", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope2",

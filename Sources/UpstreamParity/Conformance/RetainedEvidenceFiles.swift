@@ -30,15 +30,6 @@ package enum RetainedEvidence {
     return resolved
   }
 
-  package static func relativePath(for url: URL, beneath root: URL) throws -> String {
-    let resolved = try resolve(url, beneath: root)
-    let prefix = root.path + "/"
-    guard resolved.path.hasPrefix(prefix) else {
-      throw EvidenceFormatError.invalidField(record: resolved.path, field: "project-relative evidence")
-    }
-    return String(resolved.path.dropFirst(prefix.count))
-  }
-
   @discardableResult
   static func outputDirectory(_ url: URL, beneath root: URL) throws -> URL {
     let directory = try resolve(url, beneath: root)
@@ -71,19 +62,6 @@ package enum RetainedEvidence {
   static func writeJSON(_ value: Any, to url: URL) throws {
     let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
     try write(data, to: url)
-  }
-
-  package static func reference(for url: URL, beneath root: URL) throws -> RetainedFileReference {
-    let url = try resolve(url, beneath: root)
-    let bytes = try Data(contentsOf: url)
-    return try RetainedFileReference(
-      path: relativePath(for: url, beneath: root),
-      sha256: SHA256.hex(bytes))
-  }
-
-  package static func reference(for url: URL, beneath root: URL, pathPrefix: String) throws -> RetainedFileReference {
-    let reference = try reference(for: url, beneath: root)
-    return try RetainedFileReference(path: "\(pathPrefix)/\(reference.path)", sha256: reference.sha256)
   }
 
   private static func canonicalData<T: Encodable>(_ value: T, trailingNewline: Bool = false) throws -> Data {
