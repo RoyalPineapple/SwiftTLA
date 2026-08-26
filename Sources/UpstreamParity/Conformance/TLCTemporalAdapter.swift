@@ -116,6 +116,10 @@ package struct TLCTemporalAdapter: Sendable {
       try RetainedEvidence.outputDirectory(
         input.outputDirectory, beneath: input.outputDirectory.deletingLastPathComponent())
       try retainInput(input)
+      try CanonicalGraphRecords.write(
+        input.swiftRun,
+        to: input.outputDirectory.appendingPathComponent("swift-graph.jsonl")
+      )
       let completeGraph = try captureCompleteGraph(input)
       try clearTraceOutput(for: input.request)
 
@@ -124,20 +128,20 @@ package struct TLCTemporalAdapter: Sendable {
       let run = capture.run
       let propertyGraph = capture.graph
       let graph = completeGraph?.graph ?? propertyGraph
-      let graphID = try CanonicalGraphRecords.digest(for: graph.graph)
-      let initialStateIDs = graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
+      try CanonicalGraphRecords.write(
+        graph,
+        to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")
+      )
       let tlcEvidence = try RetainedEvidence.reference(
         for: input.outputDirectory.appendingPathComponent("tlc-process.json"),
         beneath: input.outputDirectory,
         pathPrefix: input.relativeOutputDirectory)
       let result = try temporalResult(
         run: run,
-        graphID: graphID,
-        initialStateIDs: initialStateIDs,
-      graph: graph,
-      outputDirectory: input.outputDirectory,
-      relativeOutputDirectory: input.relativeOutputDirectory,
-      allowsImplicitStuttering: input.allowsImplicitStuttering)
+        graph: graph,
+        outputDirectory: input.outputDirectory,
+        relativeOutputDirectory: input.relativeOutputDirectory,
+        allowsImplicitStuttering: input.allowsImplicitStuttering)
       let comparison = try comparison(
         input: input,
         tlcRun: graph,
@@ -180,6 +184,9 @@ package struct TLCTemporalAdapter: Sendable {
     try input.swiftEvidence.validate()
     try input.manifest.validate()
     try input.toolchain.validate()
+    guard input.swiftRun.isPassEligible else {
+      throw TLCTemporalAdapterError.graphEvidenceInvalid
+    }
     guard input.temporalCase.kind == .temporal,
           input.temporalCase.configuration.property != nil,
           input.correlation.caseID == input.temporalCase.id,
@@ -308,8 +315,6 @@ package struct TLCTemporalAdapter: Sendable {
 extension TLCTemporalAdapter {
   private func temporalResult(
     run: TLCProcessRun,
-    graphID: String,
-    initialStateIDs: [String],
     graph: CompletedGraphRun,
     outputDirectory: URL,
     relativeOutputDirectory: String,
@@ -317,8 +322,7 @@ extension TLCTemporalAdapter {
   ) throws -> TemporalPropertyResult {
     if run.primary.reportedExhaustiveCompletion {
       return try TemporalPropertyResult(
-        availability: .evaluated, outcome: .satisfied, graphID: graphID, initialStateIDs: initialStateIDs,
-        traceAvailability: .notApplicable)
+        availability: .evaluated, outcome: .satisfied, traceAvailability: .notApplicable)
     }
     guard isTemporalViolation(run.primary),
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path),
@@ -327,15 +331,14 @@ extension TLCTemporalAdapter {
           traceIsBound(counterexample, to: graph, allowsImplicitStuttering: allowsImplicitStuttering),
           let lasso = lasso(from: counterexample, allowsImplicitStuttering: allowsImplicitStuttering) else {
       return try TemporalPropertyResult(
-        availability: .unavailable, outcome: nil, graphID: graphID, initialStateIDs: initialStateIDs,
-        traceAvailability: .unavailable)
+        availability: .unavailable, outcome: nil, traceAvailability: .unavailable)
     }
     let traceEvidence = try RetainedEvidence.reference(
       for: outputDirectory.appendingPathComponent("counterexample.json"),
       beneath: outputDirectory,
       pathPrefix: relativeOutputDirectory)
     return try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated, graphID: graphID, initialStateIDs: initialStateIDs,
+      availability: .evaluated, outcome: .violated,
       traceAvailability: .available, traceEvidence: traceEvidence, lasso: lasso)
   }
 
@@ -351,19 +354,18 @@ extension TLCTemporalAdapter {
     if input.swiftResult.availability == .unavailable || tlcResult.availability == .unavailable {
       outcome = .unavailable
       diagnostic = .temporalEvidenceUnavailable
-    } else if input.swiftResult.outcome == tlcResult.outcome,
-              try exactGraph(tlcRun, input.swiftRun) {
-      outcome = .exact
-      diagnostic = .exactAgreement
     } else if input.swiftResult.outcome != tlcResult.outcome {
       outcome = .difference
       diagnostic = .propertyOutcomeDifference
-    } else if try exactGraph(tlcRun, input.swiftRun) == false {
-      outcome = .difference
-      diagnostic = .graphIdentityDifference
     } else {
-      outcome = .difference
-      diagnostic = .initialStateDifference
+      let graphComparison = try exactGraphComparison(expected: tlcRun, actual: input.swiftRun)
+      if graphComparison.isConformant {
+        outcome = .exact
+        diagnostic = .exactAgreement
+      } else {
+        outcome = .difference
+        diagnostic = .graphDifference
+      }
     }
     return try TemporalComparison(
       caseID: input.temporalCase.id,
@@ -378,18 +380,16 @@ extension TLCTemporalAdapter {
       diagnosticCode: diagnostic)
   }
 
-  private func exactGraph(_ expected: CompletedGraphRun, _ actual: CompletedGraphRun) throws -> Bool {
+  private func exactGraphComparison(
+    expected: CompletedGraphRun,
+    actual: CompletedGraphRun
+  ) throws -> GraphComparison {
     let expectedGraph = try CompletedGraphRun(
       graph: expected.graph,
       observableActions: expected.observableActions,
       outcome: .exhaustiveSuccess
     )
-    let actualGraph = try CompletedGraphRun(
-      graph: actual.graph,
-      observableActions: actual.observableActions,
-      outcome: .exhaustiveSuccess
-    )
-    return compareFiniteGraphs(expected: expectedGraph, actual: actualGraph).isConformant
+    return compareFiniteGraphs(expected: expectedGraph, actual: actual)
   }
 
   private func lasso(

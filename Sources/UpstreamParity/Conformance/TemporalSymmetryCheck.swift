@@ -125,7 +125,7 @@ package struct TemporalSymmetryCheck: Sendable {
       .appendingPathComponent(temporalCase.id, isDirectory: true)
     try RetainedEvidence.createDirectory(inputs, beneath: projectRoot)
     let swiftResult = try temporalResult(
-      compilation: compilation, temporalCase: temporalCase, model: model, exploration: exploration, swiftRun: swiftRun,
+      compilation: compilation, temporalCase: temporalCase, model: model, exploration: exploration,
       correlation: correlation, inputs: inputs, projectRoot: projectRoot)
     let swiftEvidence = try RetainedEvidence.reference(
       for: inputs.appendingPathComponent("swift-result.json"), beneath: projectRoot)
@@ -384,7 +384,6 @@ extension TemporalSymmetryCheck {
     temporalCase: TemporalSymmetryCase,
     model: TemporalSymmetryModelDefinition,
     exploration: ModelExplorationResult,
-    swiftRun: CompletedGraphRun,
     correlation: TemporalSymmetryRunReferences,
     inputs: URL,
     projectRoot: URL
@@ -400,15 +399,12 @@ extension TemporalSymmetryCheck {
     try RetainedEvidence.writeJSON([
       "caseID": temporalCase.id,
       "correlation": correlation.tlcRunID.uuidString.lowercased(),
-      "status": String(describing: analysis.status),
-      "graphID": try CanonicalGraphRecords.digest(for: swiftRun.graph)
+      "status": String(describing: analysis.status)
     ], to: resultURL)
-    let initial = swiftRun.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
     switch analysis.status {
     case .satisfied:
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .satisfied,
-        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .notApplicable)
     case .violated:
       guard let witness = analysis.witness else {
@@ -426,12 +422,10 @@ extension TemporalSymmetryCheck {
       try RetainedEvidence.writeCanonical(lasso, to: traceURL)
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .violated,
-        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .available, traceEvidence: try RetainedEvidence.reference(for: traceURL, beneath: projectRoot), lasso: lasso)
     case .unavailable:
       return try TemporalPropertyResult(
         availability: .unavailable, outcome: nil,
-        graphID: try CanonicalGraphRecords.digest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .unavailable)
     }
   }

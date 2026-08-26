@@ -60,6 +60,7 @@ The declared cases cover one binary symmetric collection at scopes 2 through 5.
 
 ## Evidence
 
-Each case directory contains its direct comparison, canonical graphs, TLC output, command data, and diagnostics.
+Each temporal case directory contains `swift-graph.jsonl`, `tlc-graph.jsonl`,
+`temporal-comparison.json`, TLC output, command data, and diagnostics.
 
 Read the case directory when a command reports exit `1` or `2`. The retained files identify the first incomplete or different result.

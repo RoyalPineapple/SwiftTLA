@@ -3,64 +3,53 @@
   "cases": [
     {
       "id": "temporal-always-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and stuttering.", "limits": { "states": 3, "variables": 1 } },
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
       "configuration": { "property": "AlwaysP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false, "allowsImplicitStuttering": true, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }
     },
     {
       "id": "temporal-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and stuttering.", "limits": { "states": 3, "variables": 1 } },
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
       "configuration": { "property": "EventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false }
     },
     {
       "id": "temporal-always-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and stuttering.", "limits": { "states": 3, "variables": 1 } },
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
       "configuration": { "property": "AlwaysEventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false }
     },
     {
       "id": "temporal-eventually-always-weak", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and weak-fairness stuttering boundary.", "limits": { "states": 3, "variables": 1 } },
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
       "configuration": { "property": "EventuallyAlwaysP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false }
     },
     {
       "id": "temporal-leads-to-strong", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and strong-fairness boundary.", "limits": { "states": 3, "variables": 1 } },
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
       "configuration": { "property": "LeadsToPQ", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true }
     },
     {
       "id": "temporal-weak-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and weak-fairness subcycle boundary.", "limits": { "states": 3, "variables": 1 } },
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
       "configuration": { "property": "AlwaysEventuallyP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false }
     },
     {
       "id": "temporal-strong-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
-      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and strong-fairness subcycle boundary.", "limits": { "states": 3, "variables": 1 } },
       "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
       "configuration": { "property": "AlwaysEventuallyP", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true }
     },
     {
       "id": "symmetry-single-collection-scope-2", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope2",
-      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with exactly two opaque members.", "limits": { "collections": 1, "scope": 2, "values": 2 } },
       "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 2, "symmetryEnabled": true }
     },
     {
       "id": "symmetry-single-collection-scope-3", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope3",
-      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with exactly three opaque members.", "limits": { "collections": 1, "scope": 3, "values": 2 } },
       "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 3, "symmetryEnabled": true }
     },
     {
       "id": "symmetry-single-collection-scope-4", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope4",
-      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with exactly four opaque members.", "limits": { "collections": 1, "scope": 4, "values": 2 } },
       "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 4, "symmetryEnabled": true }
     },
     {
       "id": "symmetry-single-collection-scope-5", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope5",
-      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with five opaque members.", "limits": { "collections": 1, "scope": 5, "values": 2 } },
       "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 5, "symmetryEnabled": true }
     }
   ]
