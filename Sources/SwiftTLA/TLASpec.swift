@@ -611,18 +611,6 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
   }
 }
 
-extension RefinementDecl {
-  var renderedFormalDeclaration: String {
-    let target: String
-    switch `operator` {
-    case .spec: target = "Spec"
-    case .liveSpec: target = "LiveSpec"
-    case .liveSpecEquals: target = "LiveSpecEquals"
-    }
-    return "\(name) == \(instance.namespace)!\(target)"
-  }
-}
-
 /// One explicit source expression for an abstract module variable or parameter.
 public struct RefinementMapping: Sendable, Equatable {
   public let target: String

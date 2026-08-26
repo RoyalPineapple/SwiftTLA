@@ -9,29 +9,16 @@ import SwiftTLA
 
 // MARK: - Shared parsing and verification
 
-struct ParsedEnumInfo {
+struct ParsedEnum {
     let typeName: String
     let cases: [(name: String, value: TLAValue)]
-    /// The values that belong to the formal domain. This is intentionally
-    /// separate from all Swift cases: a useful formal type can include a
-    /// sentinel such as `.none` without making it a process or map key.
-    let finiteValues: [TLAValue]
-
-    init(typeName: String, cases: [(String, TLAValue)], finiteValues: [TLAValue]? = nil) {
-        self.typeName = typeName
-        self.cases = cases
-        self.finiteValues = finiteValues ?? cases.map(\.1)
-    }
-    var domain: Set<TLAValue> { Set(cases.map(\.value)) }
+    let formalDomainValues: [TLAValue]
 }
 
 struct MacroCompilation {
     let typeName: String
     let compilation: CompiledSpecification
-    let machineSurface: MachineSurfacePlan
-    let enumInfos: [ParsedEnumInfo]
-
-    var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
+    let enumInfos: [ParsedEnum]
 }
 
 enum TLASpecVerifier {
@@ -54,7 +41,13 @@ enum TLASpecVerifier {
         }
 
         let enumInfos = Self.collectEnumVariables(from: memberList)
-        let enumDefinitions = collectEnumMetadata(from: memberList)
+        let enumDefinitions = enumInfos.map {
+            ParserEnumDefinition(
+                typeName: $0.typeName,
+                cases: TLARecord($0.cases.map { .init($0.name, $0.value) }),
+                finiteValues: $0.formalDomainValues
+            )
+        }
         let parsed = SpecParser.parseSpecClosure(
             source.closure,
             enumDefinitions: enumDefinitions
@@ -71,7 +64,6 @@ enum TLASpecVerifier {
         return MacroCompilation(
             typeName: typeName,
             compilation: compilation,
-            machineSurface: compilation.machineSurfacePlan,
             enumInfos: enumInfos
         )
     }
@@ -134,8 +126,8 @@ enum TLASpecVerifier {
         return nil
     }
 
-    static func collectEnumVariables(from members: MemberBlockItemListSyntax) -> [ParsedEnumInfo] {
-        var result: [ParsedEnumInfo] = []
+    static func collectEnumVariables(from members: MemberBlockItemListSyntax) -> [ParsedEnum] {
+        var result: [ParsedEnum] = []
         for member in members {
             guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
             guard let inheritance = enumDecl.inheritanceClause else { continue }
@@ -174,10 +166,10 @@ enum TLASpecVerifier {
                 }
             }
 
-            result.append(ParsedEnumInfo(
+            result.append(ParsedEnum(
                 typeName: enumDecl.name.text,
                 cases: cases,
-                finiteValues: finiteValues(in: enumDecl, cases: cases)
+                formalDomainValues: finiteValues(in: enumDecl, cases: cases)
             ))
         }
         return result
@@ -254,17 +246,23 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
         return []
     }
 
-    public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
-        guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
-            return []
-        }
-        guard let ext = ("""
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingExtensionsOf type: some TypeSyntaxProtocol,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext
+    ) throws -> [ExtensionDeclSyntax] {
+        guard let extensionDeclaration = ("""
             extension \(type.trimmed): TLAModelType {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-        return [ext]
+        return [extensionDeclaration]
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
+        guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
+            return []
+        }
         let parsed: MacroCompilation
         do {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
@@ -275,7 +273,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro, MemberAttributeMacro {
             context.diagnose(modelCompilationDiagnostic(error, in: declaration))
             return []
         }
-        return MacroExpander.generate(model: parsed)
+        return MacroExpander.generateStateMachineMembers(model: parsed)
     }
 }
 

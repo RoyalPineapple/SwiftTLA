@@ -175,8 +175,9 @@ struct GeneratedRestrictedProcessDomain {
 
 struct GeneratedRestrictedProcessDomainTests {
     @Test("a process declaration keeps its explicit member subset")
-    func generatedModelUsesOnlyDeclaredProcessMembers() {
-        #expect(GeneratedRestrictedProcessDomain.spec.actions.first?.bindings == [
+    func generatedModelUsesOnlyDeclaredProcessMembers() throws {
+        let compilation = try GeneratedRestrictedProcessDomain.spec.compile()
+        #expect(compilation.layout.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.int(1)])
         ])
     }
@@ -264,13 +265,17 @@ struct GeneratedPairPattern {
 }
 
 struct GeneratedPairPatternTests {
-    @Test("a generated model preserves tuple-pattern selection")
-    func generatedMachineAppliesPairPatternBindings() throws {
-
+    @Test("a generated machine rejects an action with multiple valid successors")
+    func generatedMachineRejectsAmbiguousPairSelection() throws {
         var model = try GeneratedPairPattern.makeMachine()
-        let result = try model.send(.choose)
-
-        #expect([1, 2].contains(result.after.selected))
+        do {
+            _ = try model.send(.choose)
+            Issue.record("Expected ambiguous action")
+        } catch GeneratedMachineError.ambiguousAction {
+        } catch {
+            Issue.record("Expected ambiguous action, received \(error)")
+        }
+        #expect(model.state.selected == 0)
     }
 }
 
@@ -300,7 +305,7 @@ struct GeneratedRangeInitializedAlgorithm {
 }
 
 struct GeneratedRangeInitializedAlgorithmTests {
-    @Test("#spec independently parses a finite SharedVar initial range")
+    @Test("compiled initialization preserves every finite SharedVar value")
     func generatedRangePreservesEveryInitialHour() throws {
         let compilation = try GeneratedRangeInitializedAlgorithm.spec.compile()
         let hour = try #require(compilation.layout.variableID(named: "hour"))
@@ -309,8 +314,6 @@ struct GeneratedRangeInitializedAlgorithmTests {
         }
 
         #expect(Set(initialHours) == [.int(1), .int(2), .int(3)])
-        #expect(GeneratedRangeInitializedAlgorithm.spec.variables.first { $0.name == "hour" }?.initialSet
-            == .setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
     }
 }
 
@@ -365,11 +368,11 @@ struct GeneratedAlgorithmStateConstraint {
 }
 
 struct GeneratedAlgorithmStateConstraintTests {
-    @Test("#spec preserves an algorithm-local state constraint through both construction paths")
+    @Test("compiled exploration enforces an algorithm state constraint")
     func generatedModelPreservesStateConstraint() throws {
-        #expect(GeneratedAlgorithmStateConstraint.spec.constraint
-            == .lessThan(.variable("count"), .value(.int(2))))
-        let graph = try ModelChecker(compilation: try GeneratedAlgorithmStateConstraint.spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
+        let compilation = try GeneratedAlgorithmStateConstraint.spec.compile()
+        #expect(compilation.semantics.constraint != nil)
+        let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000)).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("count", in: $0) }) == [.int(0), .int(1)])
     }
 }
@@ -408,9 +411,10 @@ struct GeneratedProcessLocalInvariant {
 }
 
 struct GeneratedProcessLocalInvariantTests {
-    @Test("#spec preserves a process-local invariant through both construction paths")
-    func generatedModelPreservesProcessLocalInvariant() {
-        #expect(GeneratedProcessLocalInvariant.spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
+    @Test("compilation preserves process-local invariants")
+    func generatedModelPreservesProcessLocalInvariant() throws {
+        let compilation = try GeneratedProcessLocalInvariant.spec.compile()
+        #expect(compilation.semantics.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
     }
 }
 

@@ -44,17 +44,6 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         }
     }
 
-    public func tlaForm(vars: String) -> String {
-        switch self {
-        case .weakFairness(let a): return "WF_\(vars)(\(a))"
-        case .strongFairness(let a): return "SF_\(vars)(\(a))"
-        case .weakFairnessNext: return "WF_\(vars)(Next)"
-        case .strongFairnessNext: return "SF_\(vars)(Next)"
-        case .weakFairnessActionCall(let action): return "WF_\(vars)(\(action))"
-        case .strongFairnessActionCall(let action): return "SF_\(vars)(\(action))"
-        }
-    }
-
     internal var isStrong: Bool {
         switch self {
         case .strongFairness, .strongFairnessNext, .strongFairnessActionCall: true
