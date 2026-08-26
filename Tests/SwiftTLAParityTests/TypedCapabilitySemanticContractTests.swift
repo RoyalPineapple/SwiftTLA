@@ -41,11 +41,7 @@ struct TypedCapabilitySemanticContractTests {
             environment: [:],
             pin: try testReferencePin()
         )
-        let evidence = SwiftExplorationEvidence(
-            caseID: matchingCase.id,
-            exploration: exploration
-        )
-        let canonicalRun = try SwiftGraphExporter().export(evidence, for: matchingCase)
+        let completedRun = try SwiftGraphExporter().export(exploration, for: matchingCase)
 
         #expect(tla.root.tla.contains("MODULE TypedCapabilitySemanticContract"))
         #expect(plusCal.root.tla.contains("--algorithm TypedCapabilitySemanticContract"))
@@ -61,11 +57,11 @@ struct TypedCapabilitySemanticContractTests {
         }
         #expect(exploration.compilationIdentity == compilation.identity)
         #expect(exploration.graph.states.count == 2)
-        #expect(canonicalRun.graph.variableNames.contains("counter"))
-        #expect(canonicalRun.graph.initialStateKeys.count == 1)
-        #expect(canonicalRun.graph.edgeOccurrences.count == 2)
-        #expect(canonicalRun.graph.edgeOccurrences.values.sorted() == [1, 1])
-        #expect(canonicalRun.observableActions == ["Terminating", "advance"])
-        #expect(canonicalRun.outcome == .exhaustiveSuccess)
+        #expect(completedRun.graph.variableNames.contains("counter"))
+        #expect(completedRun.graph.initialStateKeys.count == 1)
+        #expect(completedRun.graph.edgeOccurrences.count == 2)
+        #expect(completedRun.graph.edgeOccurrences.values.sorted() == [1, 1])
+        #expect(completedRun.observableActions == ["Terminating", "advance"])
+        #expect(completedRun.outcome == .exhaustiveSuccess)
     }
 }

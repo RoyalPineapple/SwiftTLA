@@ -219,15 +219,12 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             let check = FiniteGraphCheck().run(
                 case: finiteGraphCase,
                 swiftExploration: {
-                    return SwiftExplorationEvidence(
-                        caseID: finiteGraphCase.id,
-                        exploration: try ModelChecker(
-                            compilation: compilation,
-                            configuration: try FiniteExplorationConfiguration(
-                                maximumStateLimit: 100_000
-                            )
-                        ).explore()
-                    )
+                    try ModelChecker(
+                        compilation: compilation,
+                        configuration: try FiniteExplorationConfiguration(
+                            maximumStateLimit: 100_000
+                        )
+                    ).explore()
                 },
                 tlcRequest: request,
                 replay: .none,

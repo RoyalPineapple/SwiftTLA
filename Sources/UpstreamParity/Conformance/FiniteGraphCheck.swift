@@ -44,7 +44,7 @@ package struct FiniteGraphCheck: Sendable {
 
   package func run(
     `case` finiteGraphCase: FiniteGraphCase,
-    swiftExploration: () throws -> SwiftExplorationEvidence,
+    swiftExploration: () throws -> ModelExplorationResult,
     tlcRequest: TLCProcessRequest,
     replay: TLCReplayPolicy,
     outputDirectory: URL
@@ -72,10 +72,7 @@ package struct FiniteGraphCheck: Sendable {
       guard finiteGraphCase == tlcRequest.expectedCase else { throw FiniteGraphCheckError.tlcCaseMismatch }
 
       phase = .swiftExport
-      let actionNames = Dictionary(uniqueKeysWithValues: finiteGraphCase.renderedActions.map {
-        ($0.sourceInvocationName, $0.renderedName)
-      })
-      let swiftRun = try swiftExporter.export(swiftExploration(), for: finiteGraphCase, actionNames: actionNames)
+      let swiftRun = try swiftExporter.export(swiftExploration(), for: finiteGraphCase)
       try CanonicalGraphRecords.write(
         swiftRun,
         to: directory.appendingPathComponent("swift-graph.jsonl")
