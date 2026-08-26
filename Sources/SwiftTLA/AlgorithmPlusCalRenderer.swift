@@ -125,8 +125,8 @@ internal struct AlgorithmPlusCalRenderer {
                 // The operator is emitted after the PlusCal comment, where
                 // the official translator preserves it for TLC's CONSTRAINT.
                 continue
-            case .unsupported:
-                preconditionFailure("Algorithm capability validation must run before PlusCal rendering.")
+            case .unsupported(let construct):
+                throw unsupported(construct, path: "components[\(index)]")
             case .local:
                 throw unsupported(path: "components[\(index)]", expected: "a process or procedure local declaration", actual: "top-level local declaration")
             }
@@ -197,8 +197,8 @@ internal struct AlgorithmPlusCalRenderer {
                 continue
             case .stateConstraint:
                 throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "process state constraint")
-            case .unsupported:
-                preconditionFailure("Algorithm capability validation must run before PlusCal rendering.")
+            case .unsupported(let construct):
+                throw unsupported(construct, path: "\(path).components[\(index)]")
             case .shared, .process, .procedure:
                 throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "nested algorithm component")
             }
@@ -390,6 +390,20 @@ internal struct AlgorithmPlusCalRenderer {
             expected: expected,
             actual: actual,
             nextSafeAction: "Use the supported direct PlusCal form, or extend the renderer with a syntax-only spelling before retrying."
+        )
+    }
+
+    private func unsupported(
+        _ construct: DeclaredLanguageConstruct,
+        path: String
+    ) -> AlgorithmPlusCalRenderDiagnostic {
+        let capability = LanguageCapabilityLedger.capability(for: construct)
+        return AlgorithmPlusCalRenderDiagnostic(
+            failedConcept: "PlusCal rendering of \(construct.rawValue)",
+            path: path,
+            expected: capability.boundary,
+            actual: "\(construct.rawValue) inside Algorithm",
+            nextSafeAction: capability.nextSafeAction
         )
     }
 

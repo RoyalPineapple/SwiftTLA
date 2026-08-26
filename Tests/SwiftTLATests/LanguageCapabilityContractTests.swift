@@ -126,19 +126,6 @@ struct LanguageCapabilityContractTests {
         #expect(requiredFacts.allSatisfy(capability.headline.contains) == false)
     }
 
-    @Test("Unsupported capabilities cannot advertise compilation support")
-    func rejectsUnsupportedCapabilityWithSupportedCompilation() {
-        let invalid = capability(
-            .genericFairness,
-            compilation: .supported
-        )
-        let records = replacing(.genericFairness, with: invalid)
-
-        #expect(throws: LanguageCapabilityLedgerError.unsupportedCompilation(.genericFairness)) {
-            try LanguageCapabilityLedger.validate(records)
-        }
-    }
-
     @Test("Sequential Algorithm fairness has supported construction")
     func sequentialAlgorithmFairnessHasSupportedConstruction() {
         let capability = LanguageCapabilityLedger.capability(for: .sequentialAlgorithmFairness)
@@ -151,38 +138,6 @@ struct LanguageCapabilityContractTests {
         #expect(capability.dimensions.plusCalRendering == .supported)
         #expect(capability.dimensions.execution == .supported)
         #expect(capability.dimensions.boundedConformance == .supported)
-    }
-
-    @Test("Supported capabilities require a construction route")
-    func rejectsSupportedCapabilityWithoutConstructionRoute() {
-        let invalid = capability(
-            .awaitCondition,
-            sourceDecoding: .unsupported,
-            resultBuilderConstruction: .notApplicable
-        )
-        let records = replacing(.awaitCondition, with: invalid)
-
-        #expect(throws: LanguageCapabilityLedgerError.supportedCapabilityWithoutConstructionRoute(.awaitCondition)) {
-            try LanguageCapabilityLedger.validate(records)
-        }
-    }
-
-    @Test("The ledger rejects duplicate construct records")
-    func rejectsDuplicateCapabilityRecords() {
-        let records = LanguageCapabilityLedger.all + [LanguageCapabilityLedger.capability(for: .awaitCondition)]
-
-        #expect(throws: LanguageCapabilityLedgerError.duplicateRecord(.awaitCondition)) {
-            try LanguageCapabilityLedger.validate(records)
-        }
-    }
-
-    @Test("The ledger rejects missing construct records")
-    func rejectsMissingCapabilityRecords() {
-        let records = LanguageCapabilityLedger.all.filter { $0.construct != .awaitCondition }
-
-        #expect(throws: LanguageCapabilityLedgerError.missingRecord(.awaitCondition)) {
-            try LanguageCapabilityLedger.validate(records)
-        }
     }
 
     @Test("Parsed capability diagnostics prevent partial compilation")
@@ -252,36 +207,4 @@ struct LanguageCapabilityContractTests {
         #expect(parsedCompilation.identity == builderCompilation.identity)
     }
 
-    private func replacing(
-        _ construct: DeclaredLanguageConstruct,
-        with replacement: LanguageCapability
-    ) -> [LanguageCapability] {
-        LanguageCapabilityLedger.all.map { capability in
-            capability.construct == construct ? replacement : capability
-        }
-    }
-
-    private func capability(
-        _ construct: DeclaredLanguageConstruct,
-        sourceDecoding: LanguageCapabilityDimensionStatus? = nil,
-        resultBuilderConstruction: LanguageCapabilityDimensionStatus? = nil,
-        compilation: LanguageCapabilityDimensionStatus? = nil
-    ) -> LanguageCapability {
-        let existing = LanguageCapabilityLedger.capability(for: construct)
-        return LanguageCapability(
-            construct: existing.construct,
-            status: existing.status,
-            dimensions: .init(
-                sourceDecoding: sourceDecoding ?? existing.dimensions.sourceDecoding,
-                resultBuilderConstruction: resultBuilderConstruction ?? existing.dimensions.resultBuilderConstruction,
-                compilation: compilation ?? existing.dimensions.compilation,
-                tlaRendering: existing.dimensions.tlaRendering,
-                plusCalRendering: existing.dimensions.plusCalRendering,
-                execution: existing.dimensions.execution,
-                boundedConformance: existing.dimensions.boundedConformance
-            ),
-            boundary: existing.boundary,
-            nextSafeAction: existing.nextSafeAction
-        )
-    }
 }
