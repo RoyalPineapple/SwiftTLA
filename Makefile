@@ -1,4 +1,4 @@
-.PHONY: build examples core-conformance temporal-symmetry-conformance ci-pr ci-release-qualification
+.PHONY: build examples finite-graph temporal-symmetry-conformance ci-pr ci-release-qualification
 
 TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-conformance
 build:
@@ -8,8 +8,8 @@ examples:
 	swift test --package-path Examples/SwiftTLADemos
 	swift build --package-path Examples/SwiftTLADemoApp
 
-core-conformance:
-	./scripts/run_core_conformance.sh --case all --output .build/core-conformance-evidence
+finite-graph:
+	./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence
 
 temporal-symmetry-conformance:
 	./scripts/run_temporal_symmetry_conformance.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)

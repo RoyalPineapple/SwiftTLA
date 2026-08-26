@@ -68,7 +68,7 @@ After a port:
 3. Run the relevant TLC parity command when the upstream module and bounded
    configuration are available.
 4. For a supported core case, refresh only the declared evidence through the
-   core-conformance workflow. Do not edit pins by hand.
+   finite-graph workflow maintains these pins.
 
 ## Names and source mapping
 

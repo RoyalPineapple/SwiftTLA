@@ -25,9 +25,9 @@ ownership, import edges, configuration, and provenance.
 
 ## Exact finite graph conformance
 
-Core conformance runs a bounded SwiftTLA exploration and a pinned TLC run for
+Finite graph comparison runs a bounded SwiftTLA exploration and a pinned TLC run for
 each case in
-[`Verification/CoreConformance/cases.json`](../Verification/CoreConformance/cases.json).
+[`Verification/FiniteGraph/cases.json`](../Verification/FiniteGraph/cases.json).
 Both explorations use the canonical graph schema.
 
 The comparator evaluates canonical initial states, state bindings, labeled
@@ -40,7 +40,7 @@ record counts, and retains any diagnostics or counterexample traces. Missing,
 truncated, failed, and bounded streams cannot match.
 The comparison record reports exact equality or the first structured
 difference. See
-[Core graph conformance](CoreGraphConformance.md).
+[Finite graph comparison](FiniteGraphComparison.md).
 
 ## Temporal and symmetry cases
 

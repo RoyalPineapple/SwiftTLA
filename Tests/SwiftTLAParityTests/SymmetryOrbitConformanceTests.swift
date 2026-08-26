@@ -127,11 +127,11 @@ struct SymmetryOrbitConformanceTests {
     CanonicalState(bindings: ["members": .constant(member)])
   }
 
-  private func run(states: [CanonicalState], edges: [CanonicalEdge]? = nil) throws -> CanonicalRun {
+  private func run(states: [CanonicalState], edges: [CanonicalEdge]? = nil) throws -> CompletedGraphRun {
     let edges = edges ?? (states.count > 1
       ? [CanonicalEdge(source: states[0].key, action: "step", target: states[1].key)]
       : [CanonicalEdge(source: states[0].key, action: "step", target: states[0].key)])
-    return try CanonicalRun(
+    return try CompletedGraphRun(
       graph: CanonicalGraph(initialStates: [states[0]], states: states, edges: edges),
       observableActions: Set(edges.map(\.action)), outcome: .exhaustiveSuccess)
   }
@@ -143,7 +143,7 @@ struct SymmetryOrbitConformanceTests {
   }
 
   private func exploration(
-    _ engine: SymmetryExplorationEngine, _ reduced: Bool, _ runID: UUID, run: CanonicalRun
+    _ engine: SymmetryExplorationEngine, _ reduced: Bool, _ runID: UUID, run: CompletedGraphRun
   ) throws -> SymmetryExploration {
     let transitions = try run.graph.edgeOccurrences.map { edge, occurrences in
       try SymmetryRawTransitionWitness(
@@ -182,7 +182,7 @@ struct SymmetryOrbitConformanceTests {
                      try SymmetryPermutation(constantMapping: ["A": "B", "B": "A"])])
   }
 
-  private func evidence(_ name: String) throws -> CoreEvidenceReference {
-    try CoreEvidenceReference(path: "Verification/TemporalSymmetryConformance/\(name)", sha256: digest)
+  private func evidence(_ name: String) throws -> RetainedFileReference {
+    try RetainedFileReference(path: "Verification/TemporalSymmetryConformance/\(name)", sha256: digest)
   }
 }

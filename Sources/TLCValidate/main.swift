@@ -2,8 +2,8 @@ import SwiftTLA
 import UpstreamParity
 import Foundation
 let args = Array(CommandLine.arguments.dropFirst())
-if args.first == "core-conformance" {
-    runCoreConformance(arguments: Array(args.dropFirst()))
+if args.first == "finite-graph" {
+    runFiniteGraphCheck(arguments: Array(args.dropFirst()))
 }
 if args.first == "temporal-symmetry" {
     runTemporalSymmetry(arguments: Array(args.dropFirst()))
@@ -11,14 +11,14 @@ if args.first == "temporal-symmetry" {
 guard let name = args.first else {
     fputs("""
     Usage: tlc-validate <command>
-      core-conformance run ...
+      finite-graph run ...
       temporal-symmetry run ...
     """, stderr)
     exit(1)
 }
 fputs("tlc-validate: unknown command \(name)\n", stderr)
 exit(1)
-struct CoreConformanceToolchain: Decodable {
+struct PinnedTLCToolchain: Decodable {
     let schema: String
     let tlc: TLC
     let java: Java
@@ -46,8 +46,8 @@ struct CoreConformanceToolchain: Decodable {
 }
 
 private func referencePin(
-    from toolchain: CoreConformanceToolchain,
-    javaArchive: CoreConformanceToolchain.Artifact
+    from toolchain: PinnedTLCToolchain,
+    javaArchive: PinnedTLCToolchain.Artifact
 ) throws -> TLCReferencePin {
     try TLCReferencePin(
         tag: toolchain.tlc.tag,
@@ -62,7 +62,7 @@ private func referencePin(
     )
 }
 
-enum CoreConformanceCLIError: Error, CustomStringConvertible {
+enum FiniteGraphCLIError: Error, CustomStringConvertible {
     case usage
     case missingEnvironment(String)
     case missingFile(String)
@@ -70,82 +70,74 @@ enum CoreConformanceCLIError: Error, CustomStringConvertible {
     case unknownCase(String)
     case outputExists(String)
     case unsupportedSwiftSpec(String)
-    case invalidReplayPolicy(String)
     case invalidRunID(String)
     var description: String {
         switch self {
         case .usage:
-            return "Usage: tlc-validate core-conformance run --case <case-or-all> --output <directory>"
+            return "Usage: tlc-validate finite-graph run --case <case-or-all> --output <directory>"
         case .missingEnvironment(let name):
-            return "core-conformance is not set up: missing \(name)"
+            return "finite-graph is not set up: missing \(name)"
         case .missingFile(let path):
-            return "core-conformance prerequisite is missing: \(path)"
+            return "finite-graph prerequisite is missing: \(path)"
         case .invalidManifest(let reason):
-            return "invalid core-conformance manifest: \(reason)"
+            return "invalid finite-graph manifest: \(reason)"
         case .unknownCase(let id):
-            return "unknown core-conformance case: \(id)"
+            return "unknown finite-graph case: \(id)"
         case .outputExists(let path):
             return "output directory already exists: \(path)"
         case .unsupportedSwiftSpec(let id):
-            return "unsupported Swift core-conformance spec: \(id)"
-        case .invalidReplayPolicy(let policy):
-            return "invalid core-conformance replay policy: \(policy)"
+            return "unsupported Swift finite-graph spec: \(id)"
         case .invalidRunID(let value):
-            return "invalid core-conformance run ID: \(value)"
+            return "invalid finite-graph run ID: \(value)"
         }
     }
 }
-private func runCoreConformance(arguments: [String]) -> Never {
+private func runFiniteGraphCheck(arguments: [String]) -> Never {
     guard let command = arguments.first else {
-        failCoreConformance(CoreConformanceCLIError.usage)
+        failFiniteGraphCheck(FiniteGraphCLIError.usage)
     }
     guard command == "run" else {
-        failCoreConformance(CoreConformanceCLIError.usage)
+        failFiniteGraphCheck(FiniteGraphCLIError.usage)
     }
     do {
-        let options = try parseCoreConformanceOptions(Array(arguments.dropFirst()))
+        let options = try parseFiniteGraphOptions(Array(arguments.dropFirst()))
         let environment = ProcessInfo.processInfo.environment
-        let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
-        let manifest = try decode(CoreConformanceCasesManifest.self, at: URL(fileURLWithPath: casesPath))
-        guard manifest.schema == CoreConformanceCasesManifest.schema else {
-            throw CoreConformanceCLIError.invalidManifest("unsupported schema")
+        let casesPath = try requiredEnvironment("FINITE_GRAPH_CASES", environment)
+        let manifest = try decode(FiniteGraphManifest.self, at: URL(fileURLWithPath: casesPath))
+        guard manifest.schema == FiniteGraphManifest.schema else {
+            throw FiniteGraphCLIError.invalidManifest("unsupported schema")
         }
-        let selected: [CoreConformanceCasesManifest.Entry]
+        let selected: [FiniteGraphManifest.Case]
         if options.caseID == "all" {
             guard !manifest.cases.isEmpty else {
-                throw CoreConformanceCLIError.invalidManifest("contains no cases")
+                throw FiniteGraphCLIError.invalidManifest("contains no cases")
             }
             selected = manifest.cases
-        } else if let entry = manifest.cases.first(where: { $0.id == options.caseID }) {
-            selected = [entry]
+        } else if let declaration = manifest.cases.first(where: { $0.id == options.caseID }) {
+            selected = [declaration]
         } else {
-            throw CoreConformanceCLIError.unknownCase(options.caseID)
+            throw FiniteGraphCLIError.unknownCase(options.caseID)
         }
-        let swiftSpecs = try Dictionary(uniqueKeysWithValues: selected.map { entry in
-            (entry.id, try swiftSpec(entry.swiftSpec))
-        })
-        let invocationMappings = try Dictionary(uniqueKeysWithValues: selected.map { entry in
-            guard let spec = swiftSpecs[entry.id] else {
-                throw CoreConformanceCLIError.invalidManifest("missing Swift specification for \(entry.id)")
-            }
-            return (entry.id, try validateMappings(entry, for: spec))
-        })
-        let toolRoot = try requiredEnvironment("CORE_CONFORMANCE_TOOL_ROOT", environment)
-        let inputRoot = try requiredEnvironment("CORE_CONFORMANCE_INPUT_ROOT", environment)
+        let preparedCases = try selected.map { declaration in
+            let compilation = try sourceSpecification(declaration.id).compile()
+            return (declaration, compilation, try compilation.renderedActions())
+        }
+        let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
+        let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
         let output = URL(fileURLWithPath: options.output).standardizedFileURL
         guard !FileManager.default.fileExists(atPath: output.path) else {
-            throw CoreConformanceCLIError.outputExists(output.path)
+            throw FiniteGraphCLIError.outputExists(output.path)
         }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let lock = try decode(
-            CoreConformanceToolchain.self,
-            at: projectRoot.appendingPathComponent("Verification/CoreConformance/toolchain.json"))
+            PinnedTLCToolchain.self,
+            at: projectRoot.appendingPathComponent("Verification/FiniteGraph/toolchain.json"))
         guard lock.schema == "TLCReferencePin" else {
-            throw CoreConformanceCLIError.invalidManifest("unsupported toolchain schema")
+            throw FiniteGraphCLIError.invalidManifest("unsupported toolchain schema")
         }
         let architecture = try normalizedArchitecture()
         guard let javaArchive = lock.java.archives[architecture] else {
-            throw CoreConformanceCLIError.invalidManifest("no locked archive for \(architecture)")
+            throw FiniteGraphCLIError.invalidManifest("no locked archive for \(architecture)")
         }
         let pin = try referencePin(from: lock, javaArchive: javaArchive)
         let toolDirectory = URL(fileURLWithPath: toolRoot)
@@ -157,7 +149,7 @@ private func runCoreConformance(arguments: [String]) -> Never {
         let bridgeSource = projectRoot.appendingPathComponent(lock.bridge.source)
         for artifact in [jar, java, bridgeClasses, javaArchivePath, bridgeSource] where
             !FileManager.default.fileExists(atPath: artifact.path) {
-            throw CoreConformanceCLIError.missingFile(artifact.path)
+            throw FiniteGraphCLIError.missingFile(artifact.path)
         }
         let referenceArtifacts = try TLCReferenceInspector.inspect(
             artifacts: TLCReferenceArtifacts(
@@ -177,101 +169,99 @@ private func runCoreConformance(arguments: [String]) -> Never {
         )
         try pin.validate(referenceArtifacts)
         let runRoot = output.deletingLastPathComponent().appendingPathComponent(
-            ".core-conformance-\(UUID().uuidString.lowercased())")
+            ".finite-graph-\(UUID().uuidString.lowercased())")
         try FileManager.default.createDirectory(at: runRoot, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: runRoot) }
         if selected.count > 1 {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
         }
-        var exitCode: Int32 = CoreConformanceExitCode.exact.rawValue
-        for entry in selected {
-            guard let swiftSpec = swiftSpecs[entry.id] else {
-                throw CoreConformanceCLIError.invalidManifest("missing Swift specification for \(entry.id)")
-            }
-            guard let actionNames = invocationMappings[entry.id] else {
-                throw CoreConformanceCLIError.invalidManifest("missing invocation mapping for \(entry.id)")
-            }
-            let expectedExit = Int32(entry.expectedExit ?? Int(CoreConformanceExitCode.exact.rawValue))
-            guard expectedExit == CoreConformanceExitCode.exact.rawValue ||
-                expectedExit == CoreConformanceExitCode.semanticDifference.rawValue
-            else {
-                throw CoreConformanceCLIError.invalidManifest(
-                    "unsupported expected exit \(expectedExit) for \(entry.id)")
-            }
+        var exitCode: Int32 = FiniteGraphExitCode.exact.rawValue
+        for (declaration, compilation, renderedActions) in preparedCases {
             let caseOutput = selected.count == 1
                 ? output
-                : output.appendingPathComponent(entry.id, isDirectory: true)
-            let caseDefinition = try declaredCase(entry, pin: pin, architecture: architecture)
+                : output.appendingPathComponent(declaration.id, isDirectory: true)
+            let arguments = ["-workers", "1", "-fp", "1"]
+            let finiteGraphCase = try FiniteGraphCase(
+                id: declaration.id,
+                moduleSHA256: declaration.moduleSHA256,
+                cfgSHA256: declaration.cfgSHA256,
+                arguments: arguments,
+                argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
+                workers: 1,
+                fingerprintPolynomial: 1,
+                deadlock: false,
+                operatingSystem: "macos",
+                architecture: architecture,
+                environment: [:],
+                pin: pin,
+                renderedActions: renderedActions
+            )
             let bundle = try TLCProcessRequest.declaredBundle(
-                root: inputPath(entry.module, within: inputRoot),
-                configuration: inputPath(entry.configuration, within: inputRoot),
-                imports: try entry.imports.map { try inputPath($0, within: inputRoot) }
+                root: inputPath(declaration.module, within: inputRoot),
+                configuration: inputPath(declaration.configuration, within: inputRoot),
+                imports: try declaration.imports.map { try inputPath($0, within: inputRoot) }
             )
             let request = TLCProcessRequest(
                 javaExecutable: java,
                 jar: jar,
                 bridgeClasses: bridgeClasses,
                 bundle: bundle,
-                graphEvents: runRoot.appendingPathComponent("\(entry.id).events.jsonl"),
-                traceOutput: runRoot.appendingPathComponent("\(entry.id).counterexample.json"),
-                replayInput: runRoot.appendingPathComponent("\(entry.id).counterexample.json"),
+                graphEvents: runRoot.appendingPathComponent("\(declaration.id).events.jsonl"),
+                traceOutput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
+                replayInput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
                 workingDirectory: runRoot,
-                arguments: entry.arguments,
-                expectedCase: caseDefinition,
+                arguments: finiteGraphCase.arguments,
+                expectedCase: finiteGraphCase,
                 runID: options.runID ?? UUID(),
                 referencePin: pin,
                 referenceArtifacts: referenceArtifacts
             )
-            let result = CoreConformanceRunner().run(
-                case: caseDefinition,
+            let check = FiniteGraphCheck().run(
+                case: finiteGraphCase,
                 swiftExploration: {
-                    let compilation = try swiftSpec.compile()
                     return SwiftExplorationEvidence(
-                        caseID: caseDefinition.id,
+                        caseID: finiteGraphCase.id,
                         exploration: try ModelChecker(
                             compilation: compilation,
                             configuration: try FiniteExplorationConfiguration(
-                                maximumStateLimit: entry.maximumStateLimit
+                                maximumStateLimit: 100_000
                             )
                         ).explore()
                     )
                 },
                 tlcRequest: request,
-                replay: try replayPolicy(entry.replay),
-                outputDirectory: caseOutput,
-                swiftActionNames: actionNames
+                replay: .none,
+                outputDirectory: caseOutput
             )
-            let label = expectedExit == CoreConformanceExitCode.semanticDifference.rawValue
-                ? "core-conformance negative control \(entry.id)"
-                : "core-conformance \(entry.id)"
-            if let diagnostic = result.diagnostic {
+            let label = "finite-graph \(declaration.id)"
+            if let diagnostic = check.diagnostic {
               let report = diagnostic.report
               fputs("\(label): \(report.whatFailed)\n", stderr)
                 fputs("  where: \(report.whereItFailed)\n", stderr)
                 fputs("  expected: \(report.expected)\n", stderr)
                 fputs("  actual: \(report.actual)\n", stderr)
               fputs("  next: \(report.nextSafeAction)\n", stderr)
-            } else if let report = result.comparison?.failureReports.first {
+            } else if let report = check.comparison?.failureReports.first {
                 fputs("\(label): \(report.whatFailed)\n", stderr)
                 fputs("  where: \(report.whereItFailed)\n", stderr)
                 fputs("  expected: \(report.expected)\n", stderr)
                 fputs("  actual: \(report.actual)\n", stderr)
                 fputs("  next: \(report.nextSafeAction)\n", stderr)
             } else {
-                print("\(label): \(result.exitCode.rawValue) \(result.evidenceDirectory?.path ?? "")")
+                print("\(label): \(check.exitCode.rawValue) \(check.evidenceDirectory?.path ?? "")")
             }
             if selected.count == 1 {
-                exitCode = result.exitCode.rawValue
-            } else if result.exitCode.rawValue != expectedExit {
-                exitCode = max(exitCode, result.exitCode.rawValue)
+                exitCode = check.exitCode.rawValue
+            } else if check.exitCode != .exact {
+                exitCode = max(exitCode, check.exitCode.rawValue)
             }
         }
         exit(exitCode)
-    } catch { failCoreConformance(error) }
+    } catch { failFiniteGraphCheck(error) }
 }
-private func failCoreConformance(_ error: Error) -> Never {
-    fputs("core-conformance: \(error)\n", stderr)
-    exit(CoreConformanceExitCode.failure.rawValue)
+private func failFiniteGraphCheck(_ error: Error) -> Never {
+    fputs("finite-graph: \(error)\n", stderr)
+    exit(FiniteGraphExitCode.failure.rawValue)
 }
 private func governanceURL(_ configuredPath: String?, projectRoot: URL, defaultPath: String) -> URL {
     if let configuredPath, !configuredPath.isEmpty {
@@ -288,7 +278,7 @@ private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
         case .usage:
             return "Usage: tlc-validate temporal-symmetry run --output <directory>"
         case .missingToolRoot:
-            return "CORE_CONFORMANCE_TOOL_ROOT is required"
+            return "FINITE_GRAPH_TOOL_ROOT is required"
         }
     }
 }
@@ -315,18 +305,18 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
         let casesURL = governanceURL(
             environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
             defaultPath: "Verification/TemporalSymmetryConformance/cases.json")
-        guard let toolRoot = environment["CORE_CONFORMANCE_TOOL_ROOT"].map(URL.init(fileURLWithPath:)) else {
+        guard let toolRoot = environment["FINITE_GRAPH_TOOL_ROOT"].map(URL.init(fileURLWithPath:)) else {
             throw TemporalSymmetryCLIError.missingToolRoot
         }
         let lock = try decode(
-            CoreConformanceToolchain.self,
-            at: projectRoot.appendingPathComponent("Verification/CoreConformance/toolchain.json"))
+            PinnedTLCToolchain.self,
+            at: projectRoot.appendingPathComponent("Verification/FiniteGraph/toolchain.json"))
         guard lock.schema == "TLCReferencePin" else {
-            throw CoreConformanceCLIError.invalidManifest("unsupported toolchain schema")
+            throw FiniteGraphCLIError.invalidManifest("unsupported toolchain schema")
         }
         let architecture = try normalizedArchitecture()
         guard let javaArchive = lock.java.archives[architecture] else {
-            throw CoreConformanceCLIError.invalidManifest("no locked archive for \(architecture)")
+            throw FiniteGraphCLIError.invalidManifest("no locked archive for \(architecture)")
         }
         let records = try TemporalSymmetryConformanceRunner().run(.init(
             cases: try decode(TemporalSymmetryCases.self, at: casesURL),

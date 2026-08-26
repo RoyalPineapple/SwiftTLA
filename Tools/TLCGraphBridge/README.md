@@ -18,7 +18,7 @@ stream and the Swift graph comparator decides the bounded relation.
 
 ## Build lock
 
-`Verification/CoreConformance/toolchain.json` locks the TLC source tag and
+`Verification/FiniteGraph/toolchain.json` locks the TLC source tag and
 commit, JAR SHA-256, Temurin Java archive SHA-256 per architecture, and this
 bridge's class/source/binary SHA-256 values. The setup script compiles this
 source against only those verified files. A digest mismatch is an error.
@@ -28,7 +28,7 @@ archive for local reproducibility. It is not a distribution mechanism. If a
 fresh machine cannot retrieve or provide the exact pinned artifacts, setup
 fails instead of accepting a changed artifact.
 
-Use `make core-conformance` for exact graph comparison. The bridge spike below
+Use `make finite-graph` for exact graph comparison. The bridge spike below
 is a focused schema and provenance transport check, not a complete comparison.
 
 Run the bounded spike with:

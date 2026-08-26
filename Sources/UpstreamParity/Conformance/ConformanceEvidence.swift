@@ -30,7 +30,7 @@ package enum ConformanceEvidence {
     return resolved
   }
 
-  static func data(for reference: CoreEvidenceReference, beneath root: URL) throws -> Data {
+  static func data(for reference: RetainedFileReference, beneath root: URL) throws -> Data {
     let url = try resolve(root.appendingPathComponent(reference.path), beneath: root)
     let data = try Data(contentsOf: url)
     guard SHA256.hex(data) == reference.sha256 else {
@@ -82,7 +82,7 @@ package enum ConformanceEvidence {
     try write(data, to: url)
   }
 
-  package static func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> CoreEvidenceReference {
+  package static func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> RetainedFileReference {
     let url = try resolve(url, beneath: root)
     let bytes: Data
     if let data {
@@ -90,14 +90,14 @@ package enum ConformanceEvidence {
     } else {
       bytes = try Data(contentsOf: url)
     }
-    return try CoreEvidenceReference(
+    return try RetainedFileReference(
       path: relativePath(for: url, beneath: root),
       sha256: SHA256.hex(bytes))
   }
 
-  package static func reference(for url: URL, beneath root: URL, pathPrefix: String) throws -> CoreEvidenceReference {
+  package static func reference(for url: URL, beneath root: URL, pathPrefix: String) throws -> RetainedFileReference {
     let reference = try reference(for: url, beneath: root)
-    return try CoreEvidenceReference(path: "\(pathPrefix)/\(reference.path)", sha256: reference.sha256)
+    return try RetainedFileReference(path: "\(pathPrefix)/\(reference.path)", sha256: reference.sha256)
   }
 
   static func canonicalData<T: Encodable>(_ value: T, trailingNewline: Bool = false) throws -> Data {

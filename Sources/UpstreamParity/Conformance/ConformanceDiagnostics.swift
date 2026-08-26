@@ -55,20 +55,25 @@ package struct ConformanceFailureReport: Equatable, Sendable {
   }
 }
 
-extension ConformanceDifference {
+extension GraphDifference {
   /// A concrete explanation of this exact graph difference.
   ///
-  /// In core conformance, `expected` is TLC and `actual` is SwiftTLA.
+  /// In finite graph comparison, `expected` is TLC and `actual` is SwiftTLA.
   /// `tlc-graph.jsonl` and `swift-graph.jsonl` contain the complete graph records.
   package var failureReport: ConformanceFailureReport {
     switch self {
-    case .mapping(let messages):
+    case .observableNames(
+      let expectedVariables,
+      let actualVariables,
+      let expectedActions,
+      let actualActions
+    ):
       return .init(
-        whatFailed: "The declared observable-name mapping is not a total bijection.",
-        whereItFailed: "observable variable or action mapping",
-        expected: "Every TLC observable name maps to exactly one SwiftTLA name, and vice versa.",
-        actual: messages.joined(separator: "; "),
-        nextSafeAction: "Correct the declared mapping, then rerun the finite TLC comparison."
+        whatFailed: "The observable names differ.",
+        whereItFailed: "canonical variables or actions",
+        expected: "TLC variables \(expectedVariables.sorted()); actions \(expectedActions.sorted()).",
+        actual: "SwiftTLA variables \(actualVariables.sorted()); actions \(actualActions.sorted()).",
+        nextSafeAction: "Make the compiled Swift and rendered TLC declarations use the same names."
       )
     case .initialStates(let expected, let actual):
       return setDifferenceReport(
@@ -96,27 +101,11 @@ extension ConformanceDifference {
         actual: "SwiftTLA outcome: \(describe(actual))",
         nextSafeAction: "Inspect tlc-graph.jsonl and swift-graph.jsonl outcomes and their retained traces before changing the model."
       )
-    case .errors(let expected, let actual):
-      return .init(
-        whatFailed: "The retained verification diagnostics differ.",
-        whereItFailed: "canonical diagnostic list",
-        expected: describe(expected),
-        actual: describe(actual),
-        nextSafeAction: "Inspect the named diagnostic and its source input before changing the model."
-      )
-    case .traces(let expected, let actual):
-      return .init(
-        whatFailed: "The retained counterexample traces differ.",
-        whereItFailed: "canonical trace evidence",
-        expected: describe(expected),
-        actual: describe(actual),
-        nextSafeAction: "Inspect the first differing trace step in tlc-graph.jsonl and swift-graph.jsonl before changing the model."
-      )
     }
   }
 }
 
-extension ExactFiniteTLCComparison {
+extension GraphComparison {
   /// One actionable report per detected difference, in comparison order.
   package var failureReports: [ConformanceFailureReport] {
     differences.map(\.failureReport)

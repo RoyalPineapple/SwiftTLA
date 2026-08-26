@@ -33,12 +33,12 @@ package struct SymmetryOrbitComparisonInput: Sendable {
   package let swiftReduced: SymmetryExploration
   package let tlcRaw: SymmetryExploration
   package let tlcReduced: SymmetryExploration
-  package let swiftRawRun: CanonicalRun
-  package let swiftReducedRun: CanonicalRun
-  package let tlcRawRun: CanonicalRun
-  package let tlcReducedRun: CanonicalRun
-  package let configurationEvidence: CoreEvidenceReference
-  package let quotientEvidence: CoreEvidenceReference
+  package let swiftRawRun: CompletedGraphRun
+  package let swiftReducedRun: CompletedGraphRun
+  package let tlcRawRun: CompletedGraphRun
+  package let tlcReducedRun: CompletedGraphRun
+  package let configurationEvidence: RetainedFileReference
+  package let quotientEvidence: RetainedFileReference
   package let permutations: [SymmetryPermutation]
 
   package init(
@@ -49,12 +49,12 @@ package struct SymmetryOrbitComparisonInput: Sendable {
     swiftReduced: SymmetryExploration,
     tlcRaw: SymmetryExploration,
     tlcReduced: SymmetryExploration,
-    swiftRawRun: CanonicalRun,
-    swiftReducedRun: CanonicalRun,
-    tlcRawRun: CanonicalRun,
-    tlcReducedRun: CanonicalRun,
-    configurationEvidence: CoreEvidenceReference,
-    quotientEvidence: CoreEvidenceReference,
+    swiftRawRun: CompletedGraphRun,
+    swiftReducedRun: CompletedGraphRun,
+    tlcRawRun: CompletedGraphRun,
+    tlcReducedRun: CompletedGraphRun,
+    configurationEvidence: RetainedFileReference,
+    quotientEvidence: RetainedFileReference,
     permutations: [SymmetryPermutation]
   ) throws {
     self.caseID = caseID
@@ -155,7 +155,7 @@ package struct SymmetryOrbitComparator: Sendable {
   }
 
   private func reducedRepresentatives(
-    _ run: CanonicalRun,
+    _ run: CompletedGraphRun,
     engine: SymmetryExplorationEngine,
     derivation: SymmetryOrbitDerivation
   ) throws -> [String: String] {
@@ -179,7 +179,7 @@ package struct SymmetryOrbitComparator: Sendable {
     return representatives
   }
 
-  private func validate(_ exploration: SymmetryExploration, against run: CanonicalRun) throws {
+  private func validate(_ exploration: SymmetryExploration, against run: CompletedGraphRun) throws {
     let stateIDs = Set(run.graph.states.keys.map(\.canonicalEncoding))
     let initialStateIDs = Set(run.graph.initialStateKeys.map(\.canonicalEncoding))
     let transitions = try Set(run.graph.edgeOccurrences.map {
@@ -196,7 +196,7 @@ package struct SymmetryOrbitComparator: Sendable {
   }
 
   private func quotientTransitions(
-    _ run: CanonicalRun,
+    _ run: CompletedGraphRun,
     derivation: SymmetryOrbitDerivation
   ) -> [SymmetryQuotientTransition] {
     Set(run.graph.edgeOccurrences.keys.compactMap { edge in
@@ -207,7 +207,7 @@ package struct SymmetryOrbitComparator: Sendable {
     }).sorted()
   }
 
-  private func rawWitnesses(_ run: CanonicalRun, engine: SymmetryExplorationEngine) -> [SymmetryRawTransitionWitness] {
+  private func rawWitnesses(_ run: CompletedGraphRun, engine: SymmetryExplorationEngine) -> [SymmetryRawTransitionWitness] {
     run.graph.edgeOccurrences.compactMap { edge, occurrences in
       try? SymmetryRawTransitionWitness(
         engine: engine, sourceStateID: edge.source.canonicalEncoding, action: edge.action,

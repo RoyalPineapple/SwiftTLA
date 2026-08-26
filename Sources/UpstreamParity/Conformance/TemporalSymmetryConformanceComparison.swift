@@ -10,8 +10,8 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
   package let outcome: TemporalSymmetryOutcome
   package let swiftResult: TemporalPropertyResult
   package let tlcResult: TemporalPropertyResult
-  package let swiftEvidence: CoreEvidenceReference
-  package let tlcEvidence: CoreEvidenceReference
+  package let swiftEvidence: RetainedFileReference
+  package let tlcEvidence: RetainedFileReference
   package let completeGraphEvidence: TemporalCompleteGraphEvidence?
   package let diagnosticCode: TemporalSymmetryDiagnosticCode
 
@@ -22,8 +22,8 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
     outcome: TemporalSymmetryOutcome,
     swiftResult: TemporalPropertyResult,
     tlcResult: TemporalPropertyResult,
-    swiftEvidence: CoreEvidenceReference,
-    tlcEvidence: CoreEvidenceReference,
+    swiftEvidence: RetainedFileReference,
+    tlcEvidence: RetainedFileReference,
     completeGraphEvidence: TemporalCompleteGraphEvidence? = nil,
     diagnosticCode: TemporalSymmetryDiagnosticCode
   ) throws {
@@ -103,8 +103,8 @@ package struct TemporalComparison: Equatable, Codable, Sendable {
       outcome: container.decode(TemporalSymmetryOutcome.self, forKey: .outcome),
       swiftResult: container.decode(TemporalPropertyResult.self, forKey: .swiftResult),
       tlcResult: container.decode(TemporalPropertyResult.self, forKey: .tlcResult),
-      swiftEvidence: container.decode(CoreEvidenceReference.self, forKey: .swiftEvidence),
-      tlcEvidence: container.decode(CoreEvidenceReference.self, forKey: .tlcEvidence),
+      swiftEvidence: container.decode(RetainedFileReference.self, forKey: .swiftEvidence),
+      tlcEvidence: container.decode(RetainedFileReference.self, forKey: .tlcEvidence),
       completeGraphEvidence: try container.decodeIfPresent(TemporalCompleteGraphEvidence.self, forKey: .completeGraphEvidence),
       diagnosticCode: container.decode(TemporalSymmetryDiagnosticCode.self, forKey: .diagnosticCode))
   }
@@ -157,7 +157,7 @@ package struct SymmetryExploration: Equatable, Codable, Sendable {
   package let stateIDs: [String]
   package let transitions: [SymmetryRawTransitionWitness]
   package let declaredConfigurationSHA256: String
-  package let graphEvidence: CoreEvidenceReference
+  package let graphEvidence: RetainedFileReference
   package let invariantOutcome: SymmetryApplicableOutcome
   package let deadlockOutcome: SymmetryApplicableOutcome
 
@@ -170,7 +170,7 @@ package struct SymmetryExploration: Equatable, Codable, Sendable {
     stateIDs: [String],
     transitions: [SymmetryRawTransitionWitness],
     declaredConfigurationSHA256: String,
-    graphEvidence: CoreEvidenceReference,
+    graphEvidence: RetainedFileReference,
     invariantOutcome: SymmetryApplicableOutcome,
     deadlockOutcome: SymmetryApplicableOutcome
   ) throws {
@@ -217,7 +217,7 @@ package struct SymmetryExploration: Equatable, Codable, Sendable {
       stateIDs: container.decode([String].self, forKey: .stateIDs),
       transitions: container.decode([SymmetryRawTransitionWitness].self, forKey: .transitions),
       declaredConfigurationSHA256: container.decode(String.self, forKey: .declaredConfigurationSHA256),
-      graphEvidence: container.decode(CoreEvidenceReference.self, forKey: .graphEvidence),
+      graphEvidence: container.decode(RetainedFileReference.self, forKey: .graphEvidence),
       invariantOutcome: container.decode(SymmetryApplicableOutcome.self, forKey: .invariantOutcome),
       deadlockOutcome: container.decode(SymmetryApplicableOutcome.self, forKey: .deadlockOutcome))
   }
@@ -313,8 +313,8 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
   package let swiftReduced: SymmetryExploration
   package let tlcRaw: SymmetryExploration
   package let tlcReduced: SymmetryExploration
-  package let configurationEvidence: CoreEvidenceReference
-  package let quotientEvidence: CoreEvidenceReference
+  package let configurationEvidence: RetainedFileReference
+  package let quotientEvidence: RetainedFileReference
   package let orbits: [SymmetryOrbit]
   package let rawTransitionWitnesses: [SymmetryRawTransitionWitness]
   package let quotientTransitions: [SymmetryQuotientTransition]
@@ -329,8 +329,8 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
     swiftReduced: SymmetryExploration,
     tlcRaw: SymmetryExploration,
     tlcReduced: SymmetryExploration,
-    configurationEvidence: CoreEvidenceReference,
-    quotientEvidence: CoreEvidenceReference,
+    configurationEvidence: RetainedFileReference,
+    quotientEvidence: RetainedFileReference,
     orbits: [SymmetryOrbit],
     rawTransitionWitnesses: [SymmetryRawTransitionWitness],
     quotientTransitions: [SymmetryQuotientTransition],
@@ -499,8 +499,8 @@ package struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
       swiftReduced: container.decode(SymmetryExploration.self, forKey: .swiftReduced),
       tlcRaw: container.decode(SymmetryExploration.self, forKey: .tlcRaw),
       tlcReduced: container.decode(SymmetryExploration.self, forKey: .tlcReduced),
-      configurationEvidence: container.decode(CoreEvidenceReference.self, forKey: .configurationEvidence),
-      quotientEvidence: container.decode(CoreEvidenceReference.self, forKey: .quotientEvidence),
+      configurationEvidence: container.decode(RetainedFileReference.self, forKey: .configurationEvidence),
+      quotientEvidence: container.decode(RetainedFileReference.self, forKey: .quotientEvidence),
       orbits: container.decode([SymmetryOrbit].self, forKey: .orbits),
       rawTransitionWitnesses: container.decode([SymmetryRawTransitionWitness].self, forKey: .rawTransitionWitnesses),
       quotientTransitions: container.decode([SymmetryQuotientTransition].self, forKey: .quotientTransitions),

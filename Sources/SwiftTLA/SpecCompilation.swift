@@ -74,6 +74,24 @@ struct DirectModuleSectionPlan: Sendable, Equatable {
     let renderedModuleSource: String
     let renderedConfiguration: String
     let renderedConfigurationWithoutSymmetry: String
+    let renderedActions: [RenderedAction]
+}
+
+package struct RenderedAction: Sendable, Equatable {
+    package let sourceName: String
+    package let arguments: [TLAValue]
+    package let renderedName: String
+
+    package init(sourceName: String, arguments: [TLAValue], renderedName: String) {
+        self.sourceName = sourceName
+        self.arguments = arguments
+        self.renderedName = renderedName
+    }
+
+    package var sourceInvocationName: String {
+        guard !arguments.isEmpty else { return sourceName }
+        return "\(sourceName)(\(arguments.map(\.description).joined(separator: ", ")))"
+    }
 }
 
 struct DirectModuleAction: Sendable, Equatable {
@@ -152,6 +170,20 @@ public struct CompiledSpecification: Sendable {
 
     package var compiledActions: [(id: ActionID, renderedName: String)] {
         layout.actions.map { (id: $0.id, renderedName: $0.renderedName) }
+    }
+
+    package func renderedActions() throws -> [RenderedAction] {
+        guard let plan = moduleSectionPlans[formalModuleClosure.root.id] else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "formalModuleClosure.\(formalModuleClosure.root.module.name)",
+                expected: "a compiled module section plan",
+                actual: "no module section plan",
+                nextSafeAction: "Compile the source model again."
+            )
+        }
+        return plan.renderedActions
     }
 
     package func actionRequest(
@@ -713,10 +745,32 @@ public extension TLASpec {
         let emittedActionNamesByID = Dictionary(
             uniqueKeysWithValues: layout.actions.map { ($0.id, $0.renderedName) }
         )
-        let emittedActionCallNames = try directActionCallNames(
+        let emittedActionCalls = try directActionCalls(
             semantics.actions,
             emittedActionNames: emittedActionNamesByID
         )
+        let emittedActionCallNames = Dictionary(
+            uniqueKeysWithValues: emittedActionCalls.map { ($0.call, $0.renderedName) }
+        )
+        var renderedActions: [RenderedAction] = []
+        for (call, renderedName) in emittedActionCalls {
+            guard let action = layout.actions.first(where: { $0.id == call.action }) else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "actions[\(call.action.ordinal)]",
+                    expected: "a compiled action declaration",
+                    actual: "the rendered action call has no declaration",
+                    nextSafeAction: "Compile the source model again."
+                )
+            }
+            guard !action.declaration.name.isEmpty else { continue }
+            renderedActions.append(RenderedAction(
+                sourceName: action.declaration.name,
+                arguments: call.arguments,
+                renderedName: renderedName
+            ))
+        }
         let orderedDefinitionsBeforeInstances = try orderDirectDefinitions(
             definitionsBeforeInstances,
             declared: []
@@ -725,7 +779,7 @@ public extension TLASpec {
             definitionsAfterInstances,
             declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
         )
-        let renderedActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
+        let directModuleActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
             let compiled = semantics.actions[index]
             guard let renderedName = emittedActionNamesByID[compiled.id] else {
                 throw CompilationDiagnostic(
@@ -748,7 +802,7 @@ public extension TLASpec {
             renderedModuleSource: try renderedDirectModuleSource(
                 definitionsBeforeInstances: orderedDefinitionsBeforeInstances,
                 definitionsAfterInstances: orderedDefinitionsAfterInstances,
-                renderedActions: renderedActions,
+                renderedActions: directModuleActions,
                 emittedActionNamesByID: emittedActionNamesByID,
                 emittedActionCallNames: emittedActionCallNames,
                 renderedRefinements: renderedRefinements,
@@ -762,7 +816,8 @@ public extension TLASpec {
             renderedConfigurationWithoutSymmetry: renderedTLCConfiguration(
                 semantics: semantics,
                 usesSymmetryReduction: false
-            )
+            ),
+            renderedActions: renderedActions
         )
     }
 
@@ -1316,11 +1371,11 @@ public extension TLASpec {
     }
 }
 
-private func directActionCallNames(
+private func directActionCalls(
     _ actions: [CompiledAction],
     emittedActionNames: [ActionID: String]
-) throws -> [CompiledActionCall: String] {
-    var names: [CompiledActionCall: String] = [:]
+) throws -> [(call: CompiledActionCall, renderedName: String)] {
+    var calls: [(call: CompiledActionCall, renderedName: String)] = []
     for action in actions {
         guard let emittedName = emittedActionNames[action.id] else {
             throw CompilationDiagnostic(
@@ -1335,7 +1390,10 @@ private func directActionCallNames(
         func addCalls(_ position: Int, arguments: [TLAValue], indices: [Int]) {
             guard position < action.bindings.count else {
                 let suffix = indices.isEmpty ? "" : "__\(indices.map(String.init).joined(separator: "_"))"
-                names[.init(action: action.id, arguments: arguments)] = "\(emittedName)\(suffix)"
+                calls.append((
+                    call: .init(action: action.id, arguments: arguments),
+                    renderedName: "\(emittedName)\(suffix)"
+                ))
                 return
             }
             for (index, value) in action.bindings[position].values.enumerated() {
@@ -1344,7 +1402,7 @@ private func directActionCallNames(
         }
         addCalls(0, arguments: [], indices: [])
     }
-    return names
+    return calls
 }
 
 /// Encodes the complete source model with unambiguous field boundaries.

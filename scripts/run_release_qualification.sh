@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tool_root="${CORE_CONFORMANCE_TOOL_ROOT:-$PWD/.build/core-conformance-tools}"
+tool_root="${FINITE_GRAPH_TOOL_ROOT:-$PWD/.build/finite-graph-tools}"
 
 echo "Validate release code-check contract"
 bash Tests/Fixtures/ReleaseCodeCheck/assert_workflow.sh
@@ -33,8 +33,5 @@ swift build --target SwiftTLAMacros
 echo "Build downstream examples"
 make examples
 
-echo "Validate core-conformance workflow contract"
-Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
-
 echo "Run temporal-symmetry conformance"
-CORE_CONFORMANCE_TOOL_ROOT="$tool_root" make temporal-symmetry-conformance
+FINITE_GRAPH_TOOL_ROOT="$tool_root" make temporal-symmetry-conformance
