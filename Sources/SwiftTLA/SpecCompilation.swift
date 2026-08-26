@@ -1497,14 +1497,26 @@ private struct CanonicalSpecificationEncoder {
     }
 
     private func canonicalAction(_ action: NamedAction) -> String {
-        node("action", [
+        let compilerOwnedBindings = action.generatedSymmetricCollectionName == nil
+            ? []
+            : action.bindings.map(\.name)
+        return node("action", [
             action.name,
-            canonicalActionExpression(action.body),
+            canonicalActionExpression(
+                action.body,
+                bindingNames: compilerOwnedBindings
+            ),
             canonicalList(action.bindings.map {
-                node("action-binding", [
-                    $0.name,
-                    canonicalList($0.values.map(canonicalValue))
-                ])
+                if action.generatedSymmetricCollectionName == nil {
+                    node("action-binding", [
+                        $0.name,
+                        canonicalList($0.values.map(canonicalValue))
+                    ])
+                } else {
+                    node("action-binding", [
+                        canonicalList($0.values.map(canonicalValue))
+                    ])
+                }
             }),
             canonicalOptional(action.generatedSymmetricCollectionName)
         ])
@@ -1533,8 +1545,11 @@ private struct CanonicalSpecificationEncoder {
         node("expression", [alphaKey(expression)])
     }
 
-    private func canonicalActionExpression(_ expression: ActionExpr) -> String {
-        node("action", [alphaKey(expression)])
+    private func canonicalActionExpression(
+        _ expression: ActionExpr,
+        bindingNames: [String] = []
+    ) -> String {
+        node("action", [alphaKey(expression, bindingNames: bindingNames)])
     }
 
     private func canonicalTemporal(_ expression: TemporalExpr) -> String {

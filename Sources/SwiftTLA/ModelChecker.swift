@@ -78,7 +78,11 @@ package struct ModelChecker {
     }
 
     private func runExploration() throws -> ModelExplorationResult {
-        if let validationError = validateSymmetricCollections() {
+        if usesSymmetryReduction,
+           let validationError = symmetricCollectionPermutationBudgetError(
+               scopes: symmetricCollectionScopes,
+               budget: permutationProductBudget
+           ) {
             return emptyExploration(
                 result: bounded(.error(validationError.description))
             )
@@ -140,19 +144,12 @@ package struct ModelChecker {
             : .bounded(scopes: symmetricCollectionScopes, outcome: outcome)
     }
 
-    private func validateSymmetricCollections() -> SymmetricCollectionValidationError? {
-        symmetricCollectionPermutationBudgetError(
-            scopes: symmetricCollectionScopes,
-            budget: permutationProductBudget
-        )
-    }
-
     private var symmetricCollectionScopes: [SymmetricCollectionScope] {
         compilation.layout.variables.compactMap { variable in
             variable.symmetricCollection.map {
                 SymmetricCollectionScope(
                     collectionName: variable.declaration.name,
-                    verificationScope: $0.verificationScope
+                    verificationScope: $0.members.count
                 )
             }
         }
@@ -230,8 +227,8 @@ private func compiledBFS(
         }
         let id = StateGraph.StateID(nextID)
         stateToID[key] = id
-        idToState[id] = seed
-        queue.append(seed)
+        idToState[id] = key
+        queue.append(key)
         initialStateIDs.append(id)
         nextID += 1
     }
@@ -273,8 +270,11 @@ private func compiledBFS(
         }
 
         for successor in successors {
-            let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
-            let successorKey = try representative(successor.state)
+            let canonical = try usesSymmetryReduction
+                ? runtime.canonicalState(successor.state, values: successor.arguments)
+                : (state: successor.state, values: successor.arguments)
+            let formalArguments = try canonical.values.map { try $0.rendered(using: layout) }
+            let successorKey = canonical.state
             let targetID: StateGraph.StateID
             if let existing = stateToID[successorKey] {
                 targetID = existing
@@ -284,13 +284,13 @@ private func compiledBFS(
                 }
                 targetID = StateGraph.StateID(nextID)
                 stateToID[successorKey] = targetID
-                idToState[targetID] = successor.state
+                idToState[targetID] = successorKey
                 let actionName = layout.actions[successor.action.ordinal].declaration.name
-                predecessors[successor.state] = (
+                predecessors[successorKey] = (
                     current,
                     formalActionCall(named: actionName, arguments: formalArguments)
                 )
-                queue.append(successor.state)
+                queue.append(successorKey)
                 nextID += 1
             }
             let actionName = layout.actions[successor.action.ordinal].declaration.name

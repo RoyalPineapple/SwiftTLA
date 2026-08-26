@@ -2,6 +2,7 @@ import SwiftSyntax
 
 extension ParserSession {
     struct SymmetricCollectionSourceTypes {
+        let formalName: String
         let element: TypeSyntax
         let value: TypeSyntax
     }
@@ -18,11 +19,14 @@ extension ParserSession {
                 guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
                   let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
-                  terminalTypeName(in: specialization.expression) == "SymmetricCollectionVar"
+                  terminalTypeName(in: specialization.expression) == "SymmetricCollectionVar",
+                  let formalName = call.arguments.first?.expression
+                    .as(StringLiteralExprSyntax.self)?.representedLiteralValue
                 else { continue }
                 let arguments = Array(specialization.genericArgumentClause.arguments)
                 guard arguments.count == 2 else { continue }
                 types[name] = .init(
+                    formalName: formalName,
                     element: arguments[0].argument,
                     value: arguments[1].argument
                 )
@@ -37,8 +41,8 @@ extension ParserSession {
         collectionTypes: [String: SymmetricCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
-        guard let collectionName = arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              let types = collectionTypes[collectionName],
+        guard let collectionReference = arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let types = collectionTypes[collectionReference],
               let scopeArgument = arguments.first(where: { $0.label?.text == "verificationScope" })?.expression,
               let scopeLiteral = scopeArgument.as(IntegerLiteralExprSyntax.self),
               let scope = Int(scopeLiteral.literal.text),
@@ -56,7 +60,7 @@ extension ParserSession {
         }
 
         let declaration = SymmetricCollectionDecl(
-            name: collectionName,
+            name: types.formalName,
             verificationScope: scope,
             initial: initial,
             generatedElementType: elementType,
@@ -68,12 +72,14 @@ extension ParserSession {
 
     func parseCollectionAction(
         _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents
+        into result: inout ParsedSpecComponents,
+        collectionTypes: [String: SymmetricCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
         guard let actionName = extractStringArg(call, index: 0),
-              let collectionName = arguments.first(where: { $0.label?.text == "on" })?.expression
+              let collectionReference = arguments.first(where: { $0.label?.text == "on" })?.expression
                 .as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let collection = collectionTypes[collectionReference],
               let closure = call.trailingClosure
         else {
             result.diagnostics.append(.init(
@@ -96,13 +102,13 @@ extension ParserSession {
         validateMemberUses(
             memberName,
             in: closure,
-            owning: collectionName,
+            owning: collectionReference,
             action: actionName,
             into: &result
         )
         guard let actionBody = parseCollectionActionBody(
             closure,
-            collection: collectionName,
+            collection: collectionReference,
             member: memberName,
             binding: member
         ) else {
@@ -118,11 +124,11 @@ extension ParserSession {
             name: actionName,
             body: .existsAction(
                 member,
-                .domain(.variable(collectionName)),
-                actionBody
+                .domain(.variable(collection.formalName)),
+                renameVar(collectionReference, to: collection.formalName, in: actionBody)
             ),
             controlOwner: nil,
-            generatedSymmetricCollectionName: collectionName
+            generatedSymmetricCollectionName: collection.formalName
         ))
     }
 

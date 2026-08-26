@@ -24,15 +24,17 @@ struct DeviceContract {
     }
 }
 
-let device = Device(id: UUID())
-var contract = DeviceContract()
-contract.phases.insert(device)
-let result = try contract.send(.beginConnect(member: device.id))
+let ids = (0..<4).map { _ in UUID() }
+let initialPhases = Dictionary(uniqueKeysWithValues: ids.map { ($0, 0) })
+var contract = try DeviceContract.makeMachine(phases: ids)
 
-guard case .function = contract.state.phases else {
+guard contract.state.phases == initialPhases else {
     throw FixtureError.invalidState
 }
-guard case .function = result.after.phases else {
+let result = try contract.send(.beginConnect(member: ids[0]))
+var expectedPhases = initialPhases
+expectedPhases[ids[0]] = 1
+guard result.after.phases == expectedPhases, contract.state.phases == expectedPhases else {
     throw FixtureError.invalidTransition
 }
 
@@ -43,13 +45,9 @@ guard generatedSpec.invariants.count == 1 else {
 guard case .forAll = generatedSpec.invariants[0].body else {
     throw FixtureError.invalidInvariant
 }
-guard case .bounded(_, .ok) = try ModelChecker(compilation: try generatedSpec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check() else {
-    throw FixtureError.incompleteCheck
-}
 
 private enum FixtureError: Error {
     case invalidState
     case invalidTransition
     case invalidInvariant
-    case incompleteCheck
 }

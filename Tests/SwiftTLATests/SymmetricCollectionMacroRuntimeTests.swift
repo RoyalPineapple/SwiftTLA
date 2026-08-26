@@ -10,18 +10,10 @@ private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
 
 public struct MacroDevice: Identifiable, Sendable {
   public let id: Int
-
-  public init(id: Int) {
-    self.id = id
-  }
 }
 
 public struct StringMacroDevice: Identifiable, Sendable {
   public let id: String
-
-  public init(id: String) {
-    self.id = id
-  }
 }
 
 @TLAModel
@@ -141,12 +133,18 @@ public struct GeneratedContainsPredicateRuntime {
 struct SymmetricCollectionMacroRuntimeTests {
   private func compiledSuccessors(
     in compilation: CompiledSpecification,
-    from value: TLAValue
+    from values: [TLAValue]
   ) throws -> [CompiledState] {
-    let state = try CompiledState(formalValues: [value], compilation: compilation)
+    let state = try CompiledState(formalValues: values, compilation: compilation)
     return try CompiledRuntime(compilation: compilation)
       .successors(from: state)
       .map(\.state)
+  }
+
+  private func collectionValue(_ values: [Int], in spec: TLASpec) throws -> TLAValue {
+    let members = try #require(spec.symmetricCollections.first?.metadata.members)
+    try #require(members.count == values.count)
+    return .function(Dictionary(uniqueKeysWithValues: zip(members, values.map(TLAValue.int))))
   }
 
   private struct Device: Identifiable {
@@ -174,6 +172,43 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(parsed.symmetricCollections[0].verificationScope == 2)
     #expect(parsed.actions.compactMap(\.generatedSymmetricCollectionName) == ["devices"])
     #expect(parsed.diagnostics.isEmpty)
+  }
+
+  @Test("The declared collection name is independent of its Swift local name")
+  func parserAndBuilderShareTheDeclaredCollectionName() throws {
+    let source = """
+    {
+      let devices = SymmetricCollectionVar<Device, Int>("phases")
+      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      CollectionAction("begin", on: devices) { member in
+        devices[member] == 0 && devices.update(member, to: 1)
+      }
+      Invariant("valid") {
+        devices.allSatisfy { phase in phase >= 0 && phase <= 1 }
+      }
+    }
+    """
+    let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+    let devices = SymmetricCollectionVar<Device, Int>("phases")
+    let built = TLASpec("DeclaredCollectionName") {
+      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      CollectionAction("begin", on: devices) { member in
+        devices[member] == 0 && devices.update(member, to: 1)
+      }
+      Invariant("valid") {
+        devices.allSatisfy { phase in phase >= 0 && phase <= 1 }
+      }
+    }
+
+    let parsedCompilation = try parsed.compile(specificationName: "DeclaredCollectionName")
+    let builtCompilation = try built.compile()
+
+    #expect(parsed.diagnostics.isEmpty)
+    #expect(parsed.symmetricCollections.map(\.name) == ["phases"])
+    #expect(parsed.actions.compactMap(\.generatedSymmetricCollectionName) == ["phases"])
+    #expect(parsedCompilation.identity == builtCompilation.identity)
+    #expect(parsedCompilation.renderedTLAModuleBundle().root.tla
+      == builtCompilation.renderedTLAModuleBundle().root.tla)
   }
 
   @Test("Symmetric collection type arguments retain their syntax until generated Swift is emitted")
@@ -208,7 +243,6 @@ struct SymmetricCollectionMacroRuntimeTests {
     let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
     let initial = try #require(parsed.variables.first?.initial)
-    let advanced = TLAValue.function([.constant("DevicesMember0"): .int(1)])
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let runtimeBuilt = TLASpec("CollectionActionBehavior") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
@@ -219,11 +253,12 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let parsedCompilation = try parsed.compile(specificationName: "CollectionActionBehavior")
     let runtimeCompilation = try runtimeBuilt.compile()
+    let advanced = try collectionValue([1], in: runtimeBuilt)
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(try compiledSuccessors(in: parsedCompilation, from: initial)
-      == compiledSuccessors(in: runtimeCompilation, from: initial))
-    #expect(try compiledSuccessors(in: parsedCompilation, from: advanced).isEmpty)
+    #expect(try compiledSuccessors(in: parsedCompilation, from: [initial])
+      == compiledSuccessors(in: runtimeCompilation, from: [initial]))
+    #expect(try compiledSuccessors(in: parsedCompilation, from: [advanced]).isEmpty)
   }
 
   @Test("Parser preserves collection action precedence from syntax nodes")
@@ -299,7 +334,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       """
       let closure = try parseClosure(source)
 
-      #expect(!SpecParser.parseSpecClosure(closure).diagnostics.isEmpty)
+      #expect(SpecParser.parseSpecClosure(closure).diagnostics.isEmpty == false)
     }
   }
 
@@ -316,257 +351,173 @@ struct SymmetricCollectionMacroRuntimeTests {
     """
     let closure = try parseClosure(source)
 
-    #expect(!SpecParser.parseSpecClosure(closure).diagnostics.isEmpty)
+    #expect(SpecParser.parseSpecClosure(closure).diagnostics.isEmpty == false)
   }
 
-  @Test("Identified runtime storage retains concrete IDs beyond verification scope")
-  func runtimeStorageUsesConcreteIDsWithoutCappingPopulation() throws {
-    var devices = try IdentifiedModelCollection<Device, Int>(
-      name: "devices", verificationScope: 1, initial: 0
+  @Test("Generated state binds the exact collection population to application IDs")
+  func macroBindsExactApplicationIDs() throws {
+    let deviceID = 42
+    var model = try GeneratedSymmetricRuntime.makeMachine(
+      .init(devices: [deviceID: 0]),
+      devices: [deviceID]
     )
-    let first = Device(id: 1)
-    let second = Device(id: 2)
 
-    devices.insert(first)
-    devices.insert(second, value: 3)
-    try devices.update(id: second.id, to: 4)
+    #expect(model.state.devices == [deviceID: 0])
+    let result = try model.send(.begin(member: deviceID))
 
-    #expect(devices.verificationScope == 1)
-    #expect(devices.count == 2)
-    #expect(devices[first.id] == 0)
-    #expect(devices[second.id] == 4)
-    #expect(throws: SymmetricCollectionRuntimeError.self) {
-      try devices.update(id: 99, to: 1)
-    }
-  }
-
-  @Test("Identified runtime storage rejects an invalid verification scope")
-  func runtimeStorageRejectsInvalidVerificationScope() {
-    #expect(throws: SymmetricCollectionRuntimeError.self) {
-      _ = try IdentifiedModelCollection<Device, Int>(
-        name: "devices", verificationScope: 0, initial: 0
-      )
-    }
-  }
-
-  @Test("TLAModel generates typed collection actions and checked scopes")
-  func macroGeneratesIdentifiedRuntime() throws {
-    var model = try GeneratedSymmetricRuntime.makeMachine()
-    let device = MacroDevice(id: 42)
-
-    model.devices.insert(device)
-    let result = try model.send(.begin(member: device.id))
-
-    #expect(model.devices[device.id] == 1)
-    #expect(result.action == .begin(member: device.id))
-    #expect(GeneratedSymmetricRuntime.symmetricCollectionScopes == [
-      SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
-    ])
-    #expect(GeneratedSymmetricRuntime.spec.actions.description.contains("42") == false)
-    #expect(throws: GeneratedMachineError.self) {
+    #expect(model.state.devices == [deviceID: 1])
+    #expect(result.before.devices == [deviceID: 0])
+    #expect(result.after.devices == [deviceID: 1])
+    #expect(result.action == .begin(member: deviceID))
+    #expect(throws: GeneratedMachineStateDiagnostic.self) {
       try model.send(.begin(member: 99))
     }
   }
 
-  @Test("Generated collection actions evaluate expression-backed updates against live storage")
-  func macroUpdatesLiveStorageForExpressionBackedActions() throws {
-    var model = try GeneratedExpressionSymmetricRuntime.makeMachine()
-    let device = MacroDevice(id: 42)
+  @Test("Generated actors wrap the same exact collection population")
+  func actorBindsExactApplicationIDs() async throws {
+    let deviceID = 42
+    let actor = try GeneratedSymmetricRuntime.Actor(devices: [deviceID])
 
-    model.devices.insert(device, value: 4)
-    _ = try model.send(.advance(member: device.id))
+    let transition = try await actor.send(.begin(member: deviceID))
 
-    #expect(model.devices[device.id] == 5)
+    #expect(transition.before.devices == [deviceID: 0])
+    #expect(transition.after.devices == [deviceID: 1])
+    #expect(await actor.state.devices == [deviceID: 1])
+  }
+
+  @Test("Generated machines require one unique application ID per compiled member")
+  func macroRequiresTheExactPopulation() {
+    #expect(throws: GeneratedMachineStateDiagnostic.self) {
+      _ = try GeneratedScopedSymmetricRuntime.makeMachine(devices: ["only-one"])
+    }
+    #expect(throws: GeneratedMachineStateDiagnostic.self) {
+      _ = try GeneratedScopedSymmetricRuntime.makeMachine(devices: ["same", "same"])
+    }
+  }
+
+  @Test("Generated collection actions evaluate expression-backed updates")
+  func macroEvaluatesExpressionBackedUpdates() throws {
+    let deviceID = 42
+    var model = try GeneratedExpressionSymmetricRuntime.makeMachine(devices: [deviceID])
+
+    for expected in 1...5 {
+      _ = try model.send(.advance(member: deviceID))
+      #expect(model.state.devices == [deviceID: expected])
+    }
+
+    #expect(throws: GeneratedMachineError.self) {
+      try model.send(.advance(member: deviceID))
+    }
   }
 
   @Test("Generated routing rejects a wrong-phase selected entry and preserves peers")
-  func macroRoutesGuardToTheSelectedLiveEntry() throws {
-    var model = try GeneratedScopedSymmetricRuntime.makeMachine()
-    let eligible = StringMacroDevice(id: "eligible")
-    let wrongPhase = StringMacroDevice(id: "wrong-phase")
-    let peer = StringMacroDevice(id: "peer")
-    model.devices.insert(eligible, value: 0)
-    model.devices.insert(wrongPhase, value: 1)
-    model.devices.insert(peer, value: 4)
+  func macroRoutesGuardToTheSelectedEntry() throws {
+    let eligible = "eligible"
+    let wrongPhase = "wrong-phase"
+    let ids = [eligible, wrongPhase]
+    var model = try GeneratedScopedSymmetricRuntime.makeMachine(devices: ids)
+
+    _ = try model.send(.begin(member: wrongPhase))
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.send(.begin(member: wrongPhase.id))
+      try model.send(.begin(member: wrongPhase))
     }
-    #expect(model.devices[wrongPhase.id] == 1)
-    #expect(model.devices[eligible.id] == 0)
-    #expect(model.devices[peer.id] == 4)
+    #expect(model.state.devices == [eligible: 0, wrongPhase: 1])
 
-    _ = try model.send(.begin(member: eligible.id))
-    #expect(model.devices[eligible.id] == 1)
-    #expect(model.devices[wrongPhase.id] == 1)
-    #expect(model.devices[peer.id] == 4)
-  }
-
-  @Test("Generated routing supports live populations beyond the verification scope")
-  func macroDoesNotConsumeBoundedVerifierMembersForLiveRouting() throws {
-    var model = try GeneratedScopedSymmetricRuntime.makeMachine()
-    let devices = ["first", "second", "third"].map(StringMacroDevice.init)
-
-    for device in devices {
-      model.devices.insert(device)
-      _ = try model.send(.begin(member: device.id))
-    }
-
-    #expect(model.devices.verificationScope == 2)
-    #expect(model.devices.count == 3)
-    for device in devices {
-      #expect(model.devices[device.id] == 1)
-    }
-    #expect(GeneratedScopedSymmetricRuntime.spec.actions.description.contains("first") == false)
-    #expect(GeneratedScopedSymmetricRuntime.spec.actions.description.contains("second") == false)
-    #expect(GeneratedScopedSymmetricRuntime.spec.actions.description.contains("third") == false)
+    _ = try model.send(.begin(member: eligible))
+    #expect(model.state.devices == [eligible: 1, wrongPhase: 1])
   }
 
   @Test("Generated routing evaluates shared authored guards before its update")
   func macroEvaluatesTheCompleteAuthoredGuard() throws {
-    var model = try GeneratedSharedGuardSymmetricRuntime.makeMachine()
-    let device = StringMacroDevice(id: "shared-guard")
-    model.devices.insert(device)
+    let deviceID = "shared-guard"
+    var model = try GeneratedSharedGuardSymmetricRuntime.makeMachine(devices: [deviceID])
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.send(.begin(member: device.id))
+      try model.send(.begin(member: deviceID))
     }
-    #expect(model.devices[device.id] == 0)
+    #expect(model.state.phase == 4)
+    #expect(model.state.devices == [deviceID: 0])
   }
 
-  @Test("Generated routing preserves ActionBuilder statement precedence")
-  func macroPreservesMultiStatementActionPrecedence() throws {
-    let boundedState = TLAValue.function([
-        .constant("DevicesMember0"): .int(0),
-        .constant("DevicesMember1"): .int(1)
-      ])
+  @Test("Compiled collection actions preserve ActionBuilder statement precedence")
+  func compiledActionPreservesMultiStatementPrecedence() throws {
+    let boundedState = try collectionValue([0, 1], in: GeneratedMultiStatementSymmetricRuntime.spec)
     let compilation = try GeneratedMultiStatementSymmetricRuntime.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
       in: compilation,
-      from: boundedState
+      from: [boundedState]
     )
-    #expect(try boundedSuccessors.map { try renderedValue(named: "devices", in: $0, compilation: compilation) } == [
-      .function([
-        .constant("DevicesMember0"): .int(0),
-        .constant("DevicesMember1"): .int(11)
-      ])
-    ])
-
-    var model = try GeneratedMultiStatementSymmetricRuntime.makeMachine()
-    let rejected = StringMacroDevice(id: "rejected")
-    let selected = StringMacroDevice(id: "selected")
-    let peer = StringMacroDevice(id: "peer")
-    model.devices.insert(rejected, value: 0)
-    model.devices.insert(selected, value: 1)
-    model.devices.insert(peer, value: 4)
-
-    #expect(throws: GeneratedMachineError.self) {
-      try model.send(.advance(member: rejected.id))
-    }
-    #expect(model.devices[rejected.id] == 0)
-    #expect(model.devices[peer.id] == 4)
-
-    _ = try model.send(.advance(member: selected.id))
-    #expect(model.devices[selected.id] == 11)
-    #expect(model.devices[peer.id] == 4)
+    let expected = try collectionValue([0, 11], in: GeneratedMultiStatementSymmetricRuntime.spec)
+    #expect(try boundedSuccessors.map {
+      try renderedValue(named: "devices", in: $0, compilation: compilation)
+    } == [expected])
   }
 
-  @Test("Generated routing applies the update from the enabled disjunct only")
-  func macroPreservesBranchSpecificCollectionUpdates() throws {
-    let boundedState = TLAValue.function([
-        .constant("DevicesMember0"): .int(2),
-        .constant("DevicesMember1"): .int(1)
-      ])
+  @Test("Compiled and generated actions apply the update from the enabled disjunct")
+  func actionsPreserveBranchSpecificCollectionUpdates() throws {
+    let boundedState = try collectionValue([2, 1], in: GeneratedDisjunctiveSymmetricRuntime.spec)
     let compilation = try GeneratedDisjunctiveSymmetricRuntime.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
       in: compilation,
-      from: boundedState
+      from: [boundedState]
     )
-    #expect(try boundedSuccessors.map { try renderedValue(named: "devices", in: $0, compilation: compilation) } == [
-      .function([
-        .constant("DevicesMember0"): .int(22),
-        .constant("DevicesMember1"): .int(1)
-      ])
-    ])
+    let expected = try collectionValue([22, 1], in: GeneratedDisjunctiveSymmetricRuntime.spec)
+    #expect(try boundedSuccessors.map {
+      try renderedValue(named: "devices", in: $0, compilation: compilation)
+    } == [expected])
 
-    var model = try GeneratedDisjunctiveSymmetricRuntime.makeMachine()
-    let selected = StringMacroDevice(id: "selected")
-    let rejected = StringMacroDevice(id: "rejected")
-    let peer = StringMacroDevice(id: "peer")
-    model.devices.insert(selected, value: 2)
-    model.devices.insert(rejected, value: 1)
-    model.devices.insert(peer, value: 0)
+    let selected = "selected"
+    let rejected = "rejected"
+    var model = try GeneratedDisjunctiveSymmetricRuntime.makeMachine(
+      devices: [selected, rejected]
+    )
+
+    _ = try model.send(.advance(member: selected))
+    #expect(model.state.devices == [selected: 1, rejected: 0])
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.send(.advance(member: rejected.id))
+      try model.send(.advance(member: selected))
     }
-    #expect(model.devices[rejected.id] == 1)
-    #expect(model.devices[peer.id] == 0)
-
-    _ = try model.send(.advance(member: selected.id))
-    #expect(model.devices[selected.id] == 22)
-    #expect(model.devices[peer.id] == 0)
+    #expect(model.state.devices == [selected: 1, rejected: 0])
   }
 
-  @Test("Ordinary allSatisfy actions use every live collection value")
-  func macroProjectsLiveCollectionsForAllSatisfyGuards() throws {
-    var allowed = try GeneratedAllSatisfyPredicateRuntime.makeMachine()
-    let allowedDevices = ["one", "two", "three"].map(StringMacroDevice.init)
-    for device in allowedDevices {
-      allowed.devices.insert(device)
-    }
+  @Test("Ordinary allSatisfy actions use every declared collection value")
+  func macroEvaluatesAllSatisfyAcrossTheDeclaredPopulation() throws {
+    let ids = ["one", "two"]
+    var allowed = try GeneratedAllSatisfyPredicateRuntime.makeMachine(devices: ids)
 
     let allowedEvidence = try allowed.send(.advance)
-    #expect(allowed.phase == 1)
+    #expect(allowed.state.phase == 1)
     #expect(allowedEvidence.before.phase == 0)
     #expect(allowedEvidence.after.phase == 1)
 
-    var rejected = try GeneratedAllSatisfyPredicateRuntime.makeMachine()
-    let peers = ["one", "two", "three"].map(StringMacroDevice.init)
-    let violating = StringMacroDevice(id: "violating")
-    for device in peers {
-      rejected.devices.insert(device)
-    }
-    rejected.devices.insert(violating, value: 1)
+    let compilation = try GeneratedAllSatisfyPredicateRuntime.spec.compile()
+    let formalDevices = try collectionValue([0, 1], in: GeneratedAllSatisfyPredicateRuntime.spec)
+    #expect(try compiledSuccessors(in: compilation, from: [.int(0), formalDevices]).isEmpty)
+  }
+
+  @Test("Ordinary contains actions use every declared collection value")
+  func macroEvaluatesContainsAcrossTheDeclaredPopulation() throws {
+    let ids = ["one", "two"]
+    var rejected = try GeneratedContainsPredicateRuntime.makeMachine(devices: ids)
 
     let rejectedSnapshot = rejected.state
     #expect(throws: GeneratedMachineError.self) {
       try rejected.send(.advance)
     }
     #expect(rejected.state == rejectedSnapshot)
-    #expect(rejected.phase == 0)
-    #expect(rejected.devices.count == 4)
-    #expect(rejected.devices[violating.id] == 1)
-    for device in peers {
-      #expect(rejected.devices[device.id] == 0)
-    }
-  }
 
-  @Test("Ordinary contains actions use live values above verification scope")
-  func macroProjectsLiveCollectionsForContainsGuards() throws {
-    var model = try GeneratedContainsPredicateRuntime.makeMachine()
-    let devices = ["one", "two", "three"].map(StringMacroDevice.init)
-    for device in devices {
-      model.devices.insert(device)
-    }
-
-    let rejectedSnapshot = model.state
-    #expect(throws: GeneratedMachineError.self) {
-      try model.send(.advance)
-    }
-    #expect(model.state == rejectedSnapshot)
-    #expect(model.phase == 0)
-
-    let matching = StringMacroDevice(id: "matching")
-    model.devices.insert(matching, value: 1)
-    let evidence = try model.send(.advance)
-
-    #expect(model.phase == 1)
-    #expect(evidence.after.phase == 1)
-    #expect(model.devices.count == 4)
-    #expect(model.devices[matching.id] == 1)
-    for device in devices {
-      #expect(model.devices[device.id] == 0)
-    }
+    let compilation = try GeneratedContainsPredicateRuntime.spec.compile()
+    let formalDevices = try collectionValue([0, 1], in: GeneratedContainsPredicateRuntime.spec)
+    let successors = try compiledSuccessors(
+      in: compilation,
+      from: [.int(0), formalDevices]
+    )
+    #expect(successors.count == 1)
+    #expect(try successors.map {
+      try renderedValue(named: "phase", in: $0, compilation: compilation)
+    } == [.int(1)])
   }
 }

@@ -1,7 +1,16 @@
 func alphaKey(_ action: ActionExpr) -> String {
+    alphaKey(action, bindingNames: [])
+}
+
+func alphaKey(_ action: ActionExpr, bindingNames: [String]) -> String {
     var next = 0
+    var environment: [String: String] = [:]
+    for name in bindingNames {
+        let (_, extended) = fresh(name, environment: environment, next: &next)
+        environment = extended
+    }
     let branches = semanticBranches(action)
-    return "or[\(branches.map { actionKey($0, environment: [:], next: &next) }.joined(separator: ","))]"
+    return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
 }
 
 /// Gives action disjunction one canonical representation. In particular,

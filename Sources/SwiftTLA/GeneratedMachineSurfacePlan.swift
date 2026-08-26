@@ -6,18 +6,15 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let formalName: String
         package let storageOrdinal: Int
         package let swiftType: String
-        package let isSymmetricCollection: Bool
 
         package init(
             formalName: String,
             storageOrdinal: Int,
-            swiftType: String,
-            isSymmetricCollection: Bool
+            swiftType: String
         ) {
             self.formalName = formalName
             self.storageOrdinal = storageOrdinal
             self.swiftType = swiftType
-            self.isSymmetricCollection = isSymmetricCollection
         }
     }
 
@@ -54,23 +51,20 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package struct SymmetricCollection: Sendable, Equatable {
         package let formalName: String
         package let storageOrdinal: Int
-        package let verificationScope: Int
-        package let initial: TLAValue
+        package let members: [TLAValue]
         package let elementType: String
         package let valueType: String
 
         package init(
             formalName: String,
             storageOrdinal: Int,
-            verificationScope: Int,
-            initial: TLAValue,
+            members: [TLAValue],
             elementType: String,
             valueType: String
         ) {
             self.formalName = formalName
             self.storageOrdinal = storageOrdinal
-            self.verificationScope = verificationScope
-            self.initial = initial
+            self.members = members
             self.elementType = elementType
             self.valueType = valueType
         }
@@ -101,8 +95,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                     SymmetricCollection(
                         formalName: variable.declaration.name,
                         storageOrdinal: variable.id.ordinal,
-                        verificationScope: declaration.verificationScope,
-                        initial: declaration.initial,
+                        members: declaration.members,
                         elementType: elementType,
                         valueType: valueType
                     )
@@ -114,16 +107,19 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             $0.declaration.origin == .source
         }.map { variable in
             let collection = symmetricCollectionsByVariableID[variable.id]
-            let swiftType = try Self.generatedSwiftType(
-                explicit: variable.generatedSwiftType,
-                fallback: variable.initial,
-                path: "variables.\(variable.declaration.name)"
-            )
+            let swiftType = if let collection {
+                "[\(collection.elementType).ID: \(collection.valueType)]"
+            } else {
+                try Self.generatedSwiftType(
+                    explicit: variable.generatedSwiftType,
+                    fallback: variable.initial,
+                    path: "variables.\(variable.declaration.name)"
+                )
+            }
             return Variable(
                 formalName: variable.declaration.name,
                 storageOrdinal: variable.id.ordinal,
-                swiftType: swiftType,
-                isSymmetricCollection: collection != nil
+                swiftType: swiftType
             )
         }
         let symmetricCollections = layout.variables.compactMap {
@@ -145,6 +141,19 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                     "symmetric collection",
                     named: action.declaration.name
                 )
+            }
+            if let collection {
+                guard action.bindings.count == 1,
+                      action.bindings[0].values == collection.members else {
+                    throw CompilationDiagnostic(
+                        code: .compilationIdentityMismatch,
+                        stage: .lowering,
+                        path: "machineSurfacePlan.actions.\(action.declaration.name)",
+                        expected: "one compiled member binding for symmetric collection '\(collection.formalName)'",
+                        actual: "\(action.bindings.count) binding(s) with domains \(action.bindings.map(\.values))",
+                        nextSafeAction: "Compile the collection action from its declared symmetric collection."
+                    )
+                }
             }
             return Action(
                 swiftIdentifier: identifier,

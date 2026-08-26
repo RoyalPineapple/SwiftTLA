@@ -65,8 +65,7 @@ struct CompiledVariableLayout: Hashable, Sendable {
 }
 
 struct CompiledSymmetricCollectionLayout: Hashable, Sendable {
-    let verificationScope: Int
-    let initial: TLAValue
+    let members: [TLAValue]
     let elementType: String?
     let valueType: String?
 }
@@ -198,8 +197,7 @@ struct CompiledLayout: Hashable, Sendable {
                 generatedSwiftType: variable.generatedSwiftType,
                 symmetricCollection: collection.map {
                     .init(
-                        verificationScope: $0.verificationScope,
-                        initial: $0.initial,
+                        members: $0.metadata.members,
                         elementType: $0.generatedElementType,
                         valueType: $0.generatedValueType
                     )
@@ -684,6 +682,7 @@ struct BindingValidator {
     private let closure: FormalModuleClosure
     private let constants: [ConstantDecl]
     private let formalConstants: Set<String>
+    private let symmetricMembers: [TLAValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
     private var operators: [String: OperatorID]
     private var operatorNames: [OperatorID: String]
@@ -706,6 +705,7 @@ struct BindingValidator {
         formalConstants = Set(spec.formalParameters.compactMap { parameter in
             parameter.kind == .constant ? parameter.name : nil
         })
+        symmetricMembers = spec.symmetricCollections.flatMap { $0.metadata.members }
         self.incomingModuleParameters = incomingModuleParameters
         let names = spec.formalOperatorDefinitions.map(\.name)
             + spec.recursiveFuncs.map(\.name)
@@ -720,8 +720,14 @@ struct BindingValidator {
     }
 
     mutating func validate(spec: TLASpec) throws -> CompiledBindingTable {
+        for constant in spec.constants {
+            try validateValue(constant.value, at: "constants.\(constant.name)")
+        }
         for (index, variable) in spec.variables.enumerated() {
             let path = "variables.\(variable.name)"
+            if spec.symmetricCollections.contains(where: { $0.name == variable.name }) == false {
+                try validateValue(variable.initial, at: "\(path).initial")
+            }
             try validateExpression(variable.initialSet, at: "\(path).initialSet", scope: [:])
             try validateExpression(variable.initExpr, at: "\(path).initExpr", scope: [:])
             try validateExpression(variable.lazySet, at: "\(path).lazySet", scope: [:])
@@ -739,6 +745,11 @@ struct BindingValidator {
                 )
             }
             references["actions.\(action.name).declaration"] = .action(id)
+            if action.generatedSymmetricCollectionName == nil {
+                for (index, value) in action.bindings.flatMap(\.values).enumerated() {
+                    try validateValue(value, at: "actions.\(action.name).bindings[\(index)]")
+                }
+            }
             let scope = try bind(action.bindings.map(\.name), at: "actions.\(action.name).bindings", scope: [:])
             try actionExpression(action.body, at: "actions.\(action.name).body", scope: scope)
         }
@@ -840,6 +851,9 @@ struct BindingValidator {
             name = value
         case .weakFairnessActionCall(let value), .strongFairnessActionCall(let value):
             name = value.name
+            for (index, argument) in value.arguments.enumerated() {
+                try validateValue(argument, at: "\(path).arguments[\(index)]")
+            }
         }
         guard let id = layout.actionID(named: name) else {
             throw diagnostic(
@@ -865,8 +879,8 @@ struct BindingValidator {
         switch expression {
         case .sourceIssue(let issue):
             throw issue.compilationDiagnostic(stage: .validation, path: path)
-        case .value:
-            return
+        case .value(let value):
+            try validateValue(value, at: path)
         case .currentProcess:
             throw diagnostic(
                 code: .unknownReference,
@@ -1021,6 +1035,18 @@ struct BindingValidator {
         case .letIn(let operators, let body):
             try validateOperators(operators, body: body, at: path, scope: scope)
         }
+    }
+
+    private func validateValue(_ value: TLAValue, at path: String) throws {
+        guard let member = symmetricMembers.first(where: { valueContains(value, $0) }) else {
+            return
+        }
+        throw diagnostic(
+            code: .invalidSymmetricCollection,
+            path: path,
+            expected: "logic invariant under exchangeable member renaming",
+            actual: "authored expression names compiler-owned symmetric member '\(member)'"
+        )
     }
 
     private mutating func formalOperator(_ operation: FormalOperator, at path: String, scope: [String: BinderID]) throws {

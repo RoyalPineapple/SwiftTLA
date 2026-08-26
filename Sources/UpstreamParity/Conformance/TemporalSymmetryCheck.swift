@@ -207,10 +207,10 @@ package struct TemporalSymmetryCheck: Sendable {
       id: symmetryCase.id, bundle: reducedBundle, pin: referencePin, architecture: toolchain.architecture)
     let rawRequest = try request(
       toolchain: toolchain, bundle: rawBundle, work: work.appendingPathComponent("raw"),
-      declared: rawCase, runID: rawRunID, projectRoot: projectRoot)
+      finiteGraphCase: rawCase, runID: rawRunID, projectRoot: projectRoot)
     let reducedRequest = try request(
       toolchain: toolchain, bundle: reducedBundle, work: work.appendingPathComponent("reduced"),
-      declared: reducedCase, runID: reducedRunID, projectRoot: projectRoot)
+      finiteGraphCase: reducedCase, runID: reducedRunID, projectRoot: projectRoot)
     try validateSymmetryRequests(raw: rawRequest, reduced: reducedRequest)
     let processAdapter = TLCProcessAdapter()
     let rawTLC = try processAdapter.capture(
@@ -303,7 +303,7 @@ extension TemporalSymmetryCheck {
     toolchain: ResolvedTLCToolchain,
     bundle: TLAModuleBundle,
     work: URL,
-    declared: FiniteGraphCase,
+    finiteGraphCase: FiniteGraphCase,
     runID: UUID,
     projectRoot: URL
   ) throws -> TLCProcessRequest {
@@ -313,7 +313,8 @@ extension TemporalSymmetryCheck {
       bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
-      arguments: declared.arguments, finiteGraphCase: declared, runID: runID, referencePin: declared.pin, referenceArtifacts: toolchain.artifacts)
+      arguments: finiteGraphCase.arguments, finiteGraphCase: finiteGraphCase, runID: runID,
+      referencePin: finiteGraphCase.pin, referenceArtifacts: toolchain.artifacts)
   }
 
   private func symmetryPermutations(members: [TLAValue]) throws -> [SymmetryPermutation] {

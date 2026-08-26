@@ -1,7 +1,8 @@
 # Symmetric collections
 
-Symmetric collections model a declared finite set of exchangeable members.
-They provide formal-engine and parity support for bounded symmetry checks.
+Symmetric collections model an exact finite set of exchangeable application
+members. The same declared population drives generated execution, bounded
+exploration, rendered TLA+, and TLC symmetry checks.
 
 ## Declare a collection
 
@@ -14,12 +15,13 @@ let devices = SymmetricCollectionVar<Device, Int>("devices")
 let spec = TLASpec("Devices") {
     SymmetricCollection(devices, verificationScope: 2, initial: 0)
     CollectionAction("advance", on: devices) { member in
-        devices[member].becomes(devices[member] + 1)
+        devices.update(member, to: devices[member] + 1)
     }
 }
 ```
 
-`verificationScope` declares the finite member count for one exploration.
+`verificationScope` declares the exact member count for the generated machine
+and each exploration.
 The compiler creates opaque formal member constants and a typed function from
 those members to collection values.
 
@@ -39,21 +41,46 @@ The rendered TLA+ bundle declares the member domain, symmetry operator, and
 TLC configuration. Temporal and symmetry conformance compares the
 declared finite SwiftTLA and TLC explorations.
 
-## Generated collections
+## Use the generated machine
 
-Generated models use `IdentifiedModelCollection` for application members.
-The generated state and action surfaces carry the collection value type and
-member identifier type. `SymmetricCollectionRuntimeError` reports an unknown
-member or an unavailable member action.
+Machine creation binds one application ID to each compiled member. The ID list
+must contain exactly `verificationScope` unique values. Its order defines the
+immutable mapping to the compiled member domain.
 
-The compiler keeps application member identifiers separate from opaque formal
-member constants. The formal constants appear in the compiled model, rendered
-bundle, and TLC configuration.
+```swift
+let ids = [phone.id, watch.id]
+var machine = try DeviceContract.makeMachine(phases: ids)
+
+let transition = try machine.send(.beginConnect(member: phone.id))
+let phonePhase: Int? = machine.state.phases[phone.id]
+```
+
+The generated `State` stores the collection as `[Device.ID: Int]`. A typed
+initial state uses the same IDs:
+
+```swift
+let values = [phone.id: 0, watch.id: 0]
+let state = DeviceContract.State(phases: values)
+var machine = try DeviceContract.makeMachine(state, phases: ids)
+```
+
+The generated actor wraps the same value machine and receives the same member
+binding:
+
+```swift
+let actor = try DeviceContract.Actor(phases: ids)
+try await actor.send(.beginConnect(member: phone.id))
+```
+
+Application IDs remain separate from opaque formal member constants. The
+formal constants appear in the compiled specification, rendered bundle, and
+TLC configuration.
 
 ## Review a collection
 
-- Declare a positive finite verification scope.
+- Declare the exact positive member count.
+- Supply one unique application ID for each compiled member.
 - Express member behavior through the collection declaration and action.
-- Keep member identity distinctions in modeled state.
-- Use generated typed actions and state for application execution.
+- Read collection values from generated `State`.
+- Execute generated typed actions against the same fixed population.
 - Run the declared TLC comparison for the selected finite scope.

@@ -22,62 +22,38 @@ struct SymmetricCollectionValidationTests {
     #expect(Set(metadata.members).count == 3)
   }
 
-  @Test("Invalid symmetric scopes are rejected before initial-state exploration")
-  func invalidScopeIsReportedBeforeExploration() throws {
+  @Test("Invalid symmetric scopes fail compilation")
+  func invalidScopeFailsCompilation() {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let spec = TLASpec("Devices") {
       SymmetricCollection(devices, verificationScope: 0, initial: 0)
     }
 
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check()
-    guard case .bounded(let scopes, let outcome) = result else {
-      Issue.record("Expected bounded result, got \(result)")
-      return
-    }
-    #expect(scopes == [SymmetricCollectionScope(collectionName: "devices", verificationScope: 0)])
-    guard case .error(let message) = outcome else {
-      Issue.record("Expected validation error, got \(outcome)")
-      return
-    }
-    #expect(message.contains("devices"))
-    #expect(message.contains("positive"))
+    assertInvalidCollection(spec, .invalidScope(collection: "devices", scope: 0))
   }
 
-  @Test("Negative symmetric scopes are rejected before initial-state exploration")
-  func negativeScopeIsReportedBeforeExploration() throws {
+  @Test("Negative symmetric scopes fail compilation")
+  func negativeScopeFailsCompilation() {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let spec = TLASpec("Devices") {
       SymmetricCollection(devices, verificationScope: -1, initial: 0)
     }
 
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
-    guard case .error(let message) = result else {
-      Issue.record("Expected negative scope validation error, got \(result)")
-      return
-    }
-    #expect(message.contains("devices"))
-    #expect(message.contains("-1"))
-    #expect(message.contains("positive"))
+    assertInvalidCollection(spec, .invalidScope(collection: "devices", scope: -1))
   }
 
-  @Test("A symmetric declaration requires a collection name")
-  func missingCollectionNameIsReportedBeforeExploration() throws {
+  @Test("A symmetric declaration requires a collection name at compilation")
+  func missingCollectionNameFailsCompilation() {
     let unnamed = SymmetricCollectionVar<Device, Int>("")
     let spec = TLASpec("Devices") {
       SymmetricCollection(unnamed, verificationScope: 1, initial: 0)
     }
 
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
-    guard case .error(let message) = result else {
-      Issue.record("Expected missing-name validation error, got \(result)")
-      return
-    }
-    #expect(message.contains("missing a name"))
-    #expect(message.contains("unique collection name"))
+    assertInvalidCollection(spec, .missingCollectionName)
   }
 
   @Test("Duplicate names and generated symbol collisions identify the affected collection")
-  func duplicateAndCollisionDeclarationsAreRejected() throws {
+  func duplicateAndCollisionDeclarationsAreRejected() {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let duplicate = TLASpec("Duplicate") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
@@ -88,16 +64,11 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
     }
 
-    let duplicateResult = try ModelChecker(compilation: try duplicate.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
-    let collisionResult = try ModelChecker(compilation: try collision.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
-    guard case .error(let duplicateMessage) = duplicateResult,
-          case .error(let collisionMessage) = collisionResult else {
-      Issue.record("Expected declaration validation errors")
-      return
-    }
-    #expect(duplicateMessage.contains("devices"))
-    #expect(collisionMessage.contains("devices"))
-    #expect(collisionMessage.contains("__symmetric_devices_member_1"))
+    assertDuplicateVariable(duplicate, name: "devices")
+    assertInvalidCollection(
+      collision,
+      .symbolCollision(collection: "devices", symbol: "__symmetric_devices_member_1")
+    )
   }
 
   @Test("generated symbols reserve the direct export namespace")
@@ -115,9 +86,18 @@ struct SymmetricCollectionValidationTests {
       FormalDefinition("SymmDevicePhases", parameters: [], body: .value(.bool(true)))
       SymmetricCollection(SymmetricCollectionVar<Device, Int>("devicePhases"), verificationScope: 1, initial: 0)
     }
-    #expect(symbolCollision(variableCollision) == "DevicePhasesKeys")
-    #expect(symbolCollision(constantCollision) == "DevicePhasesMember0")
-    #expect(symbolCollision(definitionCollision) == "SymmDevicePhases")
+    assertInvalidCollection(
+      variableCollision,
+      .symbolCollision(collection: "devicePhases", symbol: "DevicePhasesKeys")
+    )
+    assertInvalidCollection(
+      constantCollision,
+      .symbolCollision(collection: "devicePhases", symbol: "DevicePhasesMember0")
+    )
+    assertInvalidCollection(
+      definitionCollision,
+      .symbolCollision(collection: "devicePhases", symbol: "SymmDevicePhases")
+    )
   }
 
   @Test("invalid collection names fail compilation before generated symbols are allocated")
@@ -126,15 +106,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(SymmetricCollectionVar<Device, Int>("device-phases"), verificationScope: 1, initial: 0)
     }
 
-    do {
-      _ = try invalidName.compile()
-      Issue.record("Expected an invalid symmetric collection diagnostic.")
-    } catch let diagnostic as CompilationDiagnostic {
-      #expect(diagnostic.code == .invalidSymmetricCollection)
-      #expect(diagnostic.actual.contains("not a formal identifier"))
-    } catch {
-      Issue.record("Expected CompilationDiagnostic, got \(error).")
-    }
+    assertInvalidCollection(invalidName, .invalidCollectionName("device-phases"))
   }
 
   @Test("Ordinary specifications do not opt into collection symmetry export")
@@ -144,21 +116,14 @@ struct SymmetricCollectionValidationTests {
       Variable(counter, 0)
     }
 
-    #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("TLC")))
-    #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("Permutations(")))
-    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY")))
-    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("Member0")))
-  }
-
-  private func symbolCollision(_ spec: TLASpec) -> String? {
-    guard case .symbolCollision(_, let symbol)? = spec.symmetricCollectionValidationError() else {
-      return nil
-    }
-    return symbol
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("TLC") == false)
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Permutations(") == false)
+    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY") == false)
+    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("Member0") == false)
   }
 
   @Test("A collection variable must retain its declared uniform member domain")
-  func nonUniformInitialDomainIsRejected() throws {
+  func nonUniformInitialDomainIsRejected() {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let declared = TLASpec("Declared") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
@@ -172,17 +137,11 @@ struct SymmetricCollectionValidationTests {
       symmetricCollections: declared.symmetricCollections
     )
 
-    let result = try ModelChecker(compilation: try malformed.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
-    guard case .error(let message) = result else {
-      Issue.record("Expected domain validation error, got \(result)")
-      return
-    }
-    #expect(message.contains("devices"))
-    #expect(message.contains("uniform"))
+    assertInvalidCollection(malformed, .invalidDomain(collection: "devices"))
   }
 
   @Test("A symmetric declaration must own exactly one model variable")
-  func invalidOwnershipIsRejected() throws {
+  func invalidOwnershipIsRejected() {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let declared = TLASpec("Declared") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
@@ -195,31 +154,117 @@ struct SymmetricCollectionValidationTests {
       symmetricCollections: declared.symmetricCollections
     )
 
-    let result = try ModelChecker(compilation: try malformed.compile(), configuration: try .init(maximumStateLimit: 100_000)).check().underlyingOutcome
-    guard case .error(let message) = result else {
-      Issue.record("Expected ownership validation error, got \(result)")
-      return
-    }
-    #expect(message.contains("devices"))
-    #expect(message.contains("own exactly one modeled variable"))
+    assertInvalidCollection(malformed, .invalidOwnership(collection: "devices"))
   }
 
-  @Test("The cross-collection permutation product has an explicit budget")
-  func permutationBudgetIsReported() throws {
+  @Test("Authored actions cannot name a compiler-owned symmetric member")
+  func asymmetricActionFailsCompilation() {
+    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let collection = SymmetricCollection(devices, verificationScope: 2, initial: 0)
+    let member = collection.metadata.members[0]
+    let spec = TLASpec("AsymmetricAction") {
+      collection
+      Action("biased") { .guard_(.equal(.value(member), .value(member))) }
+    }
+
+    assertMemberReferenceRejected(spec, path: "actions.biased.body.guard.left")
+  }
+
+  @Test("Authored invariants cannot name a compiler-owned symmetric member")
+  func asymmetricInvariantFailsCompilation() {
+    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let collection = SymmetricCollection(devices, verificationScope: 2, initial: 0)
+    let member = collection.metadata.members[0]
+    let spec = TLASpec("AsymmetricInvariant") {
+      collection
+      Invariant("Biased") { .equal(.value(member), .value(member)) }
+    }
+
+    assertMemberReferenceRejected(spec, path: "invariants.Biased.body.left")
+  }
+
+  @Test("The permutation budget applies only to reduced exploration")
+  func permutationBudgetAppliesOnlyToReduction() throws {
     let left = SymmetricCollectionVar<Device, Int>("left")
     let right = SymmetricCollectionVar<Device, Int>("right")
     let spec = TLASpec("Budget") {
       SymmetricCollection(left, verificationScope: 3, initial: 0)
       SymmetricCollection(right, verificationScope: 3, initial: 0)
     }
+    let compilation = try spec.compile()
+    let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 100_000)
 
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000), permutationProductBudget: 35).check()
-    guard case .bounded(_, let outcome) = result,
+    let unreduced = try ModelChecker(
+      compilation: compilation,
+      configuration: configuration,
+      permutationProductBudget: 35,
+      usesSymmetryReduction: false
+    ).check()
+    guard case .bounded(_, let unreducedOutcome) = unreduced,
+          case .ok = unreducedOutcome else {
+      Issue.record("Expected unreduced exploration to ignore the permutation budget, got \(unreduced)")
+      return
+    }
+
+    let reduced = try ModelChecker(
+      compilation: compilation,
+      configuration: configuration,
+      permutationProductBudget: 35,
+      usesSymmetryReduction: true
+    ).check()
+    guard case .bounded(_, let outcome) = reduced,
           case .error(let message) = outcome else {
-      Issue.record("Expected bounded budget error, got \(result)")
+      Issue.record("Expected reduced exploration to report the permutation budget, got \(reduced)")
       return
     }
     #expect(message.contains("budget"))
     #expect(message.contains("36"))
+  }
+
+  private func assertInvalidCollection(
+    _ spec: TLASpec,
+    _ expectedError: SymmetricCollectionValidationError
+  ) {
+    do {
+      _ = try spec.compile()
+      Issue.record("Expected symmetric collection compilation to fail")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .invalidSymmetricCollection)
+      #expect(diagnostic.stage == .validation)
+      #expect(diagnostic.path == "symmetricCollections")
+      #expect(diagnostic.expected == "a valid symmetric collection declaration")
+      #expect(diagnostic.actual == expectedError.description)
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error)")
+    }
+  }
+
+  private func assertDuplicateVariable(_ spec: TLASpec, name: String) {
+    do {
+      _ = try spec.compile()
+      Issue.record("Expected duplicate variable compilation to fail")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .duplicateVariable)
+      #expect(diagnostic.stage == .validation)
+      #expect(diagnostic.path == "variables.\(name)")
+      #expect(diagnostic.expected == "one declaration named '\(name)'")
+      #expect(diagnostic.actual == "multiple declarations named '\(name)'")
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error)")
+    }
+  }
+
+  private func assertMemberReferenceRejected(_ spec: TLASpec, path: String) {
+    do {
+      _ = try spec.compile()
+      Issue.record("Expected compiler-owned symmetric member reference to fail")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .invalidSymmetricCollection)
+      #expect(diagnostic.stage == .binding)
+      #expect(diagnostic.path == path)
+      #expect(diagnostic.expected == "logic invariant under exchangeable member renaming")
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error)")
+    }
   }
 }

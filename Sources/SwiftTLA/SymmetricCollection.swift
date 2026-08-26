@@ -55,7 +55,7 @@ public struct SymmetricMember<Element: Identifiable> {
 }
 
 public struct SymmetricCollectionDecl: SpecComponent, Sendable {
-  public let metadata: SymmetricCollectionMetadata
+  package let metadata: SymmetricCollectionMetadata
   let generatedElementType: String?
   let generatedValueType: String?
 
@@ -84,24 +84,19 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
       name: name,
       initial: .function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) })),
       collectionType: .dictionary(verificationScope),
-      generatedSwiftType: generatedElementType.flatMap { element in
-        generatedValueType.map { value in
-          "IdentifiedModelCollection<\(element), \(value)>"
-        }
-      },
       origin: .source
     )
   }
 }
 
-public struct SymmetricCollectionMetadata: Equatable, Sendable {
-  public let name: String
-  public let verificationScope: Int
-  public let initial: TLAValue
-  public let members: [TLAValue]
-  public let domainSymbol: String
-  public let symmetrySymbol: String
-  public let symbolOwnership: [String: String]
+package struct SymmetricCollectionMetadata: Equatable, Sendable {
+  package let name: String
+  package let verificationScope: Int
+  package let initial: TLAValue
+  package let members: [TLAValue]
+  package let domainSymbol: String
+  package let symmetrySymbol: String
+  package let symbolOwnership: [String: String]
 
   init(name: String, verificationScope: Int, initial: TLAValue) {
     let symbolStem = name.prefix(1).uppercased() + name.dropFirst()
@@ -125,7 +120,7 @@ public struct SymmetricCollectionMetadata: Equatable, Sendable {
     )
   }
 
-  public var generatedSymbols: [String] {
+  package var generatedSymbols: [String] {
     members.compactMap { value in
       guard case .constant(let symbol) = value else { return nil }
       return symbol
@@ -217,7 +212,7 @@ public struct SymmetricCollectionScope: Equatable, Sendable {
   }
 }
 
-public enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
+enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
   case invalidScope(collection: String, scope: Int)
   case missingCollectionName
   case invalidCollectionName(String)
@@ -278,7 +273,7 @@ func symmetricCollectionPermutationBudgetError(
   return nil
 }
 
-public extension TLASpec {
+extension TLASpec {
   func symmetricCollectionValidationError(
     permutationProductBudget: Int = 100_000
   ) -> SymmetricCollectionValidationError? {
@@ -351,21 +346,6 @@ public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
     name: collection.name,
     verificationScope: verificationScope,
     initial: initial.tlaValue,
-    generatedElementType: String(reflecting: Element.self),
-    generatedValueType: String(reflecting: Value.self)
-  )
-}
-
-@discardableResult
-public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
-  _ initialState: Var<Value>,
-  verificationScope: Int,
-  elementType: Element.Type
-) -> SymmetricCollectionDecl {
-  SymmetricCollectionDecl(
-    name: initialState.name,
-    verificationScope: verificationScope,
-    initial: initialState.initial ?? Value.defaultValue.tlaValue,
     generatedElementType: String(reflecting: Element.self),
     generatedValueType: String(reflecting: Value.self)
   )
