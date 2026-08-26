@@ -49,8 +49,9 @@ package struct TLCGraphReader: Sendable {
     package init(expectedCase: FiniteGraphCase) {
         self.expectedCase = expectedCase
         self.invocationWrappers = Dictionary(
-            uniqueKeysWithValues: expectedCase.renderedActions.map {
-                (
+            uniqueKeysWithValues: expectedCase.renderedActions.compactMap {
+                guard $0.sourceInvocationName != $0.renderedName else { return nil }
+                return (
                     tlaInvocationLocationIdentity(
                         action: $0.sourceName,
                         arguments: $0.arguments.map(\.description)

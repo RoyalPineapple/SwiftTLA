@@ -426,6 +426,22 @@ extension TLCGraphReaderTests {
     }
   }
 
+  @Test("an unchanged action name does not require invocation decoding")
+  func retainsUnchangedActionNames() throws {
+    let action = RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next")
+    let expectedCase = try fixtureCase(try toolchainPin(), renderedActions: [action])
+    let stream = try refreshedFooterDigest(Data(String(
+      decoding: completeGraphStream(expectedCase), as: UTF8.self
+    ).replacingOccurrences(
+      of: "\"location\":\"\"",
+      with: "\"location\":\"<Next line 1, col 1 to line 1, col 2 of module Fixture>\""
+    ).utf8))
+
+    let parsed = try TLCGraphReader(expectedCase: expectedCase).parse(stream)
+
+    #expect(parsed.transitions.map(\.action) == ["Next"])
+  }
+
   @Test("graph event parser resolves a reduced TLC alias only through its retained fingerprint representative")
   func resolvesFingerprintAliasesFromSameStream() throws {
     let expectedCase = try fixtureCase(try toolchainPin())
