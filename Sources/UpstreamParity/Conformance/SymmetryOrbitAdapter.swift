@@ -5,9 +5,9 @@ package enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
   case incompatiblePermutationDomains
   case permutationDoesNotPreserveStateSpace
   case incompleteOrbit(String)
-  case reducedStateOutsideOrbit(engine: SymmetryExplorationEngine, stateID: String)
-  case multipleReducedRepresentatives(engine: SymmetryExplorationEngine, representative: String)
-  case missingReducedRepresentative(engine: SymmetryExplorationEngine, representative: String)
+  case reducedStateOutsideOrbit(source: SymmetryGraphSource, stateID: String)
+  case multipleReducedRepresentatives(source: SymmetryGraphSource, representative: String)
+  case missingReducedRepresentative(source: SymmetryGraphSource, representative: String)
 }
 
 package struct SymmetryPermutation: Equatable, Sendable {
