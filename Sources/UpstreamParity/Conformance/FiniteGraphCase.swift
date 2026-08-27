@@ -5,7 +5,6 @@ import SwiftTLA
 package enum FiniteGraphCaseError: Error, Equatable, Sendable {
     case invalidIdentifier(String)
     case invalidSHA256(field: String)
-    case invalidArgumentsDigest
     case invalidRenderedActions
     case moduleDigestMismatch
     case cfgDigestMismatch
@@ -120,9 +119,6 @@ package struct FiniteGraphCase: Equatable, Sendable {
     package let moduleSHA256: String
     package let cfgSHA256: String
     package let arguments: [String]
-    package let argumentsSHA256: String
-    package let operatingSystem: String
-    package let architecture: String
     package let environment: [String: String]
     package let pin: TLCReferencePin
     package let renderedActions: [RenderedAction]
@@ -133,9 +129,6 @@ package struct FiniteGraphCase: Equatable, Sendable {
         moduleSHA256: String,
         cfgSHA256: String,
         arguments: [String],
-        argumentsSHA256: String,
-        operatingSystem: String,
-        architecture: String,
         environment: [String: String],
         pin: TLCReferencePin,
         renderedActions: [RenderedAction] = []
@@ -143,8 +136,6 @@ package struct FiniteGraphCase: Equatable, Sendable {
         guard !id.isEmpty else { throw FiniteGraphCaseError.invalidIdentifier("case ID") }
         guard TLCReferencePin.isSHA256(moduleSHA256) else { throw FiniteGraphCaseError.invalidSHA256(field: "moduleSHA256") }
         guard TLCReferencePin.isSHA256(cfgSHA256) else { throw FiniteGraphCaseError.invalidSHA256(field: "cfgSHA256") }
-        let computedArgumentsDigest = try Self.argumentsDigest(arguments)
-        guard argumentsSHA256 == computedArgumentsDigest else { throw FiniteGraphCaseError.invalidArgumentsDigest }
         guard Set(renderedActions.map(\.sourceInvocationName)).count == renderedActions.count,
               Set(renderedActions.map(\.renderedName)).count == renderedActions.count else {
             throw FiniteGraphCaseError.invalidRenderedActions
@@ -154,17 +145,9 @@ package struct FiniteGraphCase: Equatable, Sendable {
         self.moduleSHA256 = moduleSHA256
         self.cfgSHA256 = cfgSHA256
         self.arguments = arguments
-        self.argumentsSHA256 = argumentsSHA256
-        self.operatingSystem = operatingSystem
-        self.architecture = architecture
         self.environment = environment
         self.pin = pin
         self.renderedActions = renderedActions
-    }
-
-    package static func argumentsDigest(_ arguments: [String]) throws -> String {
-        let encoded = try JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys])
-        return SHA256.hex(encoded)
     }
 
     package func validateLaunch(module: URL, configuration: URL) throws {

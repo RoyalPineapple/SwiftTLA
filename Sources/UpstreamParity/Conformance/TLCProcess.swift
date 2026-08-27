@@ -74,7 +74,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package let runID: UUID
   package let timeout: TimeInterval
   package let traceMode: TLCTraceMode
-  package let referencePin: TLCReferencePin?
   package let referenceArtifacts: TLCReferenceArtifacts?
 
   package init(
@@ -89,7 +88,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     runID: UUID,
     timeout: TimeInterval = 60,
     traceMode: TLCTraceMode = .none,
-    referencePin: TLCReferencePin? = nil,
     referenceArtifacts: TLCReferenceArtifacts? = nil
   ) {
     self.javaExecutable = javaExecutable
@@ -103,7 +101,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.runID = runID
     self.timeout = timeout
     self.traceMode = traceMode
-    self.referencePin = referencePin
     self.referenceArtifacts = referenceArtifacts
   }
 
@@ -113,7 +110,18 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package var moduleFileName: String { "\(bundle.root.name).tla" }
   package var configurationFileName: String { "\(bundle.root.name).cfg" }
 
-  package func commandArguments(
+  package var launchArguments: [String] {
+    return commandArguments(
+      module: inputDirectory.appendingPathComponent(moduleFileName),
+      configuration: inputDirectory.appendingPathComponent(configurationFileName))
+  }
+
+  private var inputDirectory: URL {
+    workingDirectory.appendingPathComponent(
+      "input-\(runID.uuidString.lowercased())-\(traceMode)", isDirectory: true)
+  }
+
+  private func commandArguments(
     module: URL,
     configuration: URL
   ) -> [String] {
@@ -161,8 +169,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
       ))
     }
     try validateDeclaredBundle()
-    let input = workingDirectory.appendingPathComponent(
-      "input-\(runID.uuidString.lowercased())-\(traceMode)", isDirectory: true)
+    let input = inputDirectory
     guard !FileManager.default.fileExists(atPath: input.path) else {
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
         path: input.path, reason: "the declared TLC input directory already exists"
@@ -215,11 +222,8 @@ package struct TLCProcessRequest: Equatable, Sendable {
     }
   }
 
-  package func validateReferenceBinding(pin: TLCReferencePin, artifacts: TLCReferenceArtifacts)
-    throws {
-    guard finiteGraphCase.pin == pin else {
-      throw FiniteGraphCaseError.pinMismatch("declared case reference pin")
-    }
+  package func validateReferenceBinding(artifacts: TLCReferenceArtifacts) throws {
+    let pin = finiteGraphCase.pin
     guard sameFile(jar, artifacts.jar) else {
       throw FiniteGraphCaseError.pinMismatch("execution TLC JAR")
     }
@@ -284,10 +288,11 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
     let input = try request.stageDeclaredBundle()
     try request.validateLaunchBinding(module: input.module, configuration: input.configuration)
     if validatesReferences {
-      guard let pin = request.referencePin, let artifacts = request.referenceArtifacts else {
-        throw FiniteGraphCaseError.missingArtifact("reference pin and artifacts")
+      guard let artifacts = request.referenceArtifacts else {
+        throw FiniteGraphCaseError.missingArtifact("reference artifacts")
       }
-      try request.validateReferenceBinding(pin: pin, artifacts: artifacts)
+      try request.validateReferenceBinding(artifacts: artifacts)
+      let pin = request.finiteGraphCase.pin
       try pin.validate(
         TLCReferenceInspector.inspect(
           artifacts: artifacts, javaExecutable: request.javaExecutable,
@@ -296,7 +301,7 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
     }
     let result = try executeProcess(
       executable: request.javaExecutable,
-      arguments: request.commandArguments(module: input.module, configuration: input.configuration),
+      arguments: request.launchArguments,
       directory: request.workingDirectory,
       timeout: request.timeout,
       environment: request.effectiveEnvironment
@@ -374,11 +379,6 @@ package struct TLCProcessAdapter: Sendable {
     )
   }
 
-  package func retain(request: TLCProcessRequest, in directory: URL) throws {
-    try writeProcessRecord(request: request, results: [:], failures: [:], to: directory)
-    try retainRawArtifacts(from: request, in: directory)
-  }
-
   private func retain(
     _ run: TLCProcessRun,
     request: TLCProcessRequest,
@@ -391,7 +391,7 @@ package struct TLCProcessAdapter: Sendable {
       directory.appendingPathComponent("logs"), beneath: directory)
     try retain(run.primary, phase: .primary, in: logs)
     if let trace = run.trace { try retain(trace, phase: .trace, in: logs) }
-    try retainRawArtifacts(from: request, in: directory)
+    try retainRawFiles(from: request, in: directory)
   }
 
   private func retain(
@@ -414,20 +414,18 @@ package struct TLCProcessAdapter: Sendable {
     default:
       try retain(TLCProcessExecutionFailure(error), phase: .primary, in: logs)
     }
-    try retainRawArtifacts(from: request, in: directory)
+    try retainRawFiles(from: request, in: directory)
   }
 
-  private func retainRawArtifacts(from request: TLCProcessRequest, in directory: URL) throws {
+  private func retainRawFiles(from request: TLCProcessRequest, in directory: URL) throws {
     let artifacts = [
       (request.graphEvents, "graph-events.jsonl"),
       (traceGraphEvents(for: request.graphEvents), "graph-events.trace.jsonl"),
       (request.traceOutput, "counterexample.json")
     ]
-    var availability: [String: Bool] = [:]
     for (source, name) in artifacts {
       let destination = directory.appendingPathComponent(name)
       let exists = FileManager.default.fileExists(atPath: source.path)
-      availability[name] = exists
       if exists {
         if FileManager.default.fileExists(atPath: destination.path) {
           try FileManager.default.removeItem(at: destination)
@@ -435,7 +433,6 @@ package struct TLCProcessAdapter: Sendable {
         try FileManager.default.copyItem(at: source, to: destination)
       }
     }
-    try RetainedFiles.writeJSON(availability, to: directory.appendingPathComponent("raw-artifacts.json"))
   }
 
   private func traceRequest(_ request: TLCProcessRequest) -> TLCProcessRequest {
@@ -447,7 +444,7 @@ package struct TLCProcessAdapter: Sendable {
       traceOutput: request.traceOutput,
       workingDirectory: request.workingDirectory,
       finiteGraphCase: request.finiteGraphCase, runID: request.runID,
-      timeout: request.timeout, traceMode: .dumpJSON, referencePin: request.referencePin,
+      timeout: request.timeout, traceMode: .dumpJSON,
       referenceArtifacts: request.referenceArtifacts
     )
   }
@@ -474,21 +471,22 @@ package struct TLCProcessAdapter: Sendable {
     failures: [TLCInvocationPhase: TLCProcessExecutionFailure],
     to directory: URL
   ) throws {
-    let phases: [TLCInvocationPhase] = [.primary, .trace]
     var record: [String: Any] = [
-      "request": try processRequestJSON(request),
-      "attempted": phases.compactMap { phase in
-        results[phase] != nil || failures[phase] != nil ? phase.rawValue : nil
-      }
+      "caseID": request.caseID,
+      "runID": request.runID.uuidString.lowercased(),
+      "timeout": request.timeout,
+      "inputs": bundleInputJSON(request.bundle),
+      "toolPin": pinJSON(request.finiteGraphCase.pin),
+      TLCInvocationPhase.primary.rawValue: invocationJSON(
+        request: request,
+        result: results[.primary],
+        failure: failures[.primary])
     ]
-    for phase in phases {
-      if let result = results[phase] {
-        record[phase.rawValue] = processJSON(result)
-      } else if let failure = failures[phase] {
-        record[phase.rawValue] = ["executionError": redactingSecrets(in: failure.message)]
-      } else {
-        record[phase.rawValue] = NSNull()
-      }
+    if results[.trace] != nil || failures[.trace] != nil {
+      record[TLCInvocationPhase.trace.rawValue] = invocationJSON(
+        request: traceRequest(request),
+        result: results[.trace],
+        failure: failures[.trace])
     }
     try RetainedFiles.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
   }
@@ -531,76 +529,30 @@ package struct TLCProcessAdapter: Sendable {
   }
 }
 
-func processJSON(_ result: TLCProcessResult) -> [String: Any] {
-  [
-    "status": result.status,
-    "isViolation": result.isViolation,
-    "reportedExhaustiveCompletion": result.reportedExhaustiveCompletion
+private func invocationJSON(
+  request: TLCProcessRequest,
+  result: TLCProcessResult?,
+  failure: TLCProcessExecutionFailure?
+) -> [String: Any] {
+  var record: [String: Any] = [
+    "arguments": request.launchArguments.map { redactingSecrets(in: $0) }
   ]
-}
-
-private func processRequestJSON(_ request: TLCProcessRequest) throws -> [String: Any] {
-  [
-    "case": try finiteGraphCaseJSON(request.finiteGraphCase),
-    "toolchain": toolchainJSON(request),
-    "bundle": [
-      "root": request.bundle.root.name,
-      "files": request.bundle.files.map {
-        ["name": $0.name, "tlaSHA256": SHA256.hex(Data($0.tla.utf8))]
-      }
-    ],
-    "module": request.moduleFileName,
-    "configuration": request.configurationFileName,
-    "timeout": request.timeout
-  ]
-}
-
-private func finiteGraphCaseJSON(_ finiteGraphCase: FiniteGraphCase) throws -> [String: Any] {
-  let record: [String: Any] = [
-    "id": finiteGraphCase.id,
-    "exploration": try JSONSerialization.jsonObject(
-      with: JSONEncoder().encode(finiteGraphCase.exploration)
-    ),
-    "moduleSHA256": finiteGraphCase.moduleSHA256,
-    "cfgSHA256": finiteGraphCase.cfgSHA256,
-    "arguments": finiteGraphCase.arguments,
-    "argumentsSHA256": finiteGraphCase.argumentsSHA256,
-    "operatingSystem": finiteGraphCase.operatingSystem,
-    "architecture": finiteGraphCase.architecture,
-    "environment": finiteGraphCase.environment,
-    "pin": pinJSON(finiteGraphCase.pin),
-    "renderedActions": finiteGraphCase.renderedActions.map { call in
-      [
-        "sourceName": call.sourceName,
-        "arguments": call.arguments.map(\.description),
-        "renderedName": call.renderedName
-      ]
-    }
-  ]
+  if let result { record["exitStatus"] = result.status }
+  if let failure { record["executionError"] = redactingSecrets(in: failure.message) }
   return record
 }
 
-private func toolchainJSON(_ request: TLCProcessRequest) -> [String: Any] {
-  var record: [String: Any] = ["declaredPin": pinJSON(request.finiteGraphCase.pin)]
-  if let referencePin = request.referencePin {
-    record["referencePin"] = pinJSON(referencePin)
+private func bundleInputJSON(_ bundle: TLAModuleBundle) -> [[String: String]] {
+  var inputs = bundle.files.map {
+    ["file": "\($0.name).tla", "sha256": SHA256.hex(Data($0.tla.utf8))]
   }
-  if let artifacts = request.referenceArtifacts {
-    record["referenceArtifacts"] = [
-      "jar": artifacts.jar.path,
-      "javaArchive": artifacts.javaArchive.path,
-      "bridgeSource": artifacts.bridgeSource.path,
-      "bridgeBinary": artifacts.bridgeBinary.path,
-      "jarManifest": artifacts.jarManifest,
-      "runtime": [
-        "version": artifacts.runtime.version,
-        "vendor": artifacts.runtime.vendor,
-        "architecture": artifacts.runtime.architecture,
-        "properties": artifacts.runtime.properties
-      ]
-    ]
+  if let cfg = bundle.root.cfg {
+    inputs.append([
+      "file": "\(bundle.root.name).cfg",
+      "sha256": SHA256.hex(Data(cfg.utf8))
+    ])
   }
-  return record
+  return inputs
 }
 
 private func pinJSON(_ pin: TLCReferencePin) -> [String: String] {

@@ -80,7 +80,6 @@ package struct FiniteGraphCheck: Sendable {
         runID: tlcRequest.runID
       )
       staging = directory
-      try tlcProcess.retain(request: tlcRequest, in: directory)
 
       phase = .swiftExport
       let exploration = try ModelChecker(

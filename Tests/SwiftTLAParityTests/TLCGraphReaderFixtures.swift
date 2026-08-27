@@ -180,8 +180,7 @@ func fixtureCase(
     exploration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled),
     moduleSHA256: String(repeating: "c", count: 64),
     cfgSHA256: String(repeating: "d", count: 64),
-    arguments: arguments, argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-    operatingSystem: "macos", architecture: "arm64",
+    arguments: arguments,
     environment: [:], pin: pin, renderedActions: renderedActions
   )
 }
@@ -259,8 +258,7 @@ func caseForFiles(
     exploration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled),
     moduleSHA256: SHA256.hex(try Data(contentsOf: module)),
     cfgSHA256: SHA256.hex(try Data(contentsOf: configuration)),
-    arguments: arguments, argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-    operatingSystem: "macos", architecture: "arm64",
+    arguments: arguments,
     environment: environment, pin: try testReferencePin()
   )
 }
@@ -319,7 +317,7 @@ func requestWithReferenceArtifacts(
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
     workingDirectory: URL(fileURLWithPath: "/tmp"),
     finiteGraphCase: try fixtureCase(try testReferencePin(), arguments: ["-workers", "1", "-fp", "1"]),
-    runID: UUID(), referencePin: try testReferencePin(), referenceArtifacts: artifacts
+    runID: UUID(), referenceArtifacts: artifacts
   )
 }
 func header(_ finiteGraphCase: FiniteGraphCase) throws -> String {

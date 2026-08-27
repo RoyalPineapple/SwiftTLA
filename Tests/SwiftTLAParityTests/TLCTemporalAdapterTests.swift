@@ -275,9 +275,7 @@ struct TLCTemporalAdapterTests {
     let resultJSON = try JSONSerialization.jsonObject(
       with: Data(contentsOf: fixture.output.appendingPathComponent("tlc-process.json"))) as? [String: Any]
     let primary = resultJSON?["primary"] as? [String: Any]
-    #expect(primary?["status"] as? Int == 12)
-    #expect(primary?["isViolation"] as? Bool == true)
-    #expect(primary?["reportedExhaustiveCompletion"] as? Bool == false)
+    #expect(primary?["exitStatus"] as? Int == 12)
   }
 
   @Test("TLC temporal adapter rejects a trace path that collides with generated evidence")
@@ -432,15 +430,13 @@ struct TLCTemporalAdapterTests {
         exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
         moduleSHA256: SHA256.hex(Data(contentsOf: module)),
         cfgSHA256: SHA256.hex(Data(contentsOf: configuration)), arguments: [],
-        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), operatingSystem: "macos",
-        architecture: "arm64", environment: [:], pin: try testReferencePin())
+        environment: [:], pin: try testReferencePin())
       completeGraphCase = try FiniteGraphCase(
         id: "temporal",
         exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
         moduleSHA256: SHA256.hex(Data(contentsOf: module)),
         cfgSHA256: SHA256.hex(Data(contentsOf: graphConfiguration)), arguments: [],
-        argumentsSHA256: try FiniteGraphCase.argumentsDigest([]), operatingSystem: "macos",
-        architecture: "arm64", environment: [:], pin: try testReferencePin())
+        environment: [:], pin: try testReferencePin())
       temporalCase = try TemporalCase(
         id: launchCase.id,
         sourceInput: try Fixture.reference(module, path: "Verification/TemporalSymmetryConformance/TemporalFixture.tla"),
@@ -452,7 +448,7 @@ struct TLCTemporalAdapterTests {
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
         workingDirectory: root,
-        finiteGraphCase: launchCase, runID: UUID(), referencePin: launchCase.pin)
+        finiteGraphCase: launchCase, runID: UUID())
       completeGraphRequest = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
@@ -460,7 +456,7 @@ struct TLCTemporalAdapterTests {
         graphEvents: root.appendingPathComponent("complete-events.jsonl"),
         traceOutput: root.appendingPathComponent("complete-trace.json"),
         workingDirectory: root,
-        finiteGraphCase: completeGraphCase, runID: UUID(), referencePin: completeGraphCase.pin)
+        finiteGraphCase: completeGraphCase, runID: UUID())
       swiftRun = try TLCGraphReader(finiteGraphCase: launchCase).readCompletedGraph(
         graphStream(case: launchCase, runID: request.runID),
         result: Self.success
@@ -508,7 +504,6 @@ struct TLCTemporalAdapterTests {
         runID: request.runID,
         timeout: request.timeout,
         traceMode: request.traceMode,
-        referencePin: request.referencePin,
         referenceArtifacts: request.referenceArtifacts
       )
     }

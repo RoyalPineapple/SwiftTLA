@@ -187,9 +187,6 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 moduleSHA256: declaration.moduleSHA256,
                 cfgSHA256: declaration.cfgSHA256,
                 arguments: arguments,
-                argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-                operatingSystem: "macos",
-                architecture: architecture,
                 environment: [:],
                 pin: pin,
                 renderedActions: renderedActions
@@ -209,7 +206,6 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 workingDirectory: runRoot,
                 finiteGraphCase: finiteGraphCase,
                 runID: options.runID ?? UUID(),
-                referencePin: pin,
                 referenceArtifacts: referenceArtifacts
             )
             let check = FiniteGraphCheck().run(

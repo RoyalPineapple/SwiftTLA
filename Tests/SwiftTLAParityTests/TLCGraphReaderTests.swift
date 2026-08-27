@@ -182,10 +182,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
       traceMode: .dumpJSON
     )
-    let command = request.commandArguments(
-      module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
-      configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg")
-    )
+    let command = request.launchArguments
     #expect(command.contains("-Dswifttla.tlc.graph.path=/tmp/events.jsonl"))
     #expect(command.contains("-Dswifttla.tlc.graph.run-id=00000000-0000-4000-8000-000000000001"))
     #expect(command.contains("-Dswifttla.tlc.graph.case-id=fixture"))
@@ -211,14 +208,14 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       artifacts: artifacts
     )
     #expect(throws: FiniteGraphCaseError.pinMismatch("execution TLC JAR")) {
-      try substitutedJar.validateReferenceBinding(pin: try testReferencePin(), artifacts: artifacts)
+      try substitutedJar.validateReferenceBinding(artifacts: artifacts)
     }
     let substitutedBridge = try requestWithReferenceArtifacts(
       jar: artifacts.jar, bridgeClasses: URL(fileURLWithPath: "/tmp/substituted-bridge"),
       artifacts: artifacts
     )
     #expect(throws: FiniteGraphCaseError.pinMismatch("execution bridge class")) {
-      try substitutedBridge.validateReferenceBinding(pin: try testReferencePin(), artifacts: artifacts)
+      try substitutedBridge.validateReferenceBinding(artifacts: artifacts)
     }
   }
 
