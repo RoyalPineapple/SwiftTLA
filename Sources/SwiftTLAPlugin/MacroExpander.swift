@@ -53,7 +53,6 @@ enum MacroExpander {
         decls.append(contentsOf: generateAction(actions: plan.actions))
         decls.append(DeclSyntax(generateStateStruct(
             variables: plan.variables,
-            symmetricCollections: plan.symmetricCollections,
             enumInfos: model.enumInfos
         )))
         decls.append(contentsOf: generateGeneratedMachineStorageMembers(
@@ -268,7 +267,6 @@ enum MacroExpander {
 extension MacroExpander {
     static func generateStateStruct(
         variables: [MachineSurfacePlan.Variable],
-        symmetricCollections: [MachineSurfacePlan.SymmetricCollection],
         enumInfos: [ParsedEnum]
     ) -> StructDeclSyntax {
         StructDeclSyntax(
@@ -321,7 +319,7 @@ extension MacroExpander {
                                 firstName: "storageState",
                                 type: TypeSyntax(stringLiteral: "_GeneratedMachineStorage.State")
                             )
-                            for collection in symmetricCollections {
+                            for collection in variables.compactMap(\.symmetricCollection) {
                                 FunctionParameterSyntax(
                                     firstName: .identifier(collection.formalName),
                                     type: TypeSyntax(stringLiteral: "[\(collection.elementType).ID]")
@@ -335,7 +333,6 @@ extension MacroExpander {
                     body: CodeBlockSyntax {
                         ExprSyntax(stringLiteral: stateDecodingStatements(
                             variables: variables,
-                            symmetricCollections: symmetricCollections,
                             enumInfos: enumInfos
                         ))
                     }
@@ -346,15 +343,12 @@ extension MacroExpander {
 
     static func stateDecodingStatements(
         variables: [MachineSurfacePlan.Variable],
-        symmetricCollections: [MachineSurfacePlan.SymmetricCollection],
         enumInfos: [ParsedEnum]
     ) -> String {
         variables.map { variable in
             let key = String(reflecting: variable.formalName)
             let typeName = variable.swiftType
-            if let collection = symmetricCollections.first(where: {
-                $0.storageOrdinal == variable.storageOrdinal
-            }) {
+            if let collection = variable.symmetricCollection {
                 let formalMembers = collection.members.map(codegenTLAValue).joined(separator: ", ")
                 return """
                 guard \(collection.formalName).count == \(collection.members.count),
@@ -370,7 +364,7 @@ extension MacroExpander {
                     [\(formalMembers)]
                 ).map { id, formalMember in
                     guard let value: \(collection.valueType) = try storage.collectionValue(
-                        at: \(collection.storageOrdinal),
+                        at: \(variable.storageOrdinal),
                         for: formalMember,
                         as: \(collection.valueType).self,
                         in: storageState

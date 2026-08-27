@@ -197,29 +197,10 @@ struct SymmetricCollectionPredicateTests {
 
   @Test("Macro diagnostics anchor unsupported predicates at the authored expression")
   func macroDiagnosticAnchorsUnsupportedPredicate() throws {
-    let repository = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-    let fixture = repository.appendingPathComponent("Tests/Fixtures/InvalidCollectionPredicateMacro")
-    let scratch = FileManager.default.temporaryDirectory
-      .appendingPathComponent("SwiftTLA-invalid-predicate-\(UUID().uuidString)")
-    defer { try? FileManager.default.removeItem(at: scratch) }
-    try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-    let outputURL = scratch.appendingPathComponent("build.log")
-    _ = FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-    let output = try FileHandle(forWritingTo: outputURL)
+    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidCollectionPredicateMacro")
+    let result = try runSwiftPackage(["build", "--package-path", fixture.path])
 
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = ["swift", "build", "--package-path", fixture.path, "--scratch-path", scratch.path]
-    process.standardOutput = output
-    process.standardError = output
-    try process.run()
-    process.waitUntilExit()
-    try output.close()
-
-    #expect(process.terminationStatus != 0)
+    #expect(result.status != 0)
   }
 
   private func predicateClosure() throws -> ClosureExprSyntax {

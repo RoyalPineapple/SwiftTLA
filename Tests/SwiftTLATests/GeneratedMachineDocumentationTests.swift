@@ -221,32 +221,37 @@ struct GeneratedMachineDocumentationTests {
     }
 
     private func runXcodebuild(in fixture: URL) throws -> (status: Int32, output: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
-        process.currentDirectoryURL = fixture
-        process.arguments = [
-            "-quiet",
-            "-scheme", "GeneratedMachineDocumentation-Package",
-            "-destination", "platform=macOS",
-            "test",
-            "CODE_SIGNING_ALLOWED=NO"
-        ]
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SwiftTLA-generated-machine-docs-\(UUID().uuidString).log")
-        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-        let output = try FileHandle(forWritingTo: outputURL)
-        defer { try? FileManager.default.removeItem(at: outputURL) }
+        try withSerializedExternalPackageBuild {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
+            process.currentDirectoryURL = fixture
+            process.arguments = [
+                "-quiet",
+                "-scheme", "GeneratedMachineDocumentation-Package",
+                "-destination", "platform=macOS",
+                "-parallel-testing-enabled", "NO",
+                "-parallel-testing-worker-count", "1",
+                "-jobs", "1",
+                "test",
+                "CODE_SIGNING_ALLOWED=NO"
+            ]
+            let outputURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("SwiftTLA-generated-machine-docs-\(UUID().uuidString).log")
+            _ = FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+            let output = try FileHandle(forWritingTo: outputURL)
+            defer { try? FileManager.default.removeItem(at: outputURL) }
 
-        process.standardOutput = output
-        process.standardError = output
-        try process.run()
-        process.waitUntilExit()
-        try output.close()
+            process.standardOutput = output
+            process.standardError = output
+            try process.run()
+            process.waitUntilExit()
+            try output.close()
 
-        return (
-            process.terminationStatus,
-            String(data: try Data(contentsOf: outputURL), encoding: .utf8) ?? ""
-        )
+            return (
+                process.terminationStatus,
+                String(data: try Data(contentsOf: outputURL), encoding: .utf8) ?? ""
+            )
+        }
     }
 
     private func outputTail(_ output: String) -> String {

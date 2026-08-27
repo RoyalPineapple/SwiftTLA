@@ -176,8 +176,47 @@ struct CompilerPipelineCanonicalizationTests {
         let module = compilation.renderedTLAModuleBundle().root.tla
 
         #expect(first != second)
-        #expect(module.contains("\\A value \\in"))
-        #expect(module.contains("\\A value__1 \\in"))
+        #expect(module.contains("\\A b0 \\in"))
+        #expect(module.contains("\\A b1 \\in"))
+    }
+
+    @Test("compiled binder names do not shadow declarations")
+    func compiledBinderNamesDoNotShadowDeclarations() throws {
+        let spec = TLASpec("BinderCollision") {
+            Var("b0", 1)
+            Invariant("Safe") {
+                .forAll(
+                    .setLiteral([.value(.int(1))]),
+                    "value",
+                    .equal(.variable("value"), .variable("b0"))
+                )
+            }
+        }
+
+        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+
+        #expect(module.contains("VARIABLES b0"))
+        #expect(module.contains("\\A _b0 \\in"))
+        #expect(module.contains("(_b0 = b0)"))
+    }
+
+    @Test("compiled binder names do not shadow theorem names")
+    func compiledBinderNamesDoNotShadowTheoremNames() throws {
+        let spec = TLASpec("BinderTheoremCollision") {
+            Theorem(name: "b0", always: .value(.bool(true)))
+            Invariant("Safe") {
+                .forAll(
+                    .setLiteral([.value(.int(1))]),
+                    "value",
+                    .equal(.variable("value"), .int(1))
+                )
+            }
+        }
+
+        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+
+        #expect(spec.theorems.map(\.name) == ["b0"])
+        #expect(module.contains("\\A _b0 \\in"))
     }
 
     @Test("macro compilation uses the explicit formal module name")
@@ -1450,6 +1489,10 @@ struct CompilerPipelineCanonicalizationTests {
         let declaration = try #require(source.symmetricCollections.first { $0.name == "devices" })
         let action = try #require(source.actions.first { $0.name == "advance" })
         let compiledAction = try #require(compilation.semantics.actions.first)
+        let machineVariable = try #require(
+            compilation.machineSurfacePlan.variables.first { $0.formalName == "devices" }
+        )
+        let machineCollection = try #require(machineVariable.symmetricCollection)
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let successors = try CompiledRuntime(compilation: compilation)
             .successors(for: compiledAction.id, from: initialState)
@@ -1470,6 +1513,9 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compiledAction.bindings.count == 1)
         #expect(compiledAction.bindings[0].values == declaration.metadata.members)
         #expect(compiledAction.symmetricCollection == compilation.layout.variableID(named: "devices"))
+        #expect(machineVariable.swiftType == "[CompilerPipelineMember.ID: Int]")
+        #expect(machineCollection.formalName == "devices")
+        #expect(compilation.machineSurfacePlan.symmetricCollections == [machineCollection])
         #expect(hasOuterExistential)
         #expect(try successors.map { successor in
             try successor.arguments.map { try $0.rendered(using: compilation.layout) }

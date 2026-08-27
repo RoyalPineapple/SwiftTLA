@@ -6,15 +6,18 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let formalName: String
         package let storageOrdinal: Int
         package let swiftType: String
+        package let symmetricCollection: SymmetricCollection?
 
         package init(
             formalName: String,
             storageOrdinal: Int,
-            swiftType: String
+            swiftType: String,
+            symmetricCollection: SymmetricCollection?
         ) {
             self.formalName = formalName
             self.storageOrdinal = storageOrdinal
             self.swiftType = swiftType
+            self.symmetricCollection = symmetricCollection
         }
     }
 
@@ -49,20 +52,17 @@ package struct MachineSurfacePlan: Sendable, Equatable {
 
     package struct SymmetricCollection: Sendable, Equatable {
         package let formalName: String
-        package let storageOrdinal: Int
         package let members: [TLAValue]
         package let elementType: String
         package let valueType: String
 
         package init(
             formalName: String,
-            storageOrdinal: Int,
             members: [TLAValue],
             elementType: String,
             valueType: String
         ) {
             self.formalName = formalName
-            self.storageOrdinal = storageOrdinal
             self.members = members
             self.elementType = elementType
             self.valueType = valueType
@@ -71,7 +71,9 @@ package struct MachineSurfacePlan: Sendable, Equatable {
 
     package let variables: [Variable]
     package let actions: [Action]
-    package let symmetricCollections: [SymmetricCollection]
+    package var symmetricCollections: [SymmetricCollection] {
+        variables.compactMap(\.symmetricCollection)
+    }
 
     init(layout: CompiledLayout, semantics: CompiledSemantics) throws {
         let symmetricCollectionsByVariableID: [VariableID: SymmetricCollection] = try Dictionary(
@@ -93,7 +95,6 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                     variable.id,
                     SymmetricCollection(
                         formalName: variable.declaration.name,
-                        storageOrdinal: variable.id.ordinal,
                         members: declaration.members,
                         elementType: elementType,
                         valueType: valueType
@@ -129,11 +130,9 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             return Variable(
                 formalName: variable.declaration.name,
                 storageOrdinal: variable.id.ordinal,
-                swiftType: swiftType
+                swiftType: swiftType,
+                symmetricCollection: collection
             )
-        }
-        let symmetricCollections = layout.variables.compactMap {
-            symmetricCollectionsByVariableID[$0.id]
         }
         let executableActions = layout.actions.filter {
             $0.declaration.name != CompilerControlSymbol.terminatingAction.rawValue
@@ -185,7 +184,6 @@ package struct MachineSurfacePlan: Sendable, Equatable {
 
         self.variables = variables
         self.actions = actions
-        self.symmetricCollections = symmetricCollections
     }
 
     private static func missingDeclaration(_ kind: String, named name: String) -> CompilationDiagnostic {
