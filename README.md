@@ -181,6 +181,7 @@ running state, use the generated `Actor`. See
 ## Learn more
 
 - [Supported language fragment](Documentation/Design.md)
+- [Production readiness](Documentation/ProductionReadiness.md)
 - [Finite graph comparison](Documentation/FiniteGraphComparison.md)
 - [Temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md)
 - [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
