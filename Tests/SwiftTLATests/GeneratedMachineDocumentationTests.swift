@@ -2,6 +2,26 @@ import Foundation
 import Testing
 
 struct GeneratedMachineDocumentationTests {
+    @Test("README clock examples compile from their exact fixture sources")
+    func readmeClockExamplesMatchCompilingFixtures() throws {
+        let root = packageRoot()
+        let readme = try String(
+            contentsOf: root.appendingPathComponent("README.md"),
+            encoding: .utf8
+        )
+
+        for (identifier, file) in readmeExampleSources {
+            let fixture = try String(
+                contentsOf: root.appendingPathComponent(file),
+                encoding: .utf8
+            )
+            #expect(
+                swiftSnippet(id: identifier, in: readme) == fixture.trimmingCharacters(in: .newlines),
+                "README snippet does not match fixture: \(identifier)"
+            )
+        }
+    }
+
     @Test("Generated machine guide retains its public contract and fixture parity")
     func guideRetainsPublicContract() throws {
         let root = packageRoot()
@@ -161,6 +181,15 @@ struct GeneratedMachineDocumentationTests {
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift",
             "generated-machine-testing":
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/GeneratedMachineTests.swift"
+        ]
+    }
+
+    private var readmeExampleSources: [String: String] {
+        [
+            "readme-clock-model":
+                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/READMEClockModel.swift",
+            "readme-clock-swiftui":
+                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/READMEClockView.swift"
         ]
     }
 

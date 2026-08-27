@@ -3,6 +3,23 @@ import Testing
 import SwiftTLA
 
 struct GeneratedMachineDocumentationTests {
+    @Test("README clock starts from its declared state and rolls into the next minute")
+    func readmeClockUsesExplicitInitialState() throws {
+        var machine = try ClockModel.makeMachine(
+            .init(hour: 16, minute: 19, second: 59)
+        )
+
+        let transition = try machine.send(.tick)
+
+        #expect(transition.before.hour == 16)
+        #expect(transition.before.minute == 19)
+        #expect(transition.before.second == 59)
+        #expect(transition.after.hour == 16)
+        #expect(transition.after.minute == 20)
+        #expect(transition.after.second == 0)
+        #expect(machine.state == transition.after)
+    }
+
     @Test("bounded model preserves state when a disabled action is rejected")
     func disabledActionRetainsSnapshot() throws {
         var machine = try BoundedCounter.makeMachine()

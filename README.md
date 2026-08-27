@@ -28,6 +28,8 @@ Generated machine
 Use `#spec` and `Algorithm` to define the behavior that matters. The DSL
 expresses data, transitions, procedures, invariants, and temporal properties.
 
+**Example ID:** `readme-clock-model`
+
 ```swift
 import Foundation
 import SwiftTLA
@@ -41,34 +43,38 @@ public struct ClockModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Clock") {
-            Algorithm("Clock") {
-                let hour = SharedVar("hour", in: 0...23)
-                let minute = SharedVar("minute", in: 0...59)
-                let second = SharedVar("second", in: 0...59)
+            Algorithm("Clock", scoped: { scope in
+                let hour = scope.sharedVar("hour", in: 0...23)
+                let minute = scope.sharedVar("minute", in: 0...59)
+                let second = scope.sharedVar("second", in: 0...59)
 
                 While(Step.tick, true) {
                     Either {
                         When(second < 59)
                         Assign(second, to: second + 1)
                     } or: {
-                        When(second == 59)
-                        When(minute < 59)
-                        Assign(second, to: 0)
-                        Assign(minute, to: minute + 1)
-                    } or: {
-                        When(second == 59)
-                        When(minute == 59)
-                        When(hour < 23)
-                        Assign(second, to: 0)
-                        Assign(minute, to: 0)
-                        Assign(hour, to: hour + 1)
-                    } or: {
-                        When(second == 59)
-                        When(minute == 59)
-                        When(hour == 23)
-                        Assign(second, to: 0)
-                        Assign(minute, to: 0)
-                        Assign(hour, to: 0)
+                        Either {
+                            When(second == 59)
+                            When(minute < 59)
+                            Assign(second, to: 0)
+                            Assign(minute, to: minute + 1)
+                        } or: {
+                            Either {
+                                When(second == 59)
+                                When(minute == 59)
+                                When(hour < 23)
+                                Assign(second, to: 0)
+                                Assign(minute, to: 0)
+                                Assign(hour, to: hour + 1)
+                            } or: {
+                                When(second == 59)
+                                When(minute == 59)
+                                When(hour == 23)
+                                Assign(second, to: 0)
+                                Assign(minute, to: 0)
+                                Assign(hour, to: 0)
+                            }
+                        }
                     }
                 }
 
@@ -77,7 +83,7 @@ public struct ClockModel: Sendable {
                     minute >= 0 && minute <= 59 &&
                     second >= 0 && second <= 59
                 }
-            }
+            })
         }
     }
 }
@@ -100,6 +106,8 @@ print(result.after)
 
 The generated state is ordinary Swift value state. A view renders it and sends
 typed actions; the machine keeps each transition atomic.
+
+**Example ID:** `readme-clock-swiftui`
 
 ```swift
 import SwiftUI
@@ -133,7 +141,9 @@ struct ClockView: View {
         .task {
             guard machine == nil else { return }
             do {
-                machine = try ClockModel.makeMachine()
+                machine = try ClockModel.makeMachine(
+                    .init(hour: 16, minute: 19, second: 59)
+                )
             } catch {
                 diagnostic = String(describing: error)
             }
