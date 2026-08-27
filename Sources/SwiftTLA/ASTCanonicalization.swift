@@ -10,11 +10,7 @@ func alphaKey(_ action: ActionExpr, bindingNames: [String]) -> String {
         environment = extended
     }
     let branches = semanticBranches(action)
-    var keys: [String] = []
-    for branch in branches {
-        keys.append(actionKey(branch, environment: environment, next: &next))
-    }
-    return "or[\(keys.joined(separator: ","))]"
+    return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
 }
 
 /// Gives action disjunction one canonical representation. In particular,

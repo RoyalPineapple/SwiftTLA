@@ -134,29 +134,6 @@ enum MacroExpander {
                 DeclSyntax(stringLiteral: "public enum Action: Hashable, Sendable {}")
             ]
         }
-        func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
-            "\(binding.formalName).tlaValue"
-        }
-
-        func fixedArgument(_ binding: MachineSurfacePlan.Binding) -> String {
-            codegenTLAValue(binding.domain[0])
-        }
-
-        func actionArgumentBinding(
-            for binding: MachineSurfacePlan.Binding,
-            index: Int,
-            in arguments: String
-        ) -> String {
-            switch binding.swiftType {
-            case "Int": return "let \(binding.formalName) = try \(arguments).value(at: \(index), as: Int.self)"
-            case "Bool": return "let \(binding.formalName) = try \(arguments).value(at: \(index), as: Bool.self)"
-            case "String": return "let \(binding.formalName) = try \(arguments).value(at: \(index), as: String.self)"
-            case "TLAValue": return "let \(binding.formalName) = try \(arguments).value(at: \(index), as: TLAValue.self)"
-            default:
-                return "let \(binding.formalName) = try \(arguments).value(at: \(index), as: \(binding.swiftType).self)"
-            }
-        }
-
         let cases = actions.map { action in
             if let collection = action.symmetricCollection {
                 return "case \(action.swiftIdentifier)(member: \(collection.elementType).ID)"
@@ -193,8 +170,8 @@ enum MacroExpander {
             let publicBindings = action.bindings.filter(\.isPublic)
             let arguments = action.bindings.map { binding in
                 binding.isPublic
-                    ? argumentConstructor(for: binding)
-                    : fixedArgument(binding)
+                    ? "\(binding.formalName).tlaValue"
+                    : codegenTLAValue(binding.domain[0])
             }.joined(separator: ", ")
             let pattern = publicBindings.isEmpty
                 ? ".\(action.swiftIdentifier)"
@@ -221,7 +198,9 @@ enum MacroExpander {
                 return "case \(ordinal) where arguments.isEmpty: return .\(action.swiftIdentifier)"
             }
             let bindings = action.bindings.enumerated().compactMap { index, binding in
-                binding.isPublic ? actionArgumentBinding(for: binding, index: index, in: "arguments") : nil
+                binding.isPublic
+                    ? "let \(binding.formalName) = try arguments.value(at: \(index), as: \(binding.swiftType).self)"
+                    : nil
             }.joined(separator: "\n                    ")
             let fixedArguments = action.bindings.enumerated().compactMap { index, binding in
                 binding.isPublic ? nil : "arguments.matches(\(codegenTLAValue(binding.domain[0])), at: \(index))"
