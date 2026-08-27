@@ -176,8 +176,47 @@ struct CompilerPipelineCanonicalizationTests {
         let module = compilation.renderedTLAModuleBundle().root.tla
 
         #expect(first != second)
-        #expect(module.contains("\\A value \\in"))
-        #expect(module.contains("\\A value__1 \\in"))
+        #expect(module.contains("\\A b0 \\in"))
+        #expect(module.contains("\\A b1 \\in"))
+    }
+
+    @Test("compiled binder names do not shadow declarations")
+    func compiledBinderNamesDoNotShadowDeclarations() throws {
+        let spec = TLASpec("BinderCollision") {
+            Var("b0", 1)
+            Invariant("Safe") {
+                .forAll(
+                    .setLiteral([.value(.int(1))]),
+                    "value",
+                    .equal(.variable("value"), .variable("b0"))
+                )
+            }
+        }
+
+        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+
+        #expect(module.contains("VARIABLES b0"))
+        #expect(module.contains("\\A _b0 \\in"))
+        #expect(module.contains("(_b0 = b0)"))
+    }
+
+    @Test("compiled binder names do not shadow theorem names")
+    func compiledBinderNamesDoNotShadowTheoremNames() throws {
+        let spec = TLASpec("BinderTheoremCollision") {
+            Theorem(name: "b0", always: .value(.bool(true)))
+            Invariant("Safe") {
+                .forAll(
+                    .setLiteral([.value(.int(1))]),
+                    "value",
+                    .equal(.variable("value"), .int(1))
+                )
+            }
+        }
+
+        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+
+        #expect(spec.theorems.map(\.name) == ["b0"])
+        #expect(module.contains("\\A _b0 \\in"))
     }
 
     @Test("macro compilation uses the explicit formal module name")

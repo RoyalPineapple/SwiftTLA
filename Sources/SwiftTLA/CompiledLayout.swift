@@ -669,6 +669,7 @@ struct BindingValidator {
     private let formalParameters: Set<String>
     private let symmetricMembers: [TLAValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
+    private let reservedRenderedNames: Set<String>
     private var operators: [String: OperatorID]
     private var operatorNames: [OperatorID: String]
     private var operatorArities: [OperatorID: Int]
@@ -691,6 +692,11 @@ struct BindingValidator {
         formalParameters = Set(spec.formalParameters.map(\.name))
         symmetricMembers = spec.symmetricCollections.flatMap { $0.metadata.members }
         self.incomingModuleParameters = incomingModuleParameters
+        var reservedRenderedNames = spec.renderedDeclarationNames()
+        reservedRenderedNames.formUnion(spec.symmetricCollections.flatMap(\.metadata.generatedSymbols))
+        reservedRenderedNames.formUnion(spec.symmetrySets.map { "Symm\($0.variableName)" })
+        reservedRenderedNames.formUnion(incomingModuleParameters.map(\.operatorName))
+        self.reservedRenderedNames = reservedRenderedNames
         let signatures = spec.formalOperatorDefinitions.map { ($0.name, $0.parameters.count) }
             + spec.recursiveFuncs.map { ($0.name, $0.params.count) }
             + closure.linkedOperators.formalOperatorDefinitions.map { ($0.name, $0.parameters.count) }
@@ -1315,7 +1321,7 @@ struct BindingValidator {
         try duplicate(names, at: path)
         var nested = scope
         for name in names {
-            let id = bind(name, in: nested)
+            let id = allocateBinder()
             knownBinderNames.insert(name)
             nested[name] = id
             references["\(path).\(name)"] = .binder(id)
@@ -1333,7 +1339,7 @@ struct BindingValidator {
         for parameter in parameters {
             switch parameter {
             case .value(let name):
-                let id = bind(name, in: nested)
+                let id = allocateBinder()
                 knownBinderNames.insert(name)
                 nested[name] = id
                 references["\(path).\(name)"] = .binder(id)
@@ -1349,15 +1355,15 @@ struct BindingValidator {
         return nested
     }
 
-    private mutating func bind(_ sourceName: String, in scope: [String: BinderID]) -> BinderID {
+    private mutating func allocateBinder() -> BinderID {
         let id = BinderID(ordinal: nextBinderOrdinal)
         nextBinderOrdinal += 1
-        let activeNames = Set(scope.values.compactMap { binders[$0] })
-        var renderedName = sourceName
-        var suffix = id.ordinal
-        while activeNames.contains(renderedName) {
-            renderedName = "\(sourceName)__\(suffix)"
-            suffix += 1
+        var declaredNames = reservedRenderedNames
+        declaredNames.formUnion(operators.keys)
+        declaredNames.formUnion(binders.values)
+        var renderedName = "b\(id.ordinal)"
+        while declaredNames.contains(renderedName) {
+            renderedName = "_\(renderedName)"
         }
         binders[id] = renderedName
         return id
