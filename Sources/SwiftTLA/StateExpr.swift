@@ -19,8 +19,7 @@ func generatedBinderName(
 
 /// A local TLA+ operator declared inside a `LET … IN` expression.
 ///
-/// Local operators are formal expressions, not Swift closures.  They remain
-/// in the AST so the evaluator and the emitted module use the same scope.
+/// The AST retains each operator's lexical scope for evaluation and rendering.
 public struct LocalOperator: Hashable, Sendable {
     public let name: String
     public let parameters: [String]
@@ -46,9 +45,8 @@ public struct LocalOperator: Hashable, Sendable {
 
 /// A formal function body with named, scoped inputs.
 ///
-/// This is syntax in the specification, not a Swift closure and never a state
-/// value. The evaluator binds its inputs only while evaluating the formal
-/// operator that receives it.
+/// The evaluator binds its inputs while evaluating the formal operator that
+/// receives it.
 public struct FormalLambda: Hashable, Sendable {
     public let parameters: [String]
     public let body: StateExpr
@@ -69,10 +67,8 @@ public struct FormalLambda: Hashable, Sendable {
 
 /// A formal operator passed or applied by the specification.
 ///
-/// This is deliberately not a Swift closure. A lambda retains its parameter
-/// names and body in the formal AST; a reference retains the TLA+ operator name
-/// and its required arity. Both can therefore be emitted, checked, and applied
-/// by the same formal runtime.
+/// A lambda retains its parameters and body. A reference retains its operator
+/// name and required arity. The runtime and renderer consume the same form.
 public indirect enum FormalOperator: Hashable, Sendable {
     case lambda(FormalLambda)
     case reference(String, arity: Int)
@@ -96,9 +92,7 @@ public indirect enum FormalOperator: Hashable, Sendable {
 
 /// One argument supplied to a formal operator call.
 ///
-/// TLA+ operators can receive ordinary expressions and other operators.  Keep
-/// that distinction in the AST: a higher-order call is not a Swift closure
-/// invocation and does not erase the operator that was supplied.
+/// The cases preserve whether a TLA+ argument is a value or an operator.
 public indirect enum FormalCallArgument: Hashable, Sendable {
     case value(StateExpr)
     case `operator`(FormalOperator)
@@ -339,8 +333,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case operatorApplication(FormalOperator, [FormalCallArgument])
 
     case recursiveCall(String, [StateExpr])
-    /// A scoped formal value. This is TLA+ `LET name == value IN body`, not a
-    /// Swift local and not a state update.
+    /// A scoped TLA+ `LET name == value IN body` value expression.
     case letValue(String, StateExpr, StateExpr)
     case letIn([LocalOperator], StateExpr)
 
@@ -368,9 +361,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .greaterThan(let a, let b): return "(\(a) > \(b))"
         case .greaterOrEqual(let a, let b): return "(\(a) >= \(b))"
         case .and(let a, let b): return "(\(a) /\\ \(b))"
-        // StateExpr disjunction is left-to-right and short-circuiting in the
-        // evaluator.  Spell that guard explicitly for TLA+, where an invalid
-        // function application in the right operand must not be forced.
+        // The conditional preserves left-to-right, short-circuit evaluation
+        // when the right operand contains a partial function application.
         case .or(let a, let b): return "(IF \(a) THEN TRUE ELSE \(b))"
         case .not(let a): return "(~\(a))"
         case .ifThenElse(let c, let t, let f): return "(IF \(c) THEN \(t) ELSE \(f))"

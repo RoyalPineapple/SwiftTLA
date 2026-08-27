@@ -1,7 +1,6 @@
 /// A typed handle for one locally recursive TLA+ operator.
 ///
-/// `LetRec` is deliberately unary. Model inputs with more than one value as a
-/// `Pair` or typed `Record`, preserving one local TLA+ operator parameter.
+/// `LetRec` has one input. Use a `Pair` or typed `Record` for compound input.
 public struct LocalRecursion<Input: TLAValueType, Output: TLAValueType>: Sendable {
     fileprivate let name: String
 
@@ -10,8 +9,7 @@ public struct LocalRecursion<Input: TLAValueType, Output: TLAValueType>: Sendabl
     }
 }
 
-/// Builds TLA+ `LET name(input) == definition IN body` without exposing the
-/// raw local-operator AST to an application model.
+/// Builds a typed TLA+ `LET name(input) == definition IN body` expression.
 public func LetRec<
     Input: TLAValueType,
     Output: TLAValueType,

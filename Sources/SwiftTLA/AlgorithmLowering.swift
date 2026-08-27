@@ -3,10 +3,8 @@ enum AlgorithmLowerer {
         case process
     }
 
-    // These frame keys are the names emitted by the official PlusCal
-    // translator.  The runtime stack remains an implementation detail, but
-    // its formal representation must be comparable to the independent
-    // translation rather than merely equivalent by convention.
+    // These frame keys match the official PlusCal translation so both tools
+    // expose the same formal stack representation.
 
     private struct ControlFlow {
         let algorithm: String
@@ -355,9 +353,7 @@ enum AlgorithmLowerer {
         Array(Set(processes.flatMap(\.domain))).sorted()
     }
 
-    /// The PlusCal translator omits `pc` for a process machine made entirely
-    /// of one unconditional, control-free loop.  Preserve that source-level
-    /// machine shape instead of materializing a constant implementation state.
+    /// A process machine with one unconditional control-free loop has no `pc`.
     private static func requiresProgramCounter(for algorithm: AlgorithmModel) -> Bool {
         guard !algorithm.processes.isEmpty, algorithm.procedures.isEmpty else {
             return true
@@ -390,8 +386,7 @@ enum AlgorithmLowerer {
         }
     }
 
-    /// Lowers a PlusCal `begin ... end algorithm` body. This is deliberately
-    /// not a one-element process: PlusCal gives this form a scalar `pc` and
+    /// Lowers a PlusCal `begin ... end algorithm` body with scalar `pc` and
     /// unparameterized action labels.
     private static func lowerSequential(
         _ algorithm: AlgorithmModel,
@@ -686,9 +681,8 @@ enum AlgorithmLowerer {
               let entry = procedure.steps.first?.label.name else {
             return .guard_(.value(.bool(false)))
         }
-        // A frame captures every procedure-owned slot, not only the callee's.
-        // That makes a tail call safe: it reuses the caller's continuation and
-        // return restores the entire pre-call procedural environment at once.
+        // A frame captures every procedure-owned slot. A tail call reuses the
+        // caller's continuation, and return restores the pre-call environment.
         let frameFields = [
             (CompilerControlSymbol.procedure.rawValue, StateExpr.value(.string(procedure.name))),
             (CompilerControlSymbol.programCounter.rawValue, returnTo)
@@ -957,8 +951,8 @@ enum AlgorithmLowerer {
                 label))
     }
 
-    /// An `Each` machine continues to its next `Do` when it does not explicitly
-    /// transfer control. Its final `Do` reaches the builder-owned `Done` state.
+    /// An `Each` machine falls through to its next `Do`; its final `Do` reaches
+    /// the builder-owned `Done` state.
     private static func completingControl(_ action: ActionExpr, fallthrough location: StateExpr) -> ActionExpr {
         let branches = ActionNormalization.branches(of: action)
         let completed = branches.map { branch in

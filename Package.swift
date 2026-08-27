@@ -34,8 +34,7 @@ let package = Package(
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax")
         ], swiftSettings: settings),
-        // Repository tools export the canonical corpus without compiling the
-        // full example gallery.
+        // Canonical compiler models used by repository validation tools.
         .target(
             name: "CanonicalUpstreamCorpus",
             dependencies: ["SwiftTLA", "SwiftTLAMacros"],
@@ -57,16 +56,14 @@ let package = Package(
             dependencies: ["SwiftTLA", "UpstreamParity"],
             path: "Sources/TLCValidate"
         ),
-        // Internal CI appendix: exports the canonical upstream Algorithm
-        // corpus for independent translator/TLC evidence. It is deliberately
-        // not a package product or application-facing API.
+        // Exports the canonical upstream Algorithm corpus for independent
+        // translator and TLC evidence.
         .executableTarget(
             name: "canonical-corpus-export",
             dependencies: ["SwiftTLA", "CanonicalUpstreamCorpus"],
             path: "Tools/CanonicalCorpusExport"
         ),
-        // Fast semantic-core tests. Keep this target free of UpstreamParity so
-        // Fast semantic witnesses compile and run without the parity corpus.
+        // Compiler semantic tests.
         .testTarget(name: "SwiftTLATests", dependencies: [
             "SwiftTLA",
             "SwiftTLAMacros",
@@ -74,7 +71,7 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax")
         ], swiftSettings: settings),
-        // Slower corpus, oracle, and governance tests.
+        // Corpus, oracle, and governance tests.
         .testTarget(name: "SwiftTLAParityTests", dependencies: [
             "SwiftTLA",
             "SwiftTLAMacros",

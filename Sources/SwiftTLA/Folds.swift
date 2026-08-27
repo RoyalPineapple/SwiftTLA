@@ -1,8 +1,7 @@
 /// A source-faithful port of the TLA+ Community Modules `Folds` module.
 ///
-/// Import `Folds.module` when a specification needs its general set-folding
-/// operator. Most Swift models use `FunctionsModule.module` and its typed `Fold`
-/// facade instead.
+/// Import `Folds.module` for its general set-folding operator. The typed `Fold`
+/// facade uses `FunctionsModule.module`.
 public enum Folds {
     /// The `Folds.tla` source module.
     public static let module = TLASpec("Folds") {

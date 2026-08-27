@@ -248,7 +248,7 @@ public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
 ///
 /// This is the standard TLA+ `CHOOSE f \in [1..Cardinality(S) -> S] :
 /// IsInjective(f)` expression. The choice remains symbolic in the formal
-/// specification; Swift does not evaluate it while the model is authored.
+/// specification and is evaluated by the formal runtime.
 public func InjectiveSequence<Element: TLAValueType>(
   from values: Expr<SetExpr<Element>>
 ) -> Expr<TupleExpr<Element>> {
@@ -259,9 +259,8 @@ public func InjectiveSequence<Element: TLAValueType>(
   ))
 }
 
-/// The bounded formal function space from one finite domain to a finite set
-/// of values. `Functions(from:to:)` is a TLA+ function set, not a Swift
-/// dictionary or closure evaluated by the application.
+/// The bounded TLA+ function space from one finite domain to a finite set of
+/// values.
 public func Functions<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
   from domain: FiniteDomain<Domain>,
   to values: Expr<SetExpr<Range>>
@@ -279,8 +278,8 @@ public func Subsets<Element: TLAValueType>(
 // swiftlint:disable identifier_name
 /// All non-empty subsets of a finite formal set.
 ///
-/// This is the formal choice domain used by a PlusCal `with` statement such
-/// as `rk \in SUBSET Key \ { { } }`. It is not a Swift `Set` filter.
+/// The choice domain used by a PlusCal `with` statement such as
+/// `rk \in SUBSET Key \ { { } }`.
 public func NonEmptySubsets<Element: TLAValueType>(
   of values: Expr<SetExpr<Element>>
 ) -> Expr<SetExpr<SetExpr<Element>>> {
@@ -289,8 +288,7 @@ public func NonEmptySubsets<Element: TLAValueType>(
 }
 // swiftlint:enable identifier_name
 
-/// Narrows a finite formal set to the values that satisfy a formal predicate.
-/// The closure describes TLA+ syntax; it does not execute as application code.
+/// Narrows a finite formal set with a typed TLA+ predicate.
 public func Where<Value: TLAValueType>(
   _ candidates: Expr<SetExpr<Value>>,
   matching predicate: (WithValue<Value>) -> StateExpr
@@ -305,9 +303,8 @@ public func Where<Value: TLAValueType>(
 
 /// Selects one value from a finite formal domain.
 ///
-/// Use this for a fixed model value, such as a graph supplied by a TLC
-/// configuration. The selection is evaluated by the formal evaluator while
-/// the spec is built; it is not application control flow.
+/// The formal evaluator selects a fixed model value while the specification is
+/// built, such as a graph supplied by a TLC configuration.
 public func Select<Value: TLAValueType>(
   from candidates: Expr<SetExpr<Value>>,
   matching predicate: (WithValue<Value>) -> StateExpr
@@ -385,9 +382,7 @@ extension Expr where T: FormalSetValue {
 
 /// A typed finite TLA+ tuple (sequence).
 ///
-/// This is the formal sequence value, not a Swift `Array`. Use it for ordered
-/// state. Its storage is private so application code cannot accidentally make
-/// a host-language collection part of the specification.
+/// Use this typed formal sequence for ordered state.
 public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
   private let values: [TLAValue]
 
@@ -422,9 +417,9 @@ extension TupleExpr: FormalTupleValue {}
 
 /// A typed two-member TLA+ tuple.
 ///
-/// Use `Pair` when the two positions have different formal types. This is a
-/// formal tuple, not a Swift tuple: it can be stored in formal state, used as
-/// a set member, and selected by a PlusCal `with` binding.
+/// Use `Pair` when the two positions have different formal types. It can be
+/// stored in formal state, used as a set member, and selected by a PlusCal
+/// `with` binding.
 public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Hashable, Sendable {
   public let first: First
   public let second: Second
@@ -468,9 +463,8 @@ extension Pair: FormalTupleValue {}
 
 /// A finite formal sequence whose first element is at index zero.
 ///
-/// TLA+ represents this value as a function with domain `0..<(count)`. It is
-/// useful for source algorithms that use `ZSequences`; it is not a Swift
-/// array or dictionary.
+/// TLA+ represents this value as a function with domain `0..<(count)` for
+/// source algorithms that use `ZSequences`.
 public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
   private let values: [TLAValue: TLAValue]
 
@@ -591,8 +585,7 @@ public func ZeroBasedSequences<Element: TLAValueType>(
 /// Creates a finite formal set of nondecreasing integer sequences.
 ///
 /// This is the bounded model-checking form of a sorted `Seq(Values)` domain.
-/// It is useful when the sortedness is an assumption of the algorithm, as in
-/// binary search, rather than state that the algorithm itself must establish.
+/// Use it when sortedness is a declared input assumption, as in binary search.
 // swiftlint:disable:next identifier_name
 public func SortedSequences(
   of elements: Expr<SetExpr<Int>>,
@@ -609,9 +602,8 @@ public func SortedSequences(
   ))
 }
 
-/// The shared finite expansion used by the runtime builder and source parser.
-/// Keeping this operation here makes the two construction paths enumerate the
-/// same sequence domain without exposing host-language arrays to a model.
+/// The finite sequence-domain expansion shared by the builder and source
+/// parser.
 func formalSequenceExpressions(
   members: [StateExpr],
   lengths: ClosedRange<Int>
@@ -872,8 +864,7 @@ extension Expr {
   }
 }
 
-/// A bounded, inclusive formal integer set. This is TLA+ `lower..upper`, not
-/// a Swift range. Both endpoints can depend on the current formal state.
+/// A bounded, inclusive TLA+ integer set whose endpoints can depend on state.
 public func IntRange(
   _ lower: some StateExprConvertible,
   through upper: some StateExprConvertible
@@ -910,8 +901,8 @@ extension Expr where T: FormalTupleValue {
 /// Combines a formal function with the upstream `Functions.FoldFunction` operator.
 ///
 /// The closure builds a `LAMBDA` in the specification. The upstream operator
-/// selects a function-domain member with `CHOOSE`, so use an operation whose
-/// result does not depend on that selection order. Import `FunctionsModule.module`
+/// selects a function-domain member with `CHOOSE`, so the operation must be
+/// independent of that selection order. Import `FunctionsModule.module`
 /// into the surrounding specification so TLC receives the upstream operator.
 public func Fold<Element: TLAValueType, Result: TLAValueType>(
   _ sequence: Expr<TupleExpr<Element>>,
