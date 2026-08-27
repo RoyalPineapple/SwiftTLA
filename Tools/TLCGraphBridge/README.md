@@ -2,19 +2,17 @@
 
 `LosslessStateWriter` is a version-bound transport adapter for TLC v1.8.0. It
 records the complete `IStateWriter` callback surface as append-only
-`TLCGraphEvent` JSONL. It does not evaluate expressions, infer successors,
-canonicalize values, or compare graphs.
+`TLCGraphEvent` JSONL. TLC owns graph exploration. The Swift reader validates
+the event stream and constructs the TLC graph. The graph comparator decides
+formal equality.
 
-The supported schema is `swifttla.tlc.graph-events` version 1. It has a
-header, state and transition callback records, completion/failure records, and
-a footer that authenticates the exact body bytes. The consumer validates
+The supported schema is `swifttla.tlc.graph-events` version 2. It has a
+header, state and transition callback records, and a footer whose SHA-256
+covers the exact body bytes. The consumer validates
 strict UTF-8, exact record schemas, sequence/order rules, the footer digest,
-and the pinned provenance before it turns the stream into TLC graph evidence.
-Unknown or malformed fields are rejected.
-
-This boundary is deliberately transport-only. TLC remains responsible for its
-own exploration. SwiftTLA's independent adapter canonicalizes the verified
-stream and the Swift graph comparator decides the bounded relation.
+and closure counts before it turns the stream into TLC graph evidence. Unknown
+or malformed fields are rejected. Tool, bridge, module, and configuration pins
+are validated against the launched files before TLC runs.
 
 ## Build lock
 

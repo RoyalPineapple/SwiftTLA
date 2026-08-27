@@ -17,19 +17,17 @@ import tlc2.tool.TLCState;
 import tlc2.util.BitVector;
 import tlc2.util.IStateWriter;
 
-/** TLC v1.8.0 transport-only writer for the bounded conformance spike. */
+/** TLC v1.8.0 graph-event writer. */
 public final class LosslessStateWriter implements IStateWriter {
     private static final String SCHEMA = "swifttla.tlc.graph-events";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final String OUTPUT_PROPERTY = "swifttla.tlc.graph.path";
-    private static final String PROVENANCE_PROPERTY = "swifttla.tlc.graph.provenance";
     private static final String RUN_ID_PROPERTY = "swifttla.tlc.graph.run-id";
     private static final String CASE_ID_PROPERTY = "swifttla.tlc.graph.case-id";
 
     private final Path outputPath;
     private final BufferedWriter output;
     private final MessageDigest bodyDigest;
-    private final String provenance;
     private final String runId;
     private final String caseId;
     private final Map<String, Integer> counts = new LinkedHashMap<>();
@@ -39,13 +37,12 @@ public final class LosslessStateWriter implements IStateWriter {
     public LosslessStateWriter() {
         try {
             outputPath = Path.of(required(OUTPUT_PROPERTY)).toAbsolutePath().normalize();
-            provenance = jsonObject(required(PROVENANCE_PROPERTY), PROVENANCE_PROPERTY);
             runId = required(RUN_ID_PROPERTY);
             caseId = required(CASE_ID_PROPERTY);
             Files.createDirectories(outputPath.getParent());
             output = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
             bodyDigest = MessageDigest.getInstance("SHA-256");
-            emit("header", "writer.header", "\"provenance\":" + provenance);
+            emit("header", "writer.header", "");
             Runtime.getRuntime().addShutdownHook(new Thread(this::close, "swifttla-graph-writer-close"));
         } catch (IOException error) {
             throw new UncheckedIOException("cannot create TLC graph event stream", error);
@@ -169,8 +166,7 @@ public final class LosslessStateWriter implements IStateWriter {
             String value = String.valueOf(state.lookup(names[index]));
             bindings.append("{\"ordinal\":").append(index)
                     .append(",\"name\":").append(quote(names[index]))
-                    .append(",\"tla\":").append(quote(value))
-                    .append(",\"tlaSha256\":").append(quote(sha256(value))).append('}');
+                    .append(",\"tla\":").append(quote(value)).append('}');
         }
         return "{\"fingerprint\":" + quote(Long.toUnsignedString(state.fingerPrint()))
                 + ",\"level\":" + state.getLevel() + ",\"bindings\":" + bindings + "]}";
@@ -178,7 +174,7 @@ public final class LosslessStateWriter implements IStateWriter {
 
     private void emit(String type, String callback, String fields) {
         ensureOpen();
-        String line = base(type, callback) + "," + fields + "}";
+        String line = base(type, callback) + (fields.isEmpty() ? "}" : "," + fields + "}");
         try {
             byte[] bytes = (line + "\n").getBytes(StandardCharsets.UTF_8);
             output.write(line);
@@ -226,24 +222,8 @@ public final class LosslessStateWriter implements IStateWriter {
         return value;
     }
 
-    private static String jsonObject(String value, String property) {
-        String trimmed = value.trim();
-        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
-            throw new IllegalStateException(property + " must be a JSON object");
-        }
-        return trimmed;
-    }
-
     private static String location(SemanticNode node) {
         return node == null ? "" : String.valueOf(node.getLocation());
-    }
-
-    private static String sha256(String value) {
-        try {
-            return hex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException error) {
-            throw new IllegalStateException("SHA-256 is unavailable", error);
-        }
     }
 
     private static String hex(byte[] bytes) {

@@ -156,13 +156,13 @@ func fingerprintAliasGraphStream(
   return body + footer
 }
 func binding(_ ordinal: Int, _ name: String, _ tla: String) -> [String: Any] {
-  ["ordinal": ordinal, "name": name, "tla": tla, "tlaSha256": SHA256.hex(Data(tla.utf8))]
+  ["ordinal": ordinal, "name": name, "tla": tla]
 }
 func record(
   _ type: String, _ sequence: Int, _ runID: String, _ caseID: String, _ fields: [String: Any]
 ) -> [String: Any] {
   fields.merging([
-    "schema": "swifttla.tlc.graph-events", "version": 1, "type": type, "seq": sequence,
+    "schema": "swifttla.tlc.graph-events", "version": 2, "type": type, "seq": sequence,
     "runId": runID, "caseId": caseID
   ]) { _, new in new }
 }
@@ -323,22 +323,10 @@ func requestWithReferenceArtifacts(
   )
 }
 func header(_ finiteGraphCase: FiniteGraphCase) throws -> String {
-  let pin = finiteGraphCase.pin
   let record: [String: Any] = [
-    "schema": "swifttla.tlc.graph-events", "version": 1, "type": "header",
+    "schema": "swifttla.tlc.graph-events", "version": 2, "type": "header",
     "callback": "writer.header",
-    "seq": 0, "runId": "00000000-0000-4000-8000-000000000001", "caseId": "fixture",
-    "provenance": [
-      "tlcTag": pin.tag, "tlcCommit": pin.commit, "tlcJarSha256": pin.jarSHA256,
-      "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion,
-      "javaArchiveSha256": pin.javaArchiveSHA256,
-      "bridgeClass": pin.bridgeClass, "bridgeSourceSha256": pin.bridgeSourceSHA256,
-      "bridgeBinarySha256": pin.bridgeBinarySHA256,
-      "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
-      "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-      "os": finiteGraphCase.operatingSystem, "architecture": finiteGraphCase.architecture,
-      "environment": finiteGraphCase.environment
-    ]
+    "seq": 0, "runId": "00000000-0000-4000-8000-000000000001", "caseId": finiteGraphCase.id
   ]
   let data = try JSONSerialization.data(withJSONObject: record)
   return try #require(String(data: data, encoding: .utf8))
