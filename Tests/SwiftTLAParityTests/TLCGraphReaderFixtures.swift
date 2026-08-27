@@ -172,12 +172,16 @@ func jsonLine(_ object: [String: Any]) throws -> Data {
 func fixtureCase(
   _ pin: TLCReferencePin,
   arguments: [String] = [],
-  renderedActions: [RenderedAction] = []
+  renderedActions: [RenderedAction] = [],
+  symmetryReduction: SymmetryReduction = .disabled
 )
   throws -> FiniteGraphCase {
   try FiniteGraphCase(
     id: "fixture",
-    exploration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled),
+    exploration: try .init(
+      maximumStateLimit: 100_000,
+      symmetryReduction: symmetryReduction
+    ),
     moduleSHA256: String(repeating: "c", count: 64),
     cfgSHA256: String(repeating: "d", count: 64),
     arguments: arguments,

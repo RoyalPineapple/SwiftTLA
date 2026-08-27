@@ -482,6 +482,16 @@ extension TLCGraphReaderTests {
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "seen fingerprint without representative")) {
       try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true, aliasFingerprint: "foreign"))
     }
+
+    let reducedCase = try fixtureCase(
+      try toolchainPin(),
+      symmetryReduction: .enabled(maximumPermutationCount: 2)
+    )
+    let reduced = try TLCGraphReader(finiteGraphCase: reducedCase).parse(
+      try fingerprintAliasGraphStream(reducedCase, aliasSeen: true, aliasValue: "2")
+    )
+    #expect(reduced.transitions.count == 2)
+    #expect(reduced.transitions[0].target == reduced.transitions[1].target)
   }
 
   @Test("process adapter adds trace capture only after a violation")
