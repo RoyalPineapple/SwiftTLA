@@ -472,6 +472,10 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   }
 
   /// Creates a zero-based formal sequence from values in formal order.
+  public static func literal() -> Expr<Self> {
+    Expr(.value(.function([:])))
+  }
+
   public static func literal(_ elements: Element...) -> Expr<Self> {
     literal(elements.map { .value($0.tlaValue) })
   }
@@ -501,6 +505,7 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   }
 
   private static func literal(_ elements: [StateExpr]) -> Expr<Self> {
+    guard elements.isEmpty == false else { return literal() }
     let index = "__zeroBasedSequenceIndex"
     let pairs = elements.enumerated().flatMap { offset, element in
       [StateExpr.equal(.variable(index), .int(offset)), element]
@@ -604,6 +609,7 @@ func formalZeroBasedSequenceExpressions(
   guard lengths.lowerBound >= 0 else { return [] }
   return formalSequenceExpressions(members: members, lengths: lengths).map { tuple in
     guard case .tupleLiteral(let elements) = tuple else { return tuple }
+    guard elements.isEmpty == false else { return .value(.function([:])) }
     let index = "__zeroBasedSequenceIndex"
     let pairs = elements.enumerated().flatMap { offset, element in
       [StateExpr.equal(.variable(index), .int(offset)), element]
