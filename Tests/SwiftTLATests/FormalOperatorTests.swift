@@ -373,7 +373,7 @@ struct FormalOperatorTests {
     #expect(try compiledValue(pointwise, formalOperators: functions) == .function([
       .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
     ]))
-    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(f, S) =="))
+    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(b0, b1) =="))
   }
 
   @Test("Util definitions execute without flattening their Functions dependency")
