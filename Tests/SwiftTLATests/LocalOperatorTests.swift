@@ -290,6 +290,25 @@ struct LocalOperatorTests {
     #expect(expression.description.contains("SumTo(number) =="))
   }
 
+  @Test("terminating recursive operators evaluate beyond host call depth")
+  func evaluatesDeepTerminatingRecursion() throws {
+    let sumTo = LocalOperator(
+      "SumTo",
+      parameters: ["number"],
+      body: .ifThenElse(
+        .equal(.variable("number"), .int(0)),
+        .int(0),
+        .add(
+          .variable("number"),
+          .recursiveCall("SumTo", [.subtract(.variable("number"), .int(1))])
+        )
+      )
+    )
+    let expression = StateExpr.letIn([sumTo], .recursiveCall("SumTo", [.int(512)]))
+
+    #expect(try compiledValue(expression) == .int(131_328))
+  }
+
   @Test("LET operators are emitted as executable TLA+ source")
   func emitsLetInSource() throws {
     let local = LocalOperator("AddOne", parameters: ["number"], body: .add(.variable("number"), .int(1)))
@@ -297,7 +316,9 @@ struct LocalOperatorTests {
       FormalDefinition("Answer", parameters: [], body: .letIn([local], .recursiveCall("AddOne", [.int(41)])))
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Answer == LET AddOne("))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains(
+      "Answer == LET AddOne(b0) == (b0 + 1)"
+    ))
     #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("RECURSIVE AddOne")))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("IN AddOne(41)"))
   }
