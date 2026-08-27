@@ -9,8 +9,10 @@ private struct CoffeeCanFields {
 private enum CoffeeCanSchema: TLARecordSchema {
     typealias Fields = CoffeeCanFields
 
-    static let fieldNames: Set<String> = ["black", "white"]
-    static let defaultRecord: TLAValue = .record(["black": .int(0), "white": .int(0)])
+    static let fields: [TLARecordFieldDeclaration<Self>] = [
+        .init(black, default: 0),
+        .init(white, default: 0),
+    ]
 
     static func fieldName<Value>(for field: KeyPath<CoffeeCanFields, Value>) -> String? {
         let key = field as AnyKeyPath

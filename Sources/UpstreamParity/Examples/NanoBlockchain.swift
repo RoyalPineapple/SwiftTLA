@@ -158,11 +158,10 @@ package struct NanoBlockchainModel: Sendable {
     package enum SignatureSchema: TLARecordSchema {
         package typealias Fields = SignatureFields
 
-        package static let fieldNames: Set<String> = ["data", "signedWith"]
-        package static let defaultRecord: TLAValue = .record([
-            "data": HashReference.none.tlaValue,
-            "signedWith": SigningKey.none.tlaValue,
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(data, default: HashReference.none),
+            .init(signedWith, default: SigningKey.none),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
             let key = field as AnyKeyPath
@@ -183,11 +182,10 @@ package struct NanoBlockchainModel: Sendable {
     package enum SignedBlockSchema: TLARecordSchema {
         package typealias Fields = SignedBlockFields
 
-        package static let fieldNames: Set<String> = ["block", "signature"]
-        package static let defaultRecord: TLAValue = .record([
-            "block": Block.none.tlaValue,
-            "signature": SignatureSchema.defaultRecord,
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(block, default: Block.none),
+            .init(signature, default: Record<SignatureSchema>()),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
             let key = field as AnyKeyPath

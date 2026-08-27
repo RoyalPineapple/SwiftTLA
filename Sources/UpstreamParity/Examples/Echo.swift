@@ -30,11 +30,10 @@ package struct EchoModel: Sendable {
     package enum MessageSchema: TLARecordSchema {
         package typealias Fields = MessageFields
 
-        package static let fieldNames: Set<String> = ["kind", "sender"]
-        package static let defaultRecord: TLAValue = .record([
-            "kind": MessageKind.message.tlaValue,
-            "sender": Node.a.tlaValue
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(kind, default: MessageKind.message),
+            .init(sender, default: Node.a),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
             let key = field as AnyKeyPath

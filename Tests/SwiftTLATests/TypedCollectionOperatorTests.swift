@@ -53,9 +53,6 @@ private struct InvalidLiteralFields {
 private enum InvalidLiteralSchema: TLARecordSchema {
     typealias Fields = InvalidLiteralFields
 
-    static let fieldNames: Set<String> = ["count", "enabled"]
-    static let defaultRecord: TLAValue = .record(["count": .int(0), "enabled": .bool(false)])
-
     static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
         let key = field as AnyKeyPath
         if key == \InvalidLiteralFields.count { return "count" }
@@ -66,20 +63,10 @@ private enum InvalidLiteralSchema: TLARecordSchema {
     static let count = field(\InvalidLiteralFields.count)
     static let enabled = field(\InvalidLiteralFields.enabled)
     static let unlisted = field(\InvalidLiteralFields.unlisted)
-}
-
-private enum InvalidDefaultRecordSchema: TLARecordSchema {
-    typealias Fields = InvalidLiteralFields
-
-    static let fieldNames: Set<String> = ["count", "enabled"]
-    static let defaultRecord: TLAValue = .record(["count": .int(0)])
-
-    static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
-        let key = field as AnyKeyPath
-        if key == \InvalidLiteralFields.count { return "count" }
-        if key == \InvalidLiteralFields.enabled { return "enabled" }
-        return nil
-    }
+    static let fields = [
+        TLARecordFieldDeclaration(count, default: 0),
+        TLARecordFieldDeclaration(enabled, default: false)
+    ]
 }
 
 @TLAModel
@@ -183,10 +170,6 @@ private struct FoldGeneratedModel {
                     .init(InvalidLiteralSchema.count, 0),
                     .init(InvalidLiteralSchema.count, 1)
                 ).raw,
-                .invalidTypedRecordLiteral
-            ),
-            (
-                Expr<Record<InvalidDefaultRecordSchema>>(Record()).raw,
                 .invalidTypedRecordLiteral
             ),
             (

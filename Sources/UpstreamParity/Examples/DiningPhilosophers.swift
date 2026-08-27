@@ -26,8 +26,10 @@ package struct DiningPhilosophersModel: Sendable {
     package enum Fork: TLARecordSchema {
         package typealias Fields = ForkFields
 
-        package static let fieldNames: Set<String> = ["holder", "clean"]
-        package static let defaultRecord: TLAValue = .record(["holder": .int(1), "clean": .bool(false)])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(holder, default: Philosopher.one),
+            .init(clean, default: false),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<ForkFields, Value>) -> String? {
             let key = field as AnyKeyPath

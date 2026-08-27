@@ -39,10 +39,11 @@ package enum MultiCarElevator {
     package enum CarSchema: TLARecordSchema {
         package typealias Fields = CarFields
 
-        package static let fieldNames: Set<String> = ["floor", "doorsOpen", "rider"]
-        package static let defaultRecord: TLAValue = .record([
-            "floor": .int(0), "doorsOpen": .bool(false), "rider": .string("none")
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(floor, default: FloorID.ground),
+            .init(doorsOpen, default: false),
+            .init(rider, default: "none"),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
@@ -66,10 +67,11 @@ package enum MultiCarElevator {
     package enum CallSchema: TLARecordSchema {
         package typealias Fields = CallFields
 
-        package static let fieldNames: Set<String> = ["person", "floor", "direction"]
-        package static let defaultRecord: TLAValue = .record([
-            "person": .string("alice"), "floor": .int(0), "direction": .string("up")
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(person, default: PersonID.alice),
+            .init(floor, default: FloorID.ground),
+            .init(direction, default: Direction.up),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<CallFields, Value>) -> String? {
             let key = field as AnyKeyPath

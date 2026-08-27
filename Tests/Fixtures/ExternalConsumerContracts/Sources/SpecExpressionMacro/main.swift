@@ -24,9 +24,6 @@ struct Counter {
     enum CarSchema: TLARecordSchema {
         typealias Fields = CarFields
 
-        static let fieldNames: Set<String> = ["doorsOpen", "floor"]
-        static let defaultRecord: TLAValue = .record(["doorsOpen": .bool(false), "floor": .int(0)])
-
         static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \CarFields.floor { return "floor" }
@@ -36,6 +33,10 @@ struct Counter {
 
         static let floor = field(\CarFields.floor)
         static let doorsOpen = field(\CarFields.doorsOpen)
+        static let fields = [
+            TLARecordFieldDeclaration(floor, default: 0),
+            TLARecordFieldDeclaration(doorsOpen, default: false)
+        ]
     }
 
     enum CarID: String, FiniteTLAValueDomain {
@@ -74,7 +75,10 @@ struct Counter {
 var counter = try Counter.makeMachine()
 let result = try counter.send(.advance)
 guard result.after.value == 1,
-      result.after.cars[.one][Counter.CarSchema.floor] == 2 else {
+      result.after.cars[.one].tlaValue == .record([
+        "floor": .int(2),
+        "doorsOpen": .bool(false)
+      ]) else {
     throw FixtureError.invalidTransition
 }
 

@@ -27,9 +27,6 @@ struct TypedFacadeContractTests {
 
   enum CarSchema: TLARecordSchema {
     typealias Fields = CarFields
-    static let fieldNames: Set<String> = ["floor", "doorsOpen"]
-    static let defaultRecord: TLAValue = .record(["floor": .int(0), "doorsOpen": .bool(false)])
-
     static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
       let key = field as AnyKeyPath
       if key == \CarFields.floor { return "floor" }
@@ -39,6 +36,57 @@ struct TypedFacadeContractTests {
 
     static let floor = field(\CarFields.floor)
     static let doorsOpen = field(\CarFields.doorsOpen)
+    static let fields = [
+      TLARecordFieldDeclaration(floor, default: 0),
+      TLARecordFieldDeclaration(doorsOpen, default: false)
+    ]
+  }
+
+  struct GarageFields {
+    let car: Record<CarSchema>
+    let owner: PersonID
+  }
+
+  enum GarageSchema: TLARecordSchema {
+    typealias Fields = GarageFields
+
+    static func fieldName<Value>(for field: KeyPath<GarageFields, Value>) -> String? {
+      let key = field as AnyKeyPath
+      if key == \GarageFields.car { return "car" }
+      if key == \GarageFields.owner { return "owner" }
+      return nil
+    }
+
+    static let car = field(\GarageFields.car)
+    static let owner = field(\GarageFields.owner)
+    static let fields = [
+      TLARecordFieldDeclaration(car, default: Record<CarSchema>()),
+      TLARecordFieldDeclaration(owner, default: PersonID.alice)
+    ]
+  }
+
+  @Test("record decoding validates declared fields and nested values")
+  func recordDecodingValidatesSchema() throws {
+    #expect(Record<CarSchema>(formalValue: .record([
+      "floor": .bool(false),
+      "doorsOpen": .bool(false)
+    ])) == nil)
+    #expect(Record<CarSchema>(formalValue: .record(TLARecord([
+      .init("floor", .int(0)),
+      .init("floor", .int(1))
+    ]))) == nil)
+    #expect(Record<CarSchema>(formalValue: .record(["floor": .int(0)])) == nil)
+    #expect(Record<CarSchema>(formalValue: .record([
+      "floor": .int(0),
+      "doorsOpen": .bool(false),
+      "owner": .string("alice")
+    ])) == nil)
+
+    let formal: TLAValue = .record([
+      "car": .record(["floor": .int(2), "doorsOpen": .bool(true)]),
+      "owner": .string("bob")
+    ])
+    #expect(try #require(Record<GarageSchema>(formalValue: formal)).tlaValue == formal)
   }
 
   @Test("typed reads, set mutation, and nested updates lower to typed expressions")
@@ -156,13 +204,13 @@ struct TypedFacadeContractTests {
 
     #expect(result.status != 0)
     for expected in [
-      "InvalidTypedDSL.swift:43:",
+      "InvalidTypedDSL.swift:41:",
       "parameter 'person' requires an explicitly written finite values array",
-      "InvalidTypedDSL.swift:60:",
+      "InvalidTypedDSL.swift:58:",
       "parameter 'car' requires a non-empty finite values array",
-      "InvalidTypedDSL.swift:77:",
+      "InvalidTypedDSL.swift:75:",
       "parameter 'direction' has duplicate finite-domain values",
-      "InvalidTypedDSL.swift:98:",
+      "InvalidTypedDSL.swift:96:",
       "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
     ] {
       #expect(result.output.contains(expected))
@@ -170,7 +218,7 @@ struct TypedFacadeContractTests {
 
     let unknownField = try buildExternalConsumer("InvalidTypedDSLUnknownField")
     #expect(unknownField.status != 0)
-    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:41:"))
+    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:39:"))
     #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
   }
 
