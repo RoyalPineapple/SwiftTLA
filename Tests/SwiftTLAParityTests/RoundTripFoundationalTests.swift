@@ -467,14 +467,11 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
     let labels = transitions.map(\.label)
-    #expect(
-      Set(labels) == [
-        .init(.init(name: "moveElevator", arguments: [.int(1)])),
-        .init(.init(name: "moveElevator", arguments: [.int(2)]))
-      ])
+    #expect(labels.map(\.action) == ["moveElevator", "moveElevator"])
+    #expect(labels.map(\.arguments) == [[.int(1)], [.int(2)]])
     #expect(
       Set(transitions.map(\.action)) == ["moveElevator(1)", "moveElevator(2)"])
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator(id) =="))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator(b0) =="))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator__0 == moveElevator(1)"))
   }
 
@@ -498,7 +495,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   @Test func explorationResultMatchesExistingCheckerViews() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("ExplorationSnapshot") {
-      Variable(from: x.name, StateExpr.set([1, 2]))
+      Variable(x, in: Expr<SetExpr<Int>>(StateExpr.set([1, 2])))
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
     let checker = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
@@ -632,7 +629,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   @Test func expressionBackedNondeterministicInit() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("LazyInit") {
-      Variable(from: x.name, StateExpr.set([1, 2, 3]))
+      Variable(x, in: Expr<SetExpr<Int>>(StateExpr.set([1, 2, 3])))
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
 
@@ -750,13 +747,13 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
   @Test("Sequence variable append and read in model checker")
   func sequenceVariableAppendRead() throws {
-    let seq = Var<TLAValue>("seq")
+    let seq = Var<TupleExpr<Int>>("seq")
     let result = Var<Int>("result")
     let spec = TLASpec("SeqTest") {
-      Variable(seq, TLAValue.tuple([]))
+      Variable(seq, TupleExpr<Int>())
       Variable(result, 0)
       Action("push") {
-        seq.becomes(Expr<TLAValue>(seq.stateExpr.appending(42))).when(seq.stateExpr.count == 0)
+        seq.becomes(Expr<TupleExpr<Int>>(seq.stateExpr.appending(42))).when(seq.stateExpr.count == 0)
           && result.stays
       }
       Action("pop") { seq.stateExpr.count > 0 && result.becomes(Expr<Int>(seq.stateExpr.at(1))) }
@@ -774,14 +771,14 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
   @Test("Function-typed variable stores and retrieves values")
   func functionVariable() throws {
-    let clock = Var<TLAValue>("clock")
+    let clock = Var<Function<FunctionVariableKey, Int>>("clock")
     let p = Var<Int>("p")
     let domain = StateExpr.set([1, 2])
     let spec = TLASpec("FuncTest") {
-      Variable(clock, TLAValue.function([:]))
+      Variable(clock, Function<FunctionVariableKey, Int>.literal((.one, 0), (.two, 0)))
       Action("init") {
         let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
-        clock.becomes(Expr<TLAValue>(fun)).when(clock.stateExpr.domain.cardinality == 0)
+        clock.becomes(Expr<Function<FunctionVariableKey, Int>>(fun)).when(clock[.one] == 0)
       }
     }
     let compilation = try spec.compile()
@@ -804,10 +801,10 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   @Test("choose action produces nondeterministic assignment")
   func chooseAction() throws {
     let picked = Var<Int>("picked")
-    let source = Var<TLAValue>("source")
+    let source = Var<SetExpr<Int>>("source")
     let spec = TLASpec("ChooseTest") {
       Variable(picked, 0)
-      Variable(source, TLAValue.set([.int(1), .int(2), .int(3)]))
+      Variable(source, SetExpr(1, 2, 3))
       Action("pick") {
         source.stateExpr.cardinality > 0
           && choose(picked, from: source)
@@ -842,23 +839,34 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
   @Test("SpecParser parses functionLiteral(p, in: domain, body)")
   func specParserFunctionLiteral() throws {
-    let source = "StateExpr.functionLiteral(StateExpr.set([1]), (2 + 3))"
+    let source = "StateExpr.functionLiteral(StateExpr.set([1]), \"value\", value + 3)"
     let statement = try #require(Parser.parse(source: source).statements.first)
     let expr = try #require(statement.item.as(ExprSyntax.self))
     let result = SpecParser.decodeStateExpr(expr)
-    let d = result?.description ?? ""
-    #expect(d.contains("|->") && d.contains("{1}") && d.contains("(2 + 3)"))
+    #expect(result == .functionLiteral(
+      .setLiteral([.int(1)]),
+      "value",
+      .add(.variable("value"), .int(3))
+    ))
   }
 
-  @Test("Function TLA+ output is valid ASCII")
-  func functionTLAOutput() {
+  @Test("Compiled function literals render with their canonical binder")
+  func functionTLAOutput() throws {
     let p = Var<Int>("p")
     let domain = StateExpr.set([1, 2])
     let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
-    let desc = fun.description
-    #expect(desc.contains("[x"))
-    #expect(desc.contains("\\in"))
-    #expect(desc.contains("|->"))
-    #expect(!desc.contains("_x"))
+    let spec = TLASpec("FunctionLiteral") {
+      FormalDefinition("Double", parameters: [], body: fun)
+    }
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    #expect(tla.contains("Double == [b0 \\in {1, 2} |-> (b0 * 10)]"))
   }
+}
+
+private enum FunctionVariableKey: Int, CaseIterable, FiniteTLAValueDomain {
+  case one = 1
+  case two = 2
+
+  static var finiteValues: [Self] { allCases }
+  static var defaultValue: Self { .one }
 }
