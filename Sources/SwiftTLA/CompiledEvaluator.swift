@@ -1,13 +1,15 @@
-enum EvalError: Error, CustomStringConvertible {
+enum EvalError: Error, CustomStringConvertible, Equatable {
     case typeMismatch(String)
     case divisionByZero
     case indexOutOfBounds(Int, Int)
+    case recursionDepthExceeded(Int)
 
     var description: String {
         switch self {
         case .typeMismatch(let message): return "Type mismatch: \(message)"
         case .divisionByZero: return "Division by zero"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
+        case .recursionDepthExceeded(let limit): return "Evaluation exceeded recursive depth \(limit)"
         }
     }
 }
@@ -45,6 +47,11 @@ private struct EvaluatorBindings {
         to binder: BinderID
     ) -> EvaluatorBindings {
         var bindings = self
+        if case .boundValue(let source) = expression,
+           let binding = scope.bindings.values[source] {
+            bindings.values[binder] = binding
+            return bindings
+        }
         bindings.values[binder] = .expression(.init(expression: expression, scope: scope))
         return bindings
     }
@@ -88,6 +95,7 @@ private indirect enum EvaluatorTask {
     case foldResult(CompiledFormalLambda, members: [CompiledValue], index: Int, scope: EvaluatorScope)
     case formalCall(CompiledFormalOperator, arguments: [CompiledFormalCallArgument], scope: EvaluatorScope)
     case recursiveCall(OperatorID, arguments: [CompiledStateExpr], scope: EvaluatorScope)
+    case recursiveReturn
     case localDomain(CompiledStateExpr, scope: EvaluatorScope)
     case store(EvaluatorThunk)
 }
@@ -100,6 +108,7 @@ struct CompiledEvaluator: Sendable {
     let enabledActions: Set<ActionID>
     let localOperators: [OperatorID: CompiledLocalOperator]
     let operatorBindings: [OperatorID: CompiledFormalOperator]
+    private static let maximumRecursiveDepth = 4_096
 
     init(
         state: CompiledState,
@@ -152,6 +161,7 @@ struct CompiledEvaluator: Sendable {
         let recursiveFunctions = Dictionary(
             uniqueKeysWithValues: semantics.recursiveFunctions.map { ($0.id, $0) }
         )
+        var recursiveDepth = 0
 
         func integer(_ value: CompiledValue) throws -> Int {
             guard case .integer(let integer) = value else {
@@ -468,6 +478,11 @@ struct CompiledEvaluator: Sendable {
                 }
 
             case .recursiveCall(let id, let arguments, let scope):
+                guard recursiveDepth < Self.maximumRecursiveDepth else {
+                    throw EvalError.recursionDepthExceeded(Self.maximumRecursiveDepth)
+                }
+                recursiveDepth += 1
+                tasks.append(.recursiveReturn)
                 if let operation = scope.localOperators[id] {
                     guard operation.parameters.count == arguments.count else {
                         throw EvalError.typeMismatch("Recursive operator argument count differs")
@@ -498,6 +513,9 @@ struct CompiledEvaluator: Sendable {
                     callScope.bindings = callScope.bindings.binding(argument, from: scope, to: parameter)
                 }
                 tasks.append(.expression(function.body, callScope))
+
+            case .recursiveReturn:
+                recursiveDepth -= 1
 
             case .localDomain(let body, let scope):
                 if try popValue(from: &values) == .boolean(false) {
