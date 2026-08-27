@@ -26,5 +26,6 @@ archive for local reproducibility. It is not a distribution mechanism. If a
 fresh machine cannot retrieve or provide the exact pinned artifacts, setup
 fails instead of accepting a changed artifact.
 
-Use `./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence`
-for exact graph comparison.
+The hosted finite-graph workflow runs the complete comparison and retains its
+evidence. Local diagnostic checks run only through
+`scripts/local-validation.sh` with a focused test filter.
