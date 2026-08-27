@@ -3,6 +3,13 @@ import Testing
 @testable import UpstreamParity
 
 struct UpstreamParityTests {
+    @Test("Every counted example declares a positive TLC state count")
+    func countedExamplesDeclarePositiveTLCStateCounts() {
+        for entry in Example.all {
+            #expect(entry.expectedDistinct > 0, "\(entry.id) has no recorded TLC state count")
+        }
+    }
+
     @Test("Model checker count matches every TLC-verified example")
     func modelCheckerMatchesTLC() throws {
         for entry in Example.all {
