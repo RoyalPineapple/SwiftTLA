@@ -91,7 +91,7 @@ struct AlgorithmBuilderTests {
     func unsupportedAlgorithmFairnessFailsBeforeLowering() {
         let algorithm = Algorithm("UnsupportedFairness") {
             Do(TestControlLabel.advance) { Stop() }
-            WeakFairness("advance")
+            WeakFairnessNext()
         }
 
         do {
@@ -115,7 +115,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("UnsupportedProcedureFairness") {
             Procedure(ProcedureName.work) {
                 Do(TestControlLabel.advance) { Return() }
-                WeakFairness("advance")
+                WeakFairnessNext()
             }
         }
 

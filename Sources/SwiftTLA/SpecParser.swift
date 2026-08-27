@@ -142,6 +142,7 @@ public final class ParserSession {
     var algorithmTupleVariables: Set<String> = []
     /// Source bindings visible to the source expression currently being parsed.
     var sourceScope = TypedFacadeScope.empty
+    var sourceActionBindings: [String: NamedAction] = [:]
     var algorithmParseFailure: String?
     var algorithmCapabilityDiagnostic: LanguageCapabilityDiagnostic?
 
@@ -1750,9 +1751,9 @@ public final class ParserSession {
             return .integerRange(lower, upper)
         case "enabled":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
-                  let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
+                  let action = actionReference(args.first?.expression)
             else { return nil }
-            return .enabledAction(name)
+            return .enabledAction(action.name)
         case "letValue":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
                   args.count == 3,
@@ -2060,9 +2061,6 @@ public enum SpecParser {
         ParserSession().decodeTemporal(call)
     }
 
-    public static func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
-        ParserSession().decodeFairness(call)
-    }
 }
 
 extension ParserSession {
@@ -2354,27 +2352,25 @@ extension ParserSession {
     }
 
     func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
-        let name: String
-        if let ref = call.calledExpression.as(MemberAccessExprSyntax.self) {
-            name = ref.declName.baseName.text
-        } else if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
-            name = reference.baseName.text
-        } else {
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else {
             return nil
         }
         switch name {
-        case "weakFairness", "WeakFairness":
-            guard let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
-                .representedLiteralValue else { return nil }
-            return .weakFairness(actionName)
-        case "strongFairness", "StrongFairness":
-            guard let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
-                .representedLiteralValue else { return nil }
-            return .strongFairness(actionName)
-        case "weakFairnessNext", "WeakFairnessNext": return .weakFairnessNext
-        case "strongFairnessNext", "StrongFairnessNext": return .strongFairnessNext
+        case "WeakFairness":
+            guard let action = actionReference(call.arguments.first?.expression) else { return nil }
+            return .weakFairness(action.name)
+        case "StrongFairness":
+            guard let action = actionReference(call.arguments.first?.expression) else { return nil }
+            return .strongFairness(action.name)
+        case "WeakFairnessNext": return .weakFairnessNext
+        case "StrongFairnessNext": return .strongFairnessNext
         default: return nil
         }
+    }
+
+    func actionReference(_ expression: ExprSyntax?) -> NamedAction? {
+        guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
+        return sourceActionBindings[reference.baseName.text]
     }
 
 }

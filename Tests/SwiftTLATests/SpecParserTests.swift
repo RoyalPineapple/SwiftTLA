@@ -27,6 +27,42 @@ private func parserEnum(
     .init(typeName: typeName, cases: cases, finiteValues: finiteValues)
 }
 
+@Suite(.serialized) struct StructuralActionReferenceParsingTests {
+    @Test("action declarations carry fairness and enabled references")
+    func actionDeclarationsCarryReferences() throws {
+        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        {
+            let count = Var<Int>("count", initial: 0)
+            Variable(count)
+            let advance = Action("advance") { count.becomes(count + 1) }
+            advance
+            WeakFairness(advance)
+            StrongFairness(advance)
+            Invariant("AdvanceEnabled") { StateExpr.enabled(advance) }
+        }
+        """))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.map(\.name) == ["advance"])
+        #expect(parsed.fairness == [.weakFairness("advance"), .strongFairness("advance")])
+        #expect(parsed.invariants.first?.body == .enabledAction("advance"))
+        _ = try parsed.compile(specificationName: "StructuralActionReferences")
+    }
+
+    @Test("fairness rejects an undeclared action reference")
+    func fairnessRejectsUndeclaredActionReference() throws {
+        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        {
+            WeakFairness(missing)
+        }
+        """))
+
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Fairness action reference 'missing' is not bound by a local Action declaration."
+        ])
+    }
+}
+
 @Suite(.serialized) struct AlgorithmBuilderParsingTests {
     private var controlLabels: ParserEnumDefinition {
         parserEnum(
@@ -104,7 +140,7 @@ private func parserEnum(
             Algorithm("ProcedureCapability") {
                 Procedure(ProcedureName.work) {
                     Do(TestControlLabel.advance) { Return() }
-                    WeakFairness("advance")
+                    WeakFairnessNext()
                 }
             }
         }
@@ -2229,18 +2265,6 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         ))
     }
 
-    @Test func parseStaticEnabled() throws {
-        #expect(SpecParser.decodeStateExpr(try parseExpression("StateExpr.enabled(\"Next\")")) == StateExpr.enabledAction("Next"))
-    }
-
-    @Test("enabled action names must be static")
-    func rejectsDynamicEnabledActionName() throws {
-        #expect(SpecParser.decodeStateExpr(
-            try parseExpression(#"StateExpr.enabled("Next\(suffix)")"#)
-        ) == nil)
-        #expect(SpecParser.decodeStateExpr(try parseExpression("StateExpr.enabled()")) == nil)
-    }
-
     @Test func parseStaticFunction() throws {
         #expect(SpecParser.decodeStateExpr(
             try parseExpression("StateExpr.functionLiteral(StateExpr.set([1, 2]), \"x\", x + 1)")
@@ -2459,48 +2483,6 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 }
 
-// MARK: - FairnessCondition
-
-@Suite(.serialized) struct FairnessConditionTests {
-    @Test func parseWeakFairness() throws {
-        #expect(
-            SpecParser.decodeFairness(try #require(try parseExpression("x.weakFairness(\"Tick\")").as(FunctionCallExprSyntax.self)))
-                == FairnessCondition.weakFairness("Tick")
-        )
-    }
-
-    @Test func parseStrongFairness() throws {
-        #expect(
-            SpecParser.decodeFairness(try #require(try parseExpression("x.strongFairness(\"Tick\")").as(FunctionCallExprSyntax.self)))
-                == FairnessCondition.strongFairness("Tick")
-        )
-    }
-
-    @Test func parseAggregateFairnessDeclaration() throws {
-        #expect(
-            SpecParser.decodeFairness(try #require(try parseExpression("WeakFairnessNext()").as(FunctionCallExprSyntax.self)))
-                == FairnessCondition.weakFairnessNext
-        )
-    }
-
-    @Test("action fairness requires a static action name")
-    func rejectsDynamicFairnessActionName() throws {
-        let dynamic = try #require(try parseExpression(
-            #"x.weakFairness("Tick\(suffix)")"#
-        ).as(FunctionCallExprSyntax.self))
-        let missing = try #require(try parseExpression(
-            "x.strongFairness()"
-        ).as(FunctionCallExprSyntax.self))
-
-        #expect(SpecParser.decodeFairness(dynamic) == nil)
-        #expect(SpecParser.decodeFairness(missing) == nil)
-    }
-
-    @Test func parseUnknownReturnsNil() throws {
-        let call = try #require(try parseExpression("x.unknown()").as(FunctionCallExprSyntax.self))
-        #expect(SpecParser.decodeFairness(call) == nil)
-    }
-}
 
 // MARK: - Enum phase parsing
 

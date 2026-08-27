@@ -403,7 +403,7 @@ public struct VarDecl: SpecComponent, Sendable {
     self.generatedSwiftType = generatedSwiftType
   }
 }
-public struct ActionDecl: SpecComponent {
+public struct ActionDecl: SpecComponent, Sendable {
   public let name: String
   public let body: ActionExpr
   public let bindings: [ActionBinding]
@@ -860,11 +860,11 @@ public func AlwaysEventually(_ name: String, _ expr: StateExpr) -> TemporalDecl 
 public func EventuallyAlways(_ name: String, _ expr: StateExpr) -> TemporalDecl {
   TemporalDecl(name, .eventuallyAlways(expr))
 }
-public func WeakFairness(_ action: String) -> FairnessDecl {
-  FairnessDecl(.weakFairness(action))
+public func WeakFairness(_ action: ActionDecl) -> FairnessDecl {
+  FairnessDecl(.weakFairness(action.name))
 }
-public func StrongFairness(_ action: String) -> FairnessDecl {
-  FairnessDecl(.strongFairness(action))
+public func StrongFairness(_ action: ActionDecl) -> FairnessDecl {
+  FairnessDecl(.strongFairness(action.name))
 }
 public func WeakFairnessNext() -> FairnessDecl {
   FairnessDecl(.weakFairnessNext)
