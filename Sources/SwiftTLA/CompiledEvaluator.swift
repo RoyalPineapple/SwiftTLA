@@ -77,7 +77,7 @@ private enum EvaluatorCollectionValues {
     case function([CompiledValue: CompiledValue])
 }
 
-private indirect enum EvaluatorTask {
+private enum EvaluatorTask {
     case expression(CompiledStateExpr, EvaluatorScope)
     case finish(Int, ([CompiledValue]) throws -> CompiledValue)
     case conditional(then: CompiledStateExpr, otherwise: CompiledStateExpr, scope: EvaluatorScope)
