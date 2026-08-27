@@ -1,3 +1,45 @@
+private enum FieldDiscoveryTask {
+    case value(TLAValue)
+    case expression(StateExpr)
+    case operation(FormalOperator)
+    case argument(FormalCallArgument)
+    case action(ActionExpr)
+    case name(String)
+}
+
+private enum BindingValidationTask {
+    case expression(StateExpr, path: String, scope: [String: BinderID])
+    case action(ActionExpr, path: String, scope: [String: BinderID])
+    case bindExpression(
+        names: [String],
+        binderPath: String,
+        expression: StateExpr,
+        expressionPath: String,
+        scope: [String: BinderID]
+    )
+    case bindAction(
+        name: String,
+        binderPath: String,
+        action: ActionExpr,
+        actionPath: String,
+        scope: [String: BinderID]
+    )
+    case formalOperator(FormalOperator, path: String, scope: [String: BinderID])
+    case formalArgument(FormalCallArgument, path: String, scope: [String: BinderID])
+    case recordFields(
+        [StateRecordExpression.Field],
+        index: Int,
+        seen: Set<String>,
+        path: String,
+        scope: [String: BinderID]
+    )
+    case bindField(String, path: String)
+    case localOperators([LocalOperator], body: StateExpr, path: String, scope: [String: BinderID])
+    case localOperator(LocalOperator, id: OperatorID, path: String, scope: [String: BinderID])
+    case finishLocalOperator(OperatorID, referencePathsBeforeBody: Set<String>, declarationPath: String)
+    case restoreOperators([String: OperatorID])
+}
+
 struct VariableID: Hashable, Sendable {
     let ordinal: Int
 }
@@ -334,134 +376,136 @@ struct CompiledLayout: Hashable, Sendable {
             names.append(name)
         }
 
-        func visit(_ value: TLAValue) {
-            switch value {
-            case .int, .bool, .string, .constant:
-                return
-            case .set(let values):
-                values.sorted().forEach(visit)
-            case .tuple(let values):
-                values.forEach(visit)
-            case .record(let record):
-                for field in record.fields {
-                    append(field.name)
-                    visit(field.value)
-                }
-            case .function(let values):
-                for entry in values.sorted(by: { $0.key < $1.key }) {
-                    visit(entry.key)
-                    visit(entry.value)
+        func visit(_ initial: FieldDiscoveryTask) {
+            var pending = [initial]
+            while let task = pending.popLast() {
+                switch task {
+                case .name(let name):
+                    append(name)
+                case .value(let value):
+                    switch value {
+                    case .int, .bool, .string, .constant:
+                        break
+                    case .set(let values):
+                        pending.append(contentsOf: values.sorted().reversed().map(FieldDiscoveryTask.value))
+                    case .tuple(let values):
+                        pending.append(contentsOf: values.reversed().map(FieldDiscoveryTask.value))
+                    case .record(let record):
+                        for field in record.fields.reversed() {
+                            pending.append(.value(field.value))
+                            pending.append(.name(field.name))
+                        }
+                    case .function(let values):
+                        for entry in values.sorted(by: { $0.key < $1.key }).reversed() {
+                            pending.append(.value(entry.value))
+                            pending.append(.value(entry.key))
+                        }
+                    }
+                case .operation(let operation):
+                    if case .lambda(let lambda) = operation {
+                        pending.append(.expression(lambda.body))
+                    }
+                case .argument(let argument):
+                    switch argument {
+                    case .value(let expression): pending.append(.expression(expression))
+                    case .operator(let operation): pending.append(.operation(operation))
+                    }
+                case .action(let action):
+                    switch action {
+                    case .assign(_, let value), .guard_(let value), .chooseAction(_, let value):
+                        pending.append(.expression(value))
+                    case .unchanged:
+                        break
+                    case .existsAction(_, let set, let body), .define(_, let set, let body):
+                        pending.append(.action(body))
+                        pending.append(.expression(set))
+                    case .ifElse(let condition, let then, let otherwise):
+                        pending.append(.action(otherwise))
+                        pending.append(.action(then))
+                        pending.append(.expression(condition))
+                    case .and(let lhs, let rhs), .or(let lhs, let rhs):
+                        pending.append(.action(rhs))
+                        pending.append(.action(lhs))
+                    }
+                case .expression(let expression):
+                    switch expression {
+                    case .sourceIssue, .variable, .processLocalFamily, .currentProcess, .programCounter,
+                         .procedureStack, .controlLocation, .enabledAction:
+                        break
+                    case .value(let value):
+                        pending.append(.value(value))
+                    case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
+                         .unionAll(let value), .tupleAccess(let value, _), .tupleLength(let value),
+                         .tupleHead(let value), .tupleTail(let value), .domain(let value),
+                         .sequenceFromSet(let value):
+                        pending.append(.expression(value))
+                    case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
+                         .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
+                         .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
+                         .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
+                         .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
+                         .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
+                         .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
+                         .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
+                         .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs),
+                         .integerRange(let lhs, let rhs):
+                        pending.append(.expression(rhs))
+                        pending.append(.expression(lhs))
+                    case .ifThenElse(let condition, let then, let otherwise):
+                        pending.append(.expression(otherwise))
+                        pending.append(.expression(then))
+                        pending.append(.expression(condition))
+                    case .setLiteral(let values), .tupleLiteral(let values):
+                        pending.append(contentsOf: values.reversed().map(FieldDiscoveryTask.expression))
+                    case .recordLiteral(let record):
+                        for field in record.fields.reversed() {
+                            pending.append(.expression(field.value))
+                            pending.append(.name(field.name))
+                        }
+                    case .recordAccess(let value, let field):
+                        pending.append(.name(field))
+                        pending.append(.expression(value))
+                    case .except(let function, let key, let value):
+                        pending.append(.expression(value))
+                        pending.append(.expression(key))
+                        pending.append(.expression(function))
+                    case .caseExpr(let branches, let otherwise):
+                        if let otherwise { pending.append(.expression(otherwise)) }
+                        pending.append(contentsOf: branches.reversed().map(FieldDiscoveryTask.expression))
+                    case .setFilter(let domain, _, let body), .functionLiteral(let domain, _, let body),
+                         .forAll(let domain, _, let body), .exists(let domain, _, let body),
+                         .choose(let domain, _, let body):
+                        pending.append(.expression(body))
+                        pending.append(.expression(domain))
+                    case .setMap(let body, _, let domain):
+                        pending.append(.expression(domain))
+                        pending.append(.expression(body))
+                    case .foldFunction(let lambda, let initial, let sequence):
+                        pending.append(.expression(sequence))
+                        pending.append(.expression(initial))
+                        pending.append(.expression(lambda.body))
+                    case .operatorApplication(let operation, let arguments):
+                        pending.append(contentsOf: arguments.reversed().map(FieldDiscoveryTask.argument))
+                        pending.append(.operation(operation))
+                    case .recursiveCall(_, let arguments):
+                        pending.append(contentsOf: arguments.reversed().map(FieldDiscoveryTask.expression))
+                    case .letValue(_, let value, let body):
+                        pending.append(.expression(body))
+                        pending.append(.expression(value))
+                    case .letIn(let definitions, let body):
+                        pending.append(.expression(body))
+                        for definition in definitions.reversed() {
+                            pending.append(.expression(definition.body))
+                            if let domain = definition.domain { pending.append(.expression(domain)) }
+                        }
+                    }
                 }
             }
         }
 
-        func visit(_ expression: StateExpr) {
-            switch expression {
-            case .sourceIssue:
-                return
-            case .value(let value):
-                visit(value)
-            case .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
-                return
-            case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
-                 .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
-                 .domain(let value), .sequenceFromSet(let value):
-                visit(value)
-            case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
-                 .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
-                 .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
-                 .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
-                 .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
-                 .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
-                 .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
-                 .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
-                 .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
-                visit(lhs)
-                visit(rhs)
-            case .ifThenElse(let condition, let then, let otherwise):
-                visit(condition)
-                visit(then)
-                visit(otherwise)
-            case .setLiteral(let values), .tupleLiteral(let values):
-                values.forEach(visit)
-            case .tupleAccess(let value, _):
-                visit(value)
-            case .recordLiteral(let record):
-                for field in record.fields {
-                    append(field.name)
-                    visit(field.value)
-                }
-            case .recordAccess(let value, let field):
-                visit(value)
-                append(field)
-            case .except(let function, let key, let value):
-                visit(function)
-                visit(key)
-                visit(value)
-            case .caseExpr(let branches, let otherwise):
-                branches.forEach(visit)
-                if let otherwise { visit(otherwise) }
-            case .setFilter(let set, _, let predicate), .functionLiteral(let set, _, let predicate),
-                 .forAll(let set, _, let predicate), .exists(let set, _, let predicate),
-                 .choose(let set, _, let predicate):
-                visit(set)
-                visit(predicate)
-            case .setMap(let value, _, let set):
-                visit(value)
-                visit(set)
-            case .integerRange(let lower, let upper):
-                visit(lower)
-                visit(upper)
-            case .foldFunction(let lambda, let initial, let sequence):
-                visit(lambda.body)
-                visit(initial)
-                visit(sequence)
-            case .operatorApplication(let operation, let arguments):
-                visit(operation)
-                arguments.forEach(visit)
-            case .recursiveCall(_, let arguments):
-                arguments.forEach(visit)
-            case .letValue(_, let value, let body):
-                visit(value)
-                visit(body)
-            case .letIn(let definitions, let body):
-                for definition in definitions {
-                    if let domain = definition.domain { visit(domain) }
-                    visit(definition.body)
-                }
-                visit(body)
-            }
-        }
-
-        func visit(_ operation: FormalOperator) {
-            if case .lambda(let lambda) = operation { visit(lambda.body) }
-        }
-
-        func visit(_ argument: FormalCallArgument) {
-            switch argument {
-            case .value(let expression): visit(expression)
-            case .operator(let operation): visit(operation)
-            }
-        }
-
-        func visit(_ action: ActionExpr) {
-            switch action {
-            case .assign(_, let value), .guard_(let value), .chooseAction(_, let value):
-                visit(value)
-            case .unchanged:
-                return
-            case .existsAction(_, let set, let body), .define(_, let set, let body):
-                visit(set)
-                visit(body)
-            case .ifElse(let condition, let then, let otherwise):
-                visit(condition)
-                visit(then)
-                visit(otherwise)
-            case .and(let lhs, let rhs), .or(let lhs, let rhs):
-                visit(lhs)
-                visit(rhs)
-            }
-        }
+        func visit(_ value: TLAValue) { visit(FieldDiscoveryTask.value(value)) }
+        func visit(_ expression: StateExpr) { visit(FieldDiscoveryTask.expression(expression)) }
+        func visit(_ action: ActionExpr) { visit(FieldDiscoveryTask.action(action)) }
 
         for module in modules {
             module.constants.forEach { visit($0.value) }
@@ -746,7 +790,7 @@ struct BindingValidator {
                 try validateValue(value, at: "actions.\(action.name).bindings[\(index)]")
             }
             let scope = try bind(action.bindings.map(\.name), at: "actions.\(action.name).bindings", scope: [:])
-            try actionExpression(action.body, at: "actions.\(action.name).body", scope: scope)
+            try validate([.action(action.body, path: "actions.\(action.name).body", scope: scope)])
         }
         for (offset, condition) in spec.fairness.enumerated() {
             try validate(condition, at: "fairness[\(offset)]")
@@ -875,16 +919,83 @@ struct BindingValidator {
         scope: [String: BinderID]
     ) throws {
         guard let expression else { return }
-        try validateExpression(expression, at: path, scope: scope)
+        try validate([.expression(expression, path: path, scope: scope)])
     }
 
     private mutating func validateExpression(_ expression: StateExpr, at path: String, scope: [String: BinderID]) throws {
-        var pending = [(expression: expression, path: path, scope: scope)]
-        while let current = pending.popLast() {
-            let expression = current.expression
-            let path = current.path
-            let scope = current.scope
-            try validateExpressionNode(expression, at: path, scope: scope, pending: &pending)
+        try validate([.expression(expression, path: path, scope: scope)])
+    }
+
+    private mutating func validate(_ initial: [BindingValidationTask]) throws {
+        var pending = initial
+        while let task = pending.popLast() {
+            switch task {
+            case .expression(let expression, let path, let scope):
+                try validateExpressionNode(expression, at: path, scope: scope, pending: &pending)
+            case .action(let action, let path, let scope):
+                try validateActionNode(action, at: path, scope: scope, pending: &pending)
+            case .bindExpression(let names, let binderPath, let expression, let expressionPath, let scope):
+                let bodyScope = try bind(names, at: binderPath, scope: scope)
+                pending.append(.expression(expression, path: expressionPath, scope: bodyScope))
+            case .bindAction(let name, let binderPath, let action, let actionPath, let scope):
+                let bodyScope = try bind([name], at: binderPath, scope: scope)
+                pending.append(.action(action, path: actionPath, scope: bodyScope))
+            case .formalOperator(let operation, let path, let scope):
+                try validateFormalOperator(operation, at: path, scope: scope, pending: &pending)
+            case .formalArgument(let argument, let path, let scope):
+                switch argument {
+                case .value(let expression): pending.append(.expression(expression, path: path, scope: scope))
+                case .operator(let operation): pending.append(.formalOperator(operation, path: path, scope: scope))
+                }
+            case .recordFields(let fields, let index, var seen, let path, let scope):
+                guard fields.indices.contains(index) else { continue }
+                let field = fields[index]
+                guard seen.insert(field.name).inserted else {
+                    throw CompilationDiagnostic(
+                        code: .duplicateRecordField,
+                        stage: .validation,
+                        path: "\(path).fields[\(index)].declaration",
+                        expected: "one declaration for each record field",
+                        actual: "a repeated record field '\(field.name)'",
+                        nextSafeAction: "Give each record field a distinct name."
+                    )
+                }
+                let fieldPath = "\(path).fields[\(index)]"
+                try bindField(field.name, at: "\(fieldPath).declaration")
+                pending.append(.recordFields(fields, index: index + 1, seen: seen, path: path, scope: scope))
+                pending.append(.expression(field.value, path: "\(fieldPath).value", scope: scope))
+            case .bindField(let name, let path):
+                try bindField(name, at: path)
+            case .localOperators(let operations, let body, let path, let scope):
+                try scheduleLocalOperators(operations, body: body, at: path, scope: scope, pending: &pending)
+            case .localOperator(let operation, let id, let path, let scope):
+                let referencePathsBeforeBody = Set(references.keys)
+                pending.append(.finishLocalOperator(
+                    id,
+                    referencePathsBeforeBody: referencePathsBeforeBody,
+                    declarationPath: "\(path).declaration"
+                ))
+                pending.append(.bindExpression(
+                    names: operation.parameters,
+                    binderPath: "\(path).parameters",
+                    expression: operation.body,
+                    expressionPath: "\(path).body",
+                    scope: scope
+                ))
+                if let domain = operation.domain {
+                    pending.append(.expression(domain, path: "\(path).domain", scope: scope))
+                }
+            case .finishLocalOperator(let id, let referencePathsBeforeBody, let declarationPath):
+                localOperatorDependencies[id] = Set(references.compactMap { path, reference in
+                    guard referencePathsBeforeBody.contains(path) == false,
+                          case .operator(let target) = reference
+                    else { return nil }
+                    return target
+                })
+                references[declarationPath] = .operator(id)
+            case .restoreOperators(let outer):
+                operators = outer
+            }
         }
     }
 
@@ -892,7 +1003,7 @@ struct BindingValidator {
         _ expression: StateExpr,
         at path: String,
         scope: [String: BinderID],
-        pending: inout [(expression: StateExpr, path: String, scope: [String: BinderID])]
+        pending: inout [BindingValidationTask]
     ) throws {
         switch expression {
         case .sourceIssue(let issue):
@@ -954,7 +1065,7 @@ struct BindingValidator {
         case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
              .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
              .domain(let value), .sequenceFromSet(let value):
-            pending.append((value, path, scope))
+            pending.append(.expression(value, path: path, scope: scope))
         case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
              .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
              .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
@@ -964,8 +1075,8 @@ struct BindingValidator {
              .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
              .tupleConcatenate(let lhs, let rhs),
              .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
-            pending.append((rhs, "\(path).right", scope))
-            pending.append((lhs, "\(path).left", scope))
+            pending.append(.expression(rhs, path: "\(path).right", scope: scope))
+            pending.append(.expression(lhs, path: "\(path).left", scope: scope))
         case .functionApply(.variable(let name), let argument)
             where scope[name] == nil && operators.keys.contains(name):
             guard let id = operators[name], let arity = operatorArities[id] else {
@@ -985,69 +1096,74 @@ struct BindingValidator {
                 )
             }
             references["\(path).left"] = .operator(id)
-            pending.append((argument, "\(path).right", scope))
+            pending.append(.expression(argument, path: "\(path).right", scope: scope))
         case .functionApply(let function, let argument):
-            pending.append((argument, "\(path).right", scope))
-            pending.append((function, "\(path).left", scope))
+            pending.append(.expression(argument, path: "\(path).right", scope: scope))
+            pending.append(.expression(function, path: "\(path).left", scope: scope))
         case .ifThenElse(let condition, let then, let otherwise):
-            pending.append((otherwise, "\(path).else", scope))
-            pending.append((then, "\(path).then", scope))
-            pending.append((condition, "\(path).condition", scope))
+            pending.append(.expression(otherwise, path: "\(path).else", scope: scope))
+            pending.append(.expression(then, path: "\(path).then", scope: scope))
+            pending.append(.expression(condition, path: "\(path).condition", scope: scope))
         case .setLiteral(let values), .tupleLiteral(let values):
             for (index, value) in values.enumerated().reversed() {
-                pending.append((value, "\(path)[\(index)]", scope))
+                pending.append(.expression(value, path: "\(path)[\(index)]", scope: scope))
             }
         case .tupleAccess(let value, _):
-            pending.append((value, path, scope))
+            pending.append(.expression(value, path: path, scope: scope))
         case .recordAccess(let value, let field):
-            try validateExpression(value, at: "\(path).value", scope: scope)
-            try bindField(field, at: "\(path).field")
+            pending.append(.bindField(field, path: "\(path).field"))
+            pending.append(.expression(value, path: "\(path).value", scope: scope))
         case .recordLiteral(let values):
-            var names = Set<String>()
-            for (index, field) in values.fields.enumerated() {
-                guard names.insert(field.name).inserted else {
-                    throw CompilationDiagnostic(
-                        code: .duplicateRecordField,
-                        stage: .validation,
-                        path: "\(path).\(field.name)",
-                        expected: "one declaration for each record field",
-                        actual: "a repeated record field",
-                        nextSafeAction: "Give each record field a distinct name."
-                    )
-                }
-                let fieldPath = "\(path).fields[\(index)]"
-                try bindField(field.name, at: "\(fieldPath).declaration")
-                try validateExpression(field.value, at: "\(fieldPath).value", scope: scope)
-            }
+            pending.append(.recordFields(values.fields, index: 0, seen: [], path: path, scope: scope))
         case .except(let function, let key, let value):
-            pending.append((value, "\(path).value", scope))
-            pending.append((key, "\(path).key", scope))
-            pending.append((function, "\(path).function", scope))
+            pending.append(.expression(value, path: "\(path).value", scope: scope))
+            pending.append(.expression(key, path: "\(path).key", scope: scope))
+            pending.append(.expression(function, path: "\(path).function", scope: scope))
         case .caseExpr(let pairs, let otherwise):
+            guard pairs.isEmpty == false, pairs.count.isMultiple(of: 2) else {
+                throw CompilationDiagnostic(
+                    code: .invalidFormalDeclaration,
+                    stage: .validation,
+                    path: path,
+                    expected: "at least one complete CASE condition and value pair",
+                    actual: pairs.isEmpty ? "no CASE branches" : "an unmatched CASE branch",
+                    nextSafeAction: "Provide complete condition and value pairs before an optional OTHER expression."
+                )
+            }
             if let otherwise {
-                pending.append((otherwise, "\(path).otherwise", scope))
+                pending.append(.expression(otherwise, path: "\(path).otherwise", scope: scope))
             }
             for (index, pair) in pairs.enumerated().reversed() {
-                pending.append((pair, "\(path).branch[\(index)]", scope))
+                pending.append(.expression(pair, path: "\(path).branch[\(index)]", scope: scope))
             }
         case .setFilter(let set, let name, let predicate), .functionLiteral(let set, let name, let predicate),
              .forAll(let set, let name, let predicate), .exists(let set, let name, let predicate),
              .choose(let set, let name, let predicate):
-            try validateExpression(set, at: "\(path).domain", scope: scope)
-            let bodyScope = try bind([name], at: "\(path).binder", scope: scope)
-            try validateExpression(predicate, at: "\(path).body", scope: bodyScope)
+            pending.append(.bindExpression(
+                names: [name],
+                binderPath: "\(path).binder",
+                expression: predicate,
+                expressionPath: "\(path).body",
+                scope: scope
+            ))
+            pending.append(.expression(set, path: "\(path).domain", scope: scope))
         case .setMap(let value, let name, let set):
-            try validateExpression(set, at: "\(path).domain", scope: scope)
-            let bodyScope = try bind([name], at: "\(path).binder", scope: scope)
-            try validateExpression(value, at: "\(path).body", scope: bodyScope)
+            pending.append(.bindExpression(
+                names: [name],
+                binderPath: "\(path).binder",
+                expression: value,
+                expressionPath: "\(path).body",
+                scope: scope
+            ))
+            pending.append(.expression(set, path: "\(path).domain", scope: scope))
         case .integerRange(let lower, let upper):
-            pending.append((upper, "\(path).upper", scope))
-            pending.append((lower, "\(path).lower", scope))
+            pending.append(.expression(upper, path: "\(path).upper", scope: scope))
+            pending.append(.expression(lower, path: "\(path).lower", scope: scope))
         case .foldFunction(let lambda, let initial, let sequence):
             let bodyScope = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
-            try validateExpression(lambda.body, at: "\(path).body", scope: bodyScope)
-            try validateExpression(initial, at: "\(path).initial", scope: scope)
-            try validateExpression(sequence, at: "\(path).sequence", scope: scope)
+            pending.append(.expression(sequence, path: "\(path).sequence", scope: scope))
+            pending.append(.expression(initial, path: "\(path).initial", scope: scope))
+            pending.append(.expression(lambda.body, path: "\(path).body", scope: bodyScope))
         case .operatorApplication(let operation, let arguments):
             guard operation.arity == arguments.count else {
                 throw diagnostic(
@@ -1069,15 +1185,14 @@ struct BindingValidator {
                     actual: "a formal operator argument"
                 )
             }
-            try formalOperator(operation, at: "\(path).operator", scope: scope)
-            for (index, argument) in arguments.enumerated() {
-                switch argument {
-                case .value(let value):
-                    try validateExpression(value, at: "\(path).arguments[\(index)]", scope: scope)
-                case .operator(let formal):
-                    try formalOperator(formal, at: "\(path).arguments[\(index)]", scope: scope)
-                }
+            for (index, argument) in arguments.enumerated().reversed() {
+                pending.append(.formalArgument(
+                    argument,
+                    path: "\(path).arguments[\(index)]",
+                    scope: scope
+                ))
             }
+            pending.append(.formalOperator(operation, path: "\(path).operator", scope: scope))
         case .recursiveCall(let name, let arguments):
             guard let id = operators[name] else {
                 throw diagnostic(
@@ -1105,14 +1220,19 @@ struct BindingValidator {
             }
             references[path] = .operator(id)
             for (index, argument) in arguments.enumerated().reversed() {
-                pending.append((argument, "\(path).arguments[\(index)]", scope))
+                pending.append(.expression(argument, path: "\(path).arguments[\(index)]", scope: scope))
             }
         case .letValue(let name, let value, let body):
-            try validateExpression(value, at: "\(path).value", scope: scope)
-            let bodyScope = try bind([name], at: "\(path).binder", scope: scope)
-            try validateExpression(body, at: "\(path).body", scope: bodyScope)
+            pending.append(.bindExpression(
+                names: [name],
+                binderPath: "\(path).binder",
+                expression: body,
+                expressionPath: "\(path).body",
+                scope: scope
+            ))
+            pending.append(.expression(value, path: "\(path).value", scope: scope))
         case .letIn(let operators, let body):
-            try validateOperators(operators, body: body, at: path, scope: scope)
+            pending.append(.localOperators(operators, body: body, path: path, scope: scope))
         }
     }
 
@@ -1128,7 +1248,12 @@ struct BindingValidator {
         )
     }
 
-    private mutating func formalOperator(_ operation: FormalOperator, at path: String, scope: [String: BinderID]) throws {
+    private mutating func validateFormalOperator(
+        _ operation: FormalOperator,
+        at path: String,
+        scope: [String: BinderID],
+        pending: inout [BindingValidationTask]
+    ) throws {
         switch operation {
         case .reference(let name, let arity):
             guard let id = operators[name] else {
@@ -1161,15 +1286,16 @@ struct BindingValidator {
                 throw issue.compilationDiagnostic(stage: .binding, path: path)
             }
             let bodyScope = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
-            try validateExpression(lambda.body, at: "\(path).body", scope: bodyScope)
+            pending.append(.expression(lambda.body, path: "\(path).body", scope: bodyScope))
         }
     }
 
-    private mutating func validateOperators(
+    private mutating func scheduleLocalOperators(
         _ operators: [LocalOperator],
         body: StateExpr,
         at path: String,
-        scope: [String: BinderID]
+        scope: [String: BinderID],
+        pending: inout [BindingValidationTask]
     ) throws {
         for operation in operators {
             if let issue = operation.sourceIssue {
@@ -1189,56 +1315,63 @@ struct BindingValidator {
         for (operation, local) in zip(operators, localOperators) {
             operatorArities[local.1] = operation.parameters.count
         }
-        defer { self.operators = outerOperators }
-        for operation in operators {
-            guard let id = self.operators[operation.name] else {
-                throw diagnostic(code: .unknownReference, path: path, expected: "a declared operator", actual: "no operator identity")
-            }
-            let referencePathsBeforeBody = Set(references.keys)
-            try validateExpression(operation.domain, at: "\(path).\(operation.name).domain", scope: scope)
-            let bodyScope = try bind(operation.parameters, at: "\(path).\(operation.name).parameters", scope: scope)
-            try validateExpression(operation.body, at: "\(path).\(operation.name).body", scope: bodyScope)
-            localOperatorDependencies[id] = Set(references.compactMap { path, reference in
-                guard !referencePathsBeforeBody.contains(path), case .operator(let target) = reference else {
-                    return nil
-                }
-                return target
-            })
-            references["\(path).\(operation.name).declaration"] = .operator(id)
-        }
         for local in localOperators {
             references["\(path).operators.\(local.0)"] = .operator(local.1)
         }
-        try validateExpression(body, at: "\(path).body", scope: scope)
+        pending.append(.restoreOperators(outerOperators))
+        pending.append(.expression(body, path: "\(path).body", scope: scope))
+        for (operation, local) in zip(operators, localOperators).reversed() {
+            pending.append(.localOperator(
+                operation,
+                id: local.1,
+                path: "\(path).\(operation.name)",
+                scope: scope
+            ))
+        }
     }
 
-    private mutating func actionExpression(_ action: ActionExpr, at path: String, scope: [String: BinderID]) throws {
+    private mutating func validateActionNode(
+        _ action: ActionExpr,
+        at path: String,
+        scope: [String: BinderID],
+        pending: inout [BindingValidationTask]
+    ) throws {
         switch action {
         case .assign(let target, let value):
             try assignmentTarget(target, at: "\(path).assign", scope: scope)
-            try validateExpression(value, at: "\(path).value", scope: scope)
+            pending.append(.expression(value, path: "\(path).value", scope: scope))
         case .unchanged(let target):
             try assignmentTarget(target, at: "\(path).unchanged", scope: scope)
         case .guard_(let condition):
-            try validateExpression(condition, at: "\(path).guard", scope: scope)
+            pending.append(.expression(condition, path: "\(path).guard", scope: scope))
         case .chooseAction(let target, let set):
             try assignmentTarget(target, at: "\(path).choose", scope: scope)
-            try validateExpression(set, at: "\(path).set", scope: scope)
+            pending.append(.expression(set, path: "\(path).set", scope: scope))
         case .existsAction(let name, let set, let body):
-            try validateExpression(set, at: "\(path).set", scope: scope)
-            let bodyScope = try bind([name], at: "\(path).binder", scope: scope)
-            try actionExpression(body, at: "\(path).body", scope: bodyScope)
+            pending.append(.bindAction(
+                name: name,
+                binderPath: "\(path).binder",
+                action: body,
+                actionPath: "\(path).body",
+                scope: scope
+            ))
+            pending.append(.expression(set, path: "\(path).set", scope: scope))
         case .define(let name, let value, let body):
-            try validateExpression(value, at: "\(path).value", scope: scope)
-            let bodyScope = try bind([name], at: "\(path).binder", scope: scope)
-            try actionExpression(body, at: "\(path).body", scope: bodyScope)
+            pending.append(.bindAction(
+                name: name,
+                binderPath: "\(path).binder",
+                action: body,
+                actionPath: "\(path).body",
+                scope: scope
+            ))
+            pending.append(.expression(value, path: "\(path).value", scope: scope))
         case .ifElse(let condition, let then, let otherwise):
-            try validateExpression(condition, at: "\(path).condition", scope: scope)
-            try actionExpression(then, at: "\(path).then", scope: scope)
-            try actionExpression(otherwise, at: "\(path).else", scope: scope)
+            pending.append(.action(otherwise, path: "\(path).else", scope: scope))
+            pending.append(.action(then, path: "\(path).then", scope: scope))
+            pending.append(.expression(condition, path: "\(path).condition", scope: scope))
         case .and(let lhs, let rhs), .or(let lhs, let rhs):
-            try actionExpression(lhs, at: "\(path).left", scope: scope)
-            try actionExpression(rhs, at: "\(path).right", scope: scope)
+            pending.append(.action(rhs, path: "\(path).right", scope: scope))
+            pending.append(.action(lhs, path: "\(path).left", scope: scope))
         }
     }
 

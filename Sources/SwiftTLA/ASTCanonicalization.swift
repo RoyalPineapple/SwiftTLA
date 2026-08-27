@@ -10,54 +10,115 @@ func alphaKey(_ action: ActionExpr, bindingNames: [String]) -> String {
         environment = extended
     }
     let branches = semanticBranches(action)
-    return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
+    var keys: [String] = []
+    for branch in branches {
+        keys.append(actionKey(branch, environment: environment, next: &next))
+    }
+    return "or[\(keys.joined(separator: ","))]"
 }
 
 /// Gives action disjunction one canonical representation. In particular,
 /// `(a \/ b) /\ c` and `(a /\ c) \/ (b /\ c)` are the same transition
 /// relation, whether the disjunction originated as a Swift boolean guard or
 /// as an `ActionBuilder` branch.
+private enum SemanticActionBranchTask {
+    case expression(ActionExpr)
+    case concatenate
+    case conjoin
+    case wrapExistential(String, StateExpr)
+    case wrapDefinition(String, StateExpr)
+}
+
 private func semanticBranches(_ action: ActionExpr) -> [ActionExpr] {
-    switch action {
-    case .or(let left, let right):
-        return semanticBranches(left) + semanticBranches(right)
-    case .guard_(let condition):
-        return semanticStateBranches(condition).map(ActionExpr.guard_)
-    case .and(let left, let right):
-        return semanticBranches(left).flatMap { leftBranch in
-            semanticBranches(right).map { rightBranch in .and(leftBranch, rightBranch) }
+    var tasks = [SemanticActionBranchTask.expression(action)]
+    var branches: [[ActionExpr]] = []
+    while let task = tasks.popLast() {
+        switch task {
+        case .expression(let expression):
+            switch expression {
+            case .or(let left, let right):
+                tasks.append(.concatenate)
+                tasks.append(.expression(right))
+                tasks.append(.expression(left))
+            case .guard_(let condition):
+                branches.append(semanticStateBranches(condition).map(ActionExpr.guard_))
+            case .and(let left, let right):
+                tasks.append(.conjoin)
+                tasks.append(.expression(right))
+                tasks.append(.expression(left))
+            case .ifElse(let condition, let then, let otherwise):
+                tasks.append(.concatenate)
+                tasks.append(.expression(.and(.guard_(.not(condition)), otherwise)))
+                tasks.append(.expression(.and(.guard_(condition), then)))
+            case .existsAction(let variable, let set, let body):
+                tasks.append(.wrapExistential(variable, set))
+                tasks.append(.expression(body))
+            case .define(let variable, let value, let body):
+                tasks.append(.wrapDefinition(variable, value))
+                tasks.append(.expression(body))
+            default:
+                branches.append([expression])
+            }
+        case .concatenate:
+            let right = branches.removeLast()
+            let left = branches.removeLast()
+            branches.append(left + right)
+        case .conjoin:
+            let right = branches.removeLast()
+            let left = branches.removeLast()
+            branches.append(left.flatMap { leftBranch in
+                right.map { rightBranch in .and(leftBranch, rightBranch) }
+            })
+        case .wrapExistential(let variable, let set):
+            branches.append(branches.removeLast().map { .existsAction(variable, set, $0) })
+        case .wrapDefinition(let variable, let value):
+            branches.append(branches.removeLast().map { .define(variable, value, $0) })
         }
-    case .ifElse(let condition, let then, let otherwise):
-        return semanticBranches(.and(.guard_(condition), then))
-            + semanticBranches(.and(.guard_(.not(condition)), otherwise))
-    case .existsAction(let variable, let set, let body):
-        return semanticBranches(body).map { .existsAction(variable, set, $0) }
-    case .define(let variable, let value, let body):
-        return semanticBranches(body).map { .define(variable, value, $0) }
-    default:
-        return [action]
     }
+    return branches[0]
 }
 
 /// Splits only disjunctions that occur inside a Boolean guard. Swift can group
 /// `a && (b || c)` into one `StateExpr` before that condition meets an action
 /// update, while the syntax parser retains separate action guards. Both spell
 /// the same transition relation.
+private enum SemanticStateBranchTask {
+    case expression(StateExpr)
+    case concatenate
+    case conjoin
+}
+
 private func semanticStateBranches(_ expression: StateExpr) -> [StateExpr] {
-    switch expression {
-    case .sourceIssue:
-        return [expression]
-    case .or(let left, let right):
-        return semanticStateBranches(left) + semanticStateBranches(right)
-    case .and(let left, let right):
-        return semanticStateBranches(left).flatMap { leftBranch in
-            semanticStateBranches(right).map { rightBranch in
-                .and(leftBranch, rightBranch)
+    var tasks = [SemanticStateBranchTask.expression(expression)]
+    var branches: [[StateExpr]] = []
+    while let task = tasks.popLast() {
+        switch task {
+        case .expression(let expression):
+            switch expression {
+            case .or(let left, let right):
+                tasks.append(.concatenate)
+                tasks.append(.expression(right))
+                tasks.append(.expression(left))
+            case .and(let left, let right):
+                tasks.append(.conjoin)
+                tasks.append(.expression(right))
+                tasks.append(.expression(left))
+            default:
+                branches.append([expression])
             }
+        case .concatenate:
+            let right = branches.removeLast()
+            let left = branches.removeLast()
+            branches.append(left + right)
+        case .conjoin:
+            let right = branches.removeLast()
+            let left = branches.removeLast()
+            branches.append(left.flatMap { leftBranch in
+                right.map { rightBranch in .and(leftBranch, rightBranch) }
+            })
         }
-    default:
-        return [expression]
     }
+    return branches[0]
 }
 
 func alphaKey(_ expression: StateExpr) -> String {
@@ -83,75 +144,224 @@ func fresh(_ name: String, environment: [String: String], next: inout Int) -> (S
     return (canonical, extended)
 }
 
+private enum ActionKeyTask {
+    case expression(ActionExpr, environment: [String: String])
+    case finish(Int, ([String]) -> String)
+}
+
+private enum ActionAssociativeOperation: String {
+    case and
+    case or
+}
+
 private func actionKey(_ action: ActionExpr, environment: [String: String], next: inout Int) -> String {
-    func state(_ expression: StateExpr) -> String { stateKey(expression, environment: environment, next: &next) }
-    func associative(_ operation: String, _ action: ActionExpr) -> String {
-        func flatten(_ action: ActionExpr) -> [ActionExpr] {
-            switch (operation, action) {
-            case ("and", .and(let left, let right)), ("or", .or(let left, let right)):
-                return flatten(left) + flatten(right)
-            case ("and", .guard_(let condition)):
-                return flattenGuard(condition)
-            default:
-                return [action]
+    var tasks = [ActionKeyTask.expression(action, environment: environment)]
+    var parts: [String] = []
+    while let task = tasks.popLast() {
+        switch task {
+        case .finish(let count, let formatter):
+            let start = parts.count - count
+            let values = Array(parts[start...])
+            parts.removeSubrange(start...)
+            parts.append(formatter(values))
+        case .expression(let expression, let environment):
+            func state(_ value: StateExpr) -> String {
+                stateKey(value, environment: environment, next: &next)
+            }
+            switch expression {
+            case .assign(let variable, let value):
+                parts.append("assign(\(variable),\(state(value)))")
+            case .unchanged(let variable):
+                parts.append("unchanged(\(variable))")
+            case .guard_(let condition):
+                parts.append("guard(\(state(condition)))")
+            case .chooseAction(let variable, let set):
+                parts.append("chooseAction(\(variable),\(state(set)))")
+            case .existsAction(let variable, let set, let body):
+                let setKey = state(set)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                tasks.append(.finish(1) { "existsAction(\(canonical),\(setKey),\($0[0]))" })
+                tasks.append(.expression(body, environment: extended))
+            case .define(let variable, let value, let body):
+                let valueKey = state(value)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                tasks.append(.finish(1) { "define(\(canonical),\(valueKey),\($0[0]))" })
+                tasks.append(.expression(body, environment: extended))
+            case .ifElse(let condition, let then, let otherwise):
+                let conditionKey = state(condition)
+                tasks.append(.finish(2) { "if(\(conditionKey),\($0[0]),\($0[1]))" })
+                tasks.append(.expression(otherwise, environment: environment))
+                tasks.append(.expression(then, environment: environment))
+            case .and:
+                scheduleKeyOperands(.and, expression, environment: environment, tasks: &tasks)
+            case .or:
+                scheduleKeyOperands(.or, expression, environment: environment, tasks: &tasks)
             }
         }
-        func flattenGuard(_ condition: StateExpr) -> [ActionExpr] {
-            guard operation == "and", case .and(let left, let right) = condition else {
-                return [.guard_(condition)]
-            }
-            return flattenGuard(left) + flattenGuard(right)
-        }
-        return "\(operation)[\(flatten(action).map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
     }
-    switch action {
-    case .assign(let variable, let value): return "assign(\(variable),\(state(value)))"
-    case .unchanged(let variable): return "unchanged(\(variable))"
-    case .guard_(let condition): return "guard(\(state(condition)))"
-    case .chooseAction(let variable, let set): return "chooseAction(\(variable),\(state(set)))"
-    case .existsAction(let variable, let set, let body):
-        let setKey = state(set)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "existsAction(\(canonical),\(setKey),\(actionKey(body, environment: extended, next: &next)))"
-    case .define(let variable, let value, let body):
-        let valueKey = state(value)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "define(\(canonical),\(valueKey),\(actionKey(body, environment: extended, next: &next)))"
-    case .ifElse(let condition, let then, let otherwise):
-        return "if(\(state(condition)),\(actionKey(then, environment: environment, next: &next)),\(actionKey(otherwise, environment: environment, next: &next)))"
-    case .and: return associative("and", action)
-    case .or: return associative("or", action)
+    return parts[0]
+}
+
+private func scheduleKeyOperands(
+    _ operation: ActionAssociativeOperation,
+    _ action: ActionExpr,
+    environment: [String: String],
+    tasks: inout [ActionKeyTask]
+) {
+    var pending = [action]
+    var operands: [ActionExpr] = []
+    while let expression = pending.popLast() {
+        switch (operation, expression) {
+        case (.and, .and(let left, let right)), (.or, .or(let left, let right)):
+            pending.append(right)
+            pending.append(left)
+        case (.and, .guard_(let condition)):
+            var conditions = [condition]
+            while let candidate = conditions.popLast() {
+                if case .and(let left, let right) = candidate {
+                    conditions.append(right)
+                    conditions.append(left)
+                } else {
+                    operands.append(.guard_(candidate))
+                }
+            }
+        default:
+            operands.append(expression)
+        }
+    }
+    tasks.append(.finish(operands.count) {
+        "\(operation.rawValue)[\($0.joined(separator: ","))]"
+    })
+    for operand in operands.reversed() {
+        tasks.append(.expression(operand, environment: environment))
     }
 }
 
 private enum StateKeyTask {
     case expression(StateExpr, environment: [String: String])
-    case text(String)
+    case finish(Int, ([String]) -> String)
+    case bind(StateKeyBinding, variable: String, body: StateExpr, environment: [String: String])
+    case formalOperator(FormalOperator, environment: [String: String], style: FormalOperatorKeyStyle)
+    case formalArgument(FormalCallArgument, environment: [String: String])
+    case letOperators([LocalOperator], index: Int, body: StateExpr, environment: [String: String], declarations: [String])
+    case letOperatorAfterDomain([LocalOperator], index: Int, body: StateExpr, environment: [String: String], declarations: [String])
+    case letOperatorAfterBody([LocalOperator], index: Int, body: StateExpr, environment: [String: String], declarations: [String], domain: String, parameters: [String])
+}
+
+private enum StateKeyBinding {
+    case filter
+    case map
+    case function
+    case forall
+    case exists
+    case choose
+    case letValue
+}
+
+private enum FormalOperatorKeyStyle {
+    case operation
+    case argument
 }
 
 func stateKey(_ expression: StateExpr, environment: [String: String], next: inout Int) -> String {
     var tasks = [StateKeyTask.expression(expression, environment: environment)]
     var parts: [String] = []
 
-    func schedule(_ name: String, _ expressions: [StateExpr], environment: [String: String]) {
-        parts.append("\(name)(")
-        tasks.append(.text(")"))
-        for (index, expression) in expressions.enumerated().reversed() {
+    func schedule(
+        _ expressions: [StateExpr],
+        environment: [String: String],
+        formatter: @escaping ([String]) -> String
+    ) {
+        tasks.append(.finish(expressions.count, formatter))
+        for expression in expressions.reversed() {
             tasks.append(.expression(expression, environment: environment))
-            if index > 0 {
-                tasks.append(.text(","))
-            }
         }
+    }
+
+    func schedule(_ name: String, _ expressions: [StateExpr], environment: [String: String]) {
+        schedule(expressions, environment: environment) { "\(name)(\($0.joined(separator: ",")))" }
+    }
+
+    func allocate(_ parameters: [String], environment: [String: String]) -> ([String], [String: String]) {
+        var extended = environment
+        var canonical: [String] = []
+        for parameter in parameters {
+            let (name, nextEnvironment) = fresh(parameter, environment: extended, next: &next)
+            canonical.append(name)
+            extended = nextEnvironment
+        }
+        return (canonical, extended)
     }
 
     while let task = tasks.popLast() {
         switch task {
-        case .text(let text):
-            parts.append(text)
-        case .expression(let expression, let environment):
-            func key(_ expression: StateExpr, environment: [String: String] = environment) -> String {
-                stateKey(expression, environment: environment, next: &next)
+        case .finish(let count, let formatter):
+            let start = parts.count - count
+            let values = Array(parts[start...])
+            parts.removeSubrange(start...)
+            parts.append(formatter(values))
+        case .bind(let binding, let variable, let body, let environment):
+            let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+            tasks.append(.finish(2) { values in
+                switch binding {
+                case .filter: "filter(\(values[0]),\(canonical),\(values[1]))"
+                case .map: "map(\(values[1]),\(canonical),\(values[0]))"
+                case .function: "function(\(values[0]),\(canonical),\(values[1]))"
+                case .forall: "forall(\(values[0]),\(canonical),\(values[1]))"
+                case .exists: "exists(\(values[0]),\(canonical),\(values[1]))"
+                case .choose: "choose(\(values[0]),\(canonical),\(values[1]))"
+                case .letValue: "letValue(\(canonical),\(values[0]),\(values[1]))"
+                }
+            })
+            tasks.append(.expression(body, environment: extended))
+        case .formalOperator(let operation, let environment, let style):
+            switch operation {
+            case .reference(let name, let arity):
+                parts.append("operator(\(environment[name] ?? name),\(arity))")
+            case .lambda(let lambda):
+                let (parameters, extended) = allocate(lambda.parameters, environment: environment)
+                tasks.append(.finish(1) { values in
+                    let name = switch style {
+                    case .operation: "lambda"
+                    case .argument: "operatorLambda"
+                    }
+                    return "\(name)([\(parameters.joined(separator: ","))],\(values[0]))"
+                })
+                tasks.append(.expression(lambda.body, environment: extended))
             }
+        case .formalArgument(let argument, let environment):
+            switch argument {
+            case .value(let expression):
+                tasks.append(.finish(1) { "value(\($0[0]))" })
+                tasks.append(.expression(expression, environment: environment))
+            case .operator(let operation):
+                tasks.append(.formalOperator(operation, environment: environment, style: .argument))
+            }
+        case .letOperators(let operators, let index, let body, let environment, let declarations):
+            guard index < operators.count else {
+                tasks.append(.finish(1) { "letIn([\(declarations.joined(separator: ","))],\($0[0]))" })
+                tasks.append(.expression(body, environment: environment))
+                continue
+            }
+            if let domain = operators[index].domain {
+                tasks.append(.letOperatorAfterDomain(operators, index: index, body: body, environment: environment, declarations: declarations))
+                tasks.append(.expression(domain, environment: environment))
+            } else {
+                let (parameters, extended) = allocate(operators[index].parameters, environment: environment)
+                tasks.append(.letOperatorAfterBody(operators, index: index, body: body, environment: environment, declarations: declarations, domain: "unbounded", parameters: parameters))
+                tasks.append(.expression(operators[index].body, environment: extended))
+            }
+        case .letOperatorAfterDomain(let operators, let index, let body, let environment, let declarations):
+            let domain = parts.removeLast()
+            let (parameters, extended) = allocate(operators[index].parameters, environment: environment)
+            tasks.append(.letOperatorAfterBody(operators, index: index, body: body, environment: environment, declarations: declarations, domain: domain, parameters: parameters))
+            tasks.append(.expression(operators[index].body, environment: extended))
+        case .letOperatorAfterBody(let operators, let index, let body, let environment, let declarations, let domain, let parameters):
+            let operation = operators[index]
+            let operationBody = parts.removeLast()
+            let declaration = "local(\(operation.name),[\(parameters.joined(separator: ","))],\(domain),\(operationBody))"
+            tasks.append(.letOperators(operators, index: index + 1, body: body, environment: environment, declarations: declarations + [declaration]))
+        case .expression(let expression, let environment):
             switch expression {
             case .add(let lhs, let rhs): schedule("add", [lhs, rhs], environment: environment)
             case .subtract(let lhs, let rhs): schedule("subtract", [lhs, rhs], environment: environment)
@@ -203,14 +413,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
                         operands.append(candidate)
                     }
                 }
-                parts.append("\(operation)[")
-                tasks.append(.text("]"))
-                for (index, operand) in operands.enumerated().reversed() {
-                    tasks.append(.expression(operand, environment: environment))
-                    if index > 0 {
-                        tasks.append(.text(","))
-                    }
-                }
+                schedule(operands, environment: environment) { "\(operation)[\($0.joined(separator: ","))]" }
             case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
             case .value(let value): parts.append("value(\(value))")
             case .variable(let name): parts.append("var(\(environment[name] ?? name))")
@@ -221,102 +424,77 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .controlLocation(let reference):
                 parts.append("control(\(reference.owner?.canonicalEncoding ?? "source"),\(reference.sourceName))")
             case .setLiteral(let values):
-                parts.append("set[\(values.map { key($0) }.sorted().joined(separator: ","))]")
+                schedule(values, environment: environment) { "set[\($0.sorted().joined(separator: ","))]" }
             case .setFilter(let set, let variable, let predicate):
-                let setKey = key(set)
-                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                parts.append("filter(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+                tasks.append(.bind(.filter, variable: variable, body: predicate, environment: environment))
+                tasks.append(.expression(set, environment: environment))
             case .setMap(let mapped, let variable, let set):
-                let setKey = key(set)
-                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                parts.append("map(\(key(mapped, environment: extended)),\(canonical),\(setKey))")
+                tasks.append(.bind(.map, variable: variable, body: mapped, environment: environment))
+                tasks.append(.expression(set, environment: environment))
             case .tupleLiteral(let values):
-                parts.append("tuple[\(values.map { key($0) }.joined(separator: ","))]")
+                schedule(values, environment: environment) { "tuple[\($0.joined(separator: ","))]" }
             case .tupleAccess(let tuple, let index):
-                parts.append("tupleAccess(\(key(tuple)),\(index))")
+                schedule([tuple], environment: environment) { "tupleAccess(\($0[0]),\(index))" }
             case .recordLiteral(let fields):
-                let fields = fields.fields.map { "\($0.name):\(key($0.value))" }.joined(separator: ",")
-                parts.append("record[\(fields)]")
+                let names = fields.fields.map(\.name)
+                schedule(fields.fields.map(\.value), environment: environment) { values in
+                    "record[\(zip(names, values).map { "\($0):\($1)" }.joined(separator: ","))]"
+                }
             case .recordAccess(let record, let field):
-                parts.append("recordAccess(\(key(record)),\(field))")
+                schedule([record], environment: environment) { "recordAccess(\($0[0]),\(field))" }
             case .functionLiteral(let domain, let variable, let body):
-                let domainKey = key(domain)
-                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                parts.append("function(\(domainKey),\(canonical),\(key(body, environment: extended)))")
+                tasks.append(.bind(.function, variable: variable, body: body, environment: environment))
+                tasks.append(.expression(domain, environment: environment))
             case .except(let function, let keyExpression, let value):
-                parts.append("except(\(key(function)),\(key(keyExpression)),\(key(value)))")
+                schedule("except", [function, keyExpression, value], environment: environment)
             case .caseExpr(let cases, let fallback):
-                let cases = cases.map { key($0) }.joined(separator: ",")
-                parts.append("case[\(cases)]/\(fallback.map { key($0) } ?? "none")")
+                let expressions = cases + (fallback.map { [$0] } ?? [])
+                schedule(expressions, environment: environment) { values in
+                    let caseValues = values.prefix(cases.count).joined(separator: ",")
+                    let fallbackValue = fallback == nil ? "none" : values[cases.count]
+                    return "case[\(caseValues)]/\(fallbackValue)"
+                }
             case .forAll(let set, let variable, let predicate):
-                let setKey = key(set)
-                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                parts.append("forall(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+                tasks.append(.bind(.forall, variable: variable, body: predicate, environment: environment))
+                tasks.append(.expression(set, environment: environment))
             case .exists(let set, let variable, let predicate):
-                let setKey = key(set)
-                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                parts.append("exists(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+                tasks.append(.bind(.exists, variable: variable, body: predicate, environment: environment))
+                tasks.append(.expression(set, environment: environment))
             case .choose(let set, let variable, let predicate):
-                let setKey = key(set)
-                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-                parts.append("choose(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+                tasks.append(.bind(.choose, variable: variable, body: predicate, environment: environment))
+                tasks.append(.expression(set, environment: environment))
             case .enabledAction(let name): parts.append("enabled(\(name))")
             case .foldFunction(let operation, let initial, let sequence):
-                var lambdaEnvironment = environment
-                let parameters = operation.parameters.map { parameter -> String in
-                    let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
-                    lambdaEnvironment = extended
-                    return canonical
-                }
-                parts.append("fold([\(parameters.joined(separator: ","))],\(key(operation.body, environment: lambdaEnvironment)),\(key(initial)),\(key(sequence)))")
+                let (parameters, extended) = allocate(operation.parameters, environment: environment)
+                tasks.append(.finish(3) {
+                    "fold([\(parameters.joined(separator: ","))],\($0.joined(separator: ",")))"
+                })
+                tasks.append(.expression(sequence, environment: environment))
+                tasks.append(.expression(initial, environment: environment))
+                tasks.append(.expression(operation.body, environment: extended))
             case .operatorApplication(let operation, let arguments):
-                let operationKey: String
-                switch operation {
-                case .lambda(let lambda):
-                    var lambdaEnvironment = environment
-                    let parameters = lambda.parameters.map { parameter -> String in
-                        let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
-                        lambdaEnvironment = extended
-                        return canonical
-                    }
-                    operationKey = "lambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
-                case .reference(let name, let arity):
-                    operationKey = "operator(\(environment[name] ?? name),\(arity))"
+                tasks.append(.finish(arguments.count + 1) { values in
+                    "apply(\(values[0]),[\(values.dropFirst().joined(separator: ","))])"
+                })
+                for argument in arguments.reversed() {
+                    tasks.append(.formalArgument(argument, environment: environment))
                 }
-                let argumentKeys = arguments.map { argument -> String in
-                    switch argument {
-                    case .value(let expression): return "value(\(key(expression)))"
-                    case .operator(.reference(let name, let arity)):
-                        return "operator(\(environment[name] ?? name),\(arity))"
-                    case .operator(.lambda(let lambda)):
-                        var lambdaEnvironment = environment
-                        let parameters = lambda.parameters.map { parameter -> String in
-                            let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
-                            lambdaEnvironment = extended
-                            return canonical
-                        }
-                        return "operatorLambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
-                    }
-                }
-                parts.append("apply(\(operationKey),[\(argumentKeys.joined(separator: ","))])")
+                tasks.append(.formalOperator(operation, environment: environment, style: .operation))
             case .recursiveCall(let name, let arguments):
-                parts.append("recursive(\(name),\(arguments.map { key($0) }.joined(separator: ",")))")
+                schedule(arguments, environment: environment) {
+                    "recursive(\(name),\($0.joined(separator: ",")))"
+                }
             case .letValue(let name, let value, let body):
-                let valueKey = key(value)
-                let (canonical, extended) = fresh(name, environment: environment, next: &next)
-                parts.append("letValue(\(canonical),\(valueKey),\(key(body, environment: extended)))")
+                tasks.append(.bind(.letValue, variable: name, body: body, environment: environment))
+                tasks.append(.expression(value, environment: environment))
             case .letIn(let operators, let body):
-                let declarations = operators.map { operation in
-                    var operatorEnvironment = environment
-                    let domainKey = operation.domain.map { key($0, environment: operatorEnvironment) } ?? "unbounded"
-                    let parameterNames = operation.parameters.map { parameter -> String in
-                        let (canonical, extended) = fresh(parameter, environment: operatorEnvironment, next: &next)
-                        operatorEnvironment = extended
-                        return canonical
-                    }
-                    return "local(\(operation.name),[\(parameterNames.joined(separator: ","))],\(domainKey),\(key(operation.body, environment: operatorEnvironment)))"
-                }.joined(separator: ",")
-                parts.append("letIn([\(declarations)],\(key(body)))")
+                tasks.append(.letOperators(
+                    operators,
+                    index: 0,
+                    body: body,
+                    environment: environment,
+                    declarations: []
+                ))
             }
         }
     }

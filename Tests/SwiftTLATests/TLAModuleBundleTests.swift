@@ -239,7 +239,7 @@ struct TLAModuleBundleTests {
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports.map(\.name) == ["InstanceArithmetic"])
     let importedModule = try #require(bundle.imports.first)
-    #expect(importedModule.tla.contains("Twice("))
+    #expect(importedModule.tla.contains("Twice(b0) =="))
 
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

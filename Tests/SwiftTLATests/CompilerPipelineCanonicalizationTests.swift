@@ -565,7 +565,7 @@ struct CompilerPipelineCanonicalizationTests {
             .successors(for: action.id, from: state)
             .map(\.state)
 
-        guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.semantics.actions[0].body else {
+        guard case .assign(_, .operatorApplication(let id, _)) = compilation.semantics.actions[0].body else {
             Issue.record("Expected an operator identity")
             return
         }
@@ -672,7 +672,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .and(.guard_(.operatorApplication(.lambda(let lambda), _)), .unchanged) = compilation.semantics.actions[0].body else {
+        guard case .and(.guard_(.lambdaApplication(let lambda, _)), .unchanged) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled higher-order call")
             return
         }
@@ -1092,6 +1092,84 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(alphaKey(sum) == expectedKey)
         #expect(compilation.renderedTLAModuleBundle().tla.contains("PositiveSum == (\(expectedSum) > 0)"))
+    }
+
+    @Test("state identity traverses structured expressions and preserves lexical scope")
+    func stateIdentityTraversesEveryStructuredChild() {
+        let values: [(StateExpr, String)] = [
+            (
+                .setFilter(.setLiteral([.int(2), .int(1)]), "element", .equal(.variable("element"), .int(1))),
+                "filter(set[value(1),value(2)],@0,equal(var(@0),value(1)))"
+            ),
+            (
+                .setMap(.add(.variable("element"), .int(1)), "element", .setLiteral([.int(1)])),
+                "map(add(var(@0),value(1)),@0,set[value(1)])"
+            ),
+            (
+                .functionLiteral(.setLiteral([.int(1)]), "input", .tupleLiteral([.variable("input"), .int(2)])),
+                "function(set[value(1)],@0,tuple[var(@0),value(2)])"
+            ),
+            (
+                .forAll(.setLiteral([.int(1)]), "item", .exists(.setLiteral([.int(2)]), "item", .equal(.variable("item"), .int(2)))),
+                "forall(set[value(1)],@0,exists(set[value(2)],@1,equal(var(@1),value(2))))"
+            ),
+            (
+                .choose(.setLiteral([.int(1)]), "candidate", .equal(.variable("candidate"), .int(1))),
+                "choose(set[value(1)],@0,equal(var(@0),value(1)))"
+            ),
+            (
+                .recordLiteral(.init([
+                    .init(name: "second", value: .caseExpr([.bool(true)], .bool(false))),
+                    .init(name: "first", value: .except(.variable("table"), .int(1), .int(2)))
+                ])),
+                "record[first:except(var(table),value(1),value(2)),second:case[value(TRUE)]/value(FALSE)]"
+            ),
+            (
+                .foldFunction(
+                    .init(parameters: ["sum", "item"], body: .add(.variable("sum"), .variable("item"))),
+                    initial: .int(0),
+                    sequence: .tupleLiteral([.int(1)])
+                ),
+                "fold([@0,@1],add(var(@0),var(@1)),value(0),tuple[value(1)])"
+            ),
+            (
+                .operatorApplication(
+                    .lambda(.init(parameters: ["value"], body: .variable("value"))),
+                    [
+                        .value(.int(1)),
+                        .operator(.lambda(.init(parameters: ["argument"], body: .variable("argument"))))
+                    ]
+                ),
+                "apply(lambda([@0],var(@0)),[value(value(1)),operatorLambda([@1],var(@1))])"
+            ),
+            (
+                .letValue("value", .int(1), .add(.variable("value"), .int(2))),
+                "letValue(@0,value(1),add(var(@0),value(2)))"
+            ),
+            (
+                .letIn(
+                    [
+                        .init(
+                            "Walk",
+                            parameters: ["item"],
+                            domain: .setLiteral([.int(1)]),
+                            body: .recursiveCall("Walk", [.subtract(.variable("item"), .int(1))])
+                        ),
+                        .init(
+                            "Identity",
+                            parameters: ["value"],
+                            body: .variable("value")
+                        )
+                    ],
+                    .recursiveCall("Walk", [.int(2)])
+                ),
+                "letIn([local(Walk,[@0],set[value(1)],recursive(Walk,subtract(var(@0),value(1)))),local(Identity,[@1],unbounded,var(@1))],recursive(Walk,value(2)))"
+            )
+        ]
+
+        for (expression, expected) in values {
+            #expect(alphaKey(expression) == expected)
+        }
     }
 
     @Test("free references fail at the binding gate")

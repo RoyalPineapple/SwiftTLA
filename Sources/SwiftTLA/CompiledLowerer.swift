@@ -1,6 +1,36 @@
 private enum StateLoweringTask {
     case expression(StateExpr, path: String)
-    case binary((CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr, path: String)
+    case build(
+        childCount: Int,
+        path: String,
+        ([CompiledStateExpr]) throws -> CompiledStateExpr
+    )
+}
+
+private enum ActionLoweringTask {
+    case expression(ActionExpr, path: String)
+    case build(
+        childCount: Int,
+        path: String,
+        ([CompiledActionExpr]) throws -> CompiledActionExpr
+    )
+}
+
+private enum FormalOperatorLoweringPlan {
+    case reference(OperatorID, arity: Int)
+    case lambda([BinderID])
+}
+
+private enum FormalArgumentLoweringPlan {
+    case value
+    case `operator`(FormalOperatorLoweringPlan)
+}
+
+private struct LocalOperatorLoweringPlan {
+    let id: OperatorID
+    let parameters: [BinderID]
+    let hasDomain: Bool
+    let isRecursive: Bool
 }
 
 struct CompiledLowerer {
@@ -342,48 +372,174 @@ struct CompiledLowerer {
         while let task = tasks.popLast() {
             switch task {
             case .expression(let expression, let path):
-                let operation: ((CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr)?
-                let operands: (StateExpr, StateExpr)?
                 switch expression {
-                case .add(let lhs, let rhs): operation = CompiledStateExpr.add; operands = (lhs, rhs)
-                case .subtract(let lhs, let rhs): operation = CompiledStateExpr.subtract; operands = (lhs, rhs)
-                case .multiply(let lhs, let rhs): operation = CompiledStateExpr.multiply; operands = (lhs, rhs)
-                case .divide(let lhs, let rhs): operation = CompiledStateExpr.divide; operands = (lhs, rhs)
-                case .modulo(let lhs, let rhs): operation = CompiledStateExpr.modulo; operands = (lhs, rhs)
-                case .integerDivide(let lhs, let rhs): operation = CompiledStateExpr.integerDivide; operands = (lhs, rhs)
-                case .equal(let lhs, let rhs): operation = CompiledStateExpr.equal; operands = (lhs, rhs)
-                case .notEqual(let lhs, let rhs): operation = CompiledStateExpr.notEqual; operands = (lhs, rhs)
-                case .lessThan(let lhs, let rhs): operation = CompiledStateExpr.lessThan; operands = (lhs, rhs)
-                case .lessOrEqual(let lhs, let rhs): operation = CompiledStateExpr.lessOrEqual; operands = (lhs, rhs)
-                case .greaterThan(let lhs, let rhs): operation = CompiledStateExpr.greaterThan; operands = (lhs, rhs)
-                case .greaterOrEqual(let lhs, let rhs): operation = CompiledStateExpr.greaterOrEqual; operands = (lhs, rhs)
-                case .and(let lhs, let rhs): operation = CompiledStateExpr.and; operands = (lhs, rhs)
-                case .or(let lhs, let rhs): operation = CompiledStateExpr.or; operands = (lhs, rhs)
-                case .in(let lhs, let rhs): operation = CompiledStateExpr.in; operands = (lhs, rhs)
-                case .subset(let lhs, let rhs): operation = CompiledStateExpr.subset; operands = (lhs, rhs)
-                case .union(let lhs, let rhs): operation = CompiledStateExpr.union; operands = (lhs, rhs)
-                case .intersection(let lhs, let rhs): operation = CompiledStateExpr.intersection; operands = (lhs, rhs)
-                case .setDifference(let lhs, let rhs): operation = CompiledStateExpr.setDifference; operands = (lhs, rhs)
-                case .tupleDynamicAccess(let lhs, let rhs): operation = CompiledStateExpr.tupleDynamicAccess; operands = (lhs, rhs)
-                case .tupleAppend(let lhs, let rhs): operation = CompiledStateExpr.tupleAppend; operands = (lhs, rhs)
-                case .tupleConcatenate(let lhs, let rhs): operation = CompiledStateExpr.tupleConcatenate; operands = (lhs, rhs)
-                case .functionApply(let lhs, let rhs): operation = CompiledStateExpr.functionApply; operands = (lhs, rhs)
-                case .functionSet(let lhs, let rhs): operation = CompiledStateExpr.functionSet; operands = (lhs, rhs)
-                case .setSum(let lhs, let rhs): operation = CompiledStateExpr.setSum; operands = (lhs, rhs)
-                default: operation = nil; operands = nil
+                case .sourceIssue(let issue): throw issue.compilationDiagnostic(stage: .lowering, path: path)
+                case .value(let value): lowered.append(.value(value))
+                case .currentProcess, .processLocalFamily: throw diagnostic(path: path)
+                case .programCounter, .procedureStack, .variable: lowered.append(try valueReference(at: path))
+                case .controlLocation: lowered.append(.controlLocation(try controlLocation(at: path)))
+                case .enabledAction: lowered.append(.enabledAction(try action(at: path)))
+                case .negate(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.negate, on: &tasks)
+                case .not(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.not, on: &tasks)
+                case .cardinality(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.cardinality, on: &tasks)
+                case .powerSet(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.powerSet, on: &tasks)
+                case .unionAll(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.unionAll, on: &tasks)
+                case .tupleLength(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.tupleLength, on: &tasks)
+                case .tupleHead(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.tupleHead, on: &tasks)
+                case .tupleTail(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.tupleTail, on: &tasks)
+                case .domain(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.domain, on: &tasks)
+                case .sequenceFromSet(let value): scheduleUnary(value, at: path, build: CompiledStateExpr.sequenceFromSet, on: &tasks)
+                case .add(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.add, on: &tasks)
+                case .subtract(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.subtract, on: &tasks)
+                case .multiply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.multiply, on: &tasks)
+                case .divide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.divide, on: &tasks)
+                case .modulo(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.modulo, on: &tasks)
+                case .integerDivide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.integerDivide, on: &tasks)
+                case .equal(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.equal, on: &tasks)
+                case .notEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.notEqual, on: &tasks)
+                case .lessThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.lessThan, on: &tasks)
+                case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.lessOrEqual, on: &tasks)
+                case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.greaterThan, on: &tasks)
+                case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.greaterOrEqual, on: &tasks)
+                case .and(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.and, on: &tasks)
+                case .or(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.or, on: &tasks)
+                case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.in, on: &tasks)
+                case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.subset, on: &tasks)
+                case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.union, on: &tasks)
+                case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.intersection, on: &tasks)
+                case .setDifference(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.setDifference, on: &tasks)
+                case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.tupleDynamicAccess, on: &tasks)
+                case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.tupleAppend, on: &tasks)
+                case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.tupleConcatenate, on: &tasks)
+                case .functionApply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.functionApply, on: &tasks)
+                case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.functionSet, on: &tasks)
+                case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, build: CompiledStateExpr.setSum, on: &tasks)
+                case .integerRange(let lower, let upper):
+                    schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, build: { .integerRange($0[0], $0[1]) }, on: &tasks)
+                case .ifThenElse(let condition, let then, let otherwise):
+                    schedule([(condition, "\(path).condition"), (then, "\(path).then"), (otherwise, "\(path).else")], at: path, build: { .ifThenElse($0[0], $0[1], $0[2]) }, on: &tasks)
+                case .setLiteral(let values):
+                    schedule(indexed(values, at: path), at: path, build: CompiledStateExpr.setLiteral, on: &tasks)
+                case .tupleLiteral(let values):
+                    schedule(indexed(values, at: path), at: path, build: CompiledStateExpr.tupleLiteral, on: &tasks)
+                case .tupleAccess(let value, let index):
+                    schedule([(value, path)], at: path, build: { .tupleAccess($0[0], index) }, on: &tasks)
+                case .recordLiteral(let record):
+                    let fields = try record.fields.enumerated().map { index, item in
+                        let fieldPath = "\(path).fields[\(index)]"
+                        return (id: try field(at: "\(fieldPath).declaration"), key: CompiledValue.string(item.name), expression: item.value, path: "\(fieldPath).value")
+                    }
+                    schedule(fields.map { ($0.expression, $0.path) }, at: path, build: { values in
+                        .recordLiteral(.init(zip(fields, values).map { field, value in
+                            .init(id: field.id, key: field.key, value: value)
+                        }))
+                    }, on: &tasks)
+                case .recordAccess(let value, let name):
+                    let id = try field(at: "\(path).field")
+                    schedule([(value, "\(path).value")], at: path, build: { .recordAccess($0[0], id, .string(name)) }, on: &tasks)
+                case .except(let function, let key, let value):
+                    schedule([(function, "\(path).function"), (key, "\(path).key"), (value, "\(path).value")], at: path, build: { .except($0[0], $0[1], $0[2]) }, on: &tasks)
+                case .caseExpr(let branches, let otherwise):
+                    var children = branches.enumerated().map { ($0.element, "\(path).branch[\($0.offset)]") }
+                    if let otherwise { children.append((otherwise, "\(path).otherwise")) }
+                    schedule(children, at: path, build: { values in
+                        var compiledBranches: [CompiledCaseBranch] = []
+                        for index in stride(from: 0, to: branches.count, by: 2) {
+                            compiledBranches.append(.init(condition: values[index], value: values[index + 1]))
+                        }
+                        guard let first = compiledBranches.first else { throw invalidTraversal(at: path) }
+                        return .caseExpr(
+                            first,
+                            Array(compiledBranches.dropFirst()),
+                            otherwise: values.count == branches.count ? nil : values.last
+                        )
+                    }, on: &tasks)
+                case .setFilter(let domain, let name, let body):
+                    scheduleBinding(domain, body, binder: try binder(at: "\(path).binder.\(name)"), at: path, build: CompiledStateExpr.setFilter, on: &tasks)
+                case .setMap(let body, let name, let domain):
+                    let binder = try binder(at: "\(path).binder.\(name)")
+                    schedule([(body, "\(path).body"), (domain, "\(path).domain")], at: path, build: { .setMap($0[0], binder, $0[1]) }, on: &tasks)
+                case .functionLiteral(let domain, let name, let body):
+                    scheduleBinding(domain, body, binder: try binder(at: "\(path).binder.\(name)"), at: path, build: CompiledStateExpr.functionLiteral, on: &tasks)
+                case .forAll(let domain, let name, let body):
+                    scheduleBinding(domain, body, binder: try binder(at: "\(path).binder.\(name)"), at: path, build: CompiledStateExpr.forAll, on: &tasks)
+                case .exists(let domain, let name, let body):
+                    scheduleBinding(domain, body, binder: try binder(at: "\(path).binder.\(name)"), at: path, build: CompiledStateExpr.exists, on: &tasks)
+                case .choose(let domain, let name, let body):
+                    scheduleBinding(domain, body, binder: try binder(at: "\(path).binder.\(name)"), at: path, build: CompiledStateExpr.choose, on: &tasks)
+                case .foldFunction(let lambda, let initial, let sequence):
+                    let parameters = try lambda.parameters.map { try binder(at: "\(path).parameters.\($0)") }
+                    schedule([(lambda.body, "\(path).body"), (initial, "\(path).initial"), (sequence, "\(path).sequence")], at: path, build: {
+                        .foldFunction(.init(parameters: parameters, body: $0[0]), initial: $0[1], sequence: $0[2])
+                    }, on: &tasks)
+                case .operatorApplication(let operation, let arguments):
+                    switch operation {
+                    case .lambda(let lambda):
+                        let parameters = try lambda.parameters.map {
+                            try binder(at: "\(path).operator.parameters.\($0)")
+                        }
+                        let valueArguments = try arguments.enumerated().map { index, argument in
+                            guard case .value(let value) = argument else { throw invalidTraversal(at: "\(path).arguments[\(index)]") }
+                            return value
+                        }
+                        schedule(
+                            [(lambda.body, "\(path).operator.body")] + indexed(valueArguments, at: "\(path).arguments"),
+                            at: path,
+                            build: { values in
+                                guard let body = values.first else { throw invalidTraversal(at: path) }
+                                return .lambdaApplication(
+                                    .init(parameters: parameters, body: body),
+                                    Array(values.dropFirst())
+                                )
+                            },
+                            on: &tasks
+                        )
+                    case .reference:
+                        let operation = try operatorID(at: "\(path).operator")
+                        let argumentPlans = try arguments.enumerated().map {
+                            try formalArgumentPlan($0.element, at: "\(path).arguments[\($0.offset)]")
+                        }
+                        schedule(formalChildren(arguments: arguments, at: path), at: path, build: { values in
+                            var index = 0
+                            let compiledArguments = try argumentPlans.map {
+                                try materialize($0, from: values, index: &index, at: path)
+                            }
+                            guard index == values.count else { throw invalidTraversal(at: path) }
+                            return .operatorApplication(operation, compiledArguments)
+                        }, on: &tasks)
+                    }
+                case .recursiveCall(_, let arguments):
+                    let id = try operatorID(at: path)
+                    schedule(indexed(arguments, at: "\(path).arguments"), at: path, build: { .recursiveCall(id, $0) }, on: &tasks)
+                case .letValue(let name, let value, let body):
+                    let binder = try binder(at: "\(path).binder.\(name)")
+                    schedule([(value, "\(path).value"), (body, "\(path).body")], at: path, build: { .letValue(binder, $0[0], $0[1]) }, on: &tasks)
+                case .letIn(let operators, let body):
+                    let plans = try localOperatorPlans(operators, at: path)
+                    var children: [(StateExpr, String)] = []
+                    for operation in operators {
+                        if let domain = operation.domain { children.append((domain, "\(path).\(operation.name).domain")) }
+                        children.append((operation.body, "\(path).\(operation.name).body"))
+                    }
+                    children.append((body, "\(path).body"))
+                    schedule(children, at: path, build: { values in
+                        var index = 0
+                        let compiled = try plans.map { plan in
+                            let domain = plan.hasDomain ? try child(from: values, index: &index, at: path) : nil
+                            return CompiledLocalOperator(id: plan.id, parameters: plan.parameters, domain: domain, body: try child(from: values, index: &index, at: path), isRecursive: plan.isRecursive)
+                        }
+                        let body = try child(from: values, index: &index, at: path)
+                        guard index == values.count else { throw invalidTraversal(at: path) }
+                        return .letIn(compiled, body)
+                    }, on: &tasks)
                 }
-                if let operation, let operands {
-                    tasks.append(.binary(operation, path: path))
-                    tasks.append(.expression(operands.1, path: "\(path).right"))
-                    tasks.append(.expression(operands.0, path: "\(path).left"))
-                } else {
-                    lowered.append(try lowerRecursive(expression, at: path))
-                }
-            case .binary(let operation, let path):
-                guard lowered.count >= 2 else { throw invalidTraversal(at: path) }
-                let rhs = lowered.removeLast()
-                let lhs = lowered.removeLast()
-                lowered.append(operation(lhs, rhs))
+            case .build(let childCount, let path, let build):
+                guard lowered.count >= childCount else { throw invalidTraversal(at: path) }
+                let start = lowered.count - childCount
+                let range = start..<lowered.endIndex
+                let children = Array(lowered[range])
+                lowered.removeSubrange(range)
+                lowered.append(try build(children))
             }
         }
         guard lowered.count == 1, let expression = lowered.first else {
@@ -392,133 +548,165 @@ struct CompiledLowerer {
         return expression
     }
 
-    private func lowerRecursive(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
-        switch expression {
-        case .sourceIssue(let issue):
-            throw issue.compilationDiagnostic(stage: .lowering, path: path)
-        case .value(let value): return .value(value)
-        case .currentProcess:
-            throw diagnostic(path: path)
-        case .programCounter, .procedureStack: return try valueReference(at: path)
-        case .controlLocation: return .controlLocation(try controlLocation(at: path))
-        case .variable: return try valueReference(at: path)
-        case .processLocalFamily:
-            throw diagnostic(path: path)
-        case .enabledAction: return .enabledAction(try action(at: path))
-        case .negate(let value): return .negate(try lower(value, at: path))
-        case .not(let value): return .not(try lower(value, at: path))
-        case .cardinality(let value): return .cardinality(try lower(value, at: path))
-        case .powerSet(let value): return .powerSet(try lower(value, at: path))
-        case .unionAll(let value): return .unionAll(try lower(value, at: path))
-        case .tupleLength(let value): return .tupleLength(try lower(value, at: path))
-        case .tupleHead(let value): return .tupleHead(try lower(value, at: path))
-        case .tupleTail(let value): return .tupleTail(try lower(value, at: path))
-        case .domain(let value): return .domain(try lower(value, at: path))
-        case .sequenceFromSet(let value): return .sequenceFromSet(try lower(value, at: path))
-        case .add, .subtract, .multiply, .divide, .modulo, .integerDivide,
-             .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-             .and, .or, .in, .subset, .union, .intersection, .setDifference,
-             .tupleDynamicAccess, .tupleAppend, .tupleConcatenate,
-             .functionApply, .functionSet, .setSum:
-            throw invalidTraversal(at: path)
-        case .ifThenElse(let condition, let then, let otherwise):
-            return try .ifThenElse(
-                lower(condition, at: "\(path).condition"),
-                lower(then, at: "\(path).then"),
-                lower(otherwise, at: "\(path).else")
-            )
-        case .setLiteral(let values): return try .setLiteral(lower(values, at: path))
-        case .tupleLiteral(let values): return try .tupleLiteral(lower(values, at: path))
-        case .tupleAccess(let value, let index): return try .tupleAccess(lower(value, at: path), index)
-        case .recordLiteral(let fields):
-            return try .recordLiteral(.init(fields.fields.enumerated().map { index, item in
-                let fieldPath = "\(path).fields[\(index)]"
-                return .init(
-                    id: try field(at: "\(fieldPath).declaration"),
-                    key: .string(item.name),
-                    value: try lower(item.value, at: "\(fieldPath).value")
-                )
-            }))
-        case .recordAccess(let value, let field):
-            return try .recordAccess(
-                lower(value, at: "\(path).value"),
-                self.field(at: "\(path).field"),
-                .string(field)
-            )
-        case .except(let function, let key, let value):
-            return try .except(
-                lower(function, at: "\(path).function"),
-                lower(key, at: "\(path).key"),
-                lower(value, at: "\(path).value")
-            )
-        case .caseExpr(let pairs, let otherwise):
-            return .caseExpr(try lower(pairs, at: "\(path).branch"), try lowerOptional(otherwise, at: "\(path).otherwise"))
-        case .setFilter(let set, let name, let predicate):
-            return try binding(CompiledStateExpr.setFilter, set, name, predicate, path)
-        case .setMap(let value, let name, let set):
-            return try .setMap(lower(value, at: "\(path).body"), binder(at: "\(path).binder.\(name)"), lower(set, at: "\(path).domain"))
-        case .functionLiteral(let domain, let name, let body):
-            return try binding(CompiledStateExpr.functionLiteral, domain, name, body, path)
-        case .forAll(let set, let name, let predicate): return try binding(CompiledStateExpr.forAll, set, name, predicate, path)
-        case .exists(let set, let name, let predicate): return try binding(CompiledStateExpr.exists, set, name, predicate, path)
-        case .choose(let set, let name, let predicate): return try binding(CompiledStateExpr.choose, set, name, predicate, path)
-        case .integerRange(let lowerBound, let upperBound):
-            return try .integerRange(
-                lower(lowerBound, at: "\(path).lower"),
-                lower(upperBound, at: "\(path).upper")
-            )
-        case .foldFunction(let lambda, let initial, let sequence):
-            return try .foldFunction(
-                lower(lambda, at: path),
-                initial: lower(initial, at: "\(path).initial"),
-                sequence: lower(sequence, at: "\(path).sequence")
-            )
-        case .operatorApplication(let operation, let arguments):
-            return try .operatorApplication(
-                lower(operation, at: "\(path).operator"),
-                arguments.enumerated().map { index, argument in try lower(argument, at: "\(path).arguments[\(index)]") }
-            )
-        case .recursiveCall(_, let arguments):
-            return try .recursiveCall(try operatorID(at: path), arguments.enumerated().map { index, argument in
-                try lower(argument, at: "\(path).arguments[\(index)]")
-            })
-        case .letValue(let name, let value, let body):
-            return try .letValue(
-                binder(at: "\(path).binder.\(name)"),
-                lower(value, at: "\(path).value"),
-                lower(body, at: "\(path).body")
-            )
-        case .letIn(let operators, let body):
-            let localOperators = try operators.map { operation in
-                (operation, try operatorID(at: "\(path).\(operation.name).declaration"))
+    private func schedule(
+        _ children: [(expression: StateExpr, path: String)],
+        at path: String,
+        build: @escaping ([CompiledStateExpr]) throws -> CompiledStateExpr,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        tasks.append(.build(childCount: children.count, path: path, build))
+        for child in children.reversed() {
+            tasks.append(.expression(child.expression, path: child.path))
+        }
+    }
+
+    private func scheduleUnary(
+        _ value: StateExpr,
+        at path: String,
+        build: @escaping (CompiledStateExpr) -> CompiledStateExpr,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        schedule([(value, path)], at: path, build: { build($0[0]) }, on: &tasks)
+    }
+
+    private func scheduleBinary(
+        _ lhs: StateExpr,
+        _ rhs: StateExpr,
+        at path: String,
+        build: @escaping (CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        schedule(
+            [(lhs, "\(path).left"), (rhs, "\(path).right")],
+            at: path,
+            build: { build($0[0], $0[1]) },
+            on: &tasks
+        )
+    }
+
+    private func scheduleBinding(
+        _ domain: StateExpr,
+        _ body: StateExpr,
+        binder: BinderID,
+        at path: String,
+        build: @escaping (CompiledStateExpr, BinderID, CompiledStateExpr) -> CompiledStateExpr,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        schedule(
+            [(domain, "\(path).domain"), (body, "\(path).body")],
+            at: path,
+            build: { build($0[0], binder, $0[1]) },
+            on: &tasks
+        )
+    }
+
+    private func indexed(_ expressions: [StateExpr], at path: String) -> [(StateExpr, String)] {
+        expressions.enumerated().map { ($0.element, "\(path)[\($0.offset)]") }
+    }
+
+    private func formalOperatorPlan(
+        _ operation: FormalOperator,
+        at path: String
+    ) throws -> FormalOperatorLoweringPlan {
+        switch operation {
+        case .reference(_, let arity):
+            return .reference(try operatorID(at: path), arity: arity)
+        case .lambda(let lambda):
+            return .lambda(try lambda.parameters.map { try binder(at: "\(path).parameters.\($0)") })
+        }
+    }
+
+    private func formalArgumentPlan(
+        _ argument: FormalCallArgument,
+        at path: String
+    ) throws -> FormalArgumentLoweringPlan {
+        switch argument {
+        case .value: return .value
+        case .operator(let operation): return .operator(try formalOperatorPlan(operation, at: path))
+        }
+    }
+
+    private func formalChildren(
+        arguments: [FormalCallArgument],
+        at path: String
+    ) -> [(StateExpr, String)] {
+        var children: [(StateExpr, String)] = []
+        for (index, argument) in arguments.enumerated() {
+            let argumentPath = "\(path).arguments[\(index)]"
+            switch argument {
+            case .value(let value): children.append((value, argumentPath))
+            case .operator(.lambda(let lambda)): children.append((lambda.body, "\(argumentPath).body"))
+            case .operator(.reference): break
             }
-            let localOperatorIDs = Set(localOperators.map(\.1))
-            let calls = Dictionary(uniqueKeysWithValues: localOperators.map { _, id in
-                (id, bindings.localOperatorDependencies[id, default: []].intersection(localOperatorIDs))
-            })
-            func isRecursive(_ start: OperatorID, from current: OperatorID, visited: Set<OperatorID>) -> Bool {
-                for target in calls[current, default: []] {
-                    if target == start { return true }
-                    if !visited.contains(target), isRecursive(start, from: target, visited: visited.union([target])) {
-                        return true
-                    }
-                }
-                return false
+        }
+        return children
+    }
+
+    private func materialize(
+        _ plan: FormalOperatorLoweringPlan,
+        from children: [CompiledStateExpr],
+        index: inout Int,
+        at path: String
+    ) throws -> CompiledFormalOperator {
+        switch plan {
+        case .reference(let id, let arity): return .reference(id, arity: arity)
+        case .lambda(let parameters):
+            return .lambda(.init(parameters: parameters, body: try child(from: children, index: &index, at: path)))
+        }
+    }
+
+    private func materialize(
+        _ plan: FormalArgumentLoweringPlan,
+        from children: [CompiledStateExpr],
+        index: inout Int,
+        at path: String
+    ) throws -> CompiledFormalCallArgument {
+        switch plan {
+        case .value: return .value(try child(from: children, index: &index, at: path))
+        case .operator(let operation): return .operator(try materialize(operation, from: children, index: &index, at: path))
+        }
+    }
+
+    private func child(
+        from children: [CompiledStateExpr],
+        index: inout Int,
+        at path: String
+    ) throws -> CompiledStateExpr {
+        guard children.indices.contains(index) else { throw invalidTraversal(at: path) }
+        let expression = children[index]
+        index += 1
+        return expression
+    }
+
+    private func localOperatorPlans(
+        _ operators: [LocalOperator],
+        at path: String
+    ) throws -> [LocalOperatorLoweringPlan] {
+        let declarations = try operators.map { operation in
+            (operation, try operatorID(at: "\(path).\(operation.name).declaration"))
+        }
+        let ids = Set(declarations.map(\.1))
+        let calls = Dictionary(uniqueKeysWithValues: declarations.map { _, id in
+            (id, bindings.localOperatorDependencies[id, default: []].intersection(ids))
+        })
+        let recursive = Set(ids.filter { start in
+            var pending = Array(calls[start, default: []])
+            var visited: Set<OperatorID> = []
+            while let current = pending.popLast() {
+                if current == start { return true }
+                guard visited.insert(current).inserted else { continue }
+                pending.append(contentsOf: calls[current, default: []])
             }
-            let recursiveOperatorIDs = Set(localOperatorIDs.filter {
-                isRecursive($0, from: $0, visited: [$0])
-            })
-            return try .letIn(
-                operators.map {
-                    try lower(
-                        $0,
-                        at: "\(path).\($0.name)",
-                        isRecursive: recursiveOperatorIDs.contains(
-                            try operatorID(at: "\(path).\($0.name).declaration")
-                        )
-                    )
+            return false
+        })
+        return try declarations.map { operation, id in
+            .init(
+                id: id,
+                parameters: try operation.parameters.map {
+                    try binder(at: "\(path).\(operation.name).parameters.\($0)")
                 },
-                lower(body, at: "\(path).body")
+                hasDomain: operation.domain != nil,
+                isRecursive: recursive.contains(id)
             )
         }
     }
@@ -553,41 +741,90 @@ struct CompiledLowerer {
     }
 
     private func lower(_ action: ActionExpr, at path: String) throws -> CompiledActionExpr {
-        switch action {
-        case .assign(_, let value):
-            let variable = try variable(at: "\(path).assign")
-            return try .assign(variable, lower(value, at: "\(path).value"))
-        case .unchanged: return try .unchanged(variable(at: "\(path).unchanged"))
-        case .guard_(let condition): return try .guard_(lower(condition, at: "\(path).guard"))
-        case .chooseAction(_, let set): return try .chooseAction(variable(at: "\(path).choose"), lower(set, at: "\(path).set"))
-        case .existsAction(let name, let set, let body):
-            return try .existsAction(
-                binder(at: "\(path).binder.\(name)"),
-                lower(set, at: "\(path).set"),
-                lower(body, at: "\(path).body")
-            )
-        case .define(let name, let value, let body):
-            return try .define(
-                binder(at: "\(path).binder.\(name)"),
-                lower(value, at: "\(path).value"),
-                lower(body, at: "\(path).body")
-            )
-        case .ifElse(let condition, let then, let otherwise):
-            return try .ifElse(
-                lower(condition, at: "\(path).condition"),
-                lower(then, at: "\(path).then"),
-                lower(otherwise, at: "\(path).else")
-            )
-        case .and(let lhs, let rhs):
-            return try .and(
-                lower(lhs, at: "\(path).left"),
-                lower(rhs, at: "\(path).right")
-            )
-        case .or(let lhs, let rhs):
-            return try .or(
-                lower(lhs, at: "\(path).left"),
-                lower(rhs, at: "\(path).right")
-            )
+        var tasks = [ActionLoweringTask.expression(action, path: path)]
+        var lowered: [CompiledActionExpr] = []
+        while let task = tasks.popLast() {
+            switch task {
+            case .build(let childCount, let taskPath, let build):
+                guard lowered.count >= childCount else { throw invalidTraversal(at: taskPath) }
+                let start = lowered.count - childCount
+                let children = Array(lowered[start...])
+                lowered.removeSubrange(start...)
+                lowered.append(try build(children))
+            case .expression(let expression, let taskPath):
+                switch expression {
+                case .assign(_, let value):
+                    lowered.append(try .assign(
+                        variable(at: "\(taskPath).assign"),
+                        lower(value, at: "\(taskPath).value")
+                    ))
+                case .unchanged:
+                    lowered.append(try .unchanged(variable(at: "\(taskPath).unchanged")))
+                case .guard_(let condition):
+                    lowered.append(try .guard_(lower(condition, at: "\(taskPath).guard")))
+                case .chooseAction(_, let set):
+                    lowered.append(try .chooseAction(
+                        variable(at: "\(taskPath).choose"),
+                        lower(set, at: "\(taskPath).set")
+                    ))
+                case .existsAction(let name, let set, let body):
+                    let binder = try binder(at: "\(taskPath).binder.\(name)")
+                    let compiledSet = try lower(set, at: "\(taskPath).set")
+                    scheduleAction(
+                        [(body, "\(taskPath).body")],
+                        at: taskPath,
+                        build: { .existsAction(binder, compiledSet, $0[0]) },
+                        on: &tasks
+                    )
+                case .define(let name, let value, let body):
+                    let binder = try binder(at: "\(taskPath).binder.\(name)")
+                    let compiledValue = try lower(value, at: "\(taskPath).value")
+                    scheduleAction(
+                        [(body, "\(taskPath).body")],
+                        at: taskPath,
+                        build: { .define(binder, compiledValue, $0[0]) },
+                        on: &tasks
+                    )
+                case .ifElse(let condition, let then, let otherwise):
+                    let compiledCondition = try lower(condition, at: "\(taskPath).condition")
+                    scheduleAction(
+                        [(then, "\(taskPath).then"), (otherwise, "\(taskPath).else")],
+                        at: taskPath,
+                        build: { .ifElse(compiledCondition, $0[0], $0[1]) },
+                        on: &tasks
+                    )
+                case .and(let lhs, let rhs):
+                    scheduleAction(
+                        [(lhs, "\(taskPath).left"), (rhs, "\(taskPath).right")],
+                        at: taskPath,
+                        build: { .and($0[0], $0[1]) },
+                        on: &tasks
+                    )
+                case .or(let lhs, let rhs):
+                    scheduleAction(
+                        [(lhs, "\(taskPath).left"), (rhs, "\(taskPath).right")],
+                        at: taskPath,
+                        build: { .or($0[0], $0[1]) },
+                        on: &tasks
+                    )
+                }
+            }
+        }
+        guard lowered.count == 1, let expression = lowered.first else {
+            throw invalidTraversal(at: path)
+        }
+        return expression
+    }
+
+    private func scheduleAction(
+        _ children: [(expression: ActionExpr, path: String)],
+        at path: String,
+        build: @escaping ([CompiledActionExpr]) throws -> CompiledActionExpr,
+        on tasks: inout [ActionLoweringTask]
+    ) {
+        tasks.append(.build(childCount: children.count, path: path, build))
+        for child in children.reversed() {
+            tasks.append(.expression(child.expression, path: child.path))
         }
     }
 
@@ -603,20 +840,6 @@ struct CompiledLowerer {
     }
 
     private func lower(
-        _ operation: LocalOperator,
-        at path: String,
-        isRecursive: Bool
-    ) throws -> CompiledLocalOperator {
-        .init(
-            id: try operatorID(at: "\(path).declaration"),
-            parameters: try operation.parameters.map { try binder(at: "\(path).parameters.\($0)") },
-            domain: try lowerOptional(operation.domain, at: "\(path).domain"),
-            body: try lower(operation.body, at: "\(path).body"),
-            isRecursive: isRecursive
-        )
-    }
-
-    private func lower(
         _ parameters: [FormalParameter],
         at path: String
     ) throws -> [CompiledFormalParameter] {
@@ -628,45 +851,6 @@ struct CompiledLowerer {
                 return .operator(try operatorID(at: "\(path).\(name)"), arity: arity)
             }
         }
-    }
-
-    private func lower(_ lambda: FormalLambda, at path: String) throws -> CompiledFormalLambda {
-        .init(
-            parameters: try lambda.parameters.map { try binder(at: "\(path).parameters.\($0)") },
-            body: try lower(lambda.body, at: "\(path).body")
-        )
-    }
-
-    private func lower(_ operation: FormalOperator, at path: String) throws -> CompiledFormalOperator {
-        switch operation {
-        case .reference(_, let arity): return try .reference(operatorID(at: path), arity: arity)
-        case .lambda(let lambda): return .lambda(try lower(lambda, at: path))
-        }
-    }
-
-    private func lower(_ argument: FormalCallArgument, at path: String) throws -> CompiledFormalCallArgument {
-        switch argument {
-        case .value(let value): return .value(try lower(value, at: path))
-        case .operator(let operation): return .operator(try lower(operation, at: path))
-        }
-    }
-
-    private func lower(_ values: [StateExpr], at path: String) throws -> [CompiledStateExpr] {
-        try values.enumerated().map { index, value in try lower(value, at: "\(path)[\(index)]") }
-    }
-
-    private func binding(
-        _ make: (CompiledStateExpr, BinderID, CompiledStateExpr) -> CompiledStateExpr,
-        _ domain: StateExpr,
-        _ name: String,
-        _ body: StateExpr,
-        _ path: String
-    ) throws -> CompiledStateExpr {
-        try make(
-            lower(domain, at: "\(path).domain"),
-            binder(at: "\(path).binder.\(name)"),
-            lower(body, at: "\(path).body")
-        )
     }
 
     private func valueReference(at path: String) throws -> CompiledStateExpr {

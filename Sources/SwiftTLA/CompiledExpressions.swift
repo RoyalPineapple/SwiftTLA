@@ -12,6 +12,11 @@ struct CompiledRecordExpression: Sendable {
     }
 }
 
+struct CompiledCaseBranch: Sendable {
+    let condition: CompiledStateExpr
+    let value: CompiledStateExpr
+}
+
 indirect enum CompiledStateExpr: Sendable {
     case value(TLAValue)
     case stateVariable(VariableID)
@@ -65,7 +70,7 @@ indirect enum CompiledStateExpr: Sendable {
     case functionLiteral(CompiledStateExpr, BinderID, CompiledStateExpr)
     case functionApply(CompiledStateExpr, CompiledStateExpr)
     case except(CompiledStateExpr, CompiledStateExpr, CompiledStateExpr)
-    case caseExpr([CompiledStateExpr], CompiledStateExpr?)
+    case caseExpr(CompiledCaseBranch, [CompiledCaseBranch], otherwise: CompiledStateExpr?)
 
     case forAll(CompiledStateExpr, BinderID, CompiledStateExpr)
     case exists(CompiledStateExpr, BinderID, CompiledStateExpr)
@@ -75,7 +80,8 @@ indirect enum CompiledStateExpr: Sendable {
     case setSum(CompiledStateExpr, CompiledStateExpr)
     case functionSet(CompiledStateExpr, CompiledStateExpr)
     case foldFunction(CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr)
-    case operatorApplication(CompiledFormalOperator, [CompiledFormalCallArgument])
+    case lambdaApplication(CompiledFormalLambda, [CompiledStateExpr])
+    case operatorApplication(OperatorID, [CompiledFormalCallArgument])
     case recursiveCall(OperatorID, [CompiledStateExpr])
     case letValue(BinderID, CompiledStateExpr, CompiledStateExpr)
     case letIn([CompiledLocalOperator], CompiledStateExpr)
@@ -209,15 +215,22 @@ extension CompiledStateExpr {
                 visit(function, scope: scope)
                 visit(key, scope: scope)
                 visit(value, scope: scope)
-            case .caseExpr(let values, let fallback):
-                values.forEach { visit($0, scope: scope) }
-                if let fallback { visit(fallback, scope: scope) }
+            case .caseExpr(let first, let remaining, let otherwise):
+                visit(first.condition, scope: scope)
+                visit(first.value, scope: scope)
+                for branch in remaining {
+                    visit(branch.condition, scope: scope)
+                    visit(branch.value, scope: scope)
+                }
+                if let otherwise { visit(otherwise, scope: scope) }
             case .foldFunction(let operation, let initial, let sequence):
                 visit(operation.body, scope: scope)
                 visit(initial, scope: scope)
                 visit(sequence, scope: scope)
+            case .lambdaApplication(let operation, let arguments):
+                visitCall(.lambda(operation), arguments: arguments.map(CompiledFormalCallArgument.value), scope: scope)
             case .operatorApplication(let operation, let arguments):
-                visitCall(operation, arguments: arguments, scope: scope)
+                visitCall(.reference(operation, arity: arguments.count), arguments: arguments, scope: scope)
             case .recursiveCall(let id, let arguments):
                 visitCall(
                     .reference(id, arity: arguments.count),

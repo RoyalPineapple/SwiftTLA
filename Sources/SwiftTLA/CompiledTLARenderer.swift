@@ -1,5 +1,13 @@
 private enum StateRenderingTask {
     case expression(CompiledStateExpr)
+    case formalArgument(CompiledFormalCallArgument)
+    case formalOperator(CompiledFormalOperator)
+    case localOperator(CompiledLocalOperator)
+    case text(String)
+}
+
+private enum ActionRenderingTask {
+    case expression(CompiledActionExpr)
     case text(String)
 }
 
@@ -8,26 +16,46 @@ struct CompiledTLARenderer {
     let bindings: CompiledBindingTable
 
     func action(_ expression: CompiledActionExpr) throws -> String {
-        switch expression {
-        case .assign(let variable, let value):
-            return "\(try variableName(variable))' = \(try state(value))"
-        case .unchanged(let variable):
-            return "UNCHANGED \(try variableName(variable))"
-        case .guard_(let condition):
-            return try state(condition)
-        case .chooseAction(let variable, let set):
-            return "\(try variableName(variable))' \\in \(try state(set))"
-        case .existsAction(let binder, let set, let body):
-            return "\\E \(try binderName(binder)) \\in \(try state(set)): \(try action(body))"
-        case .ifElse(let condition, let then, let otherwise):
-            return "IF \(try state(condition)) THEN (\(try action(then))) ELSE (\(try action(otherwise)))"
-        case .define(let binder, let value, let body):
-            return "LET \(try binderName(binder)) == \(try state(value)) IN \(try action(body))"
-        case .and(let lhs, let rhs):
-            return "(\(try action(lhs)) /\\ \(try action(rhs)))"
-        case .or(let lhs, let rhs):
-            return "(\(try action(lhs)) \\/ \(try action(rhs)))"
+        var tasks = [ActionRenderingTask.expression(expression)]
+        var parts: [String] = []
+        func schedule(_ values: [ActionRenderingTask]) {
+            tasks.append(contentsOf: values.reversed())
         }
+        while let task = tasks.popLast() {
+            switch task {
+            case .text(let value):
+                parts.append(value)
+            case .expression(let action):
+                switch action {
+                case .assign(let variable, let value):
+                    parts.append("\(try variableName(variable))' = \(try state(value))")
+                case .unchanged(let variable):
+                    parts.append("UNCHANGED \(try variableName(variable))")
+                case .guard_(let condition):
+                    parts.append(try state(condition))
+                case .chooseAction(let variable, let set):
+                    parts.append("\(try variableName(variable))' \\in \(try state(set))")
+                case .existsAction(let binder, let set, let body):
+                    parts.append("\\E \(try binderName(binder)) \\in \(try state(set)): ")
+                    tasks.append(.expression(body))
+                case .ifElse(let condition, let then, let otherwise):
+                    parts.append("IF \(try state(condition)) THEN (")
+                    schedule([
+                        .expression(then), .text(") ELSE ("), .expression(otherwise), .text(")")
+                    ])
+                case .define(let binder, let value, let body):
+                    parts.append("LET \(try binderName(binder)) == \(try state(value)) IN ")
+                    tasks.append(.expression(body))
+                case .and(let lhs, let rhs):
+                    parts.append("(")
+                    schedule([.expression(lhs), .text(" /\\ "), .expression(rhs), .text(")")])
+                case .or(let lhs, let rhs):
+                    parts.append("(")
+                    schedule([.expression(lhs), .text(" \\/ "), .expression(rhs), .text(")")])
+                }
+            }
+        }
+        return parts.joined()
     }
 
     func temporal(_ expression: CompiledTemporalExpr) throws -> String {
@@ -116,10 +144,37 @@ struct CompiledTLARenderer {
             }
         }
 
+        func schedule(_ scheduled: [StateRenderingTask]) {
+            tasks.append(contentsOf: scheduled.reversed())
+        }
+
         while let task = tasks.popLast() {
             switch task {
             case .text(let text):
                 parts.append(text)
+            case .formalArgument(let argument):
+                switch argument {
+                case .value(let value): tasks.append(.expression(value))
+                case .operator(let operation): tasks.append(.formalOperator(operation))
+                }
+            case .formalOperator(let operation):
+                switch operation {
+                case .lambda(let lambda):
+                    parts.append("LAMBDA \(try lambda.parameters.map(binderName).joined(separator: ", ")) : ")
+                    tasks.append(.expression(lambda.body))
+                case .reference(let id, _):
+                    parts.append(try operatorName(id))
+                }
+            case .localOperator(let operation):
+                let name = try operatorName(operation.id)
+                let parameters = try operation.parameters.map(binderName).joined(separator: ", ")
+                if let domain = operation.domain, let parameter = operation.parameters.first {
+                    parts.append("\(name)[\(try binderName(parameter)) \\in ")
+                    schedule([.expression(domain), .text("] == "), .expression(operation.body)])
+                } else {
+                    parts.append("\(name)\(parameters.isEmpty ? "" : "(\(parameters))") == ")
+                    tasks.append(.expression(operation.body))
+                }
             case .expression(let expression):
                 switch expression {
                 case .add(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " + ", suffix: ")")
@@ -160,109 +215,148 @@ struct CompiledTLARenderer {
                 case .sequenceFromSet(let value): schedule("SeqFromSet(", [value], separator: "", suffix: ")")
                 case .ifThenElse(let condition, let then, let otherwise):
                     parts.append("(IF ")
-                    tasks.append(.text(")"))
-                    tasks.append(.expression(otherwise))
-                    tasks.append(.text(" ELSE "))
-                    tasks.append(.expression(then))
-                    tasks.append(.text(" THEN "))
-                    tasks.append(.expression(condition))
-                default:
-                    parts.append(try recursiveState(expression))
+                    schedule([
+                        .expression(condition), .text(" THEN "), .expression(then),
+                        .text(" ELSE "), .expression(otherwise), .text(")")
+                    ])
+                case .value(let value): parts.append(value.description)
+                case .stateVariable(let variable): parts.append(try variableName(variable))
+                case .boundValue(let binder): parts.append(try binderName(binder))
+                case .controlLocation(let location): parts.append(try controlLocationName(location))
+                case .operatorReference(let operation): parts.append(try operatorName(operation))
+                case .setLiteral(let values): schedule("{", values, separator: ", ", suffix: "}")
+                case .setFilter(let set, let binder, let predicate):
+                    parts.append("{\(try binderName(binder)) \\in ")
+                    schedule([.expression(set), .text(" : "), .expression(predicate), .text("}")])
+                case .setMap(let value, let binder, let set):
+                    parts.append("{")
+                    schedule([
+                        .expression(value), .text(" : \(try binderName(binder)) \\in "),
+                        .expression(set), .text("}")
+                    ])
+                case .tupleLiteral(let values): schedule("<<", values, separator: ", ", suffix: ">>")
+                case .tupleAccess(let tuple, let index):
+                    schedule([.expression(tuple), .text("[\(index)]")])
+                case .recordLiteral(let record):
+                    var fields: [StateRenderingTask] = []
+                    for (index, field) in record.fields.enumerated() {
+                        if index > 0 { fields.append(.text(", ")) }
+                        fields.append(.text("\(try fieldName(field.id)) |-> "))
+                        fields.append(.expression(field.value))
+                    }
+                    parts.append("[")
+                    fields.append(.text("]"))
+                    schedule(fields)
+                case .recordAccess(let record, let field, _):
+                    parts.append("(")
+                    schedule([.expression(record), .text(").\(try fieldName(field))")])
+                case .functionLiteral(let domain, let binder, let body):
+                    parts.append("[\(try binderName(binder)) \\in ")
+                    schedule([.expression(domain), .text(" |-> "), .expression(body), .text("]")])
+                case .except(let function, let key, let value):
+                    parts.append("[")
+                    schedule([
+                        .expression(function), .text(" EXCEPT !["), .expression(key),
+                        .text("] = "), .expression(value), .text("]")
+                    ])
+                case .caseExpr(let first, let remaining, let otherwise):
+                    var branches: [StateRenderingTask] = []
+                    for (index, branch) in ([first] + remaining).enumerated() {
+                        if index > 0 { branches.append(.text(" [] ")) }
+                        branches.append(.expression(branch.condition))
+                        branches.append(.text(" -> "))
+                        branches.append(.expression(branch.value))
+                    }
+                    if let otherwise {
+                        branches.append(.text(" [] "))
+                        branches.append(.text("OTHER -> "))
+                        branches.append(.expression(otherwise))
+                    }
+                    parts.append("CASE ")
+                    schedule(branches)
+                case .forAll(let set, let binder, let predicate):
+                    parts.append("\\A \(try binderName(binder)) \\in ")
+                    schedule([.expression(set), .text(" : "), .expression(predicate)])
+                case .exists(let set, let binder, let predicate):
+                    parts.append("\\E \(try binderName(binder)) \\in ")
+                    schedule([.expression(set), .text(" : "), .expression(predicate)])
+                case .choose(let set, let binder, let predicate):
+                    parts.append("CHOOSE \(try binderName(binder)) \\in ")
+                    schedule([.expression(set), .text(" : "), .expression(predicate)])
+                case .enabledAction(let action): parts.append("ENABLED \(try actionName(action))")
+                case .foldFunction(let operation, let initial, let sequence):
+                    parts.append("FoldFunction(")
+                    schedule([
+                        .formalOperator(.lambda(operation)), .text(", "), .expression(initial),
+                        .text(", "), .expression(sequence), .text(")")
+                    ])
+                case .lambdaApplication(let lambda, let arguments):
+                    var rendered: [StateRenderingTask] = []
+                    for (index, pair) in zip(lambda.parameters, arguments).enumerated() {
+                        if index > 0 { rendered.append(.text(" ")) }
+                        rendered.append(.text("\(try binderName(pair.0)) == "))
+                        rendered.append(.expression(pair.1))
+                    }
+                    parts.append("LET ")
+                    rendered.append(.text(" IN "))
+                    rendered.append(.expression(lambda.body))
+                    schedule(rendered)
+                case .operatorApplication(let operation, let arguments):
+                    parts.append(try operatorName(operation))
+                    if arguments.isEmpty == false {
+                        var rendered: [StateRenderingTask] = []
+                        for (index, argument) in arguments.enumerated() {
+                            if index > 0 { rendered.append(.text(", ")) }
+                            rendered.append(.formalArgument(argument))
+                        }
+                        parts.append("(")
+                        rendered.append(.text(")"))
+                        schedule(rendered)
+                    }
+                case .recursiveCall(let operation, let arguments):
+                    parts.append(try operatorName(operation))
+                    if arguments.isEmpty == false {
+                        var rendered: [StateRenderingTask] = []
+                        for (index, argument) in arguments.enumerated() {
+                            if index > 0 { rendered.append(.text(", ")) }
+                            rendered.append(.expression(argument))
+                        }
+                        parts.append("(")
+                        rendered.append(.text(")"))
+                        schedule(rendered)
+                    }
+                case .letValue(let binder, let value, let body):
+                    parts.append("LET \(try binderName(binder)) == ")
+                    schedule([.expression(value), .text(" IN "), .expression(body)])
+                case .letIn(let operations, let body):
+                    if operations.isEmpty {
+                        tasks.append(.expression(body))
+                        continue
+                    }
+                    let recursiveDeclarations = try operations
+                        .filter { $0.isRecursive && $0.domain == nil }
+                        .map { operation in
+                            let name = try operatorName(operation.id)
+                            let slots = Array(repeating: "_", count: operation.parameters.count).joined(separator: ", ")
+                            return operation.parameters.isEmpty ? name : "\(name)(\(slots))"
+                        }
+                        .joined(separator: ", ")
+                    parts.append("LET ")
+                    if recursiveDeclarations.isEmpty == false {
+                        parts.append("RECURSIVE \(recursiveDeclarations)\n    ")
+                    }
+                    var rendered: [StateRenderingTask] = []
+                    for (index, operation) in operations.enumerated() {
+                        if index > 0 { rendered.append(.text("\n    ")) }
+                        rendered.append(.localOperator(operation))
+                    }
+                    rendered.append(.text("\nIN "))
+                    rendered.append(.expression(body))
+                    schedule(rendered)
                 }
             }
         }
         return parts.joined()
-    }
-
-    private func recursiveState(_ expression: CompiledStateExpr) throws -> String {
-        switch expression {
-        case .value(let value): return value.description
-        case .stateVariable(let variable): return try variableName(variable)
-        case .boundValue(let binder): return try binderName(binder)
-        case .controlLocation(let location): return try controlLocationName(location)
-        case .operatorReference(let operation): return try operatorName(operation)
-        case .add, .subtract, .multiply, .divide, .modulo, .integerDivide,
-             .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-             .and, .or, .in, .subset, .union, .intersection, .setDifference,
-             .tupleDynamicAccess, .tupleAppend, .tupleConcatenate,
-             .functionApply, .functionSet, .setSum, .integerRange,
-             .negate, .not, .cardinality, .powerSet, .unionAll,
-             .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet,
-             .ifThenElse:
-            throw invalidStateTraversal()
-        case .setLiteral(let values):
-            return values.isEmpty ? "{}" : "{\(try values.map(state).joined(separator: ", "))}"
-        case .setFilter(let set, let binder, let predicate):
-            return "{\(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))}"
-        case .setMap(let value, let binder, let set):
-            return "{\(try state(value)) : \(try binderName(binder)) \\in \(try state(set))}"
-        case .tupleLiteral(let values): return "<<\(try values.map(state).joined(separator: ", "))>>"
-        case .tupleAccess(let tuple, let index): return "\(try state(tuple))[\(index)]"
-        case .recordLiteral(let record):
-            return "[\(try record.fields.map { "\(try fieldName($0.id)) |-> \(try state($0.value))" }.joined(separator: ", "))]"
-        case .recordAccess(let record, let field, _): return "(\(try state(record))).\(try fieldName(field))"
-        case .functionLiteral(let domain, let binder, let body):
-            return "[\(try binderName(binder)) \\in \(try state(domain)) |-> \(try state(body))]"
-        case .except(let function, let key, let value):
-            return "[\(try state(function)) EXCEPT \u{21}[\(try state(key))] = \(try state(value))]"
-        case .caseExpr(let pairs, let otherwise):
-            let cases = try stride(from: 0, to: pairs.count, by: 2).map {
-                "\(try state(pairs[$0])) -> \(try state(pairs[$0 + 1]))"
-            }.joined(separator: " [] ")
-            if let otherwise { return "CASE \(cases) [] OTHER -> \(try state(otherwise))" }
-            return "CASE \(cases)"
-        case .forAll(let set, let binder, let predicate): return "\\A \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
-        case .exists(let set, let binder, let predicate): return "\\E \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
-        case .choose(let set, let binder, let predicate): return "CHOOSE \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
-        case .enabledAction(let action): return "ENABLED \(try actionName(action))"
-        case .foldFunction(let operation, let initial, let sequence):
-            return "FoldFunction(\(try formalLambda(operation)), \(try state(initial)), \(try state(sequence)))"
-        case .operatorApplication(let operation, let arguments):
-            switch operation {
-            case .lambda(let lambda):
-                let bindings = try lambdaBindings(lambda, arguments: arguments)
-                return "LET \(bindings) IN \(try state(lambda.body))"
-            case .reference:
-                let arguments = try arguments.map(formalArgument).joined(separator: ", ")
-                let name = try formalOperator(operation)
-                return arguments.isEmpty ? name : "\(name)(\(arguments))"
-            }
-        case .recursiveCall(let operation, let arguments):
-            let name = try operatorName(operation)
-            return arguments.isEmpty ? name : "\(name)(\(try arguments.map(state).joined(separator: ", ")))"
-        case .letValue(let binder, let value, let body):
-            return "LET \(try binderName(binder)) == \(try state(value)) IN \(try state(body))"
-        case .letIn(let operations, let body):
-            let recursiveDeclarations = try operations
-                .filter { $0.isRecursive && $0.domain == nil }
-                .map { operation in
-                    let name = try operatorName(operation.id)
-                    let slots = Array(repeating: "_", count: operation.parameters.count).joined(separator: ", ")
-                    return operation.parameters.isEmpty ? name : "\(name)(\(slots))"
-                }
-                .joined(separator: ", ")
-            let declarations = try operations.map(localOperator).joined(separator: "\n    ")
-            let recursive = recursiveDeclarations.isEmpty ? "" : "RECURSIVE \(recursiveDeclarations)\n    "
-            return "LET \(recursive)\(declarations)\nIN \(try state(body))"
-        }
-    }
-
-    private func invalidStateTraversal() -> CompilationDiagnostic {
-        .init(
-            code: .invalidFormalDeclaration,
-            stage: .rendering,
-            path: "compiledRenderer.state",
-            expected: "one rendered expression for each compiled expression",
-            actual: "the rendering traversal bypassed its expression stack",
-            nextSafeAction: "Retain the compiled specification and report this compiler defect."
-        )
-    }
-
-    private func formalArgument(_ argument: CompiledFormalCallArgument) throws -> String {
-        switch argument {
-        case .value(let value): return try state(value)
-        case .operator(let operation): return try formalOperator(operation)
-        }
     }
 
     private func formalParameter(_ parameter: CompiledFormalParameter) throws -> String {
@@ -271,56 +365,6 @@ struct CompiledTLARenderer {
         case .operator(let operation, let arity):
             return "\(try operatorName(operation))(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
         }
-    }
-
-    private func lambdaBindings(
-        _ lambda: CompiledFormalLambda,
-        arguments: [CompiledFormalCallArgument]
-    ) throws -> String {
-        guard lambda.parameters.count == arguments.count else {
-            throw CompilationDiagnostic(
-                code: .unknownReference,
-                stage: .rendering,
-                path: "compiledRenderer.lambdaApplication",
-                expected: "one formal value for each lambda parameter",
-                actual: "\(arguments.count) arguments for \(lambda.parameters.count) parameters",
-                nextSafeAction: "Compile the source model again before rendering."
-            )
-        }
-        return try zip(lambda.parameters, arguments).map { parameter, argument in
-            guard case .value(let value) = argument else {
-                throw CompilationDiagnostic(
-                    code: .unknownReference,
-                    stage: .rendering,
-                    path: "compiledRenderer.lambdaApplication",
-                    expected: "a formal value lambda argument",
-                    actual: "a formal operator argument",
-                    nextSafeAction: "Compile the source model again before rendering."
-                )
-            }
-            return "\(try binderName(parameter)) == \(try state(value))"
-        }.joined(separator: " ")
-    }
-
-    private func formalOperator(_ operation: CompiledFormalOperator) throws -> String {
-        switch operation {
-        case .lambda(let lambda):
-            return try formalLambda(lambda)
-        case .reference(let id, _): return try operatorName(id)
-        }
-    }
-
-    private func formalLambda(_ lambda: CompiledFormalLambda) throws -> String {
-        "LAMBDA \(try lambda.parameters.map(binderName).joined(separator: ", ")) : \(try state(lambda.body))"
-    }
-
-    private func localOperator(_ operation: CompiledLocalOperator) throws -> String {
-        let name = try operatorName(operation.id)
-        let parameters = try operation.parameters.map(binderName).joined(separator: ", ")
-        if let domain = operation.domain, let parameter = operation.parameters.first {
-            return "\(name)[\(try binderName(parameter)) \\in \(try state(domain))] == \(try state(operation.body))"
-        }
-        return "\(name)\(parameters.isEmpty ? "" : "(\(parameters))") == \(try state(operation.body))"
     }
 
     private func variableName(_ id: VariableID) throws -> String {

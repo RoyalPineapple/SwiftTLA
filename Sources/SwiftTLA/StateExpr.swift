@@ -417,6 +417,10 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
             return "[\(f) EXCEPT ![\(x)] = \(e)]"
 
         case .caseExpr(let pairs, let other):
+            guard pairs.isEmpty == false else { return "CASE <missing condition and value branch>" }
+            guard pairs.count.isMultiple(of: 2) else {
+                return "CASE <unmatched condition \(pairs.last.map(String.init(describing:)) ?? "missing")>"
+            }
             let cases = stride(from: 0, to: pairs.count, by: 2).map {
                 "\(pairs[$0]) -> \(pairs[$0 + 1])"
             }.joined(separator: " [] ")
