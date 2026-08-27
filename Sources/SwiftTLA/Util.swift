@@ -1,8 +1,7 @@
 /// A source-faithful port of the KeyValueStore example's `Util` module.
 ///
-/// `Util` is an upstream dependency, not a new SwiftTLA invention. It keeps
-/// its own module file so TLC resolves the same `Util -> Functions -> Folds`
-/// relationship as the original example.
+/// Its module closure preserves the upstream `Util -> Functions -> Folds`
+/// dependency relationship.
 public enum KeyValueStoreUtil {
     /// The `Util.tla` source module.
     public static let module = TLASpec("Util") {
