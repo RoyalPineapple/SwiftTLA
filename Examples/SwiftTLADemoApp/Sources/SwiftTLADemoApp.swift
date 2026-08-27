@@ -310,8 +310,8 @@ private struct ElevatorBankView: View {
     private func riderSummary(_ state: ElevatorBank.State) -> String {
         let riders = ElevatorBank.Rider.finiteValues.filter { $0 != .none }
         return riders.map { rider in
-            let passenger = state.riders[rider]
-            guard let phase = passenger.value(for: ElevatorBank.RiderSchema.phase),
+            guard let passenger = state.riders[rider],
+                  let phase = passenger.value(for: ElevatorBank.RiderSchema.phase),
                   let floor = passenger.value(for: ElevatorBank.RiderSchema.floor),
                   let destination = passenger.value(for: ElevatorBank.RiderSchema.destination)
             else { return "\(rider.rawValue.capitalized): invalid state" }
@@ -658,7 +658,7 @@ private struct ElevatorFloorBoard: View {
                         Spacer(minLength: 0)
                         VStack(alignment: .trailing, spacing: 3) {
                             ForEach(waitingRiders(at: floor), id: \.self) { rider in
-                                if let destination = state.riders[rider].value(for: ElevatorBank.RiderSchema.destination) {
+                                if let destination = state.riders[rider]?.value(for: ElevatorBank.RiderSchema.destination) {
                                     RiderChip(rider: rider, destination: destination)
                                 }
                             }
@@ -674,8 +674,8 @@ private struct ElevatorFloorBoard: View {
     private func waitingRiders(at floor: ElevatorBank.Floor) -> [ElevatorBank.Rider] {
         ElevatorBank.Rider.finiteValues.filter { rider in
             rider != .none
-                && state.riders[rider].value(for: ElevatorBank.RiderSchema.phase) == .waiting
-                && state.riders[rider].value(for: ElevatorBank.RiderSchema.floor) == floor
+                && state.riders[rider]?.value(for: ElevatorBank.RiderSchema.phase) == .waiting
+                && state.riders[rider]?.value(for: ElevatorBank.RiderSchema.floor) == floor
         }
     }
 }
@@ -684,7 +684,7 @@ private struct ElevatorShaft: View {
     let car: ElevatorBank.CarID
     let state: ElevatorBank.State
 
-    private var vehicle: Record<ElevatorBank.CarSchema> { state.cars[car] }
+    private var vehicle: Record<ElevatorBank.CarSchema>? { state.cars[car] }
     private let floors: [ElevatorBank.Floor] = [.three, .two, .one]
 
     var body: some View {
@@ -695,9 +695,10 @@ private struct ElevatorShaft: View {
             VStack(spacing: 0) {
                 ForEach(floors, id: \.self) { floor in
                     ZStack {
-                        if vehicle.value(for: ElevatorBank.CarSchema.floor) == floor,
+                        if let vehicle,
+                           vehicle.value(for: ElevatorBank.CarSchema.floor) == floor,
                            let rider = vehicle.value(for: ElevatorBank.CarSchema.rider),
-                           let destination = state.riders[rider].value(for: ElevatorBank.RiderSchema.destination) {
+                           let destination = state.riders[rider]?.value(for: ElevatorBank.RiderSchema.destination) {
                             CarCabin(
                                 vehicle: vehicle,
                                 destination: destination
@@ -859,12 +860,14 @@ private struct DuckRingSeats: View {
 
     var body: some View {
         ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
-            DuckSeat(
-                number: index + 1,
-                identifier: identifiers[node],
-                isLeaderHome: identifiers[node] == leader && leader != 0
-            )
-            .position(layout.ringPoint(for: node))
+            if let identifier = identifiers[node] {
+                DuckSeat(
+                    number: index + 1,
+                    identifier: identifier,
+                    isLeaderHome: identifier == leader && leader != 0
+                )
+                .position(layout.ringPoint(for: node))
+            }
         }
     }
 }

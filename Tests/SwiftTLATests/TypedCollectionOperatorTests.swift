@@ -158,6 +158,36 @@ private struct FoldGeneratedModel {
 }
 
 @Suite(.serialized) struct TypedCollectionOperatorTests {
+    @Test("concrete functions and pairs preserve typed values and fail closed")
+    func concreteTypedValuesFailClosed() throws {
+        let function = try #require(Function<PartialFiniteDomain, Int>(formalValue: .function([
+            .string("first"): .int(7)
+        ])))
+        #expect(function[.first] == 7)
+        #expect(function[.second] == nil)
+        #expect(function.tlaValue == .function([.string("first"): .int(7)]))
+
+        let duplicateDomain = Function<DuplicateFiniteDomain, Int>()
+        #expect(duplicateDomain[.first] == 0)
+        #expect(duplicateDomain.sourceIssue != nil)
+        #expect(Function<DuplicateFiniteDomain, Int>(formalValue: .function([
+            .string("first"): .int(1)
+        ])) == nil)
+        #expect(Function<EmptyFiniteDomain, Int>(formalValue: .function([:])) == nil)
+        #expect(Function<PartialFiniteDomain, Int>(formalValue: .function([
+            .string("first"): .bool(true)
+        ])) == nil)
+
+        let pair = Pair(first: 3, second: true)
+        let decoded = try #require(Pair<Int, Bool>(formalValue: .tuple([.int(3), .bool(true)])))
+        #expect(decoded.first == 3)
+        #expect(decoded.second)
+        #expect(pair == decoded)
+        #expect(Set([pair, decoded]).count == 1)
+        #expect(Pair<Int, Bool>(formalValue: .tuple([.int(3)])) == nil)
+        #expect(Pair<Int, Bool>(formalValue: .tuple([.bool(true), .int(3)])) == nil)
+    }
+
     @Test("invalid typed literals and bounded sequences fail during compilation")
     func invalidTypedValuesFailDuringCompilation() throws {
         let invalidExpressions: [(StateExpr, CompilationDiagnostic.Code)] = [

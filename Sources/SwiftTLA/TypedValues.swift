@@ -175,11 +175,16 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
   private let values: [TLAValue: TLAValue]
 
   public init() {
-    values = Dictionary(uniqueKeysWithValues: Domain.tlaValues.map { ($0, Range.defaultValue.tlaValue) })
+    var values: [TLAValue: TLAValue] = [:]
+    for key in Domain.tlaValues {
+      values[key] = Range.defaultValue.tlaValue
+    }
+    self.values = values
   }
 
   public init?(formalValue: TLAValue) {
-    guard case .function(let values) = formalValue,
+    guard Domain.sourceIssue == nil,
+          case .function(let values) = formalValue,
           Set(values.keys) == Set(Domain.tlaValues),
           values.values.allSatisfy({ Range(formalValue: $0) != nil })
     else { return nil }
@@ -187,14 +192,11 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
   }
 
   public var tlaValue: TLAValue { .function(values) }
+  public var sourceIssue: SourceModelIssue? { Domain.sourceIssue }
   public static var defaultValue: Self { Self() }
 
-  public subscript(_ key: Domain) -> Range {
-    guard let raw = values[key.tlaValue], let value = Range(formalValue: raw) else {
-      assertionFailure("Function storage contains an invalid declared value")
-      return Range.defaultValue
-    }
-    return value
+  public subscript(_ key: Domain) -> Range? {
+    values[key.tlaValue].flatMap(Range.init(formalValue:))
   }
 
   public static func literal(_ entries: (Domain, Expr<Range>)...) -> Expr<Self> {
@@ -424,41 +426,33 @@ extension TupleExpr: FormalTupleValue {}
 /// formal tuple, not a Swift tuple: it can be stored in formal state, used as
 /// a set member, and selected by a PlusCal `with` binding.
 public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Hashable, Sendable {
-  private let firstValue: TLAValue
-  private let secondValue: TLAValue
+  public let first: First
+  public let second: Second
 
   public init(first: First = .defaultValue, second: Second = .defaultValue) {
-    firstValue = first.tlaValue
-    secondValue = second.tlaValue
+    self.first = first
+    self.second = second
   }
 
   public init?(formalValue: TLAValue) {
     guard case .tuple(let values) = formalValue,
           values.count == 2,
-          First(formalValue: values[0]) != nil,
-          Second(formalValue: values[1]) != nil
+          let first = First(formalValue: values[0]),
+          let second = Second(formalValue: values[1])
     else { return nil }
-    firstValue = values[0]
-    secondValue = values[1]
+    self.first = first
+    self.second = second
   }
 
-  public var tlaValue: TLAValue { .tuple([firstValue, secondValue]) }
+  public var tlaValue: TLAValue { .tuple([first.tlaValue, second.tlaValue]) }
   public static var defaultValue: Self { Self() }
 
-  public var first: First {
-    guard let value = First(formalValue: firstValue) else {
-      assertionFailure("Pair storage contains an invalid first value")
-      return First.defaultValue
-    }
-    return value
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.tlaValue == rhs.tlaValue
   }
 
-  public var second: Second {
-    guard let value = Second(formalValue: secondValue) else {
-      assertionFailure("Pair storage contains an invalid second value")
-      return Second.defaultValue
-    }
-    return value
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(tlaValue)
   }
 
   public static func literal(_ first: First, _ second: Second) -> Expr<Self> {
