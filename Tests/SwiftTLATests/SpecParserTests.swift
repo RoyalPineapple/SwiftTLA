@@ -2045,6 +2045,29 @@ private enum ParserNode: String, FiniteTLAValueDomain {
             try parseExpression(#"At("step\(suffix)", worker)"#)
         ) == nil)
     }
+
+    @Test("control locations require a declared label case")
+    func requiresDeclaredControlLocation() throws {
+        let parser = ParserSession(enumDefinitions: [
+            parserEnum("Label", cases: ["receive": .string("receive")])
+        ])
+        let expected = StateExpr.equal(
+            .functionApply(.programCounter, .variable("worker")),
+            .controlLocation(.init("receive"))
+        )
+
+        #expect(parser.decodeStateExpr(
+            try parseExpression("At(Label.receive, worker)")
+        ) == expected)
+        for source in [
+            #"At("receive", worker)"#,
+            "At(.receive, worker)",
+            "At(Other.receive, worker)",
+            "At(Label.missing, worker)"
+        ] {
+            #expect(parser.decodeStateExpr(try parseExpression(source)) == nil)
+        }
+    }
 }
 
 // MARK: - StateExpr: method calls (binary)

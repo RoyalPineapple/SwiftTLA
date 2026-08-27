@@ -459,16 +459,11 @@ public final class ParserSession {
     }
 
     private func controlLocation(_ expression: ExprSyntax?) -> String? {
-        guard let expression else { return nil }
-        if let literal = expression.as(StringLiteralExprSyntax.self) {
-            return literal.representedLiteralValue
-        }
-        guard let access = expression.as(MemberAccessExprSyntax.self) else { return nil }
-        if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.text) {
-            return label
-        }
-        return access.declName.baseName.text
+        guard let access = expression?.as(MemberAccessExprSyntax.self),
+              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.text)
+        else { return nil }
+        return label
     }
 
     /// Independently expands the bounded `Sequences(of:lengths:)` spelling
