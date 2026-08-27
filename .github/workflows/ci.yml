@@ -16,7 +16,7 @@ jobs:
       - name: Validate local validation lock contract
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
-      - name: Build and test every Swift target
+      - name: Run complete Swift test suite
         run: swift test -j 1
 
   apple-platform-examples:
