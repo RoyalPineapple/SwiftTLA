@@ -15,6 +15,10 @@ struct AlgorithmPlusCalRendererTests {
         case finished
     }
 
+    private enum ProcedureName: String, CaseIterable {
+        case work
+    }
+
     private enum Node: String, FiniteTLAValueDomain {
         case left
         case right
@@ -315,14 +319,14 @@ struct AlgorithmPlusCalRendererTests {
     func rendersSequentialProcedureAlgorithm() throws {
         let algorithm = Algorithm("Procedures", scoped: { scope in
             let output = scope.sharedVar("output", initial: 0)
-            Procedure("work", parameters: Int.self, scoped: { value, scope in
+            Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                 let offset = scope.localVar("offset", initial: 1)
                 Do(ProcedureStep.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
                 }
             })
-            Do(ProcedureStep.start) { Call("work", with: 7) }
+            Do(ProcedureStep.start) { Call(ProcedureName.work, with: 7) }
             Do(ProcedureStep.finished) { Stop() }
         })
 

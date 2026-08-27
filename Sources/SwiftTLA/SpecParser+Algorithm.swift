@@ -497,8 +497,11 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
-        guard let name = extractStringArg(call, index: 0), let closure = algorithmBuilderClosure(in: call) else {
-            algorithmParseFailure = "Procedure requires a string literal name and a builder body."
+        guard let name = procedureName(call.arguments.first?.expression, construct: "Procedure"),
+              let closure = algorithmBuilderClosure(in: call) else {
+            if algorithmParseFailure == nil {
+                algorithmParseFailure = "Procedure requires a name and a builder body."
+            }
             return nil
         }
         let bindings = closureParameterNames(in: closure)
@@ -1119,10 +1122,7 @@ extension ParserSession {
             guard let label = algorithmLabel(call.arguments.first?.expression) else { return nil }
             return .goto(.init(name: label))
         case .call:
-            guard let target = extractStringArg(call, index: 0) else {
-                algorithmParseFailure = "Call requires a procedure name string literal."
-                return nil
-            }
+            guard let target = procedureName(call.arguments.first?.expression, construct: "Call") else { return nil }
             let arguments = call.arguments.dropFirst().compactMap { argument in
                 decodeAlgorithmStateExpression(argument.expression, scope: scope)
             }
@@ -1449,12 +1449,34 @@ extension ParserSession {
     }
 
     private func algorithmLabel(_ expression: ExprSyntax?) -> String? {
-        guard let label = controlLocation(expression) else {
+        guard let label = registeredStringEnumCase(expression) else {
             let source = expression?.description.trimmingCharacters(in: .whitespacesAndNewlines) ?? "missing"
             algorithmParseFailure = "Algorithm control label '\(source)' must be a qualified case of a registered String-backed enum."
             return nil
         }
         return label
+    }
+
+    private func procedureName(_ expression: ExprSyntax?, construct: String) -> String? {
+        if let name = registeredStringEnumCase(expression) { return name }
+        guard let expression,
+              let access = expression.as(MemberAccessExprSyntax.self),
+              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text else {
+            let source = expression?.description.trimmingCharacters(in: .whitespacesAndNewlines) ?? "missing"
+            algorithmParseFailure = "\(construct) procedure name '\(source)' must be a qualified enum case."
+            return nil
+        }
+        guard let definition = enumDefinition(named: type) else {
+            algorithmParseFailure = "\(construct) procedure-name enum '\(type)' is not registered."
+            return nil
+        }
+        let member = access.declName.baseName.text
+        guard let value = definition.value(named: member) else {
+            algorithmParseFailure = "\(construct) procedure name '\(member)' is not declared in registered enum '\(type)'."
+            return nil
+        }
+        algorithmParseFailure = "\(construct) procedure name '\(type).\(member)' must have a String raw value; found \(value)."
+        return nil
     }
 
     func finiteAlgorithmDomain(_ expression: ExprSyntax) -> (typeName: String, values: [TLAValue])? {
