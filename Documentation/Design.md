@@ -7,7 +7,8 @@ source model. Compilation creates one immutable compiled specification.
 typed Swift source → source model → compile → compiled specification
                                             ├→ generated Swift machine
                                             ├→ private runtime and exploration
-                                            └→ rendered TLA+ and PlusCal bundles
+                                            ├→ rendered TLA+ bundle
+                                            └→ authored PlusCal bundle when the source has one Algorithm
 ```
 
 The compiled specification carries the model meaning through every local
@@ -28,8 +29,8 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("Counter", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(Step.advance) {
                     When(count < 1)
                     Assign(count, to: count + 1)
@@ -37,7 +38,7 @@ struct Counter {
                 Invariant("Bounds") {
                     count >= 0 && count <= 1
                 }
-            }
+            })
         }
     }
 }
@@ -92,7 +93,8 @@ See [Generated Machines](GeneratedMachines.md) and
 
 ## Render formal bundles
 
-The compiled specification renders direct TLA+ and authored PlusCal bundles.
+Every compiled specification renders direct TLA+. A compilation with exactly
+one authored `Algorithm` also renders that algorithm as PlusCal.
 
 ```swift
 let tla = compilation.renderedTLAModuleBundle()

@@ -31,14 +31,14 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter") {
-                let count = SharedVar(initial: 0)
+            Algorithm("Counter", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
 
                 Do(Step.advance) {
                     When(count < 1)
                     Assign(count, to: count + 1)
                 }
-            }
+            })
         }
     }
 }

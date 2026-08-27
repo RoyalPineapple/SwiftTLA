@@ -14,8 +14,8 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter") {
-                let value = SharedVar("value", initial: 0)
+            Algorithm("Counter", scoped: { scope in
+                let value = scope.sharedVar("value", initial: 0)
                 Do(Step.advance) {
                     When(value < 1)
                     Assign(value, to: value + 1)
@@ -23,7 +23,7 @@ struct Counter {
                 Invariant("Bounds") {
                     value >= 0 && value <= 1
                 }
-            }
+            })
         }
     }
 }
@@ -57,8 +57,9 @@ let transition = try machine.send(.advance)
 let bundle = compilation.renderedTLAModuleBundle()
 ```
 
-`CompiledSpecification` is the single compiled input for local exploration, generated Swift,
-direct TLA+, authored PlusCal, and conformance evidence. Its description
+`CompiledSpecification` is the single compiled input for local exploration,
+generated Swift, direct TLA+, authored PlusCal for a single authored
+`Algorithm`, and conformance evidence. Its description
 exposes declarations, control locations, imports, and identity in canonical
 order.
 
@@ -71,9 +72,9 @@ the action type and argument types selected by the source model.
 ## Declare modules and refinement structurally
 
 Use `Import` and `Instance` for TLA+ modules. Compilation links their complete
-module closure. Direct TLA+ and authored PlusCal bundles use that closure. TLC
-invocations that consume compiled bundles stage those declared files.
-Conformance fixtures remain independent external bundles.
+module closure. Direct TLA+ and available authored PlusCal bundles use that
+closure. TLC invocations that consume compiled bundles stage those declared
+files. Conformance fixtures remain independent external bundles.
 
 Use `FormalDefinition` and `Invariant` for typed formal claims. Use
 `Refinement` with a typed abstract model and state mapping. The local checker

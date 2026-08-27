@@ -4,8 +4,10 @@
 
 Define explicit state, permitted actions, and rules that must hold. SwiftTLA
 generates a typed Swift machine your application can run. The same model can
-also drive bounded exploration and TLA+/PlusCal rendering. Selected finite
-cases compare SwiftTLA's exploration with independent pinned TLC fixtures.
+also drive bounded exploration and direct TLA+ rendering. A model with one
+authored `Algorithm` also renders a source-faithful PlusCal bundle. Selected
+finite cases compare SwiftTLA's exploration with independent pinned TLC
+fixtures.
 
 **One model. Typed application state. Bounded formal evidence.**
 
@@ -16,7 +18,7 @@ Swift source model
 CompiledSpecification
  ├── generated State, Action, Transition, and machine
  ├── bounded exploration
- └── rendered TLA+ and PlusCal bundles
+ └── rendered TLA+ bundle and, for one authored Algorithm, PlusCal bundle
 
 Generated machine
  ├── value stored in SwiftUI @State
@@ -159,9 +161,9 @@ it stores the same generated machine value behind actor isolation.
 
 ## Add bounded assurance
 
-The same compiled specification renders the TLA+ and PlusCal bundles. Finite
-graph comparison compares its bounded exploration with TLC's exploration of a
-pinned reference fixture. See
+This clock's compiled specification renders direct TLA+ and its authored
+PlusCal algorithm. Finite graph comparison compares bounded SwiftTLA
+exploration with TLC's exploration of a pinned reference fixture. See
 [Finite graph comparison](Documentation/FiniteGraphComparison.md) for the
 retained evidence and precise claim.
 

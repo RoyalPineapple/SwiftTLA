@@ -5,11 +5,12 @@ SwiftTLA BFS run and one TLC run. For each declared case, it compares the
 canonical initial-state set, canonical state bindings, and complete labeled
 transition multiset. It is stronger than matching a state count.
 
-Published TLA+ semantics are authoritative. Pinned TLC is the external
-executable reference. Its source and tests provide diagnostic evidence.
+The typed Swift source model owns the meaning that SwiftTLA accepts. Each TLC
+fixture is an independently maintained executable reference for one declared
+finite case. Exact graph comparison checks whether those two implementations
+agree within that case's bounds. GitHub Actions runs the comparison and owns
+the admission decision.
 
-The declared semantic source and retained hosted evidence are authoritative.
-GitHub Actions runs exact finite graph comparison.
 Local use provides diagnostic evidence through the approved narrow validation
 wrapper. Hosted GitHub Actions provides admission evidence.
 
@@ -21,9 +22,9 @@ and the bridge class/source/binary digests. `cases.json` locks every case's
 module, configuration, and Swift exploration policy. Setup
 fails closed when a required digest does not match.
 
-The setup script can seed an exact, digest-matching artifact from
-`Tools/TLCGraphBridge/.tool-cache`. The published artifact source supplies the
-locked files to a fresh machine. Setup accepts only the declared digests.
+The setup script first checks `Tools/TLCGraphBridge/.tool-cache`, then downloads
+missing files from the URLs in the toolchain lock. Every cached or downloaded
+file must match its declared digest.
 
 ## Evidence and diagnosis
 
@@ -38,10 +39,11 @@ tlc-graph.jsonl ───┘
 ```
 
 Each graph stream contains a header, sorted initial states, sorted states,
-sorted labeled edges with multiplicity, diagnostics, counterexample traces,
-and a final completion record. The completion record declares the outcome and
+sorted labeled edges with multiplicity, an optional counterexample trace, and
+a final completion record. The completion record declares the outcome and
 exact record counts. A missing, truncated, failed, or bounded completion cannot
-represent an exact result.
+represent an exact result. Process and comparison failures use the sibling
+`diagnostic.json` file.
 
 `comparison.json` records whether the two complete graphs match and includes
 the first structured differences when they do not. Exact equality is decided
