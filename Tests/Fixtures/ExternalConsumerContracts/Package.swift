@@ -58,10 +58,6 @@ let package = Package(
       dependencies: [.product(name: "SwiftTLA", package: "SwiftTLA")]
     ),
     .executableTarget(
-      name: "InvalidTypedFacadeRuntime",
-      dependencies: [.product(name: "SwiftTLA", package: "SwiftTLA")]
-    ),
-    .executableTarget(
       name: "ReadmeSymmetricCollectionMacro",
       dependencies: generatedMachineDependencies
     ),

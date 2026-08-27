@@ -31,7 +31,11 @@ struct InvalidTypedField {
       let floor = Var<Int>("floor")
       let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
       Variable(floor, 0)
-      Action("unknownField", parameters: [
+      Variable(cars, TLAValue.function([
+        CarID.carA.tlaValue: TLAValue.record(["floor": .int(0)]),
+        CarID.carB.tlaValue: TLAValue.record(["floor": .int(0)])
+      ]))
+      SwiftTLA.Action("unknownField", parameters: [
         ActionParameter("person", values: ["alice", "bob"])
       ]) {
         cars.becomes(cars.updating(CarSchema.person, to: 2))

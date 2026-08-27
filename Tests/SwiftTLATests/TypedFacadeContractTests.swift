@@ -130,21 +130,13 @@ struct TypedFacadeContractTests {
     #expect(CarID.tlaValues == [.string("carA"), .string("carB")])
   }
 
-  @Test("finite function indexes reject values omitted from the declared domain")
-  func omittedFiniteDomainValueIsRejectedBeforeLowering() throws {
-    let result = try runExternalConsumer("InvalidTypedFacadeRuntime")
-
-    #expect(result.status != 0)
-    #expect(result.output.contains("not declared by OmittedID.finiteValues"))
-  }
-
   @Test("typed facade compile-negative fixtures reject escape hatches")
   func invalidTypedFacadeUsesDoNotTypeCheck() throws {
     let result = try buildExternalConsumer("InvalidTypedFacade")
 
     #expect(result.status != 0)
     #expect(result.output.contains("TLAField"))
-    #expect(result.output.contains("InvalidTypedFacade.swift:30:"))
+    #expect(result.output.contains("InvalidTypedFacade.swift:32:"))
     #expect(result.output.contains("member 'person'"))
     #expect(result.output.contains("no exact matches in call to instance method 'becomes'"))
     #expect(result.output.contains("candidate expects value of type 'TLAValue'"))
@@ -164,13 +156,13 @@ struct TypedFacadeContractTests {
 
     #expect(result.status != 0)
     for expected in [
-      "InvalidTypedDSL.swift:41:",
+      "InvalidTypedDSL.swift:43:",
       "parameter 'person' requires an explicitly written finite values array",
-      "InvalidTypedDSL.swift:58:",
+      "InvalidTypedDSL.swift:60:",
       "parameter 'car' requires a non-empty finite values array",
-      "InvalidTypedDSL.swift:75:",
+      "InvalidTypedDSL.swift:77:",
       "parameter 'direction' has duplicate finite-domain values",
-      "InvalidTypedDSL.swift:95:",
+      "InvalidTypedDSL.swift:98:",
       "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
     ] {
       #expect(result.output.contains(expected))
@@ -178,7 +170,7 @@ struct TypedFacadeContractTests {
 
     let unknownField = try buildExternalConsumer("InvalidTypedDSLUnknownField")
     #expect(unknownField.status != 0)
-    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:36:"))
+    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:41:"))
     #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
   }
 

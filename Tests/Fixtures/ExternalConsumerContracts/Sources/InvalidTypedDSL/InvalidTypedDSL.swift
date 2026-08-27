@@ -91,6 +91,7 @@ struct InvalidTypedUpdate {
       let floor = Var<Int>("floor")
       let car = Var<Record<CarSchema>>("car")
       Variable(floor, 0)
+      Variable(car, Record<CarSchema>.literal(.init(CarSchema.floor, 0)))
       Action("unsupportedUpdate", parameters: [
         ActionParameter("person", values: ["alice", "bob"])
       ]) {
