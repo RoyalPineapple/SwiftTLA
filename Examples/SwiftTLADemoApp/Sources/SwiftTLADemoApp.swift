@@ -199,7 +199,10 @@ private struct DuckDuckLeaderView: View {
         }
 
         guard case .deliver(let node) = action,
-              let message = machine.state.messages.elements.first(where: { $0[ChangRoberts.MessageSchema.to] == node })
+              let message = machine.state.messages.elements.first(where: {
+                  $0.value(for: ChangRoberts.MessageSchema.to) == node
+              }),
+              let candidate = message.value(for: ChangRoberts.MessageSchema.candidate)
         else { return false }
 
         isDelivering = true
@@ -209,13 +212,13 @@ private struct DuckDuckLeaderView: View {
             let result = try nextMachine.send(action)
             guard runID == simulationID else { return false }
             let forwarded = result.after.messages.elements.first {
-                $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&
-                    $0[ChangRoberts.MessageSchema.from] == node
+                $0.value(for: ChangRoberts.MessageSchema.candidate) == candidate &&
+                    $0.value(for: ChangRoberts.MessageSchema.from) == node
             }
             let animation = DuckDelivery(
-                candidate: message[ChangRoberts.MessageSchema.candidate],
+                candidate: candidate,
                 from: node,
-                to: forwarded?[ChangRoberts.MessageSchema.to]
+                to: forwarded?.value(for: ChangRoberts.MessageSchema.to)
             )
 
             delivery = animation
@@ -308,7 +311,11 @@ private struct ElevatorBankView: View {
         let riders = ElevatorBank.Rider.finiteValues.filter { $0 != .none }
         return riders.map { rider in
             let passenger = state.riders[rider]
-            return "\(rider.rawValue.capitalized): \(passenger[ElevatorBank.RiderSchema.phase].rawValue), floor \(passenger[ElevatorBank.RiderSchema.floor].rawValue) → \(passenger[ElevatorBank.RiderSchema.destination].rawValue)"
+            guard let phase = passenger.value(for: ElevatorBank.RiderSchema.phase),
+                  let floor = passenger.value(for: ElevatorBank.RiderSchema.floor),
+                  let destination = passenger.value(for: ElevatorBank.RiderSchema.destination)
+            else { return "\(rider.rawValue.capitalized): invalid state" }
+            return "\(rider.rawValue.capitalized): \(phase.rawValue), floor \(floor.rawValue) → \(destination.rawValue)"
         }.joined(separator: "\n")
     }
 
@@ -651,7 +658,9 @@ private struct ElevatorFloorBoard: View {
                         Spacer(minLength: 0)
                         VStack(alignment: .trailing, spacing: 3) {
                             ForEach(waitingRiders(at: floor), id: \.self) { rider in
-                                RiderChip(rider: rider, destination: state.riders[rider][ElevatorBank.RiderSchema.destination])
+                                if let destination = state.riders[rider].value(for: ElevatorBank.RiderSchema.destination) {
+                                    RiderChip(rider: rider, destination: destination)
+                                }
                             }
                         }
                     }
@@ -665,8 +674,8 @@ private struct ElevatorFloorBoard: View {
     private func waitingRiders(at floor: ElevatorBank.Floor) -> [ElevatorBank.Rider] {
         ElevatorBank.Rider.finiteValues.filter { rider in
             rider != .none
-                && state.riders[rider][ElevatorBank.RiderSchema.phase] == .waiting
-                && state.riders[rider][ElevatorBank.RiderSchema.floor] == floor
+                && state.riders[rider].value(for: ElevatorBank.RiderSchema.phase) == .waiting
+                && state.riders[rider].value(for: ElevatorBank.RiderSchema.floor) == floor
         }
     }
 }
@@ -686,10 +695,12 @@ private struct ElevatorShaft: View {
             VStack(spacing: 0) {
                 ForEach(floors, id: \.self) { floor in
                     ZStack {
-                        if vehicle[ElevatorBank.CarSchema.floor] == floor {
+                        if vehicle.value(for: ElevatorBank.CarSchema.floor) == floor,
+                           let rider = vehicle.value(for: ElevatorBank.CarSchema.rider),
+                           let destination = state.riders[rider].value(for: ElevatorBank.RiderSchema.destination) {
                             CarCabin(
                                 vehicle: vehicle,
-                                destination: state.riders[vehicle[ElevatorBank.CarSchema.rider]][ElevatorBank.RiderSchema.destination]
+                                destination: destination
                             )
                                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         }
@@ -713,13 +724,13 @@ private struct CarCabin: View {
 
     var body: some View {
         VStack(spacing: 5) {
-            HStack(spacing: vehicle[ElevatorBank.CarSchema.door] == .open ? 18 : 2) {
+            HStack(spacing: vehicle.value(for: ElevatorBank.CarSchema.door) == .open ? 18 : 2) {
                 RoundedRectangle(cornerRadius: 4).fill(.indigo).frame(width: 52, height: 45)
                 RoundedRectangle(cornerRadius: 4).fill(.indigo).frame(width: 52, height: 45)
             }
-            if vehicle[ElevatorBank.CarSchema.rider] != .none {
+            if let rider = vehicle.value(for: ElevatorBank.CarSchema.rider), rider != .none {
                 RiderChip(
-                    rider: vehicle[ElevatorBank.CarSchema.rider],
+                    rider: rider,
                     destination: destination
                 )
             }
@@ -884,10 +895,11 @@ private struct DuckRingMessages: View {
 
     var body: some View {
         ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
-            if message[ChangRoberts.MessageSchema.candidate] != activeDelivery?.candidate {
-                let destination = message[ChangRoberts.MessageSchema.to]
+            if let candidate = message.value(for: ChangRoberts.MessageSchema.candidate),
+               let destination = message.value(for: ChangRoberts.MessageSchema.to),
+               candidate != activeDelivery?.candidate {
                 let placement = placement(for: destination, at: index)
-                DuckMessageBadge(candidate: message[ChangRoberts.MessageSchema.candidate])
+                DuckMessageBadge(candidate: candidate)
                     .position(layout.messagePoint(
                         for: destination,
                         ordinal: placement.ordinal,
@@ -898,8 +910,12 @@ private struct DuckRingMessages: View {
     }
 
     private func placement(for destination: ChangRoberts.Node, at index: Int) -> (ordinal: Int, total: Int) {
-        let prior = messages[..<index].filter { $0[ChangRoberts.MessageSchema.to] == destination }.count
-        let total = messages.filter { $0[ChangRoberts.MessageSchema.to] == destination }.count
+        let prior = messages[..<index].filter {
+            $0.value(for: ChangRoberts.MessageSchema.to) == destination
+        }.count
+        let total = messages.filter {
+            $0.value(for: ChangRoberts.MessageSchema.to) == destination
+        }.count
         return (prior, total)
     }
 }

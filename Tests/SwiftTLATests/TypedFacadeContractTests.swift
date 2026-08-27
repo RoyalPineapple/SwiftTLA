@@ -86,7 +86,10 @@ struct TypedFacadeContractTests {
       "car": .record(["floor": .int(2), "doorsOpen": .bool(true)]),
       "owner": .string("bob")
     ])
-    #expect(try #require(Record<GarageSchema>(formalValue: formal)).tlaValue == formal)
+    let garage = try #require(Record<GarageSchema>(formalValue: formal))
+    #expect(garage.tlaValue == formal)
+    #expect(garage.value(for: GarageSchema.owner) == .bob)
+    #expect(garage.value(for: GarageSchema.car)?.value(for: CarSchema.floor) == 2)
   }
 
   @Test("typed reads, set mutation, and nested updates lower to typed expressions")

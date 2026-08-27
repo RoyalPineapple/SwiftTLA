@@ -137,6 +137,10 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
   }
   public static var defaultValue: Self { Self() }
 
+  public func value<Value: TLAValueType>(for field: TLAField<Schema, Value>) -> Value? {
+    values.value(named: field.name).flatMap(Value.init(formalValue:))
+  }
+
   public static func literal(_ fields: TLARecordEntry<Schema>...) -> Expr<Self> {
     if let problem = schemaProblem(Schema.fields.map(\.name)) {
       return Expr(.sourceIssue(.invalidRecordSchema(
