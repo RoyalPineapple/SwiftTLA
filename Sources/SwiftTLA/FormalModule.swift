@@ -2,8 +2,8 @@ import Foundation
 
 /// One source file in a TLA+ module bundle.
 ///
-/// A formal module is a real source dependency, not text copied into a
-/// consumer. The root file has a TLC configuration; imported files do not.
+/// The root file may own a TLC configuration. Imported files are source
+/// dependencies without root configuration.
 public struct TLAModuleFile: Sendable, Equatable {
   public let name: String
   public let tla: String
@@ -18,9 +18,8 @@ public struct TLAModuleFile: Sendable, Equatable {
 
 /// A post-render integrity failure in a TLA+ module bundle.
 ///
-/// The compiler's `FormalModuleClosure` is the semantic linker. This type only
-/// reports that emitted text files no longer form the already-linked closure
-/// that TLC will receive.
+/// Reports a mismatch between emitted files and the linked module closure
+/// staged for TLC.
 public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStringConvertible {
   case duplicateModule(String)
   case missingModule(module: String, importedBy: String, line: Int)
@@ -587,12 +586,6 @@ package struct FormalModuleClosure: Sendable {
     return names.first { !seen.insert($0).inserted }
   }
 
-  /// Names which a consumer may configure when it links this module.
-  ///
-  /// This intentionally uses the typed scope analysis instead of reflecting strings.
-  /// A binder, local operator, assignment target, or record field is not an
-  /// importable interface symbol merely because it happens to share a name
-  /// with one.
   private static func moduleInterfaceSymbols(of module: TLASpec) -> Set<String> {
     var symbols = Set(module.formalParameters.map(\.name))
     var moduleDeclarations = Set(module.variables.map(\.name))
@@ -708,11 +701,7 @@ public struct ModuleArgument: Sendable, Equatable {
     self.value = value.stateExpr
   }
 
-  /// Builds an argument from a parsed formal expression.
-  ///
-  /// This is primarily used by the macro parser. Public callers normally use
-  /// `value:` so Swift supplies the expression conversion.
-  public init(_ parameter: String, expression: StateExpr) {
+  package init(_ parameter: String, expression: StateExpr) {
     self.parameter = parameter
     self.value = expression
   }
@@ -721,9 +710,8 @@ public struct ModuleArgument: Sendable, Equatable {
 /// A named TLA+ module instance.
 ///
 /// `Instance("CC", of: ClientCentric.module)` exports as
-/// `CC == INSTANCE ClientCentric`.  This is deliberately separate from
-/// `Import`: an import is an `EXTENDS` relationship, while an instance keeps
-/// the imported operators behind an explicit namespace such as `CC!Check`.
+/// `CC == INSTANCE ClientCentric` and exposes operators through a namespace
+/// such as `CC!Check`.
 public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
   public let name: String
   public let module: TLASpec
@@ -778,9 +766,8 @@ public struct FormalModuleInstanceReference: Sendable, Equatable {
 
 /// Applies a formal value operator by its TLA+ name while retaining its result type.
 ///
-/// This is the typed boundary for imported community-module definitions.  It is
-/// deliberately not a Swift closure: the operator name and every argument remain
-/// in `StateExpr` for parser fidelity, evaluation, and TLA+ emission.
+/// The operator name and arguments remain in `StateExpr` for binding,
+/// evaluation, and TLA+ emission.
 public func FormalCall<Result: TLAValueType>(
   _ name: String
 ) -> Expr<Result> {
@@ -843,9 +830,8 @@ public func FormalCall<
 
 /// Applies an executable formal operator exported by a named `INSTANCE`.
 ///
-/// Module instances are an explicit source-level namespace in TLA+.  Keeping
-/// the namespace here avoids treating an imported definition as a host closure
-/// or leaking raw `StateExpr` construction into an application model.
+/// The instance name remains an explicit source-level namespace in the
+/// compiled expression.
 public func ModuleCall<Result: TLAValueType>(
   _ instance: String,
   _ operatorName: String

@@ -3,16 +3,16 @@ import Testing
 
 @Suite("ClientCentric formal module")
 struct ClientCentricModuleTests {
-  @Test("an instance qualifies executable formal operators without copying imports")
+  @Test("an instance resolves namespaced executable operators")
   func instanceResolvesSnapshotIsolation() throws {
-    let keys = StateExpr.setLiteral([.value(.string("k"))])
-    let values = StateExpr.setLiteral([.value(.string("none"))])
-    let initial = StateExpr.functionLiteral(keys, "key", .value(.string("none")))
+    let keys = SetExpr<TestKey>(.key)
+    let values = SetExpr<TestValue>(.none)
+    let initial = StateExpr.functionLiteral(keys.stateExpr, "key", .value(.string("none")))
     let consumer = TLASpec("ClientCentricConsumer") {
       Import(KeyValueStoreUtil.module)
       Instance("CC", of: ClientCentric.module, with: [
-        ModuleArgument("Keys", expression: keys),
-        ModuleArgument("Values", expression: values)
+        ModuleArgument("Keys", value: keys),
+        ModuleArgument("Values", value: values)
       ])
     }
 
