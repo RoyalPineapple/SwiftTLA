@@ -483,7 +483,7 @@ extension ParserSession {
         in declarationScope: String? = nil
     ) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
-            guard ["Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
+            guard ref.baseName.text == "Var" else { return nil }
             return (ref.baseName.text, nil)
         }
         if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),

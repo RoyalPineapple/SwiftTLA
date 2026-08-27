@@ -1024,15 +1024,19 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.description.imports.isEmpty)
     }
 
-    @Test("#spec Algorithm lowering reaches macro-generated consumers through one identity")
-    func algorithmSpecificationUsesMacroCompiledPayload() throws {
+    @Test("scoped Algorithm declarations reach generated execution through one identity")
+    func scopedAlgorithmMatchesGeneratedExecution() throws {
         let compilation = try CompilerPipelineAlgorithmModel.spec.compile()
         let repeated = try CompilerPipelineAlgorithmModel.spec.compile()
         let rendered = compilation.renderedTLAModuleBundle().tla
         let repeatedRendered = repeated.renderedTLAModuleBundle().tla
+        var machine = try CompilerPipelineAlgorithmModel.makeMachine()
+        let transition = try machine.send(.increment)
 
         #expect(repeated.identity == compilation.identity)
         #expect(rendered == repeatedRendered)
+        #expect(transition.before.count == 0)
+        #expect(transition.after.count == 1)
     }
 
     @Test("duplicate declarations fail with an actionable typed diagnostic")

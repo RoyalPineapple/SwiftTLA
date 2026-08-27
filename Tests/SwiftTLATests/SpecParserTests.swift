@@ -460,13 +460,13 @@ private func parserEnum(
         let source = """
         {
             Algorithm("SiblingScopes") {
-                Each(Node.all) { node in
-                    let local = LocalVar("local", initial: 0)
+                Each(Node.all, scoped: { node, scope in
+                    let local = scope.localVar("local", initial: 0)
                     Do(TestControlLabel.increment) {
                         Await(local == 0)
                         Stop()
                     }
-                }
+                })
                 Each(Node.all) { node in
                     Do(TestControlLabel.done) {
                         Await(local == 0)
@@ -589,8 +589,8 @@ private func parserEnum(
     func formalExpressionClosuresDoNotBecomeAlgorithmDeclarations() throws {
         let source = """
         {
-            Algorithm("FormalClosureBoundary") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("FormalClosureBoundary") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.advance) {
                     let imported: Expr<Int> = ModuleCall("Instance", "Value", count)
                     Assign(count, to: imported)
@@ -703,8 +703,8 @@ private func parserEnum(
     func parsesMechanicalPlusCalStatements() throws {
         let source = """
         {
-            Algorithm("Counter") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("Counter") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 Each(Node.all, fairness: .strong) { node in
                     While(TestControlLabel.increment, count < 2) {
                         When(count >= 0)
@@ -736,8 +736,8 @@ private func parserEnum(
     func parsesAlgorithmTemporalDeclarations() throws {
         let source = """
         {
-            Algorithm("Temporal") {
-                let value = SharedVar("value", initial: 0)
+            Algorithm("Temporal") { scope in
+                let value = scope.sharedVar("value", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(value, to: value + 1)
                 }
@@ -761,8 +761,8 @@ private func parserEnum(
     func parsesProcessScopedFormalLambdaApplication() throws {
         let source = """
         {
-            Algorithm("ScopedFormalLambda") {
-                let counters = SharedVar("counters", initial: Function<Worker, Int>.literal(
+            Algorithm("ScopedFormalLambda") { scope in
+                let counters = scope.sharedVar("counters", initial: Function<Worker, Int>.literal(
                     (.left, 0),
                     (.right, 0)
                 ))
@@ -805,8 +805,8 @@ private func parserEnum(
     func malformedFormalLambdaRetainsSixFieldDiagnostic() throws {
         let source = """
         {
-            Algorithm("MalformedFormalLambda") {
-                let counter = SharedVar("counter", initial: 0)
+            Algorithm("MalformedFormalLambda") { scope in
+                let counter = scope.sharedVar("counter", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(counter, to: Expr<Int>(StateExpr.operatorApplication(
                         .lambda(FormalLambda(parameters: [], body: .int(1))),
@@ -834,8 +834,8 @@ private func parserEnum(
     func parsesThreeIndependentWithBindings() throws {
         let source = """
         {
-            Algorithm("ThreeWith") {
-                let selected = SharedVar("selected", initial: 0)
+            Algorithm("ThreeWith") { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
                 Do(TestControlLabel.choose) {
                     With(
                         SetExpr<Int>.literal(1, 2),
@@ -861,8 +861,8 @@ private func parserEnum(
     func parsesStatementMacro() throws {
         let source = """
         {
-            Algorithm("MacroLock") {
-                let lock = SharedVar("lock", initial: 1)
+            Algorithm("MacroLock") { scope in
+                let lock = scope.sharedVar("lock", initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     Await(value == 1)
                     Assign(value, to: 0)
@@ -889,9 +889,9 @@ private func parserEnum(
     func parsesTwoParameterStatementMacro() throws {
         let source = """
         {
-            Algorithm("CopyValue") {
-                let destination = SharedVar("destination", initial: 0)
-                let source = SharedVar("source", initial: 7)
+            Algorithm("CopyValue") { scope in
+                let destination = scope.sharedVar("destination", initial: 0)
+                let source = scope.sharedVar("source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                     Assign(target, to: value.expr)
                 }
@@ -912,9 +912,9 @@ private func parserEnum(
     func parsesExpressionStatementMacroArguments() throws {
         let source = """
         {
-            Algorithm("OffsetValue") {
-                let destination = SharedVar("destination", initial: 0)
-                let source = SharedVar("source", initial: 7)
+            Algorithm("OffsetValue") { scope in
+                let destination = scope.sharedVar("destination", initial: 0)
+                let source = scope.sharedVar("source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                     Assign(target, to: value.expr)
                 }
@@ -962,8 +962,8 @@ private func parserEnum(
     func diagnosesExpressionMacroAssignmentTarget() throws {
         let source = """
         {
-            Algorithm("InvalidMacroTarget") {
-                let destination = SharedVar("destination", initial: 0)
+            Algorithm("InvalidMacroTarget") { scope in
+                let destination = scope.sharedVar("destination", initial: 0)
                 let write = Macro { (target: MacroParameter<Int>) in
                     Assign(target, to: 1)
                 }
@@ -985,16 +985,16 @@ private func parserEnum(
     func parsesTypedProcedureBindings() throws {
         let source = """
         {
-            Algorithm("ProcedureSource") {
-                let output = SharedVar("output", initial: 0)
-                Procedure(ProcedureName.work, parameters: Int.self) { value in
-                    let offset = LocalVar("offset", initial: 1)
+            Algorithm("ProcedureSource") { scope in
+                let output = scope.sharedVar("output", initial: 0)
+                Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
+                    let offset = scope.localVar("offset", initial: 1)
                     Do(TestControlLabel.enter) {
                         Await(value.expr >= 0)
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
-                }
+                })
                 Do(TestControlLabel.start) { Call(ProcedureName.work, with: 7) }
                 Do(TestControlLabel.finished) { Stop() }
             }
@@ -1013,9 +1013,9 @@ private func parserEnum(
     func diagnosesStatementMacroArity() throws {
         let source = """
         {
-            Algorithm("BadMacroCall") {
-                let destination = SharedVar("destination", initial: 0)
-                let source = SharedVar("source", initial: 7)
+            Algorithm("BadMacroCall") { scope in
+                let destination = scope.sharedVar("destination", initial: 0)
+                let source = scope.sharedVar("source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                     Assign(target, to: value.expr)
                 }
@@ -1034,8 +1034,8 @@ private func parserEnum(
     func parsesParameterlessStatementMacro() throws {
         let source = """
         {
-            Algorithm("ParameterlessMacro") {
-                let count = SharedVar("count", initial: 0)
+            Algorithm("ParameterlessMacro") { scope in
+                let count = scope.sharedVar("count", initial: 0)
                 let increment = Macro {
                     Assign(count, to: count + 1)
                 }
@@ -1055,8 +1055,8 @@ private func parserEnum(
     func parsesFilteredFunctionInitialDomain() throws {
         let source = """
         {
-            Algorithm("FunctionDomain") {
-                let successors = SharedVar("successors", in: Where(
+            Algorithm("FunctionDomain") { scope in
+                let successors = scope.sharedVar("successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
                     All(Node.all) { node in
@@ -1125,8 +1125,8 @@ private func parserEnum(
     func parsesRecordFunctionComprehension() throws {
         let source = """
         {
-            Algorithm("RecordFunction") {
-                let cars = SharedVar("cars", initial: Function<Car, Record<Model.CarRecord>>.mapping { _ in
+            Algorithm("RecordFunction") { scope in
+                let cars = scope.sharedVar("cars", initial: Function<Car, Record<Model.CarRecord>>.mapping { _ in
                     Record.literal(
                         .init(Model.CarRecord.floor, 4),
                         .init(Model.CarRecord.door, .closed)
@@ -1165,8 +1165,8 @@ private func parserEnum(
     func parsesEmptySetFunctionComprehension() throws {
         let source = """
         {
-            Algorithm("Votes") {
-                let votes = SharedVar("votes", initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
+            Algorithm("Votes") { scope in
+                let votes = scope.sharedVar("votes", initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
                 Do(TestControlLabel.hold) { Assign(votes, to: votes.expr) }
             }
         }
@@ -1224,12 +1224,12 @@ private func parserEnum(
     func parsesStaticFormalSelection() throws {
         let source = """
         {
-            Algorithm("StaticChoice") {
+            Algorithm("StaticChoice") { scope in
                 let selected = Select(
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
                 )
-                let current: SharedVariable<Int> = SharedVar("current", initial: selected)
+                let current: SharedVariable<Int> = scope.sharedVar("current", initial: selected)
                 Do(TestControlLabel.done) { Stop() }
             }
         }
@@ -1246,8 +1246,8 @@ private func parserEnum(
     func parsesStatementMacroWithProcessIdentifier() throws {
         let source = """
         {
-            Algorithm("MacroProcess") {
-                let marked = SharedVar("marked", initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
+            Algorithm("MacroProcess") { scope in
+                let marked = scope.sharedVar("marked", initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
                 let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
                 }
@@ -1414,8 +1414,8 @@ private func parserEnum(
     @Test("parsed shared initializers retain and evaluate their formal expression")
     func parsedSharedInitializerRetainsFormalExpression() throws {
         let closure = try parseClosure("""
-        {
-            let count: SharedVariable<Int> = SharedVar("count", initial: 1 + 2)
+        { scope in
+            let count: SharedVariable<Int> = scope.sharedVar("count", initial: 1 + 2)
         }
         """)
         let parsed = SpecParser.parseSpecClosure(closure)
@@ -1434,15 +1434,15 @@ private func parserEnum(
     @Test("parsed and built literal initializers have one compilation identity")
     func parsedAndBuiltLiteralInitializersShareIdentity() throws {
         let closure = try parseClosure("""
-        {
-            let count = SharedVar("count", initial: 1)
+        { scope in
+            let count = scope.sharedVar("count", initial: 1)
         }
         """)
         let parsed = try SpecParser.parseSpecClosure(closure).compile(
             specificationName: "LiteralInitializer"
         )
-        let built = try TLASpec("LiteralInitializer") {
-            SharedVar("count", initial: 1)
+        let built = try TLASpec("LiteralInitializer") { scope in
+            let _ = scope.sharedVar("count", initial: 1)
         }.compile()
 
         #expect(parsed.identity == built.identity)
@@ -1451,9 +1451,9 @@ private func parserEnum(
     @Test("parsed initial domains retain state dependencies")
     func parsedInitialDomainsRetainStateDependencies() throws {
         let closure = try parseClosure("""
-        {
-            let limit = SharedVar("limit", initial: 2)
-            let choice = SharedVar("choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
+        { scope in
+            let limit = scope.sharedVar("limit", initial: 2)
+            let choice = scope.sharedVar("choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
                 value <= limit
             })
         }
@@ -1611,8 +1611,8 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     @Test("top-level variable declarations retain their Swift type")
     func retainsAnnotatedVariableType() throws {
         let source = """
-        {
-            let mode: SharedVariable<CameraMode> = SharedVar("mode", initial: CameraMode.idle)
+        { scope in
+            let mode: SharedVariable<CameraMode> = scope.sharedVar("mode", initial: CameraMode.idle)
         }
         """
         let closure = try parseClosure(source)
