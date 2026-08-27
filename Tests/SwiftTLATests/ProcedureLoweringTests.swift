@@ -143,7 +143,7 @@ struct ProcedureLoweringTests {
                 .shared(.init(root: "seen", initialization: .value(.function([
                     .int(1): .int(0),
                     .int(2): .int(0)
-                ])))),
+                ])), swiftTypeName: "Function<Worker, Int>")),
                 .process(.init(
                     typeName: "Worker",
                     domain: workers,
