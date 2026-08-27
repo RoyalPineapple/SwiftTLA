@@ -654,7 +654,7 @@ struct GeneratedStateMachineTests {
     @Test("#spec preserves the constrained TLASpec builder for model generation")
     func specExpressionMacroCompilesExternally() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/SpecExpressionMacro")
-        let result = try runSwiftPackage(["run", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
 
         #expect(result.status == 0, Comment(rawValue: result.output))
     }
