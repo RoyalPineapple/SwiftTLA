@@ -191,7 +191,13 @@ struct LanguageCapabilityContractTests {
         }
         """
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDefinitions: [ParserEnumDefinition(
+                typeName: "TestControlLabel",
+                cases: ["increment": .string("increment")]
+            )]
+        )
         let parsedCompilation = try parsed.compile(specificationName: "CanonicalAlgorithm")
         let builderCompilation = try TLASpec("CanonicalAlgorithm") {
             Algorithm("CanonicalAlgorithm", scoped: { scope in

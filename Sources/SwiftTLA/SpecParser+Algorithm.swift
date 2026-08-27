@@ -1449,21 +1449,12 @@ extension ParserSession {
     }
 
     private func algorithmLabel(_ expression: ExprSyntax?) -> String? {
-        guard let expression else { return nil }
-        if let literal = expression.as(StringLiteralExprSyntax.self) {
-            return literal.representedLiteralValue
+        guard let label = controlLocation(expression) else {
+            let source = expression?.description.trimmingCharacters(in: .whitespacesAndNewlines) ?? "missing"
+            algorithmParseFailure = "Algorithm control label '\(source)' must be a qualified case of a registered String-backed enum."
+            return nil
         }
-        if let access = expression.as(MemberAccessExprSyntax.self) {
-            guard let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text else {
-                return nil
-            }
-            if case .string(let rawLabel) = enumDefinition(named: type)?
-                .value(named: access.declName.baseName.text) {
-                return rawLabel
-            }
-            return access.declName.baseName.text
-        }
-        return nil
+        return label
     }
 
     func finiteAlgorithmDomain(_ expression: ExprSyntax) -> (typeName: String, values: [TLAValue])? {

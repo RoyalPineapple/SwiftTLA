@@ -1446,20 +1446,26 @@ private enum MissingAlgorithmLabel: String, CaseIterable {
 
 @TLAModel
 private struct ProcedureGeneratedModel {
+    enum Step: String, CaseIterable {
+        case enter
+        case start
+        case finished
+    }
+
     static var spec: TLASpec {
         #spec("ProcedureGenerated") {
             Algorithm("ProcedureGenerated", scoped: { scope in
                 let output = scope.sharedVar("output", initial: 0)
                 Procedure("work", parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar("offset", initial: 1)
-                    Do(TestControlLabel.enter) {
+                    Do(Step.enter) {
                         Await(value.expr >= 0)
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
                 })
-                Do(TestControlLabel.start) { Call("work", with: 7) }
-                Do(TestControlLabel.finished) { Stop() }
+                Do(Step.start) { Call("work", with: 7) }
+                Do(Step.finished) { Stop() }
             })
         }
     }
@@ -1467,6 +1473,11 @@ private struct ProcedureGeneratedModel {
 
 @TLAModel
 private struct MacroProcessGeneratedModel {
+    enum Step: String, CaseIterable {
+        case mark
+        case done
+    }
+
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
@@ -1486,8 +1497,8 @@ private struct MacroProcessGeneratedModel {
                 }
 
                 Each(Node.all) { node in
-                    Do(TestControlLabel.mark) { mark(node) }
-                    Do(TestControlLabel.done) { Stop() }
+                    Do(Step.mark) { mark(node) }
+                    Do(Step.done) { Stop() }
                 }
             })
         }
@@ -1496,6 +1507,8 @@ private struct MacroProcessGeneratedModel {
 
 @TLAModel
 private struct FunctionDomainGeneratedModel {
+    enum Step: String, CaseIterable { case done }
+
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
@@ -1517,7 +1530,7 @@ private struct FunctionDomainGeneratedModel {
                     }
                 })
 
-                Do(TestControlLabel.done) { Stop() }
+                Do(Step.done) { Stop() }
                 Invariant("OneSuccessorPerNode") {
                     All(Node.all) { node in
                         successors[node].cardinality == 1
@@ -1530,6 +1543,8 @@ private struct FunctionDomainGeneratedModel {
 
 @TLAModel
 private struct StaticFormalSelectionModel {
+    enum Step: String, CaseIterable { case done }
+
     static var spec: TLASpec {
         #spec("StaticFormalSelection") {
             Algorithm("StaticFormalSelection", scoped: { scope in
@@ -1539,7 +1554,7 @@ private struct StaticFormalSelectionModel {
                 )
                 let current: SharedVariable<Int> = scope.sharedVar("current", initial: selected)
 
-                Do(TestControlLabel.done) { Stop() }
+                Do(Step.done) { Stop() }
                 Invariant("SelectedEven") { current == 2 }
             })
         }
@@ -1548,6 +1563,8 @@ private struct StaticFormalSelectionModel {
 
 @TLAModel
 private struct StaticFilteredFunctionSelectionModel {
+    enum Step: String, CaseIterable { case done }
+
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case first
         case second
@@ -1577,7 +1594,7 @@ private struct StaticFilteredFunctionSelectionModel {
                     initial: successors
                 )
 
-                Do(TestControlLabel.done) { Stop() }
+                Do(Step.done) { Stop() }
                 Invariant("CurrentIsDefined") { current == current.expr }
             })
         }

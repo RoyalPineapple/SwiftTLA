@@ -28,6 +28,23 @@ private func parserEnum(
 }
 
 @Suite(.serialized) struct AlgorithmBuilderParsingTests {
+    private var controlLabels: ParserEnumDefinition {
+        parserEnum(
+            "TestControlLabel",
+            cases: .init(TestControlLabel.allCases.map { .init($0.rawValue, .string($0.rawValue)) })
+        )
+    }
+
+    private func parseAlgorithm(
+        _ closure: ClosureExprSyntax,
+        enumDefinitions: [ParserEnumDefinition] = []
+    ) -> SpecParser.ParsedSpecComponents {
+        SpecParser.parseSpecClosure(
+            closure,
+            enumDefinitions: [controlLabels] + enumDefinitions
+        )
+    }
+
     private func compile(
         _ parsed: SpecParser.ParsedSpecComponents,
         named name: String
@@ -58,7 +75,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum("Node", finiteValues: [.string("left"), .string("right")])]
         )
@@ -78,7 +95,7 @@ private func parserEnum(
 
     @Test("parser retains unsupported procedure declarations for compiler diagnostics")
     func retainsUnsupportedProcedureDeclarationForCompilerDiagnostic() throws {
-        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        let parsed = parseAlgorithm(try parseClosure("""
         {
             Algorithm("ProcedureCapability") {
                 Procedure("work") {
@@ -115,7 +132,7 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             try parseClosure(source),
             enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
@@ -138,7 +155,7 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             try parseClosure(source),
             enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
@@ -154,7 +171,7 @@ private func parserEnum(
             Algorithm("EachScope", scoped: { scope in
                 let enabled = scope.sharedVar("enabled", initial: true)
                 Each(Node.all) { _ in
-                    Do(TestControlLabel.step) {
+                    Do(TestControlLabel.advance) {
                         Await(enabled == true)
                         Stop()
                     }
@@ -162,13 +179,13 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             try parseClosure(source),
             enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(try loweredSource(parsed, named: "EachScope").actions.map(\.name) == ["step", "Terminating"])
+        #expect(try loweredSource(parsed, named: "EachScope").actions.map(\.name) == ["advance", "Terminating"])
     }
 
     @Test("Algorithm parser carries shared bindings into macro declarations")
@@ -180,14 +197,14 @@ private func parserEnum(
                 let waitUntilEnabled = Macro { (value: MacroParameter<Bool>) in
                     Await(enabled == value.expr)
                 }
-                Do(TestControlLabel.step) { waitUntilEnabled(enabled) }
+                Do(TestControlLabel.advance) { waitUntilEnabled(enabled) }
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(try loweredSource(parsed, named: "MacroScope").actions.map(\.name) == ["step", "Terminating"])
+        #expect(try loweredSource(parsed, named: "MacroScope").actions.map(\.name) == ["advance", "Terminating"])
     }
 
     @Test("Algorithm parser resolves enum cases through lexical and declared type scope")
@@ -200,7 +217,7 @@ private func parserEnum(
                 })
                 Each(Worker.all, scoped: { _, scope in
                     let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
-                    Do(TestControlLabel.step) {
+                    Do(TestControlLabel.advance) {
                         Await(phases[current] == .ready)
                         Stop()
                     }
@@ -208,7 +225,7 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             try parseClosure(source),
             enumDefinitions: [
                 parserEnum(
@@ -242,7 +259,7 @@ private func parserEnum(
         {
             Algorithm("TupleAppend", scoped: { scope in
                 let values = scope.sharedVar("values", initial: TupleExpr<Int>())
-                Do(TestControlLabel.step) {
+                Do(TestControlLabel.advance) {
                     Let(values.expr.appending(1)) { extended in
                         Assert(extended.expr.count == 1)
                     }
@@ -251,7 +268,7 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         _ = try compile(parsed, named: "TupleAppend")
@@ -265,14 +282,14 @@ private func parserEnum(
             Algorithm("TupleCount", scoped: { scope in
                 let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2))
                 let count = scope.sharedVar("count", initial: 0)
-                Do(TestControlLabel.step) {
+                Do(TestControlLabel.advance) {
                     Assign(count, to: values.count)
                     Stop()
                 }
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let module = try compile(parsed, named: "TupleCount").renderedTLAModuleBundle().tla
@@ -289,14 +306,14 @@ private func parserEnum(
                     lengths: 1...2
                 ))
                 let count = scope.sharedVar("count", initial: 0)
-                Do(TestControlLabel.step) {
+                Do(TestControlLabel.advance) {
                     Assign(count, to: input.count)
                     Stop()
                 }
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let module = try compile(parsed, named: "ZeroBasedCount").renderedTLAModuleBundle().tla
@@ -315,7 +332,7 @@ private func parserEnum(
                     initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
                 )
                 let count = scope.sharedVar("count", initial: 0)
-                Do(TestControlLabel.step) {
+                Do(TestControlLabel.advance) {
                     With(pending) { tuple in
                         Assign(count, to: tuple.expr.count)
                     }
@@ -329,7 +346,7 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let module = try compile(parsed, named: "BoundTupleCount").renderedTLAModuleBundle().tla
@@ -350,7 +367,7 @@ private func parserEnum(
             algorithm
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.sourceAlgorithms.count == 1)
@@ -392,7 +409,7 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.count == 1)
         #expect(parsed.diagnostics[0].message.contains("Unsupported Algorithm declaration"))
@@ -420,7 +437,7 @@ private func parserEnum(
         }
         """
 
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             try parseClosure(source),
             enumDefinitions: [parserEnum("Node", finiteValues: [.string("only")])]
         )
@@ -477,7 +494,7 @@ private func parserEnum(
             (
                 name: "UnknownInDo",
                 body: """
-                Do("step") {
+                Do(TestControlLabel.advance) {
                     UnknownInDo()
                 }
                 """
@@ -485,7 +502,7 @@ private func parserEnum(
             (
                 name: "UnknownInIf",
                 body: """
-                Do("step") {
+                Do(TestControlLabel.advance) {
                     If(true) {
                         UnknownInIf()
                     }
@@ -495,7 +512,7 @@ private func parserEnum(
             (
                 name: "UnknownInWith",
                 body: """
-                Do("step") {
+                Do(TestControlLabel.advance) {
                     With(SetExpr<Int>.literal(1)) { value in
                         UnknownInWith()
                     }
@@ -512,7 +529,7 @@ private func parserEnum(
                 }
             }
             """
-            let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+            let parsed = parseAlgorithm(try parseClosure(source))
 
             #expect(parsed.sourceAlgorithms.isEmpty)
             let diagnostic = try #require(parsed.diagnostics.first?.capabilityDiagnostic)
@@ -534,7 +551,7 @@ private func parserEnum(
         {
             Algorithm("FormalClosureBoundary") {
                 let count = SharedVar("count", initial: 0)
-                Do("advance") {
+                Do(TestControlLabel.advance) {
                     let imported: Expr<Int> = ModuleCall("Instance", "Value", count)
                     Assign(count, to: imported)
                 }
@@ -551,7 +568,7 @@ private func parserEnum(
         }
         """
 
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         #expect(parsed.sourceAlgorithms.map(\.model.name) == ["FormalClosureBoundary"])
@@ -661,7 +678,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum("Node", finiteValues: [.string("left"), .string("right")])]
         )
@@ -681,7 +698,7 @@ private func parserEnum(
         {
             Algorithm("Temporal") {
                 let value = SharedVar("value", initial: 0)
-                Do("advance") {
+                Do(TestControlLabel.advance) {
                     Assign(value, to: value + 1)
                 }
                 LeadsTo("progress", value == 0, value > 0)
@@ -692,7 +709,7 @@ private func parserEnum(
             }
         }
         """
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(try loweredSource(parsed, named: "Temporal").temporalProperties.map(\.name) == [
@@ -726,7 +743,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum(
                 "Worker",
@@ -760,7 +777,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
         guard let diagnostic = parsed.diagnostics.first else {
             Issue.record("Expected a malformed formal-lambda diagnostic")
             return
@@ -792,7 +809,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ThreeWith")
@@ -817,7 +834,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum("Node", finiteValues: [.string("left"), .string("right")])]
         )
@@ -843,7 +860,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "CopyValue")
@@ -866,7 +883,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "OffsetValue")
@@ -892,7 +909,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "PairVote")
@@ -915,7 +932,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.actions.isEmpty)
         let diagnostic = parsed.diagnostics.first?.message ?? ""
@@ -944,7 +961,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ProcedureSource")
@@ -967,7 +984,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.first?.message.contains("Statement macro 'copy' expects 2 arguments but received 1.") == true)
@@ -987,7 +1004,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "ParameterlessMacro")
@@ -1011,7 +1028,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum(
                 "Node",
@@ -1051,7 +1068,7 @@ private func parserEnum(
             })
         }
         """
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             try parseClosure(source),
             enumDefinitions: [parserEnum(
                 "Node",
@@ -1080,7 +1097,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [
                 parserEnum("Door", cases: ["closed": .string("closed")]),
@@ -1115,7 +1132,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum("Acceptor", finiteValues: [.string("a1"), .string("a2")])]
         )
@@ -1149,7 +1166,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum(
                 "Node",
@@ -1178,7 +1195,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = parseAlgorithm(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "StaticChoice")
@@ -1201,7 +1218,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum(
                 "Node",
@@ -1216,43 +1233,66 @@ private func parserEnum(
         #expect(body?.description.contains("__pcal_macro_parameter") == false)
     }
 
-    @Test("parser uses a PlusCal label enum's declared raw value")
-    func parsesDeclaredRawAlgorithmLabel() throws {
+    @Test("Do, While, and Goto use their declared label raw values")
+    func parsesDeclaredAlgorithmLabels() throws {
         let source = """
         {
             Algorithm("RawLabel") {
-                Each(Node.all) { _ in
-                    Do(Step.resourceManager) { Stop() }
-                }
+                Do(Step.start) { Goto(Step.finish) }
+                While(Step.loop, true) { Goto(Step.finish) }
+                Do(Step.finish) { Stop() }
             }
         }
         """
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [
-                parserEnum("Step", cases: ["resourceManager": .string("RS")]),
-                parserEnum("Node", finiteValues: [.string("left"), .string("right")])
-            ]
+            enumDefinitions: [parserEnum("Step", cases: [
+                "start": .string("Begin"),
+                "loop": .string("Repeat"),
+                "finish": .string("Finish")
+            ])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        let specification = try loweredSource(parsed, named: "RawLabel")
-        #expect(specification.actions.map(\.name) == ["RS", "Terminating"])
+        let algorithm = try #require(parsed.sourceAlgorithms.first?.model)
+        #expect(algorithm.sequentialSteps.map(\.label.name) == ["Begin", "Repeat", "Finish"])
+        #expect(algorithm.sequentialSteps[0].statements == [.goto(.init(name: "Finish"))])
+        #expect(algorithm.sequentialSteps[1].statements == [.goto(.init(name: "Finish"))])
+        _ = try compile(parsed, named: "RawLabel")
     }
 
-    @Test("algorithm labels must be static")
-    func rejectsInterpolatedAlgorithmLabel() throws {
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(#"""
-        {
-            Algorithm("DynamicLabel") {
-                Do("step\(suffix)") { Stop() }
+    @Test("Do, While, and Goto reject labels outside a registered enum")
+    func rejectsUnboundAlgorithmLabels() throws {
+        let invalidLabels = [
+            #""label""#,
+            ".advance",
+            "Unknown.advance",
+            "TestControlLabel.missing"
+        ]
+        for construct in ["Do", "While", "Goto"] {
+            for label in invalidLabels {
+                let statement: String
+                switch construct {
+                case "Do": statement = "Do(\(label)) { Stop() }"
+                case "While": statement = "While(\(label), true) { Stop() }"
+                default: statement = "Do(TestControlLabel.advance) { Goto(\(label)) }"
+                }
+                let parsed = parseAlgorithm(try parseClosure("""
+                {
+                    Algorithm("InvalidLabel") {
+                        \(statement)
+                    }
+                }
+                """))
+
+                #expect(parsed.sourceAlgorithms.isEmpty, "\(construct) accepted \(label)")
+                let diagnostic = try #require(parsed.diagnostics.first)
+                #expect(diagnostic.message.contains(
+                    "Algorithm control label '\(label)' must be a qualified case of a registered String-backed enum."
+                ))
             }
         }
-        """#))
-
-        #expect(parsed.sourceAlgorithms.isEmpty)
-        #expect(parsed.diagnostics.count == 1)
     }
 
     @Test("parsed algorithms compile their declared process owner")
@@ -1271,7 +1311,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = parseAlgorithm(
             closure,
             enumDefinitions: [parserEnum(
                 "ParserNode",
@@ -1711,7 +1751,13 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDefinitions: [parserEnum(
+                "TestControlLabel",
+                cases: ["stop": .string("stop")]
+            )]
+        )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         #expect(parsed.sourceAlgorithms.first?.model.formalOperatorDefinitions == [
@@ -2044,6 +2090,29 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(SpecParser.decodeStateExpr(
             try parseExpression(#"At("step\(suffix)", worker)"#)
         ) == nil)
+    }
+
+    @Test("control locations require a declared label case")
+    func requiresDeclaredControlLocation() throws {
+        let parser = ParserSession(enumDefinitions: [
+            parserEnum("Label", cases: ["receive": .string("receive")])
+        ])
+        let expected = StateExpr.equal(
+            .functionApply(.programCounter, .variable("worker")),
+            .controlLocation(.init("receive"))
+        )
+
+        #expect(parser.decodeStateExpr(
+            try parseExpression("At(Label.receive, worker)")
+        ) == expected)
+        for source in [
+            #"At("receive", worker)"#,
+            "At(.receive, worker)",
+            "At(Other.receive, worker)",
+            "At(Label.missing, worker)"
+        ] {
+            #expect(parser.decodeStateExpr(try parseExpression(source)) == nil)
+        }
     }
 }
 
@@ -2744,6 +2813,8 @@ private enum TestPersonID: String, FiniteTLAValueDomain {
 
 @TLAModel
 private struct DefinePhaseGeneratedModel {
+    enum Step: String, CaseIterable { case stay }
+
     enum Mode: String, FiniteTLAValueDomain {
         case define
 
@@ -2755,7 +2826,7 @@ private struct DefinePhaseGeneratedModel {
         #spec("DefinePhaseGeneratedModel") {
             Algorithm("Phase", scoped: { scope in
                 let mode: SharedVariable<Mode> = scope.sharedVar("mode", initial: .define)
-                Do(TestControlLabel.stay) { Assign(mode, to: mode) }
+                Do(Step.stay) { Assign(mode, to: mode) }
             })
             FormalDefinition("Visible", parameters: [], body: true, plusCalPhase: .define)
         }

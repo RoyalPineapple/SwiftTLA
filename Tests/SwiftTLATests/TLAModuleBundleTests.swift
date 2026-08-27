@@ -15,12 +15,14 @@ private func parseExpression(_ source: String) throws -> ExprSyntax {
 
 @TLAModel
 private struct ImportedFormalModuleGeneratedModel {
+  enum Step: String, CaseIterable { case keep }
+
   static var spec: TLASpec {
     #spec("ImportedFormalModuleGeneratedModel") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Algorithm("ImportedFormalModuleGeneratedModel", scoped: { scope in
         let value = scope.sharedVar("value", initial: 0)
-        Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
+        Do(Step.keep) { Assign(value, to: value.expr) }
       })
     }
   }
@@ -28,12 +30,14 @@ private struct ImportedFormalModuleGeneratedModel {
 
 @TLAModel
 private struct InstancedFormalModuleGeneratedModel {
+  enum Step: String, CaseIterable { case keep }
+
   static var spec: TLASpec {
     #spec("InstancedFormalModuleGeneratedModel") {
       Instance("Folding", of: Folds.module)
       Algorithm("InstancedFormalModuleGeneratedModel", scoped: { scope in
         let value = scope.sharedVar("value", initial: 0)
-        Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
+        Do(Step.keep) { Assign(value, to: value.expr) }
       })
     }
   }
