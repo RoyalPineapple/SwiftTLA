@@ -653,8 +653,7 @@ struct NestedComposedCounter {
 struct GeneratedStateMachineTests {
     @Test("#spec preserves the constrained TLASpec builder for model generation")
     func specExpressionMacroCompilesExternally() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/SpecExpressionMacro")
-        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
+        let result = try buildExternalConsumer("SpecExpressionMacro")
 
         #expect(result.status == 0, Comment(rawValue: result.output))
     }
@@ -844,10 +843,9 @@ struct GeneratedStateMachineTests {
         #expect(await actor.state == actorBefore)
     }
 
-    @Test("Removed fixed-arity action syntax does not type check")
-    func unsupportedActionParameterSyntaxDoesNotCompile() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidActionParameterAPI")
-        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
+    @Test("Fixed-arity action syntax does not type check")
+    func fixedArityActionSyntaxDoesNotCompile() throws {
+        let result = try buildExternalConsumer("InvalidActionParameterAPI")
 
         #expect(result.status != 0)
         #expect(result.output.contains("Parameterized action 'singleParameter' requires a parameters list"))

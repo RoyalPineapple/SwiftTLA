@@ -98,8 +98,7 @@ struct NestedComposableMacroConformanceTests {
 
     @Test("Model macro rejects arbitrary instance state")
     func modelWithInstanceStoredStateDoesNotTypeCheck() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidModelStoredState")
-        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
+        let result = try buildExternalConsumer("InvalidModelStoredState")
 
         #expect(result.status != 0)
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
@@ -107,8 +106,7 @@ struct NestedComposableMacroConformanceTests {
 
     @Test("Model macro rejects dynamic formal module names")
     func modelWithDynamicFormalModuleNameDoesNotTypeCheck() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidDynamicModelName")
-        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
+        let result = try buildExternalConsumer("InvalidDynamicModelName")
 
         #expect(result.status != 0)
         #expect(result.output.contains("must be a string literal; dynamic names cannot form a stable compilation identity"))
@@ -116,8 +114,7 @@ struct NestedComposableMacroConformanceTests {
 
     @Test("Model macro rejects observer-backed instance state")
     func modelWithObservedInstanceStateDoesNotTypeCheck() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidObservedModelState")
-        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
+        let result = try buildExternalConsumer("InvalidObservedModelState")
 
         #expect(result.status != 0)
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
@@ -125,16 +122,14 @@ struct NestedComposableMacroConformanceTests {
 
     @Test("External clients compile against generated typed application surfaces")
     func generatedTypedSurfaceCompilesExternally() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/GeneratedTypedSurface")
-        let result = try runSwiftPackage(["run", "--package-path", fixture.path])
+        let result = try runExternalConsumer("GeneratedTypedSurface")
 
         #expect(result.status == 0)
     }
 
     @Test("External clients cannot use raw state maps or transition evidence")
     func generatedRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
-        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidGeneratedRawSurface")
-        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
+        let result = try buildExternalConsumer("InvalidGeneratedRawSurface")
 
         #expect(result.status != 0)
         #expect(result.output.contains("has no member 'tlaSnapshot'"))
@@ -158,8 +153,7 @@ struct NestedComposableMacroConformanceTests {
         stateDiagnostic: String,
         requiresGeneratedSurfaceRejection: Bool = true
     ) throws {
-        let package = packageRoot().appendingPathComponent("Tests/Fixtures/\(fixture)")
-        let result = try runSwiftPackage(["build", "--package-path", package.path])
+        let result = try buildExternalConsumer(fixture)
 
         #expect(result.status != 0)
         #expect(result.output.contains(stateDiagnostic))

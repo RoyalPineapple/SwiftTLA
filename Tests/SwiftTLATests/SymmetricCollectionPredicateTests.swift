@@ -197,8 +197,7 @@ struct SymmetricCollectionPredicateTests {
 
   @Test("Macro diagnostics anchor unsupported predicates at the authored expression")
   func macroDiagnosticAnchorsUnsupportedPredicate() throws {
-    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidCollectionPredicateMacro")
-    let result = try runSwiftPackage(["build", "--package-path", fixture.path])
+    let result = try buildExternalConsumer("InvalidCollectionPredicateMacro")
 
     #expect(result.status != 0)
   }
