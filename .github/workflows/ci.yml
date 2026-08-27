@@ -5,82 +5,19 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      run_hosted_diagnostics:
-        description: Run unstable hosted macOS test and coverage diagnostics.
-        required: false
-        default: false
-        type: boolean
 
 jobs:
-  release-code-check:
+  swift-tests:
     runs-on: macos-15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
       - name: Validate local validation lock contract
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
-      - name: Validate release code-check contract
-        run: bash Tests/Fixtures/ReleaseCodeCheck/assert_workflow.sh
-
-      - name: Run SwiftLint (advisory)
-        run: |
-          set +e
-          ./scripts/lint-zero-new.sh
-          lint_status=$?
-          set -e
-          if [ "$lint_status" -ne 0 ]; then
-            echo "::warning::SwiftLint violations found; see this step's diagnostics."
-          fi
-
-      - name: Run tests (hosted diagnostic)
-        if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_diagnostics
-        run: |
-          set +e
-          xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS'
-          test_status=$?
-          set -e
-          if [ "$test_status" -ne 0 ]; then
-            echo "::warning::Hosted macOS test runner failed (exit $test_status). Run make ci-local before making a release claim."
-          fi
-
-      - name: Run coverage (hosted diagnostic)
-        if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_diagnostics
-        run: |
-          set +e
-          xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS' -enableCodeCoverage YES
-          coverage_status=$?
-          set -e
-          if [ "$coverage_status" -ne 0 ]; then
-            echo "::warning::Hosted macOS coverage runner failed (exit $coverage_status). Run make ci-local before making a release claim."
-          fi
-
-  build:
-    runs-on: macos-15
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      - run: swift build --target SwiftTLA -j 1
-
-  public-api:
-    name: public-api (${{ matrix.name }})
-    runs-on: macos-15
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: machine
-            filter: 'SwiftTLATests\.(GeneratedStateMachineTests|GeneratedActorExecutionContractTests|GeneratedMachineDocumentationTests)'
-          - name: model-diagnostics
-            filter: 'modelWithInstanceStoredStateDoesNotTypeCheck|modelWithDynamicFormalModuleNameDoesNotTypeCheck|modelWithObservedInstanceStateDoesNotTypeCheck'
-          - name: external-surfaces
-            filter: 'generatedTypedSurfaceCompilesExternally|generatedRawStateAndTransitionEvidenceDoNotCompileExternally|generatedActorRawStateDoesNotCompileExternally'
-    steps:
-      - uses: actions/checkout@v5
-      - run: ./scripts/local-validation.sh swiftpm-test '${{ matrix.filter }}'
+      - name: Build and test every Swift target
+        run: swift test -j 1
 
   apple-platform-examples:
     runs-on: macos-15

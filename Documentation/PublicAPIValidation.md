@@ -1,8 +1,8 @@
 # Public API validation
 
-The `public-api` GitHub Actions job validates SwiftTLA as an external Swift
-package. It runs the repository smoke suite, which exercises the generated
-value machine, actor, and SwiftUI-facing API.
+The required `swift-tests` GitHub Actions job validates SwiftTLA's compiler,
+runtime, generated machine, and external Swift package contracts. It runs both
+repository test targets.
 
 The suite also builds real consumer packages:
 

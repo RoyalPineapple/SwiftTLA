@@ -25,7 +25,6 @@ core-governance, and temporal/symmetry checks:
 ./scripts/local-validation.sh swiftpm-test "UpstreamParityTests"
 ```
 
-GitHub Actions runs the broad PR smoke suite as the `public-api` job. The suite
-checks generated value-machine and actor behavior, then builds valid and
-invalid external consumer packages. Run focused local diagnosis through the
-approved wrapper.
+GitHub Actions runs both test targets as the required `swift-tests` job. The
+job also builds the valid and invalid external-consumer targets exercised by
+the test suites. Run focused local diagnosis through the approved wrapper.
