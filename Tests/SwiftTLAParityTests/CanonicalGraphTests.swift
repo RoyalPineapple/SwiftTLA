@@ -115,9 +115,6 @@ struct CanonicalGraphTests {
             moduleSHA256: String(repeating: "a", count: 64),
             cfgSHA256: String(repeating: "b", count: 64),
             arguments: [],
-            argumentsSHA256: try FiniteGraphCase.argumentsDigest([]),
-            operatingSystem: "macos",
-            architecture: "arm64",
             environment: [:],
             pin: try testReferencePin(),
             renderedActions: [

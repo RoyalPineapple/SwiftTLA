@@ -135,8 +135,7 @@ package struct TLCTemporalAdapter: Sendable {
           request.cfgSHA256 == SHA256.hex(Data(propertyConfiguration.utf8)) else {
       throw TLCTemporalAdapterError.configurationMismatch
     }
-    guard request.pin == input.request.referencePin,
-          request.moduleSHA256 == sourceInput.sha256 else {
+    guard request.moduleSHA256 == sourceInput.sha256 else {
       throw TLCTemporalAdapterError.provenanceMismatch
     }
     guard try SHA256.hex(Data(contentsOf: input.sourceInputURL)) == sourceInput.sha256 else {
@@ -154,8 +153,6 @@ package struct TLCTemporalAdapter: Sendable {
           graphRequest.bundle.root.tla == input.request.bundle.root.tla,
           graphRequest.finiteGraphCase.arguments == input.request.finiteGraphCase.arguments,
           graphRequest.finiteGraphCase.pin == input.request.finiteGraphCase.pin,
-          graphRequest.finiteGraphCase.operatingSystem == input.request.finiteGraphCase.operatingSystem,
-          graphRequest.finiteGraphCase.architecture == input.request.finiteGraphCase.architecture,
           graphRequest.finiteGraphCase.environment == input.request.finiteGraphCase.environment,
           graphRequest.finiteGraphCase.moduleSHA256 == sourceInput.sha256 else {
       throw TLCTemporalAdapterError.requestMismatch

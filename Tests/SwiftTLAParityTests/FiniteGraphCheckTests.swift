@@ -73,14 +73,17 @@ struct FiniteGraphCheckTests {
     #expect(tlcCompletion["eligible"] as? Bool == true)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    let processRequest = try #require(process["request"] as? [String: Any])
-    #expect((processRequest["case"] as? [String: Any])?["id"] as? String == request.finiteGraphCase.id)
-    let retainedExploration = try #require(
-      (processRequest["case"] as? [String: Any])?["exploration"] as? [String: Any])
-    #expect(retainedExploration["maximumStateLimit"] as? Int == 10)
-    #expect(retainedExploration["symmetryReduction"] as? String == "disabled")
-    #expect((processRequest["toolchain"] as? [String: Any])?["declaredPin"] != nil)
-    #expect((processRequest["bundle"] as? [String: Any])?["root"] as? String == "Fixture")
+    #expect(process["caseID"] as? String == request.finiteGraphCase.id)
+    #expect(process["runID"] as? String == request.runID.uuidString.lowercased())
+    let inputs = try #require(process["inputs"] as? [[String: String]])
+    #expect(Set(inputs.compactMap { $0["file"] }) == ["Fixture.tla", "Fixture.cfg"])
+    #expect(Set(inputs.compactMap { $0["sha256"] }) == [SHA256.hex(Data())])
+    #expect(process["toolPin"] != nil)
+    let primary = try #require(process["primary"] as? [String: Any])
+    let arguments = try #require(primary["arguments"] as? [String])
+    #expect(arguments.contains("-workers"))
+    #expect(arguments.contains(where: { $0.hasSuffix("/Fixture.cfg") }))
+    #expect(arguments.contains(where: { $0.hasSuffix("/Fixture.tla") }))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
     let comparison = try #require(result.comparison)
@@ -280,7 +283,7 @@ extension FiniteGraphCheckTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.trace.jsonl").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
+    #expect((process["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
     #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
   }
   @Test("finite graph check retains completed primary evidence after an arbitrary trace execution error")
@@ -308,7 +311,7 @@ extension FiniteGraphCheckTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.trace.failure.log").path))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.failure.log").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
+    #expect((process["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
     #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
   }
   @Test("finite graph check rejects an existing output without touching it")
@@ -369,13 +372,12 @@ extension FiniteGraphCheckTests {
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-process.json").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.trace.stdout.log").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("raw-artifacts.json").path))
     #expect(!fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.primary.failure.log").path))
     let loserDiagnostic = try json(at: losingEvidence.appendingPathComponent("diagnostic.json"))
     #expect(loserDiagnostic["phase"] as? String == "publication")
     let loserProcess = try json(at: losingEvidence.appendingPathComponent("tlc-process.json"))
-    #expect((loserProcess["primary"] as? [String: Any])?["status"] as? Int == 12)
-    #expect((loserProcess["trace"] as? [String: Any])?["status"] as? Int == 12)
+    #expect((loserProcess["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
+    #expect((loserProcess["trace"] as? [String: Any])?["exitStatus"] as? Int == 12)
     #expect(
       (try String(contentsOf: losingEvidence.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "primary invocation"))
@@ -401,9 +403,6 @@ extension FiniteGraphCheckTests {
       moduleSHA256: String(repeating: "c", count: 64),
       cfgSHA256: String(repeating: "d", count: 64),
       arguments: ["-workers", "1"],
-      argumentsSHA256: try FiniteGraphCase.argumentsDigest(["-workers", "1"]),
-      operatingSystem: "macos",
-      architecture: "arm64",
       environment: [:],
       pin: try testReferencePin()
     )

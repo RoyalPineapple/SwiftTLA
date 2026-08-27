@@ -137,9 +137,7 @@ package struct TemporalSymmetryCheck: Sendable {
       moduleSHA256: sourceInput.sha256,
       cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
       arguments: arguments,
-      argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-      operatingSystem: "macos",
-      architecture: toolchain.architecture, environment: [:], pin: referencePin)
+      environment: [:], pin: referencePin)
     let request = TLCProcessRequest(
       javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
       bundle: bundle,
@@ -147,7 +145,7 @@ package struct TemporalSymmetryCheck: Sendable {
       traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
       finiteGraphCase: launch,
-      runID: UUID(), referencePin: referencePin, referenceArtifacts: toolchain.artifacts)
+      runID: UUID(), referenceArtifacts: toolchain.artifacts)
     let graphBundle = try externalBundle(
       source: source,
       renderedConfiguration: TemporalCaseConfiguration.renderedGraphConfiguration)
@@ -156,9 +154,7 @@ package struct TemporalSymmetryCheck: Sendable {
       moduleSHA256: sourceInput.sha256,
       cfgSHA256: SHA256.hex(Data(graphBundle.cfg.utf8)),
       arguments: arguments,
-      argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-      operatingSystem: "macos",
-      architecture: toolchain.architecture, environment: [:], pin: referencePin)
+      environment: [:], pin: referencePin)
     let completeGraphRequest = TLCProcessRequest(
       javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
       bundle: graphBundle,
@@ -166,7 +162,7 @@ package struct TemporalSymmetryCheck: Sendable {
       traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
       workingDirectory: work,
       finiteGraphCase: graphCase, runID: UUID(),
-      referencePin: referencePin, referenceArtifacts: toolchain.artifacts)
+      referenceArtifacts: toolchain.artifacts)
     return TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, request: request,
       completeGraphRequest: completeGraphRequest, swiftRun: swiftRun, swiftResult: swiftResult,
@@ -206,10 +202,10 @@ package struct TemporalSymmetryCheck: Sendable {
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
     let rawCase = try makeFiniteGraphCase(
       id: symmetryCase.id, exploration: symmetryCase.rawExploration,
-      bundle: rawBundle, pin: referencePin, architecture: toolchain.architecture)
+      bundle: rawBundle, pin: referencePin)
     let reducedCase = try makeFiniteGraphCase(
       id: symmetryCase.id, exploration: symmetryCase.reducedExploration,
-      bundle: reducedBundle, pin: referencePin, architecture: toolchain.architecture)
+      bundle: reducedBundle, pin: referencePin)
     let rawRequest = try request(
       toolchain: toolchain, bundle: rawBundle, work: work.appendingPathComponent("raw"),
       finiteGraphCase: rawCase, runID: rawRunID, projectRoot: projectRoot)
@@ -293,8 +289,7 @@ extension TemporalSymmetryCheck {
     id: String,
     exploration: FiniteExplorationConfiguration,
     bundle: TLAModuleBundle,
-    pin: TLCReferencePin,
-    architecture: String
+    pin: TLCReferencePin
   ) throws -> FiniteGraphCase {
     let arguments = ["-workers", "1", "-fp", "1"]
     guard let configuration = bundle.root.cfg else {
@@ -303,8 +298,7 @@ extension TemporalSymmetryCheck {
     return try FiniteGraphCase(
       id: id, exploration: exploration,
       moduleSHA256: SHA256.hex(Data(bundle.root.tla.utf8)), cfgSHA256: SHA256.hex(Data(configuration.utf8)),
-      arguments: arguments, argumentsSHA256: try FiniteGraphCase.argumentsDigest(arguments),
-      operatingSystem: "macos", architecture: architecture, environment: [:], pin: pin)
+      arguments: arguments, environment: [:], pin: pin)
   }
 
   private func request(
@@ -322,7 +316,7 @@ extension TemporalSymmetryCheck {
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
       finiteGraphCase: finiteGraphCase, runID: runID,
-      referencePin: finiteGraphCase.pin, referenceArtifacts: toolchain.artifacts)
+      referenceArtifacts: toolchain.artifacts)
   }
 
   private func symmetryPermutations(members: [TLAValue]) throws -> [SymmetryPermutation] {
@@ -390,7 +384,6 @@ extension TemporalSymmetryCheck {
 }
 
 private struct ResolvedTLCToolchain {
-  let architecture: String
   let java: URL
   let jar: URL
   let bridgeClasses: URL
@@ -398,7 +391,7 @@ private struct ResolvedTLCToolchain {
 
   init(toolRoot: URL, projectRoot: URL, pin: TLCReferencePin) throws {
     let armJava = toolRoot.appendingPathComponent("java-arm64/Contents/Home/bin/java")
-    architecture = FileManager.default.fileExists(atPath: armJava.path) ? "arm64" : "x86_64"
+    let architecture = FileManager.default.fileExists(atPath: armJava.path) ? "arm64" : "x86_64"
     java = toolRoot.appendingPathComponent("java-\(architecture)/Contents/Home/bin/java")
     jar = toolRoot.appendingPathComponent("downloads/tla2tools.jar")
     bridgeClasses = toolRoot.appendingPathComponent("bridge-classes")
