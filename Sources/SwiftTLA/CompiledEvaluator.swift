@@ -232,47 +232,39 @@ struct CompiledEvaluator: Sendable {
         case .tupleLiteral(let expressions):
             return .tuple(try expressions.map(value))
         case .tupleAccess(let tuple, let index):
-            guard case .tuple(let values) = try value(tuple) else {
-                throw EvalError.typeMismatch("Expected a tuple")
-            }
+            let values = try sequenceElements(from: value(tuple))
             guard index >= 1, index <= values.count else {
                 throw EvalError.indexOutOfBounds(index, values.count)
             }
             return values[index - 1]
         case .tupleDynamicAccess(let tuple, let index):
-            guard case .tuple(let values) = try value(tuple) else {
-                throw EvalError.typeMismatch("Expected a tuple")
-            }
+            let values = try sequenceElements(from: value(tuple))
             let position = try integer(index)
             guard position >= 1, position <= values.count else {
                 throw EvalError.indexOutOfBounds(position, values.count)
             }
             return values[position - 1]
         case .tupleLength(let tuple):
-            guard case .tuple(let values) = try value(tuple) else {
-                throw EvalError.typeMismatch("Expected a tuple")
-            }
+            let values = try sequenceElements(from: value(tuple))
             return .integer(values.count)
         case .tupleAppend(let tuple, let element):
-            guard case .tuple(var values) = try value(tuple) else {
-                throw EvalError.typeMismatch("Expected a tuple")
-            }
+            var values = try sequenceElements(from: value(tuple))
             values.append(try value(element))
             return .tuple(values)
         case .tupleHead(let tuple):
-            guard case .tuple(let values) = try value(tuple), let first = values.first else {
+            guard let first = try sequenceElements(from: value(tuple)).first else {
                 throw EvalError.typeMismatch("Expected a nonempty tuple")
             }
             return first
         case .tupleTail(let tuple):
-            guard case .tuple(let values) = try value(tuple), !values.isEmpty else {
+            let values = try sequenceElements(from: value(tuple))
+            guard values.isEmpty == false else {
                 throw EvalError.typeMismatch("Expected a nonempty tuple")
             }
             return .tuple(Array(values.dropFirst()))
         case .tupleConcatenate(let lhs, let rhs):
-            guard case .tuple(let left) = try value(lhs), case .tuple(let right) = try value(rhs) else {
-                throw EvalError.typeMismatch("Expected tuples")
-            }
+            let left = try sequenceElements(from: value(lhs))
+            let right = try sequenceElements(from: value(rhs))
             return .tuple(left + right)
         case .recordLiteral(let fields):
             return .record(CompiledRecord(try fields.fields.map {
@@ -290,7 +282,7 @@ struct CompiledEvaluator: Sendable {
             case .record(let values):
                 return .set(Set(values.fields.map(\.key)))
             case .tuple(let values):
-                return .set(Set((1...values.count).map(CompiledValue.integer)))
+                return .set(Set(values.indices.map { .integer($0 + 1) }))
             default:
                 throw EvalError.typeMismatch("Expected a function")
             }
@@ -435,6 +427,22 @@ struct CompiledEvaluator: Sendable {
 }
 
 private extension CompiledEvaluator {
+    func sequenceElements(from value: CompiledValue) throws -> [CompiledValue] {
+        switch value {
+        case .tuple(let values):
+            return values
+        case .function(let values):
+            return try (0..<values.count).map { offset in
+                guard let element = values[.integer(offset + 1)] else {
+                    throw EvalError.typeMismatch("Expected a sequence function")
+                }
+                return element
+            }
+        default:
+            throw EvalError.typeMismatch("Expected a sequence")
+        }
+    }
+
     func evaluatePowerSet(
         _ expression: CompiledStateExpr,
         bindings: CompiledBindings
@@ -497,9 +505,7 @@ private extension CompiledEvaluator {
         guard operation.parameters.count == 2 else {
             throw EvalError.typeMismatch("FoldFunction requires two parameters")
         }
-        guard case .tuple(let values) = try evaluate(sequence, bindings: bindings) else {
-            throw EvalError.typeMismatch("Expected a tuple")
-        }
+        let values = try sequenceElements(from: evaluate(sequence, bindings: bindings))
         let initialValue = try evaluate(initial, bindings: bindings)
         return try values.reversed().reduce(initialValue) { result, element in
             try evaluate(
