@@ -951,7 +951,8 @@ struct BindingValidator {
              .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
             try validateExpression(lhs, at: "\(path).left", scope: scope)
             try validateExpression(rhs, at: "\(path).right", scope: scope)
-        case .functionApply(.variable(let name), let argument) where operators[name] != nil:
+        case .functionApply(.variable(let name), let argument)
+            where scope[name] == nil && operators.keys.contains(name):
             guard let id = operators[name], let arity = operatorArities[id] else {
                 throw diagnostic(
                     code: .invalidFormalOperatorApplication,

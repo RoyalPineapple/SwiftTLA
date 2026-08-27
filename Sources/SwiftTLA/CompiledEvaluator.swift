@@ -13,6 +13,8 @@ enum EvalError: Error, CustomStringConvertible {
 }
 
 struct CompiledEvaluator: Sendable {
+    private static let maximumOperatorCallDepth = 16
+
     let variableValue: @Sendable (VariableID) throws -> CompiledValue
     let semantics: CompiledSemantics
     let layout: CompiledLayout
@@ -20,7 +22,7 @@ struct CompiledEvaluator: Sendable {
     let enabledActions: Set<ActionID>
     let localOperators: [OperatorID: CompiledLocalOperator]
     let operatorBindings: [OperatorID: CompiledFormalOperator]
-    let remainingRecursionDepth: Int
+    let remainingOperatorCallDepth: Int
 
     init(
         state: CompiledState,
@@ -30,7 +32,7 @@ struct CompiledEvaluator: Sendable {
         enabledActions: Set<ActionID> = [],
         localOperators: [OperatorID: CompiledLocalOperator] = [:],
         operatorBindings: [OperatorID: CompiledFormalOperator] = [:],
-        remainingRecursionDepth: Int = 1_000
+        remainingOperatorCallDepth: Int = CompiledEvaluator.maximumOperatorCallDepth
     ) {
         self.variableValue = { try state.value(for: $0) }
         self.semantics = semantics
@@ -39,7 +41,7 @@ struct CompiledEvaluator: Sendable {
         self.enabledActions = enabledActions
         self.localOperators = localOperators
         self.operatorBindings = operatorBindings
-        self.remainingRecursionDepth = remainingRecursionDepth
+        self.remainingOperatorCallDepth = remainingOperatorCallDepth
     }
 
     init(
@@ -59,7 +61,7 @@ struct CompiledEvaluator: Sendable {
         self.enabledActions = []
         self.localOperators = [:]
         self.operatorBindings = [:]
-        self.remainingRecursionDepth = 1_000
+        self.remainingOperatorCallDepth = Self.maximumOperatorCallDepth
     }
 
     private init(
@@ -70,7 +72,7 @@ struct CompiledEvaluator: Sendable {
         enabledActions: Set<ActionID>,
         localOperators: [OperatorID: CompiledLocalOperator],
         operatorBindings: [OperatorID: CompiledFormalOperator],
-        remainingRecursionDepth: Int
+        remainingOperatorCallDepth: Int
     ) {
         self.variableValue = variableValue
         self.semantics = semantics
@@ -79,7 +81,7 @@ struct CompiledEvaluator: Sendable {
         self.enabledActions = enabledActions
         self.localOperators = localOperators
         self.operatorBindings = operatorBindings
-        self.remainingRecursionDepth = remainingRecursionDepth
+        self.remainingOperatorCallDepth = remainingOperatorCallDepth
     }
 
     func evaluate(_ expression: CompiledStateExpr) throws -> CompiledValue {
@@ -117,10 +119,11 @@ struct CompiledEvaluator: Sendable {
             return .controlLocation(label)
         case .operatorReference(let id):
             if localOperators[id] != nil || semantics.recursiveFunctions.contains(where: { $0.id == id }) {
-                return try evaluate(.recursiveCall(id, []), bindings: bindings)
+                return try evaluateRecursiveCall(id, arguments: [], bindings: bindings)
             }
-            return try evaluate(
-                .operatorApplication(.reference(id, arity: 0), []),
+            return try evaluateOperatorApplication(
+                .reference(id, arity: 0),
+                arguments: [],
                 bindings: bindings
             )
         case .add(let lhs, let rhs):
@@ -210,15 +213,7 @@ struct CompiledEvaluator: Sendable {
                 try evaluate(body, bindings: bindings.binding(element, to: binder))
             }))
         case .powerSet(let set):
-            guard case .set(let values) = try value(set) else {
-                throw EvalError.typeMismatch("Expected a set")
-            }
-            let members = Array(values)
-            return .set(Set((0..<(1 << members.count)).map { mask in
-                .set(Set(members.enumerated().compactMap { index, member in
-                    mask & (1 << index) == 0 ? nil : member
-                }))
-            }))
+            return try evaluatePowerSet(set, bindings: bindings)
         case .unionAll(let set):
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
@@ -300,15 +295,10 @@ struct CompiledEvaluator: Sendable {
                 throw EvalError.typeMismatch("Expected a function")
             }
         case .functionLiteral(let domain, let binder, let body):
-            guard case .set(let values) = try value(domain) else {
-                throw EvalError.typeMismatch("Expected a function domain")
-            }
-            return .function(try values.reduce(into: [CompiledValue: CompiledValue]()) { result, element in
-                result[element] = try evaluate(body, bindings: bindings.binding(element, to: binder))
-            })
+            return try evaluateFunctionLiteral(domain: domain, binder: binder, body: body, bindings: bindings)
         case .functionApply(let function, let argument):
             if case .operatorReference(let id) = function {
-                return try evaluate(.recursiveCall(id, [argument]), bindings: bindings)
+                return try evaluateRecursiveCall(id, arguments: [argument], bindings: bindings)
             }
             let key = try value(argument)
             switch try value(function) {
@@ -390,38 +380,14 @@ struct CompiledEvaluator: Sendable {
                 return total + value
             })
         case .functionSet(let domain, let range):
-            guard case .set(let domainValues) = try value(domain), case .set(let rangeValues) = try value(range) else {
-                throw EvalError.typeMismatch("Expected function-set domains")
-            }
-            let orderedDomain = CompiledValue.sorted(domainValues)
-            let orderedRange = CompiledValue.sorted(rangeValues)
-            var functions: [[CompiledValue: CompiledValue]] = [[:]]
-            for key in orderedDomain {
-                functions = functions.flatMap { partial in
-                    orderedRange.map { value in
-                        var next = partial
-                        next[key] = value
-                        return next
-                    }
-                }
-            }
-            return .set(Set(functions.map(CompiledValue.function)))
+            return try evaluateFunctionSet(domain: domain, range: range, bindings: bindings)
         case .foldFunction(let operation, let initial, let sequence):
-            guard operation.parameters.count == 2 else {
-                throw EvalError.typeMismatch("FoldFunction requires two parameters")
-            }
-            guard case .tuple(let values) = try value(sequence) else {
-                throw EvalError.typeMismatch("Expected a tuple")
-            }
-            let initialValue = try value(initial)
-            return try values.reversed().reduce(initialValue) { result, element in
-                try evaluate(
-                    operation.body,
-                    bindings: bindings
-                        .binding(element, to: operation.parameters[0])
-                        .binding(result, to: operation.parameters[1])
-                )
-            }
+            return try evaluateFoldFunction(
+                operation: operation,
+                initial: initial,
+                sequence: sequence,
+                bindings: bindings
+            )
         case .caseExpr(let branches, let otherwise):
             var index = 0
             while index < branches.count {
@@ -438,76 +404,7 @@ struct CompiledEvaluator: Sendable {
             }
             return try value(otherwise)
         case .operatorApplication(let operation, let arguments):
-            guard remainingRecursionDepth > 0 else {
-                throw EvalError.typeMismatch("Formal operator depth exceeded")
-            }
-            switch operation {
-            case .lambda(let lambda):
-                guard lambda.parameters.count == arguments.count else {
-                    throw EvalError.typeMismatch("Formal operator argument count differs")
-                }
-                var callBindings = bindings
-                for (parameter, argument) in zip(lambda.parameters, arguments) {
-                    guard case .value(let argumentExpression) = argument else {
-                        throw EvalError.typeMismatch("Expected a formal value argument")
-                    }
-                    callBindings = callBindings.binding(
-                        { try evaluate(argumentExpression, bindings: bindings) },
-                        to: parameter
-                    )
-                }
-                return try CompiledEvaluator(
-                    variableValue: variableValue,
-                    semantics: semantics,
-                    layout: layout,
-                    bindings: callBindings,
-                    enabledActions: enabledActions,
-                    localOperators: localOperators,
-                    operatorBindings: operatorBindings,
-                    remainingRecursionDepth: remainingRecursionDepth - 1
-                ).evaluate(lambda.body)
-            case .reference(let id, let arity):
-                if let supplied = operatorBindings[id] {
-                    guard supplied.arity == arity else {
-                        throw EvalError.typeMismatch("Formal operator argument count differs")
-                    }
-                    return try evaluate(.operatorApplication(supplied, arguments), bindings: bindings)
-                }
-                guard let definition = semantics.formalOperatorDefinitions.first(where: { $0.id == id }) else {
-                    throw CompiledEvaluationError.unresolvedOperator
-                }
-                guard definition.parameters.count == arity, definition.parameters.count == arguments.count else {
-                    throw EvalError.typeMismatch("Formal operator argument count differs")
-                }
-                var callBindings = bindings
-                var callOperatorBindings = operatorBindings
-                for (parameter, argument) in zip(definition.parameters, arguments) {
-                    switch (parameter, argument) {
-                    case (.value(let binder), .value(let argumentExpression)):
-                        callBindings = callBindings.binding(
-                            { try evaluate(argumentExpression, bindings: bindings) },
-                            to: binder
-                        )
-                    case (.operator(let id, let arity), .operator(let operation)):
-                        guard operation.arity == arity else {
-                            throw EvalError.typeMismatch("Formal operator argument count differs")
-                        }
-                        callOperatorBindings[id] = operation
-                    default:
-                        throw EvalError.typeMismatch("Expected a formal value argument")
-                    }
-                }
-                return try CompiledEvaluator(
-                    variableValue: variableValue,
-                    semantics: semantics,
-                    layout: layout,
-                    bindings: callBindings,
-                    enabledActions: enabledActions,
-                    localOperators: localOperators,
-                    operatorBindings: callOperatorBindings,
-                    remainingRecursionDepth: remainingRecursionDepth - 1
-                ).evaluate(definition.body)
-            }
+            return try evaluateOperatorApplication(operation, arguments: arguments, bindings: bindings)
         case .letValue(let binder, let valueExpression, let body):
             return try evaluate(
                 body,
@@ -529,70 +426,213 @@ struct CompiledEvaluator: Sendable {
                 enabledActions: enabledActions,
                 localOperators: nested,
                 operatorBindings: operatorBindings,
-                remainingRecursionDepth: remainingRecursionDepth
+                remainingOperatorCallDepth: remainingOperatorCallDepth
             ).evaluate(body)
         case .recursiveCall(let id, let arguments):
-            guard remainingRecursionDepth > 0 else {
-                throw EvalError.typeMismatch("Recursive operator depth exceeded")
-            }
-            if let operation = localOperators[id] {
-                guard operation.parameters.count == arguments.count else {
-                    throw EvalError.typeMismatch("Recursive operator argument count differs")
-                }
-                var callBindings = bindings
-                for (parameter, argument) in zip(operation.parameters, arguments) {
-                    callBindings = callBindings.binding(
-                        { try evaluate(argument, bindings: bindings) },
-                        to: parameter
-                    )
-                }
-                if let domain = operation.domain, case .boolean(false) = try CompiledEvaluator(
-                    variableValue: variableValue,
-                    semantics: semantics,
-                    layout: layout,
-                    bindings: callBindings,
-                    enabledActions: enabledActions,
-                    localOperators: localOperators,
-                    operatorBindings: operatorBindings,
-                    remainingRecursionDepth: remainingRecursionDepth - 1
-                ).evaluate(.in(.boundValue(operation.parameters[0]), domain)) {
-                    throw EvalError.typeMismatch("Recursive operator argument is outside its domain")
-                }
-                return try CompiledEvaluator(
-                    variableValue: variableValue,
-                    semantics: semantics,
-                    layout: layout,
-                    bindings: callBindings,
-                    enabledActions: enabledActions,
-                    localOperators: localOperators,
-                    operatorBindings: operatorBindings,
-                    remainingRecursionDepth: remainingRecursionDepth - 1
-                ).evaluate(operation.body)
-            }
-            if let function = semantics.recursiveFunctions.first(where: { $0.id == id }) {
-                guard function.parameters.count == arguments.count else {
-                    throw EvalError.typeMismatch("Recursive operator argument count differs")
-                }
-                var callBindings = bindings
-                for (parameter, argument) in zip(function.parameters, arguments) {
-                    callBindings = callBindings.binding(
-                        { try evaluate(argument, bindings: bindings) },
-                        to: parameter
-                    )
-                }
-                return try CompiledEvaluator(
-                    variableValue: variableValue,
-                    semantics: semantics,
-                    layout: layout,
-                    bindings: callBindings,
-                    enabledActions: enabledActions,
-                    localOperators: localOperators,
-                    operatorBindings: operatorBindings,
-                    remainingRecursionDepth: remainingRecursionDepth - 1
-                ).evaluate(function.body)
-            }
-            throw CompiledEvaluationError.unresolvedOperator
+            return try evaluateRecursiveCall(id, arguments: arguments, bindings: bindings)
         }
+    }
+}
+
+private extension CompiledEvaluator {
+    func evaluatePowerSet(
+        _ expression: CompiledStateExpr,
+        bindings: CompiledBindings
+    ) throws -> CompiledValue {
+        guard case .set(let values) = try evaluate(expression, bindings: bindings) else {
+            throw EvalError.typeMismatch("Expected a set")
+        }
+        let members = Array(values)
+        return .set(Set((0..<(1 << members.count)).map { mask in
+            .set(Set(members.enumerated().compactMap { index, member in
+                mask & (1 << index) == 0 ? nil : member
+            }))
+        }))
+    }
+
+    func evaluateFunctionLiteral(
+        domain: CompiledStateExpr,
+        binder: BinderID,
+        body: CompiledStateExpr,
+        bindings: CompiledBindings
+    ) throws -> CompiledValue {
+        guard case .set(let values) = try evaluate(domain, bindings: bindings) else {
+            throw EvalError.typeMismatch("Expected a function domain")
+        }
+        return .function(try values.reduce(into: [CompiledValue: CompiledValue]()) { result, element in
+            result[element] = try evaluate(body, bindings: bindings.binding(element, to: binder))
+        })
+    }
+
+    func evaluateFunctionSet(
+        domain: CompiledStateExpr,
+        range: CompiledStateExpr,
+        bindings: CompiledBindings
+    ) throws -> CompiledValue {
+        guard case .set(let domainValues) = try evaluate(domain, bindings: bindings),
+              case .set(let rangeValues) = try evaluate(range, bindings: bindings) else {
+            throw EvalError.typeMismatch("Expected function-set domains")
+        }
+        let orderedDomain = CompiledValue.sorted(domainValues)
+        let orderedRange = CompiledValue.sorted(rangeValues)
+        var functions: [[CompiledValue: CompiledValue]] = [[:]]
+        for key in orderedDomain {
+            functions = functions.flatMap { partial in
+                orderedRange.map { value in
+                    var next = partial
+                    next[key] = value
+                    return next
+                }
+            }
+        }
+        return .set(Set(functions.map(CompiledValue.function)))
+    }
+
+    func evaluateFoldFunction(
+        operation: CompiledFormalLambda,
+        initial: CompiledStateExpr,
+        sequence: CompiledStateExpr,
+        bindings: CompiledBindings
+    ) throws -> CompiledValue {
+        guard operation.parameters.count == 2 else {
+            throw EvalError.typeMismatch("FoldFunction requires two parameters")
+        }
+        guard case .tuple(let values) = try evaluate(sequence, bindings: bindings) else {
+            throw EvalError.typeMismatch("Expected a tuple")
+        }
+        let initialValue = try evaluate(initial, bindings: bindings)
+        return try values.reversed().reduce(initialValue) { result, element in
+            try evaluate(
+                operation.body,
+                bindings: bindings
+                    .binding(element, to: operation.parameters[0])
+                    .binding(result, to: operation.parameters[1])
+            )
+        }
+    }
+
+    func evaluateOperatorApplication(
+        _ operation: CompiledFormalOperator,
+        arguments: [CompiledFormalCallArgument],
+        bindings: CompiledBindings
+    ) throws -> CompiledValue {
+        guard remainingOperatorCallDepth > 0 else {
+            throw EvalError.typeMismatch("Formal operator depth exceeded")
+        }
+        switch operation {
+        case .lambda(let lambda):
+            guard lambda.parameters.count == arguments.count else {
+                throw EvalError.typeMismatch("Formal operator argument count differs")
+            }
+            var callBindings = bindings
+            for (parameter, argument) in zip(lambda.parameters, arguments) {
+                guard case .value(let argumentExpression) = argument else {
+                    throw EvalError.typeMismatch("Expected a formal value argument")
+                }
+                callBindings = callBindings.binding(
+                    { try evaluate(argumentExpression, bindings: bindings) },
+                    to: parameter
+                )
+            }
+            return try evaluateCallBody(lambda.body, bindings: callBindings)
+        case .reference(let id, let arity):
+            if let supplied = operatorBindings[id] {
+                guard supplied.arity == arity else {
+                    throw EvalError.typeMismatch("Formal operator argument count differs")
+                }
+                return try evaluateOperatorApplication(supplied, arguments: arguments, bindings: bindings)
+            }
+            guard let definition = semantics.formalOperatorDefinitions.first(where: { $0.id == id }) else {
+                throw CompiledEvaluationError.unresolvedOperator
+            }
+            guard definition.parameters.count == arity, definition.parameters.count == arguments.count else {
+                throw EvalError.typeMismatch("Formal operator argument count differs")
+            }
+            var callBindings = bindings
+            var callOperatorBindings = operatorBindings
+            for (parameter, argument) in zip(definition.parameters, arguments) {
+                switch (parameter, argument) {
+                case (.value(let binder), .value(let argumentExpression)):
+                    callBindings = callBindings.binding(
+                        { try evaluate(argumentExpression, bindings: bindings) },
+                        to: binder
+                    )
+                case (.operator(let id, let arity), .operator(let operation)):
+                    guard operation.arity == arity else {
+                        throw EvalError.typeMismatch("Formal operator argument count differs")
+                    }
+                    callOperatorBindings[id] = operation
+                default:
+                    throw EvalError.typeMismatch("Expected a formal value argument")
+                }
+            }
+            return try evaluateCallBody(
+                definition.body,
+                bindings: callBindings,
+                operatorBindings: callOperatorBindings
+            )
+        }
+    }
+
+    func evaluateRecursiveCall(
+        _ id: OperatorID,
+        arguments: [CompiledStateExpr],
+        bindings: CompiledBindings
+    ) throws -> CompiledValue {
+        guard remainingOperatorCallDepth > 0 else {
+            throw EvalError.typeMismatch("Recursive operator depth exceeded")
+        }
+        if let operation = localOperators[id] {
+            guard operation.parameters.count == arguments.count else {
+                throw EvalError.typeMismatch("Recursive operator argument count differs")
+            }
+            var callBindings = bindings
+            for (parameter, argument) in zip(operation.parameters, arguments) {
+                callBindings = callBindings.binding(
+                    { try evaluate(argument, bindings: bindings) },
+                    to: parameter
+                )
+            }
+            if let domain = operation.domain,
+               case .boolean(false) = try evaluateCallBody(
+                   .in(.boundValue(operation.parameters[0]), domain),
+                   bindings: callBindings
+               ) {
+                throw EvalError.typeMismatch("Recursive operator argument is outside its domain")
+            }
+            return try evaluateCallBody(operation.body, bindings: callBindings)
+        }
+        if let function = semantics.recursiveFunctions.first(where: { $0.id == id }) {
+            guard function.parameters.count == arguments.count else {
+                throw EvalError.typeMismatch("Recursive operator argument count differs")
+            }
+            var callBindings = bindings
+            for (parameter, argument) in zip(function.parameters, arguments) {
+                callBindings = callBindings.binding(
+                    { try evaluate(argument, bindings: bindings) },
+                    to: parameter
+                )
+            }
+            return try evaluateCallBody(function.body, bindings: callBindings)
+        }
+        throw CompiledEvaluationError.unresolvedOperator
+    }
+
+    func evaluateCallBody(
+        _ expression: CompiledStateExpr,
+        bindings: CompiledBindings,
+        operatorBindings: [OperatorID: CompiledFormalOperator]? = nil
+    ) throws -> CompiledValue {
+        try CompiledEvaluator(
+            variableValue: variableValue,
+            semantics: semantics,
+            layout: layout,
+            bindings: bindings,
+            enabledActions: enabledActions,
+            localOperators: localOperators,
+            operatorBindings: operatorBindings ?? self.operatorBindings,
+            remainingOperatorCallDepth: remainingOperatorCallDepth - 1
+        ).evaluate(expression)
     }
 }
 

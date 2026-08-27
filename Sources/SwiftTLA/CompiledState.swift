@@ -1,3 +1,5 @@
+import os
+
 struct CompiledState: Hashable, Sendable, Comparable {
     private let compilationIdentity: CompilationIdentity
     private let values: [CompiledValue]
@@ -118,7 +120,7 @@ struct CompiledState: Hashable, Sendable, Comparable {
 }
 
 struct CompiledBindings: Sendable {
-    private var values: [BinderID: @Sendable () throws -> CompiledValue]
+    private var values: [BinderID: CompiledBinding]
 
     init() {
         values = [:]
@@ -128,12 +130,12 @@ struct CompiledBindings: Sendable {
         guard let value = values[binder] else {
             throw CompiledEvaluationError.unboundBinder(binder)
         }
-        return try value()
+        return try value.resolve()
     }
 
     func binding(_ value: CompiledValue, to binder: BinderID) -> CompiledBindings {
         var bound = self
-        bound.values[binder] = { value }
+        bound.values[binder] = CompiledBinding(value)
         return bound
     }
 
@@ -142,8 +144,32 @@ struct CompiledBindings: Sendable {
         to binder: BinderID
     ) -> CompiledBindings {
         var bound = self
-        bound.values[binder] = value
+        bound.values[binder] = CompiledBinding(value)
         return bound
+    }
+}
+
+private final class CompiledBinding: Sendable {
+    private let cached: OSAllocatedUnfairLock<CompiledValue?>
+    private let evaluate: @Sendable () throws -> CompiledValue
+
+    init(_ value: CompiledValue) {
+        cached = .init(initialState: value)
+        evaluate = { value }
+    }
+
+    init(_ evaluate: @escaping @Sendable () throws -> CompiledValue) {
+        cached = .init(initialState: nil)
+        self.evaluate = evaluate
+    }
+
+    func resolve() throws -> CompiledValue {
+        if let value = cached.withLock({ $0 }) {
+            return value
+        }
+        let value = try evaluate()
+        cached.withLock { $0 = value }
+        return value
     }
 }
 

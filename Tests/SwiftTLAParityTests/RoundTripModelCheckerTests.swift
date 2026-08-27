@@ -675,6 +675,22 @@ private func value(
     #expect(Set(tv) == Set([.int(1), .int(2), .int(3)]))
   }
 
+  @Test("nonterminating recursive operators report their depth limit")
+  func nonterminatingRecursiveOperator() throws {
+    let function = RecursiveFunc(
+      name: "Loop",
+      params: ["value"],
+      body: .recursiveCall("Loop", [.variable("value")])
+    )
+
+    #expect(throws: EvalError.self) {
+      try compiledValue(
+        .recursiveCall("Loop", [.value(0)]),
+        recursiveFunctions: [function]
+      )
+    }
+  }
+
   @Test("TLAValue.function Comparable ordering")
   func functionComparable() {
     let small = TLAValue.function([.int(1): "a"])
