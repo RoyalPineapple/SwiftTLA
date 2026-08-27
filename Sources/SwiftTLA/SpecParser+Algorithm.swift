@@ -21,7 +21,6 @@ private enum AlgorithmStateDeclarationKind: Equatable {
 private enum AlgorithmSourceConstruct: Equatable {
     case formalDefinition
     case macro
-    case state(AlgorithmStateDeclarationKind)
     case scopedState(AlgorithmStateDeclarationKind, scope: String)
     case procedure
     case each
@@ -55,8 +54,8 @@ private enum AlgorithmSourceConstruct: Equatable {
         switch self {
         case .formalDefinition: .formalDefinition
         case .macro: .statementMacro
-        case .state(.shared), .scopedState(.shared, _): .sharedVariable
-        case .state(.local), .scopedState(.local, _): .localVariable
+        case .scopedState(.shared, _): .sharedVariable
+        case .scopedState(.local, _): .localVariable
         case .procedure: .procedure
         case .each: .each
         case .doStep: .atomicStep
@@ -104,7 +103,6 @@ private enum AlgorithmSourceConstruct: Equatable {
 
     func isState(_ kind: AlgorithmStateDeclarationKind, in scope: String?) -> Bool {
         switch self {
-        case .state(let actual): actual == kind
         case .scopedState(let actual, let owner): actual == kind && owner == scope
         default: false
         }
@@ -114,8 +112,6 @@ private enum AlgorithmSourceConstruct: Equatable {
         switch reference.baseName.text {
         case "FormalDefinition": self = .formalDefinition
         case "Macro": self = .macro
-        case "SharedVar": self = .state(.shared)
-        case "LocalVar": self = .state(.local)
         case "Procedure": self = .procedure
         case "Each": self = .each
         case "Do": self = .doStep
@@ -849,7 +845,7 @@ extension ParserSession {
             guard let domain = finiteSharedVariableDomain(domainSyntax)
             else {
                 algorithmParseFailure = algorithmParseFailure
-                    ?? ("SharedVar(_:in:) requires a supported finite formal set expression; "
+                    ?? ("scope.sharedVar(_:in:) requires a supported finite formal set expression; "
                         + "could not decode '\(domainSyntax.description.trimmingCharacters(in: .whitespacesAndNewlines))'.")
                 return nil
             }
