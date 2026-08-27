@@ -423,7 +423,7 @@ public final class ParserSession {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
               call.arguments.count == 2,
-              let label = controlLocation(call.arguments.first?.expression),
+              let label = registeredStringEnumCase(call.arguments.first?.expression),
               let processSyntax = call.arguments.dropFirst().first?.expression,
               let process = decodeTypedFacadeValue(processSyntax, scope: scope)
         else { return nil }
@@ -458,7 +458,7 @@ public final class ParserSession {
         )
     }
 
-    func controlLocation(_ expression: ExprSyntax?) -> String? {
+    func registeredStringEnumCase(_ expression: ExprSyntax?) -> String? {
         guard let access = expression?.as(MemberAccessExprSyntax.self),
               let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
               case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.text)

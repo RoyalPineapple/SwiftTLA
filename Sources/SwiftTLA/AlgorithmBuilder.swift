@@ -1439,8 +1439,11 @@ public func Assert(_ condition: some StateExprConvertible) -> StepStatement {
 
 /// Invokes a declared PlusCal procedure from a sequential algorithm step.
 /// Arguments are formal expressions evaluated in the caller's pre-state.
-public func Call(_ target: String, with arguments: (any StateExprConvertible)... ) -> StepStatement {
-    StepStatement(model: .call(target: target, arguments: arguments.map(\.stateExpr)))
+public func Call<Name: CaseIterable & RawRepresentable & Sendable>(
+    _ target: Name,
+    with arguments: (any StateExprConvertible)...
+) -> StepStatement where Name.RawValue == String {
+    StepStatement(model: .call(target: target.rawValue, arguments: arguments.map(\.stateExpr)))
 }
 
 /// Returns from the enclosing PlusCal procedure.
@@ -1448,36 +1451,36 @@ public func Return() -> StepStatement {
     StepStatement(model: .return)
 }
 
-public func Procedure(
-    _ name: String,
+public func Procedure<Name: CaseIterable & RawRepresentable & Sendable>(
+    _ name: Name,
     @AlgorithmBuilder _ body: () -> [AlgorithmElement]
-) -> AlgorithmElement {
-    procedure(name: name, parameters: [], components: body())
+) -> AlgorithmElement where Name.RawValue == String {
+    procedure(name: name.rawValue, parameters: [], components: body())
 }
 
-public func Procedure<Value: TLAValueType>(
-    _ name: String,
+public func Procedure<Name: CaseIterable & RawRepresentable & Sendable, Value: TLAValueType>(
+    _ name: Name,
     parameters: Value.Type,
     @AlgorithmBuilder _ body: (ProcedureParameter<Value>) -> [AlgorithmElement]
-) -> AlgorithmElement {
+) -> AlgorithmElement where Name.RawValue == String {
     let parameterName = "parameter0"
     return procedure(
-        name: name,
+        name: name.rawValue,
         parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: Value.self))],
         components: body(ProcedureParameter(name: parameterName))
     )
 }
 
-public func Procedure<Value: TLAValueType>(
-    _ name: String,
+public func Procedure<Name: CaseIterable & RawRepresentable & Sendable, Value: TLAValueType>(
+    _ name: Name,
     parameters: Value.Type,
     @AlgorithmBuilder scoped body: (ProcedureParameter<Value>, ProcedureScope) -> [AlgorithmElement]
-) -> AlgorithmElement {
+) -> AlgorithmElement where Name.RawValue == String {
     let parameterName = "parameter0"
     let scope = ProcedureScope()
     let body = body(ProcedureParameter(name: parameterName), scope)
     return procedure(
-        name: name,
+        name: name.rawValue,
         parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: Value.self))],
         components: scope.declarations + body
     )
@@ -1496,12 +1499,12 @@ private func procedure(
     )))
 }
 
-public func Procedure<First: TLAValueType, Second: TLAValueType>(
-    _ name: String, parameters: First.Type, _ second: Second.Type,
+public func Procedure<Name: CaseIterable & RawRepresentable & Sendable, First: TLAValueType, Second: TLAValueType>(
+    _ name: Name, parameters: First.Type, _ second: Second.Type,
     @AlgorithmBuilder _ body: (ProcedureParameter<First>, ProcedureParameter<Second>) -> [AlgorithmElement]
-) -> AlgorithmElement {
+) -> AlgorithmElement where Name.RawValue == String {
     procedure(
-        name: name,
+        name: name.rawValue,
         parameters: [
             .init(root: "parameter0", initial: .value(First.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: First.self)),
             .init(root: "parameter1", initial: .value(Second.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: Second.self))
@@ -1510,12 +1513,12 @@ public func Procedure<First: TLAValueType, Second: TLAValueType>(
     )
 }
 
-public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType>(
-    _ name: String, parameters: A.Type, _ b: B.Type, _ c: C.Type,
+public func Procedure<Name: CaseIterable & RawRepresentable & Sendable, A: TLAValueType, B: TLAValueType, C: TLAValueType>(
+    _ name: Name, parameters: A.Type, _ b: B.Type, _ c: C.Type,
     @AlgorithmBuilder _ body: (ProcedureParameter<A>, ProcedureParameter<B>, ProcedureParameter<C>) -> [AlgorithmElement]
-) -> AlgorithmElement {
+) -> AlgorithmElement where Name.RawValue == String {
     procedure(
-        name: name,
+        name: name.rawValue,
         parameters: [
             .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: A.self)),
             .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: B.self)),
@@ -1525,12 +1528,12 @@ public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType>(
     )
 }
 
-public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType, D: TLAValueType>(
-    _ name: String, parameters: A.Type, _ b: B.Type, _ c: C.Type, _ d: D.Type,
+public func Procedure<Name: CaseIterable & RawRepresentable & Sendable, A: TLAValueType, B: TLAValueType, C: TLAValueType, D: TLAValueType>(
+    _ name: Name, parameters: A.Type, _ b: B.Type, _ c: C.Type, _ d: D.Type,
     @AlgorithmBuilder _ body: (ProcedureParameter<A>, ProcedureParameter<B>, ProcedureParameter<C>, ProcedureParameter<D>) -> [AlgorithmElement]
-) -> AlgorithmElement {
+) -> AlgorithmElement where Name.RawValue == String {
     procedure(
-        name: name,
+        name: name.rawValue,
         parameters: [
             .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: A.self)),
             .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: B.self)),

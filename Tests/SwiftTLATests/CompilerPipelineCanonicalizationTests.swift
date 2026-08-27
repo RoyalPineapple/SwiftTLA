@@ -16,6 +16,11 @@ private enum CompilerPipelineNode: String, FiniteTLAValueDomain, CaseIterable {
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
+private enum CompilerPipelineProcedure: String, CaseIterable {
+    case first
+    case second
+}
+
 private enum FirstGeneratedSurfaceValue: String, FiniteTLAValueDomain {
     case value
 
@@ -325,12 +330,12 @@ struct CompilerPipelineCanonicalizationTests {
                     Assign(value, to: value + 1)
                 }
             }
-            Procedure("first") {
+            Procedure(CompilerPipelineProcedure.first) {
                 Do(TestControlLabel.start) {
                     Return()
                 }
             }
-            Procedure("second") {
+            Procedure(CompilerPipelineProcedure.second) {
                 Do(TestControlLabel.start) {
                     Return()
                 }
@@ -366,12 +371,12 @@ struct CompilerPipelineCanonicalizationTests {
                     Assign(value, to: value + 1)
                 }
             }
-            Procedure("first") {
+            Procedure(CompilerPipelineProcedure.first) {
                 Do(TestControlLabel.start) {
                     Return()
                 }
             }
-            Procedure("second") {
+            Procedure(CompilerPipelineProcedure.second) {
                 Do(TestControlLabel.start) {
                     Return()
                 }

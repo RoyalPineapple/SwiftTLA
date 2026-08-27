@@ -35,6 +35,10 @@ private func parserEnum(
         )
     }
 
+    private var procedureNames: ParserEnumDefinition {
+        parserEnum("ProcedureName", cases: ["work": .string("work")])
+    }
+
     private func parseAlgorithm(
         _ closure: ClosureExprSyntax,
         enumDefinitions: [ParserEnumDefinition] = []
@@ -98,13 +102,13 @@ private func parserEnum(
         let parsed = parseAlgorithm(try parseClosure("""
         {
             Algorithm("ProcedureCapability") {
-                Procedure("work") {
+                Procedure(ProcedureName.work) {
                     Do(TestControlLabel.advance) { Return() }
                     WeakFairness("advance")
                 }
             }
         }
-        """))
+        """), enumDefinitions: [procedureNames])
 
         #expect(parsed.diagnostics.isEmpty)
         do {
@@ -947,7 +951,7 @@ private func parserEnum(
         {
             Algorithm("ProcedureSource") {
                 let output = SharedVar("output", initial: 0)
-                Procedure("work", parameters: Int.self) { value in
+                Procedure(ProcedureName.work, parameters: Int.self) { value in
                     let offset = LocalVar("offset", initial: 1)
                     Do(TestControlLabel.enter) {
                         Await(value.expr >= 0)
@@ -955,13 +959,13 @@ private func parserEnum(
                         Return()
                     }
                 }
-                Do(TestControlLabel.start) { Call("work", with: 7) }
+                Do(TestControlLabel.start) { Call(ProcedureName.work, with: 7) }
                 Do(TestControlLabel.finished) { Stop() }
             }
         }
         """
         let closure = try parseClosure(source)
-        let parsed = parseAlgorithm(closure)
+        let parsed = parseAlgorithm(closure, enumDefinitions: [procedureNames])
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ProcedureSource")
@@ -1291,6 +1295,47 @@ private func parserEnum(
                 #expect(diagnostic.message.contains(
                     "Algorithm control label '\(label)' must be a qualified case of a registered String-backed enum."
                 ))
+            }
+        }
+    }
+
+    @Test("Procedure and Call reject names outside a registered enum")
+    func rejectsUnboundProcedureNames() throws {
+        let invalidNames = [
+            (#""work""#, "procedure name '\"work\"' must be a qualified enum case."),
+            (".work", "procedure name '.work' must be a qualified enum case."),
+            ("Unknown.work", "procedure-name enum 'Unknown' is not registered."),
+            ("ProcedureName.missing", "procedure name 'missing' is not declared in registered enum 'ProcedureName'."),
+            ("NumberedProcedure.work", "procedure name 'NumberedProcedure.work' must have a String raw value")
+        ]
+        for construct in ["Procedure", "Call"] {
+            for (name, expected) in invalidNames {
+                let body: String
+                if construct == "Procedure" {
+                    body = "Procedure(\(name)) { Do(TestControlLabel.advance) { Return() } }"
+                } else {
+                    body = """
+                    Procedure(ProcedureName.work) { Do(TestControlLabel.advance) { Return() } }
+                    Do(TestControlLabel.start) { Call(\(name)) }
+                    """
+                }
+                let parsed = parseAlgorithm(
+                    try parseClosure("""
+                    {
+                        Algorithm("InvalidProcedureName") {
+                            \(body)
+                        }
+                    }
+                    """),
+                    enumDefinitions: [
+                        procedureNames,
+                        parserEnum("NumberedProcedure", cases: ["work": .int(1)])
+                    ]
+                )
+
+                #expect(parsed.sourceAlgorithms.isEmpty, "\(construct) accepted \(name)")
+                let diagnostic = try #require(parsed.diagnostics.first)
+                #expect(diagnostic.message.contains("\(construct) \(expected)"))
             }
         }
     }

@@ -4,6 +4,10 @@ import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    private enum ProcedureName: String, CaseIterable {
+        case work
+    }
+
     private enum GeneratedSurfaceKey: String, FiniteTLAValueDomain {
         case value
 
@@ -109,7 +113,7 @@ struct AlgorithmBuilderTests {
     @Test("unsupported Algorithm fairness in a procedure fails before lowering")
     func unsupportedProcedureFairnessFailsBeforeLowering() {
         let algorithm = Algorithm("UnsupportedProcedureFairness") {
-            Procedure("work") {
+            Procedure(ProcedureName.work) {
                 Do(TestControlLabel.advance) { Return() }
                 WeakFairness("advance")
             }
@@ -447,14 +451,14 @@ struct AlgorithmBuilderTests {
     func buildsTypedProcedure() throws {
         let algorithm = Algorithm("ProcedureBuilder", scoped: { scope in
             let output = scope.sharedVar("output", initial: 0)
-            Procedure("work", parameters: Int.self, scoped: { value, scope in
+            Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                 let offset = scope.localVar("offset", initial: 1)
                 Do(TestControlLabel.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
                 }
             })
-            Do(TestControlLabel.start) { Call("work", with: 7) }
+            Do(TestControlLabel.start) { Call(ProcedureName.work, with: 7) }
             Do(TestControlLabel.finished) { Stop() }
         })
 
@@ -1452,11 +1456,15 @@ private struct ProcedureGeneratedModel {
         case finished
     }
 
+    enum ProcedureName: String, CaseIterable {
+        case work
+    }
+
     static var spec: TLASpec {
         #spec("ProcedureGenerated") {
             Algorithm("ProcedureGenerated", scoped: { scope in
                 let output = scope.sharedVar("output", initial: 0)
-                Procedure("work", parameters: Int.self, scoped: { value, scope in
+                Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar("offset", initial: 1)
                     Do(Step.enter) {
                         Await(value.expr >= 0)
@@ -1464,7 +1472,7 @@ private struct ProcedureGeneratedModel {
                         Return()
                     }
                 })
-                Do(Step.start) { Call("work", with: 7) }
+                Do(Step.start) { Call(ProcedureName.work, with: 7) }
                 Do(Step.finished) { Stop() }
             })
         }
