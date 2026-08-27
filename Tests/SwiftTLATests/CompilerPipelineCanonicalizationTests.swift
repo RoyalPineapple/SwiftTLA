@@ -1489,6 +1489,10 @@ struct CompilerPipelineCanonicalizationTests {
         let declaration = try #require(source.symmetricCollections.first { $0.name == "devices" })
         let action = try #require(source.actions.first { $0.name == "advance" })
         let compiledAction = try #require(compilation.semantics.actions.first)
+        let machineVariable = try #require(
+            compilation.machineSurfacePlan.variables.first { $0.formalName == "devices" }
+        )
+        let machineCollection = try #require(machineVariable.symmetricCollection)
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let successors = try CompiledRuntime(compilation: compilation)
             .successors(for: compiledAction.id, from: initialState)
@@ -1509,6 +1513,9 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compiledAction.bindings.count == 1)
         #expect(compiledAction.bindings[0].values == declaration.metadata.members)
         #expect(compiledAction.symmetricCollection == compilation.layout.variableID(named: "devices"))
+        #expect(machineVariable.swiftType == "[CompilerPipelineMember.ID: Int]")
+        #expect(machineCollection.formalName == "devices")
+        #expect(compilation.machineSurfacePlan.symmetricCollections == [machineCollection])
         #expect(hasOuterExistential)
         #expect(try successors.map { successor in
             try successor.arguments.map { try $0.rendered(using: compilation.layout) }
