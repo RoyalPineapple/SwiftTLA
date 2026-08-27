@@ -168,7 +168,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
     }
   }
 
-  @Test("TLC command loads bridge and passes every frozen property")
+  @Test("TLC command selects the bridge and identifies its graph stream")
   func assemblesFrozenBridgeCommand() throws {
     let request = TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
@@ -182,15 +182,11 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
       traceMode: .dumpJSON
     )
-    let command = try request.commandArguments(
+    let command = request.commandArguments(
       module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
       configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg")
     )
     #expect(command.contains("-Dswifttla.tlc.graph.path=/tmp/events.jsonl"))
-    #expect(
-      command.contains(where: {
-        $0.contains("-Dswifttla.tlc.graph.provenance=") && $0.contains("moduleSha256")
-      }))
     #expect(command.contains("-Dswifttla.tlc.graph.run-id=00000000-0000-4000-8000-000000000001"))
     #expect(command.contains("-Dswifttla.tlc.graph.case-id=fixture"))
     #expect(command.contains("/tmp/tla2tools.jar:/tmp/bridge-classes"))
@@ -325,7 +321,7 @@ extension TLCGraphReaderTests {
     }
     let invalidInitial = [
       "\(try header(finiteGraphCase))\n",
-      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":1,\"type\":\"initial\",",
+      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":2,\"type\":\"initial\",",
       "\"callback\":\"writeState.initial\",\"seq\":2,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",\"state\":{}}\n"
     ].joined()
@@ -334,7 +330,7 @@ extension TLCGraphReaderTests {
     }
     let unsupportedCallback = [
       "\(try header(finiteGraphCase))\n",
-      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":1,\"type\":\"unsupported\",",
+      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":2,\"type\":\"unsupported\",",
       "\"callback\":\"writeState.flags\",\"seq\":1,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",",
       "\"reason\":\"missing action\"}\n"
@@ -349,6 +345,60 @@ extension TLCGraphReaderTests {
         javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
         bridgeSourceSHA256: pin.bridgeSourceSHA256, bridgeBinarySHA256: pin.bridgeBinarySHA256
       )
+    }
+  }
+
+  @Test("graph event stream requires stable identity, order, closure, counts, and body bytes")
+  func validatesStreamIntegrity() throws {
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let complete = try completeGraphStream(finiteGraphCase)
+    let runID = "00000000-0000-4000-8000-000000000001"
+
+    let changedRun = try mutatedCompleteGraphStream(finiteGraphCase) { line in
+      guard line.contains("\"seq\":1") else { return line }
+      return line.replacingOccurrences(
+        of: runID, with: "00000000-0000-4000-8000-000000000002")
+    }
+    #expect(throws: TLCGraphEventError.invalidRecord(line: 2, reason: "run ID changed")) {
+      try reader.parse(changedRun)
+    }
+
+    let changedCase = Data(
+      String(decoding: complete, as: UTF8.self)
+        .replacingOccurrences(of: "\"caseId\":\"fixture\"", with: "\"caseId\":\"other\"")
+        .utf8)
+    #expect(throws: TLCGraphEventError.invalidRecord(line: 1, reason: "case ID")) {
+      try reader.parse(changedCase)
+    }
+
+    let sequenceGap = try mutatedCompleteGraphStream(finiteGraphCase) {
+      $0.replacingOccurrences(of: "\"seq\":1", with: "\"seq\":9")
+    }
+    #expect(throws: TLCGraphEventError.invalidRecord(line: 2, reason: "sequence gap")) {
+      try reader.parse(sequenceGap)
+    }
+
+    let openFooter = Data(
+      String(decoding: complete, as: UTF8.self)
+        .replacingOccurrences(of: "\"status\":\"closed\"", with: "\"status\":\"open\"")
+        .utf8)
+    #expect(throws: TLCGraphEventError.invalidFooter("not closed")) {
+      try reader.parse(openFooter)
+    }
+
+    let wrongCounts = Data(
+      String(decoding: complete, as: UTF8.self)
+        .replacingOccurrences(of: "\"initial\":1", with: "\"initial\":2")
+        .utf8)
+    #expect(throws: TLCGraphEventError.invalidFooter("count for initial")) {
+      try reader.parse(wrongCounts)
+    }
+
+    var changedBody = complete
+    changedBody.insert(0x20, at: 1)
+    #expect(throws: TLCGraphEventError.invalidFooter("body digest")) {
+      try reader.parse(changedBody)
     }
   }
 
@@ -466,7 +516,7 @@ extension TLCGraphReaderTests {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let mutations = [
-      { (line: String) in line.replacingOccurrences(of: "\"version\":1", with: "\"version\":true")
+      { (line: String) in line.replacingOccurrences(of: "\"version\":2", with: "\"version\":true")
       },
       { (line: String) in line.replacingOccurrences(of: "\"seen\":false", with: "\"seen\":0") },
       { (line: String) in
@@ -483,7 +533,7 @@ extension TLCGraphReaderTests {
     }
   }
 
-  @Test("launch binding hashes the declared inputs and derives provenance from the declared case")
+  @Test("launch validates the staged module and configuration against the declared case")
   func rejectsLaunchBindingMismatches() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(
       UUID().uuidString)
@@ -499,11 +549,6 @@ extension TLCGraphReaderTests {
       finiteGraphCase: finiteGraphCase, module: module, configuration: configuration)
     let staged = try valid.stageDeclaredBundle()
     try valid.validateLaunchBinding(module: staged.module, configuration: staged.configuration)
-    let command = try valid.commandArguments(module: staged.module, configuration: staged.configuration)
-    #expect(
-      command.contains(where: {
-        $0.contains(finiteGraphCase.moduleSHA256) && $0.contains(finiteGraphCase.argumentsSHA256)
-      }))
     let wrongModule = TLAModuleBundle.external(
       root: TLAModuleFile(name: "Module", tla: "wrong module", cfg: "cfg bytes")
     )

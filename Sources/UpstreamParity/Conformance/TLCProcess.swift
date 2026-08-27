@@ -116,10 +116,9 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package func commandArguments(
     module: URL,
     configuration: URL
-  ) throws -> [String] {
+  ) -> [String] {
     return [
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
-      "-Dswifttla.tlc.graph.provenance=\(try provenanceJSON())",
       "-Dswifttla.tlc.graph.run-id=\(runID.uuidString.lowercased())",
       "-Dswifttla.tlc.graph.case-id=\(caseID)",
       "-cp", "\(jar.path):\(bridgeClasses.path)",
@@ -233,22 +232,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     }
   }
 
-  private func provenanceJSON() throws -> String {
-    let pin = finiteGraphCase.pin
-    let provenance: [String: Any] = [
-      "tlcTag": pin.tag, "tlcCommit": pin.commit, "tlcJarSha256": pin.jarSHA256,
-      "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion,
-      "javaArchiveSha256": pin.javaArchiveSHA256, "bridgeClass": pin.bridgeClass,
-      "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
-      "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
-      "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-      "os": finiteGraphCase.operatingSystem,
-      "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
-    ]
-    let data = try JSONSerialization.data(withJSONObject: provenance, options: [.sortedKeys])
-    return String(decoding: data, as: UTF8.self)
-  }
-
   private func traceArguments(_ mode: TLCTraceMode) -> [String] {
     switch mode {
     case .none: []
@@ -313,7 +296,7 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
     }
     let result = try executeProcess(
       executable: request.javaExecutable,
-      arguments: try request.commandArguments(module: input.module, configuration: input.configuration),
+      arguments: request.commandArguments(module: input.module, configuration: input.configuration),
       directory: request.workingDirectory,
       timeout: request.timeout,
       environment: request.effectiveEnvironment

@@ -559,34 +559,14 @@ private func graphCompletion(at url: URL) throws -> [String: Any] {
 private func graphStream(for finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {
   let first = state(fingerprint: "1", value: "1")
   let second = state(fingerprint: "2", value: "2")
-  let provenance: [String: Any] = [
-    "tlcTag": finiteGraphCase.pin.tag,
-    "tlcCommit": finiteGraphCase.pin.commit,
-    "tlcJarSha256": finiteGraphCase.pin.jarSHA256,
-    "javaDistribution": finiteGraphCase.pin.javaDistribution,
-    "javaVersion": finiteGraphCase.pin.javaVersion,
-    "javaArchiveSha256": finiteGraphCase.pin.javaArchiveSHA256,
-    "bridgeClass": finiteGraphCase.pin.bridgeClass,
-    "bridgeSourceSha256": finiteGraphCase.pin.bridgeSourceSHA256,
-    "bridgeBinarySha256": finiteGraphCase.pin.bridgeBinarySHA256,
-    "moduleSha256": finiteGraphCase.moduleSHA256,
-    "cfgSha256": finiteGraphCase.cfgSHA256,
-    "arguments": finiteGraphCase.arguments,
-    "argumentsSha256": finiteGraphCase.argumentsSHA256,
-    "os": finiteGraphCase.operatingSystem,
-    "architecture": finiteGraphCase.architecture,
-    "environment": finiteGraphCase.environment
-  ]
   let common: [String: Any] = [
     "schema": "swifttla.tlc.graph-events",
-    "version": 1,
+    "version": 2,
     "runId": runID.uuidString.lowercased(),
     "caseId": finiteGraphCase.id
   ]
   let records: [[String: Any]] = [
-    common.merging([
-      "type": "header", "callback": "writer.header", "seq": 0, "provenance": provenance
-    ]) { $1 },
+    common.merging(["type": "header", "callback": "writer.header", "seq": 0]) { $1 },
     common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": first]) { $1 },
     common.merging([
       "type": "transition", "callback": "writeState.action", "seq": 2,
@@ -613,12 +593,7 @@ private func state(fingerprint: String, value: String) -> [String: Any] {
     "fingerprint": fingerprint,
     "level": 1,
     "bindings": [
-      [
-        "ordinal": 0,
-        "name": "x",
-        "tla": value,
-        "tlaSha256": SHA256.hex(Data(value.utf8))
-      ]
+      ["ordinal": 0, "name": "x", "tla": value]
     ]
   ]
 }

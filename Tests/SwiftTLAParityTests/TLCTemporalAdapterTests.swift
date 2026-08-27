@@ -537,22 +537,13 @@ struct TLCTemporalAdapterTests {
 private func graphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {
   let state: [String: Any] = [
     "fingerprint": "1", "level": 1,
-    "bindings": [["ordinal": 0, "name": "x", "tla": "1", "tlaSha256": SHA256.hex(Data("1".utf8))]]
-  ]
-  let pin = finiteGraphCase.pin
-  let provenance: [String: Any] = [
-    "tlcTag": pin.tag, "tlcCommit": pin.commit, "tlcJarSha256": pin.jarSHA256,
-    "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion, "javaArchiveSha256": pin.javaArchiveSHA256,
-    "bridgeClass": pin.bridgeClass, "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
-    "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
-    "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-    "os": finiteGraphCase.operatingSystem, "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
+    "bindings": [["ordinal": 0, "name": "x", "tla": "1"]]
   ]
   let common: [String: Any] = [
-    "schema": "swifttla.tlc.graph-events", "version": 1, "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
+    "schema": "swifttla.tlc.graph-events", "version": 2, "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
   ]
   let records = [
-    common.merging(["type": "header", "callback": "writer.header", "seq": 0, "provenance": provenance]) { $1 },
+    common.merging(["type": "header", "callback": "writer.header", "seq": 0]) { $1 },
     common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": state]) { $1 }
   ]
   let body = try records.reduce(into: Data()) { result, record in
@@ -572,7 +563,7 @@ private func temporalGraphStream(case finiteGraphCase: FiniteGraphCase, runID: U
   let second = graphState(fingerprint: "2", value: 2)
   let common = graphCommon(case: finiteGraphCase, runID: runID)
   let records = [
-    common.merging(["type": "header", "callback": "writer.header", "seq": 0, "provenance": graphProvenance(finiteGraphCase)]) { $1 },
+    common.merging(["type": "header", "callback": "writer.header", "seq": 0]) { $1 },
     common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": first]) { $1 },
     graphTransition(common: common, sequence: 2, source: first, target: second, action: "A"),
     graphTransition(common: common, sequence: 3, source: second, target: first, action: "B")
@@ -619,7 +610,7 @@ private func numberedStutteringTrace(action: String = "UnnamedAction") throws ->
 private func graphState(fingerprint: String, value: Int) -> [String: Any] {
   [
     "fingerprint": fingerprint, "level": 1,
-    "bindings": [["ordinal": 0, "name": "x", "tla": String(value), "tlaSha256": SHA256.hex(Data(String(value).utf8))]]
+    "bindings": [["ordinal": 0, "name": "x", "tla": String(value)]]
   ]
 }
 
@@ -636,20 +627,7 @@ private func graphTransition(
 
 private func graphCommon(case finiteGraphCase: FiniteGraphCase, runID: UUID) -> [String: Any] {
   [
-    "schema": "swifttla.tlc.graph-events", "version": 1,
+    "schema": "swifttla.tlc.graph-events", "version": 2,
     "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
-  ]
-}
-
-private func graphProvenance(_ finiteGraphCase: FiniteGraphCase) -> [String: Any] {
-  let pin = finiteGraphCase.pin
-  return [
-    "tlcTag": pin.tag, "tlcCommit": pin.commit, "tlcJarSha256": pin.jarSHA256,
-    "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion, "javaArchiveSha256": pin.javaArchiveSHA256,
-    "bridgeClass": pin.bridgeClass, "bridgeSourceSha256": pin.bridgeSourceSHA256, "bridgeBinarySha256": pin.bridgeBinarySHA256,
-    "moduleSha256": finiteGraphCase.moduleSHA256, "cfgSha256": finiteGraphCase.cfgSHA256,
-    "arguments": finiteGraphCase.arguments, "argumentsSha256": finiteGraphCase.argumentsSHA256,
-    "os": finiteGraphCase.operatingSystem,
-    "architecture": finiteGraphCase.architecture, "environment": finiteGraphCase.environment
   ]
 }

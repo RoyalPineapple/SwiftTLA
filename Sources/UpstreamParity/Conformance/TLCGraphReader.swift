@@ -6,7 +6,6 @@ package enum TLCGraphEventError: Error, Equatable, Sendable {
     case malformedJSON(line: Int)
     case duplicateKey(line: Int, key: String)
     case invalidRecord(line: Int, reason: String)
-    case provenanceMismatch(String)
     case missingFooter
     case invalidFooter(String)
     case unsupportedCallback(String)
@@ -15,10 +14,8 @@ package enum TLCGraphEventError: Error, Equatable, Sendable {
 }
 
 package struct TLCBinding: Equatable, Sendable {
-    package let ordinal: Int
     package let name: String
     package let tla: String
-    package let tlaSHA256: String
 }
 
 package struct TLCGraphState: Equatable, Sendable {
@@ -89,11 +86,10 @@ package struct TLCGraphReader: Sendable {
             switch type {
             case "header":
                 guard index == 0 else { throw TLCGraphEventError.invalidRecord(line: line, reason: "header is not first") }
-                try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "provenance"], line)
+                try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId"], line)
                 guard try string(object, "callback", line) == "writer.header" else {
                     throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid header callback")
                 }
-                try validateProvenance(try dictionary(object, "provenance", line))
             case "initial":
                 try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "state"], line)
                 guard try string(object, "callback", line) == "writeState.initial" else {
@@ -260,7 +256,7 @@ package struct TLCGraphReader: Sendable {
     }
 
     private func validateCommon(_ object: [String: Any], line: Int, expectedSequence: Int, runID: inout UUID?) throws {
-        guard try string(object, "schema", line) == "swifttla.tlc.graph-events", try int(object, "version", line) == 1 else {
+        guard try string(object, "schema", line) == "swifttla.tlc.graph-events", try int(object, "version", line) == 2 else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "schema")
         }
         guard try int(object, "seq", line) == expectedSequence else { throw TLCGraphEventError.invalidRecord(line: line, reason: "sequence gap") }
@@ -272,48 +268,16 @@ package struct TLCGraphReader: Sendable {
         runID = parsed
     }
 
-    private func validateProvenance(_ value: [String: Any]) throws {
-        try exactKeys(value, [
-            "tlcTag", "tlcCommit", "tlcJarSha256", "javaDistribution", "javaVersion", "javaArchiveSha256",
-            "bridgeClass", "bridgeSourceSha256", "bridgeBinarySha256", "moduleSha256", "cfgSha256",
-            "arguments", "argumentsSha256", "os", "architecture", "environment"
-        ], 1)
-        let expected: [String: String] = [
-            "tlcTag": finiteGraphCase.pin.tag, "tlcCommit": finiteGraphCase.pin.commit, "tlcJarSha256": finiteGraphCase.pin.jarSHA256,
-            "javaDistribution": finiteGraphCase.pin.javaDistribution, "javaVersion": finiteGraphCase.pin.javaVersion,
-            "javaArchiveSha256": finiteGraphCase.pin.javaArchiveSHA256, "bridgeClass": finiteGraphCase.pin.bridgeClass,
-            "bridgeSourceSha256": finiteGraphCase.pin.bridgeSourceSHA256, "bridgeBinarySha256": finiteGraphCase.pin.bridgeBinarySHA256
-        ]
-        for (key, expectedValue) in expected {
-            guard try string(value, key, 1) == expectedValue else {
-                throw TLCGraphEventError.provenanceMismatch(key)
-            }
-        }
-        guard try string(value, "moduleSha256", 1) == finiteGraphCase.moduleSHA256,
-              try string(value, "cfgSha256", 1) == finiteGraphCase.cfgSHA256,
-              try strings(value, "arguments", 1) == finiteGraphCase.arguments,
-              try string(value, "argumentsSha256", 1) == finiteGraphCase.argumentsSHA256,
-              try string(value, "os", 1) == finiteGraphCase.operatingSystem,
-              try string(value, "architecture", 1) == finiteGraphCase.architecture,
-              try stringDictionary(value, "environment", 1) == finiteGraphCase.environment
-        else { throw TLCGraphEventError.provenanceMismatch("case provenance") }
-    }
-
     private func parseState(_ value: [String: Any], line: Int) throws -> TLCGraphState {
         try exactKeys(value, ["fingerprint", "level", "bindings"], line)
         let bindings = try array(value, "bindings", line).enumerated().map { index, item -> TLCBinding in
             guard let object = item as? [String: Any] else { throw TLCGraphEventError.invalidRecord(line: line, reason: "binding") }
-            try exactKeys(object, ["ordinal", "name", "tla", "tlaSha256"], line)
+            try exactKeys(object, ["ordinal", "name", "tla"], line)
             let text = try string(object, "tla", line)
-            guard try string(object, "tlaSha256", line) == SHA256.hex(Data(text.utf8)) else {
-                throw TLCGraphEventError.invalidRecord(line: line, reason: "binding digest")
-            }
             guard try int(object, "ordinal", line) == index else { throw TLCGraphEventError.invalidRecord(line: line, reason: "binding ordinal") }
             return TLCBinding(
-                ordinal: index,
                 name: try string(object, "name", line),
-                tla: text,
-                tlaSHA256: try string(object, "tlaSha256", line)
+                tla: text
             )
         }
         guard Set(bindings.map(\.name)).count == bindings.count else {
@@ -528,25 +492,6 @@ private func dictionary(_ object: [String: Any], _ key: String, _ line: Int) thr
 private func array(_ object: [String: Any], _ key: String, _ line: Int) throws -> [Any] {
     guard let value = object[key] as? [Any] else { throw TLCGraphEventError.invalidRecord(line: line, reason: key) }
     return value
-}
-
-private func strings(_ object: [String: Any], _ key: String, _ line: Int) throws -> [String] {
-    guard let values = object[key] as? [Any], values.allSatisfy({ $0 is String }) else {
-        throw TLCGraphEventError.invalidRecord(line: line, reason: key)
-    }
-    return values.compactMap { $0 as? String }
-}
-
-private func stringDictionary(_ object: [String: Any], _ key: String, _ line: Int) throws -> [String: String] {
-    guard let values = object[key] as? [String: Any] else {
-        throw TLCGraphEventError.invalidRecord(line: line, reason: key)
-    }
-    var strings: [String: String] = [:]
-    for (name, value) in values {
-        guard let text = value as? String else { throw TLCGraphEventError.invalidRecord(line: line, reason: key) }
-        strings[name] = text
-    }
-    return strings
 }
 
 private struct JSONDuplicateKeyScanner {

@@ -31,7 +31,7 @@
   "bridge": {
     "class": "org.swifttla.conformance.LosslessStateWriter",
     "source": "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java",
-    "sourceSha256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
-    "binarySha256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
+    "sourceSha256": "0bdc542fc5058c152c3a3d9efd2df39fd7f6281645c0f54db41d146772a51929",
+    "binarySha256": "723cfa84460279ccdc8770e2e3c7301585b32e7fa652de18b1eb37974c0fe061"
   }
 }
