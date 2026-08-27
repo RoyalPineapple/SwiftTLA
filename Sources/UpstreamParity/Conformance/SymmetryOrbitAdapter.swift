@@ -91,7 +91,7 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
       domain: domain,
       maximumPermutationCount: maximumPermutationCount
     )
-    let stateTable = Dictionary(uniqueKeysWithValues: states.map { ($0.key, $0) })
+    let stateTable = try canonicalStateTable(states)
     var unseen = Set(stateTable.keys)
     var derived: [[CanonicalStateKey]] = []
     var representatives: [CanonicalStateKey: CanonicalStateKey] = [:]

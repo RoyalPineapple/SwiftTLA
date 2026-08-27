@@ -58,6 +58,15 @@ struct CanonicalGraphTests {
         }
     }
 
+    @Test("canonical graphs reject duplicate states")
+    func rejectsDuplicateStates() {
+        let state = CanonicalState(bindings: ["counter": .integer(1)])
+
+        #expect(throws: CanonicalGraphError.duplicateState(state.key)) {
+            _ = try CanonicalGraph(initialStates: [state], states: [state, state], edges: [])
+        }
+    }
+
     @Test("string-keyed functions and records share one canonical value")
     func canonicalizesStringKeyedFunctionsAsRecords() throws {
         let record = CanonicalValue.record(["member": .integer(1)])
