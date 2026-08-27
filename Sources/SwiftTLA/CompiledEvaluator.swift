@@ -79,7 +79,8 @@ private enum EvaluatorCollectionValues {
 
 private enum EvaluatorTask {
     case expression(CompiledStateExpr, EvaluatorScope)
-    case finish(Int, ([CompiledValue]) throws -> CompiledValue)
+    case finish(CompiledStateExpr)
+    case booleanResult
     case conditional(then: CompiledStateExpr, otherwise: CompiledStateExpr, scope: EvaluatorScope)
     case booleanRight(CompiledStateExpr, scope: EvaluatorScope, shortCircuit: Bool)
     case collectionStart(EvaluatorCollection, binder: BinderID, body: CompiledStateExpr, scope: EvaluatorScope)
@@ -177,51 +178,6 @@ struct CompiledEvaluator: Sendable {
             return boolean
         }
 
-        func schedule(
-            _ expressions: [(CompiledStateExpr, EvaluatorScope)],
-            build: @escaping ([CompiledValue]) throws -> CompiledValue
-        ) {
-            tasks.append(.finish(expressions.count, build))
-            for (expression, scope) in expressions.reversed() {
-                tasks.append(.expression(expression, scope))
-            }
-        }
-
-        func schedule(
-            _ expressions: [CompiledStateExpr],
-            scope: EvaluatorScope,
-            build: @escaping ([CompiledValue]) throws -> CompiledValue
-        ) {
-            schedule(expressions.map { ($0, scope) }, build: build)
-        }
-
-        func schedule(
-            _ expression: CompiledStateExpr,
-            scope: EvaluatorScope,
-            build: @escaping (CompiledValue) throws -> CompiledValue
-        ) {
-            schedule([expression], scope: scope) { values in
-                guard values.count == 1, let value = values.first else {
-                    throw EvalError.typeMismatch("Invalid evaluator continuation")
-                }
-                return try build(value)
-            }
-        }
-
-        func schedule(
-            _ first: CompiledStateExpr,
-            _ second: CompiledStateExpr,
-            scope: EvaluatorScope,
-            build: @escaping (CompiledValue, CompiledValue) throws -> CompiledValue
-        ) {
-            schedule([first, second], scope: scope) { values in
-                guard values.count == 2 else {
-                    throw EvalError.typeMismatch("Invalid evaluator continuation")
-                }
-                return try build(values[0], values[1])
-            }
-        }
-
         func collectionResult(
             _ mode: EvaluatorCollection,
             accumulated: EvaluatorCollectionValues
@@ -244,14 +200,218 @@ struct CompiledEvaluator: Sendable {
 
         while let task = tasks.popLast() {
             switch task {
-            case .finish(let count, let build):
-                guard values.count >= count else {
+            case .finish(let expression):
+                switch expression {
+                case .add:
+                    let rhs = try integer(popValue(from: &values))
+                    let lhs = try integer(popValue(from: &values))
+                    values.append(.integer(lhs + rhs))
+                case .subtract:
+                    let rhs = try integer(popValue(from: &values))
+                    let lhs = try integer(popValue(from: &values))
+                    values.append(.integer(lhs - rhs))
+                case .multiply:
+                    let rhs = try integer(popValue(from: &values))
+                    let lhs = try integer(popValue(from: &values))
+                    values.append(.integer(lhs * rhs))
+                case .divide, .integerDivide:
+                    let dividend = try integer(popValue(from: &values))
+                    let divisor = try integer(popValue(from: &values))
+                    guard divisor != 0 else { throw EvalError.divisionByZero }
+                    values.append(.integer(dividend / divisor))
+                case .modulo:
+                    let dividend = try integer(popValue(from: &values))
+                    let divisor = try integer(popValue(from: &values))
+                    guard divisor != 0 else { throw EvalError.divisionByZero }
+                    values.append(.integer(dividend % divisor))
+                case .negate:
+                    values.append(.integer(-(try integer(popValue(from: &values)))))
+                case .equal:
+                    let rhs = try popValue(from: &values)
+                    values.append(.boolean(try popValue(from: &values) == rhs))
+                case .notEqual:
+                    let rhs = try popValue(from: &values)
+                    values.append(.boolean(try popValue(from: &values) != rhs))
+                case .lessThan:
+                    let rhs = try integer(popValue(from: &values))
+                    values.append(.boolean(try integer(popValue(from: &values)) < rhs))
+                case .lessOrEqual:
+                    let rhs = try integer(popValue(from: &values))
+                    values.append(.boolean(try integer(popValue(from: &values)) <= rhs))
+                case .greaterThan:
+                    let rhs = try integer(popValue(from: &values))
+                    values.append(.boolean(try integer(popValue(from: &values)) > rhs))
+                case .greaterOrEqual:
+                    let rhs = try integer(popValue(from: &values))
+                    values.append(.boolean(try integer(popValue(from: &values)) >= rhs))
+                case .not:
+                    values.append(.boolean(!(try boolean(popValue(from: &values)))))
+                case .setLiteral(let expressions):
+                    values.append(.set(Set(try popValues(expressions.count, from: &values))))
+                case .in:
+                    let member = try popValue(from: &values)
+                    let setValue = try popValue(from: &values)
+                    guard case .set(let set) = setValue else {
+                        throw EvalError.typeMismatch("Expected a set")
+                    }
+                    values.append(.boolean(set.contains(member)))
+                case .subset:
+                    let rhs = try popValue(from: &values)
+                    let lhs = try popValue(from: &values)
+                    guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
+                        throw EvalError.typeMismatch("Expected sets")
+                    }
+                    values.append(.boolean(lhs.isSubset(of: rhs)))
+                case .union:
+                    let rhs = try popValue(from: &values)
+                    let lhs = try popValue(from: &values)
+                    guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
+                        throw EvalError.typeMismatch("Expected sets")
+                    }
+                    values.append(.set(lhs.union(rhs)))
+                case .intersection:
+                    let rhs = try popValue(from: &values)
+                    let lhs = try popValue(from: &values)
+                    guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
+                        throw EvalError.typeMismatch("Expected sets")
+                    }
+                    values.append(.set(lhs.intersection(rhs)))
+                case .setDifference:
+                    let rhs = try popValue(from: &values)
+                    let lhs = try popValue(from: &values)
+                    guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
+                        throw EvalError.typeMismatch("Expected sets")
+                    }
+                    values.append(.set(lhs.subtracting(rhs)))
+                case .cardinality:
+                    guard case .set(let set) = try popValue(from: &values) else {
+                        throw EvalError.typeMismatch("Expected a set")
+                    }
+                    values.append(.integer(set.count))
+                case .powerSet:
+                    guard case .set(let set) = try popValue(from: &values) else {
+                        throw EvalError.typeMismatch("Expected a set")
+                    }
+                    values.append(try powerSet(of: set))
+                case .unionAll:
+                    guard case .set(let members) = try popValue(from: &values) else {
+                        throw EvalError.typeMismatch("Expected a set")
+                    }
+                    values.append(.set(try members.reduce(into: Set<CompiledValue>()) { result, member in
+                        guard case .set(let nested) = member else {
+                            throw EvalError.typeMismatch("Expected a set of sets")
+                        }
+                        result.formUnion(nested)
+                    }))
+                case .integerRange:
+                    let upper = try integer(popValue(from: &values))
+                    let lower = try integer(popValue(from: &values))
+                    values.append(lower <= upper ? .set(Set((lower...upper).map(CompiledValue.integer))) : .set([]))
+                case .tupleLiteral(let expressions):
+                    values.append(.tuple(try popValues(expressions.count, from: &values)))
+                case .tupleAccess(_, let index):
+                    let tuple = try sequenceElements(from: popValue(from: &values))
+                    guard index >= 1, index <= tuple.count else {
+                        throw EvalError.indexOutOfBounds(index, tuple.count)
+                    }
+                    values.append(tuple[index - 1])
+                case .tupleDynamicAccess:
+                    let index = try integer(popValue(from: &values))
+                    let tuple = try sequenceElements(from: popValue(from: &values))
+                    guard index >= 1, index <= tuple.count else {
+                        throw EvalError.indexOutOfBounds(index, tuple.count)
+                    }
+                    values.append(tuple[index - 1])
+                case .tupleLength:
+                    values.append(.integer(try sequenceElements(from: popValue(from: &values)).count))
+                case .tupleAppend:
+                    let element = try popValue(from: &values)
+                    var tuple = try sequenceElements(from: popValue(from: &values))
+                    tuple.append(element)
+                    values.append(.tuple(tuple))
+                case .tupleHead:
+                    guard let first = try sequenceElements(from: popValue(from: &values)).first else {
+                        throw EvalError.typeMismatch("Expected a nonempty tuple")
+                    }
+                    values.append(first)
+                case .tupleTail:
+                    let tuple = try sequenceElements(from: popValue(from: &values))
+                    guard tuple.isEmpty == false else {
+                        throw EvalError.typeMismatch("Expected a nonempty tuple")
+                    }
+                    values.append(.tuple(Array(tuple.dropFirst())))
+                case .tupleConcatenate:
+                    let rhs = try sequenceElements(from: popValue(from: &values))
+                    let lhs = try sequenceElements(from: popValue(from: &values))
+                    values.append(.tuple(lhs + rhs))
+                case .recordLiteral(let fields):
+                    let fieldValues = try popValues(fields.fields.count, from: &values)
+                    values.append(.record(CompiledRecord(zip(fields.fields, fieldValues).map {
+                        .init(key: $0.0.key, value: $0.1)
+                    })))
+                case .recordAccess(_, _, let key):
+                    guard case .record(let record) = try popValue(from: &values),
+                          let value = record.value(for: key)
+                    else {
+                        throw EvalError.typeMismatch("Expected record field")
+                    }
+                    values.append(value)
+                case .domain:
+                    switch try popValue(from: &values) {
+                    case .function(let function): values.append(.set(Set(function.keys)))
+                    case .record(let record): values.append(.set(Set(record.fields.map(\.key))))
+                    case .tuple(let tuple): values.append(.set(Set(tuple.indices.map { .integer($0 + 1) })))
+                    default: throw EvalError.typeMismatch("Expected a function")
+                    }
+                case .functionApply:
+                    let function = try popValue(from: &values)
+                    let key = try popValue(from: &values)
+                    switch function {
+                    case .function(let function):
+                        guard let value = function[key] else {
+                            throw EvalError.typeMismatch("Function argument is outside its domain")
+                        }
+                        values.append(value)
+                    case .tuple(let tuple):
+                        guard case .integer(let index) = key, index >= 1, index <= tuple.count else {
+                            throw EvalError.typeMismatch("Tuple index is outside its domain")
+                        }
+                        values.append(tuple[index - 1])
+                    case .record(let record):
+                        guard case .string = key, let value = record.value(for: key) else {
+                            throw EvalError.typeMismatch("Record field is unavailable")
+                        }
+                        values.append(value)
+                    default:
+                        throw EvalError.typeMismatch("Expected a function")
+                    }
+                case .sequenceFromSet:
+                    guard case .set(let set) = try popValue(from: &values) else {
+                        throw EvalError.typeMismatch("Expected a set")
+                    }
+                    values.append(.tuple(CompiledValue.sorted(set)))
+                case .setSum:
+                    guard case .set(let members) = try popValue(from: &values),
+                          case .function(let function) = try popValue(from: &values)
+                    else {
+                        throw EvalError.typeMismatch("Expected a function and a set")
+                    }
+                    values.append(.integer(try members.reduce(0) { total, member in
+                        guard let result = function[member], case .integer(let value) = result else {
+                            throw EvalError.typeMismatch("Expected integer function values")
+                        }
+                        return total + value
+                    }))
+                case .functionSet:
+                    let range = try popValue(from: &values)
+                    let domain = try popValue(from: &values)
+                    values.append(try functionSet(domain: domain, range: range))
+                default:
                     throw EvalError.typeMismatch("Invalid evaluator continuation")
                 }
-                let start = values.count - count
-                let arguments = Array(values[start...])
-                values.removeSubrange(start...)
-                values.append(try build(arguments))
+
+            case .booleanResult:
+                values.append(.boolean(try boolean(popValue(from: &values))))
 
             case .conditional(let then, let otherwise, let scope):
                 let condition = try boolean(try popValue(from: &values))
@@ -262,12 +422,7 @@ struct CompiledEvaluator: Sendable {
                 if lhs == shortCircuit {
                     values.append(.boolean(shortCircuit))
                 } else {
-                    tasks.append(.finish(1) { values in
-                        guard values.count == 1, let value = values.first else {
-                            throw EvalError.typeMismatch("Invalid evaluator continuation")
-                        }
-                        return .boolean(try boolean(value))
-                    })
+                    tasks.append(.booleanResult)
                     tasks.append(.expression(expression, scope))
                 }
 
@@ -561,122 +716,92 @@ struct CompiledEvaluator: Sendable {
                         tasks.append(.formalCall(.reference(id, arity: 0), arguments: [], scope: scope))
                     }
                 case .add(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .integer(try integer($0) + integer($1))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .subtract(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .integer(try integer($0) - integer($1))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .multiply(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .integer(try integer($0) * integer($1))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs):
-                    schedule(rhs, lhs, scope: scope) { divisorValue, dividendValue in
-                        let divisor = try integer(divisorValue)
-                        guard divisor != 0 else { throw EvalError.divisionByZero }
-                        return .integer(try integer(dividendValue) / divisor)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(lhs, scope))
+                    tasks.append(.expression(rhs, scope))
                 case .modulo(let lhs, let rhs):
-                    schedule(rhs, lhs, scope: scope) { divisorValue, dividendValue in
-                        let divisor = try integer(divisorValue)
-                        guard divisor != 0 else { throw EvalError.divisionByZero }
-                        return .integer(try integer(dividendValue) % divisor)
-                    }
-                case .negate(let expression):
-                    schedule(expression, scope: scope) {
-                        .integer(-(try integer($0)))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(lhs, scope))
+                    tasks.append(.expression(rhs, scope))
+                case .negate(let operand):
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(operand, scope))
                 case .equal(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .boolean($0 == $1)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .notEqual(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .boolean($0 != $1)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .lessThan(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .boolean(try integer($0) < integer($1))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .lessOrEqual(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .boolean(try integer($0) <= integer($1))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .greaterThan(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .boolean(try integer($0) > integer($1))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .greaterOrEqual(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .boolean(try integer($0) >= integer($1))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .and(let lhs, let rhs):
                     tasks.append(.booleanRight(rhs, scope: scope, shortCircuit: false))
                     tasks.append(.expression(lhs, scope))
                 case .or(let lhs, let rhs):
                     tasks.append(.booleanRight(rhs, scope: scope, shortCircuit: true))
                     tasks.append(.expression(lhs, scope))
-                case .not(let expression):
-                    schedule(expression, scope: scope) {
-                        .boolean(!(try boolean($0)))
-                    }
+                case .not(let operand):
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(operand, scope))
                 case .ifThenElse(let condition, let then, let otherwise):
                     tasks.append(.conditional(then: then, otherwise: otherwise, scope: scope))
                     tasks.append(.expression(condition, scope))
                 case .setLiteral(let expressions):
-                    schedule(expressions, scope: scope) { .set(Set($0)) }
+                    tasks.append(.finish(expression))
+                    for element in expressions.reversed() {
+                        tasks.append(.expression(element, scope))
+                    }
                 case .in(let member, let set):
-                    schedule(set, member, scope: scope) { setValue, member in
-                        guard case .set(let set) = setValue else {
-                            throw EvalError.typeMismatch("Expected a set")
-                        }
-                        return .boolean(set.contains(member))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(member, scope))
+                    tasks.append(.expression(set, scope))
                 case .subset(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        guard case .set(let lhs) = $0,
-                              case .set(let rhs) = $1
-                        else {
-                            throw EvalError.typeMismatch("Expected sets")
-                        }
-                        return .boolean(lhs.isSubset(of: rhs))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .union(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        guard case .set(let lhs) = $0,
-                              case .set(let rhs) = $1
-                        else {
-                            throw EvalError.typeMismatch("Expected sets")
-                        }
-                        return .set(lhs.union(rhs))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .intersection(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        guard case .set(let lhs) = $0,
-                              case .set(let rhs) = $1
-                        else {
-                            throw EvalError.typeMismatch("Expected sets")
-                        }
-                        return .set(lhs.intersection(rhs))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .setDifference(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        guard case .set(let lhs) = $0,
-                              case .set(let rhs) = $1
-                        else {
-                            throw EvalError.typeMismatch("Expected sets")
-                        }
-                        return .set(lhs.subtracting(rhs))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .cardinality(let set):
-                    schedule(set, scope: scope) {
-                        guard case .set(let set) = $0 else {
-                            throw EvalError.typeMismatch("Expected a set")
-                        }
-                        return .integer(set.count)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(set, scope))
                 case .setFilter(let set, let binder, let predicate):
                     tasks.append(.collectionStart(.filter, binder: binder, body: predicate, scope: scope))
                     tasks.append(.expression(set, scope))
@@ -684,106 +809,55 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.collectionStart(.map, binder: binder, body: body, scope: scope))
                     tasks.append(.expression(set, scope))
                 case .powerSet(let set):
-                    schedule(set, scope: scope) {
-                        guard case .set(let set) = $0 else {
-                            throw EvalError.typeMismatch("Expected a set")
-                        }
-                        return try powerSet(of: set)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(set, scope))
                 case .unionAll(let set):
-                    schedule(set, scope: scope) {
-                        guard case .set(let members) = $0 else {
-                            throw EvalError.typeMismatch("Expected a set")
-                        }
-                        return .set(try members.reduce(into: Set<CompiledValue>()) { result, member in
-                            guard case .set(let nested) = member else {
-                                throw EvalError.typeMismatch("Expected a set of sets")
-                            }
-                            result.formUnion(nested)
-                        })
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(set, scope))
                 case .integerRange(let lower, let upper):
-                    schedule(lower, upper, scope: scope) {
-                        let lower = try integer($0)
-                        let upper = try integer($1)
-                        guard lower <= upper else { return .set([]) }
-                        return .set(Set((lower...upper).map(CompiledValue.integer)))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(upper, scope))
+                    tasks.append(.expression(lower, scope))
                 case .tupleLiteral(let expressions):
-                    schedule(expressions, scope: scope) { .tuple($0) }
-                case .tupleAccess(let tuple, let index):
-                    schedule(tuple, scope: scope) {
-                        let tuple = try sequenceElements(from: $0)
-                        guard index >= 1, index <= tuple.count else {
-                            throw EvalError.indexOutOfBounds(index, tuple.count)
-                        }
-                        return tuple[index - 1]
+                    tasks.append(.finish(expression))
+                    for element in expressions.reversed() {
+                        tasks.append(.expression(element, scope))
                     }
+                case .tupleAccess(let tuple, _):
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(tuple, scope))
                 case .tupleDynamicAccess(let tuple, let index):
-                    schedule(tuple, index, scope: scope) {
-                        let tuple = try sequenceElements(from: $0)
-                        let index = try integer($1)
-                        guard index >= 1, index <= tuple.count else {
-                            throw EvalError.indexOutOfBounds(index, tuple.count)
-                        }
-                        return tuple[index - 1]
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(index, scope))
+                    tasks.append(.expression(tuple, scope))
                 case .tupleLength(let tuple):
-                    schedule(tuple, scope: scope) {
-                        .integer(try sequenceElements(from: $0).count)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(tuple, scope))
                 case .tupleAppend(let tuple, let element):
-                    schedule(tuple, element, scope: scope) {
-                        var tuple = try sequenceElements(from: $0)
-                        tuple.append($1)
-                        return .tuple(tuple)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(element, scope))
+                    tasks.append(.expression(tuple, scope))
                 case .tupleHead(let tuple):
-                    schedule(tuple, scope: scope) {
-                        guard let first = try sequenceElements(from: $0).first else {
-                            throw EvalError.typeMismatch("Expected a nonempty tuple")
-                        }
-                        return first
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(tuple, scope))
                 case .tupleTail(let tuple):
-                    schedule(tuple, scope: scope) {
-                        let tuple = try sequenceElements(from: $0)
-                        guard tuple.isEmpty == false else {
-                            throw EvalError.typeMismatch("Expected a nonempty tuple")
-                        }
-                        return .tuple(Array(tuple.dropFirst()))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(tuple, scope))
                 case .tupleConcatenate(let lhs, let rhs):
-                    schedule(lhs, rhs, scope: scope) {
-                        .tuple(
-                            try sequenceElements(from: $0)
-                                + sequenceElements(from: $1)
-                        )
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(rhs, scope))
+                    tasks.append(.expression(lhs, scope))
                 case .recordLiteral(let fields):
-                    schedule(fields.fields.map { ($0.value, scope) }) { fieldValues in
-                        .record(CompiledRecord(zip(fields.fields, fieldValues).map {
-                            .init(key: $0.0.key, value: $0.1)
-                        }))
+                    tasks.append(.finish(expression))
+                    for field in fields.fields.reversed() {
+                        tasks.append(.expression(field.value, scope))
                     }
-                case .recordAccess(let record, _, let key):
-                    schedule(record, scope: scope) {
-                        guard case .record(let record) = $0,
-                              let value = record.value(for: key)
-                        else {
-                            throw EvalError.typeMismatch("Expected record field")
-                        }
-                        return value
-                    }
-                case .domain(let expression):
-                    schedule(expression, scope: scope) {
-                        switch $0 {
-                        case .function(let values): return .set(Set(values.keys))
-                        case .record(let values): return .set(Set(values.fields.map(\.key)))
-                        case .tuple(let values): return .set(Set(values.indices.map { .integer($0 + 1) }))
-                        default: throw EvalError.typeMismatch("Expected a function")
-                        }
-                    }
+                case .recordAccess(let record, _, _):
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(record, scope))
+                case .domain(let operand):
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(operand, scope))
                 case .functionLiteral(let domain, let binder, let body):
                     tasks.append(.collectionStart(.function, binder: binder, body: body, scope: scope))
                     tasks.append(.expression(domain, scope))
@@ -791,32 +865,9 @@ struct CompiledEvaluator: Sendable {
                     if case .operatorReference(let id) = function {
                         tasks.append(.recursiveCall(id, arguments: [argument], scope: scope))
                     } else {
-                        schedule(argument, function, scope: scope) { key, function in
-                            switch function {
-                            case .function(let values):
-                                guard let value = values[key] else {
-                                    throw EvalError.typeMismatch("Function argument is outside its domain")
-                                }
-                                return value
-                            case .tuple(let values):
-                                guard case .integer(let index) = key,
-                                      index >= 1,
-                                      index <= values.count
-                                else {
-                                    throw EvalError.typeMismatch("Tuple index is outside its domain")
-                                }
-                                return values[index - 1]
-                            case .record(let values):
-                                guard case .string = key,
-                                      let value = values.value(for: key)
-                                else {
-                                    throw EvalError.typeMismatch("Record field is unavailable")
-                                }
-                                return value
-                            default:
-                                throw EvalError.typeMismatch("Expected a function")
-                            }
-                        }
+                        tasks.append(.finish(expression))
+                        tasks.append(.expression(function, scope))
+                        tasks.append(.expression(argument, scope))
                     }
                 case .except(let function, let key, let replacement):
                     tasks.append(.exceptFunction(key: key, scope: scope))
@@ -836,32 +887,16 @@ struct CompiledEvaluator: Sendable {
                 case .enabledAction(let action):
                     values.append(.boolean(enabledActions.contains(action)))
                 case .sequenceFromSet(let set):
-                    schedule(set, scope: scope) {
-                        guard case .set(let set) = $0 else {
-                            throw EvalError.typeMismatch("Expected a set")
-                        }
-                        return .tuple(CompiledValue.sorted(set))
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(set, scope))
                 case .setSum(let function, let set):
-                    schedule(function, set, scope: scope) {
-                        guard case .function(let function) = $0,
-                              case .set(let members) = $1
-                        else {
-                            throw EvalError.typeMismatch("Expected a function and a set")
-                        }
-                        return .integer(try members.reduce(0) { total, member in
-                            guard let result = function[member],
-                                  case .integer(let value) = result
-                            else {
-                                throw EvalError.typeMismatch("Expected integer function values")
-                            }
-                            return total + value
-                        })
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(set, scope))
+                    tasks.append(.expression(function, scope))
                 case .functionSet(let domain, let range):
-                    schedule(domain, range, scope: scope) {
-                        try functionSet(domain: $0, range: $1)
-                    }
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(range, scope))
+                    tasks.append(.expression(domain, scope))
                 case .foldFunction(let operation, let initial, let sequence):
                     tasks.append(.foldSequence(operation, initial: initial, scope: scope))
                     tasks.append(.expression(sequence, scope))
@@ -906,6 +941,16 @@ private extension CompiledEvaluator {
             throw EvalError.typeMismatch("Invalid evaluator continuation")
         }
         return value
+    }
+
+    func popValues(_ count: Int, from values: inout [CompiledValue]) throws -> [CompiledValue] {
+        guard values.count >= count else {
+            throw EvalError.typeMismatch("Invalid evaluator continuation")
+        }
+        let start = values.count - count
+        let result = Array(values[start...])
+        values.removeSubrange(start...)
+        return result
     }
 
     func sequenceElements(from value: CompiledValue) throws -> [CompiledValue] {
