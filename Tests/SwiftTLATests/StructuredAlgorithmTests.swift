@@ -6,6 +6,8 @@ import SwiftTLAMacros
 /// atomic action updates one nested field, and generated state stays typed.
 @TLAModel
 private struct StructuredCarModel {
+    enum Step: String, CaseIterable { case open }
+
     enum Car: String, CaseIterable, FiniteTLAValueDomain {
         case north
         case south
@@ -58,7 +60,7 @@ private struct StructuredCarModel {
                 ))
 
                 Each(Car.all) { car in
-                    Do(TestControlLabel.open) {
+                    Do(Step.open) {
                         When(cars[car][CarRecord.door] == Door.closed)
                         Assign(cars, to: cars.updating(car) { vehicle in
                             vehicle.updating(CarRecord.door, to: Door.open)

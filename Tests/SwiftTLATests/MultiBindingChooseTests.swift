@@ -37,6 +37,8 @@ struct MultiBindingChooseTests {
 
 @TLAModel
 private struct MultiBindingChooseModel {
+    enum Step: String, CaseIterable { case choose }
+
     enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case only = 0
         static var defaultValue: Self { .only }
@@ -48,7 +50,7 @@ private struct MultiBindingChooseModel {
             Algorithm("MultiBindingChoose", scoped: { scope in
                 let selected = scope.sharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
-                    Do(TestControlLabel.choose) {
+                    Do(Step.choose) {
                         Choose(1...2, 10...11) { first, second in
                             Assign(selected, to: first.expr * 100 + second.expr)
                         }

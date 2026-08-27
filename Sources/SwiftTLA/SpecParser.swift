@@ -458,7 +458,7 @@ public final class ParserSession {
         )
     }
 
-    private func controlLocation(_ expression: ExprSyntax?) -> String? {
+    func controlLocation(_ expression: ExprSyntax?) -> String? {
         guard let access = expression?.as(MemberAccessExprSyntax.self),
               let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
               case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.text)

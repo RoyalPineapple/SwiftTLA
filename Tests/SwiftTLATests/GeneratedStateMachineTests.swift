@@ -45,6 +45,8 @@ struct CounterNoInvs {
 
 @TLAModel
 struct GeneratedAlgorithmCounter {
+    enum Step: String, CaseIterable { case increment }
+
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case left
         case right
@@ -59,7 +61,7 @@ struct GeneratedAlgorithmCounter {
             Algorithm("GeneratedAlgorithmCounter", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Each(Node.all, fairness: .weak) { _ in
-                    While(TestControlLabel.increment, count < 2) {
+                    While(Step.increment, count < 2) {
                         When(count < 2)
                         Assert(count >= 0)
                         Assign(count, to: count + 1)
@@ -72,12 +74,14 @@ struct GeneratedAlgorithmCounter {
 
 @TLAModel
 private struct SeededCounterMachine {
+    enum Step: String, CaseIterable { case advance }
+
     static var spec: TLASpec {
         #spec("SeededCounterMachine") {
             Algorithm("SeededCounterMachine", scoped: { scope in
                 let value = scope.sharedVar("value", in: 0...2)
 
-                While(TestControlLabel.advance, true) {
+                While(Step.advance, true) {
                     Either {
                         When(value < 2)
                         Assign(value, to: value + 1)
@@ -151,6 +155,8 @@ struct GeneratedAlgorithmMachineTests {
 
 @TLAModel
 struct GeneratedRestrictedProcessDomain {
+    enum Step: String, CaseIterable { case increment }
+
     enum Member: Int, CaseIterable, FiniteTLAValueDomain {
         case worker = 1
 
@@ -164,7 +170,7 @@ struct GeneratedRestrictedProcessDomain {
             Algorithm("GeneratedRestrictedProcessDomain", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Each(Member.all) { _ in
-                    Do(TestControlLabel.increment) {
+                    Do(Step.increment) {
                         Assign(count, to: count + 1)
                     }
                 }
@@ -185,16 +191,21 @@ struct GeneratedRestrictedProcessDomainTests {
 
 @TLAModel
 struct GeneratedSequentialCounter {
+    enum Step: String, CaseIterable {
+        case increment
+        case finish
+    }
+
     static var spec: TLASpec {
         #spec("GeneratedSequentialCounter") {
             Algorithm("GeneratedSequentialCounter", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
-                Do(TestControlLabel.increment) {
+                Do(Step.increment) {
                     Let(count + 1) { nextCount in
                         Assign(count, to: nextCount.expr)
                     }
                 }
-                Do(TestControlLabel.finish) {
+                Do(Step.finish) {
                     Stop()
                 }
             })
@@ -214,12 +225,14 @@ struct GeneratedSequentialMachineTests {
 
 @TLAModel
 struct GeneratedSimultaneousSwap {
+    enum Step: String, CaseIterable { case swap }
+
     static var spec: TLASpec {
         #spec("GeneratedSimultaneousSwap") {
             Algorithm("GeneratedSimultaneousSwap", scoped: { scope in
                 let left = scope.sharedVar("left", initial: 1)
                 let right = scope.sharedVar("right", initial: 2)
-                Do(TestControlLabel.swap) {
+                Do(Step.swap) {
                     Assign(left, to: right)
                     Assign(right, to: left)
                 }
@@ -246,11 +259,13 @@ struct GeneratedSimultaneousSwapTests {
 
 @TLAModel
 struct GeneratedPairPattern {
+    enum Step: String, CaseIterable { case choose }
+
     static var spec: TLASpec {
         #spec("GeneratedPairPattern") {
             Algorithm("GeneratedPairPattern", scoped: { scope in
                 let selected = scope.sharedVar("selected", initial: 0)
-                Do(TestControlLabel.choose) {
+                Do(Step.choose) {
                     With(SetExpr<Pair<Int, Bool>>.literal(
                         Pair(first: 1, second: true),
                         Pair(first: 2, second: false)
@@ -281,6 +296,8 @@ struct GeneratedPairPatternTests {
 
 @TLAModel
 struct GeneratedRangeInitializedAlgorithm {
+    enum Step: String, CaseIterable { case advance }
+
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case clock
 
@@ -294,7 +311,7 @@ struct GeneratedRangeInitializedAlgorithm {
             Algorithm("GeneratedRangeInitializedAlgorithm", scoped: { scope in
                 let hour = scope.sharedVar("hour", in: 1...3)
                 Each(Node.all) { _ in
-                    Do(TestControlLabel.advance) {
+                    Do(Step.advance) {
                         When(hour < 3)
                         Assign(hour, to: hour + 1)
                     }
@@ -319,6 +336,8 @@ struct GeneratedRangeInitializedAlgorithmTests {
 
 @TLAModel
 struct GeneratedIntegerChoiceAlgorithm {
+    enum Step: String, CaseIterable { case choose }
+
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case only
 
@@ -332,7 +351,7 @@ struct GeneratedIntegerChoiceAlgorithm {
             Algorithm("GeneratedIntegerChoice", scoped: { scope in
                 let selected = scope.sharedVar("selected", initial: 0)
                 Each(Node.all) { _ in
-                    Do(TestControlLabel.choose) {
+                    Do(Step.choose) {
                         Choose(1...3) { choice in
                             Assign(selected, to: choice.expr)
                         }
@@ -354,11 +373,13 @@ struct GeneratedIntegerChoiceAlgorithmTests {
 
 @TLAModel
 struct GeneratedAlgorithmStateConstraint {
+    enum Step: String, CaseIterable { case advance }
+
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmStateConstraint") {
             Algorithm("GeneratedAlgorithmStateConstraint", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
-                Do(TestControlLabel.advance) {
+                Do(Step.advance) {
                     Assign(count, to: count + 1)
                 }
                 StateConstraint(count < 2)
@@ -420,6 +441,8 @@ struct GeneratedProcessLocalInvariantTests {
 
 @TLAModel
 struct GeneratedDependentInitialAlgorithm {
+    enum Step: String, CaseIterable { case stop }
+
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case left
         case right
@@ -446,7 +469,7 @@ struct GeneratedDependentInitialAlgorithm {
                     If(node == Node.left && seed == true, then: Phase.active, else: Phase.inactive)
                 })
                 Each(Node.all) { _ in
-                    Do(TestControlLabel.stop) {
+                    Do(Step.stop) {
                         Assign(mirrors, to: mirrors)
                         Stop()
                     }
@@ -552,11 +575,13 @@ struct MultiVar {
 
 @TLAModel
 struct BuilderOnlyClock {
+    enum Step: String, CaseIterable { case tick }
+
     static var spec: TLASpec {
         #spec("BuilderOnlyClock") {
             Algorithm("BuilderOnlyClock", scoped: { scope in
                 let hr = scope.sharedVar("hr", initial: 1)
-                Do(TestControlLabel.tick) {
+                Do(Step.tick) {
                     If(hr < 12) {
                         Assign(hr, to: hr + 1)
                     } else: {

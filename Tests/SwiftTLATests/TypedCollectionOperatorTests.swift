@@ -9,11 +9,6 @@ private func parseExpression(_ source: String) throws -> ExprSyntax {
     try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
 }
 
-private enum CollectionStep: String, CaseIterable {
-    case keepEvenSquares
-    case findEven
-}
-
 private enum InvalidLiteralDomain: String, CaseIterable, FiniteTLAValueDomain {
     case first
     case second
@@ -71,11 +66,13 @@ private enum InvalidLiteralSchema: TLARecordSchema {
 
 @TLAModel
 private struct TypedCollectionGeneratedModel {
+    enum Step: String, CaseIterable { case keepEvenSquares }
+
     static var spec: TLASpec {
         #spec("TypedCollectionGeneratedModel") { scope in
             Algorithm("TypedCollectionGeneratedModel", scoped: { algorithm in
                 let values = algorithm.sharedVar("values", initial: IntRange(1, through: 4))
-                Do(CollectionStep.keepEvenSquares) {
+                Do(Step.keepEvenSquares) {
                     Assign(values, to:
                         values.expr
                             .filtering { value in value.expr % 2 == 0 }
@@ -89,11 +86,13 @@ private struct TypedCollectionGeneratedModel {
 
 @TLAModel
 private struct TypedQuantifierGeneratedModel {
+    enum Step: String, CaseIterable { case findEven }
+
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
             Algorithm("TypedQuantifierGeneratedModel", scoped: { algorithm in
                 let result = algorithm.sharedVar("result", initial: false)
-                Do(CollectionStep.findEven) {
+                Do(Step.findEven) {
                     Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
                         value.expr % 2 == 0
                     })
@@ -105,13 +104,15 @@ private struct TypedQuantifierGeneratedModel {
 
 @TLAModel
 private struct NonEmptySubsetGeneratedModel {
+    enum Step: String, CaseIterable { case keep }
+
     static var spec: TLASpec {
         #spec("NonEmptySubsetGeneratedModel") {
             Algorithm("NonEmptySubsetGeneratedModel", scoped: { scope in
                 let selectedKeys = scope.sharedVar("selectedKeys", in: NonEmptySubsets(
                     of: SetExpr<Int>.literal(1, 2)
                 ))
-                Do(TestControlLabel.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
+                Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
             })
         }
     }
@@ -119,6 +120,8 @@ private struct NonEmptySubsetGeneratedModel {
 
 @TLAModel
 private struct ZeroBasedSequenceGeneratedModel {
+    enum Step: String, CaseIterable { case writeFirst }
+
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
             Algorithm("ZeroBasedSequenceGeneratedModel", scoped: { scope in
@@ -131,7 +134,7 @@ private struct ZeroBasedSequenceGeneratedModel {
                     with: -1
                 ))
 
-                Do(TestControlLabel.writeFirst) {
+                Do(Step.writeFirst) {
                     Assign(table, to: table.updating(0, to: input[0]))
                 }
             })
@@ -141,13 +144,15 @@ private struct ZeroBasedSequenceGeneratedModel {
 
 @TLAModel
 private struct FoldGeneratedModel {
+    enum Step: String, CaseIterable { case sum }
+
     static var spec: TLASpec {
         #spec("FoldGeneratedModel") {
             Import(FunctionsModule.module)
             Algorithm("FoldGeneratedModel", scoped: { scope in
                 let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2, 3))
                 let total = scope.sharedVar("total", initial: 0)
-                Do(TestControlLabel.sum) {
+                Do(Step.sum) {
                     Assign(total, to: Fold(values.expr, startingWith: 0) { element, accumulated in
                         element + accumulated
                     })

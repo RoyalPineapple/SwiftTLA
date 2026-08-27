@@ -14,6 +14,8 @@ private func parseExpression(_ source: String) throws -> ExprSyntax {
 
 @TLAModel
 private struct GeneratedTypedLocalRecursionModel {
+  enum Step: String, CaseIterable { case advance }
+
   static var spec: TLASpec {
     #spec("GeneratedTypedLocalRecursionModel") {
       FormalDefinition(
@@ -25,7 +27,7 @@ private struct GeneratedTypedLocalRecursionModel {
       )
       Algorithm("GeneratedTypedLocalRecursionModel", scoped: { scope in
         let counter = scope.sharedVar("counter", initial: 0)
-        Do(TestControlLabel.advance) {
+        Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       })
@@ -35,6 +37,8 @@ private struct GeneratedTypedLocalRecursionModel {
 
 @TLAModel
 private struct GeneratedTypedFormalDefinitionAlgorithm {
+  enum Step: String, CaseIterable { case advance }
+
   static var spec: TLASpec {
     #spec("GeneratedTypedFormalDefinitionAlgorithm") {
       FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
@@ -44,7 +48,7 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
       }
       Algorithm("GeneratedTypedFormalDefinitionAlgorithm", scoped: { scope in
         let counter = scope.sharedVar("counter", initial: 0)
-        Do(TestControlLabel.advance) {
+        Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       })
@@ -54,6 +58,8 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
 
 @TLAModel
 private struct GeneratedTopLevelTypedFormalDefinitionModel {
+  enum Step: String, CaseIterable { case advance }
+
   static var spec: TLASpec {
     #spec("GeneratedTopLevelTypedFormalDefinitionModel") { scope in
       let bound = scope.sharedVar("bound", initial: 2)
@@ -64,7 +70,7 @@ private struct GeneratedTopLevelTypedFormalDefinitionModel {
         }, in: { recursion in recursion(ballot) })
       }
       Algorithm("GeneratedTopLevelTypedFormalDefinitionModel") {
-        Do(TestControlLabel.advance) {
+        Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       }

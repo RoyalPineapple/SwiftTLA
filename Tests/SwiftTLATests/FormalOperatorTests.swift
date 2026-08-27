@@ -4,6 +4,8 @@ import Testing
 
 @TLAModel
 private struct GeneratedHigherOrderFormalModel {
+  enum Step: String, CaseIterable { case advance }
+
   static var spec: TLASpec {
     #spec("GeneratedHigherOrderFormalModel") {
       FormalDefinition(
@@ -19,7 +21,7 @@ private struct GeneratedHigherOrderFormalModel {
       )
       Algorithm("GeneratedHigherOrderFormalModel", scoped: { scope in
         let counter = scope.sharedVar("counter", initial: 0)
-        Do(TestControlLabel.advance) {
+        Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       })
