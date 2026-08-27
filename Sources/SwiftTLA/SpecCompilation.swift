@@ -331,6 +331,8 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFormalDeclaration
         case invalidFormalOperatorApplication
         case missingVariableInitializer
+        case invalidVariableInitialization
+        case cyclicVariableInitialization
         case invalidSymmetricMember
         case emptySpecificationName
         case invalidSpecificationName
@@ -495,7 +497,12 @@ public extension TLASpec {
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
         let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
-        let compiledRefinements = try compiledRefinements(bindings: bindings, closure: closure, layout: layout)
+        let compiledRefinements = try compiledRefinements(
+            bindings: bindings,
+            closure: closure,
+            layout: layout,
+            semantics: semantics
+        )
         let identity = compilationIdentity
         let machineSurfacePlan = try MachineSurfacePlan(layout: layout, semantics: semantics)
         let directModuleSections = try directModuleSectionPlan(
@@ -820,7 +827,8 @@ public extension TLASpec {
         let refinements = try source.compiledRefinements(
             bindings: bindings,
             closure: context.closure,
-            layout: layout
+            layout: layout,
+            semantics: semantics
         )
         return try source.directModuleSectionPlan(
             layout: layout,
@@ -964,10 +972,14 @@ public extension TLASpec {
             return lines.joined(separator: "\n") + "\n"
         }
 
+        let initializations = Dictionary(
+            uniqueKeysWithValues: semantics.variableInitializations.map {
+                ($0.variable, $0.initialization)
+            }
+        )
         let initialPredicates = try layout.variables.map { variable -> String in
             let name = variable.declaration.name
-            guard let initializer = semantics.variableInitializers[variable.id],
-                  let initialValue = semantics.initialValues[variable.id] else {
+            guard let initialization = initializations[variable.id] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .rendering,
@@ -980,10 +992,14 @@ public extension TLASpec {
             if let collection = semantics.symmetricCollections.first(where: { $0.variable == variable.id }) {
                 return "\(name) = [member \\in \(collection.domainSymbol) |-> \(try collection.initial.rendered(using: layout))]"
             }
-            if let set = initializer.lazySet { return "\(name) \\in \(try renderer.state(set))" }
-            if let set = initializer.initialSet { return "\(name) \\in \(try renderer.state(set))" }
-            if let expression = initializer.initExpr { return "\(name) = \(try renderer.state(expression))" }
-            return "\(name) = \(try renderer.state(.value(initialValue.rendered(using: layout))))"
+            switch initialization {
+            case .value(let value):
+                return "\(name) = \(try value.rendered(using: layout))"
+            case .expression(let expression):
+                return "\(name) = \(try renderer.state(expression))"
+            case .memberOf(let set):
+                return "\(name) \\in \(try renderer.state(set))"
+            }
         }
         if initialPredicates.count == 1 {
             lines.append("Init == \(initialPredicates[0])")
@@ -1247,7 +1263,8 @@ public extension TLASpec {
     private func compiledRefinements(
         bindings: CompiledBindingTable,
         closure: FormalModuleClosure,
-        layout: CompiledLayout
+        layout: CompiledLayout,
+        semantics: CompiledSemantics
     ) throws -> [CompiledRefinement] {
         let lowerer = CompiledLowerer(bindings: bindings, closure: closure, layout: layout)
         return try refinements.map { refinement in
@@ -1289,7 +1306,11 @@ public extension TLASpec {
                     source,
                     at: "refinements.\(refinement.name).mappings.\(parameter.name)"
                 )
-                guard compiled.isStateIndependent else {
+                let dependencies = compiled.stateRequirements(
+                    formalOperators: semantics.formalOperatorDefinitions,
+                    recursiveFunctions: semantics.recursiveFunctions
+                )
+                guard dependencies.variables.isEmpty && dependencies.requiresCompleteState == false else {
                     throw CompilationDiagnostic(
                         code: .stateDependentRefinementParameter,
                         stage: .binding,
@@ -1502,13 +1523,18 @@ private struct CanonicalSpecificationEncoder {
         }
         return node("variable", [
             variable.name,
-            canonicalValue(variable.initial),
-            canonicalOptional(variable.initialSet.map(canonicalExpression)),
-            canonicalOptional(variable.initExpr.map(canonicalExpression)),
-            canonicalOptional(variable.lazySet.map(canonicalExpression)),
+            canonicalInitialization(variable.initialization),
             collection,
             canonicalOptional(variable.generatedSwiftType)
         ])
+    }
+
+    private func canonicalInitialization(_ initialization: VariableInitialization) -> String {
+        switch initialization {
+        case .value(let value): return node("value", [canonicalValue(value)])
+        case .expression(let expression): return node("expression", [canonicalExpression(expression)])
+        case .memberOf(let set): return node("member-of", [canonicalExpression(set)])
+        }
     }
 
     private func canonicalAction(_ action: NamedAction) -> String {

@@ -21,7 +21,7 @@ package struct BinarySearchModel: Sendable {
                 ))
                 let val = scope.sharedVar("val", in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
                 let low = scope.sharedVar("low", initial: 1)
-                let high = scope.sharedVar("high", initial: seq.count)
+                let high: SharedVariable<Int> = scope.sharedVar("high", initial: seq.count)
                 let result = scope.sharedVar("result", initial: 0)
 
                 While(Step.a, low <= high && result == 0) {

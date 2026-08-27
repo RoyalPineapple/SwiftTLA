@@ -423,7 +423,7 @@ extension ParserSession {
            args.count >= 2,
            let name = parsedVariableName(args[0].expression),
            let range = decodeStateExpr(args[1].expression) {
-            result.variables.append(.init(name: name, initial: .int(0), lazySet: range))
+            result.variables.append(.init(name: name, initialization: .memberOf(range), origin: .source))
             return
         }
         if args.first?.label?.text == "computed",
@@ -433,7 +433,7 @@ extension ParserSession {
                return expression
            }),
            let initial = decodeStateExpr(expression) {
-            result.variables.append(.init(name: name, initial: .int(0), initExpr: initial))
+            result.variables.append(.init(name: name, initialization: .expression(initial), origin: .source))
             return
         }
         guard let firstName = args.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
@@ -451,12 +451,11 @@ extension ParserSession {
         if args.count >= 2 {
             let label = args[1].label?.text
             if label == "in" {
-                if let setExpr = decodeStateExpr(args[1].expression),
-                   case .set(let values) = parsedInitialValue(args[1].expression) {
+                if let setExpr = decodeStateExpr(args[1].expression) {
                     result.variables.append(.init(
                         name: firstName,
-                        initial: .set(values),
-                        initialSet: setExpr
+                        initialization: .memberOf(setExpr),
+                        origin: .source
                     ))
                     return
                 }
@@ -492,7 +491,7 @@ extension ParserSession {
                 }
             }
             if let initial = decodeTypedFacadeValue(valExpr, scope: sourceScope) {
-                result.variables.append(.init(name: firstName, initial: .int(0), initExpr: initial))
+                result.variables.append(.init(name: firstName, initialization: .expression(initial), origin: .source))
                 return
             }
         }

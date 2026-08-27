@@ -81,38 +81,162 @@ indirect enum CompiledStateExpr: Sendable {
     case letIn([CompiledLocalOperator], CompiledStateExpr)
 }
 
+private struct CompiledDependencyScope {
+    var localOperators: [OperatorID: CompiledLocalOperator] = [:]
+    var operatorBindings: [OperatorID: CompiledFormalOperator] = [:]
+    var valueBindings: [BinderID: CompiledStateExpr] = [:]
+}
+
 extension CompiledStateExpr {
-    var isStateIndependent: Bool {
-        switch self {
-        case .value, .controlLocation, .operatorReference:
-            return true
-        case .stateVariable, .boundValue, .enabledAction:
-            return false
-        case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
-             .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
-             .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
-             .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
-             .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
-             .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
-             .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
-             .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
-             .except(let lhs, let rhs, _), .setSum(let lhs, let rhs), .functionSet(let lhs, let rhs):
-            return lhs.isStateIndependent && rhs.isStateIndependent
-        case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
-             .unionAll(let value), .tupleAccess(let value, _), .tupleLength(let value),
-             .tupleHead(let value), .tupleTail(let value), .domain(let value), .sequenceFromSet(let value):
-            return value.isStateIndependent
-        case .recordAccess(let value, _, _):
-            return value.isStateIndependent
-        case .ifThenElse(let condition, let then, let otherwise):
-            return condition.isStateIndependent && then.isStateIndependent && otherwise.isStateIndependent
-        case .setLiteral(let values), .tupleLiteral(let values):
-            return values.allSatisfy(\.isStateIndependent)
-        case .setFilter, .setMap, .integerRange, .recordLiteral, .functionLiteral, .caseExpr,
-             .forAll, .exists, .choose, .foldFunction, .operatorApplication, .recursiveCall,
-             .letValue, .letIn:
-            return false
+    func stateRequirements(
+        formalOperators: [CompiledFormalOperatorDefinition],
+        recursiveFunctions: [CompiledRecursiveFunction]
+    ) -> (variables: Set<VariableID>, requiresCompleteState: Bool) {
+        let formalOperators = Dictionary(uniqueKeysWithValues: formalOperators.map { ($0.id, $0) })
+        let recursiveFunctions = Dictionary(uniqueKeysWithValues: recursiveFunctions.map { ($0.id, $0) })
+        var variables: Set<VariableID> = []
+        var requiresCompleteState = false
+        var activeOperators: Set<OperatorID> = []
+        var activeValues: Set<BinderID> = []
+
+        func bind(
+            _ parameters: [BinderID],
+            to arguments: [CompiledFormalCallArgument],
+            in scope: CompiledDependencyScope
+        ) -> CompiledDependencyScope {
+            var nested = scope
+            for (parameter, argument) in zip(parameters, arguments) {
+                if case .value(let expression) = argument {
+                    nested.valueBindings[parameter] = expression
+                }
+            }
+            return nested
         }
+
+        func visitCall(
+            _ operation: CompiledFormalOperator,
+            arguments: [CompiledFormalCallArgument],
+            scope: CompiledDependencyScope
+        ) {
+            switch operation {
+            case .lambda(let lambda):
+                visit(lambda.body, scope: bind(lambda.parameters, to: arguments, in: scope))
+            case .reference(let id, _):
+                if let supplied = scope.operatorBindings[id] {
+                    visitCall(supplied, arguments: arguments, scope: scope)
+                    return
+                }
+                guard activeOperators.insert(id).inserted else { return }
+                defer { activeOperators.remove(id) }
+                if let local = scope.localOperators[id] {
+                    let nested = bind(local.parameters, to: arguments, in: scope)
+                    if let domain = local.domain { visit(domain, scope: nested) }
+                    visit(local.body, scope: nested)
+                    return
+                }
+                if let function = recursiveFunctions[id] {
+                    visit(function.body, scope: bind(function.parameters, to: arguments, in: scope))
+                    return
+                }
+                guard let definition = formalOperators[id] else { return }
+                var nested = scope
+                for (parameter, argument) in zip(definition.parameters, arguments) {
+                    switch (parameter, argument) {
+                    case (.value(let binder), .value(let expression)):
+                        nested.valueBindings[binder] = expression
+                    case (.operator(let parameterID, _), .operator(let supplied)):
+                        nested.operatorBindings[parameterID] = supplied
+                    default:
+                        break
+                    }
+                }
+                visit(definition.body, scope: nested)
+            }
+        }
+
+        func visit(_ expression: CompiledStateExpr, scope: CompiledDependencyScope) {
+            switch expression {
+            case .value, .controlLocation:
+                return
+            case .boundValue(let binder):
+                guard let value = scope.valueBindings[binder], activeValues.insert(binder).inserted else { return }
+                defer { activeValues.remove(binder) }
+                visit(value, scope: scope)
+            case .enabledAction:
+                requiresCompleteState = true
+            case .stateVariable(let variable):
+                variables.insert(variable)
+            case .operatorReference(let id):
+                visitCall(.reference(id, arity: 0), arguments: [], scope: scope)
+            case .negate(let value), .not(let value), .cardinality(let value),
+                 .powerSet(let value), .unionAll(let value), .tupleAccess(let value, _),
+                 .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
+                 .recordAccess(let value, _, _), .domain(let value), .sequenceFromSet(let value):
+                visit(value, scope: scope)
+            case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
+                 .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
+                 .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
+                 .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
+                 .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
+                 .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
+                 .integerRange(let lhs, let rhs), .tupleDynamicAccess(let lhs, let rhs),
+                 .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
+                 .setSum(let lhs, let rhs), .functionSet(let lhs, let rhs):
+                visit(lhs, scope: scope)
+                visit(rhs, scope: scope)
+            case .functionApply(.operatorReference(let id), let argument):
+                visitCall(.reference(id, arity: 1), arguments: [.value(argument)], scope: scope)
+            case .functionApply(let function, let argument):
+                visit(function, scope: scope)
+                visit(argument, scope: scope)
+            case .ifThenElse(let condition, let then, let otherwise):
+                visit(condition, scope: scope)
+                visit(then, scope: scope)
+                visit(otherwise, scope: scope)
+            case .setLiteral(let values), .tupleLiteral(let values):
+                values.forEach { visit($0, scope: scope) }
+            case .setFilter(let set, _, let predicate), .functionLiteral(let set, _, let predicate),
+                 .forAll(let set, _, let predicate), .exists(let set, _, let predicate),
+                 .choose(let set, _, let predicate):
+                visit(set, scope: scope)
+                visit(predicate, scope: scope)
+            case .setMap(let value, _, let set):
+                visit(value, scope: scope)
+                visit(set, scope: scope)
+            case .recordLiteral(let fields):
+                fields.fields.forEach { visit($0.value, scope: scope) }
+            case .except(let function, let key, let value):
+                visit(function, scope: scope)
+                visit(key, scope: scope)
+                visit(value, scope: scope)
+            case .caseExpr(let values, let fallback):
+                values.forEach { visit($0, scope: scope) }
+                if let fallback { visit(fallback, scope: scope) }
+            case .foldFunction(let operation, let initial, let sequence):
+                visit(operation.body, scope: scope)
+                visit(initial, scope: scope)
+                visit(sequence, scope: scope)
+            case .operatorApplication(let operation, let arguments):
+                visitCall(operation, arguments: arguments, scope: scope)
+            case .recursiveCall(let id, let arguments):
+                visitCall(
+                    .reference(id, arity: arguments.count),
+                    arguments: arguments.map(CompiledFormalCallArgument.value),
+                    scope: scope
+                )
+            case .letValue(let binder, let value, let body):
+                var nested = scope
+                nested.valueBindings[binder] = value
+                visit(body, scope: nested)
+            case .letIn(let operations, let body):
+                var nested = scope
+                operations.forEach { nested.localOperators[$0.id] = $0 }
+                visit(body, scope: nested)
+            }
+        }
+
+        visit(self, scope: .init())
+        return (variables, requiresCompleteState)
     }
 }
 
@@ -235,10 +359,10 @@ struct CompiledRecursiveFunction: Sendable {
     let body: CompiledStateExpr
 }
 
-struct CompiledVariableInitializer: Sendable {
-    let initialSet: CompiledStateExpr?
-    let initExpr: CompiledStateExpr?
-    let lazySet: CompiledStateExpr?
+enum CompiledVariableInitialization: Sendable {
+    case value(CompiledValue)
+    case expression(CompiledStateExpr)
+    case memberOf(CompiledStateExpr)
 }
 
 struct CompiledFormalModuleReplacement: Sendable {
@@ -261,8 +385,7 @@ struct CompiledSymmetricCollection: Sendable {
 
 struct CompiledSemantics: Sendable {
     let checkDeadlock: Bool
-    let initialValues: [VariableID: CompiledValue]
-    let variableInitializers: [VariableID: CompiledVariableInitializer]
+    let variableInitializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
     let actions: [CompiledAction]
     let invariants: [CompiledInvariant]
     let temporalProperties: [CompiledTemporal]

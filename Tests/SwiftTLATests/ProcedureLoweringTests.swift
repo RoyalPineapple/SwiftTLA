@@ -9,7 +9,7 @@ struct ProcedureLoweringTests {
             AlgorithmModel(
                 name: "ScopedFidelity",
                 components: [
-                    .shared(.init(root: "output", initial: .int(0))),
+                    .shared(.init(root: "output", initialization: .value(.int(0)))),
                     .step(.init(label: .init(name: "start"), statements: [
                         .letBinding(variable: letName, value: .int(1), [
                             .with(variable: withName, source: .setLiteral([.value(.int(1))]), [
@@ -47,7 +47,7 @@ struct ProcedureLoweringTests {
         let model = AlgorithmModel(
             name: "ProcedureFrame",
             components: [
-                .shared(.init(root: "output", initial: .int(0))),
+                .shared(.init(root: "output", initialization: .value(.int(0)))),
                 .step(.init(label: .init(name: "start"), statements: [
                     .call(target: "work", arguments: [.int(7)])
                 ])),
@@ -56,7 +56,7 @@ struct ProcedureLoweringTests {
                     name: "work",
                     parameters: [.init(root: "workValue", initial: .int(0), swiftTypeName: "Int")],
                     components: [
-                        .local(.init(root: "workOffset", initial: .int(1), swiftTypeName: "Int")),
+                        .local(.init(root: "workOffset", initialization: .value(.int(1)), swiftTypeName: "Int")),
                         .step(.init(label: .init(name: "enter"), statements: [
                             .set(target: .root("output"), value: .add(.variable("workValue"), .variable("workOffset"))),
                             .return
@@ -91,7 +91,7 @@ struct ProcedureLoweringTests {
         let model = AlgorithmModel(
             name: "TailProcedureFrame",
             components: [
-                .shared(.init(root: "output", initial: .int(0))),
+                .shared(.init(root: "output", initialization: .value(.int(0)))),
                 .step(.init(label: .init(name: "start"), statements: [
                     .call(target: "outer", arguments: [.int(4)])
                 ])),
@@ -140,7 +140,7 @@ struct ProcedureLoweringTests {
         let model = AlgorithmModel(
             name: "ProcessProcedureFrame",
             components: [
-                .shared(.init(root: "seen", initial: .value(.function([
+                .shared(.init(root: "seen", initialization: .value(.function([
                     .int(1): .int(0),
                     .int(2): .int(0)
                 ])))),

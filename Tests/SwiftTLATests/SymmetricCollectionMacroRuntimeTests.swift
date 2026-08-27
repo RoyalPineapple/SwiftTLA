@@ -254,7 +254,10 @@ struct SymmetricCollectionMacroRuntimeTests {
     """
     let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
-    let initial = try #require(parsed.variables.first?.initial)
+    guard case .value(let initial) = try #require(parsed.variables.first?.initialization) else {
+      Issue.record("Expected a fixed collection initializer")
+      return
+    }
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let runtimeBuilt = TLASpec("CollectionActionBehavior") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)

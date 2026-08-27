@@ -78,7 +78,7 @@ private struct CompilerPipelineInitializationModel {
         #spec("CompilerPipelineInitializationModel") {
             Algorithm("CompilerPipelineInitializationModel", scoped: { scope in
                 let seed = scope.sharedVar("seed", initial: 0)
-                let computed = scope.sharedVar("computed", initial: seed + 1)
+                let computed: SharedVariable<Int> = scope.sharedVar("computed", initial: seed + 1)
                 let choice = scope.sharedVar("choice", in: SetExpr<Int>.literal(1, 2))
                 Do(TestControlLabel.done) {
                     Assign(computed, to: computed)
@@ -589,8 +589,9 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(name: "counter", initial: .int(0)),
                 .init(
                     name: "choice",
-                    initial: .int(0),
-                    initialSet: .setLiteral([.value(.int(1)), .value(.int(2))])
+                    initialization: .memberOf(.setLiteral([.value(.int(1)), .value(.int(2))])),
+                    generatedSwiftType: "Int",
+                    origin: .source
                 )
             ],
             actions: [
@@ -1135,19 +1136,310 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(rendered == repeatedRendered)
     }
 
-    @Test("#spec lowering preserves every canonical variable initialization field")
+    @Test("#spec lowering preserves each typed variable initialization form")
     func specMacroRetainsInitializationForms() throws {
         let source = try CompilerPipelineInitializationModel.spec.loweredSourceModel()
         let compilation = try source.compile()
+        let seed = try #require(source.variables.first { $0.name == "seed" })
         let computed = try #require(source.variables.first { $0.name == "computed" })
         let choice = try #require(source.variables.first { $0.name == "choice" })
         let repeated = try CompilerPipelineInitializationModel.spec.compile()
 
-        #expect(computed.initExpr == .add(.variable("seed"), .int(1)))
-        #expect(computed.lazySet == nil)
-        #expect(choice.initialSet == .setLiteral([.value(.int(1)), .value(.int(2))]))
-        #expect(choice.lazySet == nil)
+        #expect(seed.initialization == .value(.int(0)))
+        #expect(computed.initialization == .expression(.add(.variable("seed"), .int(1))))
+        #expect(choice.initialization == .memberOf(.setLiteral([.value(.int(1)), .value(.int(2))])))
         #expect(repeated.identity == compilation.identity)
+    }
+
+    @Test("variable initialization follows dependencies instead of declaration order")
+    func variableInitializationFollowsDependencies() throws {
+        let compilation = try TLASpec(
+            name: "InitializerDependencyOrder",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(.add(.variable("choice"), .int(1))),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(
+                    name: "choice",
+                    initialization: .memberOf(.integerRange(.int(1), .variable("limit"))),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "limit", initial: .int(3))
+            ],
+            actions: [],
+            invariants: []
+        ).compile()
+        let states = try CompiledRuntime(compilation: compilation).initialStates()
+
+        #expect(Set(try states.map {
+            try renderedValue(named: "derived", in: $0, compilation: compilation)
+        }) == [.int(2), .int(3), .int(4)])
+    }
+
+    @Test("variable initialization follows dependencies through formal definitions")
+    func variableInitializationFollowsFormalDefinitionDependencies() throws {
+        let compilation = try TLASpec(
+            name: "FormalInitializerDependency",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(
+                        .operatorApplication(.reference("Derived", arity: 0), [])
+                    ),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "seed", initial: .int(4))
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Derived",
+                    parameters: [],
+                    body: .add(.variable("seed"), .int(1))
+                )
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(5))
+    }
+
+    @Test("a zero-arity formal definition is a variable initializer value")
+    func zeroArityFormalDefinitionInitializesVariable() throws {
+        let compilation = try TLASpec(
+            name: "ZeroArityInitializer",
+            variables: [
+                .init(
+                    name: "value",
+                    initialization: .expression(.variable("InitialValue")),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(name: "InitialValue", parameters: [], body: .int(3))
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "value", in: state, compilation: compilation) == .int(3))
+    }
+
+    @Test("a formal definition with parameters is not a value")
+    func parameterizedFormalDefinitionCannotInitializeVariableWithoutArguments() {
+        let spec = TLASpec(
+            name: "ParameterizedInitializer",
+            variables: [
+                .init(
+                    name: "value",
+                    initialization: .expression(.variable("InitialValue")),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(name: "InitialValue", parameters: [.value("argument")], body: .variable("argument"))
+            ]
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected a formal operator application diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidFormalOperatorApplication)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("mutually dependent variable initializers fail compilation")
+    func mutuallyDependentVariableInitializersFailCompilation() {
+        let spec = TLASpec(
+            name: "CyclicInitializers",
+            variables: [
+                .init(
+                    name: "downstream",
+                    initialization: .expression(.variable("first")),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(
+                    name: "first",
+                    initialization: .expression(.variable("second")),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(
+                    name: "second",
+                    initialization: .expression(.variable("first")),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected a cyclic variable-initialization diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .cyclicVariableInitialization)
+            #expect(diagnostic.actual == "dependency cycle first -> second -> first")
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("unused local operators do not create variable-initialization cycles")
+    func unusedLocalOperatorsDoNotCreateInitializationCycles() throws {
+        let compilation = try TLASpec(
+            name: "UnusedLocalInitializerOperator",
+            variables: [
+                .init(
+                    name: "owner",
+                    initialization: .expression(.letIn([
+                        .init("unused", body: .variable("owner"))
+                    ], .int(1))),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: []
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "owner", in: state, compilation: compilation) == .int(1))
+    }
+
+    @Test("action enabledness hidden in a formal definition cannot initialize a variable")
+    func formalDefinitionCannotHideEnablednessInVariableInitialization() {
+        let spec = TLASpec(
+            name: "EnabledInitializer",
+            variables: [
+                .init(
+                    name: "ready",
+                    initialization: .expression(
+                        .operatorApplication(.reference("IsReady", arity: 0), [])
+                    ),
+                    generatedSwiftType: "Bool",
+                    origin: .source
+                )
+            ],
+            actions: [.init(name: "stay", body: .unchanged(.named("ready")))],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(name: "IsReady", parameters: [], body: .enabledAction("stay"))
+            ]
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected an invalid variable-initialization diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidVariableInitialization)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("unused operator arguments do not create variable-initialization dependencies")
+    func unusedOperatorArgumentsDoNotCreateInitializationDependencies() throws {
+        let compilation = try TLASpec(
+            name: "UnusedInitializerOperatorArgument",
+            variables: [
+                .init(
+                    name: "owner",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Ignore", arity: 2),
+                        [
+                            .operator(.lambda(.init(
+                                parameters: ["ignored"],
+                                body: .variable("owner")
+                            ))),
+                            .value(.int(1))
+                        ]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Ignore",
+                    parameters: [.operator("operation", arity: 1), .value("value")],
+                    body: .variable("value")
+                )
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "owner", in: state, compilation: compilation) == .int(1))
+    }
+
+    @Test("formal values remain substitutional during variable initialization")
+    func formalValuesRemainSubstitutionalDuringInitialization() throws {
+        let compilation = try TLASpec(
+            name: "UnusedInitializerValue",
+            variables: [
+                .init(
+                    name: "operatorValue",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Ignore", arity: 1),
+                        [.value(.variable("operatorValue"))]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(
+                    name: "letValue",
+                    initialization: .expression(.letValue(
+                        "ignored",
+                        .variable("letValue"),
+                        .int(2)
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(
+                    name: "nestedValue",
+                    initialization: .expression(.letValue(
+                        "outer",
+                        .int(3),
+                        .operatorApplication(
+                            .reference("Identity", arity: 1),
+                            [.value(.variable("outer"))]
+                        )
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(name: "Ignore", parameters: [.value("ignored")], body: .int(1)),
+                .init(name: "Identity", parameters: [.value("value")], body: .variable("value"))
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "operatorValue", in: state, compilation: compilation) == .int(1))
+        #expect(try renderedValue(named: "letValue", in: state, compilation: compilation) == .int(2))
+        #expect(try renderedValue(named: "nestedValue", in: state, compilation: compilation) == .int(3))
     }
 
     @Test("symmetric collection actions lower to the declared finite member binding")
@@ -1308,7 +1600,12 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(name: "step", body: .assign(.named("value"), .int(1)), bindings: [.init(name: "choice", values: [.int(0), .int(2)])])
             ], invariants: []),
             TLASpec(name: "StructuralFingerprint", variables: [
-                .init(name: "value", initial: .int(0), initExpr: .value(.int(1)))
+                .init(
+                    name: "value",
+                    initialization: .expression(.value(.int(1))),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
             ], actions: base.actions, invariants: []),
             TLASpec(name: "StructuralFingerprint", variables: [
                 .init(name: "value", initial: .int(0), collectionType: .dictionary(2))

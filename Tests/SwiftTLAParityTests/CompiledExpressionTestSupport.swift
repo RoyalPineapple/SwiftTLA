@@ -13,7 +13,11 @@ func compiledValue(
   let resultName = "result"
   let specification = TLASpec(
     name: "CompiledExpressionTest",
-    variables: variables + [NamedVar(name: resultName, initial: .int(0), initExpr: expression)],
+    variables: variables + [NamedVar(
+      name: resultName,
+      initialization: .expression(expression),
+      origin: .source
+    )],
     actions: [],
     invariants: [],
     recursiveFuncs: recursiveFunctions,

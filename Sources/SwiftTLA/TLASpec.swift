@@ -12,26 +12,30 @@ enum VariableOrigin: Sendable, Equatable {
   case procedureStack
 }
 
+public enum VariableInitialization: Sendable, Equatable {
+  case value(TLAValue)
+  case expression(StateExpr)
+  case memberOf(StateExpr)
+
+  var normalized: Self {
+    if case .expression(.value(let value)) = self { return .value(value) }
+    return self
+  }
+}
+
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let name: String
-  public let initial: TLAValue
-  public let initialSet: StateExpr?
-  public let initExpr: StateExpr?
-  public let lazySet: StateExpr?  // expression-backed nondeterministic init
+  public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
   let generatedSwiftType: String?
   let origin: VariableOrigin
 
   public init(
-    name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil,
-    lazySet: StateExpr? = nil, collectionType: CollectionVarType = .scalar
+    name: String, initial: TLAValue, collectionType: CollectionVarType = .scalar
   ) {
     self.init(
       name: name,
-      initial: initial,
-      initialSet: initialSet,
-      initExpr: initExpr,
-      lazySet: lazySet,
+      initialization: .value(initial),
       collectionType: collectionType,
       generatedSwiftType: nil,
       origin: .source
@@ -39,24 +43,23 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   }
 
   init(
-    name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil,
-    lazySet: StateExpr? = nil, collectionType: CollectionVarType = .scalar,
+    name: String, initialization: VariableInitialization,
+    collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil,
     origin: VariableOrigin
   ) {
     self.name = name
-    self.initial = initial
-    self.initialSet = initialSet
-    self.initExpr = initExpr
-    self.lazySet = lazySet
+    self.initialization = initialization.normalized
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
     self.origin = origin
   }
   public var description: String {
-    if let s = lazySet { return "\(name) \\in \(s)" }
-    if let s = initialSet { return "\(name) \\in \(s)" }
-    return "\(name) = \(initial)"
+    switch initialization {
+    case .value(let value): return "\(name) = \(value)"
+    case .expression(let expression): return "\(name) = \(expression)"
+    case .memberOf(let set): return "\(name) \\in \(set)"
+    }
   }
 }
 public struct ActionBinding: Sendable, Hashable {
@@ -364,10 +367,7 @@ struct AuthoredPlusCalDeclaration: Sendable, Equatable {
 }
 public struct VarDecl: SpecComponent, Sendable {
   public let name: String
-  public let initial: TLAValue
-  public let initialSet: StateExpr?
-  public let initExpr: StateExpr?
-  public let lazySet: StateExpr?
+  public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
   let generatedSwiftType: String?
   init(
@@ -377,51 +377,28 @@ public struct VarDecl: SpecComponent, Sendable {
     generatedSwiftType: String? = nil
   ) {
     self.name = name
-    self.initial = initial
-    self.initialSet = nil
-    self.initExpr = nil
-    self.lazySet = nil
+    self.initialization = .value(initial)
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
   }
   init(
-    _ name: String, _ initial: TLAValue, initialSet: StateExpr?,
+    _ name: String, memberOf set: StateExpr,
     collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil
   ) {
     self.name = name
-    self.initial = initial
-    self.initialSet = initialSet
-    self.initExpr = nil
-    self.lazySet = nil
+    self.initialization = .memberOf(set)
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
   }
   init(
     _ name: String,
-    initExpr: StateExpr,
+    expression: StateExpr,
     collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil
   ) {
     self.name = name
-    self.initial = .int(0)
-    self.initialSet = nil
-    self.initExpr = initExpr
-    self.lazySet = nil
-    self.collectionType = collectionType
-    self.generatedSwiftType = generatedSwiftType
-  }
-  init(
-    _ name: String,
-    lazySet: StateExpr,
-    collectionType: CollectionVarType = .scalar,
-    generatedSwiftType: String? = nil
-  ) {
-    self.name = name
-    self.initial = .int(0)
-    self.initialSet = nil
-    self.initExpr = nil
-    self.lazySet = lazySet
+    self.initialization = VariableInitialization.expression(expression).normalized
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
   }
@@ -709,12 +686,12 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
     if let issue = expr.sourceIssue {
-      return [VarDecl(expr.name, initExpr: .sourceIssue(issue))]
+      return [VarDecl(expr.name, expression: .sourceIssue(issue))]
     }
     guard let initial = expr.initial else {
       return [VarDecl(
         expr.name,
-        initExpr: .sourceIssue(.missingVariableInitializer(
+        expression: .sourceIssue(.missingVariableInitializer(
           name: expr.name,
           type: swiftSurfaceTypeName(for: T.self)
         )),
@@ -777,7 +754,7 @@ public enum ActionBuilder {
 @discardableResult
 public func Variable(_ name: String, _ initial: some TLAValueConvertible) -> VarDecl {
   if let issue = initial.sourceIssue {
-    return VarDecl(name, initExpr: .sourceIssue(issue))
+    return VarDecl(name, expression: .sourceIssue(issue))
   }
     return VarDecl(name, initial.tlaValue)
 }
@@ -785,7 +762,7 @@ public func Variable(_ name: String, _ initial: some TLAValueConvertible) -> Var
 public func Variable(_ name: String, in values: some Sequence<some TLAValueConvertible>) -> VarDecl {
   let set = Set(values.map(\.tlaValue))
   let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
-  return VarDecl(name, .set(set), initialSet: stateSet)
+  return VarDecl(name, memberOf: stateSet)
 }
 func swiftSurfaceTypeName<T>(for type: T.Type) -> String {
   ObjectIdentifier(type) == ObjectIdentifier(TLAValue.self)
@@ -795,12 +772,12 @@ func swiftSurfaceTypeName<T>(for type: T.Type) -> String {
 @discardableResult
 public func Variable<T>(_ ref: Var<T>) -> VarDecl {
   if let issue = ref.sourceIssue {
-    return VarDecl(ref.name, initExpr: .sourceIssue(issue))
+    return VarDecl(ref.name, expression: .sourceIssue(issue))
   }
   guard let initial = ref.initial else {
     return VarDecl(
       ref.name,
-      initExpr: .sourceIssue(.missingVariableInitializer(
+      expression: .sourceIssue(.missingVariableInitializer(
         name: ref.name,
         type: swiftSurfaceTypeName(for: T.self)
       )),
@@ -812,7 +789,7 @@ public func Variable<T>(_ ref: Var<T>) -> VarDecl {
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
   if let issue = initial.sourceIssue {
-    return VarDecl(ref.name, initExpr: .sourceIssue(issue))
+    return VarDecl(ref.name, expression: .sourceIssue(issue))
   }
     return VarDecl(ref.name, initial.tlaValue, generatedSwiftType: swiftSurfaceTypeName(for: T.self))
 }
@@ -820,7 +797,7 @@ public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> V
 public func Variable<T>(_ ref: Var<T>, _ initial: Expr<T>) -> VarDecl {
   VarDecl(
     ref.name,
-    initExpr: initial.raw,
+    expression: initial.raw,
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
@@ -831,21 +808,15 @@ public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueCon
   let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
   return VarDecl(
     ref.name,
-    .set(set),
-    initialSet: stateSet,
+    memberOf: stateSet,
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, in values: Expr<SetExpr<T>>) -> VarDecl {
-  let defaultValue = T.defaultValue
-  if let issue = defaultValue.sourceIssue {
-    return VarDecl(ref.name, initExpr: .sourceIssue(issue))
-  }
   return VarDecl(
     ref.name,
-    defaultValue.tlaValue,
-    initialSet: values.raw,
+    memberOf: values.raw,
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
@@ -853,7 +824,7 @@ public func Variable<T>(_ ref: Var<T>, in values: Expr<SetExpr<T>>) -> VarDecl {
 /// states are computed instead of being materialized while building the spec.
 @discardableResult
 public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
-  VarDecl(name, lazySet: range)
+  VarDecl(name, memberOf: range)
 }
 @discardableResult
 public func Action(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActionDecl {

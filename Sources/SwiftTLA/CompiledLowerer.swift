@@ -4,17 +4,11 @@ struct CompiledLowerer {
     let layout: CompiledLayout
 
     func lower(spec: TLASpec) throws -> CompiledSemantics {
-        var initialValues: [VariableID: CompiledValue] = [:]
-        var initializers: [VariableID: CompiledVariableInitializer] = [:]
+        var initializations: [VariableID: CompiledVariableInitialization] = [:]
         for declaration in spec.variables {
             let path = "variables.\(declaration.name)"
             let id = try variable(at: "\(path).declaration")
-            initialValues[id] = try initialValue(for: declaration)
-            initializers[id] = .init(
-                initialSet: try lowerOptional(declaration.initialSet, at: "\(path).initialSet"),
-                initExpr: try initialExpression(for: declaration),
-                lazySet: try lowerOptional(declaration.lazySet, at: "\(path).lazySet")
-            )
+            initializations[id] = try lower(declaration.initialization, at: "\(path).initialization")
         }
         let actions: [CompiledAction] = try spec.actions.map {
             try lower($0)
@@ -110,10 +104,16 @@ struct CompiledLowerer {
                     body: try lower(function.body, at: "linkedRecursiveFunctions.\(function.name).body")
                 )
             }
+        let allFormalOperators = formalOperators + linkedFormalOperators
+        let allRecursiveFunctions = recursiveFunctions + linkedRecursiveFunctions
+        let orderedInitializations = try orderedInitializations(
+            initializations,
+            formalOperators: allFormalOperators,
+            recursiveFunctions: allRecursiveFunctions
+        )
         return CompiledSemantics(
             checkDeadlock: spec.checkDeadlock,
-            initialValues: initialValues,
-            variableInitializers: initializers,
+            variableInitializations: orderedInitializations,
             actions: actions,
             invariants: invariants,
             temporalProperties: temporalProperties,
@@ -121,8 +121,8 @@ struct CompiledLowerer {
             fairness: fairness,
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
             assume: try lowerOptional(spec.assume, at: "assume"),
-            formalOperatorDefinitions: formalOperators + linkedFormalOperators,
-            recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions,
+            formalOperatorDefinitions: allFormalOperators,
+            recursiveFunctions: allRecursiveFunctions,
             formalModuleReplacements: formalModuleReplacements,
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: symmetry.values)
@@ -140,6 +140,99 @@ struct CompiledLowerer {
 
     func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
         try lower(expression, at: path)
+    }
+
+    private func orderedInitializations(
+        _ initializations: [VariableID: CompiledVariableInitialization],
+        formalOperators: [CompiledFormalOperatorDefinition],
+        recursiveFunctions: [CompiledRecursiveFunction]
+    ) throws -> [(variable: VariableID, initialization: CompiledVariableInitialization)] {
+        let declarationOrder = layout.variables.map(\.id)
+        let declared = Set(declarationOrder)
+        var dependencies: [VariableID: Set<VariableID>] = [:]
+        for variable in declarationOrder {
+            let analysis: (variables: Set<VariableID>, requiresCompleteState: Bool)
+            switch initializations[variable] {
+            case .value:
+                analysis = ([], false)
+            case .expression(let expression), .memberOf(let expression):
+                analysis = expression.stateRequirements(
+                    formalOperators: formalOperators,
+                    recursiveFunctions: recursiveFunctions
+                )
+            case nil:
+                let name = layout.variables.first { $0.id == variable }?.declaration.name ?? "unknown"
+                throw CompilationDiagnostic(
+                    code: .missingVariableInitializer,
+                    stage: .lowering,
+                    path: "variables.\(name).initialization",
+                    expected: "one typed variable initializer",
+                    actual: "no initializer was lowered",
+                    nextSafeAction: "Declare one fixed, expression, or finite-domain initializer."
+                )
+            }
+            if analysis.requiresCompleteState {
+                let name = layout.variables.first { $0.id == variable }?.declaration.name ?? "unknown"
+                throw CompilationDiagnostic(
+                    code: .invalidVariableInitialization,
+                    stage: .lowering,
+                    path: "variables.\(name).initialization",
+                    expected: "an initializer that can be evaluated before a complete state exists",
+                    actual: "the initializer evaluates action enabledness",
+                    nextSafeAction: "Initialize the variable from values and previously initialized variables."
+                )
+            }
+            dependencies[variable] = analysis.variables.intersection(declared)
+        }
+        var ordered: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
+        var remaining = Set(declarationOrder)
+        while remaining.isEmpty == false {
+            guard let next = declarationOrder.first(where: {
+                remaining.contains($0) && dependencies[$0, default: []].isDisjoint(with: remaining)
+            }) else {
+                var path: [VariableID] = []
+                var positions: [VariableID: Int] = [:]
+                var current = declarationOrder.first(where: remaining.contains)
+                var cycle: [VariableID] = []
+                while let variable = current {
+                    if let start = positions[variable] {
+                        cycle = Array(path[start...]) + [variable]
+                        break
+                    }
+                    positions[variable] = path.count
+                    path.append(variable)
+                    current = declarationOrder.first {
+                        remaining.contains($0) && dependencies[variable, default: []].contains($0)
+                    }
+                }
+                let names = cycle.compactMap { variable in
+                    layout.variables.first { $0.id == variable }?.declaration.name
+                }
+                throw CompilationDiagnostic(
+                    code: .cyclicVariableInitialization,
+                    stage: .lowering,
+                    path: "variables.\(names.first ?? "unknown").initialization",
+                    expected: "an acyclic variable-initialization dependency graph",
+                    actual: "dependency cycle \(names.joined(separator: " -> "))",
+                    nextSafeAction: "Break the cycle so each initial value depends only on independently initialized variables."
+                )
+            }
+            guard let initialization = initializations[next] else {
+                let name = layout.variables.first { $0.id == next }?.declaration.name ?? "unknown"
+                throw CompilationDiagnostic(
+                    code: .missingVariableInitializer,
+                    stage: .lowering,
+                    path: "variables.\(name).initialization",
+                    expected: "one typed variable initializer",
+                    actual: "the ordered declaration has no initializer",
+                    nextSafeAction: "Declare one fixed, expression, or finite-domain initializer."
+                )
+            }
+            ordered.append((next, initialization))
+            remaining.remove(next)
+            dependencies.removeValue(forKey: next)
+        }
+        return ordered
     }
 
     private func lower(
@@ -445,19 +538,15 @@ struct CompiledLowerer {
         }
     }
 
-    private func initialValue(for variable: NamedVar) throws -> CompiledValue {
-        if case .some(.controlLocation) = variable.initExpr {
-            guard case .controlLocation(let id) = try reference(at: "variables.\(variable.name).initExpr") else {
-                throw diagnostic(path: "variables.\(variable.name).initExpr")
-            }
-            return .controlLocation(id)
+    private func lower(
+        _ initialization: VariableInitialization,
+        at path: String
+    ) throws -> CompiledVariableInitialization {
+        switch initialization {
+        case .value(let value): return .value(.init(formal: value))
+        case .expression(let expression): return .expression(try lower(expression, at: path))
+        case .memberOf(let set): return .memberOf(try lower(set, at: path))
         }
-        return CompiledValue(formal: variable.initial)
-    }
-
-    private func initialExpression(for variable: NamedVar) throws -> CompiledStateExpr? {
-        guard let expression = variable.initExpr else { return nil }
-        return try lower(expression, at: "variables.\(variable.name).initExpr")
     }
 
     private func lower(

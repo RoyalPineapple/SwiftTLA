@@ -240,4 +240,36 @@ struct RefinementDeclarationTests {
       Issue.record("Expected a CompilationDiagnostic, got \(error).")
     }
   }
+
+  @Test("refinement parameters reject state hidden behind an operator")
+  func rejectsStateDependentOperatorMapping() {
+    let parameter = FormalModuleParameter("Limit")
+    let abstractValue = Var<Int>("abstractValue", 0)
+    let abstract = TLASpec("Abstract") {
+      parameter
+      Variable(abstractValue)
+      Action("stay") { abstractValue.stays }
+    }
+    let concreteValue = Var<Int>("concreteValue", 0)
+    let instance = Instance("C", of: abstract)
+    let current: Expr<Int> = FormalCall("Current")
+    let concrete = TLASpec("Concrete") {
+      Variable(concreteValue)
+      FormalDefinition("Current", parameters: [], body: concreteValue)
+      instance
+      Refinement(name: "Refines", instance: instance, mappings: [
+        .init(parameter, from: current),
+        .init(abstractValue, from: concreteValue)
+      ])
+    }
+
+    do {
+      _ = try concrete.compile()
+      Issue.record("Expected state-dependent parameter binding to fail.")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .stateDependentRefinementParameter)
+    } catch {
+      Issue.record("Expected a CompilationDiagnostic, got \(error).")
+    }
+  }
 }

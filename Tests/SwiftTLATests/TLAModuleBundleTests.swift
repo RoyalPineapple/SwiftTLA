@@ -112,7 +112,10 @@ struct TLAModuleBundleTests {
     let configured = TLASpec("ConfiguredZSequences") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Algorithm("ConfiguredZSequences", scoped: { scope in
-        let rotatedState = scope.sharedVar("rotated", initial: rotated)
+        let rotatedState: SharedVariable<ZeroBasedSequence<Int>> = scope.sharedVar(
+          "rotated",
+          initial: rotated
+        )
         Do(TestControlLabel.keep) { Assign(rotatedState, to: rotatedState.expr) }
       })
     }

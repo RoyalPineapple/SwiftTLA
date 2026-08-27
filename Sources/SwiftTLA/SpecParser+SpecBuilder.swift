@@ -373,11 +373,10 @@ extension ParserSession {
                let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
                 result.variables.append(.init(
                     name: name,
-                    initial: .int(0),
-                    initExpr: .sourceIssue(.missingVariableInitializer(
+                    initialization: .expression(.sourceIssue(.missingVariableInitializer(
                         name: name,
                         type: varTypeName ?? "formal value"
-                    )),
+                    ))),
                     generatedSwiftType: varTypeName,
                     origin: .source
                 ))
@@ -389,8 +388,7 @@ extension ParserSession {
                    let domain = finiteSharedVariableDomain(rangeExpr) {
                     result.variables.append(.init(
                         name: patternName,
-                        initial: domain.initial,
-                        initialSet: domain.expression,
+                        initialization: .memberOf(domain.expression),
                         generatedSwiftType: varTypeName ?? domain.elementType,
                         origin: .source
                     ))
@@ -420,8 +418,7 @@ extension ParserSession {
                     let inferredType = initialValueTypeName(from: args[1].expression)
                     result.variables.append(.init(
                         name: varName,
-                        initial: .int(0),
-                        initExpr: initial,
+                        initialization: .expression(initial),
                         generatedSwiftType: varTypeName ?? inferredType,
                         origin: .source
                     ))
@@ -438,7 +435,7 @@ extension ParserSession {
                 let inferredType = initialValueTypeName(from: args[1].expression)
                 result.variables.append(.init(
                     name: varName,
-                    initial: initial,
+                    initialization: .value(initial),
                     generatedSwiftType: varTypeName ?? inferredType,
                     origin: .source
                 ))
@@ -453,7 +450,7 @@ extension ParserSession {
                 let inferredType = initialValueTypeName(from: args[0].expression)
                 result.variables.append(.init(
                     name: patternName,
-                    initial: initial,
+                    initialization: .value(initial),
                     generatedSwiftType: varTypeName ?? inferredType,
                     origin: .source
                 ))
@@ -534,20 +531,17 @@ extension ParserSession {
 
     func finiteSharedVariableDomain(
         _ expression: ExprSyntax
-    ) -> (initial: TLAValue, expression: StateExpr, elementType: String)? {
+    ) -> (expression: StateExpr, elementType: String)? {
         if let range = parseIntegerClosedRange(expression) {
             return (
-                initial: .int(range.lowerBound),
                 expression: .setLiteral(range.map { .int($0) }),
                 elementType: "Int"
             )
         }
         guard let decoded = decodeStateExpr(expression),
-              case .set(let values) = try? evaluateClosed(decoded),
-              values.isEmpty == false,
               let elementType = setExpressionElementTypeName(expression)
         else { return nil }
-        return (initial: .int(0), expression: decoded, elementType: elementType)
+        return (expression: decoded, elementType: elementType)
     }
 
     /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
@@ -1189,10 +1183,7 @@ extension ParserSession {
         result.variables.remove(at: latest)
         result.variables[matchingIndices[0]] = .init(
             name: replacement.name,
-            initial: replacement.initial,
-            initialSet: replacement.initialSet,
-            initExpr: replacement.initExpr,
-            lazySet: replacement.lazySet,
+            initialization: replacement.initialization,
             collectionType: replacement.collectionType,
             generatedSwiftType: replacement.generatedSwiftType ?? existing.generatedSwiftType,
             origin: replacement.origin

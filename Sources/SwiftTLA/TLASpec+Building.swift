@@ -51,8 +51,7 @@ extension TLASpec {
       if let v = comp as? VarDecl {
         variables.append(
           NamedVar(
-            name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr,
-            lazySet: v.lazySet, collectionType: v.collectionType,
+            name: v.name, initialization: v.initialization, collectionType: v.collectionType,
             generatedSwiftType: v.generatedSwiftType, origin: .source))
       } else if let s = comp as? SymmetricCollectionDecl {
         variables.append(s.variable)

@@ -20,7 +20,7 @@ package struct FindHighestModel: Sendable {
                     of: SetExpr<Int>.literal(0, 1, 2, 3, 4),
                     lengths: 0...3
                 ))
-                let h = scope.sharedVar("h", initial: -1)
+                let h: SharedVariable<Int> = scope.sharedVar("h", initial: -1)
                 let i = scope.sharedVar("i", initial: 1)
 
                 While(Step.lb, i <= f.count) {

@@ -622,9 +622,13 @@ package struct FormalModuleClosure: Sendable {
       }
     }
 
-    var freeNames = module.variables.flatMap {
-      [$0.initialSet, $0.initExpr, $0.lazySet].compactMap { $0?.freeVariableNames }
-    }.reduce(into: Set<String>()) { $0.formUnion($1) }
+    var freeNames = module.variables.reduce(into: Set<String>()) { names, variable in
+      switch variable.initialization {
+      case .value: break
+      case .expression(let expression), .memberOf(let expression):
+        names.formUnion(expression.freeVariableNames)
+      }
+    }
     for action in module.actions {
       freeNames.formUnion(actionFreeNames(action.body).subtracting(Set(action.bindings.map(\.name))))
     }
