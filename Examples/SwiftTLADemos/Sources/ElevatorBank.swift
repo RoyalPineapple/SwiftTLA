@@ -77,13 +77,6 @@ public struct ElevatorBank {
     public enum CarSchema: TLARecordSchema {
         public typealias Fields = CarFields
 
-        public static let fieldNames: Set<String> = ["floor", "door", "rider"]
-        public static let defaultRecord: TLAValue = .record([
-            "floor": .int(Floor.one.rawValue),
-            "door": .string(Door.closed.rawValue),
-            "rider": .string(Rider.none.rawValue)
-        ])
-
         public static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \CarFields.floor { return "floor" }
@@ -95,6 +88,11 @@ public struct ElevatorBank {
         public static let floor = field(\CarFields.floor)
         public static let door = field(\CarFields.door)
         public static let rider = field(\CarFields.rider)
+        public static let fields: [TLARecordFieldDeclaration<Self>] = [
+            TLARecordFieldDeclaration(floor, default: Floor.one),
+            TLARecordFieldDeclaration(door, default: Door.closed),
+            TLARecordFieldDeclaration(rider, default: Rider.none)
+        ]
     }
 
     public struct RiderFields {
@@ -105,13 +103,6 @@ public struct ElevatorBank {
 
     public enum RiderSchema: TLARecordSchema {
         public typealias Fields = RiderFields
-
-        public static let fieldNames: Set<String> = ["phase", "floor", "destination"]
-        public static let defaultRecord: TLAValue = .record([
-            "phase": .string(RiderPhase.arrived.rawValue),
-            "floor": .int(Floor.one.rawValue),
-            "destination": .int(Floor.one.rawValue)
-        ])
 
         public static func fieldName<Value>(for field: KeyPath<RiderFields, Value>) -> String? {
             let key = field as AnyKeyPath
@@ -124,6 +115,11 @@ public struct ElevatorBank {
         public static let phase = field(\RiderFields.phase)
         public static let floor = field(\RiderFields.floor)
         public static let destination = field(\RiderFields.destination)
+        public static let fields: [TLARecordFieldDeclaration<Self>] = [
+            TLARecordFieldDeclaration(phase, default: RiderPhase.arrived),
+            TLARecordFieldDeclaration(floor, default: Floor.one),
+            TLARecordFieldDeclaration(destination, default: Floor.one)
+        ]
     }
 
     public static var spec: TLASpec {

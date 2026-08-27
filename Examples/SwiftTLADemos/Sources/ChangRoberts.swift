@@ -31,11 +31,6 @@ public struct ChangRoberts {
     public enum MessageSchema: TLARecordSchema {
         public typealias Fields = MessageFields
 
-        public static let fieldNames: Set<String> = ["candidate", "from", "to"]
-        public static let defaultRecord: TLAValue = .record([
-            "candidate": .int(1), "from": .string(Node.one.rawValue), "to": .string(Node.two.rawValue)
-        ])
-
         public static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \MessageFields.candidate { return "candidate" }
@@ -47,6 +42,11 @@ public struct ChangRoberts {
         public static let candidate = field(\MessageFields.candidate)
         public static let from = field(\MessageFields.from)
         public static let to = field(\MessageFields.to)
+        public static let fields: [TLARecordFieldDeclaration<Self>] = [
+            TLARecordFieldDeclaration(candidate, default: 1),
+            TLARecordFieldDeclaration(from, default: Node.one),
+            TLARecordFieldDeclaration(to, default: Node.two)
+        ]
     }
 
     public static var spec: TLASpec {
