@@ -32,8 +32,8 @@ A release commit is ready when all of these facts hold for that exact commit:
    TLC reference.
 6. PlusCal candidate validation runs in admission mode against the canonical
    corpus artifact for the merged SwiftTLA SHA.
-7. The generated machine, actor, and observable surfaces execute the same
-   compiled specification through typed state and action APIs.
+7. The generated machine, actor, and SwiftUI surfaces use the same generated
+   value machine through typed state and action APIs.
 8. The README and architecture documentation describe the shipped API and
    compiler path.
 
