@@ -77,15 +77,15 @@ struct StructuredAlgorithmTests {
         var model = try StructuredCarModel.makeMachine()
         let result = try model.send(.open(process: .north))
 
-        #expect(result.before.cars[.north].tlaValue == .record([
+        #expect(result.before.cars[.north]?.tlaValue == .record([
             "floor": .int(1),
             "door": .string(StructuredCarModel.Door.closed.rawValue)
         ]))
-        #expect(result.after.cars[.north].tlaValue == .record([
+        #expect(result.after.cars[.north]?.tlaValue == .record([
             "floor": .int(1),
             "door": .string(StructuredCarModel.Door.open.rawValue)
         ]))
-        #expect(result.after.cars[.south].tlaValue == .record([
+        #expect(result.after.cars[.south]?.tlaValue == .record([
             "floor": .int(2),
             "door": .string(StructuredCarModel.Door.closed.rawValue)
         ]))
