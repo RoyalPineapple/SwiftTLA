@@ -376,7 +376,7 @@ internal struct AlgorithmPlusCalRenderer {
         switch predicate {
         case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
              .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
-            guard location.sourceName == "Done" else { return false }
+            guard location.sourceName == CompilerControlSymbol.done.rawValue else { return false }
             return process == binding
         default:
             return false

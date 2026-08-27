@@ -350,8 +350,7 @@ internal indirect enum AlgorithmComponentModel: Sendable {
     case invariant(NamedInvariant)
     case temporal(NamedTemporal)
     case formalOperator(FormalOperatorDefinition)
-    /// A TLC state-space bound declared beside the algorithm that it bounds.
-    /// It is not a correctness property: excluded states are not explored.
+    /// A TLC state-space bound whose excluded states are omitted from exploration.
     case stateConstraint(StateExpr)
     case unsupported(DeclaredLanguageConstruct)
     case local(AlgorithmStateModel)

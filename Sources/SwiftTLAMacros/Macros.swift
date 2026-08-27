@@ -1,9 +1,7 @@
 import SwiftTLA
 
-/// Macro-generated surfaces may name Foundation types.
-/// Every `@TLAModel` file imports this module to resolve its macros, so
-/// re-exporting Foundation guarantees expansions resolve without the model
-/// file importing Foundation itself. Attached macros cannot add imports.
+/// Re-exported Foundation types are available to every `@TLAModel` expansion
+/// through the model file's SwiftTLAMacros import.
 @_exported import Foundation
 
 /// Generates a typed model machine from the declaration's `TLASpec`.

@@ -222,9 +222,8 @@ public struct CompiledSpecification: Sendable {
 
     /// Materializes the validated bundle as a new sibling directory.
     ///
-    /// Files are written only into an isolated staging directory. The staging
-    /// directory becomes visible at `directory` in one rename, so a failed
-    /// write or rename cannot leave a partial bundle at the destination.
+    /// Files are written into an isolated staging directory and become visible
+    /// at `directory` through one atomic rename.
     public func materializeModuleBundle(to directory: URL) throws {
         let bundle = renderedTLAModuleBundle()
         let fileManager = FileManager.default

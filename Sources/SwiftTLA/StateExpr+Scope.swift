@@ -1,9 +1,8 @@
 extension StateExpr {
     /// Names that this expression reads from its surrounding formal scope.
     ///
-    /// Bound names from quantifiers, functions, local operators, and formal
-    /// lambdas are removed here. This gives substitution one source of truth
-    /// for deciding when it must rename a binder to avoid capture.
+    /// Quantifiers, functions, local operators, and formal lambdas remove their
+    /// bound names. Substitution uses this set to avoid binder capture.
     var freeVariableNames: Set<String> {
         return switch self {
         case .sourceIssue, .value, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:

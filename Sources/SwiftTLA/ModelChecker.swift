@@ -374,9 +374,7 @@ private func compiledBFS(
 
 // MARK: - Results
 
-/// The class of a model-checking result that needs an engineer's attention.
-/// This is deliberately a domain enum rather than a Boolean or a generic
-/// error string so tooling can present the failed formal concept directly.
+/// The formal concept responsible for a model-checking failure.
 package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case invariantViolated
     case deadlock
@@ -467,9 +465,8 @@ package indirect enum CheckResult: CustomStringConvertible {
     case refinementViolated(refinement: String, evidence: RefinementFailureEvidence)
     case refinementUnproven(refinement: String, exploration: CheckResult)
 
-    /// The typed explanation of any non-success result. This preserves formal
-    /// state and counterexample evidence without exposing the engine's raw
-    /// string-keyed state map to application code.
+    /// The typed explanation of a failed check, including projected state and
+    /// counterexample evidence.
     public var diagnostic: ModelCheckingDiagnostic? {
         switch self {
         case .ok:

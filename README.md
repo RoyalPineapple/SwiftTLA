@@ -4,8 +4,10 @@
 
 Define explicit state, permitted actions, and rules that must hold. SwiftTLA
 generates a typed Swift machine your application can run. The same model can
-also drive bounded exploration and TLA+/PlusCal rendering. Selected finite
-cases compare SwiftTLA's exploration with independent pinned TLC fixtures.
+also drive bounded exploration and direct TLA+ rendering. A model with one
+authored `Algorithm` also renders a source-faithful PlusCal bundle. Selected
+finite cases compare SwiftTLA's exploration with independent pinned TLC
+fixtures.
 
 **One model. Typed application state. Bounded formal evidence.**
 
@@ -16,7 +18,7 @@ Swift source model
 CompiledSpecification
  ├── generated State, Action, Transition, and machine
  ├── bounded exploration
- └── rendered TLA+ and PlusCal bundles
+ └── rendered TLA+ bundle and, for one authored Algorithm, PlusCal bundle
 
 Generated machine
  ├── value stored in SwiftUI @State
@@ -27,6 +29,8 @@ Generated machine
 
 Use `#spec` and `Algorithm` to define the behavior that matters. The DSL
 expresses data, transitions, procedures, invariants, and temporal properties.
+
+**Example ID:** `readme-clock-model`
 
 ```swift
 import Foundation
@@ -41,34 +45,38 @@ public struct ClockModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Clock") {
-            Algorithm("Clock") {
-                let hour = SharedVar("hour", in: 0...23)
-                let minute = SharedVar("minute", in: 0...59)
-                let second = SharedVar("second", in: 0...59)
+            Algorithm("Clock", scoped: { scope in
+                let hour = scope.sharedVar("hour", in: 0...23)
+                let minute = scope.sharedVar("minute", in: 0...59)
+                let second = scope.sharedVar("second", in: 0...59)
 
                 While(Step.tick, true) {
                     Either {
                         When(second < 59)
                         Assign(second, to: second + 1)
                     } or: {
-                        When(second == 59)
-                        When(minute < 59)
-                        Assign(second, to: 0)
-                        Assign(minute, to: minute + 1)
-                    } or: {
-                        When(second == 59)
-                        When(minute == 59)
-                        When(hour < 23)
-                        Assign(second, to: 0)
-                        Assign(minute, to: 0)
-                        Assign(hour, to: hour + 1)
-                    } or: {
-                        When(second == 59)
-                        When(minute == 59)
-                        When(hour == 23)
-                        Assign(second, to: 0)
-                        Assign(minute, to: 0)
-                        Assign(hour, to: 0)
+                        Either {
+                            When(second == 59)
+                            When(minute < 59)
+                            Assign(second, to: 0)
+                            Assign(minute, to: minute + 1)
+                        } or: {
+                            Either {
+                                When(second == 59)
+                                When(minute == 59)
+                                When(hour < 23)
+                                Assign(second, to: 0)
+                                Assign(minute, to: 0)
+                                Assign(hour, to: hour + 1)
+                            } or: {
+                                When(second == 59)
+                                When(minute == 59)
+                                When(hour == 23)
+                                Assign(second, to: 0)
+                                Assign(minute, to: 0)
+                                Assign(hour, to: 0)
+                            }
+                        }
                     }
                 }
 
@@ -77,7 +85,7 @@ public struct ClockModel: Sendable {
                     minute >= 0 && minute <= 59 &&
                     second >= 0 && second <= 59
                 }
-            }
+            })
         }
     }
 }
@@ -100,6 +108,8 @@ print(result.after)
 
 The generated state is ordinary Swift value state. A view renders it and sends
 typed actions; the machine keeps each transition atomic.
+
+**Example ID:** `readme-clock-swiftui`
 
 ```swift
 import SwiftUI
@@ -133,7 +143,9 @@ struct ClockView: View {
         .task {
             guard machine == nil else { return }
             do {
-                machine = try ClockModel.makeMachine()
+                machine = try ClockModel.makeMachine(
+                    .init(hour: 16, minute: 19, second: 59)
+                )
             } catch {
                 diagnostic = String(describing: error)
             }
@@ -149,9 +161,9 @@ it stores the same generated machine value behind actor isolation.
 
 ## Add bounded assurance
 
-The same compiled specification renders the TLA+ and PlusCal bundles. Finite
-graph comparison compares its bounded exploration with TLC's exploration of a
-pinned reference fixture. See
+This clock's compiled specification renders direct TLA+ and its authored
+PlusCal algorithm. Finite graph comparison compares bounded SwiftTLA
+exploration with TLC's exploration of a pinned reference fixture. See
 [Finite graph comparison](Documentation/FiniteGraphComparison.md) for the
 retained evidence and precise claim.
 
@@ -169,6 +181,7 @@ running state, use the generated `Actor`. See
 ## Learn more
 
 - [Supported language fragment](Documentation/Design.md)
+- [Production readiness](Documentation/ProductionReadiness.md)
 - [Finite graph comparison](Documentation/FiniteGraphComparison.md)
 - [Temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md)
 - [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
