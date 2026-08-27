@@ -522,33 +522,27 @@ extension LivenessChecker {
     }
 
     private func stronglyConnectedComponents(in allowed: Set<StateGraph.StateID>) -> [Set<StateGraph.StateID>] {
-        var index = 0; var indices: [StateGraph.StateID: Int] = [:]; var lowlinks: [StateGraph.StateID: Int] = [:]
+        var index = 0; var indices: [StateGraph.StateID: Int] = [:]
         var stack: [StateGraph.StateID] = []; var onStack: Set<StateGraph.StateID> = []; var result: [Set<StateGraph.StateID>] = []
-        func visit(_ state: StateGraph.StateID) {
-            indices[state] = index; lowlinks[state] = index; index += 1; stack.append(state); onStack.insert(state)
+        func visit(_ state: StateGraph.StateID) -> Int {
+            let stateIndex = index
+            var lowlink = stateIndex
+            indices[state] = stateIndex; index += 1; stack.append(state); onStack.insert(state)
             for edge in edges(from: state).sorted(by: edgeOrder) where allowed.contains(edge.target) {
-                if indices[edge.target] == nil {
-                    visit(edge.target)
-                    guard let stateLowlink = lowlinks[state], let targetLowlink = lowlinks[edge.target] else {
-                        assertionFailure("Tarjan traversal lost a lowlink")
-                        return
-                    }
-                    lowlinks[state] = min(stateLowlink, targetLowlink)
-                } else if onStack.contains(edge.target) {
-                    guard let stateLowlink = lowlinks[state], let targetIndex = indices[edge.target] else {
-                        assertionFailure("Tarjan traversal lost an index")
-                        return
-                    }
-                    lowlinks[state] = min(stateLowlink, targetIndex)
+                if let targetIndex = indices[edge.target] {
+                    if onStack.contains(edge.target) { lowlink = min(lowlink, targetIndex) }
+                } else {
+                    lowlink = min(lowlink, visit(edge.target))
                 }
             }
-            if lowlinks[state] == indices[state] {
+            if lowlink == stateIndex {
                 var component: Set<StateGraph.StateID> = []
                 while let node = stack.popLast() { onStack.remove(node); component.insert(node); if node == state { break } }
                 result.append(component)
             }
+            return lowlink
         }
-        for state in allowed.sorted(by: stateOrder) where indices[state] == nil { visit(state) }
+        for state in allowed.sorted(by: stateOrder) where indices[state] == nil { _ = visit(state) }
         return result
     }
 
