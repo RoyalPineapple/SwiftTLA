@@ -134,29 +134,6 @@ enum MacroExpander {
                 DeclSyntax(stringLiteral: "public enum Action: Hashable, Sendable {}")
             ]
         }
-        func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
-            "\(binding.formalName).tlaValue"
-        }
-
-        func fixedArgument(_ binding: MachineSurfacePlan.Binding) -> String {
-            codegenTLAValue(binding.domain[0])
-        }
-
-        func actionArgumentBinding(
-            for binding: MachineSurfacePlan.Binding,
-            index: Int,
-            in arguments: String
-        ) -> String {
-            switch binding.swiftType {
-            case "Int": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: Int.self)"
-            case "Bool": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: Bool.self)"
-            case "String": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: String.self)"
-            case "TLAValue": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: TLAValue.self)"
-            default:
-                return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: \(binding.swiftType).self)"
-            }
-        }
-
         let cases = actions.map { action in
             if let collection = action.symmetricCollection {
                 return "case \(action.swiftIdentifier)(member: \(collection.elementType).ID)"
@@ -193,8 +170,8 @@ enum MacroExpander {
             let publicBindings = action.bindings.filter(\.isPublic)
             let arguments = action.bindings.map { binding in
                 binding.isPublic
-                    ? argumentConstructor(for: binding)
-                    : fixedArgument(binding)
+                    ? "\(binding.formalName).tlaValue"
+                    : codegenTLAValue(binding.domain[0])
             }.joined(separator: ", ")
             let pattern = publicBindings.isEmpty
                 ? ".\(action.swiftIdentifier)"
@@ -211,7 +188,7 @@ enum MacroExpander {
                     guard let memberOrdinal = formalMembers.firstIndex(where: {
                         arguments.matches($0, at: 0)
                     }), _\(collection.formalName)Members.indices.contains(memberOrdinal) else {
-                        return nil
+                        throw GeneratedMachineError.invalidGeneratedActionArguments
                     }
                     return .\(action.swiftIdentifier)(member: _\(collection.formalName)Members[memberOrdinal])
                 """
@@ -220,15 +197,23 @@ enum MacroExpander {
             if action.bindings.isEmpty {
                 return "case \(ordinal) where arguments.isEmpty: return .\(action.swiftIdentifier)"
             }
-            let patterns = action.bindings.enumerated().map { index, binding -> String in
-                if binding.isPublic {
-                    return actionArgumentBinding(for: binding, index: index, in: "arguments")
-                }
-                return "arguments.matches(\(codegenTLAValue(binding.domain[0])), at: \(index))"
-            }.joined(separator: ", ")
+            let bindings = action.bindings.enumerated().compactMap { index, binding in
+                binding.isPublic
+                    ? "let \(binding.formalName) = try arguments.value(at: \(index), as: \(binding.swiftType).self)"
+                    : nil
+            }.joined(separator: "\n                    ")
+            let fixedArguments = action.bindings.enumerated().compactMap { index, binding in
+                binding.isPublic ? nil : "arguments.matches(\(codegenTLAValue(binding.domain[0])), at: \(index))"
+            }
             let arguments = publicBindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
-            return "case \(ordinal) where arguments.count == \(action.bindings.count): "
-                + "guard \(patterns) else { return nil }; return .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
+            let guardFixedArguments = fixedArguments.isEmpty
+                ? ""
+                : "guard \(fixedArguments.joined(separator: ", ")) else { throw GeneratedMachineError.invalidGeneratedActionArguments }\n                    "
+            return """
+                case \(ordinal) where arguments.count == \(action.bindings.count):
+                    \(bindings)
+                    \(guardFixedArguments)return .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")
+                """
         }.joined(separator: "\n        ")
 
         return [
@@ -252,10 +237,10 @@ enum MacroExpander {
         }
         """),
             DeclSyntax(stringLiteral: """
-        private func _action(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> Action? {
+        private func _action(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) throws -> Action {
             switch ordinal {
             \(labelCases)
-            default: return nil
+            default: throw GeneratedMachineError.invalidGeneratedActionOrdinal
             }
         }
         """)

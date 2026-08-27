@@ -1746,6 +1746,13 @@ public final class ParserSession {
                   let value = args.first.flatMap({ decodeStateExpr($0.expression) })
             else { return nil }
             return .negate(value)
+        case "integerRange":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 2,
+                  let lower = decodeStateExpr(args[0].expression),
+                  let upper = decodeStateExpr(args[1].expression)
+            else { return nil }
+            return .integerRange(lower, upper)
         case "enabled":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
                   let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue

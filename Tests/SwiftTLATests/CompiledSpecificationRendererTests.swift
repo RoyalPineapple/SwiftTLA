@@ -97,6 +97,37 @@ struct CompiledSpecificationRendererTests {
         }
     }
 
+    @Test("compilation rejects malformed CASE expressions")
+    func compilationRejectsMalformedCases() {
+        let cases: [(StateExpr, String)] = [
+            (.caseExpr([.bool(true)], nil), "an unmatched CASE branch"),
+            (.caseExpr([], nil), "no CASE branches"),
+            (.caseExpr([], .int(1)), "no CASE branches")
+        ]
+
+        for (index, testCase) in cases.enumerated() {
+            let specification = TLASpec(
+                name: "MalformedCase\(index)",
+                variables: [],
+                actions: [],
+                invariants: [],
+                formalOperatorDefinitions: [
+                    .init(name: "Choice", parameters: [], body: testCase.0)
+                ]
+            )
+            do {
+                _ = try specification.compile()
+                Issue.record("Expected malformed CASE expression \(index) to fail compilation.")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .invalidFormalDeclaration)
+                #expect(diagnostic.stage == .validation)
+                #expect(diagnostic.actual == testCase.1)
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, got \(error).")
+            }
+        }
+    }
+
     @Test("materialization publishes the complete compiled bundle in one directory")
     func materializationPublishesCompleteBundle() throws {
         let compilation = try compiledBundle()

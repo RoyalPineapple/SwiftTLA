@@ -5,8 +5,6 @@ import SwiftSyntax
 import Testing
 import UpstreamParity
 
-// MARK: - Liveness checker and ChangRoberts TLC parity
-
 @Suite(.serialized) struct LivenessCheckerTests { @Test("SCC decomposition works on HourClock (12 states, 1 SCC)")
   func hourClockSCC() throws {
     let hr = Var<Int>("hr")
@@ -115,26 +113,13 @@ import UpstreamParity
     #expect(strong.rejectedComponents.contains(cycle))
   }
 }
-@Test("ChangRoberts liveness: cand ~> won holds")
+@Test("ChangRoberts compilation preserves and satisfies cand ~> won")
 func changRobertsLiveness() throws {
   let spec = Example.changRobertsN3.spec
   let compilation = try spec.compile()
   let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled)).explore()
   let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-  // Verify temporal property exists
-  #expect(spec.temporalProperties.count == 1)
-  #expect(spec.temporalProperties[0].name == "Liveness")
-  let results = lc.analyze(initialStateIDs: exploration.initialStateIDs)
-  #expect(results.count == 1)
-  #expect(results[0].status == .satisfied)
-}
-@Test("ChangRoberts liveness verified by TLC")
-func changRobertsLivenessParity() throws {
-  let spec = Example.changRobertsN3.spec
-  let compilation = try spec.compile()
-  let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled)).explore()
-  let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-  let results = lc.analyze(initialStateIDs: exploration.initialStateIDs)
-  #expect(results.count == 1)
-  #expect(results[0].status == .satisfied)
+  #expect(compilation.description.temporalProperties == ["Liveness"])
+  let result = try #require(lc.analyze(initialStateIDs: exploration.initialStateIDs).first)
+  #expect(result.status == .satisfied)
 }

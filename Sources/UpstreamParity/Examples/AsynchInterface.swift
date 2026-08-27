@@ -26,10 +26,11 @@ package struct AsynchInterfaceModel: Sendable {
     package enum InterfaceSchema: TLARecordSchema {
         package typealias Fields = InterfaceFields
 
-        package static let fieldNames: Set<String> = ["val", "rdy", "ack"]
-        package static let defaultRecord: TLAValue = .record([
-            "val": .string(Data.d1.rawValue), "rdy": .int(0), "ack": .int(0),
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(value, default: Data.d1),
+            .init(ready, default: 0),
+            .init(acknowledgement, default: 0),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<InterfaceFields, Value>) -> String? {
             let key = field as AnyKeyPath

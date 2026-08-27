@@ -16,10 +16,10 @@ struct ChangRobertsDemoTests {
         _ = try machine.send(.deliver(process: .six))
 
         let forwarded = try #require(machine.state.messages.elements.first {
-            $0[ChangRoberts.MessageSchema.candidate] == 12 &&
-                $0[ChangRoberts.MessageSchema.from] == .six
+            $0.value(for: ChangRoberts.MessageSchema.candidate) == 12 &&
+                $0.value(for: ChangRoberts.MessageSchema.from) == .six
         })
-        #expect(forwarded[ChangRoberts.MessageSchema.to] == .seven)
+        #expect(forwarded.value(for: ChangRoberts.MessageSchema.to) == .seven)
         #expect(machine.state.leader == 0)
     }
 
@@ -30,9 +30,9 @@ struct ChangRobertsDemoTests {
 
         let state = await actor.state
         let forwarded = try #require(state.messages.elements.first {
-            $0[ChangRoberts.MessageSchema.candidate] == 12
+            $0.value(for: ChangRoberts.MessageSchema.candidate) == 12
         })
-        #expect(forwarded[ChangRoberts.MessageSchema.from] == .six)
-        #expect(forwarded[ChangRoberts.MessageSchema.to] == .seven)
+        #expect(forwarded.value(for: ChangRoberts.MessageSchema.from) == .six)
+        #expect(forwarded.value(for: ChangRoberts.MessageSchema.to) == .seven)
     }
 }

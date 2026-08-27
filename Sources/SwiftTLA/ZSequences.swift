@@ -12,9 +12,11 @@ public enum ZSequences {
   public enum Rotation<Element: TLAValueType>: TLARecordSchema {
     public typealias Fields = RotationFields<Element>
 
-    public static var fieldNames: Set<String> { ["shift", "seq"] }
-    public static var defaultRecord: TLAValue {
-      .record(["shift": .int(0), "seq": ZeroBasedSequence<Element>().tlaValue])
+    public static var fields: [TLARecordFieldDeclaration<Self>] {
+      [
+        .init(shift, default: 0),
+        .init(sequence, default: ZeroBasedSequence<Element>()),
+      ]
     }
 
     public static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {

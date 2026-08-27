@@ -34,12 +34,6 @@ private struct StructuredCarModel {
     enum CarRecord: TLARecordSchema {
         typealias Fields = CarFields
 
-        static let fieldNames: Set<String> = ["floor", "door"]
-        static let defaultRecord: TLAValue = .record([
-            "floor": .int(1),
-            "door": .string(Door.closed.rawValue)
-        ])
-
         static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
             if key == \CarFields.floor { return "floor" }
@@ -49,6 +43,10 @@ private struct StructuredCarModel {
 
         static let floor = field(\CarFields.floor)
         static let door = field(\CarFields.door)
+        static let fields = [
+            TLARecordFieldDeclaration(floor, default: 1),
+            TLARecordFieldDeclaration(door, default: Door.closed)
+        ]
     }
 
     static var spec: TLASpec {
@@ -79,10 +77,18 @@ struct StructuredAlgorithmTests {
         var model = try StructuredCarModel.makeMachine()
         let result = try model.send(.open(process: .north))
 
-        #expect(result.before.cars[.north][StructuredCarModel.CarRecord.door] == .closed)
-        #expect(result.after.cars[.north][StructuredCarModel.CarRecord.door] == .open)
-        #expect(result.after.cars[.north][StructuredCarModel.CarRecord.floor] == 1)
-        #expect(result.after.cars[.south][StructuredCarModel.CarRecord.door] == .closed)
+        #expect(result.before.cars[.north].tlaValue == .record([
+            "floor": .int(1),
+            "door": .string(StructuredCarModel.Door.closed.rawValue)
+        ]))
+        #expect(result.after.cars[.north].tlaValue == .record([
+            "floor": .int(1),
+            "door": .string(StructuredCarModel.Door.open.rawValue)
+        ]))
+        #expect(result.after.cars[.south].tlaValue == .record([
+            "floor": .int(2),
+            "door": .string(StructuredCarModel.Door.closed.rawValue)
+        ]))
     }
 
     @Test("function comprehensions retain typed record values through lowering and evaluation")
@@ -115,8 +121,10 @@ struct StructuredAlgorithmTests {
                 Issue.record("Expected a typed car record.")
                 return
             }
-            #expect(record[StructuredCarModel.CarRecord.floor] == 4)
-            #expect(record[StructuredCarModel.CarRecord.door] == StructuredCarModel.Door.closed)
+            #expect(record.tlaValue == .record([
+                "floor": .int(4),
+                "door": .string(StructuredCarModel.Door.closed.rawValue)
+            ]))
         }
     }
 }

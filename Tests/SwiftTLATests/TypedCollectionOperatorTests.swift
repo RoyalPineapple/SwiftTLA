@@ -53,9 +53,6 @@ private struct InvalidLiteralFields {
 private enum InvalidLiteralSchema: TLARecordSchema {
     typealias Fields = InvalidLiteralFields
 
-    static let fieldNames: Set<String> = ["count", "enabled"]
-    static let defaultRecord: TLAValue = .record(["count": .int(0), "enabled": .bool(false)])
-
     static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
         let key = field as AnyKeyPath
         if key == \InvalidLiteralFields.count { return "count" }
@@ -66,20 +63,10 @@ private enum InvalidLiteralSchema: TLARecordSchema {
     static let count = field(\InvalidLiteralFields.count)
     static let enabled = field(\InvalidLiteralFields.enabled)
     static let unlisted = field(\InvalidLiteralFields.unlisted)
-}
-
-private enum InvalidDefaultRecordSchema: TLARecordSchema {
-    typealias Fields = InvalidLiteralFields
-
-    static let fieldNames: Set<String> = ["count", "enabled"]
-    static let defaultRecord: TLAValue = .record(["count": .int(0)])
-
-    static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
-        let key = field as AnyKeyPath
-        if key == \InvalidLiteralFields.count { return "count" }
-        if key == \InvalidLiteralFields.enabled { return "enabled" }
-        return nil
-    }
+    static let fields = [
+        TLARecordFieldDeclaration(count, default: 0),
+        TLARecordFieldDeclaration(enabled, default: false)
+    ]
 }
 
 @TLAModel
@@ -183,10 +170,6 @@ private struct FoldGeneratedModel {
                     .init(InvalidLiteralSchema.count, 0),
                     .init(InvalidLiteralSchema.count, 1)
                 ).raw,
-                .invalidTypedRecordLiteral
-            ),
-            (
-                Expr<Record<InvalidDefaultRecordSchema>>(Record()).raw,
                 .invalidTypedRecordLiteral
             ),
             (
@@ -490,13 +473,14 @@ private struct FoldGeneratedModel {
 
     @Test("zero-based sequence domains and indexed updates survive both paths")
     func zeroBasedSequencesSurviveThePipeline() throws {
-        let source = "ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 1...2)"
+        let source = "ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)"
         let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
-        let runtime = ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 1...2)
+        let runtime = ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
 
         #expect(parsed == runtime.raw)
         #expect(try compiledValue(runtime.raw) == .set([
+            .function([:]),
             .function([.int(0): .int(0)]),
             .function([.int(0): .int(1)]),
             .function([.int(0): .int(0), .int(1): .int(0)]),
@@ -504,6 +488,14 @@ private struct FoldGeneratedModel {
             .function([.int(0): .int(1), .int(1): .int(0)]),
             .function([.int(0): .int(1), .int(1): .int(1)])
         ]))
+
+        let empty = ZeroBasedSequence<Int>.literal()
+        #expect(try compiledValue(empty.raw) == .function([:]))
+        let emptySpec = TLASpec("EmptyZeroBasedSequence") {
+            let sequence = Var<ZeroBasedSequence<Int>>("sequence")
+            Variable(sequence, empty)
+        }
+        #expect(try emptySpec.compile().renderedTLAModuleBundle().tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
 
         let input = try #require(ZeroBasedSequence<Int>(formalValue: .function([
             .int(0): .int(0)

@@ -8,7 +8,11 @@ func compiledValue(
   formalOperators: [FormalOperatorDefinition] = []
 ) throws -> TLAValue {
   let variables = values.sorted { $0.0 < $1.0 }.map { name, value in
-    NamedVar(name: name, initial: value)
+    NamedVar(
+      name: name,
+      initialization: .value(value),
+      origin: .compiler
+    )
   }
   let resultName = "result"
   let specification = TLASpec(
@@ -16,7 +20,7 @@ func compiledValue(
     variables: variables + [NamedVar(
       name: resultName,
       initialization: .expression(expression),
-      origin: .source
+      origin: .compiler
     )],
     actions: [],
     invariants: [],

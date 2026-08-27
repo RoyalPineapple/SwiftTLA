@@ -75,9 +75,9 @@ public enum GeneratedDemoTestSuite {
                 var machine = try ChangRoberts.makeMachine()
                 _ = try machine.send(.deliver(process: .six))
                 guard machine.state.messages.elements.contains(where: {
-                    $0[ChangRoberts.MessageSchema.candidate] == 12 &&
-                    $0[ChangRoberts.MessageSchema.from] == .six &&
-                    $0[ChangRoberts.MessageSchema.to] == .seven
+                    $0.value(for: ChangRoberts.MessageSchema.candidate) == 12 &&
+                    $0.value(for: ChangRoberts.MessageSchema.from) == .six &&
+                    $0.value(for: ChangRoberts.MessageSchema.to) == .seven
                 }) else {
                     throw GeneratedDemoSuiteError.deliveryWasNotForwarded
                 }

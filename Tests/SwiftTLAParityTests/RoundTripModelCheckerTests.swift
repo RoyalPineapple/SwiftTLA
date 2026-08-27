@@ -119,7 +119,7 @@ private func value(
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("Min(m, n) =="))
+    #expect(tla.contains("Min(b0, b1) == (IF (b0 < b1) THEN b0 ELSE b1)"))
   }
 
   @Test func extendsNaturals() throws {
@@ -673,6 +673,22 @@ private func value(
       return
     }
     #expect(Set(tv) == Set([.int(1), .int(2), .int(3)]))
+  }
+
+  @Test("nonterminating recursive operators stop at the recursion-depth limit")
+  func nonterminatingRecursiveOperator() throws {
+    let function = RecursiveFunc(
+      name: "Loop",
+      params: ["value"],
+      body: .recursiveCall("Loop", [.variable("value")])
+    )
+
+    #expect(throws: EvalError.recursionDepthExceeded(4_096)) {
+      try compiledValue(
+        .recursiveCall("Loop", [.value(0)]),
+        recursiveFunctions: [function]
+      )
+    }
   }
 
   @Test("TLAValue.function Comparable ordering")

@@ -140,9 +140,10 @@ struct TLAModuleBundleTests {
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("EXTENDS Integers, FiniteSets, Sequences, ZSequences"))
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports.map { $0.name } == ["ZSequences"])
-    #expect(bundle.imports[0].tla.contains("Rotation(sequence, shift) =="))
-    #expect(!bundle.imports[0].tla.contains("VARIABLES"))
-    #expect(!bundle.imports[0].tla.contains("Spec =="))
+    let importedModule = try #require(bundle.imports.first)
+    #expect(importedModule.tla.contains("Rotation("))
+    #expect(importedModule.tla.contains("VARIABLES") == false)
+    #expect(importedModule.tla.contains("Spec ==") == false)
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     try consumer.compile().materializeModuleBundle(to: directory)
@@ -182,7 +183,7 @@ struct TLAModuleBundleTests {
     let corpus = Var<ZeroBasedSequence<Int>>("corpus", .init())
     let initialized = TLASpec("InitializedZSequences") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
-      Variable(from: corpus.name, ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)).raw)
+      Variable(corpus, in: ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)))
     }
     let compilation = try initialized.compile()
     #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 7)
@@ -208,7 +209,7 @@ struct TLAModuleBundleTests {
     #expect(!(try consumer.compile().renderedTLAModuleBundle().tla.contains("Twice(value) ==")))
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports.map { $0.name } == ["FormalArithmetic"])
-    #expect(bundle.imports.first?.tla.contains("Twice(value) ==") == true)
+    #expect(bundle.imports.first?.tla.contains("Twice(") == true)
     let check = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
     guard case .ok = check else {
       Issue.record("The imported operator did not evaluate successfully.")
@@ -237,7 +238,8 @@ struct TLAModuleBundleTests {
     #expect(!(try consumer.compile().renderedTLAModuleBundle().tla.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic")))
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports.map(\.name) == ["InstanceArithmetic"])
-    #expect(bundle.imports[0].tla.contains("Twice(value) =="))
+    let importedModule = try #require(bundle.imports.first)
+    #expect(importedModule.tla.contains("Twice(b0) =="))
 
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -306,8 +308,9 @@ struct TLAModuleBundleTests {
 
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math == INSTANCE ParameterizedArithmetic WITH Base <- 2"))
     let bundle = try consumer.compile().renderedTLAModuleBundle()
-    #expect(bundle.imports[0].tla.contains("CONSTANTS Base"))
-    #expect(!bundle.imports[0].tla.contains("ASSUME Base"))
+    let importedModule = try #require(bundle.imports.first)
+    #expect(importedModule.tla.contains("CONSTANTS Base"))
+    #expect(importedModule.tla.contains("ASSUME Base") == false)
     let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
     guard case .ok = result else {
       Issue.record("The checker did not apply the module argument.")

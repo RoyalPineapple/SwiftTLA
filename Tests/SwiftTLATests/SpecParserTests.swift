@@ -2845,9 +2845,6 @@ private struct TestCarFields {
 
 private enum TestCarSchema: TLARecordSchema {
     typealias Fields = TestCarFields
-    static let fieldNames: Set<String> = ["floor", "doorsOpen"]
-    static let defaultRecord: TLAValue = .record(["floor": .int(0), "doorsOpen": .bool(false)])
-
     static func fieldName<Value>(for field: KeyPath<TestCarFields, Value>) -> String? {
         let key = field as AnyKeyPath
         if key == \TestCarFields.floor { return "floor" }
@@ -2857,4 +2854,8 @@ private enum TestCarSchema: TLARecordSchema {
 
     static let floor = field(\TestCarFields.floor)
     static let doorsOpen = field(\TestCarFields.doorsOpen)
+    static let fields = [
+        TLARecordFieldDeclaration(floor, default: 0),
+        TLARecordFieldDeclaration(doorsOpen, default: false)
+    ]
 }

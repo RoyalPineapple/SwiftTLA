@@ -60,11 +60,10 @@ package struct TwoPhaseModel: Sendable {
     package enum MessageSchema: TLARecordSchema {
         package typealias Fields = MessageFields
 
-        package static let fieldNames: Set<String> = ["kind", "rm"]
-        package static let defaultRecord: TLAValue = .record([
-            "kind": .string(MessageKind.prepared.rawValue),
-            "rm": .string(ResourceManager.one.rawValue)
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(kind, default: MessageKind.prepared),
+            .init(resourceManager, default: ResourceManager.one),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
             let key = field as AnyKeyPath

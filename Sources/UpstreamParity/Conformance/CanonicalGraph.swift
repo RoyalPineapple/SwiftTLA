@@ -155,9 +155,22 @@ package struct CanonicalEdge: Hashable, Sendable, Comparable {
 }
 
 package enum CanonicalGraphError: Error, Equatable, Sendable {
+    case duplicateState(CanonicalStateKey)
     case inconsistentStateBindings(expected: Set<String>, actual: Set<String>)
     case initialStateMissing(CanonicalStateKey)
     case edgeStateMissing(CanonicalStateKey)
+}
+
+package func canonicalStateTable(
+    _ states: some Sequence<CanonicalState>
+) throws -> [CanonicalStateKey: CanonicalState] {
+    var table: [CanonicalStateKey: CanonicalState] = [:]
+    for state in states {
+        guard table.updateValue(state, forKey: state.key) == nil else {
+            throw CanonicalGraphError.duplicateState(state.key)
+        }
+    }
+    return table
 }
 
 package struct CanonicalGraph: Equatable, Sendable {
@@ -170,7 +183,7 @@ package struct CanonicalGraph: Equatable, Sendable {
         states: [CanonicalState],
         edges: some Sequence<CanonicalEdge>
     ) throws {
-        let stateTable = Dictionary(uniqueKeysWithValues: states.map { ($0.key, $0) })
+        let stateTable = try canonicalStateTable(states)
         let expectedBindings = stateTable.values.first.map { Set($0.bindings.keys) } ?? []
         for state in stateTable.values where Set(state.bindings.keys) != expectedBindings {
             throw CanonicalGraphError.inconsistentStateBindings(

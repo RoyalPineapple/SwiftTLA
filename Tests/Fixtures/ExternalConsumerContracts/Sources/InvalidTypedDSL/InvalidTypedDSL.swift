@@ -21,14 +21,12 @@ struct CarFields {
 
 enum CarSchema: TLARecordSchema {
   typealias Fields = CarFields
-  static let fieldNames: Set<String> = ["floor"]
-  static let defaultRecord: TLAValue = .record(["floor": .int(0)])
-
   static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
     field as AnyKeyPath == \CarFields.floor ? "floor" : nil
   }
 
   static let floor = field(\CarFields.floor)
+  static let fields = [TLARecordFieldDeclaration(floor, default: 0)]
 }
 
 @TLAModel
@@ -91,6 +89,7 @@ struct InvalidTypedUpdate {
       let floor = Var<Int>("floor")
       let car = Var<Record<CarSchema>>("car")
       Variable(floor, 0)
+      Variable(car, Record<CarSchema>.literal(.init(CarSchema.floor, 0)))
       Action("unsupportedUpdate", parameters: [
         ActionParameter("person", values: ["alice", "bob"])
       ]) {

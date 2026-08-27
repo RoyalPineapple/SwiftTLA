@@ -37,12 +37,12 @@ private struct GeneratedTypedLocalRecursionModel {
 private struct GeneratedTypedFormalDefinitionAlgorithm {
   static var spec: TLASpec {
     #spec("GeneratedTypedFormalDefinitionAlgorithm") {
+      FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
+        LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
+          If(current == 0, then: true, else: recursion(current.expr - 1))
+        }, in: { recursion in recursion(ballot) })
+      }
       Algorithm("GeneratedTypedFormalDefinitionAlgorithm", scoped: { scope in
-        FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
-          LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
-            If(current == 0, then: true, else: recursion(current.expr - 1))
-          }, in: { recursion in recursion(ballot) })
-        }
         let counter = scope.sharedVar("counter", initial: 0)
         Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
@@ -56,18 +56,18 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
 private struct GeneratedTopLevelTypedFormalDefinitionModel {
   static var spec: TLASpec {
     #spec("GeneratedTopLevelTypedFormalDefinitionModel") { scope in
-      Algorithm("GeneratedTopLevelTypedFormalDefinitionModel", scoped: { algorithm in
-        let bound = algorithm.sharedVar("bound", initial: 2)
-        let counter = algorithm.sharedVar("counter", initial: 0)
-        FormalDefinition("SafeAt", taking: Int.self) { ballot in
-          LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
-            If(current == 0, then: true, else: recursion(current.expr - 1))
-          }, in: { recursion in recursion(ballot) })
-        }
+      let bound = scope.sharedVar("bound", initial: 2)
+      let counter = scope.sharedVar("counter", initial: 0)
+      FormalDefinition("SafeAt", taking: Int.self) { ballot in
+        LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
+          If(current == 0, then: true, else: recursion(current.expr - 1))
+        }, in: { recursion in recursion(ballot) })
+      }
+      Algorithm("GeneratedTopLevelTypedFormalDefinitionModel") {
         Do(TestControlLabel.advance) {
           Assign(counter, to: counter.expr + 1)
         }
-      })
+      }
     }
   }
 }
@@ -94,8 +94,12 @@ struct LocalOperatorTests {
   @Test("#spec preserves typed local recursion through generated model parsing")
   func generatedModelRetainsTypedLocalRecursion() throws {
     let body = try #require(GeneratedTypedLocalRecursionModel.spec.formalOperatorDefinitions.first?.body)
-    #expect(body.description.contains("Count[number \\in 0..4]"))
-    #expect(body.description.contains("IN Count[4]"))
+    guard case .letIn(let operators, let call) = body else {
+      Issue.record("Expected a compiled local operator")
+      return
+    }
+    #expect(operators.first?.domain == .integerRange(.int(0), .int(4)))
+    #expect(call.description.contains("Count[4]"))
     let rendered = try GeneratedTypedLocalRecursionModel.spec.compile().renderedTLAModuleBundle().tla
     #expect(rendered.contains("LET Count["))
     #expect(!rendered.contains("LET RECURSIVE Count"))
@@ -110,7 +114,13 @@ struct LocalOperatorTests {
       GeneratedTypedFormalDefinitionAlgorithm.spec.formalOperatorDefinitions.first
     )
     #expect(definition.parameters == [.value("value0"), .value("value1")])
-    #expect(definition.body.description.contains("LET RECURSIVE SA"))
+    let compilation = try GeneratedTypedFormalDefinitionAlgorithm.spec.compile()
+    let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
+    guard case .letIn(let operators, _) = compiledDefinition.body else {
+      Issue.record("Expected a compiled local operator")
+      return
+    }
+    #expect(operators.first?.isRecursive == true)
 
     var model = try GeneratedTypedFormalDefinitionAlgorithm.makeMachine()
     #expect(try model.send(.advance).after.counter == 1)
@@ -129,21 +139,19 @@ struct LocalOperatorTests {
     #expect(try model.send(.advance).after.counter == 1)
   }
 
-  @Test("typed local recursion is parser-fidelitous and preserves ForAll and Exists")
-  func parserRetainsTypedLocalRecursion() throws {
+  @Test("typed local recursion preserves quantified bindings")
+  func typedLocalRecursionPreservesQuantifiedBindings() throws {
     let source = """
     {
-      FormalDefinition(
-        "Bounded",
-        parameters: [.value("limit")],
-        body: LetRec("AtMost", over: IntRange(0, through: limit), taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, number: WithValue<Int>) in
+      FormalDefinition("Bounded", taking: Int.self) { limit in
+        LetRec("AtMost", over: IntRange(0, through: limit), taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, number: WithValue<Int>) in
           If(number == 0, then: true, else: Exists(in: IntRange(0, through: number.expr - 1)) { prior in
             recursion(prior.expr) && ForAll(in: IntRange(0, through: number.expr)) { candidate in
               candidate <= number.expr
             }
           })
         }, in: { recursion in recursion(limit) })
-      )
+      }
     }
     """
     let closure = try parseClosure(source)
@@ -151,19 +159,20 @@ struct LocalOperatorTests {
 
     #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
     #expect(parsed.formalOperatorDefinitions.count == 1)
-    let body = parsed.formalOperatorDefinitions[0].body
+    let body = try #require(parsed.formalOperatorDefinitions.first?.body)
     guard case .letIn(let operators, let call) = body else {
       Issue.record("Expected a local LET expression")
       return
     }
     #expect(operators.count == 1)
-    #expect(operators[0].name == "AtMost")
-    #expect(operators[0].parameters == ["number"])
-    #expect(operators[0].domain == .integerRange(.int(0), .variable("limit")))
-    #expect(operators[0].body.description.contains("\\E"))
-    #expect(operators[0].body.description.contains("\\A"))
-    #expect(operators[0].body.description.contains("AtMost["))
-    #expect(call.description == "AtMost[limit]")
+    let operation = try #require(operators.first)
+    #expect(operation.name == "AtMost")
+    #expect(operation.parameters == ["number"])
+    #expect(operation.domain == .integerRange(.int(0), .variable("value0")))
+    #expect(operation.body.description.contains("\\E"))
+    #expect(operation.body.description.contains("\\A"))
+    #expect(operation.body.description.contains("AtMost["))
+    #expect(call.description == "AtMost[value0]")
   }
 
   @Test("bounded recursion retains scoped values through the general parser fallback")
@@ -281,6 +290,25 @@ struct LocalOperatorTests {
     #expect(expression.description.contains("SumTo(number) =="))
   }
 
+  @Test("terminating recursive operators evaluate beyond host call depth")
+  func evaluatesDeepTerminatingRecursion() throws {
+    let sumTo = LocalOperator(
+      "SumTo",
+      parameters: ["number"],
+      body: .ifThenElse(
+        .equal(.variable("number"), .int(0)),
+        .int(0),
+        .add(
+          .variable("number"),
+          .recursiveCall("SumTo", [.subtract(.variable("number"), .int(1))])
+        )
+      )
+    )
+    let expression = StateExpr.letIn([sumTo], .recursiveCall("SumTo", [.int(512)]))
+
+    #expect(try compiledValue(expression) == .int(131_328))
+  }
+
   @Test("LET operators are emitted as executable TLA+ source")
   func emitsLetInSource() throws {
     let local = LocalOperator("AddOne", parameters: ["number"], body: .add(.variable("number"), .int(1)))
@@ -288,7 +316,9 @@ struct LocalOperatorTests {
       FormalDefinition("Answer", parameters: [], body: .letIn([local], .recursiveCall("AddOne", [.int(41)])))
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Answer == LET AddOne(number) == (number + 1)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains(
+      "Answer == LET AddOne(b0) == (b0 + 1)"
+    ))
     #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("RECURSIVE AddOne")))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("IN AddOne(41)"))
   }
@@ -316,7 +346,7 @@ struct LocalOperatorTests {
       Issue.record("Expected a compiled local operator")
       return
     }
-    #expect(operators[0].isRecursive)
+    #expect(try #require(operators.first).isRecursive)
   }
 
   @Test("the macro parser retains LET operator definitions")
@@ -342,7 +372,7 @@ struct LocalOperatorTests {
     let operation = LocalOperator("Only", parameters: ["value"], body: .variable("value"))
     let expression: StateExpr = .letIn([operation], .recursiveCall("Only", []))
 
-    #expect(throws: EvalError.self) {
+    #expect(throws: CompilationDiagnostic.self) {
       try compiledValue(expression)
     }
   }

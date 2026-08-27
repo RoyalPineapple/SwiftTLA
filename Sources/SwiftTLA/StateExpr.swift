@@ -185,7 +185,7 @@ public struct StateRecordExpression: Hashable, Sendable {
 public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
     case recordField(schema: String)
     case recordLiteral(schema: String, duplicateFields: [String], missingFields: [String])
-    case invalidRecordDefault(schema: String)
+    case invalidRecordSchema(schema: String, problem: String)
     case functionLiteral(domain: String, duplicateValues: [String], missingValues: [String])
     case staticSelection(String)
     case sequenceElementDomain(operation: String)
@@ -212,8 +212,8 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
                 missing.isEmpty ? nil : "missing fields: \(missing.joined(separator: ", "))"
             ].compactMap { $0 }.joined(separator: "; ")
             return (.invalidTypedRecordLiteral, "one value for every field declared by \(schema)", details, "Provide each declared record field exactly once, then compile again.")
-        case .invalidRecordDefault(let schema):
-            return (.invalidTypedRecordLiteral, "a complete default record declared by \(schema)", "the schema default omits a field or has an invalid field value", "Provide a valid default record for \(schema), then compile again.")
+        case .invalidRecordSchema(let schema, let problem):
+            return (.invalidTypedRecordLiteral, "unique nonempty fields declared by \(schema)", problem, "Correct the field declarations in \(schema), then compile again.")
         case .functionLiteral(let domain, let duplicates, let missing):
             let details = [
                 duplicates.isEmpty ? nil : "repeated domain values: \(duplicates.joined(separator: ", "))",
@@ -417,6 +417,10 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
             return "[\(f) EXCEPT ![\(x)] = \(e)]"
 
         case .caseExpr(let pairs, let other):
+            guard pairs.isEmpty == false else { return "CASE <missing condition and value branch>" }
+            guard pairs.count.isMultiple(of: 2) else {
+                return "CASE <unmatched condition \(pairs.last.map(String.init(describing:)) ?? "missing")>"
+            }
             let cases = stride(from: 0, to: pairs.count, by: 2).map {
                 "\(pairs[$0]) -> \(pairs[$0 + 1])"
             }.joined(separator: " [] ")

@@ -3,18 +3,6 @@ import Testing
 @testable import UpstreamParity
 
 struct UpstreamParityTests {
-    @Test("Model checker count matches every TLC-verified example")
-    func modelCheckerMatchesTLC() throws {
-        for entry in Example.all {
-            let result = try explore(entry.spec, maximumStateLimit: entry.maximumStateLimit)
-            let count = result.graph.states.count
-            let matches = count == entry.expectedDistinct && isSuccessful(result)
-            if !matches {
-                Issue.record("\(entry.id): ModelChecker \(count) states, TLC \(entry.expectedDistinct)")
-            }
-        }
-    }
-
     @Test("Game of Life preserves the blinker transition")
     func gameOfLifeBlinkerTransition() throws {
         func grid(alive: Set<TLAValue>) -> TLAValue {

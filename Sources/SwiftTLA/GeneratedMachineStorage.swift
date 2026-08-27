@@ -108,22 +108,22 @@ public struct _GeneratedMachineStorage: Sendable {
     /// Resolves the generated actions enabled in one stored state.
     public func availableActions<Action: Hashable>(
         in state: State,
-        resolve: (Int, ActionArguments) throws -> Action?
+        resolve: (Int, ActionArguments) throws -> Action
     ) throws -> [Action] {
         var seen = Set<Action>()
-        return try CompiledRuntime(compilation: compilation)
-            .successors(from: state.compiled)
-            .compactMap { successor in
-                let request = CompiledActionRequest(
-                    action: successor.action,
-                    arguments: successor.arguments
-                )
-                let input = try compilation.generatedActionInput(for: request)
-                guard let action = try resolve(input.ordinal, .init(values: input.formalArguments)) else {
-                    return nil
-                }
-                return seen.insert(action).inserted ? action : nil
+        var actions: [Action] = []
+        for successor in try CompiledRuntime(compilation: compilation).successors(from: state.compiled) {
+            let request = CompiledActionRequest(
+                action: successor.action,
+                arguments: successor.arguments
+            )
+            let input = try compilation.generatedActionInput(for: request)
+            let action = try resolve(input.ordinal, .init(values: input.formalArguments))
+            if seen.insert(action).inserted {
+                actions.append(action)
             }
+        }
+        return actions
     }
 
     private func request(

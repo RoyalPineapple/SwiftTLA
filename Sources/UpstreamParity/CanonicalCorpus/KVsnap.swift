@@ -86,12 +86,11 @@ package struct KVsnapModel: Sendable {
     package enum OperationSchema: TLARecordSchema {
         package typealias Fields = OperationFields
 
-        package static let fieldNames: Set<String> = ["op", "key", "value"]
-        package static let defaultRecord: TLAValue = .record([
-            "op": OperationKind.read.tlaValue,
-            "key": Key.k1.tlaValue,
-            "value": Value.second(.noVal).tlaValue,
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(operation, default: OperationKind.read),
+            .init(key, default: Key.k1),
+            .init(value, default: Value.second(.noVal)),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<OperationFields, Value>) -> String? {
             let key = field as AnyKeyPath

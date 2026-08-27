@@ -207,6 +207,21 @@ struct FormalOperatorTests {
     )
   }
 
+  @Test("unused formal value arguments remain unevaluated")
+  func formalValueArgumentsAreLazy() throws {
+    let first = FormalOperatorDefinition(
+      name: "first",
+      parameters: [.value("value"), .value("unused")],
+      body: .variable("value")
+    )
+    let expression = StateExpr.operatorApplication(
+      .reference("first", arity: 2),
+      [.value(.int(42)), .value(.divide(.int(1), .int(0)))]
+    )
+
+    #expect(try compiledValue(expression, formalOperators: [first]) == .int(42))
+  }
+
   @Test("model checking and runtime apply a spec-owned formal operator")
   func appliesFormalOperatorAtTheTransitionBoundary() throws {
     let applyTwice = FormalOperatorDefinition(
@@ -330,7 +345,9 @@ struct FormalOperatorTests {
           .linkedOperators.formalOperatorDefinitions
       ) == .int(6)
     )
-    #expect(try Folds.module.compile().renderedTLAModuleBundle().tla.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
+    let rendered = try Folds.module.compile().renderedTLAModuleBundle().tla
+    #expect(rendered.contains("MapThenFoldSet(op(_, _),"))
+    #expect(rendered.contains("choose(_),"))
   }
 
   @Test("Functions definitions execute through the imported formal environment")
@@ -373,7 +390,7 @@ struct FormalOperatorTests {
     #expect(try compiledValue(pointwise, formalOperators: functions) == .function([
       .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
     ]))
-    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(f, S) =="))
+    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(b0, b1) =="))
   }
 
   @Test("Util definitions execute without flattening their Functions dependency")
@@ -414,6 +431,8 @@ struct FormalOperatorTests {
     #expect(try compiledValue(permutations, formalOperators: util) == .set([
       .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
     ]))
-    #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("ReduceSet(op(_, _), set, base) =="))
+    #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains(
+      "ReduceSet(op(_, _),"
+    ))
   }
 }

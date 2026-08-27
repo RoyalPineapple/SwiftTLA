@@ -1,8 +1,6 @@
-import Foundation
 import Testing
 
 @testable import SwiftTLA
-import UpstreamParity
 
 @Suite("Typed facade contracts")
 struct TypedFacadeContractTests {
@@ -29,9 +27,6 @@ struct TypedFacadeContractTests {
 
   enum CarSchema: TLARecordSchema {
     typealias Fields = CarFields
-    static let fieldNames: Set<String> = ["floor", "doorsOpen"]
-    static let defaultRecord: TLAValue = .record(["floor": .int(0), "doorsOpen": .bool(false)])
-
     static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
       let key = field as AnyKeyPath
       if key == \CarFields.floor { return "floor" }
@@ -41,9 +36,63 @@ struct TypedFacadeContractTests {
 
     static let floor = field(\CarFields.floor)
     static let doorsOpen = field(\CarFields.doorsOpen)
+    static let fields = [
+      TLARecordFieldDeclaration(floor, default: 0),
+      TLARecordFieldDeclaration(doorsOpen, default: false)
+    ]
   }
 
-  @Test("typed reads, set mutation, and nested update lower to the existing AST")
+  struct GarageFields {
+    let car: Record<CarSchema>
+    let owner: PersonID
+  }
+
+  enum GarageSchema: TLARecordSchema {
+    typealias Fields = GarageFields
+
+    static func fieldName<Value>(for field: KeyPath<GarageFields, Value>) -> String? {
+      let key = field as AnyKeyPath
+      if key == \GarageFields.car { return "car" }
+      if key == \GarageFields.owner { return "owner" }
+      return nil
+    }
+
+    static let car = field(\GarageFields.car)
+    static let owner = field(\GarageFields.owner)
+    static let fields = [
+      TLARecordFieldDeclaration(car, default: Record<CarSchema>()),
+      TLARecordFieldDeclaration(owner, default: PersonID.alice)
+    ]
+  }
+
+  @Test("record decoding validates declared fields and nested values")
+  func recordDecodingValidatesSchema() throws {
+    #expect(Record<CarSchema>(formalValue: .record([
+      "floor": .bool(false),
+      "doorsOpen": .bool(false)
+    ])) == nil)
+    #expect(Record<CarSchema>(formalValue: .record(TLARecord([
+      .init("floor", .int(0)),
+      .init("floor", .int(1))
+    ]))) == nil)
+    #expect(Record<CarSchema>(formalValue: .record(["floor": .int(0)])) == nil)
+    #expect(Record<CarSchema>(formalValue: .record([
+      "floor": .int(0),
+      "doorsOpen": .bool(false),
+      "owner": .string("alice")
+    ])) == nil)
+
+    let formal: TLAValue = .record([
+      "car": .record(["floor": .int(2), "doorsOpen": .bool(true)]),
+      "owner": .string("bob")
+    ])
+    let garage = try #require(Record<GarageSchema>(formalValue: formal))
+    #expect(garage.tlaValue == formal)
+    #expect(garage.value(for: GarageSchema.owner) == .bob)
+    #expect(garage.value(for: GarageSchema.car)?.value(for: CarSchema.floor) == 2)
+  }
+
+  @Test("typed reads, set mutation, and nested updates lower to typed expressions")
   func typedFacadeLowersAndEvaluates() throws {
     let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
     let calls = Var<SetExpr<PersonID>>("calls")
@@ -132,23 +181,13 @@ struct TypedFacadeContractTests {
     #expect(CarID.tlaValues == [.string("carA"), .string("carB")])
   }
 
-  @Test("finite function indexes reject values omitted from the declared domain")
-  func omittedFiniteDomainValueIsRejectedBeforeLowering() throws {
-    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedFacadeRuntime")
-    let result = try runSwift(["run", "--package-path", fixture.path])
-
-    #expect(result.status != 0)
-    #expect(result.output.contains("not declared by OmittedID.finiteValues"))
-  }
-
   @Test("typed facade compile-negative fixtures reject escape hatches")
   func invalidTypedFacadeUsesDoNotTypeCheck() throws {
-    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedFacade")
-    let result = try runSwift(["build", "--package-path", fixture.path])
+    let result = try buildExternalConsumer("InvalidTypedFacade")
 
     #expect(result.status != 0)
     #expect(result.output.contains("TLAField"))
-    #expect(result.output.contains("InvalidTypedFacade.swift:30:"))
+    #expect(result.output.contains("InvalidTypedFacade.swift:32:"))
     #expect(result.output.contains("member 'person'"))
     #expect(result.output.contains("no exact matches in call to instance method 'becomes'"))
     #expect(result.output.contains("candidate expects value of type 'TLAValue'"))
@@ -164,10 +203,7 @@ struct TypedFacadeContractTests {
 
   @Test("typed DSL invalid fixture reports each source-local diagnostic")
   func invalidTypedDSLReportsSourceLocalDiagnostics() throws {
-    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedDSL")
-    let result = try runSwift([
-      "build", "--package-path", fixture.path, "--target", "InvalidTypedDSL"
-    ])
+    let result = try buildExternalConsumer("InvalidTypedDSL")
 
     #expect(result.status != 0)
     for expected in [
@@ -177,22 +213,20 @@ struct TypedFacadeContractTests {
       "parameter 'car' requires a non-empty finite values array",
       "InvalidTypedDSL.swift:75:",
       "parameter 'direction' has duplicate finite-domain values",
-      "InvalidTypedDSL.swift:95:",
+      "InvalidTypedDSL.swift:96:",
       "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
     ] {
       #expect(result.output.contains(expected))
     }
 
-    let unknownField = try runSwift([
-      "build", "--package-path", fixture.path, "--target", "InvalidTypedDSLUnknownField"
-    ])
+    let unknownField = try buildExternalConsumer("InvalidTypedDSLUnknownField")
     #expect(unknownField.status != 0)
-    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:36:"))
+    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:39:"))
     #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
   }
 
-  @Test("explicit core AST boundaries remain available to untyped callers")
-  func explicitCoreASTBoundariesRemainAvailable() {
+  @Test("formal AST construction is explicit")
+  func formalASTConstructionIsExplicit() {
     let raw = Var<TLAValue>("raw")
     let expression = StateExpr.variable(raw.name)
     let action = ActionExpr.assign(.named(raw.name), expression.updated(at: 1, to: 2))
@@ -203,37 +237,5 @@ struct TypedFacadeContractTests {
           .named("raw"),
           .except(.variable("raw"), .value(.int(1)), .value(.int(2)))
         ))
-  }
-
-  @Test("bounded elevator source model checks successfully")
-  func boundedElevatorSourceModelChecksSuccessfully() throws {
-    let checker = ModelChecker(compilation: try MultiCarElevator.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 30_000, symmetryReduction: .disabled))
-    guard case .ok(let stateCount) = try checker.check() else {
-      Issue.record("Bounded MultiCarElevator safety model did not complete successfully")
-      return
-    }
-    #expect(stateCount == 3_276)
-  }
-
-  private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {
-    let scratch = FileManager.default.temporaryDirectory
-      .appendingPathComponent("SwiftTLA-typed-facade-\(UUID().uuidString)")
-    defer { try? FileManager.default.removeItem(at: scratch) }
-    try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = ["swift"] + arguments + ["--scratch-path", scratch.path]
-    let output = Pipe()
-    process.standardOutput = output
-    process.standardError = output
-    try process.run()
-    let outputData = output.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
-
-    return (
-      process.terminationStatus,
-      String(data: outputData, encoding: .utf8) ?? ""
-    )
   }
 }

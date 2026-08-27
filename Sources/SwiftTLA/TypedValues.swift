@@ -22,10 +22,23 @@ extension FiniteTLAValueDomain {
 
 public protocol TLARecordSchema: Sendable {
   associatedtype Fields
-  static var fieldNames: Set<String> { get }
-  /// A complete, schema-valid formal value used only when a generic default is required.
-  static var defaultRecord: TLAValue { get }
+  static var fields: [TLARecordFieldDeclaration<Self>] { get }
   static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String?
+}
+
+public struct TLARecordFieldDeclaration<Schema: TLARecordSchema>: Sendable {
+  fileprivate let name: String
+  fileprivate let defaultValue: TLAValue
+  fileprivate let accepts: @Sendable (TLAValue) -> Bool
+
+  public init<Value: TLAValueType>(
+    _ field: TLAField<Schema, Value>,
+    default defaultValue: Value
+  ) {
+    name = field.name
+    self.defaultValue = defaultValue.tlaValue
+    accepts = { Value(formalValue: $0) != nil }
+  }
 }
 
 public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Hashable, Sendable {
@@ -37,16 +50,22 @@ public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Hashable, 
     self.sourceIssue = sourceIssue
   }
 
+  private var issue: SourceModelIssue? {
+    sourceIssue ?? (Schema.fields.contains { $0.name == name }
+      ? nil
+      : .recordField(schema: String(reflecting: Schema.self)))
+  }
+
   func recordAccess(_ record: StateExpr) -> StateExpr {
-    sourceIssue.map(StateExpr.sourceIssue) ?? .recordAccess(record, name)
+    issue.map(StateExpr.sourceIssue) ?? .recordAccess(record, name)
   }
 
   fileprivate var recordSelector: StateExpr {
-    sourceIssue.map(StateExpr.sourceIssue) ?? .value(.string(name))
+    issue.map(StateExpr.sourceIssue) ?? .value(.string(name))
   }
 
   fileprivate func value(_ expression: StateExpr) -> StateExpr {
-    sourceIssue.map(StateExpr.sourceIssue) ?? expression
+    issue.map(StateExpr.sourceIssue) ?? expression
   }
 }
 
@@ -54,7 +73,7 @@ extension TLARecordSchema {
   public static func field<Value: TLAValueType>(_ field: KeyPath<Fields, Value>) -> TLAField<
     Self, Value
   > {
-    guard let name = fieldName(for: field), !name.isEmpty, fieldNames.contains(name) else {
+    guard let name = fieldName(for: field), !name.isEmpty else {
       return TLAField(name: "", sourceIssue: .recordField(schema: String(reflecting: Self.self)))
     }
     return TLAField(name: name)
@@ -92,38 +111,48 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
   private let values: TLARecord
 
   public init() {
-    values = Self(formalValue: Schema.defaultRecord)?.values ?? TLARecord([])
+    values = TLARecord(Schema.fields.map { .init($0.name, $0.defaultValue) })
   }
 
   public init?(formalValue: TLAValue) {
-    guard case .record(let values) = formalValue,
-          Set(values.fields.map(\.name)) == Schema.fieldNames
+    let declarations = Schema.fields
+    let declaredNames = declarations.map(\.name)
+    guard Self.schemaProblem(declaredNames) == nil,
+          case .record(let values) = formalValue,
+          values.fields.count == declarations.count,
+          Set(values.fields.map(\.name)).count == values.fields.count,
+          Set(values.fields.map(\.name)) == Set(declaredNames),
+          declarations.allSatisfy({ declaration in
+            values.value(named: declaration.name).map(declaration.accepts) == true
+          })
     else { return nil }
     self.values = values
   }
 
   public var tlaValue: TLAValue { .record(values) }
   public var sourceIssue: SourceModelIssue? {
-    Self(formalValue: Schema.defaultRecord) == nil
-      ? .invalidRecordDefault(schema: String(reflecting: Schema.self))
-      : nil
+    Self.schemaProblem(Schema.fields.map(\.name)).map {
+      .invalidRecordSchema(schema: String(reflecting: Schema.self), problem: $0)
+    }
   }
   public static var defaultValue: Self { Self() }
 
-  public subscript<Value: TLAValueType>(_ field: TLAField<Schema, Value>) -> Value {
-    guard let raw = values.value(named: field.name), let value = Value(formalValue: raw) else {
-      assertionFailure("Record storage contains an invalid declared field")
-      return Value.defaultValue
-    }
-    return value
+  public func value<Value: TLAValueType>(for field: TLAField<Schema, Value>) -> Value? {
+    values.value(named: field.name).flatMap(Value.init(formalValue:))
   }
 
   public static func literal(_ fields: TLARecordEntry<Schema>...) -> Expr<Self> {
+    if let problem = schemaProblem(Schema.fields.map(\.name)) {
+      return Expr(.sourceIssue(.invalidRecordSchema(
+        schema: String(reflecting: Schema.self),
+        problem: problem
+      )))
+    }
     let names = fields.map(\.name)
     let duplicates = Dictionary(grouping: names, by: { $0 })
       .compactMap { $0.value.count > 1 ? $0.key : nil }
       .sorted()
-    let missing = Schema.fieldNames.subtracting(names).sorted()
+    let missing = Set(Schema.fields.map(\.name)).subtracting(names).sorted()
     guard duplicates.isEmpty, missing.isEmpty else {
       return Expr(.sourceIssue(.recordLiteral(
         schema: String(reflecting: Schema.self),
@@ -133,6 +162,12 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
     }
     return Expr(
       StateExpr.record(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, $0.value) })))
+  }
+
+  private static func schemaProblem(_ names: [String]) -> String? {
+    if names.contains(where: \.isEmpty) { return "a field has an empty name" }
+    if Set(names).count != names.count { return "field names are not unique" }
+    return nil
   }
 }
 
@@ -472,6 +507,10 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   }
 
   /// Creates a zero-based formal sequence from values in formal order.
+  public static func literal() -> Expr<Self> {
+    Expr(.value(.function([:])))
+  }
+
   public static func literal(_ elements: Element...) -> Expr<Self> {
     literal(elements.map { .value($0.tlaValue) })
   }
@@ -501,6 +540,7 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   }
 
   private static func literal(_ elements: [StateExpr]) -> Expr<Self> {
+    guard elements.isEmpty == false else { return literal() }
     let index = "__zeroBasedSequenceIndex"
     let pairs = elements.enumerated().flatMap { offset, element in
       [StateExpr.equal(.variable(index), .int(offset)), element]
@@ -604,6 +644,7 @@ func formalZeroBasedSequenceExpressions(
   guard lengths.lowerBound >= 0 else { return [] }
   return formalSequenceExpressions(members: members, lengths: lengths).map { tuple in
     guard case .tupleLiteral(let elements) = tuple else { return tuple }
+    guard elements.isEmpty == false else { return .value(.function([:])) }
     let index = "__zeroBasedSequenceIndex"
     let pairs = elements.enumerated().flatMap { offset, element in
       [StateExpr.equal(.variable(index), .int(offset)), element]

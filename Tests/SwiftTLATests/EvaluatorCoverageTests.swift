@@ -61,6 +61,7 @@ struct EvaluatorCoverage {
     #expect(try evaluate(.cardinality(.variable("s"))) == .int(3))
     #expect(try evaluate(.powerSet(.setLiteral([.int(1)]))) == .set([.set([]), .set([.int(1)])]))
     #expect(try evaluate(.integerRange(.int(2), .int(4))) == .set([.int(2), .int(3), .int(4)]))
+    #expect(try evaluate(.integerRange(.int(1), .int(0))) == .set([]))
   }
 
   @Test("tuple expressions")
@@ -73,6 +74,8 @@ struct EvaluatorCoverage {
     #expect(try evaluate(.tupleHead(.variable("t"))) == .int(1))
     #expect(try evaluate(.tupleTail(.variable("t"))) == .tuple([.int(2), .int(3)]))
     #expect(try evaluate(.tupleConcatenate(.variable("t"), .tupleLiteral([.int(4)]))) == .tuple([.int(1), .int(2), .int(3), .int(4)]))
+    #expect(try evaluate(.domain(.tupleLiteral([]))) == .set([]))
+    #expect(try evaluate(.tupleConcatenate(.tupleLiteral([]), .variable("f"))) == .tuple([.string("a"), .string("b")]))
   }
 
   @Test("records and functions")

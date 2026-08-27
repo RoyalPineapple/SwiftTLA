@@ -155,6 +155,18 @@ struct SymmetryOrbitConformanceTests {
     }
   }
 
+  @Test("Orbit derivation rejects duplicate states")
+  func orbitDerivationRejectsDuplicateStates() throws {
+    let duplicate = state("A")
+    #expect(throws: CanonicalGraphError.duplicateState(duplicate.key)) {
+      _ = try SymmetryOrbitDerivation(
+        states: [duplicate, duplicate],
+        permutations: [try SymmetryPermutation(constantMapping: ["A": "A"])],
+        maximumPermutationCount: 1
+      )
+    }
+  }
+
   @Test("Quotient projection deduplicates equivalent labeled raw edges")
   func quotientProjectionIsDeduplicated() throws {
     let rawStates = [state("A"), state("B")]

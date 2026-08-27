@@ -1,13 +1,14 @@
 # Public API validation
 
-The `public-api` GitHub Actions job validates SwiftTLA as an external Swift
-package. It runs the repository smoke suite, which exercises the generated
-value machine, actor, and SwiftUI-facing API.
+The required `swift-tests` GitHub Actions job validates SwiftTLA's compiler,
+runtime, generated machine, and external Swift package contracts. It runs both
+repository test targets.
 
-The suite also builds real consumer packages:
+The suite builds two real consumer packages. `GeneratedMachineDocumentation`
+compiles and runs the documented generated machine and actor behavior.
+`ExternalConsumerContracts` contains independently selected products for the
+remaining public-boundary checks:
 
-- `GeneratedMachineDocumentation` compiles and runs the documented generated
-  machine and actor behavior.
 - `GeneratedTypedSurface` compiles and runs typed state and action calls.
 - `InvalidGeneratedRawSurface` must fail because application code cannot access
   raw formal state or transition evidence.

@@ -7,6 +7,7 @@ public enum GeneratedMachineError: Error, Sendable {
     case ambiguousAction
     case liveMachineUnavailable(String)
     case invalidGeneratedActionOrdinal
+    case invalidGeneratedActionArguments
     case invalidGeneratedVariableOrdinal
 }
 

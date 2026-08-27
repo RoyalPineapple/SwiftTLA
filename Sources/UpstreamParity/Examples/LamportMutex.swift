@@ -27,11 +27,10 @@ package struct LamportMutexModel: Sendable {
     package enum MessageSchema: TLARecordSchema {
         package typealias Fields = MessageFields
 
-        package static let fieldNames: Set<String> = ["type", "clock"]
-        package static let defaultRecord: TLAValue = .record([
-            "type": MessageKind.request.tlaValue,
-            "clock": 0
-        ])
+        package static let fields: [TLARecordFieldDeclaration<Self>] = [
+            .init(kind, default: MessageKind.request),
+            .init(clock, default: 0),
+        ]
 
         package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
             let key = field as AnyKeyPath

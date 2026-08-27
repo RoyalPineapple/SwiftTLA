@@ -62,7 +62,7 @@ extension MacroExpander {
                 DeclSyntax(stringLiteral: """
                 public func enabledActions() throws -> [Action] {
                     try _storage.availableActions(in: _storageState) { ordinal, arguments in
-                        _action(actionAt: ordinal, arguments: arguments)
+                        try _action(actionAt: ordinal, arguments: arguments)
                     }
                 }
                 """),

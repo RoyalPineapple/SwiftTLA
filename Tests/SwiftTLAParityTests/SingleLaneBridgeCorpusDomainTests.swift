@@ -30,6 +30,6 @@ struct SingleLaneBridgeCorpusDomainTests {
         #expect(compilation.description.variables.map(\.name) == [
             "Location", "WaitingBeforeBridge",
         ])
-        #expect(source.variables.last?.initialization == .expression(.value(.tuple([]))))
+        #expect(source.variables.last?.initialization == .value(.tuple([])))
     }
 }
