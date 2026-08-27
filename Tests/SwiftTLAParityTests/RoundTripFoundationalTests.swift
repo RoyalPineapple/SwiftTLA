@@ -111,8 +111,6 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
   @Test("Compiled action execution accepts wide lowered simultaneous updates")
   func wideAssignmentsPreserveOneCommitment() throws {
-    // This is deliberately large enough to exercise a lowered atomic block,
-    // while keeping the recursive value-type teardown itself bounded.
     let depth = 256
     let assignment = ActionExpr.assign(.named("x"), .value(.int(1)))
     let action = (0..<depth).reduce(assignment) { partial, _ in
