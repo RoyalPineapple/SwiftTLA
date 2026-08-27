@@ -40,9 +40,10 @@ import UpstreamParity
     let hr = Var<Int>("hr")
     let spec = TLASpec("HourClock") {
       Variable(hr, in: 1...12)
-      Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+      let tick = Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+      tick
       Eventually("reachesTwelve", hr == 12)
-      WeakFairness("tick")
+      WeakFairness(tick)
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
@@ -71,19 +72,21 @@ import UpstreamParity
     let x = Var<Int>("x")
     let weakSpec = TLASpec("WFSFTest") {
       Variable(x, 0)
-      Action("A") { x == 0 && x.becomes(2) }
+      let a = Action("A") { x == 0 && x.becomes(2) }
+      a
       Action("B") { x == 0 && x.becomes(1) }
       Action("C") { x == 1 && x.becomes(0) }
       AlwaysEventually("neverThree", x == 3)
-      WeakFairness("A")
+      WeakFairness(a)
     }
     let strongSpec = TLASpec("WFSFTest") {
       Variable(x, 0)
-      Action("A") { x == 0 && x.becomes(2) }
+      let a = Action("A") { x == 0 && x.becomes(2) }
+      a
       Action("B") { x == 0 && x.becomes(1) }
       Action("C") { x == 1 && x.becomes(0) }
       AlwaysEventually("neverThree", x == 3)
-      StrongFairness("A")
+      StrongFairness(a)
     }
     let weakCompilation = try weakSpec.compile()
     let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()

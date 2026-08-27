@@ -274,7 +274,7 @@ extension StateExpr {
     .tupleLiteral(elements.map(\.stateExpr))
   }
   public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(.init(fields)) }
-  public static func enabled(_ name: String) -> StateExpr { .enabledAction(name) }
+  public static func enabled(_ action: ActionDecl) -> StateExpr { .enabledAction(action.name) }
 
   // MARK: - Var-based bound variables
 

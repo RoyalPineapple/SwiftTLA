@@ -153,6 +153,9 @@ extension ParserSession {
 
       func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
+        let outerActionBindings = sourceActionBindings
+        sourceActionBindings = [:]
+        defer { sourceActionBindings = outerActionBindings }
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
         sourceScope = typedFacadeScope(
             .empty,
@@ -169,6 +172,10 @@ extension ParserSession {
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       result.instanceBindings[reference.baseName.text] != nil {
                 continue
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let action = sourceActionBindings[reference.baseName.text] {
+                result.actions.append(action)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let algorithm = result.algorithmBindings[reference.baseName.text] {
@@ -226,6 +233,17 @@ extension ParserSession {
                     call: call,
                     into: &result
                 )
+            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Action" {
+                guard sourceActionBindings[sourceName] == nil else {
+                    result.diagnostics.append(.init(
+                        message: "Action binding '\(sourceName)' is declared more than once.",
+                        source: binding
+                    ))
+                    continue
+                }
+                if let action = parseAction(call, into: &result, loopVar: nil, loopValue: nil) {
+                    sourceActionBindings[sourceName] = action
+                }
             } else if algorithmBindingType(in: binding),
                       call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" {
                 guard result.algorithmBindings[sourceName] == nil else {
@@ -709,7 +727,9 @@ extension ParserSession {
             }
             validateVariableDeclaration(call, into: &result)
         case "Action":
-            parseAction(call, into: &result, loopVar: loopVar, loopValue: loopValue)
+            if let action = parseAction(call, into: &result, loopVar: loopVar, loopValue: loopValue) {
+                result.actions.append(action)
+            }
         case "Invariant":
             parseInvariant(call, into: &result)
         case "Constraint":
@@ -785,9 +805,13 @@ extension ParserSession {
             if let fc = decodeFairness(call) {
                 result.fairness.append(fc)
             } else {
+                let action = call.arguments.first?.expression
+                    .as(DeclReferenceExprSyntax.self)?.baseName.text
                 result.diagnostics.append(.init(
-                    message: "Fairness declaration requires a supported fairness expression.",
-                    source: call
+                    message: action.map { "Fairness action reference '\($0)' is not bound by a local Action declaration." }
+                        ?? "Fairness declaration requires a structural action reference.",
+                    source: call,
+                    expected: "WeakFairness(action), StrongFairness(action), WeakFairnessNext(), or StrongFairnessNext()"
                 ))
             }
         case "Import":
@@ -1215,7 +1239,7 @@ extension ParserSession {
         into result: inout ParsedSpecComponents,
         loopVar: String?,
         loopValue: Int?
-    ) {
+    ) -> NamedAction? {
         guard let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
               let closure = call.trailingClosure
         else {
@@ -1223,7 +1247,7 @@ extension ParserSession {
                 message: "Action requires a name and a supported action body.",
                 source: call
             ))
-            return
+            return nil
         }
         let arguments = Array(call.arguments)
         let bindingArguments = arguments.dropFirst()
@@ -1236,10 +1260,10 @@ extension ParserSession {
                     message: "Action '\(actionName)' contains an unsupported action expression.",
                     source: closure
                 ))
-                return
+                return nil
             }
             if let body = decodeActionFromClosure(closure) {
-                result.actions.append(.init(name: actionName, body: body))
+                return .init(name: actionName, body: body)
             } else if let expression = unsupportedActionExpression(in: closure) {
                 result.diagnostics.append(.init(
                     message: "Action '\(actionName)' contains an unsupported action expression.",
@@ -1251,7 +1275,7 @@ extension ParserSession {
                     source: closure
                 ))
             }
-            return
+            return nil
         }
         guard bindingArguments.count == 1,
               let argument = bindingArguments.first,
@@ -1262,7 +1286,7 @@ extension ParserSession {
                 message: "Parameterized action '\(actionName)' requires a parameters list of ActionParameter descriptors.",
                 source: call
             ))
-            return
+            return nil
         }
         var bindings: [ActionBinding] = []
         for (index, element) in parameterList.elements.enumerated() {
@@ -1283,20 +1307,20 @@ extension ParserSession {
             }
             bindings.append(binding)
         }
-        guard result.diagnostics.isEmpty else { return }
+        guard result.diagnostics.isEmpty else { return nil }
         guard !bindings.isEmpty else {
             result.diagnostics.append(.init(
                 message: "Parameterized action '\(actionName)' requires at least one ActionParameter descriptor.",
                 source: parameterList
             ))
-            return
+            return nil
         }
         guard closureParameterNames(in: closure).isEmpty else {
             result.diagnostics.append(.init(
                 message: "Parameterized action '\(actionName)' uses the removed closure-parameter syntax; bind values through its parameters list.",
                 source: closure
             ))
-            return
+            return nil
         }
         let actionScope = typedFacadeScope(
             .empty,
@@ -1322,13 +1346,13 @@ extension ParserSession {
                     source: closure
                 ))
             }
-            return
+            return nil
         }
-        result.actions.append(.init(
+        return .init(
             name: actionName,
             body: body,
             bindings: bindings
-        ))
+        )
     }
 
     func unsupportedActionExpression(in closure: ClosureExprSyntax) -> ExprSyntax? {
