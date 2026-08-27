@@ -430,11 +430,7 @@ struct CompiledEvaluator: Sendable {
                 guard case .set(let set) = try popValue(from: &values) else {
                     throw EvalError.typeMismatch("Expected a set")
                 }
-                let members: [CompiledValue]
-                switch mode {
-                case .choose: members = CompiledValue.sorted(set)
-                default: members = Array(set)
-                }
+                let members = CompiledValue.sorted(set)
                 let accumulated: EvaluatorCollectionValues
                 switch mode {
                 case .function: accumulated = .function([:])
