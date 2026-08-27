@@ -29,9 +29,10 @@ struct Counter {
 }
 ```
 
-Use a named `SharedVar` or `LocalVar` declaration. Use a `CaseIterable` string
-enum for a finite set of action labels. Use typed expressions in `When`,
-`Assign`, `With`, `Choose`, and property builders.
+Declare shared state with `scope.sharedVar` and process or procedure state with
+the corresponding `scope.localVar`. Use a `CaseIterable` string enum for a
+finite set of action labels. Use typed expressions in `When`, `Assign`, `With`,
+`Choose`, and property builders.
 
 ## Choose builders by source scope
 

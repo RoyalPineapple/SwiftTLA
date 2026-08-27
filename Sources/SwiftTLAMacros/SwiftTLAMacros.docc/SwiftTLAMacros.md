@@ -18,9 +18,9 @@ Transition and property meaning comes from compiled declarations.
 
 ## Supported authoring form
 
-New application models use `#spec` and `Algorithm`. Use `SharedVar` for shared
-state. Use `LocalVar` inside `Each` for process-local state. Use `Do` for each
-labeled atomic step.
+New application models use `#spec` and `Algorithm`. Declare shared state with
+`scope.sharedVar` and process-local state with the scope supplied by `Each`.
+Use `Do` for each labeled atomic step.
 
 ```swift
 @TLAModel
