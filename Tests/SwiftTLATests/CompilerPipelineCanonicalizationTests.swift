@@ -1070,6 +1070,30 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(variable == .init(ordinal: 0))
     }
 
+    @Test("compilation accepts deeply nested expressions on a test worker stack")
+    func compilationTraversesDeepExpressionsWithoutRecursionFailure() throws {
+        let sum = (1...64).reduce(StateExpr.int(0)) { expression, value in
+            .add(expression, .int(value))
+        }
+        let spec = TLASpec(
+            name: "DeepExpression",
+            variables: [],
+            actions: [],
+            invariants: [.init(name: "PositiveSum", body: .greaterThan(sum, .int(0)))]
+        )
+
+        let expectedKey = (1...64).reduce("value(0)") { key, value in
+            "add(\(key),value(\(value)))"
+        }
+        let expectedSum = (1...64).reduce("0") { expression, value in
+            "(\(expression) + \(value))"
+        }
+        let compilation = try spec.compile()
+
+        #expect(alphaKey(sum) == expectedKey)
+        #expect(compilation.renderedTLAModuleBundle().tla.contains("PositiveSum == (\(expectedSum) > 0)"))
+    }
+
     @Test("free references fail at the binding gate")
     func freeReferenceBlocksCompilation() {
         let spec = TLASpec(

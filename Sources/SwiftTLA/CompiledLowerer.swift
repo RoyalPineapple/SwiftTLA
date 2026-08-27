@@ -1,3 +1,8 @@
+private enum StateLoweringTask {
+    case expression(StateExpr, path: String)
+    case binary((CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr, path: String)
+}
+
 struct CompiledLowerer {
     let bindings: CompiledBindingTable
     let closure: FormalModuleClosure
@@ -332,6 +337,62 @@ struct CompiledLowerer {
     }
 
     private func lower(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
+        var tasks = [StateLoweringTask.expression(expression, path: path)]
+        var lowered: [CompiledStateExpr] = []
+        while let task = tasks.popLast() {
+            switch task {
+            case .expression(let expression, let path):
+                let operation: ((CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr)?
+                let operands: (StateExpr, StateExpr)?
+                switch expression {
+                case .add(let lhs, let rhs): operation = CompiledStateExpr.add; operands = (lhs, rhs)
+                case .subtract(let lhs, let rhs): operation = CompiledStateExpr.subtract; operands = (lhs, rhs)
+                case .multiply(let lhs, let rhs): operation = CompiledStateExpr.multiply; operands = (lhs, rhs)
+                case .divide(let lhs, let rhs): operation = CompiledStateExpr.divide; operands = (lhs, rhs)
+                case .modulo(let lhs, let rhs): operation = CompiledStateExpr.modulo; operands = (lhs, rhs)
+                case .integerDivide(let lhs, let rhs): operation = CompiledStateExpr.integerDivide; operands = (lhs, rhs)
+                case .equal(let lhs, let rhs): operation = CompiledStateExpr.equal; operands = (lhs, rhs)
+                case .notEqual(let lhs, let rhs): operation = CompiledStateExpr.notEqual; operands = (lhs, rhs)
+                case .lessThan(let lhs, let rhs): operation = CompiledStateExpr.lessThan; operands = (lhs, rhs)
+                case .lessOrEqual(let lhs, let rhs): operation = CompiledStateExpr.lessOrEqual; operands = (lhs, rhs)
+                case .greaterThan(let lhs, let rhs): operation = CompiledStateExpr.greaterThan; operands = (lhs, rhs)
+                case .greaterOrEqual(let lhs, let rhs): operation = CompiledStateExpr.greaterOrEqual; operands = (lhs, rhs)
+                case .and(let lhs, let rhs): operation = CompiledStateExpr.and; operands = (lhs, rhs)
+                case .or(let lhs, let rhs): operation = CompiledStateExpr.or; operands = (lhs, rhs)
+                case .in(let lhs, let rhs): operation = CompiledStateExpr.in; operands = (lhs, rhs)
+                case .subset(let lhs, let rhs): operation = CompiledStateExpr.subset; operands = (lhs, rhs)
+                case .union(let lhs, let rhs): operation = CompiledStateExpr.union; operands = (lhs, rhs)
+                case .intersection(let lhs, let rhs): operation = CompiledStateExpr.intersection; operands = (lhs, rhs)
+                case .setDifference(let lhs, let rhs): operation = CompiledStateExpr.setDifference; operands = (lhs, rhs)
+                case .tupleDynamicAccess(let lhs, let rhs): operation = CompiledStateExpr.tupleDynamicAccess; operands = (lhs, rhs)
+                case .tupleAppend(let lhs, let rhs): operation = CompiledStateExpr.tupleAppend; operands = (lhs, rhs)
+                case .tupleConcatenate(let lhs, let rhs): operation = CompiledStateExpr.tupleConcatenate; operands = (lhs, rhs)
+                case .functionApply(let lhs, let rhs): operation = CompiledStateExpr.functionApply; operands = (lhs, rhs)
+                case .functionSet(let lhs, let rhs): operation = CompiledStateExpr.functionSet; operands = (lhs, rhs)
+                case .setSum(let lhs, let rhs): operation = CompiledStateExpr.setSum; operands = (lhs, rhs)
+                default: operation = nil; operands = nil
+                }
+                if let operation, let operands {
+                    tasks.append(.binary(operation, path: path))
+                    tasks.append(.expression(operands.1, path: "\(path).right"))
+                    tasks.append(.expression(operands.0, path: "\(path).left"))
+                } else {
+                    lowered.append(try lowerRecursive(expression, at: path))
+                }
+            case .binary(let operation, let path):
+                guard lowered.count >= 2 else { throw invalidTraversal(at: path) }
+                let rhs = lowered.removeLast()
+                let lhs = lowered.removeLast()
+                lowered.append(operation(lhs, rhs))
+            }
+        }
+        guard lowered.count == 1, let expression = lowered.first else {
+            throw invalidTraversal(at: path)
+        }
+        return expression
+    }
+
+    private func lowerRecursive(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
         switch expression {
         case .sourceIssue(let issue):
             throw issue.compilationDiagnostic(stage: .lowering, path: path)
@@ -354,31 +415,12 @@ struct CompiledLowerer {
         case .tupleTail(let value): return .tupleTail(try lower(value, at: path))
         case .domain(let value): return .domain(try lower(value, at: path))
         case .sequenceFromSet(let value): return .sequenceFromSet(try lower(value, at: path))
-        case .add(let lhs, let rhs): return try binary(CompiledStateExpr.add, lhs, rhs, path)
-        case .subtract(let lhs, let rhs): return try binary(CompiledStateExpr.subtract, lhs, rhs, path)
-        case .multiply(let lhs, let rhs): return try binary(CompiledStateExpr.multiply, lhs, rhs, path)
-        case .divide(let lhs, let rhs): return try binary(CompiledStateExpr.divide, lhs, rhs, path)
-        case .modulo(let lhs, let rhs): return try binary(CompiledStateExpr.modulo, lhs, rhs, path)
-        case .integerDivide(let lhs, let rhs): return try binary(CompiledStateExpr.integerDivide, lhs, rhs, path)
-        case .equal(let lhs, let rhs): return try binary(CompiledStateExpr.equal, lhs, rhs, path)
-        case .notEqual(let lhs, let rhs): return try binary(CompiledStateExpr.notEqual, lhs, rhs, path)
-        case .lessThan(let lhs, let rhs): return try binary(CompiledStateExpr.lessThan, lhs, rhs, path)
-        case .lessOrEqual(let lhs, let rhs): return try binary(CompiledStateExpr.lessOrEqual, lhs, rhs, path)
-        case .greaterThan(let lhs, let rhs): return try binary(CompiledStateExpr.greaterThan, lhs, rhs, path)
-        case .greaterOrEqual(let lhs, let rhs): return try binary(CompiledStateExpr.greaterOrEqual, lhs, rhs, path)
-        case .and(let lhs, let rhs): return try binary(CompiledStateExpr.and, lhs, rhs, path)
-        case .or(let lhs, let rhs): return try binary(CompiledStateExpr.or, lhs, rhs, path)
-        case .in(let lhs, let rhs): return try binary(CompiledStateExpr.in, lhs, rhs, path)
-        case .subset(let lhs, let rhs): return try binary(CompiledStateExpr.subset, lhs, rhs, path)
-        case .union(let lhs, let rhs): return try binary(CompiledStateExpr.union, lhs, rhs, path)
-        case .intersection(let lhs, let rhs): return try binary(CompiledStateExpr.intersection, lhs, rhs, path)
-        case .setDifference(let lhs, let rhs): return try binary(CompiledStateExpr.setDifference, lhs, rhs, path)
-        case .tupleDynamicAccess(let lhs, let rhs): return try binary(CompiledStateExpr.tupleDynamicAccess, lhs, rhs, path)
-        case .tupleAppend(let lhs, let rhs): return try binary(CompiledStateExpr.tupleAppend, lhs, rhs, path)
-        case .tupleConcatenate(let lhs, let rhs): return try binary(CompiledStateExpr.tupleConcatenate, lhs, rhs, path)
-        case .functionApply(let lhs, let rhs): return try binary(CompiledStateExpr.functionApply, lhs, rhs, path)
-        case .functionSet(let lhs, let rhs): return try binary(CompiledStateExpr.functionSet, lhs, rhs, path)
-        case .setSum(let lhs, let rhs): return try binary(CompiledStateExpr.setSum, lhs, rhs, path)
+        case .add, .subtract, .multiply, .divide, .modulo, .integerDivide,
+             .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
+             .and, .or, .in, .subset, .union, .intersection, .setDifference,
+             .tupleDynamicAccess, .tupleAppend, .tupleConcatenate,
+             .functionApply, .functionSet, .setSum:
+            throw invalidTraversal(at: path)
         case .ifThenElse(let condition, let then, let otherwise):
             return try .ifThenElse(
                 lower(condition, at: "\(path).condition"),
@@ -479,6 +521,17 @@ struct CompiledLowerer {
                 lower(body, at: "\(path).body")
             )
         }
+    }
+
+    private func invalidTraversal(at path: String) -> CompilationDiagnostic {
+        .init(
+            code: .invalidFormalDeclaration,
+            stage: .lowering,
+            path: path,
+            expected: "one compiled expression for each source expression",
+            actual: "the lowering traversal produced an inconsistent expression stack",
+            nextSafeAction: "Retain the source model and report this compiler defect."
+        )
     }
 
     private func lower(_ expression: TemporalExpr, at path: String) throws -> CompiledTemporalExpr {
@@ -600,15 +653,6 @@ struct CompiledLowerer {
 
     private func lower(_ values: [StateExpr], at path: String) throws -> [CompiledStateExpr] {
         try values.enumerated().map { index, value in try lower(value, at: "\(path)[\(index)]") }
-    }
-
-    private func binary(
-        _ make: (CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr,
-        _ lhs: StateExpr,
-        _ rhs: StateExpr,
-        _ path: String
-    ) throws -> CompiledStateExpr {
-        try make(lower(lhs, at: "\(path).left"), lower(rhs, at: "\(path).right"))
     }
 
     private func binding(

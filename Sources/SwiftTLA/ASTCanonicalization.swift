@@ -124,157 +124,201 @@ private func actionKey(_ action: ActionExpr, environment: [String: String], next
     }
 }
 
+private enum StateKeyTask {
+    case expression(StateExpr, environment: [String: String])
+    case text(String)
+}
+
 func stateKey(_ expression: StateExpr, environment: [String: String], next: inout Int) -> String {
-    func key(_ expression: StateExpr, environment: [String: String] = environment) -> String {
-        stateKey(expression, environment: environment, next: &next)
-    }
-    func pair(_ name: String, _ left: StateExpr, _ right: StateExpr) -> String { "\(name)(\(key(left)),\(key(right)))" }
-    func associative(_ operation: String, _ expression: StateExpr) -> String {
-        func flatten(_ expression: StateExpr) -> [StateExpr] {
-            switch (operation, expression) {
-            case ("and", .and(let left, let right)), ("or", .or(let left, let right)):
-                return flatten(left) + flatten(right)
-            default:
-                return [expression]
+    var tasks = [StateKeyTask.expression(expression, environment: environment)]
+    var parts: [String] = []
+
+    func schedule(_ name: String, _ expressions: [StateExpr], environment: [String: String]) {
+        parts.append("\(name)(")
+        tasks.append(.text(")"))
+        for (index, expression) in expressions.enumerated().reversed() {
+            tasks.append(.expression(expression, environment: environment))
+            if index > 0 {
+                tasks.append(.text(","))
             }
         }
-        return "\(operation)[\(flatten(expression).map { key($0) }.joined(separator: ","))]"
     }
-    switch expression {
-    case .sourceIssue(let issue): return "sourceIssue(\(issue))"
-    case .value(let value): return "value(\(value))"
-    case .variable(let name): return "var(\(environment[name] ?? name))"
-    case .processLocalFamily(let name): return "processLocalFamily(\(environment[name] ?? name))"
-    case .currentProcess: return "currentProcess"
-    case .programCounter: return "programCounter"
-    case .procedureStack: return "procedureStack"
-    case .controlLocation(let reference):
-        return "control(\(reference.owner?.canonicalEncoding ?? "source"),\(reference.sourceName))"
-    case .add(let a, let b): return pair("add", a, b)
-    case .subtract(let a, let b): return pair("subtract", a, b)
-    case .multiply(let a, let b): return pair("multiply", a, b)
-    case .divide(let a, let b): return pair("divide", a, b)
-    case .modulo(let a, let b): return pair("modulo", a, b)
-    case .negate(let value): return "negate(\(key(value)))"
-    case .integerDivide(let a, let b): return pair("integerDivide", a, b)
-    case .equal(let a, let b): return pair("equal", a, b)
-    case .notEqual(let a, let b): return pair("notEqual", a, b)
-    case .lessThan(let a, let b): return pair("lessThan", a, b)
-    case .lessOrEqual(let a, let b): return pair("lessOrEqual", a, b)
-    case .greaterThan(let a, let b): return pair("greaterThan", a, b)
-    case .greaterOrEqual(let a, let b): return pair("greaterOrEqual", a, b)
-    case .and: return associative("and", expression)
-    case .or: return associative("or", expression)
-    case .not(let value): return "not(\(key(value)))"
-    case .ifThenElse(let c, let t, let f): return "if(\(key(c)),\(key(t)),\(key(f)))"
-    case .setLiteral(let values): return "set[\(values.map { key($0) }.sorted().joined(separator: ","))]"
-    case .in(let a, let b): return pair("in", a, b)
-    case .subset(let a, let b): return pair("subset", a, b)
-    case .union(let a, let b): return pair("union", a, b)
-    case .intersection(let a, let b): return pair("intersection", a, b)
-    case .setDifference(let a, let b): return pair("difference", a, b)
-    case .cardinality(let value): return "cardinality(\(key(value)))"
-    case .setFilter(let set, let variable, let predicate):
-        let setKey = key(set)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "filter(\(setKey),\(canonical),\(key(predicate, environment: extended)))"
-    case .setMap(let mapped, let variable, let set):
-        let setKey = key(set)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "map(\(key(mapped, environment: extended)),\(canonical),\(setKey))"
-    case .powerSet(let value): return "powerSet(\(key(value)))"
-    case .unionAll(let value): return "unionAll(\(key(value)))"
-    case .integerRange(let lower, let upper): return pair("integerRange", lower, upper)
-    case .tupleLiteral(let values): return "tuple[\(values.map { key($0) }.joined(separator: ","))]"
-    case .tupleAccess(let tuple, let index): return "tupleAccess(\(key(tuple)),\(index))"
-    case .tupleDynamicAccess(let tuple, let index): return pair("tupleDynamicAccess", tuple, index)
-    case .tupleLength(let tuple): return "tupleLength(\(key(tuple)))"
-    case .tupleAppend(let tuple, let value): return pair("tupleAppend", tuple, value)
-    case .tupleHead(let tuple): return "tupleHead(\(key(tuple)))"
-    case .tupleTail(let tuple): return "tupleTail(\(key(tuple)))"
-    case .tupleConcatenate(let a, let b): return pair("tupleConcat", a, b)
-    case .recordLiteral(let fields):
-        return "record[\(fields.fields.map { "\($0.name):\(key($0.value))" }.joined(separator: ","))]"
-    case .recordAccess(let record, let field): return "recordAccess(\(key(record)),\(field))"
-    case .domain(let function): return "domain(\(key(function)))"
-    case .functionLiteral(let domain, let variable, let body):
-        let domainKey = key(domain)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "function(\(domainKey),\(canonical),\(key(body, environment: extended)))"
-    case .functionApply(let function, let argument): return pair("apply", function, argument)
-    case .except(let function, let keyExpression, let value): return "except(\(key(function)),\(key(keyExpression)),\(key(value)))"
-    case .caseExpr(let cases, let fallback):
-        return "case[\(cases.map { key($0) }.joined(separator: ","))]/\(fallback.map { key($0) } ?? "none")"
-    case .forAll(let set, let variable, let predicate):
-        let setKey = key(set)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "forall(\(setKey),\(canonical),\(key(predicate, environment: extended)))"
-    case .exists(let set, let variable, let predicate):
-        let setKey = key(set)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "exists(\(setKey),\(canonical),\(key(predicate, environment: extended)))"
-    case .choose(let set, let variable, let predicate):
-        let setKey = key(set)
-        let (canonical, extended) = fresh(variable, environment: environment, next: &next)
-        return "choose(\(setKey),\(canonical),\(key(predicate, environment: extended)))"
-    case .enabledAction(let name): return "enabled(\(name))"
-    case .sequenceFromSet(let value): return "sequence(\(key(value)))"
-    case .setSum(let function, let set): return pair("sum", function, set)
-    case .functionSet(let domain, let range): return pair("functionSet", domain, range)
-    case .foldFunction(let operation, let initial, let sequence):
-        var lambdaEnvironment = environment
-        let parameters = operation.parameters.map { parameter -> String in
-            let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
-            lambdaEnvironment = extended
-            return canonical
-        }
-        return "fold([\(parameters.joined(separator: ","))],\(key(operation.body, environment: lambdaEnvironment)),\(key(initial)),\(key(sequence)))"
-    case .operatorApplication(let operation, let arguments):
-        let operationKey: String
-        switch operation {
-        case .lambda(let lambda):
-            var lambdaEnvironment = environment
-            let parameters = lambda.parameters.map { parameter -> String in
-                let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
-                lambdaEnvironment = extended
-                return canonical
+
+    while let task = tasks.popLast() {
+        switch task {
+        case .text(let text):
+            parts.append(text)
+        case .expression(let expression, let environment):
+            func key(_ expression: StateExpr, environment: [String: String] = environment) -> String {
+                stateKey(expression, environment: environment, next: &next)
             }
-            operationKey = "lambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
-        case .reference(let name, let arity):
-            operationKey = "operator(\(environment[name] ?? name),\(arity))"
-        }
-        let argumentKeys = arguments.map { argument -> String in
-            switch argument {
-            case .value(let expression): return "value(\(key(expression)))"
-            case .operator(.reference(let name, let arity)):
-                return "operator(\(environment[name] ?? name),\(arity))"
-            case .operator(.lambda(let lambda)):
+            switch expression {
+            case .add(let lhs, let rhs): schedule("add", [lhs, rhs], environment: environment)
+            case .subtract(let lhs, let rhs): schedule("subtract", [lhs, rhs], environment: environment)
+            case .multiply(let lhs, let rhs): schedule("multiply", [lhs, rhs], environment: environment)
+            case .divide(let lhs, let rhs): schedule("divide", [lhs, rhs], environment: environment)
+            case .modulo(let lhs, let rhs): schedule("modulo", [lhs, rhs], environment: environment)
+            case .integerDivide(let lhs, let rhs): schedule("integerDivide", [lhs, rhs], environment: environment)
+            case .equal(let lhs, let rhs): schedule("equal", [lhs, rhs], environment: environment)
+            case .notEqual(let lhs, let rhs): schedule("notEqual", [lhs, rhs], environment: environment)
+            case .lessThan(let lhs, let rhs): schedule("lessThan", [lhs, rhs], environment: environment)
+            case .lessOrEqual(let lhs, let rhs): schedule("lessOrEqual", [lhs, rhs], environment: environment)
+            case .greaterThan(let lhs, let rhs): schedule("greaterThan", [lhs, rhs], environment: environment)
+            case .greaterOrEqual(let lhs, let rhs): schedule("greaterOrEqual", [lhs, rhs], environment: environment)
+            case .in(let lhs, let rhs): schedule("in", [lhs, rhs], environment: environment)
+            case .subset(let lhs, let rhs): schedule("subset", [lhs, rhs], environment: environment)
+            case .union(let lhs, let rhs): schedule("union", [lhs, rhs], environment: environment)
+            case .intersection(let lhs, let rhs): schedule("intersection", [lhs, rhs], environment: environment)
+            case .setDifference(let lhs, let rhs): schedule("difference", [lhs, rhs], environment: environment)
+            case .integerRange(let lhs, let rhs): schedule("integerRange", [lhs, rhs], environment: environment)
+            case .tupleDynamicAccess(let lhs, let rhs): schedule("tupleDynamicAccess", [lhs, rhs], environment: environment)
+            case .tupleAppend(let lhs, let rhs): schedule("tupleAppend", [lhs, rhs], environment: environment)
+            case .tupleConcatenate(let lhs, let rhs): schedule("tupleConcat", [lhs, rhs], environment: environment)
+            case .functionApply(let lhs, let rhs): schedule("apply", [lhs, rhs], environment: environment)
+            case .setSum(let lhs, let rhs): schedule("sum", [lhs, rhs], environment: environment)
+            case .functionSet(let lhs, let rhs): schedule("functionSet", [lhs, rhs], environment: environment)
+            case .negate(let value): schedule("negate", [value], environment: environment)
+            case .not(let value): schedule("not", [value], environment: environment)
+            case .cardinality(let value): schedule("cardinality", [value], environment: environment)
+            case .powerSet(let value): schedule("powerSet", [value], environment: environment)
+            case .unionAll(let value): schedule("unionAll", [value], environment: environment)
+            case .tupleLength(let value): schedule("tupleLength", [value], environment: environment)
+            case .tupleHead(let value): schedule("tupleHead", [value], environment: environment)
+            case .tupleTail(let value): schedule("tupleTail", [value], environment: environment)
+            case .domain(let value): schedule("domain", [value], environment: environment)
+            case .sequenceFromSet(let value): schedule("sequence", [value], environment: environment)
+            case .ifThenElse(let condition, let then, let otherwise):
+                schedule("if", [condition, then, otherwise], environment: environment)
+            case .and, .or:
+                let operation: String
+                if case .and = expression { operation = "and" } else { operation = "or" }
+                var remaining = [expression]
+                var operands: [StateExpr] = []
+                while let candidate = remaining.popLast() {
+                    switch (operation, candidate) {
+                    case ("and", .and(let lhs, let rhs)), ("or", .or(let lhs, let rhs)):
+                        remaining.append(rhs)
+                        remaining.append(lhs)
+                    default:
+                        operands.append(candidate)
+                    }
+                }
+                parts.append("\(operation)[")
+                tasks.append(.text("]"))
+                for (index, operand) in operands.enumerated().reversed() {
+                    tasks.append(.expression(operand, environment: environment))
+                    if index > 0 {
+                        tasks.append(.text(","))
+                    }
+                }
+            case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
+            case .value(let value): parts.append("value(\(value))")
+            case .variable(let name): parts.append("var(\(environment[name] ?? name))")
+            case .processLocalFamily(let name): parts.append("processLocalFamily(\(environment[name] ?? name))")
+            case .currentProcess: parts.append("currentProcess")
+            case .programCounter: parts.append("programCounter")
+            case .procedureStack: parts.append("procedureStack")
+            case .controlLocation(let reference):
+                parts.append("control(\(reference.owner?.canonicalEncoding ?? "source"),\(reference.sourceName))")
+            case .setLiteral(let values):
+                parts.append("set[\(values.map { key($0) }.sorted().joined(separator: ","))]")
+            case .setFilter(let set, let variable, let predicate):
+                let setKey = key(set)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                parts.append("filter(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+            case .setMap(let mapped, let variable, let set):
+                let setKey = key(set)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                parts.append("map(\(key(mapped, environment: extended)),\(canonical),\(setKey))")
+            case .tupleLiteral(let values):
+                parts.append("tuple[\(values.map { key($0) }.joined(separator: ","))]")
+            case .tupleAccess(let tuple, let index):
+                parts.append("tupleAccess(\(key(tuple)),\(index))")
+            case .recordLiteral(let fields):
+                let fields = fields.fields.map { "\($0.name):\(key($0.value))" }.joined(separator: ",")
+                parts.append("record[\(fields)]")
+            case .recordAccess(let record, let field):
+                parts.append("recordAccess(\(key(record)),\(field))")
+            case .functionLiteral(let domain, let variable, let body):
+                let domainKey = key(domain)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                parts.append("function(\(domainKey),\(canonical),\(key(body, environment: extended)))")
+            case .except(let function, let keyExpression, let value):
+                parts.append("except(\(key(function)),\(key(keyExpression)),\(key(value)))")
+            case .caseExpr(let cases, let fallback):
+                let cases = cases.map { key($0) }.joined(separator: ",")
+                parts.append("case[\(cases)]/\(fallback.map { key($0) } ?? "none")")
+            case .forAll(let set, let variable, let predicate):
+                let setKey = key(set)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                parts.append("forall(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+            case .exists(let set, let variable, let predicate):
+                let setKey = key(set)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                parts.append("exists(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+            case .choose(let set, let variable, let predicate):
+                let setKey = key(set)
+                let (canonical, extended) = fresh(variable, environment: environment, next: &next)
+                parts.append("choose(\(setKey),\(canonical),\(key(predicate, environment: extended)))")
+            case .enabledAction(let name): parts.append("enabled(\(name))")
+            case .foldFunction(let operation, let initial, let sequence):
                 var lambdaEnvironment = environment
-                let parameters = lambda.parameters.map { parameter -> String in
+                let parameters = operation.parameters.map { parameter -> String in
                     let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
                     lambdaEnvironment = extended
                     return canonical
                 }
-                return "operatorLambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
+                parts.append("fold([\(parameters.joined(separator: ","))],\(key(operation.body, environment: lambdaEnvironment)),\(key(initial)),\(key(sequence)))")
+            case .operatorApplication(let operation, let arguments):
+                let operationKey: String
+                switch operation {
+                case .lambda(let lambda):
+                    var lambdaEnvironment = environment
+                    let parameters = lambda.parameters.map { parameter -> String in
+                        let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
+                        lambdaEnvironment = extended
+                        return canonical
+                    }
+                    operationKey = "lambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
+                case .reference(let name, let arity):
+                    operationKey = "operator(\(environment[name] ?? name),\(arity))"
+                }
+                let argumentKeys = arguments.map { argument -> String in
+                    switch argument {
+                    case .value(let expression): return "value(\(key(expression)))"
+                    case .operator(.reference(let name, let arity)):
+                        return "operator(\(environment[name] ?? name),\(arity))"
+                    case .operator(.lambda(let lambda)):
+                        var lambdaEnvironment = environment
+                        let parameters = lambda.parameters.map { parameter -> String in
+                            let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
+                            lambdaEnvironment = extended
+                            return canonical
+                        }
+                        return "operatorLambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
+                    }
+                }
+                parts.append("apply(\(operationKey),[\(argumentKeys.joined(separator: ","))])")
+            case .recursiveCall(let name, let arguments):
+                parts.append("recursive(\(name),\(arguments.map { key($0) }.joined(separator: ",")))")
+            case .letValue(let name, let value, let body):
+                let valueKey = key(value)
+                let (canonical, extended) = fresh(name, environment: environment, next: &next)
+                parts.append("letValue(\(canonical),\(valueKey),\(key(body, environment: extended)))")
+            case .letIn(let operators, let body):
+                let declarations = operators.map { operation in
+                    var operatorEnvironment = environment
+                    let domainKey = operation.domain.map { key($0, environment: operatorEnvironment) } ?? "unbounded"
+                    let parameterNames = operation.parameters.map { parameter -> String in
+                        let (canonical, extended) = fresh(parameter, environment: operatorEnvironment, next: &next)
+                        operatorEnvironment = extended
+                        return canonical
+                    }
+                    return "local(\(operation.name),[\(parameterNames.joined(separator: ","))],\(domainKey),\(key(operation.body, environment: operatorEnvironment)))"
+                }.joined(separator: ",")
+                parts.append("letIn([\(declarations)],\(key(body)))")
             }
+        }
     }
-    return "apply(\(operationKey),[\(argumentKeys.joined(separator: ","))])"
-    case .recursiveCall(let name, let arguments): return "recursive(\(name),\(arguments.map { key($0) }.joined(separator: ",")))"
-    case .letValue(let name, let value, let body):
-        let valueKey = key(value)
-        let (canonical, extended) = fresh(name, environment: environment, next: &next)
-        return "letValue(\(canonical),\(valueKey),\(key(body, environment: extended)))"
-    case .letIn(let operators, let body):
-        let declarations = operators.map { operation in
-            var operatorEnvironment = environment
-            let domainKey = operation.domain.map { key($0, environment: operatorEnvironment) } ?? "unbounded"
-            let parameterNames = operation.parameters.map { parameter -> String in
-                let (canonical, extended) = fresh(parameter, environment: operatorEnvironment, next: &next)
-                operatorEnvironment = extended
-                return canonical
-            }
-            return "local(\(operation.name),[\(parameterNames.joined(separator: ","))],\(domainKey),\(key(operation.body, environment: operatorEnvironment)))"
-        }.joined(separator: ",")
-        return "letIn([\(declarations)],\(key(body)))"
-    }
+    return parts.joined()
 }

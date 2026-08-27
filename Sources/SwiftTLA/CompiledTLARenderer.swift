@@ -1,3 +1,8 @@
+private enum StateRenderingTask {
+    case expression(CompiledStateExpr)
+    case text(String)
+}
+
 struct CompiledTLARenderer {
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
@@ -97,59 +102,107 @@ struct CompiledTLARenderer {
     }
 
     func state(_ expression: CompiledStateExpr) throws -> String {
+        var tasks = [StateRenderingTask.expression(expression)]
+        var parts: [String] = []
+
+        func schedule(_ prefix: String, _ expressions: [CompiledStateExpr], separator: String, suffix: String) {
+            parts.append(prefix)
+            tasks.append(.text(suffix))
+            for (index, expression) in expressions.enumerated().reversed() {
+                tasks.append(.expression(expression))
+                if index > 0 {
+                    tasks.append(.text(separator))
+                }
+            }
+        }
+
+        while let task = tasks.popLast() {
+            switch task {
+            case .text(let text):
+                parts.append(text)
+            case .expression(let expression):
+                switch expression {
+                case .add(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " + ", suffix: ")")
+                case .subtract(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " - ", suffix: ")")
+                case .multiply(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " * ", suffix: ")")
+                case .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs):
+                    schedule("(", [lhs, rhs], separator: " \\div ", suffix: ")")
+                case .modulo(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " % ", suffix: ")")
+                case .equal(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " = ", suffix: ")")
+                case .notEqual(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " /= ", suffix: ")")
+                case .lessThan(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " < ", suffix: ")")
+                case .lessOrEqual(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " <= ", suffix: ")")
+                case .greaterThan(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " > ", suffix: ")")
+                case .greaterOrEqual(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " >= ", suffix: ")")
+                case .and(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " /\\ ", suffix: ")")
+                case .or(let lhs, let rhs): schedule("(IF ", [lhs, rhs], separator: " THEN TRUE ELSE ", suffix: ")")
+                case .in(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " \\in ", suffix: ")")
+                case .subset(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " \\subseteq ", suffix: ")")
+                case .union(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " \\cup ", suffix: ")")
+                case .intersection(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " \\cap ", suffix: ")")
+                case .setDifference(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " \\ ", suffix: ")")
+                case .tupleDynamicAccess(let lhs, let rhs): schedule("", [lhs, rhs], separator: "[", suffix: "]")
+                case .tupleAppend(let lhs, let rhs): schedule("Append(", [lhs, rhs], separator: ", ", suffix: ")")
+                case .tupleConcatenate(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " \\o ", suffix: ")")
+                case .functionApply(let lhs, let rhs): schedule("", [lhs, rhs], separator: "[", suffix: "]")
+                case .functionSet(let lhs, let rhs): schedule("[", [lhs, rhs], separator: " -> ", suffix: "]")
+                case .setSum(let lhs, let rhs): schedule("Sum(", [lhs, rhs], separator: ", ", suffix: ")")
+                case .integerRange(let lhs, let rhs): schedule("", [lhs, rhs], separator: "..", suffix: "")
+                case .negate(let value): schedule("(-", [value], separator: "", suffix: ")")
+                case .not(let value): schedule("(~", [value], separator: "", suffix: ")")
+                case .cardinality(let value): schedule("Cardinality(", [value], separator: "", suffix: ")")
+                case .powerSet(let value): schedule("SUBSET ", [value], separator: "", suffix: "")
+                case .unionAll(let value): schedule("UNION ", [value], separator: "", suffix: "")
+                case .tupleLength(let value): schedule("Len(", [value], separator: "", suffix: ")")
+                case .tupleHead(let value): schedule("Head(", [value], separator: "", suffix: ")")
+                case .tupleTail(let value): schedule("Tail(", [value], separator: "", suffix: ")")
+                case .domain(let value): schedule("DOMAIN ", [value], separator: "", suffix: "")
+                case .sequenceFromSet(let value): schedule("SeqFromSet(", [value], separator: "", suffix: ")")
+                case .ifThenElse(let condition, let then, let otherwise):
+                    parts.append("(IF ")
+                    tasks.append(.text(")"))
+                    tasks.append(.expression(otherwise))
+                    tasks.append(.text(" ELSE "))
+                    tasks.append(.expression(then))
+                    tasks.append(.text(" THEN "))
+                    tasks.append(.expression(condition))
+                default:
+                    parts.append(try recursiveState(expression))
+                }
+            }
+        }
+        return parts.joined()
+    }
+
+    private func recursiveState(_ expression: CompiledStateExpr) throws -> String {
         switch expression {
         case .value(let value): return value.description
         case .stateVariable(let variable): return try variableName(variable)
         case .boundValue(let binder): return try binderName(binder)
         case .controlLocation(let location): return try controlLocationName(location)
         case .operatorReference(let operation): return try operatorName(operation)
-        case .add(let lhs, let rhs): return "(\(try state(lhs)) + \(try state(rhs)))"
-        case .subtract(let lhs, let rhs): return "(\(try state(lhs)) - \(try state(rhs)))"
-        case .multiply(let lhs, let rhs): return "(\(try state(lhs)) * \(try state(rhs)))"
-        case .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs): return "(\(try state(lhs)) \\div \(try state(rhs)))"
-        case .modulo(let lhs, let rhs): return "(\(try state(lhs)) % \(try state(rhs)))"
-        case .negate(let value): return "(-\(try state(value)))"
-        case .equal(let lhs, let rhs): return "(\(try state(lhs)) = \(try state(rhs)))"
-        case .notEqual(let lhs, let rhs): return "(\(try state(lhs)) /= \(try state(rhs)))"
-        case .lessThan(let lhs, let rhs): return "(\(try state(lhs)) < \(try state(rhs)))"
-        case .lessOrEqual(let lhs, let rhs): return "(\(try state(lhs)) <= \(try state(rhs)))"
-        case .greaterThan(let lhs, let rhs): return "(\(try state(lhs)) > \(try state(rhs)))"
-        case .greaterOrEqual(let lhs, let rhs): return "(\(try state(lhs)) >= \(try state(rhs)))"
-        case .and(let lhs, let rhs): return "(\(try state(lhs)) /\\ \(try state(rhs)))"
-        case .or(let lhs, let rhs): return "(IF \(try state(lhs)) THEN TRUE ELSE \(try state(rhs)))"
-        case .not(let value): return "(~\(try state(value)))"
-        case .ifThenElse(let condition, let then, let otherwise):
-            return "(IF \(try state(condition)) THEN \(try state(then)) ELSE \(try state(otherwise)))"
+        case .add, .subtract, .multiply, .divide, .modulo, .integerDivide,
+             .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
+             .and, .or, .in, .subset, .union, .intersection, .setDifference,
+             .tupleDynamicAccess, .tupleAppend, .tupleConcatenate,
+             .functionApply, .functionSet, .setSum, .integerRange,
+             .negate, .not, .cardinality, .powerSet, .unionAll,
+             .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet,
+             .ifThenElse:
+            throw invalidStateTraversal()
         case .setLiteral(let values):
             return values.isEmpty ? "{}" : "{\(try values.map(state).joined(separator: ", "))}"
-        case .in(let member, let set): return "(\(try state(member)) \\in \(try state(set)))"
-        case .subset(let lhs, let rhs): return "(\(try state(lhs)) \\subseteq \(try state(rhs)))"
-        case .union(let lhs, let rhs): return "(\(try state(lhs)) \\cup \(try state(rhs)))"
-        case .intersection(let lhs, let rhs): return "(\(try state(lhs)) \\cap \(try state(rhs)))"
-        case .setDifference(let lhs, let rhs): return "(\(try state(lhs)) \\ \(try state(rhs)))"
-        case .cardinality(let value): return "Cardinality(\(try state(value)))"
         case .setFilter(let set, let binder, let predicate):
             return "{\(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))}"
         case .setMap(let value, let binder, let set):
             return "{\(try state(value)) : \(try binderName(binder)) \\in \(try state(set))}"
-        case .powerSet(let value): return "SUBSET \(try state(value))"
-        case .unionAll(let value): return "UNION \(try state(value))"
-        case .integerRange(let lower, let upper): return "\(try state(lower))..\(try state(upper))"
         case .tupleLiteral(let values): return "<<\(try values.map(state).joined(separator: ", "))>>"
         case .tupleAccess(let tuple, let index): return "\(try state(tuple))[\(index)]"
-        case .tupleDynamicAccess(let tuple, let index): return "\(try state(tuple))[\(try state(index))]"
-        case .tupleLength(let tuple): return "Len(\(try state(tuple)))"
-        case .tupleAppend(let tuple, let value): return "Append(\(try state(tuple)), \(try state(value)))"
-        case .tupleHead(let tuple): return "Head(\(try state(tuple)))"
-        case .tupleTail(let tuple): return "Tail(\(try state(tuple)))"
-        case .tupleConcatenate(let lhs, let rhs): return "(\(try state(lhs)) \\o \(try state(rhs)))"
         case .recordLiteral(let record):
             return "[\(try record.fields.map { "\(try fieldName($0.id)) |-> \(try state($0.value))" }.joined(separator: ", "))]"
         case .recordAccess(let record, let field, _): return "(\(try state(record))).\(try fieldName(field))"
-        case .domain(let function): return "DOMAIN \(try state(function))"
         case .functionLiteral(let domain, let binder, let body):
             return "[\(try binderName(binder)) \\in \(try state(domain)) |-> \(try state(body))]"
-        case .functionApply(let function, let argument): return "\(try state(function))[\(try state(argument))]"
         case .except(let function, let key, let value):
             return "[\(try state(function)) EXCEPT \u{21}[\(try state(key))] = \(try state(value))]"
         case .caseExpr(let pairs, let otherwise):
@@ -162,9 +215,6 @@ struct CompiledTLARenderer {
         case .exists(let set, let binder, let predicate): return "\\E \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
         case .choose(let set, let binder, let predicate): return "CHOOSE \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
         case .enabledAction(let action): return "ENABLED \(try actionName(action))"
-        case .sequenceFromSet(let value): return "SeqFromSet(\(try state(value)))"
-        case .setSum(let function, let set): return "Sum(\(try state(function)), \(try state(set)))"
-        case .functionSet(let domain, let range): return "[\(try state(domain)) -> \(try state(range))]"
         case .foldFunction(let operation, let initial, let sequence):
             return "FoldFunction(\(try formalLambda(operation)), \(try state(initial)), \(try state(sequence)))"
         case .operatorApplication(let operation, let arguments):
@@ -195,6 +245,17 @@ struct CompiledTLARenderer {
             let recursive = recursiveDeclarations.isEmpty ? "" : "RECURSIVE \(recursiveDeclarations)\n    "
             return "LET \(recursive)\(declarations)\nIN \(try state(body))"
         }
+    }
+
+    private func invalidStateTraversal() -> CompilationDiagnostic {
+        .init(
+            code: .invalidFormalDeclaration,
+            stage: .rendering,
+            path: "compiledRenderer.state",
+            expected: "one rendered expression for each compiled expression",
+            actual: "the rendering traversal bypassed its expression stack",
+            nextSafeAction: "Retain the compiled specification and report this compiler defect."
+        )
     }
 
     private func formalArgument(_ argument: CompiledFormalCallArgument) throws -> String {

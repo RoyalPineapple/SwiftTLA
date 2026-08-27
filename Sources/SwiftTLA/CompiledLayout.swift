@@ -879,6 +879,21 @@ struct BindingValidator {
     }
 
     private mutating func validateExpression(_ expression: StateExpr, at path: String, scope: [String: BinderID]) throws {
+        var pending = [(expression: expression, path: path, scope: scope)]
+        while let current = pending.popLast() {
+            let expression = current.expression
+            let path = current.path
+            let scope = current.scope
+            try validateExpressionNode(expression, at: path, scope: scope, pending: &pending)
+        }
+    }
+
+    private mutating func validateExpressionNode(
+        _ expression: StateExpr,
+        at path: String,
+        scope: [String: BinderID],
+        pending: inout [(expression: StateExpr, path: String, scope: [String: BinderID])]
+    ) throws {
         switch expression {
         case .sourceIssue(let issue):
             throw issue.compilationDiagnostic(stage: .validation, path: path)
@@ -939,7 +954,7 @@ struct BindingValidator {
         case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
              .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
              .domain(let value), .sequenceFromSet(let value):
-            try validateExpression(value, at: path, scope: scope)
+            pending.append((value, path, scope))
         case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
              .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
              .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
@@ -949,8 +964,8 @@ struct BindingValidator {
              .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
              .tupleConcatenate(let lhs, let rhs),
              .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
-            try validateExpression(lhs, at: "\(path).left", scope: scope)
-            try validateExpression(rhs, at: "\(path).right", scope: scope)
+            pending.append((rhs, "\(path).right", scope))
+            pending.append((lhs, "\(path).left", scope))
         case .functionApply(.variable(let name), let argument)
             where scope[name] == nil && operators.keys.contains(name):
             guard let id = operators[name], let arity = operatorArities[id] else {
@@ -970,20 +985,20 @@ struct BindingValidator {
                 )
             }
             references["\(path).left"] = .operator(id)
-            try validateExpression(argument, at: "\(path).right", scope: scope)
+            pending.append((argument, "\(path).right", scope))
         case .functionApply(let function, let argument):
-            try validateExpression(function, at: "\(path).left", scope: scope)
-            try validateExpression(argument, at: "\(path).right", scope: scope)
+            pending.append((argument, "\(path).right", scope))
+            pending.append((function, "\(path).left", scope))
         case .ifThenElse(let condition, let then, let otherwise):
-            try validateExpression(condition, at: "\(path).condition", scope: scope)
-            try validateExpression(then, at: "\(path).then", scope: scope)
-            try validateExpression(otherwise, at: "\(path).else", scope: scope)
+            pending.append((otherwise, "\(path).else", scope))
+            pending.append((then, "\(path).then", scope))
+            pending.append((condition, "\(path).condition", scope))
         case .setLiteral(let values), .tupleLiteral(let values):
-            for (index, value) in values.enumerated() {
-                try validateExpression(value, at: "\(path)[\(index)]", scope: scope)
+            for (index, value) in values.enumerated().reversed() {
+                pending.append((value, "\(path)[\(index)]", scope))
             }
         case .tupleAccess(let value, _):
-            try validateExpression(value, at: path, scope: scope)
+            pending.append((value, path, scope))
         case .recordAccess(let value, let field):
             try validateExpression(value, at: "\(path).value", scope: scope)
             try bindField(field, at: "\(path).field")
@@ -1005,14 +1020,16 @@ struct BindingValidator {
                 try validateExpression(field.value, at: "\(fieldPath).value", scope: scope)
             }
         case .except(let function, let key, let value):
-            try validateExpression(function, at: "\(path).function", scope: scope)
-            try validateExpression(key, at: "\(path).key", scope: scope)
-            try validateExpression(value, at: "\(path).value", scope: scope)
+            pending.append((value, "\(path).value", scope))
+            pending.append((key, "\(path).key", scope))
+            pending.append((function, "\(path).function", scope))
         case .caseExpr(let pairs, let otherwise):
-            for (index, pair) in pairs.enumerated() {
-                try validateExpression(pair, at: "\(path).branch[\(index)]", scope: scope)
+            if let otherwise {
+                pending.append((otherwise, "\(path).otherwise", scope))
             }
-            try validateExpression(otherwise, at: "\(path).otherwise", scope: scope)
+            for (index, pair) in pairs.enumerated().reversed() {
+                pending.append((pair, "\(path).branch[\(index)]", scope))
+            }
         case .setFilter(let set, let name, let predicate), .functionLiteral(let set, let name, let predicate),
              .forAll(let set, let name, let predicate), .exists(let set, let name, let predicate),
              .choose(let set, let name, let predicate):
@@ -1024,8 +1041,8 @@ struct BindingValidator {
             let bodyScope = try bind([name], at: "\(path).binder", scope: scope)
             try validateExpression(value, at: "\(path).body", scope: bodyScope)
         case .integerRange(let lower, let upper):
-            try validateExpression(lower, at: "\(path).lower", scope: scope)
-            try validateExpression(upper, at: "\(path).upper", scope: scope)
+            pending.append((upper, "\(path).upper", scope))
+            pending.append((lower, "\(path).lower", scope))
         case .foldFunction(let lambda, let initial, let sequence):
             let bodyScope = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
             try validateExpression(lambda.body, at: "\(path).body", scope: bodyScope)
@@ -1087,8 +1104,8 @@ struct BindingValidator {
                 )
             }
             references[path] = .operator(id)
-            for (index, argument) in arguments.enumerated() {
-                try validateExpression(argument, at: "\(path).arguments[\(index)]", scope: scope)
+            for (index, argument) in arguments.enumerated().reversed() {
+                pending.append((argument, "\(path).arguments[\(index)]", scope))
             }
         case .letValue(let name, let value, let body):
             try validateExpression(value, at: "\(path).value", scope: scope)
