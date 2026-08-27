@@ -185,7 +185,7 @@ struct AlgorithmBuilderTests {
     func actionCompletionPreservesAssignedCompilerControlState() {
         let programCounter = NamedVar(
             name: CompilerControlSymbol.programCounter.rawValue,
-            initial: .string("start"),
+            initialization: .value(.string("start")),
             origin: .programCounter
         )
         let action = ActionNormalization.complete(
@@ -1239,9 +1239,9 @@ struct AlgorithmBuilderTests {
         let states = try CompiledRuntime(compilation: compilation).initialStates()
 
         #expect(Set(try states.map { try $0.value(for: hour).rendered(using: compilation.layout) }) == [.int(1), .int(2), .int(3)])
-        #expect(spec.variables.first { $0.name == "hour" }?.initialSet == .setLiteral([
+        #expect(spec.variables.first { $0.name == "hour" }?.initialization == .memberOf(.setLiteral([
             .value(.int(1)), .value(.int(2)), .value(.int(3))
-        ]))
+        ])))
     }
 
     @Test("SharedVar initial domains can depend on earlier formal state")
@@ -1368,6 +1368,27 @@ struct AlgorithmBuilderTests {
             .function([.string("first"): .bool(false), .string("second"): .bool(false)]),
             .function([.string("first"): .bool(true), .string("second"): .bool(true)])
         ])
+    }
+
+    @Test("process-local initialization reads the same process's earlier local state")
+    func lowersDependentProcessLocalInitialization() throws {
+        let algorithm = Algorithm("DependentProcessLocal") {
+            Each(Node.all) { _, scope in
+                let first = scope.localVar("first", initial: 1)
+                let _ = scope.localVar("second", initial: first + 1)
+                Do(TestControlLabel.stop) { Stop() }
+            }
+        }
+
+        let compilation = try loweredSourceSpecification(algorithm).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try value(named: "first", in: state, compilation: compilation) == .function([
+            .string("first"): .int(1), .string("second"): .int(1)
+        ]))
+        #expect(try value(named: "second", in: state, compilation: compilation) == .function([
+            .string("first"): .int(2), .string("second"): .int(2)
+        ]))
     }
 
     @Test("lowered process actions retain their generated parameter type")
@@ -1516,7 +1537,7 @@ private struct StaticFormalSelectionModel {
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
                 )
-                let current = scope.sharedVar("current", initial: selected)
+                let current: SharedVariable<Int> = scope.sharedVar("current", initial: selected)
 
                 Do(TestControlLabel.done) { Stop() }
                 Invariant("SelectedEven") { current == 2 }
@@ -1551,7 +1572,10 @@ private struct StaticFilteredFunctionSelectionModel {
                     },
                     matching: { successor in successor.expr == successor.expr }
                 )
-                let current = scope.sharedVar("current", initial: successors)
+                let current: SharedVariable<Function<Node, SetExpr<Node>>> = scope.sharedVar(
+                    "current",
+                    initial: successors
+                )
 
                 Do(TestControlLabel.done) { Stop() }
                 Invariant("CurrentIsDefined") { current == current.expr }

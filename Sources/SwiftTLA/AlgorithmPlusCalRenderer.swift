@@ -210,8 +210,12 @@ internal struct AlgorithmPlusCalRenderer {
     private func declarations(_ declarations: [AlgorithmStateModel], indent: String, terminator: String) -> [String] {
         declarations.enumerated().map { index, declaration in
             let suffix = index == declarations.index(before: declarations.endIndex) ? terminator : ","
-            let initializer = declaration.initialSet.map { "\\in \(expression($0))" }
-                ?? "= \(expression(declaration.initial))"
+            let initializer: String
+            switch declaration.initialization {
+            case .value(let value): initializer = "= \(value)"
+            case .expression(let value): initializer = "= \(expression(value))"
+            case .memberOf(let set): initializer = "\\in \(expression(set))"
+            }
             return "\(indent)\(declaration.root) \(initializer)\(suffix)"
         }
     }

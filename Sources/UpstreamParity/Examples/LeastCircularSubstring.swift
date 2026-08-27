@@ -132,7 +132,7 @@ package enum LeastCircularSubstringModel {
                     with: -1
                 )
             )
-            let i = scope.sharedVar("i", initial: -1)
+            let i: SharedVariable<Int> = scope.sharedVar("i", initial: -1)
             let j = scope.sharedVar("j", initial: 1)
             let k = scope.sharedVar("k", initial: 0)
 

@@ -5,36 +5,50 @@ struct CompiledRuntime {
     private var semantics: CompiledSemantics { compilation.semantics }
 
     func initialStates() throws -> [CompiledState] {
-        let initialValues = try layout.variables.map { variable in
-            guard let value = semantics.initialValues[variable.id] else {
-                throw CompiledEvaluationError.invalidVariableID(variable.id)
-            }
-            return value
-        }
-        var states = [try CompiledState(values: initialValues, compilation: compilation)]
-
-        for variable in layout.variables {
-            guard let initializer = semantics.variableInitializers[variable.id] else { continue }
-            if let set = initializer.lazySet ?? initializer.initialSet {
-                states = try states.flatMap { state in
-                    guard case .set(let values) = try CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(set) else {
+        var assignments: [[VariableID: CompiledValue]] = [[:]]
+        for (variable, initialization) in semantics.variableInitializations {
+            switch initialization {
+            case .value(let value):
+                assignments = assignments.map { values in
+                    var values = values
+                    values[variable] = value
+                    return values
+                }
+            case .expression(let expression):
+                assignments = try assignments.map { values in
+                    var values = values
+                    values[variable] = try CompiledEvaluator(
+                        variableValues: values,
+                        semantics: semantics,
+                        layout: layout
+                    ).evaluate(expression)
+                    return values
+                }
+            case .memberOf(let set):
+                assignments = try assignments.flatMap { values in
+                    guard case .set(let members) = try CompiledEvaluator(
+                        variableValues: values,
+                        semantics: semantics,
+                        layout: layout
+                    ).evaluate(set) else {
                         throw EvalError.typeMismatch("Variable initialization requires a set")
                     }
-                    return try CompiledValue.sorted(values).map { value in
-                        try state.updating(variable.id, to: value)
+                    return CompiledValue.sorted(members).map { member in
+                        var values = values
+                        values[variable] = member
+                        return values
                     }
                 }
             }
-            if let expression = initializer.initExpr {
-                states = try states.map { state in
-                    try state.updating(
-                        variable.id,
-                        to: CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(expression)
-                    )
-                }
-            }
         }
-        return states
+        return try assignments.map { values in
+            try CompiledState(values: layout.variables.map { variable in
+                guard let value = values[variable.id] else {
+                    throw CompiledEvaluationError.uninitializedVariable(variable.id)
+                }
+                return value
+            }, compilation: compilation)
+        }
     }
 
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {

@@ -1397,7 +1397,9 @@ public final class ParserSession {
         if let member = expression.as(MemberAccessExprSyntax.self),
            let type = terminalTypeName(in: member.base),
            enumDefinition(named: type) != nil {
-            return .enumeration(type)
+            return member.declName.baseName.text == "all"
+                ? .set(.enumeration(type))
+                : .enumeration(type)
         }
         if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
            case .function(let value) = typedFacadeValueShape(

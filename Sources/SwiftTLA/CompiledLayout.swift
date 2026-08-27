@@ -59,7 +59,6 @@ struct CompiledDeclaration: Hashable, Sendable {
 struct CompiledVariableLayout: Hashable, Sendable {
     let id: VariableID
     let declaration: CompiledDeclaration
-    let initial: TLAValue
     let generatedSwiftType: String?
     let symmetricCollection: CompiledSymmetricCollectionLayout?
 }
@@ -190,7 +189,6 @@ struct CompiledLayout: Hashable, Sendable {
                     sourceOffset: nil,
                     origin: variable.origin
                 ),
-                initial: variable.initial,
                 generatedSwiftType: variable.generatedSwiftType,
                 symmetricCollection: collection.map {
                     .init(
@@ -468,10 +466,10 @@ struct CompiledLayout: Hashable, Sendable {
         for module in modules {
             module.constants.forEach { visit($0.value) }
             for variable in module.variables {
-                visit(variable.initial)
-                if let initialSet = variable.initialSet { visit(initialSet) }
-                if let initialExpression = variable.initExpr { visit(initialExpression) }
-                if let lazySet = variable.lazySet { visit(lazySet) }
+                switch variable.initialization {
+                case .value(let value): visit(value)
+                case .expression(let expression), .memberOf(let expression): visit(expression)
+                }
             }
             for action in module.actions {
                 action.bindings.flatMap(\.values).forEach(visit)
@@ -716,12 +714,14 @@ struct BindingValidator {
         }
         for (index, variable) in spec.variables.enumerated() {
             let path = "variables.\(variable.name)"
-            if spec.symmetricCollections.contains(where: { $0.name == variable.name }) == false {
-                try validateValue(variable.initial, at: "\(path).initial")
+            switch variable.initialization {
+            case .value(let value):
+                if spec.symmetricCollections.contains(where: { $0.name == variable.name }) == false {
+                    try validateValue(value, at: "\(path).initialization")
+                }
+            case .expression(let expression), .memberOf(let expression):
+                try validateExpression(expression, at: "\(path).initialization", scope: [:])
             }
-            try validateExpression(variable.initialSet, at: "\(path).initialSet", scope: [:])
-            try validateExpression(variable.initExpr, at: "\(path).initExpr", scope: [:])
-            try validateExpression(variable.lazySet, at: "\(path).lazySet", scope: [:])
             if layout.variables.indices.contains(index) {
                 references["\(path).declaration"] = .variable(layout.variables[index].id)
             }
@@ -941,10 +941,32 @@ struct BindingValidator {
              .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
              .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
              .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
-             .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
+             .tupleConcatenate(let lhs, let rhs),
              .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
             try validateExpression(lhs, at: "\(path).left", scope: scope)
             try validateExpression(rhs, at: "\(path).right", scope: scope)
+        case .functionApply(.variable(let name), let argument) where operators[name] != nil:
+            guard let id = operators[name], let arity = operatorArities[id] else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "a bound unary operator",
+                    actual: "operator '\(name)' has no bound signature"
+                )
+            }
+            guard arity == 1 else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "a unary operator",
+                    actual: "operator '\(name)' has arity \(arity)"
+                )
+            }
+            references["\(path).left"] = .operator(id)
+            try validateExpression(argument, at: "\(path).right", scope: scope)
+        case .functionApply(let function, let argument):
+            try validateExpression(function, at: "\(path).left", scope: scope)
+            try validateExpression(argument, at: "\(path).right", scope: scope)
         case .ifThenElse(let condition, let then, let otherwise):
             try validateExpression(condition, at: "\(path).condition", scope: scope)
             try validateExpression(then, at: "\(path).then", scope: scope)
@@ -1230,6 +1252,14 @@ struct BindingValidator {
             return
         }
         if let id = operators[name] {
+            guard operatorArities[id] == 0 else {
+                throw diagnostic(
+                    code: .invalidFormalOperatorApplication,
+                    path: path,
+                    expected: "a zero-arity operator in value position",
+                    actual: "operator '\(name)' requires \(operatorArities[id] ?? 0) arguments"
+                )
+            }
             references[path] = .operator(id)
             return
         }

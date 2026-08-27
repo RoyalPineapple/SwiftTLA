@@ -101,17 +101,28 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 )
             }
         )
+        let initializations = Dictionary(
+            uniqueKeysWithValues: semantics.variableInitializations.map {
+                ($0.variable, $0.initialization)
+            }
+        )
 
         let variables = try layout.variables.filter {
             $0.declaration.origin == .source
         }.map { variable in
             let collection = symmetricCollectionsByVariableID[variable.id]
+            let fallback: TLAValue?
+            if case .value(let value) = initializations[variable.id] {
+                fallback = try value.rendered(using: layout)
+            } else {
+                fallback = nil
+            }
             let swiftType = if let collection {
                 "[\(collection.elementType).ID: \(collection.valueType)]"
             } else {
                 try Self.generatedSwiftType(
                     explicit: variable.generatedSwiftType,
-                    fallback: variable.initial,
+                    fallback: fallback,
                     path: "variables.\(variable.declaration.name)"
                 )
             }
@@ -190,7 +201,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
 
     private static func generatedSwiftType(
         explicit: String?,
-        fallback: TLAValue,
+        fallback: TLAValue?,
         path: String
     ) throws -> String {
         if explicit == "TLAValue" {
@@ -207,10 +218,10 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             return explicit
         }
         switch fallback {
-        case .int: return "Int"
-        case .bool: return "Bool"
-        case .string, .constant: return "String"
-        case .set, .tuple, .record, .function:
+        case .int?: return "Int"
+        case .bool?: return "Bool"
+        case .string?, .constant?: return "String"
+        case .set?, .tuple?, .record?, .function?, nil:
             throw CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape,
                 stage: .validation,

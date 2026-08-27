@@ -12,8 +12,8 @@ enum EvalError: Error, CustomStringConvertible {
     }
 }
 
-struct CompiledEvaluator {
-    let state: CompiledState
+struct CompiledEvaluator: Sendable {
+    let variableValue: @Sendable (VariableID) throws -> CompiledValue
     let semantics: CompiledSemantics
     let layout: CompiledLayout
     let bindings: CompiledBindings
@@ -32,7 +32,47 @@ struct CompiledEvaluator {
         operatorBindings: [OperatorID: CompiledFormalOperator] = [:],
         remainingRecursionDepth: Int = 1_000
     ) {
-        self.state = state
+        self.variableValue = { try state.value(for: $0) }
+        self.semantics = semantics
+        self.layout = layout
+        self.bindings = bindings
+        self.enabledActions = enabledActions
+        self.localOperators = localOperators
+        self.operatorBindings = operatorBindings
+        self.remainingRecursionDepth = remainingRecursionDepth
+    }
+
+    init(
+        variableValues: [VariableID: CompiledValue],
+        semantics: CompiledSemantics,
+        layout: CompiledLayout
+    ) {
+        self.variableValue = { variable in
+            guard let value = variableValues[variable] else {
+                throw CompiledEvaluationError.uninitializedVariable(variable)
+            }
+            return value
+        }
+        self.semantics = semantics
+        self.layout = layout
+        self.bindings = .init()
+        self.enabledActions = []
+        self.localOperators = [:]
+        self.operatorBindings = [:]
+        self.remainingRecursionDepth = 1_000
+    }
+
+    private init(
+        variableValue: @escaping @Sendable (VariableID) throws -> CompiledValue,
+        semantics: CompiledSemantics,
+        layout: CompiledLayout,
+        bindings: CompiledBindings,
+        enabledActions: Set<ActionID>,
+        localOperators: [OperatorID: CompiledLocalOperator],
+        operatorBindings: [OperatorID: CompiledFormalOperator],
+        remainingRecursionDepth: Int
+    ) {
+        self.variableValue = variableValue
         self.semantics = semantics
         self.layout = layout
         self.bindings = bindings
@@ -70,13 +110,19 @@ struct CompiledEvaluator {
         case .value(let value):
             return .init(formal: value)
         case .stateVariable(let variable):
-            return try state.value(for: variable)
+            return try variableValue(variable)
         case .boundValue(let binder):
             return try bindings.value(for: binder)
         case .controlLocation(let label):
             return .controlLocation(label)
-        case .operatorReference:
-            throw EvalError.typeMismatch("Expected a value")
+        case .operatorReference(let id):
+            if localOperators[id] != nil || semantics.recursiveFunctions.contains(where: { $0.id == id }) {
+                return try evaluate(.recursiveCall(id, []), bindings: bindings)
+            }
+            return try evaluate(
+                .operatorApplication(.reference(id, arity: 0), []),
+                bindings: bindings
+            )
         case .add(let lhs, let rhs):
             return .integer(try integer(lhs) + integer(rhs))
         case .subtract(let lhs, let rhs):
@@ -405,10 +451,13 @@ struct CompiledEvaluator {
                     guard case .value(let argumentExpression) = argument else {
                         throw EvalError.typeMismatch("Expected a formal value argument")
                     }
-                    callBindings = callBindings.binding(try value(argumentExpression), to: parameter)
+                    callBindings = callBindings.binding(
+                        { try evaluate(argumentExpression, bindings: bindings) },
+                        to: parameter
+                    )
                 }
                 return try CompiledEvaluator(
-                    state: state,
+                    variableValue: variableValue,
                     semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
@@ -435,7 +484,10 @@ struct CompiledEvaluator {
                 for (parameter, argument) in zip(definition.parameters, arguments) {
                     switch (parameter, argument) {
                     case (.value(let binder), .value(let argumentExpression)):
-                        callBindings = callBindings.binding(try value(argumentExpression), to: binder)
+                        callBindings = callBindings.binding(
+                            { try evaluate(argumentExpression, bindings: bindings) },
+                            to: binder
+                        )
                     case (.operator(let id, let arity), .operator(let operation)):
                         guard operation.arity == arity else {
                             throw EvalError.typeMismatch("Formal operator argument count differs")
@@ -446,7 +498,7 @@ struct CompiledEvaluator {
                     }
                 }
                 return try CompiledEvaluator(
-                    state: state,
+                    variableValue: variableValue,
                     semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
@@ -457,14 +509,20 @@ struct CompiledEvaluator {
                 ).evaluate(definition.body)
             }
         case .letValue(let binder, let valueExpression, let body):
-            return try evaluate(body, bindings: bindings.binding(try value(valueExpression), to: binder))
+            return try evaluate(
+                body,
+                bindings: bindings.binding(
+                    { try evaluate(valueExpression, bindings: bindings) },
+                    to: binder
+                )
+            )
         case .letIn(let operators, let body):
             var nested = localOperators
             for operation in operators {
                 nested[operation.id] = operation
             }
             return try CompiledEvaluator(
-                state: state,
+                variableValue: variableValue,
                 semantics: semantics,
                 layout: layout,
                 bindings: bindings,
@@ -483,10 +541,13 @@ struct CompiledEvaluator {
                 }
                 var callBindings = bindings
                 for (parameter, argument) in zip(operation.parameters, arguments) {
-                    callBindings = callBindings.binding(try value(argument), to: parameter)
+                    callBindings = callBindings.binding(
+                        { try evaluate(argument, bindings: bindings) },
+                        to: parameter
+                    )
                 }
                 if let domain = operation.domain, case .boolean(false) = try CompiledEvaluator(
-                    state: state,
+                    variableValue: variableValue,
                     semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
@@ -498,7 +559,7 @@ struct CompiledEvaluator {
                     throw EvalError.typeMismatch("Recursive operator argument is outside its domain")
                 }
                 return try CompiledEvaluator(
-                    state: state,
+                    variableValue: variableValue,
                     semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
@@ -514,10 +575,13 @@ struct CompiledEvaluator {
                 }
                 var callBindings = bindings
                 for (parameter, argument) in zip(function.parameters, arguments) {
-                    callBindings = callBindings.binding(try value(argument), to: parameter)
+                    callBindings = callBindings.binding(
+                        { try evaluate(argument, bindings: bindings) },
+                        to: parameter
+                    )
                 }
                 return try CompiledEvaluator(
-                    state: state,
+                    variableValue: variableValue,
                     semantics: semantics,
                     layout: layout,
                     bindings: callBindings,

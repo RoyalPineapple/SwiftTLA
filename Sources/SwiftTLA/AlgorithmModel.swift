@@ -126,11 +126,18 @@ internal struct AlgorithmModel: Sendable {
             }
         }
 
+        func initialization(_ value: VariableInitialization) -> VariableInitialization {
+            switch value {
+            case .value: return value
+            case .expression(let initial): return .expression(expression(initial))
+            case .memberOf(let set): return .memberOf(expression(set))
+            }
+        }
+
         func state(_ value: AlgorithmStateModel) -> AlgorithmStateModel {
             .init(
                 root: value.root,
-                initial: expression(value.initial),
-                initialSet: value.initialSet.map(expression),
+                initialization: initialization(value.initialization),
                 swiftTypeName: value.swiftTypeName,
                 isTuple: value.isTuple
             )
@@ -281,9 +288,9 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
         let result: String
         switch value {
         case .shared(let declaration):
-            result = "shared(\(declaration.root),\(state(declaration.initial, environment)),\(declaration.initialSet.map { state($0, environment) } ?? "nil"))"
+            result = "shared(\(declaration.root),\(initialization(declaration.initialization, environment)))"
         case .local(let declaration):
-            result = "local(\(declaration.root),\(state(declaration.initial, environment)),\(declaration.initialSet.map { state($0, environment) } ?? "nil"))"
+            result = "local(\(declaration.root),\(initialization(declaration.initialization, environment)))"
         case .step(let step):
             result = "step(\(step.label.name),\(step.loopCondition.map { state($0, environment) } ?? "nil"),[\(statements(step.statements, environment, path: "\(path).statements"))])"
         case .process(let process):
@@ -320,6 +327,14 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
         case .unsupported(let construct): result = "unsupported(\(construct.rawValue))"
         }
         return record(path, result)
+    }
+
+    func initialization(_ value: VariableInitialization, _ environment: [String: String]) -> String {
+        switch value {
+        case .value(let value): return "value(\(value))"
+        case .expression(let expression): return "expression(\(state(expression, environment)))"
+        case .memberOf(let set): return "memberOf(\(state(set, environment)))"
+        }
     }
     let components = model.components.enumerated().map { index, child in
         component(child, [:], path: "components[\(index)]")
@@ -402,21 +417,18 @@ internal enum AlgorithmFairness: Sendable {
 
 internal struct AlgorithmStateModel: Sendable {
     let root: String
-    let initial: StateExpr
-    let initialSet: StateExpr?
+    let initialization: VariableInitialization
     let swiftTypeName: String?
     let isTuple: Bool
 
     init(
         root: String,
-        initial: StateExpr,
-        initialSet: StateExpr? = nil,
+        initialization: VariableInitialization,
         swiftTypeName: String? = nil,
         isTuple: Bool = false
     ) {
         self.root = root
-        self.initial = initial
-        self.initialSet = initialSet
+        self.initialization = initialization.normalized
         self.swiftTypeName = swiftTypeName
         self.isTuple = isTuple
     }

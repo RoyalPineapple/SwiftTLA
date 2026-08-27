@@ -82,7 +82,7 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   var variable: NamedVar {
     NamedVar(
       name: name,
-      initial: .function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) })),
+      initialization: .value(.function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) }))),
       collectionType: .dictionary(verificationScope),
       origin: .source
     )
@@ -271,7 +271,7 @@ extension TLASpec {
       guard ownedVariables.count == 1 else {
         return .invalidOwnership(collection: metadata.name)
       }
-      guard case .function(let initialValues) = ownedVariables[0].initial,
+      guard case .value(.function(let initialValues)) = ownedVariables[0].initialization,
             Set(initialValues.keys) == Set(metadata.members),
             Set(initialValues.values) == Set([metadata.initial])
       else { return .invalidDomain(collection: metadata.name) }

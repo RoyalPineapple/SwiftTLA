@@ -85,20 +85,23 @@ package struct LamportMutexModel: Sendable {
     }
 
     private static func specificationComponents(_ scope: SpecificationScope) -> [SpecComponent] {
-        let clock = scope.sharedVar("clock", initial: Clock.literal((.one, 1), (.two, 1)))
+        let clock: SharedVariable<Clock> = scope.sharedVar(
+            "clock",
+            initial: Clock.literal((.one, 1), (.two, 1))
+        )
         let noRequests = Clock.literal((.one, 0), (.two, 0))
-        let req = scope.sharedVar("req", initial: Requests.literal(
+        let req: SharedVariable<Requests> = scope.sharedVar("req", initial: Requests.literal(
             (.one, noRequests),
             (.two, noRequests)
         ))
         let noAcknowledgements = SetExpr<Node>()
-        let ack = scope.sharedVar("ack", initial: Acknowledgements.literal(
+        let ack: SharedVariable<Acknowledgements> = scope.sharedVar("ack", initial: Acknowledgements.literal(
             (.one, noAcknowledgements),
             (.two, noAcknowledgements)
         ))
         let emptyQueue = MessageQueue()
         let noMessages = NetworkPeers.literal((.one, emptyQueue), (.two, emptyQueue))
-        let network = scope.sharedVar("network", initial: Network.literal(
+        let network: SharedVariable<Network> = scope.sharedVar("network", initial: Network.literal(
             (.one, noMessages),
             (.two, noMessages)
         ))

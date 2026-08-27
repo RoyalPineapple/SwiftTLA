@@ -28,7 +28,7 @@ struct SymmetricCollectionDeclarationTests {
     #expect(spec.symmetricCollections[0].verificationScope == 2)
     #expect(spec.variables.map(\.name) == ["phases"])
 
-    guard case .function(let initial) = spec.variables[0].initial else {
+    guard case .value(.function(let initial)) = spec.variables[0].initialization else {
       Issue.record("Expected the symmetric collection initializer to be a function")
       return
     }

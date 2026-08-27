@@ -13,7 +13,7 @@ func renderedSourceAlgorithmPlusCal(_ algorithm: Algorithm) throws -> String {
 }
 
 func canonicalTestSpec(
-    variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)] = [],
+    variables: [(name: String, initialization: VariableInitialization)] = [],
     actions: [(name: String, body: ActionExpr, bindings: [ActionBinding])] = [],
     invariants: [(name: String, body: StateExpr)] = [],
     temporal: [(name: String, expr: TemporalExpr)] = [],
@@ -29,7 +29,7 @@ func canonicalTestSpec(
     TLASpec(
         name: "CanonicalTestSpec",
         variables: variables.map {
-            NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet)
+            NamedVar(name: $0.name, initialization: $0.initialization, origin: .source)
         },
         formalParameters: formalParameters,
         actions: actions.map {

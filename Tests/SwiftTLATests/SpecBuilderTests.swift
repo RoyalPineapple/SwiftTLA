@@ -40,10 +40,34 @@ struct SpecBuilderTests {
         Issue.record("Expected compilation to reject the variable declaration")
       } catch let diagnostic as CompilationDiagnostic {
         #expect(diagnostic.code == .missingVariableInitializer)
-        #expect(diagnostic.path == "variables.values.initExpr")
+        #expect(diagnostic.path == "variables.values.initialization")
       } catch {
         Issue.record("Expected CompilationDiagnostic, got \(error)")
       }
     }
+  }
+
+  @Test("typed shared declarations retain their generated state type")
+  func typedSharedDeclarationsRetainGeneratedStateType() throws {
+    let count: SharedVariable<Int> = SharedVar(
+      "count",
+      initial: IntRange(1, through: 3).cardinality
+    )
+    let compilation = try TLASpec("TypedSharedDeclaration") { count }.compile()
+
+    #expect(compilation.machineSurfacePlan.variables.map(\.swiftType) == ["Int"])
+  }
+
+  @Test("literal and typed-expression initializers have one compilation identity")
+  func literalAndExpressionInitializersShareIdentity() throws {
+    let expression = Expr<Int>(.value(.int(1)))
+    let literal = try TLASpec("EquivalentInitializer") {
+      SharedVar("count", initial: 1)
+    }.compile()
+    let typedExpression = try TLASpec("EquivalentInitializer") {
+      SharedVar("count", initial: expression)
+    }.compile()
+
+    #expect(literal.identity == typedExpression.identity)
   }
 }

@@ -210,11 +210,14 @@ package struct NanoBlockchainModel: Sendable {
         #spec("NanoBlockchain") { scope in
             Extends(.integers)
             let lastHash = scope.sharedVar("lastHash", initial: HashReference.none)
-            let distributedLedger = scope.sharedVar(
+            let distributedLedger: SharedVariable<DistributedLedger> = scope.sharedVar(
                 "distributedLedger",
                 initial: DistributedLedger()
             )
-            let received = scope.sharedVar("received", initial: ReceivedBlocks())
+            let received: SharedVariable<ReceivedBlocks> = scope.sharedVar(
+                "received",
+                initial: ReceivedBlocks()
+            )
 
             Invariant("TypeInvariant") {
                 StateExpr.in(

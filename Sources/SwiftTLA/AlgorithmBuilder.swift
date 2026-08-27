@@ -371,8 +371,7 @@ public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
 /// Application code never needs the engine-level `Var` type for this form.
 public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
-    fileprivate let initial: StateExpr
-    fileprivate let initialSet: StateExpr?
+    fileprivate let initialization: VariableInitialization
     fileprivate let swiftTypeName: String
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -416,8 +415,7 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
 /// A `LocalVar` declaration is valid only inside an `Each` process body.
 public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
-    fileprivate let initial: StateExpr
-    fileprivate let initialSet: StateExpr?
+    fileprivate let initialization: VariableInitialization
     fileprivate let swiftTypeName: String
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -897,8 +895,7 @@ public func SharedVar<Value: TLAValueType>(
 ) -> SharedVariable<Value> {
     SharedVariable(
         name: name,
-        initial: .value(initial.tlaValue),
-        initialSet: nil,
+        initialization: .value(initial.tlaValue),
         swiftTypeName: swiftSurfaceTypeName(for: Value.self)
     )
 }
@@ -909,8 +906,7 @@ public func SharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVaria
     let values = range.map { StateExpr.value(.int($0)) }
     return SharedVariable(
         name: name,
-        initial: .value(.int(range.lowerBound)),
-        initialSet: .setLiteral(values),
+        initialization: .memberOf(.setLiteral(values)),
         swiftTypeName: "Int"
     )
 }
@@ -924,8 +920,7 @@ public func SharedVar<Value: TLAValueType>(
 ) -> SharedVariable<Value> {
     return SharedVariable(
         name: name,
-        initial: .value(.int(0)),
-        initialSet: values.raw,
+        initialization: .memberOf(values.raw),
         swiftTypeName: swiftSurfaceTypeName(for: Value.self)
     )
 }
@@ -935,7 +930,7 @@ public func SharedVar<Value: TLAValueType>(
     _ name: String,
     initial: Expr<Value>
 ) -> SharedVariable<Value> {
-    SharedVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: swiftSurfaceTypeName(for: Value.self))
+    SharedVariable(name: name, initialization: .expression(initial.raw), swiftTypeName: swiftSurfaceTypeName(for: Value.self))
 }
 
 /// Declares a process-local PlusCal-shaped variable.
@@ -943,7 +938,7 @@ public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
 ) -> LocalVariable<Value> {
-    LocalVariable(name: name, initial: .value(initial.tlaValue), initialSet: nil, swiftTypeName: swiftSurfaceTypeName(for: Value.self))
+    LocalVariable(name: name, initialization: .value(initial.tlaValue), swiftTypeName: swiftSurfaceTypeName(for: Value.self))
 }
 
 /// Declares a process-local variable with a typed formal initial expression.
@@ -951,7 +946,7 @@ public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Expr<Value>
 ) -> LocalVariable<Value> {
-    LocalVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: swiftSurfaceTypeName(for: Value.self))
+    LocalVariable(name: name, initialization: .expression(initial.raw), swiftTypeName: swiftSurfaceTypeName(for: Value.self))
 }
 
 /// Declares a process-local Boolean from a formal condition.
@@ -959,7 +954,7 @@ public func LocalVar<Value: TLAValueType>(
 /// This is useful when a process starts in a role-dependent state, such as
 /// one designated initiator being active while the other processes wait.
 public func LocalVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
-    LocalVariable(name: name, initial: initial, initialSet: nil, swiftTypeName: "Bool")
+    LocalVariable(name: name, initialization: .expression(initial), swiftTypeName: "Bool")
 }
 
 /// Scheduling policy for one `Each` process family.
@@ -1000,36 +995,31 @@ public struct AlgorithmElement: Sendable {
 
 private struct SharedVariableDeclaration: Sendable {
     let name: String
-    let initial: StateExpr
-    let initialSet: StateExpr?
+    let initialization: VariableInitialization
     let swiftTypeName: String
 
     init<Value>(_ variable: SharedVariable<Value>) {
         name = variable.name
-        initial = variable.initial
-        initialSet = variable.initialSet
+        initialization = variable.initialization
         swiftTypeName = variable.swiftTypeName
     }
 
     var algorithmElement: AlgorithmElement {
         AlgorithmElement(model: .shared(.init(
             root: name,
-            initial: initial,
-            initialSet: initialSet,
+            initialization: initialization,
             swiftTypeName: swiftTypeName
         )))
     }
 
     var specificationDeclaration: VarDecl {
-        if let initialSet {
-            VarDecl(
-                name,
-                .int(0),
-                initialSet: initialSet,
-                generatedSwiftType: swiftTypeName
-            )
-        } else {
-            VarDecl(name, initExpr: initial, generatedSwiftType: swiftTypeName)
+        switch initialization {
+        case .value(let value):
+            VarDecl(name, value, generatedSwiftType: swiftTypeName)
+        case .expression(let expression):
+            VarDecl(name, expression: expression, generatedSwiftType: swiftTypeName)
+        case .memberOf(let set):
+            VarDecl(name, memberOf: set, generatedSwiftType: swiftTypeName)
         }
     }
 }
@@ -1169,8 +1159,7 @@ public final class ProcedureScope {
 private func localDeclaration<Value>(_ variable: LocalVariable<Value>) -> AlgorithmElement {
     AlgorithmElement(model: .local(.init(
         root: variable.name,
-        initial: variable.initial,
-        initialSet: variable.initialSet,
+        initialization: variable.initialization,
         swiftTypeName: variable.swiftTypeName
     )))
 }
@@ -1219,8 +1208,7 @@ public enum AlgorithmBuilder {
     public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [AlgorithmElement] {
         [AlgorithmElement(model: .shared(.init(
             root: variable.name,
-            initial: variable.initial,
-            initialSet: variable.initialSet,
+            initialization: variable.initialization,
             swiftTypeName: variable.swiftTypeName
         )))]
     }
@@ -1228,8 +1216,7 @@ public enum AlgorithmBuilder {
     public static func buildExpression<Value>(_ variable: LocalVariable<Value>) -> [AlgorithmElement] {
         [AlgorithmElement(model: .local(.init(
             root: variable.name,
-            initial: variable.initial,
-            initialSet: variable.initialSet,
+            initialization: variable.initialization,
             swiftTypeName: variable.swiftTypeName
         )))]
     }
@@ -1276,10 +1263,14 @@ extension SpecBuilder {
     /// Lets a `#spec` body use the same typed shared declaration whether it
     /// contains a PlusCal `Algorithm` or an ordinary TLA+ action specification.
     public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [SpecComponent] {
-        if let initialSet = variable.initialSet {
-            return [VarDecl(variable.name, .int(0), initialSet: initialSet)]
+        switch variable.initialization {
+        case .value(let value):
+            return [VarDecl(variable.name, value, generatedSwiftType: variable.swiftTypeName)]
+        case .expression(let expression):
+            return [VarDecl(variable.name, expression: expression, generatedSwiftType: variable.swiftTypeName)]
+        case .memberOf(let set):
+            return [VarDecl(variable.name, memberOf: set, generatedSwiftType: variable.swiftTypeName)]
         }
-        return [VarDecl(variable.name, initExpr: variable.initial)]
     }
 }
 

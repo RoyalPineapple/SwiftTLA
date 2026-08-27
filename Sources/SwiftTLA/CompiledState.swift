@@ -118,7 +118,7 @@ struct CompiledState: Hashable, Sendable, Comparable {
 }
 
 struct CompiledBindings: Sendable {
-    private var values: [BinderID: CompiledValue]
+    private var values: [BinderID: @Sendable () throws -> CompiledValue]
 
     init() {
         values = [:]
@@ -128,10 +128,19 @@ struct CompiledBindings: Sendable {
         guard let value = values[binder] else {
             throw CompiledEvaluationError.unboundBinder(binder)
         }
-        return value
+        return try value()
     }
 
     func binding(_ value: CompiledValue, to binder: BinderID) -> CompiledBindings {
+        var bound = self
+        bound.values[binder] = { value }
+        return bound
+    }
+
+    func binding(
+        _ value: @escaping @Sendable () throws -> CompiledValue,
+        to binder: BinderID
+    ) -> CompiledBindings {
         var bound = self
         bound.values[binder] = value
         return bound
@@ -141,6 +150,7 @@ struct CompiledBindings: Sendable {
 enum CompiledEvaluationError: Error, Sendable {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
+    case uninitializedVariable(VariableID)
     case invalidControlLocationID(ControlLocationID)
     case invalidFieldID(FieldID)
     case invalidRecordKey(CompiledValue)

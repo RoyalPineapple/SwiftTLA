@@ -91,21 +91,30 @@ enum AlgorithmLowerer {
         var variables = shared.map { state in
             NamedVar(
                 name: state.root,
-                initial: .int(0),
-                initialSet: state.initialSet,
-                initExpr: state.initialSet == nil ? state.initial : nil,
+                initialization: state.initialization,
                 generatedSwiftType: state.swiftTypeName,
                 origin: .source
             )
         }
         for process in processes {
-            for local in process.components {
-                guard case .local(let state) = local else { continue }
+            let localStates = process.components.compactMap { component -> AlgorithmStateModel? in
+                guard case .local(let state) = component else { return nil }
+                return state
+            }
+            let localRoots = Set(localStates.map(\.root))
+            for state in localStates {
+                let initial = deterministicInitialization(
+                    state.initialization,
+                    path: "processes.\(process.typeName).locals.\(state.root)"
+                )
                 variables.append(
                     NamedVar(
                         name: state.root,
-                        initial: .int(0),
-                        initExpr: constantFunction(domain: process.domain, value: state.initial),
+                        initialization: .expression(constantFunction(
+                            domain: process.domain,
+                            value: initial,
+                            localRoots: localRoots
+                        )),
                         origin: .compiler
                     ))
             }
@@ -137,12 +146,11 @@ enum AlgorithmLowerer {
             }
             variables.insert(NamedVar(
                 name: CompilerControlSymbol.programCounter.rawValue,
-                initial: .function([:]),
-                initExpr: .functionLiteral(
+                initialization: .expression(.functionLiteral(
                     controlDomain,
                     controlBinding,
                     .caseExpr(controlCases, nil)
-                ),
+                )),
                 origin: .programCounter
             ), at: 0)
         }
@@ -150,15 +158,21 @@ enum AlgorithmLowerer {
             for slot in procedureSlots(procedures) {
                 variables.append(NamedVar(
                     name: slot.root,
-                    initial: .int(0),
-                    initExpr: constantFunction(domain: controlDomainValues(processes), value: slot.initial),
+                    initialization: .expression(constantFunction(
+                        domain: controlDomainValues(processes),
+                        value: slot.initial,
+                        localRoots: []
+                    )),
                     origin: .compiler
                 ))
             }
             variables.append(NamedVar(
                 name: CompilerControlSymbol.stack.rawValue,
-                initial: .int(0),
-                initExpr: constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
+                initialization: .expression(constantFunction(
+                    domain: controlDomainValues(processes),
+                    value: .tupleLiteral([]),
+                    localRoots: []
+                )),
                 origin: .procedureStack
             ))
         }
@@ -319,12 +333,21 @@ enum AlgorithmLowerer {
             sourceAlgorithms: [Algorithm(model: algorithm)]))
     }
 
-    private static func constantFunction(domain: [TLAValue], value: StateExpr) -> StateExpr {
+    private static func constantFunction(
+        domain: [TLAValue],
+        value: StateExpr,
+        localRoots: Set<String>
+    ) -> StateExpr {
         let binding = "__pcal_initial_process"
+        let initial = StateExpr.substituteVariable(
+            processBinding.rawValue,
+            with: .variable(binding),
+            in: rewrite(value, localRoots: localRoots)
+        )
         return .functionLiteral(
             .setLiteral(domain.map(StateExpr.value)),
             binding,
-            value.replacingCurrentProcess(with: .variable(binding))
+            initial
         )
     }
 
@@ -398,9 +421,7 @@ enum AlgorithmLowerer {
         let sharedVariables = shared.map { state in
             NamedVar(
                 name: state.root,
-                initial: .int(0),
-                initialSet: state.initialSet,
-                initExpr: state.initialSet == nil ? state.initial : nil,
+                initialization: state.initialization,
                 generatedSwiftType: state.swiftTypeName,
                 origin: .source
             )
@@ -410,16 +431,17 @@ enum AlgorithmLowerer {
             for parameter in procedure.parameters {
                 procedureVariables.append(NamedVar(
                     name: parameter.root,
-                    initial: .int(0),
-                    initExpr: parameter.initial,
+                    initialization: .expression(parameter.initial),
                     origin: .compiler
                 ))
             }
             for local in procedure.locals {
                 procedureVariables.append(NamedVar(
                     name: local.root,
-                    initial: .int(0),
-                    initExpr: local.initial,
+                    initialization: .expression(deterministicInitialization(
+                        local.initialization,
+                        path: "procedures.\(procedure.name).locals.\(local.root)"
+                    )),
                     origin: .compiler
                 ))
             }
@@ -445,13 +467,16 @@ enum AlgorithmLowerer {
         )
         var variables = [NamedVar(
             name: CompilerControlSymbol.programCounter.rawValue,
-            initial: .string(first.label.name),
-            initExpr: sequentialControl.location(first.label.name),
+            initialization: .expression(sequentialControl.location(first.label.name)),
             origin: .programCounter
         )]
             + sharedVariables
         if !procedures.isEmpty {
-            variables.append(NamedVar(name: CompilerControlSymbol.stack.rawValue, initial: .tuple([]), origin: .procedureStack))
+            variables.append(NamedVar(
+                name: CompilerControlSymbol.stack.rawValue,
+                initialization: .value(.tuple([])),
+                origin: .procedureStack
+            ))
         }
         variables += procedureVariables
         let variableNames = variables.map(\.name)
@@ -535,6 +560,22 @@ enum AlgorithmLowerer {
             formalOperatorDefinitions: formalOperatorDefinitions,
             sourceAlgorithms: [Algorithm(model: algorithm)]
         ))
+    }
+
+    private static func deterministicInitialization(
+        _ initialization: VariableInitialization,
+        path: String
+    ) -> StateExpr {
+        switch initialization {
+        case .value(let value): return .value(value)
+        case .expression(let expression): return expression
+        case .memberOf:
+            return .sourceIssue(.formalDeclaration(
+                kind: "process-local initializer",
+                name: path,
+                problem: "nondeterministic local initialization is not supported"
+            ))
+        }
     }
 
     private static func sequentialTransfer(to location: StateExpr) -> ActionExpr {
@@ -660,7 +701,12 @@ enum AlgorithmLowerer {
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign(.named($0.0.root), $0.1)
         }
-        let localAssignments = procedure.locals.map { ActionExpr.assign(.named($0.root), $0.initial) }
+        let localAssignments = procedure.locals.map {
+            ActionExpr.assign(
+                .named($0.root),
+                deterministicInitialization($0.initialization, path: "procedures.\(procedure.name).locals.\($0.root)")
+            )
+        }
         return (parameterAssignments + localAssignments + [push, sequentialTransfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
@@ -696,7 +742,12 @@ enum AlgorithmLowerer {
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign(.named($0.0.root), $0.1)
         }
-        let localAssignments = procedure.locals.map { ActionExpr.assign(.named($0.root), $0.initial) }
+        let localAssignments = procedure.locals.map {
+            ActionExpr.assign(
+                .named($0.root),
+                deterministicInitialization($0.initialization, path: "procedures.\(procedure.name).locals.\($0.root)")
+            )
+        }
         return (parameterAssignments + localAssignments + [sequentialTransfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
@@ -734,7 +785,11 @@ enum AlgorithmLowerer {
         }
         let localRoots = Set(procedureSlots(procedures).map(\.root))
         let localAssignments = procedure.locals.map {
-            ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
+            let initial = deterministicInitialization(
+                $0.initialization,
+                path: "procedures.\(procedure.name).locals.\($0.root)"
+            )
+            return ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite(initial, localRoots: localRoots)))
         }
         return (parameterAssignments + localAssignments + [push, transfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
@@ -776,7 +831,11 @@ enum AlgorithmLowerer {
         }
         let localRoots = Set(procedureSlots(procedures).map(\.root))
         let localAssignments = procedure.locals.map {
-            ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
+            let initial = deterministicInitialization(
+                $0.initialization,
+                path: "procedures.\(procedure.name).locals.\($0.root)"
+            )
+            return ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite(initial, localRoots: localRoots)))
         }
         return (parameterAssignments + localAssignments + [transfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
@@ -787,7 +846,12 @@ enum AlgorithmLowerer {
     ) -> [(root: String, initial: StateExpr)] {
         procedures.flatMap { procedure in
             procedure.parameters.map { ($0.root, $0.initial) }
-                + procedure.locals.map { ($0.root, $0.initial) }
+                + procedure.locals.map {
+                    ($0.root, deterministicInitialization(
+                        $0.initialization,
+                        path: "procedures.\(procedure.name).locals.\($0.root)"
+                    ))
+                }
         }
     }
 

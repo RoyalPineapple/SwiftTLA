@@ -1024,7 +1024,11 @@ private func parserEnum(
         let successors = try #require(try loweredSource(parsed, named: "FunctionDomain").variables.first { $0.name == "successors" })
         let surface = try #require(compilation.machineSurfacePlan.variables.first { $0.formalName == successors.name })
         #expect(surface.swiftType == "Function<Node, SetExpr<Node>>")
-        #expect(successors.initialSet?.description.contains("Cardinality") == true)
+        guard case .memberOf(let initialDomain) = successors.initialization else {
+            Issue.record("Expected successors to retain its initial domain")
+            return
+        }
+        #expect(initialDomain.description.contains("Cardinality"))
     }
 
     @Test("Algorithm parser decodes scoped function-set invariants")
@@ -1087,7 +1091,7 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "RecordFunction")
         let carsDeclaration = try #require(specification.variables.first { $0.name == "cars" })
-        guard let initializer = carsDeclaration.initExpr,
+        guard case .expression(let initializer) = carsDeclaration.initialization,
               case .function(let cars) = try evaluateClosed(initializer) else {
             Issue.record("Expected cars to retain a formal finite function")
             return
@@ -1119,7 +1123,7 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "Votes")
         let votesDeclaration = try #require(specification.variables.first { $0.name == "votes" })
-        guard let initializer = votesDeclaration.initExpr,
+        guard case .expression(let initializer) = votesDeclaration.initialization,
               case .function(let votes) = try evaluateClosed(initializer) else {
             Issue.record("Expected votes to retain a formal finite function")
             return
@@ -1168,7 +1172,7 @@ private func parserEnum(
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
                 )
-                let current = SharedVar("current", initial: selected)
+                let current: SharedVariable<Int> = SharedVar("current", initial: selected)
                 Do(TestControlLabel.done) { Stop() }
             }
         }
@@ -1178,7 +1182,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "StaticChoice")
-        #expect(specification.variables.first { $0.name == "current" }?.initExpr == .int(2))
+        #expect(specification.variables.first { $0.name == "current" }?.initialization == .value(.int(2)))
     }
 
     @Test("parser expands a statement macro with the current process identifier")
@@ -1290,7 +1294,7 @@ private func parserEnum(
     func parsedSharedInitializerRetainsFormalExpression() throws {
         let closure = try parseClosure("""
         {
-            let count = SharedVar("count", initial: 1 + 2)
+            let count: SharedVariable<Int> = SharedVar("count", initial: 1 + 2)
         }
         """)
         let parsed = SpecParser.parseSpecClosure(closure)
@@ -1298,13 +1302,49 @@ private func parserEnum(
 
         let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
 
-        #expect(parsedVariable.initial == .int(0))
-        #expect(parsedVariable.initExpr == .add(.value(.int(1)), .value(.int(2))))
+        #expect(parsedVariable.initialization == .expression(.add(.value(.int(1)), .value(.int(2)))))
 
         let compilation = try parsed.compile(specificationName: "SharedInitializer")
         let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let count = try #require(TLAStateProjection.Token(validating: "count"))
         #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+    }
+
+    @Test("parsed and built literal initializers have one compilation identity")
+    func parsedAndBuiltLiteralInitializersShareIdentity() throws {
+        let closure = try parseClosure("""
+        {
+            let count = SharedVar("count", initial: 1)
+        }
+        """)
+        let parsed = try SpecParser.parseSpecClosure(closure).compile(
+            specificationName: "LiteralInitializer"
+        )
+        let built = try TLASpec("LiteralInitializer") {
+            SharedVar("count", initial: 1)
+        }.compile()
+
+        #expect(parsed.identity == built.identity)
+    }
+
+    @Test("parsed initial domains retain state dependencies")
+    func parsedInitialDomainsRetainStateDependencies() throws {
+        let closure = try parseClosure("""
+        {
+            let limit = SharedVar("limit", initial: 2)
+            let choice = SharedVar("choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
+                value <= limit
+            })
+        }
+        """)
+        let parsed = SpecParser.parseSpecClosure(closure)
+        let compilation = try parsed.compile(specificationName: "DependentInitialDomain")
+        let choice = try #require(compilation.layout.variableID(named: "choice"))
+        let states = try CompiledRuntime(compilation: compilation).initialStates()
+
+        #expect(Set(try states.map {
+            try $0.value(for: choice).rendered(using: compilation.layout)
+        }) == [.int(1), .int(2)])
     }
 
     @Test("unsupported variable initializers fail during parsing")
@@ -1381,8 +1421,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.variables.count == 1)
         guard parsed.variables.count == 1 else { return }
         #expect(parsed.variables[0].name == "counter")
-        #expect(parsed.variables[0].initial == .set([.int(0), .int(1)]))
-        #expect(parsed.variables[0].initialSet == .setLiteral([.value(.int(0)), .value(.int(1))]))
+        #expect(parsed.variables[0].initialization == .memberOf(.setLiteral([.value(.int(0)), .value(.int(1))])))
         #expect(parsed.variables[0].generatedSwiftType == "Int")
     }
 
@@ -1401,10 +1440,10 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.count == 2)
         #expect(parsed.variables[0].name == "queued")
-        #expect(parsed.variables[0].initial == .set([]))
+        #expect(parsed.variables[0].initialization == .value(.set([])))
         #expect(parsed.variables[0].generatedSwiftType == "TLAValue")
         #expect(parsed.variables[1].name == "phase")
-        #expect(parsed.variables[1].initial == .int(0))
+        #expect(parsed.variables[1].initialization == .value(.int(0)))
         #expect(parsed.variables[1].generatedSwiftType == "Int")
     }
 
@@ -1488,8 +1527,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
                 name: "CanonicalTestSpec",
                 variables: [.init(
                     name: "counter",
-                    initial: .set([.int(0), .int(1)]),
-                    initialSet: .setLiteral(values),
+                    initialization: .memberOf(.setLiteral(values)),
                     generatedSwiftType: "Int",
                     origin: .source
                 )],
@@ -1804,7 +1842,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
 
     @Test func localOperatorParameterNamesAreAlphaEquivalent() throws {
         let parserTree = canonicalTestSpec(
-            variables: [("counter", .int(0), nil)],
+            variables: [("counter", .value(.int(0)))],
             actions: [(
                 "advance",
                 .guard_(.letIn([
@@ -1822,7 +1860,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
             invariants: []
         )
         let builderTree = canonicalTestSpec(
-            variables: [("counter", .int(0), nil)],
+            variables: [("counter", .value(.int(0)))],
             actions: [(
                 "advance",
                 .guard_(.letIn([
@@ -2692,7 +2730,7 @@ private let cameraModeDefinition = parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.variables.count == 1)
         #expect(parsed.variables[0].name == "mode")
-        #expect(parsed.variables[0].initial == .string("idle"))
+        #expect(parsed.variables[0].initialization == .value(.string("idle")))
         #expect(parsed.variables[0].generatedSwiftType == "CameraMode")
     }
 

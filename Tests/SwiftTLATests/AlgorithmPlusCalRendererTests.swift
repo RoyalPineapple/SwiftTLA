@@ -145,7 +145,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("imports Integers when rendering a negative formal value")
     func rendersNegativeFormalValue() throws {
         let algorithm = Algorithm("Negative", scoped: { scope in
-            let _ = scope.sharedVar("previous", initial: -1)
+            let _: SharedVariable<Int> = scope.sharedVar("previous", initial: -1)
             Do(TestControlLabel.stop) { Stop() }
         })
 
