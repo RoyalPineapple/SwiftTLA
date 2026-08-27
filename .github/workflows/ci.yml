@@ -17,7 +17,7 @@ jobs:
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        run: swift test -j 1
+        run: swift test -j 1 --no-parallel
 
   apple-platform-examples:
     runs-on: macos-15
