@@ -654,7 +654,7 @@ struct GeneratedStateMachineTests {
     @Test("#spec preserves the constrained TLASpec builder for model generation")
     func specExpressionMacroCompilesExternally() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/SpecExpressionMacro")
-        let result = try runSwift(["run", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["run", "--package-path", fixture.path])
 
         #expect(result.status == 0, Comment(rawValue: result.output))
     }
@@ -847,7 +847,7 @@ struct GeneratedStateMachineTests {
     @Test("Removed fixed-arity action syntax does not type check")
     func unsupportedActionParameterSyntaxDoesNotCompile() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidActionParameterAPI")
-        let result = try runSwift(["build", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
         #expect(result.output.contains("Parameterized action 'singleParameter' requires a parameters list"))
@@ -874,25 +874,4 @@ struct GeneratedStateMachineTests {
         }
     }
 
-    private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {
-        let scratch = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SwiftTLA-invalid-action-parameter-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: scratch) }
-        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["swift"] + arguments + ["--scratch-path", scratch.path]
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = output
-        try process.run()
-        let outputData = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        return (
-            process.terminationStatus,
-            String(data: outputData, encoding: .utf8) ?? ""
-        )
-    }
 }

@@ -99,7 +99,7 @@ struct NestedComposableMacroConformanceTests {
     @Test("Model macro rejects arbitrary instance state")
     func modelWithInstanceStoredStateDoesNotTypeCheck() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidModelStoredState")
-        let result = try runSwift(["build", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
@@ -108,7 +108,7 @@ struct NestedComposableMacroConformanceTests {
     @Test("Model macro rejects dynamic formal module names")
     func modelWithDynamicFormalModuleNameDoesNotTypeCheck() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidDynamicModelName")
-        let result = try runSwift(["build", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
         #expect(result.output.contains("must be a string literal; dynamic names cannot form a stable compilation identity"))
@@ -117,7 +117,7 @@ struct NestedComposableMacroConformanceTests {
     @Test("Model macro rejects observer-backed instance state")
     func modelWithObservedInstanceStateDoesNotTypeCheck() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidObservedModelState")
-        let result = try runSwift(["build", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
@@ -126,7 +126,7 @@ struct NestedComposableMacroConformanceTests {
     @Test("External clients compile against generated typed application surfaces")
     func generatedTypedSurfaceCompilesExternally() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/GeneratedTypedSurface")
-        let result = try runSwift(["run", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["run", "--package-path", fixture.path])
 
         #expect(result.status == 0)
     }
@@ -134,7 +134,7 @@ struct NestedComposableMacroConformanceTests {
     @Test("External clients cannot use raw state maps or transition evidence")
     func generatedRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidGeneratedRawSurface")
-        let result = try runSwift(["build", "--package-path", fixture.path])
+        let result = try runSwiftPackage(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
         #expect(result.output.contains("has no member 'tlaSnapshot'"))
@@ -159,7 +159,7 @@ struct NestedComposableMacroConformanceTests {
         requiresGeneratedSurfaceRejection: Bool = true
     ) throws {
         let package = packageRoot().appendingPathComponent("Tests/Fixtures/\(fixture)")
-        let result = try runSwift(["build", "--package-path", package.path])
+        let result = try runSwiftPackage(["build", "--package-path", package.path])
 
         #expect(result.status != 0)
         #expect(result.output.contains(stateDiagnostic))
@@ -177,29 +177,4 @@ struct NestedComposableMacroConformanceTests {
         )
     }
 
-    private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {
-        let scratch = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SwiftTLA-invalid-nested-macro-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: scratch) }
-        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["swift"] + arguments + ["--scratch-path", scratch.path]
-        let outputURL = scratch.appendingPathComponent("output.log")
-        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-        let output = try FileHandle(forWritingTo: outputURL)
-        defer { try? output.close() }
-        process.standardOutput = output
-        process.standardError = output
-        try process.run()
-        process.waitUntilExit()
-        try output.synchronize()
-        let outputData = try Data(contentsOf: outputURL)
-
-        return (
-            process.terminationStatus,
-            String(data: outputData, encoding: .utf8) ?? ""
-        )
-    }
 }
