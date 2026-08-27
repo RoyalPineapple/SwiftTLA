@@ -10,16 +10,11 @@ struct UpstreamParityTests {
         }
     }
 
-    @Test("Model checker count matches every TLC-verified example")
-    func modelCheckerMatchesTLC() throws {
-        for entry in Example.all {
-            let result = try explore(entry.spec, maximumStateLimit: entry.maximumStateLimit)
-            let count = result.graph.states.count
-            let matches = count == entry.expectedDistinct && isSuccessful(result)
-            if !matches {
-                Issue.record("\(entry.id): ModelChecker \(count) states, TLC \(entry.expectedDistinct)")
-            }
-        }
+    @Test("Model checker reaches the declared TLC state count", arguments: Example.all)
+    func modelCheckerReachesDeclaredTLCStateCount(_ entry: Example.Entry) throws {
+        let result = try explore(entry.spec, maximumStateLimit: entry.maximumStateLimit)
+        #expect(result.graph.states.count == entry.expectedDistinct)
+        #expect(isSuccessful(result))
     }
 
     @Test("Game of Life preserves the blinker transition")
