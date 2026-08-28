@@ -94,8 +94,10 @@ struct RefinementChecker {
     }
 
     private func mappedState(_ refinement: CompiledRefinement, source: CompiledState) throws -> CompiledState {
-        let evaluator = CompiledEvaluator(state: source, semantics: compilation.semantics, layout: compilation.layout)
-        return try CompiledState(values: refinement.variableMappings.map(evaluator.evaluate), compilation: refinement.abstract)
+        try CompiledState(
+            values: CompiledRuntime(compilation: compilation).evaluate(refinement.variableMappings, in: source),
+            compilation: refinement.abstract
+        )
     }
 }
 

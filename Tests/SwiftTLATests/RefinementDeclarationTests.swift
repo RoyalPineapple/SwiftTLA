@@ -157,6 +157,40 @@ struct RefinementDeclarationTests {
     }
   }
 
+  @Test("refinement mappings use compiled action enabledness")
+  func mapsActionEnabledness() throws {
+    let abstractEnabled = Var<Bool>("abstractEnabled", true)
+    let abstract = TLASpec("Abstract") {
+      Variable(abstractEnabled)
+      Action("advance") {
+        abstractEnabled.becomes(false).when(abstractEnabled)
+      }
+    }
+    let concreteValue = Var<Int>("concreteValue", 0)
+    let concreteAdvance = Action("advance") {
+      concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
+    }
+    let instance = Instance("C", of: abstract)
+    let concrete = TLASpec("Concrete") {
+      Variable(concreteValue)
+      concreteAdvance
+      instance
+      Refinement(
+        name: "Refines",
+        instance: instance,
+        mappings: [.init(abstractEnabled, from: StateExpr.enabled(concreteAdvance))]
+      )
+    }
+
+    guard case .ok = try ModelChecker(
+      compilation: try concrete.compile(),
+      configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
+    ).check() else {
+      Issue.record("Expected action enabledness to preserve the abstract transition.")
+      return
+    }
+  }
+
   @Test("bounded refinement reports a concrete edge outside the abstract relation")
   func rejectsUnmappedConcreteEdge() throws {
     let abstractValue = Var<Int>("abstractValue", 0)
