@@ -1,6 +1,4 @@
-import Foundation
-
-/// Storage for one generated Swift machine and its compiled specification.
+/// Support storage referenced by `@TLAModel` member expansions.
 public struct _GeneratedMachineStorage: Sendable {
     /// An opaque state from this storage's compiled specification.
     public struct State: Hashable, Sendable {
