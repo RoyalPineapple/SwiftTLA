@@ -46,7 +46,7 @@ struct Counter {
 
 `Algorithm`, `Each`, `Procedure`, `Do`, `When`, `Assign`, `With`, `Choose`,
 `Goto`, and `Stop` create the source model. `FormalDefinition`, `Invariant`,
-`Theorem`, `Import`, `Instance`, and `Refinement` create typed formal
+`Import`, `Instance`, and `Refinement` create typed formal
 declarations in the same model.
 
 Direct TLA+ builders serve imported formal modules and parity fixtures. They

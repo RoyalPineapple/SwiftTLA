@@ -63,7 +63,6 @@ extension TLASpec {
         + temporalProperties.map(\.name)
         + recursiveFuncs.map(\.name)
         + formalOperatorDefinitions.map(\.name)
-        + theorems.map(\.name)
         + moduleInstances.map(\.name)
         + refinements.map(\.name)
     )

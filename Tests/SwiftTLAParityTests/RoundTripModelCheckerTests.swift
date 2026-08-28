@@ -100,15 +100,16 @@ private func value(
     #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTANT N = 3"))
   }
 
-  @Test func theoremOutput() throws {
+  @Test func invariantOutput() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
-      Theorem(name: "Safety", always: x >= 0)
+      Invariant("Safety") { x >= 0 }
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("THEOREM"))
+    let bundle = try spec.compile().renderedTLAModuleBundle()
+    #expect(bundle.tla.contains("Safety == (x >= 0)"))
+    #expect(bundle.cfg.contains("INVARIANT Safety"))
   }
 
   @Test func definitionsOutput() throws {

@@ -116,6 +116,50 @@ private struct CompilerPipelineCollectionModel {
 
 @Suite("Compiler pipeline canonicalization")
 struct CompilerPipelineCanonicalizationTests {
+    @Test("module assumptions are state-independent")
+    func moduleAssumptionsAreStateIndependent() {
+        let stateRead = TLASpec("StateDependentAssumption") {
+            Var("value", 0)
+            Assume(StateExpr.variable("value") >= 0)
+        }
+        let operatorRead = TLASpec(
+            name: "OperatorAssumption",
+            variables: [.init(name: "value", initial: .int(0))],
+            actions: [],
+            invariants: [],
+            assume: .operatorApplication(.reference("Current", arity: 0), []),
+            formalOperatorDefinitions: [
+                .init(name: "Current", parameters: [], body: .variable("value"))
+            ]
+        )
+        let enabledness = TLASpec(
+            name: "EnablednessAssumption",
+            variables: [.init(name: "value", initial: .int(0))],
+            actions: [.init(name: "stay", body: .unchanged(.named("value")))],
+            invariants: [],
+            assume: .enabledAction("stay")
+        )
+        let cases = [
+            (stateRead, "an assumption that reads model state"),
+            (operatorRead, "an assumption that reads model state"),
+            (enabledness, "an assumption that evaluates action enabledness")
+        ]
+
+        for (specification, actual) in cases {
+            do {
+                _ = try specification.compile()
+                Issue.record("Expected \(specification.name) to fail compilation.")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .stateDependentAssumption)
+                #expect(diagnostic.stage == .lowering)
+                #expect(diagnostic.path == "assume")
+                #expect(diagnostic.actual == actual)
+            } catch {
+                Issue.record("Expected a CompilationDiagnostic, got \(error).")
+            }
+        }
+    }
+
     @Test("generated Swift value types contribute to compilation identity")
     func generatedSwiftValueTypesContributeToCompilationIdentity() throws {
         let first = try TLASpec("GeneratedSurfaceIdentity") {
@@ -213,10 +257,10 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(module.contains("(_b0 = b0)"))
     }
 
-    @Test("compiled binder names do not shadow theorem names")
-    func compiledBinderNamesDoNotShadowTheoremNames() throws {
-        let spec = TLASpec("BinderTheoremCollision") {
-            Theorem(name: "b0", always: .value(.bool(true)))
+    @Test("compiled binder names do not shadow temporal property names")
+    func compiledBinderNamesDoNotShadowTemporalPropertyNames() throws {
+        let spec = TLASpec("BinderPropertyCollision") {
+            Always("b0", .value(.bool(true)))
             Invariant("Safe") {
                 .forAll(
                     .setLiteral([.value(.int(1))]),
@@ -228,7 +272,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let module = try spec.compile().renderedTLAModuleBundle().root.tla
 
-        #expect(spec.theorems.map(\.name) == ["b0"])
+        #expect(spec.temporalProperties.map(\.name) == ["b0"])
         #expect(module.contains("\\A _b0 \\in"))
     }
 
@@ -1756,7 +1800,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let variants = [
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], checkDeadlock: true),
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], theorems: [Theorem(name: "Safety", always: .value(.bool(true)))]),
+            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], temporalProperties: [.init(name: "Safety", expr: .always(.value(.bool(true))))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
             {
                 let collection = SymmetricCollectionDecl(

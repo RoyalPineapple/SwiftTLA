@@ -43,7 +43,7 @@ finite set of action labels. Use typed expressions in `When`, `Assign`, `With`,
 | Process family | `Each` | one finite process family |
 | Atomic action | `Do` | guard, assignment, choice, and transfer statements |
 | Procedure | `Procedure` | typed procedure declaration |
-| Formal declaration | `FormalDefinition`, `Invariant`, `Theorem`, `Refinement` | typed formal declaration |
+| Formal declaration | `FormalDefinition`, `Invariant`, `Refinement` | typed formal declaration |
 
 The source builders preserve lexical nesting. Compilation binds each declared
 name to a private identity. The runtime uses those identities and compiled
