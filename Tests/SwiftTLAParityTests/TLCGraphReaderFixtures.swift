@@ -111,15 +111,22 @@ func fingerprintAliasGraphStream(
   _ finiteGraphCase: FiniteGraphCase,
   aliasSeen: Bool,
   aliasFingerprint: String = "2",
-  aliasValue: String = "1"
+  aliasValue: String = "A",
+  aliasStableValue: String = "0"
 ) throws -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
-  let state0: [String: Any] = ["fingerprint": "1", "level": 1, "bindings": [binding(0, "x", "0")]]
-  let representative: [String: Any] = ["fingerprint": "2", "level": 2, "bindings": [binding(0, "x", "1")]]
+  let state0: [String: Any] = [
+    "fingerprint": "1", "level": 1,
+    "bindings": [binding(0, "x", "Origin"), binding(1, "stable", "0")]
+  ]
+  let representative: [String: Any] = [
+    "fingerprint": "2", "level": 2,
+    "bindings": [binding(0, "x", "A"), binding(1, "stable", "0")]
+  ]
   let alias: [String: Any] = [
     "fingerprint": aliasFingerprint,
     "level": 2,
-    "bindings": [binding(0, "x", aliasValue)]
+    "bindings": [binding(0, "x", aliasValue), binding(1, "stable", aliasStableValue)]
   ]
   let headerData = Data((try header(finiteGraphCase)).utf8)
   let initial = record(
@@ -172,16 +179,22 @@ func jsonLine(_ object: [String: Any]) throws -> Data {
 func fixtureCase(
   _ pin: TLCReferencePin,
   arguments: [String] = [],
-  renderedActions: [RenderedAction] = []
+  renderedActions: [RenderedAction] = [],
+  symmetryReduction: SymmetryReduction = .disabled,
+  symmetryGenerators: [SymmetryPermutation] = []
 )
   throws -> FiniteGraphCase {
   try FiniteGraphCase(
     id: "fixture",
-    exploration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled),
+    exploration: try .init(
+      maximumStateLimit: 100_000,
+      symmetryReduction: symmetryReduction
+    ),
     moduleSHA256: String(repeating: "c", count: 64),
     cfgSHA256: String(repeating: "d", count: 64),
     arguments: arguments,
-    environment: [:], pin: pin, renderedActions: renderedActions
+    environment: [:], pin: pin, renderedActions: renderedActions,
+    symmetryGenerators: symmetryGenerators
   )
 }
 func functionRecordNormalizationStream(

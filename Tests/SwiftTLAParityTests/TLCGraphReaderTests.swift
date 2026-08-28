@@ -465,8 +465,8 @@ extension TLCGraphReaderTests {
     #expect(parsed.transitions.map(\.action) == ["Next"])
   }
 
-  @Test("graph event reader resolves a reduced TLC alias only through its retained fingerprint representative")
-  func resolvesFingerprintAliasesFromSameStream() throws {
+  @Test("reduced TLC fingerprint aliases must belong to the declared symmetry orbit")
+  func acceptsOnlyDeclaredSymmetryAliases() throws {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let parsed = try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true))
@@ -474,13 +474,39 @@ extension TLCGraphReaderTests {
     #expect(parsed.transitions[0].target == parsed.transitions[1].target)
     #expect(parsed.fingerprintRepresentatives["2"] == parsed.transitions[0].target)
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "fingerprint binding mismatch")) {
-      try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: false, aliasValue: "2"))
+      try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: false, aliasValue: "B"))
     }
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "fingerprint binding mismatch")) {
-      try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true, aliasValue: "2"))
+      try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true, aliasValue: "B"))
     }
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "seen fingerprint without representative")) {
       try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true, aliasFingerprint: "foreign"))
+    }
+
+    let reducedCase = try fixtureCase(
+      try toolchainPin(),
+      symmetryReduction: .enabled(maximumPermutationCount: 2),
+      symmetryGenerators: [try SymmetryPermutation(constantMapping: ["A": "B", "B": "A"])]
+    )
+    let reduced = try TLCGraphReader(finiteGraphCase: reducedCase).parse(
+      try fingerprintAliasGraphStream(reducedCase, aliasSeen: true, aliasValue: "B")
+    )
+    #expect(reduced.transitions.count == 2)
+    #expect(reduced.transitions[0].target == reduced.transitions[1].target)
+    #expect(throws: TLCGraphEventError.invalidRecord(
+      line: 4, reason: "fingerprint binding outside declared symmetry orbit")) {
+      try TLCGraphReader(finiteGraphCase: reducedCase).parse(try fingerprintAliasGraphStream(
+        reducedCase, aliasSeen: true, aliasValue: "B", aliasStableValue: "1"))
+    }
+    #expect(throws: TLCGraphEventError.invalidRecord(
+      line: 4, reason: "fingerprint binding outside declared symmetry orbit")) {
+      try TLCGraphReader(finiteGraphCase: reducedCase).parse(try fingerprintAliasGraphStream(
+        reducedCase, aliasSeen: true, aliasValue: "C"))
+    }
+    #expect(throws: SymmetryOrbitAdapterError.emptyPermutationGroup) {
+      try fixtureCase(
+        try toolchainPin(),
+        symmetryReduction: .enabled(maximumPermutationCount: 2))
     }
   }
 

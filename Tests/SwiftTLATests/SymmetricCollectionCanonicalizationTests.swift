@@ -34,24 +34,21 @@ struct SymmetricCollectionCanonicalizationTests {
       guard let source = graph.states[sourceID] else { continue }
       for edge in edges {
         guard let target = graph.states[edge.target] else { continue }
-        let targetAndArguments = mappings.map { mapping in
-          (
-            target: encode(applyPermutation(target.entries, mapping: mapping)),
-            arguments: edge.label.arguments.map {
-              encode(applyPermutation($0, mapping: mapping))
-            }
-          )
-        }.min {
-          let lhs = $0.target + "|arguments:" + $0.arguments.joined(separator: "|")
-          let rhs = $1.target + "|arguments:" + $1.arguments.joined(separator: "|")
-          return lhs < rhs
-        }
-        guard let targetAndArguments else { continue }
-        let action = targetAndArguments.arguments.isEmpty
+        let sourceRepresentative = canonicalState(source)
+        let arguments = mappings.compactMap { mapping -> [String]? in
+          guard encode(applyPermutation(source.entries, mapping: mapping)) == sourceRepresentative else {
+            return nil
+          }
+          return edge.label.arguments.map {
+            encode(applyPermutation($0, mapping: mapping))
+          }
+        }.min { $0.lexicographicallyPrecedes($1) }
+        guard let arguments else { continue }
+        let action = arguments.isEmpty
           ? edge.label.action
-          : "\(edge.label.action)(\(targetAndArguments.arguments.joined(separator: ",")))"
+          : "\(edge.label.action)(\(arguments.joined(separator: ",")))"
         transitions.insert(
-          "\(canonicalState(source)) --\(action)--> \(targetAndArguments.target)"
+          "\(sourceRepresentative) --\(action)--> \(canonicalState(target))"
         )
       }
     }
@@ -169,6 +166,29 @@ struct SymmetricCollectionCanonicalizationTests {
       independentlyCanonicalizedState($0, groups: groups)
     }
     return Set(orbits).count == graph.states.count
+  }
+
+  @Test("Reduced transitions retain the executed symmetric member")
+  func reducedTransitionsRetainExecutedMember() throws {
+    let members = SymmetricCollectionVar<Device, Int>("members")
+    let spec = TLASpec("MemberActions") {
+      SymmetricCollection(members, verificationScope: 2, initial: 0)
+      CollectionAction("mark", on: members) { member in
+        (members[member] == 0) && members.update(member, to: 1)
+      }
+    }
+    let compilation = try spec.compile()
+    let exploration = try ModelChecker(
+      compilation: compilation,
+      configuration: try FiniteExplorationConfiguration(
+        maximumStateLimit: 100,
+        symmetryReduction: .enabled(maximumPermutationCount: 2)
+      )
+    ).explore()
+    let initial = try #require(exploration.initialStateIDs.first)
+    let transitions = try #require(exploration.graph.transitions[initial])
+    #expect(transitions.count == 2)
+    #expect(Set(transitions.flatMap(\.label.arguments)) == Set(spec.symmetricCollections[0].metadata.members))
   }
 
   @Test("Nested symmetric values are quotient-canonicalized without collapsing identities")

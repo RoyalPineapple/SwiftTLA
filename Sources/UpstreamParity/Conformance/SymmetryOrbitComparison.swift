@@ -1,4 +1,5 @@
 import Foundation
+import SwiftTLA
 
 package struct SymmetryOrbit: Equatable, Encodable, Sendable {
   package let members: [String]
@@ -89,7 +90,8 @@ package struct SymmetryOrbitComparison: Equatable, Encodable, Sendable {
 package enum SymmetryOrbitDifferenceKind: String, Encodable, Sendable {
   case incompleteRun
   case rawGraph
-  case observableNames
+  case variableNames
+  case undeclaredAction
   case reducedInitialStates
   case quotientTransition
 }
@@ -110,6 +112,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
   package let swiftReduced: CompletedGraphRun
   package let tlcRaw: CompletedGraphRun
   package let tlcReduced: CompletedGraphRun
+  package let renderedActions: [RenderedAction]
   package let permutations: [SymmetryPermutation]
   package let maximumPermutationCount: Int
 
@@ -119,6 +122,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
     swiftReduced: CompletedGraphRun,
     tlcRaw: CompletedGraphRun,
     tlcReduced: CompletedGraphRun,
+    renderedActions: [RenderedAction],
     permutations: [SymmetryPermutation],
     maximumPermutationCount: Int
   ) throws {
@@ -132,6 +136,7 @@ package struct SymmetryOrbitComparisonInput: Sendable {
     self.swiftReduced = swiftReduced
     self.tlcRaw = tlcRaw
     self.tlcReduced = tlcReduced
+    self.renderedActions = renderedActions
     self.permutations = permutations
     self.maximumPermutationCount = maximumPermutationCount
   }
@@ -159,13 +164,20 @@ package func compareSymmetryOrbits(
   }
 
   let variableNames = input.swiftRaw.graph.variableNames
-  let observableActions = input.swiftRaw.observableActions
-  guard runs.allSatisfy({
-    $0.graph.variableNames == variableNames && $0.observableActions == observableActions
-  }) else {
+  let declaredActions = Set(input.renderedActions.map(\.renderedName))
+  guard runs.allSatisfy({ $0.graph.variableNames == variableNames }) else {
     return .difference([SymmetryOrbitDifference(
-      kind: .observableNames,
-      detail: "Raw and reduced SwiftTLA and TLC graphs declare different observable names"
+      kind: .variableNames,
+      detail: "Raw and reduced SwiftTLA and TLC graphs declare different variables"
+    )])
+  }
+  let undeclaredActions = Set(runs.flatMap { run in
+    run.graph.edgeOccurrences.keys.map(\.action).filter { !declaredActions.contains($0) }
+  })
+  guard undeclaredActions.isEmpty else {
+    return .difference([SymmetryOrbitDifference(
+      kind: .undeclaredAction,
+      detail: "Graph actions are absent from the compiled action plan: \(undeclaredActions.sorted().joined(separator: ", "))"
     )])
   }
 
@@ -174,6 +186,7 @@ package func compareSymmetryOrbits(
     permutations: input.permutations,
     maximumPermutationCount: input.maximumPermutationCount
   )
+  let actionPlan = try SymmetryActionPlan(input.renderedActions)
   let swiftRepresentatives = try reducedRepresentatives(
     input.swiftReduced, source: .swift, derivation: derivation
   )
@@ -192,11 +205,12 @@ package func compareSymmetryOrbits(
     )])
   }
 
-  let expectedQuotient = try quotientTransitions(input.swiftRaw, derivation: derivation)
+  let expectedQuotient = try quotientTransitions(
+    input.swiftRaw, derivation: derivation, actionPlan: actionPlan)
   let quotients = try [
-    quotientTransitions(input.tlcRaw, derivation: derivation),
-    quotientTransitions(input.swiftReduced, derivation: derivation),
-    quotientTransitions(input.tlcReduced, derivation: derivation)
+    quotientTransitions(input.tlcRaw, derivation: derivation, actionPlan: actionPlan),
+    quotientTransitions(input.swiftReduced, derivation: derivation, actionPlan: actionPlan),
+    quotientTransitions(input.tlcReduced, derivation: derivation, actionPlan: actionPlan)
   ]
   guard quotients.allSatisfy({ $0 == expectedQuotient }) else {
     return .difference([SymmetryOrbitDifference(
@@ -273,17 +287,79 @@ private func initialRepresentatives(
 
 private func quotientTransitions(
   _ run: CompletedGraphRun,
-  derivation: SymmetryOrbitDerivation
+  derivation: SymmetryOrbitDerivation,
+  actionPlan: SymmetryActionPlan
 ) throws -> [SymmetryQuotientTransition] {
   try Set(run.graph.edgeOccurrences.keys.map { edge in
     guard let source = derivation.representativeForState[edge.source],
-          let target = derivation.representativeForState[edge.target] else {
+          let target = derivation.representativeForState[edge.target],
+          let sourceState = run.graph.states[edge.source] else {
       throw SymmetryOrbitAdapterError.incompleteOrbit(edge.source.canonicalEncoding)
     }
     return try SymmetryQuotientTransition(
       sourceRepresentative: source.canonicalEncoding,
-      action: edge.action,
+      action: actionPlan.representative(
+        for: edge.action,
+        from: sourceState,
+        sourceRepresentative: source,
+        group: derivation.group
+      ),
       targetRepresentative: target.canonicalEncoding
     )
   }).sorted()
+}
+
+private struct SymmetryActionCall: Hashable {
+  let sourceName: String
+  let arguments: [CanonicalValue]
+}
+
+private struct SymmetryActionPlan {
+  private let calls: [String: SymmetryActionCall]
+  private let renderedNames: [SymmetryActionCall: String]
+
+  init(_ actions: [RenderedAction]) throws {
+    var calls: [String: SymmetryActionCall] = [:]
+    var renderedNames: [SymmetryActionCall: String] = [:]
+    for action in actions {
+      let call = SymmetryActionCall(
+        sourceName: action.sourceName,
+        arguments: try action.arguments.map(CanonicalValue.init)
+      )
+      guard calls.updateValue(call, forKey: action.renderedName) == nil else {
+        throw SymmetryOrbitAdapterError.duplicateRenderedAction(action.renderedName)
+      }
+      guard renderedNames.updateValue(action.renderedName, forKey: call) == nil else {
+        throw SymmetryOrbitAdapterError.duplicateActionCall
+      }
+    }
+    self.calls = calls
+    self.renderedNames = renderedNames
+  }
+
+  func representative(
+    for action: String,
+    from source: CanonicalState,
+    sourceRepresentative: CanonicalStateKey,
+    group: [SymmetryPermutation]
+  ) throws -> String {
+    guard let call = calls[action] else {
+      throw SymmetryOrbitAdapterError.undeclaredAction(action)
+    }
+    var candidates: [String] = []
+    for permutation in group where try permutation.apply(source).key == sourceRepresentative {
+      let transformed = SymmetryActionCall(
+        sourceName: call.sourceName,
+        arguments: try call.arguments.map(permutation.apply)
+      )
+      guard let renderedName = renderedNames[transformed] else {
+        throw SymmetryOrbitAdapterError.actionPlanNotClosed(action: action)
+      }
+      candidates.append(renderedName)
+    }
+    guard let representative = candidates.min(by: canonicalBytes) else {
+      throw SymmetryOrbitAdapterError.incompleteOrbit(source.key.canonicalEncoding)
+    }
+    return representative
+  }
 }

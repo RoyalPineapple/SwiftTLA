@@ -10,6 +10,7 @@ package enum FiniteGraphCaseError: Error, Equatable, Sendable {
     case cfgDigestMismatch
     case pinMismatch(String)
     case missingArtifact(String)
+    case symmetryGeneratorsWithoutReduction
 }
 
 package struct TLCReferencePin: Equatable, Sendable {
@@ -122,6 +123,7 @@ package struct FiniteGraphCase: Equatable, Sendable {
     package let environment: [String: String]
     package let pin: TLCReferencePin
     package let renderedActions: [RenderedAction]
+    let symmetryGroup: [SymmetryPermutation]
 
     package init(
         id: String,
@@ -131,7 +133,8 @@ package struct FiniteGraphCase: Equatable, Sendable {
         arguments: [String],
         environment: [String: String],
         pin: TLCReferencePin,
-        renderedActions: [RenderedAction] = []
+        renderedActions: [RenderedAction] = [],
+        symmetryGenerators: [SymmetryPermutation] = []
     ) throws {
         guard !id.isEmpty else { throw FiniteGraphCaseError.invalidIdentifier("case ID") }
         guard TLCReferencePin.isSHA256(moduleSHA256) else { throw FiniteGraphCaseError.invalidSHA256(field: "moduleSHA256") }
@@ -148,6 +151,17 @@ package struct FiniteGraphCase: Equatable, Sendable {
         self.environment = environment
         self.pin = pin
         self.renderedActions = renderedActions
+        switch exploration.symmetryReduction {
+        case .disabled:
+            guard symmetryGenerators.isEmpty else {
+                throw FiniteGraphCaseError.symmetryGeneratorsWithoutReduction
+            }
+            symmetryGroup = []
+        case .enabled(let maximumPermutationCount):
+            symmetryGroup = try SymmetryPermutation.closedGroup(
+                generatedBy: symmetryGenerators,
+                maximumPermutationCount: maximumPermutationCount)
+        }
     }
 
     package func validateLaunch(module: URL, configuration: URL) throws {
