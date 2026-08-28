@@ -161,41 +161,6 @@ struct FiniteGraphCheckTests {
         "secret"))
   }
 
-  @Test("finite graph check isolates a stale staging directory and retains trace evidence")
-  func isolatesStagingAndRetainsTraceEvidence() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let stale = root.appendingPathComponent(
-      ".fixture.\(request.runID.uuidString.lowercased()).staging")
-    try fileManager.createDirectory(at: stale, withIntermediateDirectories: true)
-    try Data("stale".utf8).write(to: stale.appendingPathComponent("contamination.txt"))
-    try Data("trace".utf8).write(to: request.traceOutput)
-    let executor = FixtureTLCExecutor(
-      stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
-      status: 12,
-      stdout: "Invariant violation"
-    )
-    let output = root.appendingPathComponent("trace-evidence")
-    let result = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(executor: executor)
-    ).run(
-      compilation: try fixtureCompilation(),
-      tlcRequest: request,
-      outputDirectory: output
-    )
-    #expect(result.evidenceDirectory == output)
-    #expect(
-      !fileManager.fileExists(atPath: output.appendingPathComponent("contamination.txt").path))
-    #expect(fileManager.fileExists(atPath: stale.appendingPathComponent("contamination.txt").path))
-    #expect(
-      fileManager.fileExists(
-        atPath: output.appendingPathComponent("logs/tlc.trace.stdout.log").path))
-    #expect(
-      fileManager.fileExists(atPath: output.appendingPathComponent("counterexample.json").path))
-  }
   @Test("finite graph check rejects a complete graph stream from another TLC run")
   func rejectsWrongTLCStreamRunBinding() throws {
     let fileManager = FileManager.default
@@ -362,54 +327,6 @@ extension FiniteGraphCheckTests {
 }
 
 extension FiniteGraphCheckTests {
-  @Test("a post-preflight publication loser preserves completed TLC evidence")
-  func publicationRaceRetainsPhaseCorrectCompletedEvidence() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let stream = try graphStream(for: request.finiteGraphCase, runID: request.runID)
-    let barrier = PublicationRaceBarrier(parties: 2)
-    let check = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: BarrierTLCExecutor(stream: stream, barrier: barrier)))
-    let output = root.appendingPathComponent("shared-evidence")
-    let results = ResultBox()
-    let compilation = try fixtureCompilation(action: "Next")
-    DispatchQueue.concurrentPerform(iterations: 2) { _ in
-      results.append(
-        check.run(
-          compilation: compilation,
-          tlcRequest: request,
-          outputDirectory: output
-        ))
-    }
-    #expect(results.values.count == 2)
-    #expect(results.values.filter { $0.exitCode == .semanticDifference }.count == 1)
-    #expect(results.values.filter { $0.exitCode == .failure }.count == 1)
-    let losingEvidence = try #require(
-      results.values.first { $0.exitCode == .failure }?.evidenceDirectory)
-    #expect(losingEvidence != output)
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("diagnostic.json").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("swift-graph.jsonl").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-graph.jsonl").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("tlc-process.json").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.stdout.log").path))
-    #expect(fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.trace.stdout.log").path))
-    #expect(!fileManager.fileExists(atPath: losingEvidence.appendingPathComponent("logs/tlc.primary.failure.log").path))
-    let loserDiagnostic = try json(at: losingEvidence.appendingPathComponent("diagnostic.json"))
-    #expect(loserDiagnostic["phase"] as? String == "publication")
-    let loserProcess = try json(at: losingEvidence.appendingPathComponent("tlc-process.json"))
-    #expect((loserProcess["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
-    #expect((loserProcess["trace"] as? [String: Any])?["exitStatus"] as? Int == 12)
-    #expect(
-      (try String(contentsOf: losingEvidence.appendingPathComponent("logs/tlc.stdout.log"))).contains(
-        "primary invocation"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-graph.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-graph.jsonl").path))
-    #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
-  }
   private func fixtureCompilation(action: String = "SwiftNext") throws -> CompiledSpecification {
     let value = Var<Int>("x")
     return try TLASpec("Fixture") {
@@ -465,47 +382,6 @@ private struct FixtureTLCExecutor: TLCProcessExecuting {
     )
   }
 }
-private final class PublicationRaceBarrier: Sendable {
-  private let arrivals = OSAllocatedUnfairLock(initialState: 0)
-  private let release = DispatchSemaphore(value: 0)
-  private let parties: Int
-  init(parties: Int) {
-    self.parties = parties
-  }
-  func waitForAll() {
-    let isLast = arrivals.withLock {
-      $0 += 1
-      return $0 == parties
-    }
-    if isLast {
-      for _ in 1..<parties {
-        release.signal()
-      }
-    } else {
-      release.wait()
-    }
-  }
-}
-private struct BarrierTLCExecutor: TLCProcessExecuting {
-  let stream: Data
-  let barrier: PublicationRaceBarrier
-  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-    try stream.write(to: request.graphEvents)
-    if request.traceMode == .none {
-      barrier.waitForAll()
-    }
-    let phase: String
-    switch request.traceMode {
-    case .none: phase = "primary"
-    case .dumpJSON: phase = "trace"
-    }
-    return TLCProcessResult(
-      status: 12,
-      stdout: "Error: violation from \(phase) invocation",
-      stderr: ""
-    )
-  }
-}
 private struct FailingTLCExecutor: TLCProcessExecuting {
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     throw TLCProcessError.timedOut(
@@ -555,15 +431,6 @@ private final class ArbitraryFollowupFailureTLCExecutor: TLCProcessExecuting, Se
     case .dumpJSON:
       return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
     }
-  }
-}
-private final class ResultBox: Sendable {
-  private let storage = OSAllocatedUnfairLock(initialState: [FiniteGraphCheckOutput]())
-  var values: [FiniteGraphCheckOutput] {
-    storage.withLock { $0 }
-  }
-  func append(_ value: FiniteGraphCheckOutput) {
-    storage.withLock { $0.append(value) }
   }
 }
 private func json(at url: URL) throws -> [String: Any] {

@@ -84,13 +84,13 @@ package struct TemporalCaseConfiguration: Equatable, Codable, Sendable {
 
 package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
-  package let sourceInput: RetainedFileReference
+  package let sourceInput: SourceInputPin
   package let configuration: TemporalCaseConfiguration
   package let exploration: FiniteExplorationConfiguration
 
   package init(
     id: String,
-    sourceInput: RetainedFileReference,
+    sourceInput: SourceInputPin,
     configuration: TemporalCaseConfiguration,
     exploration: FiniteExplorationConfiguration
   ) throws {
@@ -117,7 +117,7 @@ package struct TemporalCase: Equatable, Codable, Sendable {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
-      sourceInput: try container.decode(RetainedFileReference.self, forKey: .sourceInput),
+      sourceInput: try container.decode(SourceInputPin.self, forKey: .sourceInput),
       configuration: try container.decode(TemporalCaseConfiguration.self, forKey: .configuration),
       exploration: try container.decode(FiniteExplorationConfiguration.self, forKey: .exploration))
   }

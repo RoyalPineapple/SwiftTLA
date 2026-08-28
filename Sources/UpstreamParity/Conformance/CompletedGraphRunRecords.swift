@@ -48,7 +48,7 @@ package enum CompletedGraphRunRecords {
     records.append([
       "type": "complete",
       "eligible": run.isPassEligible,
-      "outcome": outcome(run.outcome),
+      "outcome": outcomeRecord(run.outcome),
       "initialStateCount": run.graph.initialStateKeys.count,
       "stateCount": run.graph.states.count,
       "edgeCount": run.graph.edgeOccurrences.values.reduce(0, +),
@@ -57,7 +57,7 @@ package enum CompletedGraphRunRecords {
     return records
   }
 
-  private static func outcome(_ outcome: GraphRunOutcome) -> [String: String] {
+  static func outcomeRecord(_ outcome: GraphRunOutcome) -> [String: String] {
     switch outcome {
     case .exhaustiveSuccess:
       ["kind": "exhaustiveSuccess"]
@@ -71,4 +71,5 @@ package enum CompletedGraphRunRecords {
       ["kind": "executionError", "message": message]
     }
   }
+
 }

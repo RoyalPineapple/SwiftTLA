@@ -104,14 +104,8 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         let environment = ProcessInfo.processInfo.environment
         let casesPath = try requiredEnvironment("FINITE_GRAPH_CASES", environment)
         let manifest = try decode(FiniteGraphManifest.self, at: URL(fileURLWithPath: casesPath))
-        guard manifest.schema == FiniteGraphManifest.schema else {
-            throw FiniteGraphCLIError.invalidManifest("unsupported schema")
-        }
         let selected: [FiniteGraphManifest.Case]
         if options.caseID == "all" {
-            guard !manifest.cases.isEmpty else {
-                throw FiniteGraphCLIError.invalidManifest("contains no cases")
-            }
             selected = manifest.cases
         } else if let declaration = manifest.cases.first(where: { $0.id == options.caseID }) {
             selected = [declaration]

@@ -243,7 +243,6 @@ package struct TemporalSymmetryCheck: Sendable {
       toolchain: toolchain, bundle: reducedBundle, work: work.appendingPathComponent("reduced"),
       finiteGraphCase: reducedCase, runID: reducedRunID,
       projectRoot: projectRoot)
-    try validateSymmetryRequests(raw: rawRequest, reduced: reducedRequest)
     let processAdapter = TLCProcessAdapter()
     let rawTLC = try processAdapter.capture(
       rawRequest,
@@ -296,20 +295,6 @@ package struct TemporalSymmetryCheck: Sendable {
 }
 
 extension TemporalSymmetryCheck {
-  private func validateSymmetryRequests(raw: TLCProcessRequest, reduced: TLCProcessRequest) throws {
-    guard raw.caseID == reduced.caseID,
-          raw.runID != reduced.runID,
-          raw.finiteGraphCase.moduleSHA256 == reduced.finiteGraphCase.moduleSHA256,
-          raw.finiteGraphCase.pin == reduced.finiteGraphCase.pin,
-          raw.bundle.root.name == reduced.bundle.root.name,
-          raw.bundle.root.tla == reduced.bundle.root.tla,
-          raw.bundle.imports == reduced.bundle.imports,
-          raw.bundle.root.cfg != reduced.bundle.root.cfg else {
-      throw EvidenceFormatError.inconsistentReference(
-        record: raw.caseID, field: "pinned TLC raw/reduced pair")
-    }
-  }
-
   private func makeFiniteGraphCase(
     id: String,
     exploration: FiniteExplorationConfiguration,

@@ -76,7 +76,7 @@ struct TemporalSymmetryCheckTests {
     )
     let temporalCase = try TemporalCase(
       id: "temporal",
-      sourceInput: try RetainedFileReference(
+      sourceInput: try SourceInputPin(
         path: "TemporalFixture.tla",
         sha256: SHA256.hex(Data(contentsOf: source))
       ),

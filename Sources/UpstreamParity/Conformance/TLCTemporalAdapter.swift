@@ -59,11 +59,12 @@ package struct TLCTemporalAdapter: Sendable {
       input.swiftRun,
       to: input.outputDirectory.appendingPathComponent("swift-graph.jsonl")
     )
-    let completeGraph = try captureCompleteGraph(input)
     try clearTraceOutput(for: input.request)
-
     let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
     let run = capture.run
+    let completeGraph = capture.graph.isPassEligible
+      ? capture.graph
+      : try captureCompleteGraph(input)
     try CompletedGraphRunRecords.write(
       completeGraph,
       to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")

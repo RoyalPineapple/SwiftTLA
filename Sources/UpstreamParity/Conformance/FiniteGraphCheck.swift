@@ -133,9 +133,10 @@ package struct FiniteGraphCheck: Sendable {
       }
       do {
         try writeDiagnostic(failure, to: staging)
+        try publish(staging: staging, to: outputDirectory)
         return .init(
           exitCode: .failure,
-          evidenceDirectory: try publishFailure(staging: staging, to: outputDirectory),
+          evidenceDirectory: outputDirectory,
           comparison: nil,
           diagnostic: failure
         )
@@ -250,44 +251,15 @@ package struct FiniteGraphCheck: Sendable {
   private func createStagingDirectory(beside output: URL, caseID: String, runID: UUID) throws -> URL {
     let parent = output.deletingLastPathComponent()
     try RetainedFiles.createDirectory(parent, beneath: parent)
-    for _ in 0..<16 {
-      let path = parent.appendingPathComponent(
-        ".\(caseID).\(runID.uuidString.lowercased()).\(UUID().uuidString.lowercased()).staging"
-      )
-      do {
-        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false)
-        return path
-      } catch CocoaError.fileWriteFileExists {
-        continue
-      }
-    }
-    throw FiniteGraphCheckError.stagingDirectoryUnavailable
+    let path = parent.appendingPathComponent(
+      ".\(caseID).\(runID.uuidString.lowercased()).\(UUID().uuidString.lowercased()).staging"
+    )
+    try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false)
+    return path
   }
 
   private func publish(staging: URL, to outputDirectory: URL) throws {
     try FileManager.default.moveItem(at: staging, to: outputDirectory)
-  }
-
-  private func publishFailure(staging: URL, to outputDirectory: URL) throws -> URL {
-    do {
-      try publish(staging: staging, to: outputDirectory)
-      return outputDirectory
-    } catch {
-      guard FileManager.default.fileExists(atPath: outputDirectory.path) else { throw error }
-      let parent = outputDirectory.deletingLastPathComponent()
-      for _ in 0..<16 {
-        let sibling = parent.appendingPathComponent(
-          ".\(outputDirectory.lastPathComponent).\(UUID().uuidString.lowercased()).failure"
-        )
-        do {
-          try publish(staging: staging, to: sibling)
-          return sibling
-        } catch CocoaError.fileWriteFileExists {
-          continue
-        }
-      }
-      throw FiniteGraphCheckError.stagingDirectoryUnavailable
-    }
   }
 
 }
@@ -295,7 +267,6 @@ package struct FiniteGraphCheck: Sendable {
 private enum FiniteGraphCheckError: Error {
   case outputAlreadyExists
   case symmetryReductionEnabled
-  case stagingDirectoryUnavailable
 }
 
 private func failureReportJSON(_ report: CheckFailureReport) -> [String: Any] {

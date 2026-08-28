@@ -230,6 +230,7 @@ package enum GraphRunOutcome: Hashable, Sendable {
         if case .exhaustiveSuccess = self { return true }
         return false
     }
+
 }
 
 package struct GraphTraceStep: Hashable, Sendable {

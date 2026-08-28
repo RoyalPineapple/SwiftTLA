@@ -289,27 +289,21 @@ package protocol TLCProcessExecuting: Sendable {
 }
 
 package struct SystemTLCProcessExecutor: TLCProcessExecuting {
-  private let validatesReferences: Bool
-
-  package init(validatesReferences: Bool = true) {
-    self.validatesReferences = validatesReferences
-  }
+  package init() {}
 
   package func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     let input = try request.stageDeclaredBundle()
     try request.validateLaunchBinding(module: input.module, configuration: input.configuration)
-    if validatesReferences {
-      guard let artifacts = request.referenceArtifacts else {
-        throw FiniteGraphCaseError.missingArtifact("reference artifacts")
-      }
-      try request.validateReferenceBinding(artifacts: artifacts)
-      let pin = request.finiteGraphCase.pin
-      try pin.validate(
-        TLCReferenceInspector.inspect(
-          artifacts: artifacts, javaExecutable: request.javaExecutable,
-          directory: request.workingDirectory
-        ))
+    guard let artifacts = request.referenceArtifacts else {
+      throw FiniteGraphCaseError.missingArtifact("reference artifacts")
     }
+    try request.validateReferenceBinding(artifacts: artifacts)
+    let pin = request.finiteGraphCase.pin
+    try pin.validate(
+      TLCReferenceInspector.inspect(
+        artifacts: artifacts, javaExecutable: request.javaExecutable,
+        directory: request.workingDirectory
+      ))
     let result = try executeProcess(
       executable: request.javaExecutable,
       arguments: request.launchArguments,
@@ -630,7 +624,7 @@ package enum TLCReferenceInspector {
   }
 }
 
-private func executeProcess(
+func executeProcess(
   executable: URL,
   arguments: [String],
   directory: URL,

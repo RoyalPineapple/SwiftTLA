@@ -1,6 +1,6 @@
 import Foundation
 
-package struct RetainedFileReference: Equatable, Codable, Sendable {
+package struct SourceInputPin: Equatable, Codable, Sendable {
   package let path: String
   package let sha256: String
 
@@ -12,7 +12,7 @@ package struct RetainedFileReference: Equatable, Codable, Sendable {
 
   package func validate() throws {
     guard !path.isEmpty, !path.hasPrefix("/"), TLCReferencePin.isSHA256(sha256) else {
-      throw EvidenceFormatError.invalidField(record: "evidence", field: "path or sha256")
+      throw EvidenceFormatError.invalidField(record: "source input", field: "path or sha256")
     }
   }
 

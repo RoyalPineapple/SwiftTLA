@@ -95,18 +95,12 @@ func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
                 "swift": firstDifferentEdgeOccurrenceJSON(swift, tlc)
             ]
         case .outcome(let tlc, let swift):
-            ["kind": "outcome", "tlc": outcomeJSON(tlc), "swift": outcomeJSON(swift)]
+            [
+                "kind": "outcome",
+                "tlc": CompletedGraphRunRecords.outcomeRecord(tlc),
+                "swift": CompletedGraphRunRecords.outcomeRecord(swift)
+            ]
         }
-    }
-}
-
-private func outcomeJSON(_ outcome: GraphRunOutcome) -> [String: String] {
-    switch outcome {
-    case .exhaustiveSuccess: ["kind": "exhaustiveSuccess"]
-    case .invariantViolation(let message): ["kind": "invariantViolation", "message": message]
-    case .deadlock(let state): ["kind": "deadlock", "state": state.canonicalEncoding]
-    case .incomplete(let message): ["kind": "incomplete", "message": message]
-    case .executionError(let message): ["kind": "executionError", "message": message]
     }
 }
 

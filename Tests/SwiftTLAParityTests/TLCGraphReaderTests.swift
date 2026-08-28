@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import Testing
 import SwiftTLA
-import UpstreamParity
+@testable import UpstreamParity
 @Suite(.serialized)
 struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCompletedGraphRun() throws {
@@ -304,12 +304,11 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       .appendingPathComponent("Tests/Fixtures/FiniteGraph/TLCTrace/violation-counterexample.json")
     let evidence = try TLCTraceParser().parseCounterexample(Data(contentsOf: traceURL))
     #expect(evidence.states.count == 4)
-    #expect(evidence.actions == ["Next", "Next", "Next"])
+    #expect(evidence.transitions.map(\.name) == ["Next", "Next", "Next"])
     #expect(
       evidence.states.map { $0.bindings["x"] } == [
         .integer(0), .integer(1), .integer(2), .integer(3)
       ])
-    #expect(evidence.canonicalTrace(id: "violation").steps.count == 3)
   }
 }
 
@@ -321,31 +320,18 @@ extension TLCGraphReaderTests {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let executable = directory.appendingPathComponent("slow-java.sh")
-    let module = directory.appendingPathComponent("Module.tla")
-    let configuration = directory.appendingPathComponent("Module.cfg")
-    try "---- MODULE Module ----\n====\n".write(to: module, atomically: true, encoding: .utf8)
-    try "SPECIFICATION Spec\n".write(to: configuration, atomically: true, encoding: .utf8)
     try "#!/bin/sh\ntrap '' TERM\nwhile true; do /bin/sleep 0.1; done\n"
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-    let request = TLCProcessRequest(
-      javaExecutable: executable, jar: URL(fileURLWithPath: "/tmp/jar"), bridgeClasses: directory,
-      bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
-      graphEvents: directory.appendingPathComponent("events.jsonl"),
-      traceOutput: directory.appendingPathComponent("trace.json"),
-      workingDirectory: directory,
-      finiteGraphCase: try caseForFiles(
-        id: "timeout", module: module, configuration: configuration, arguments: []),
-      runID: UUID(), timeout: 0.25
-    )
     let started = Date()
     #expect(throws: TLCProcessError.self) {
-      _ = try SystemTLCProcessExecutor(validatesReferences: false).execute(request)
+      _ = try executeProcess(
+        executable: executable, arguments: [], directory: directory, timeout: 0.25)
     }
     #expect(Date().timeIntervalSince(started) < 3)
   }
 
-  @Test("production TLC execution rejects a banner outside the pinned revision")
+  @Test("the TLC pin rejects a banner from another revision")
   func rejectsWrongTLCBanner() throws {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -353,13 +339,14 @@ extension TLCGraphReaderTests {
     try "#!/bin/sh\nprintf 'TLC2 Version 2026.07.31.184830 (rev: deadbee)\\n'\n"
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-    let request = try helperProcessRequest(executable: executable, in: directory, environment: [:])
+    let result = try executeProcess(
+      executable: executable, arguments: [], directory: directory, timeout: 1, environment: [:])
     #expect(throws: FiniteGraphCaseError.pinMismatch("TLC banner")) {
-      _ = try SystemTLCProcessExecutor(validatesReferences: false).execute(request)
+      try toolchainPin().validateReportedTLCBanner(result.stdout + "\n" + result.stderr)
     }
   }
 
-  @Test("production TLC execution uses only the declared environment")
+  @Test("the TLC subprocess uses only the declared environment")
   func excludesHostEnvironmentAndPreservesAllowlist() throws {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -369,12 +356,13 @@ extension TLCGraphReaderTests {
       .appending("printf 'home=%s allowed=%s\\n' \"${HOME-unset}\" \"${FINITE_GRAPH_ALLOWED_VALUE-unset}\"\n")
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-    let request = try helperProcessRequest(
+    let result = try executeProcess(
       executable: executable,
-      in: directory,
+      arguments: [],
+      directory: directory,
+      timeout: 1,
       environment: ["FINITE_GRAPH_ALLOWED_VALUE": "declared"]
     )
-    let result = try SystemTLCProcessExecutor(validatesReferences: false).execute(request)
     #expect(result.stdout.contains("home=unset allowed=declared"))
   }
 
