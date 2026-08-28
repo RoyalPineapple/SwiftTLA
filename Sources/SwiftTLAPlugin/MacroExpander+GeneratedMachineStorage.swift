@@ -9,25 +9,6 @@ extension MacroExpander {
         let collectionArguments = symmetricCollections.map {
             ", \($0.formalName): _\($0.formalName)Members"
         }.joined()
-        let successorCases = actions.map { action -> String in
-            let pattern: String
-            if action.symmetricCollection == nil {
-                let bindings = action.bindings.filter(\.isPublic)
-                pattern = bindings.isEmpty
-                    ? ".\(action.swiftIdentifier)"
-                    : ".\(action.swiftIdentifier)(\(bindings.map { "\($0.formalName): _" }.joined(separator: ", ")))"
-            } else {
-                pattern = ".\(action.swiftIdentifier)(member: _)"
-            }
-            return """
-            case \(pattern):
-                return try _storage.successors(
-                    actionOrdinal: Self._actionOrdinal(for: action),
-                    arguments: try _actionArguments(for: action),
-                    from: storageState
-                )
-            """
-        }.joined(separator: "\n                ")
         var members: [DeclSyntax] = [
             DeclSyntax(stringLiteral: """
             public var state: State {
@@ -49,9 +30,11 @@ extension MacroExpander {
                     for action: Action,
                     from storageState: _GeneratedMachineStorage.State
                 ) throws -> [_GeneratedMachineStorage.State] {
-                    switch action {
-                    \(successorCases)
-                    }
+                    try _storage.successors(
+                        actionOrdinal: Self._actionOrdinal(for: action),
+                        arguments: try _actionArguments(for: action),
+                        from: storageState
+                    )
                 }
                 """),
                 DeclSyntax(stringLiteral: """
