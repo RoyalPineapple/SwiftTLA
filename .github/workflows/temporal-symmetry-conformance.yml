@@ -4,47 +4,40 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      swift_tla_sha:
+        description: Immutable merged SwiftTLA SHA
+        required: true
+        type: string
 
 permissions:
   contents: read
-  actions: read
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
 
 jobs:
-  check-head:
-    runs-on: ubuntu-latest
-    outputs:
-      run_expensive: ${{ steps.head.outputs.run_expensive }}
-    steps:
-      - id: head
-        uses: actions/github-script@v8
-        with:
-          script: |
-            if (context.eventName === 'workflow_dispatch') {
-              core.setOutput('run_expensive', 'true')
-              return
-            }
-            const { data } = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'temporal-symmetry-conformance.yml',
-              branch: 'main',
-              status: 'completed',
-              per_page: 1
-            })
-            const previous = data.workflow_runs[0]
-            core.setOutput('run_expensive', String(!previous || previous.head_sha !== context.sha))
-
   temporal-symmetry-conformance:
-    needs: check-head
-    if: needs.check-head.outputs.run_expensive == 'true'
     runs-on: macos-15
     env:
+      SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
     steps:
+      - name: Validate SwiftTLA SHA
+        run: '[[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]'
+
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+
+      - id: revision
+        name: Verify merged SwiftTLA revision
+        run: |
+          resolved_sha="$(git rev-parse HEAD)"
+          [ "$resolved_sha" = "$SWIFT_TLA_SHA" ]
+          git merge-base --is-ancestor "$resolved_sha" refs/remotes/origin/main
+          echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
 
       - name: Run temporal-symmetry conformance
         run: ./scripts/run_temporal_symmetry_conformance.sh --output .build/temporal-symmetry-conformance
@@ -53,7 +46,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: temporal-symmetry-conformance-${{ github.run_id }}
+          name: temporal-symmetry-conformance-${{ steps.revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .build/temporal-symmetry-conformance
-          if-no-files-found: warn
+          if-no-files-found: error

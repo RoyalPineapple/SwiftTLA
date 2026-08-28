@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
+    inputs:
+      swift_tla_sha:
+        description: Immutable merged SwiftTLA SHA
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,11 +20,25 @@ jobs:
   finite-graph:
     runs-on: macos-15
     env:
+      SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
     steps:
+      - name: Validate SwiftTLA SHA
+        run: '[[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]'
+
       - uses: actions/checkout@v5
         with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
           submodules: false
+
+      - id: revision
+        name: Verify merged SwiftTLA revision
+        run: |
+          resolved_sha="$(git rev-parse HEAD)"
+          [ "$resolved_sha" = "$SWIFT_TLA_SHA" ]
+          git merge-base --is-ancestor "$resolved_sha" refs/remotes/origin/main
+          echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
 
       - name: Run exact finite graph comparison
         run: ./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence
@@ -28,7 +47,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: finite-graph-${{ github.run_id }}
+          name: finite-graph-${{ steps.revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .build/finite-graph-evidence
-          if-no-files-found: warn
+          if-no-files-found: error
