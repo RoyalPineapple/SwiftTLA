@@ -16,7 +16,7 @@ package enum RefinementFailureEvidence: Sendable, Equatable {
 struct RefinementChecker {
     let compilation: CompiledSpecification
 
-    func check(_ exploration: ModelExplorationResult) throws -> CheckResult? {
+    func check(_ exploration: ModelExplorationResult) throws -> ModelCheckOutcome? {
         guard exploration.isComplete else {
             return compilation.refinements.first.map {
                 .refinementUnproven(refinement: $0.name, exploration: exploration.result)
@@ -40,7 +40,7 @@ struct RefinementChecker {
         states: [StateGraph.StateID: CompiledState],
         initialStateIDs: [StateGraph.StateID],
         graph: StateGraph
-    ) throws -> CheckResult? {
+    ) throws -> ModelCheckOutcome? {
         guard compilation.layout.moduleInstances.contains(where: {
             $0.id == refinement.instance
         }) else {

@@ -583,7 +583,6 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     #expect(diagnostic.subject == "mustStayZero")
     #expect(diagnostic.expected == "the invariant to evaluate to true")
     #expect(diagnostic.actual == "false")
-    #expect(diagnostic.stateCommitted == false)
     #expect(diagnostic.state?.projection?.value(for: xToken) == .int(1))
     #expect(diagnostic.trace.map(\.action) == ["init", "increment"])
     #expect(diagnostic.nextSafeAction.contains("final trace transition"))

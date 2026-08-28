@@ -38,7 +38,7 @@ struct LivenessConformanceTests {
         actions: [NamedAction] = [],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
-    ) throws -> TemporalAnalysisResult {
+    ) throws -> TemporalAnalysis {
         let spec = TLASpec(
             name: graph.specName,
             variables: [NamedVar(name: "x", initial: .int(0))],
@@ -382,13 +382,13 @@ struct LivenessConformanceTests {
         #expect(strong.rejectedComponents.contains(Set([initial, disabled])))
     }
 
-    @Test("unavailable evidence is explicit for unknown actions, evaluation errors, and incomplete exploration")
+    @Test("declared unavailable conditions retain typed reasons")
     func unavailableEvidenceMatrix() throws {
         let unknownActionGraph = try graph(
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
-        let unavailable: [(String, TemporalAnalysisResult, TemporalDiagnosticReason)] = [
+        let unavailable: [(String, TemporalAnalysis, TemporalDiagnosticReason)] = [
             (
                 "unknown action",
                 try analyze(unknownActionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),
@@ -404,6 +404,44 @@ struct LivenessConformanceTests {
         for (name, result, reason) in unavailable {
             #expect(result.status == .unavailable, "Expected \(name) to be unavailable")
             #expect(result.reason == reason)
+        }
+    }
+
+    @Test("temporal predicate evaluation preserves its typed failure")
+    func predicateEvaluationThrowsTypedFailure() throws {
+        let graph = try graph(transitions: [:], values: [initial: 0])
+
+        do {
+            _ = try analyze(
+                graph,
+                property: .eventually(.value(.int(1))),
+                initialStateIDs: [initial]
+            )
+            Issue.record("Expected temporal predicate evaluation to fail")
+        } catch let error as TemporalEvaluationError {
+            #expect(error == .predicate(
+                state: initial,
+                cause: .typeMismatch("Expected a boolean")
+            ))
+        }
+    }
+
+    @Test("leads-to trigger evaluation preserves its typed failure")
+    func leadsToTriggerEvaluationThrowsTypedFailure() throws {
+        let graph = try graph(transitions: [:], values: [initial: 0])
+
+        do {
+            _ = try analyze(
+                graph,
+                property: .leadsTo(.value(.int(1)), predicate(1)),
+                initialStateIDs: [initial]
+            )
+            Issue.record("Expected leads-to trigger evaluation to fail")
+        } catch let error as TemporalEvaluationError {
+            #expect(error == .leadsToTrigger(
+                state: initial,
+                cause: .typeMismatch("Expected a boolean")
+            ))
         }
     }
 
@@ -435,6 +473,33 @@ struct LivenessConformanceTests {
 
         #expect(result.status == .unavailable)
         #expect(result.reason == .unknownAction)
+    }
+
+    @Test("liveness graph states require matching compiled states")
+    func livenessGraphStateIdentityMismatch() throws {
+        let sourceGraph = try graph(transitions: [:], values: [initial: 0])
+        let specification = TLASpec(
+            name: sourceGraph.specName,
+            variables: [NamedVar(name: "x", initial: .int(0))],
+            actions: [],
+            invariants: [],
+            temporalProperties: [NamedTemporal(name: "property", expr: .eventually(predicate(1)))]
+        )
+        let compilation = try specification.compile()
+
+        do {
+            _ = try LivenessChecker(
+                compilation: compilation,
+                graph: sourceGraph,
+                states: [:]
+            ).analyze(initialStateIDs: [initial])
+            Issue.record("Expected the compiled state identity check to fail")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .compilationIdentityMismatch)
+            #expect(diagnostic.stage == .checking)
+            #expect(diagnostic.path == "liveness.state")
+            #expect(diagnostic.actual == "state s0 has no compiled value")
+        }
     }
 
     @Test("compilation binds each fairness condition to a declared action")
@@ -484,7 +549,10 @@ struct LivenessConformanceTests {
             Eventually("reachesOne", x == 1)
         }
         let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).checkLiveness()
-        if case .livenessViolated = liveness {
+        if case .livenessViolated(let property, let reason, let witness) = liveness {
+            #expect(property == "reachesOne")
+            #expect(reason == .violatingFairLasso)
+            #expect(witness.cycle.isEmpty == false)
         } else {
             Issue.record("Expected liveness violation, got \(liveness)")
         }
