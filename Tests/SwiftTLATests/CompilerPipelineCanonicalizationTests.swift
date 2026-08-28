@@ -116,6 +116,50 @@ private struct CompilerPipelineCollectionModel {
 
 @Suite("Compiler pipeline canonicalization")
 struct CompilerPipelineCanonicalizationTests {
+    @Test("module assumptions are state-independent")
+    func moduleAssumptionsAreStateIndependent() {
+        let stateRead = TLASpec("StateDependentAssumption") {
+            Var("value", 0)
+            Assume(StateExpr.variable("value") >= 0)
+        }
+        let operatorRead = TLASpec(
+            name: "OperatorAssumption",
+            variables: [.init(name: "value", initial: .int(0))],
+            actions: [],
+            invariants: [],
+            assume: .operatorApplication(.reference("Current", arity: 0), []),
+            formalOperatorDefinitions: [
+                .init(name: "Current", parameters: [], body: .variable("value"))
+            ]
+        )
+        let enabledness = TLASpec(
+            name: "EnablednessAssumption",
+            variables: [.init(name: "value", initial: .int(0))],
+            actions: [.init(name: "stay", body: .unchanged(.named("value")))],
+            invariants: [],
+            assume: .enabledAction("stay")
+        )
+        let cases = [
+            (stateRead, "an assumption that reads model state"),
+            (operatorRead, "an assumption that reads model state"),
+            (enabledness, "an assumption that evaluates action enabledness")
+        ]
+
+        for (specification, actual) in cases {
+            do {
+                _ = try specification.compile()
+                Issue.record("Expected \(specification.name) to fail compilation.")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .stateDependentAssumption)
+                #expect(diagnostic.stage == .lowering)
+                #expect(diagnostic.path == "assume")
+                #expect(diagnostic.actual == actual)
+            } catch {
+                Issue.record("Expected a CompilationDiagnostic, got \(error).")
+            }
+        }
+    }
+
     @Test("generated Swift value types contribute to compilation identity")
     func generatedSwiftValueTypesContributeToCompilationIdentity() throws {
         let first = try TLASpec("GeneratedSurfaceIdentity") {

@@ -119,6 +119,25 @@ struct CompiledLowerer {
             }
         let allFormalOperators = formalOperators + linkedFormalOperators
         let allRecursiveFunctions = recursiveFunctions + linkedRecursiveFunctions
+        let assume = try lowerOptional(spec.assume, at: "assume")
+        if let assume {
+            let requirements = assume.stateRequirements(
+                formalOperators: allFormalOperators,
+                recursiveFunctions: allRecursiveFunctions
+            )
+            guard requirements.variables.isEmpty && requirements.requiresCompleteState == false else {
+                throw CompilationDiagnostic(
+                    code: .stateDependentAssumption,
+                    stage: .lowering,
+                    path: "assume",
+                    expected: "a state-independent module assumption",
+                    actual: requirements.requiresCompleteState
+                        ? "an assumption that evaluates action enabledness"
+                        : "an assumption that reads model state",
+                    nextSafeAction: "Express state rules as invariants or temporal properties."
+                )
+            }
+        }
         let orderedInitializations = try orderedInitializations(
             initializations,
             formalOperators: allFormalOperators,
@@ -132,7 +151,7 @@ struct CompiledLowerer {
             temporalProperties: temporalProperties,
             fairness: fairness,
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
-            assume: try lowerOptional(spec.assume, at: "assume"),
+            assume: assume,
             formalOperatorDefinitions: allFormalOperators,
             recursiveFunctions: allRecursiveFunctions,
             formalModuleReplacements: formalModuleReplacements,
