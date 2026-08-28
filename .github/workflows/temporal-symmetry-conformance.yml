@@ -9,6 +9,9 @@ permissions:
   contents: read
   actions: read
 
+env:
+  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+
 jobs:
   check-head:
     runs-on: ubuntu-latest
