@@ -238,6 +238,41 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("CountIsZero =="))
     }
 
+    @Test("compilation leaves standard process termination to the PlusCal translator")
+    func plansTranslatorTermination() throws {
+        let algorithm = Algorithm("TranslatorTermination") {
+            Each(Node.all) { _ in
+                Do(ProcessStep.done) { Stop() }
+            }
+            Eventually("Termination", All(Node.all) { Finished($0) })
+        }
+
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
+
+        #expect(rendered.contains("Termination ==") == false)
+    }
+
+    @Test("compilation rejects a custom property with the translator termination name")
+    func rejectsCustomTerminationProperty() {
+        let algorithm = Algorithm("CustomTermination") {
+            Each(Node.all) { _ in
+                Do(ProcessStep.done) { Stop() }
+            }
+            Eventually("Termination", true)
+        }
+
+        do {
+            _ = try renderedSourceAlgorithmPlusCal(algorithm)
+            Issue.record("Expected compilation to reject the duplicate rendered definition")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .duplicateRenderedModuleDefinition)
+            #expect(diagnostic.stage == .rendering)
+            #expect(diagnostic.actual == "a distinct property named Termination")
+        } catch {
+            Issue.record("Unexpected diagnostic: \(error)")
+        }
+    }
+
     @Test("renders nested finite-domain property binders distinctly")
     func rendersNestedFiniteDomainPropertyBindersDistinctly() throws {
         let spec = TLASpec("DistinctPropertyBinders") {

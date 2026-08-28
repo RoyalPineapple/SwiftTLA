@@ -40,16 +40,6 @@ internal struct AuthoredPlusCalModule: Sendable {
     }
 }
 
-enum AuthoredPlusCalPropertyKind: Sendable {
-    case invariant
-    case temporal
-}
-
-struct AuthoredPlusCalPropertyReference: Sendable {
-    let name: String
-    let kind: AuthoredPlusCalPropertyKind
-}
-
 private func authoredPlusCalIdentifier(
     _ name: String,
     path: String,
@@ -352,18 +342,6 @@ internal struct AlgorithmPlusCalRenderer {
         self.module = module
     }
 
-    func sourceProperties() throws -> [AuthoredPlusCalPropertyReference] {
-        let model = module.algorithm
-        return try propertyNames(in: model.components, path: "components")
-    }
-
-    func translatorOwnedPropertyNames() -> Set<String> {
-        let model = module.algorithm
-        return Set(temporals(in: model.components).compactMap { temporal in
-            isTranslatorTermination(temporal) ? temporal.name : nil
-        })
-    }
-
     func render() throws -> String {
         try render(module)
     }
@@ -645,64 +623,6 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func expression(_ value: StateExpr, path: String) throws -> String {
         try value.authoredPlusCalSource(path: path)
-    }
-
-    private func propertyNames(
-        in components: [AlgorithmComponentModel],
-        path: String
-    ) throws -> [AuthoredPlusCalPropertyReference] {
-        try components.enumerated().flatMap { index, component in
-            let componentPath = "\(path)[\(index)]"
-            switch component {
-            case .invariant(let invariant):
-                return [AuthoredPlusCalPropertyReference(name: invariant.name, kind: .invariant)]
-            case .temporal(let temporal):
-                if isTranslatorTermination(temporal) {
-                    return []
-                }
-                if temporal.name == "Termination" {
-                    throw AlgorithmPlusCalRenderDiagnostic(
-                        failedConcept: "PlusCal temporal property export",
-                        path: componentPath,
-                        expected: "the translator's standard Termination predicate for this process family",
-                        actual: "a distinct property named Termination",
-                        nextSafeAction: "Rename the custom property, or use Eventually(All(domain) { Finished($0) }) so the official translator owns Termination."
-                    )
-                }
-                return [AuthoredPlusCalPropertyReference(name: temporal.name, kind: .temporal)]
-            case .process(let process):
-                return try propertyNames(in: process.components, path: "\(componentPath).components")
-            case .shared, .procedure, .formalOperator, .stateConstraint, .unsupported, .local, .step:
-                return []
-            }
-        }
-    }
-
-    private func temporals(in components: [AlgorithmComponentModel]) -> [NamedTemporal] {
-        components.flatMap { component in
-            switch component {
-            case .temporal(let temporal): return [temporal]
-            case .process(let process): return temporals(in: process.components)
-            case .shared, .procedure, .invariant, .formalOperator, .stateConstraint, .unsupported, .local, .step: return []
-            }
-        }
-    }
-
-    private func isTranslatorTermination(_ temporal: NamedTemporal) -> Bool {
-        let model = module.algorithm
-        guard temporal.name == "Termination", model.processes.count == 1,
-              case .eventually(let expression) = temporal.expr,
-              case .forAll(let domain, let binding, let predicate) = expression,
-              domain == .setLiteral(model.processes[0].domain.map(StateExpr.value))
-        else { return false }
-        switch predicate {
-        case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
-             .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
-            guard location.sourceName == CompilerControlSymbol.done.rawValue else { return false }
-            return process == binding
-        default:
-            return false
-        }
     }
 
     private func set(_ values: [TLAValue]) -> String {

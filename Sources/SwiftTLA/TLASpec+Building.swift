@@ -242,29 +242,15 @@ extension TLASpec {
       semantics: semantics,
       formalRenderer: formalRenderer
     )
-    let declarationPlan = AuthoredPlusCalModule(
-      name: name,
-      extendsModules: authoredPlusCalExtends,
-      constants: authoredPlusCalPrelude,
-      preludeDeclarations: declarationSections.prelude,
-      algorithm: plusCalAlgorithm,
-      defineDeclarations: declarationSections.define,
-      postTranslationDeclarations: [],
-      refinements: renderedRefinements
-    )
-    let renderer = AlgorithmPlusCalRenderer(module: declarationPlan)
-    let sourceProperties = try renderer.sourceProperties()
+    let propertyPlan = try authoredPlusCalProperties(in: plusCalAlgorithm)
+    let sourceProperties = propertyPlan.properties
     let invariantsByID = Dictionary(uniqueKeysWithValues: semantics.invariants.map { ($0.id, $0) })
     let temporalPropertiesByID = Dictionary(uniqueKeysWithValues: semantics.temporalProperties.map { ($0.id, $0) })
     func propertyMissing(_ id: PropertyID) -> CompilationDiagnostic {
       .init(code: .compilationIdentityMismatch, stage: .rendering, path: "authoredPlusCal.properties", expected: "a compiled property for identity \(id.ordinal)", actual: "no compiled property", nextSafeAction: "Compile the model again from its current source.")
     }
-    func propertyID(_ property: AuthoredPlusCalPropertyReference) throws -> PropertyID {
-      let path: String
-      switch property.kind {
-      case .invariant: path = "invariants.\(property.name).declaration"
-      case .temporal: path = "temporalProperties.\(property.name).declaration"
-      }
+    func propertyID(_ property: AuthoredPlusCalProperty) throws -> PropertyID {
+      let path = property.bindingPath
       guard case .property(let id) = bindings.references[path] else {
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering, path: path, expected: "a bound property identity", actual: "no property identity", nextSafeAction: "Compile the model again from its current source.")
       }
@@ -273,13 +259,13 @@ extension TLASpec {
     let sourcePropertyIDs = try Set(sourceProperties.map(propertyID))
     let renderedSourceProperties = try sourceProperties.map { property -> (name: String, definition: String) in
       let id = try propertyID(property)
-      switch property.kind {
-      case .invariant:
+      switch property {
+      case .invariant(let name):
         guard let invariant = invariantsByID[id] else { throw propertyMissing(id) }
-        return (property.name, "\(property.name) == \(try formalRenderer.state(invariant.body))")
-      case .temporal:
+        return (name, "\(name) == \(try formalRenderer.state(invariant.body))")
+      case .temporal(let name):
         guard let temporal = temporalPropertiesByID[id] else { throw propertyMissing(id) }
-        return (property.name, "\(property.name) == \(try formalRenderer.temporal(temporal.expression))")
+        return (name, "\(name) == \(try formalRenderer.temporal(temporal.expression))")
       }
     }
     let topLevelProperties = try layout.stateProperties
@@ -295,7 +281,7 @@ extension TLASpec {
           Set(topLevelPropertyNames).count == topLevelPropertyNames.count,
           Set(loweredPropertyNames).count == loweredPropertyNames.count,
           Set(sourcePropertyNames + topLevelPropertyNames)
-            .union(renderer.translatorOwnedPropertyNames()) == Set(loweredPropertyNames)
+            .union(propertyPlan.translatorOwnedNames) == Set(loweredPropertyNames)
     else {
         throw AlgorithmPlusCalRenderDiagnostic(
           failedConcept: "authored PlusCal property export",
@@ -322,6 +308,64 @@ extension TLASpec {
       refinements: renderedRefinements
     )
     return module
+  }
+
+  private func authoredPlusCalProperties(
+    in algorithm: AlgorithmModel
+  ) throws -> (properties: [AuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
+    func isTranslatorTermination(_ temporal: NamedTemporal) -> Bool {
+      guard temporal.name == "Termination", algorithm.processes.count == 1,
+            case .eventually(let expression) = temporal.expr,
+            case .forAll(let domain, let binding, let predicate) = expression,
+            domain == .setLiteral(algorithm.processes[0].domain.map(StateExpr.value))
+      else { return false }
+      switch predicate {
+      case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
+           .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
+        return location.sourceName == CompilerControlSymbol.done.rawValue && process == binding
+      default:
+        return false
+      }
+    }
+
+    func collect(
+      _ components: [AlgorithmComponentModel],
+      path: String
+    ) throws -> (properties: [AuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
+      var properties: [AuthoredPlusCalProperty] = []
+      var translatorOwnedNames: Set<String> = []
+      for (index, component) in components.enumerated() {
+        let componentPath = "\(path)[\(index)]"
+        switch component {
+        case .invariant(let invariant):
+          properties.append(.invariant(invariant.name))
+        case .temporal(let temporal):
+          if isTranslatorTermination(temporal) {
+            translatorOwnedNames.insert(temporal.name)
+          } else if temporal.name == "Termination" {
+            throw CompilationDiagnostic(
+              code: .duplicateRenderedModuleDefinition,
+              stage: .rendering,
+              path: componentPath,
+              expected: "the translator's standard Termination predicate for this process family",
+              actual: "a distinct property named Termination",
+              nextSafeAction: "Give the property a distinct name, or declare the standard process termination property."
+            )
+          } else {
+            properties.append(.temporal(temporal.name))
+          }
+        case .process(let process):
+          let nested = try collect(process.components, path: "\(componentPath).components")
+          properties += nested.properties
+          translatorOwnedNames.formUnion(nested.translatorOwnedNames)
+        case .shared, .procedure, .formalOperator, .stateConstraint, .unsupported, .local, .step:
+          continue
+        }
+      }
+      return (properties, translatorOwnedNames)
+    }
+
+    return try collect(algorithm.components, path: "components")
   }
 
   private var authoredPlusCalExtends: [String] {
@@ -387,6 +431,24 @@ extension TLASpec {
         .map(\.description)
         .joined(separator: ", ")
       return "Symm\(symmetry.variableName) == Permutations({\(values)})"
+    }
+  }
+}
+
+private enum AuthoredPlusCalProperty {
+  case invariant(String)
+  case temporal(String)
+
+  var name: String {
+    switch self {
+    case .invariant(let name), .temporal(let name): name
+    }
+  }
+
+  var bindingPath: String {
+    switch self {
+    case .invariant(let name): "invariants.\(name).declaration"
+    case .temporal(let name): "temporalProperties.\(name).declaration"
     }
   }
 }
