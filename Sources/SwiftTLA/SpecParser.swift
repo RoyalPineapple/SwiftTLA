@@ -626,7 +626,11 @@ public final class ParserSession {
 
         let parameters = closureParameterNames(in: closure)
         guard parameters.count <= 1 else { return nil }
-        let parameter = parameters.first ?? "$0"
+        let sourceParameter = parameters.first ?? "$0"
+        let parameter = parameters.first ?? generatedBinderName(
+            line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset),
+            column: 0
+        )
 
         let binding = StateExpr.variable(parameter)
         let predicate: StateExpr?
@@ -635,7 +639,7 @@ public final class ParserSession {
            let argument = finished.arguments.first?.expression,
            decodeTypedFacadeValue(
             argument,
-            scope: typedFacadeScope(scope, binding: parameter, to: binding)
+            scope: typedFacadeScope(scope, binding: sourceParameter, to: binding)
            ) != nil {
             predicate = .equal(
                 .functionApply(.programCounter, binding),
@@ -644,7 +648,7 @@ public final class ParserSession {
         } else {
             predicate = decodeTypedFacadeValue(
                 bodySyntax,
-                scope: typedFacadeScope(scope, binding: parameter, to: binding)
+                scope: typedFacadeScope(scope, binding: sourceParameter, to: binding)
             )
         }
         guard let predicate else { return nil }
@@ -2282,7 +2286,7 @@ extension ParserSession {
               let kind = CollectionPredicateKind(rawValue: access.declName.baseName.text),
               let closure = call.trailingClosure
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
-              let parameter = Self.collectionPredicateParameter(in: closure),
+              let sourceParameter = Self.collectionPredicateParameter(in: closure),
               closure.statements.count == 1,
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
@@ -2294,10 +2298,16 @@ extension ParserSession {
                   collectionNames.contains(formalName)
             else { return nil }
         }
+        let parameter = sourceParameter == "$0"
+            ? generatedBinderName(
+                line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset),
+                column: 0
+            )
+            : sourceParameter
         let selectedValue = StateExpr.functionApply(collection, .variable(parameter))
         guard let body = decodeBody(
             bodySyntax,
-            typedFacadeScope(.empty, binding: parameter, to: selectedValue)
+            typedFacadeScope(.empty, binding: sourceParameter, to: selectedValue)
         ) else { return nil }
 
         let domain = StateExpr.domain(collection)

@@ -656,7 +656,8 @@ struct CompiledLayout: Hashable, Sendable {
                 default: "_"
                 }
             }.joined()
-            let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
+            let candidate = raw.isEmpty ? "Action" : (raw.first?.isNumber == true ? "_\(raw)" : raw)
+            let stem = isTLADeclarationName(candidate) ? candidate : "_\(candidate)"
             var renderedName = stem.isEmpty ? "Action" : stem
             var suffix = 2
             while !used.insert(renderedName).inserted {
@@ -1293,6 +1294,11 @@ struct BindingValidator {
             if let issue = operation.sourceIssue {
                 throw issue.compilationDiagnostic(stage: .binding, path: "\(path).\(operation.name)")
             }
+            try requireFormalDeclarationName(
+                operation.name,
+                kind: "local operator",
+                at: "\(path).\(operation.name).declaration"
+            )
         }
         try duplicate(operators.map(\.name), at: "\(path).operators")
         let outerOperators = self.operators
@@ -1368,6 +1374,7 @@ struct BindingValidator {
     }
 
     private mutating func bindField(_ name: String, at path: String) throws {
+        try requireFormalIdentifier(name, kind: "record field", at: path)
         guard let id = layout.fieldID(named: name) else {
             throw diagnostic(
                 code: .unknownReference,
@@ -1464,6 +1471,7 @@ struct BindingValidator {
         try duplicate(names, at: path)
         var nested = scope
         for name in names {
+            try requireFormalIdentifier(name, kind: "binder", at: "\(path).\(name)")
             let id = allocateBinder()
             knownBinderNames.insert(name)
             nested[name] = id
@@ -1480,6 +1488,11 @@ struct BindingValidator {
         try duplicate(parameters.map(\.name), at: path)
         var nested = scope
         for parameter in parameters {
+            try requireFormalIdentifier(
+                parameter.name,
+                kind: "formal parameter",
+                at: "\(path).\(parameter.name)"
+            )
             switch parameter {
             case .value(let name):
                 let id = allocateBinder()
@@ -1510,6 +1523,28 @@ struct BindingValidator {
         }
         binders[id] = renderedName
         return id
+    }
+
+    private func requireFormalDeclarationName(_ name: String, kind: String, at path: String) throws {
+        guard isTLADeclarationName(name) else {
+            throw diagnostic(
+                code: .invalidFormalDeclaration,
+                path: path,
+                expected: "a formal identifier that is not a reserved word",
+                actual: "invalid \(kind) name '\(name)'"
+            )
+        }
+    }
+
+    private func requireFormalIdentifier(_ name: String, kind: String, at path: String) throws {
+        guard isFormalIdentifier(name) else {
+            throw diagnostic(
+                code: .invalidFormalDeclaration,
+                path: path,
+                expected: "a formal identifier beginning with an ASCII letter or underscore",
+                actual: "invalid \(kind) name '\(name)'"
+            )
+        }
     }
 
     private func duplicate(_ names: [String], at path: String) throws {

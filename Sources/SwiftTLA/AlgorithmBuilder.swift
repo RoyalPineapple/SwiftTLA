@@ -2239,7 +2239,7 @@ internal enum AlgorithmValidator {
     ) {
         if name.hasPrefix("__pcal_") {
             diagnostics.append(AlgorithmDiagnostic(.reservedName, at: anchor))
-        } else if name.isEmpty || name.contains(where: { !$0.isLetter && !$0.isNumber && $0 != "_" }) {
+        } else if isPlusCalDeclarationName(name) == false {
             diagnostics.append(AlgorithmDiagnostic(.invalidName, at: anchor))
         }
     }

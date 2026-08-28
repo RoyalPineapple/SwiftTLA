@@ -160,7 +160,7 @@ struct ProcedureLoweringTests {
                     parameters: [.init(root: "outerValue", initial: .int(0), swiftTypeName: "Int")],
                     components: [.step(.init(label: .init(name: "enter"), statements: [
                         .call(target: "inner", arguments: [.variable("outerValue")])
-                    ])), .step(.init(label: .init(name: "return"), statements: [.return]))]
+                    ])), .step(.init(label: .init(name: "resume"), statements: [.return]))]
                 )),
                 .procedure(.init(
                     name: "inner",
@@ -196,9 +196,9 @@ struct ProcedureLoweringTests {
         #expect(try functionValue("innerValue", key: .int(1), in: oneReturned, compilation: compilation) == .int(0))
         #expect(try functionValue("outerValue", key: .int(1), in: oneReturned, compilation: compilation) == .int(1))
         #expect(try functionValue("outerValue", key: .int(2), in: oneReturned, compilation: compilation) == .int(2))
-        #expect(try functionValue("pc", key: .int(1), in: oneReturned, compilation: compilation) == .string("return"))
+        #expect(try functionValue("pc", key: .int(1), in: oneReturned, compilation: compilation) == .string("resume"))
 
-        let oneFinished = try apply("procedure.outer.return", process: .int(1), in: compilation, to: oneReturned)
+        let oneFinished = try apply("procedure.outer.resume", process: .int(1), in: compilation, to: oneReturned)
         #expect(try functionValue("pc", key: .int(1), in: oneFinished, compilation: compilation) == .string("finished"))
         #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation) == .string("enter"))
     }
