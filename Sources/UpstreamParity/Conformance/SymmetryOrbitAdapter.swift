@@ -52,6 +52,39 @@ package struct SymmetryPermutation: Equatable, Sendable {
       .joined(separator: "|")
   }
 
+  static func closedGroup(
+    generatedBy generators: [Self],
+    maximumPermutationCount: Int
+  ) throws -> [Self] {
+    guard let first = generators.first else {
+      throw SymmetryOrbitAdapterError.emptyPermutationGroup
+    }
+    let domain = Set(first.constantMapping.keys)
+    guard generators.allSatisfy({ Set($0.constantMapping.keys) == domain }) else {
+      throw SymmetryOrbitAdapterError.incompatiblePermutationDomains
+    }
+    let identity = try Self.identity(on: domain)
+    var known = [identity.key: identity]
+    var frontier = [identity]
+    while let current = frontier.popLast() {
+      for generator in generators {
+        let next = try generator.composing(after: current)
+        if known[next.key] == nil {
+          let (required, overflow) = known.count.addingReportingOverflow(1)
+          guard overflow == false, required <= maximumPermutationCount else {
+            throw SymmetryOrbitAdapterError.permutationLimitExceeded(
+              required: overflow ? .max : required,
+              limit: maximumPermutationCount
+            )
+          }
+          known[next.key] = next
+          frontier.append(next)
+        }
+      }
+    }
+    return known.values.sorted { $0.key < $1.key }
+  }
+
   func apply(_ value: CanonicalValue) throws -> CanonicalValue {
     switch value {
     case .constant(let name):
@@ -87,15 +120,9 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
         limit: maximumPermutationCount
       )
     }
-    let domain = Set(permutations[0].constantMapping.keys)
-    guard permutations.allSatisfy({ Set($0.constantMapping.keys) == domain }) else {
-      throw SymmetryOrbitAdapterError.incompatiblePermutationDomains
-    }
-    let closure = try Self.closure(
-      generators: permutations,
-      domain: domain,
-      maximumPermutationCount: maximumPermutationCount
-    )
+    let closure = try SymmetryPermutation.closedGroup(
+      generatedBy: permutations,
+      maximumPermutationCount: maximumPermutationCount)
     let stateTable = try canonicalStateTable(states)
     var unseen = Set(stateTable.keys)
     var derived: [[CanonicalStateKey]] = []
@@ -118,30 +145,4 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
     self.group = closure
   }
 
-  private static func closure(
-    generators: [SymmetryPermutation],
-    domain: Set<String>,
-    maximumPermutationCount: Int
-  ) throws -> [SymmetryPermutation] {
-    let identity = try SymmetryPermutation.identity(on: domain)
-    var known = [identity.key: identity]
-    var frontier = [identity]
-    while let current = frontier.popLast() {
-      for generator in generators {
-        let next = try generator.composing(after: current)
-        if known[next.key] == nil {
-          let (required, overflow) = known.count.addingReportingOverflow(1)
-          guard overflow == false, required <= maximumPermutationCount else {
-            throw SymmetryOrbitAdapterError.permutationLimitExceeded(
-              required: overflow ? .max : required,
-              limit: maximumPermutationCount
-            )
-          }
-          known[next.key] = next
-          frontier.append(next)
-        }
-      }
-    }
-    return known.values.sorted { $0.key < $1.key }
-  }
 }

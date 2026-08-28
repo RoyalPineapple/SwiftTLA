@@ -304,11 +304,19 @@ package struct TLCGraphReader: Sendable {
         guard let representative = representatives[state.fingerprint] else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "seen fingerprint without representative")
         }
-        if try canonicalState(representative) == canonicalState(state) {
+        let representativeState = try canonicalState(representative)
+        let alias = try canonicalState(state)
+        if representativeState == alias {
             return
         }
-        guard case .enabled = finiteGraphCase.exploration.symmetryReduction else {
+        guard finiteGraphCase.symmetryGroup.isEmpty == false else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "fingerprint binding mismatch")
+        }
+        guard try finiteGraphCase.symmetryGroup.contains(where: { permutation in
+            try permutation.apply(alias) == representativeState
+        }) else {
+            throw TLCGraphEventError.invalidRecord(
+                line: line, reason: "fingerprint binding outside declared symmetry orbit")
         }
     }
 

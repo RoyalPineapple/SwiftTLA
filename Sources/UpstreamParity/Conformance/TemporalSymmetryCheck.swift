@@ -190,6 +190,13 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TemporalSymmetryOutcome {
     let scope = symmetryCase.scope
+    guard compilation.machineSurfacePlan.symmetricCollections.count == 1,
+          let collection = compilation.machineSurfacePlan.symmetricCollections.first,
+          collection.members.count == scope else {
+      throw EvidenceFormatError.invalidField(
+        record: symmetryCase.id, field: "symmetric collection")
+    }
+    let generators = try symmetryGenerators(members: collection.members)
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     try RetainedFiles.createDirectory(outputDirectory, beneath: projectRoot)
     let rawRunID = UUID()
@@ -203,16 +210,20 @@ package struct TemporalSymmetryCheck: Sendable {
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
     let rawCase = try makeFiniteGraphCase(
       id: symmetryCase.id, exploration: symmetryCase.rawExploration,
-      bundle: rawBundle, pin: referencePin, renderedActions: renderedActions)
+      bundle: rawBundle, pin: referencePin, renderedActions: renderedActions,
+      symmetryGenerators: [])
     let reducedCase = try makeFiniteGraphCase(
       id: symmetryCase.id, exploration: symmetryCase.reducedExploration,
-      bundle: reducedBundle, pin: referencePin, renderedActions: renderedActions)
+      bundle: reducedBundle, pin: referencePin, renderedActions: renderedActions,
+      symmetryGenerators: generators)
     let rawRequest = try request(
       toolchain: toolchain, bundle: rawBundle, work: work.appendingPathComponent("raw"),
-      finiteGraphCase: rawCase, runID: rawRunID, projectRoot: projectRoot)
+      finiteGraphCase: rawCase, runID: rawRunID,
+      projectRoot: projectRoot)
     let reducedRequest = try request(
       toolchain: toolchain, bundle: reducedBundle, work: work.appendingPathComponent("reduced"),
-      finiteGraphCase: reducedCase, runID: reducedRunID, projectRoot: projectRoot)
+      finiteGraphCase: reducedCase, runID: reducedRunID,
+      projectRoot: projectRoot)
     try validateSymmetryRequests(raw: rawRequest, reduced: reducedRequest)
     let processAdapter = TLCProcessAdapter()
     let rawTLC = try processAdapter.capture(
@@ -229,13 +240,6 @@ package struct TemporalSymmetryCheck: Sendable {
       compilation: compilation,
       configuration: symmetryCase.reducedExploration
     ).explore(), for: reducedCase)
-    guard compilation.machineSurfacePlan.symmetricCollections.count == 1,
-          let collection = compilation.machineSurfacePlan.symmetricCollections.first,
-          collection.members.count == scope else {
-      throw EvidenceFormatError.invalidField(
-        record: symmetryCase.id, field: "symmetric collection")
-    }
-    let permutations = try symmetryPermutations(members: collection.members)
     guard case .enabled(let maximumPermutationCount) = symmetryCase.reducedExploration.symmetryReduction else {
       throw EvidenceFormatError.invalidField(
         record: symmetryCase.id, field: "reduced symmetry policy")
@@ -255,7 +259,7 @@ package struct TemporalSymmetryCheck: Sendable {
       tlcRaw: rawTLC,
       tlcReduced: reducedTLC,
       renderedActions: renderedActions,
-      permutations: permutations,
+      permutations: generators,
       maximumPermutationCount: maximumPermutationCount
     )
     switch try compareSymmetryOrbits(input) {
@@ -292,7 +296,8 @@ extension TemporalSymmetryCheck {
     exploration: FiniteExplorationConfiguration,
     bundle: TLAModuleBundle,
     pin: TLCReferencePin,
-    renderedActions: [RenderedAction]
+    renderedActions: [RenderedAction],
+    symmetryGenerators: [SymmetryPermutation]
   ) throws -> FiniteGraphCase {
     let arguments = ["-workers", "1", "-fp", "1"]
     guard let configuration = bundle.root.cfg else {
@@ -301,7 +306,8 @@ extension TemporalSymmetryCheck {
     return try FiniteGraphCase(
       id: id, exploration: exploration,
       moduleSHA256: SHA256.hex(Data(bundle.root.tla.utf8)), cfgSHA256: SHA256.hex(Data(configuration.utf8)),
-      arguments: arguments, environment: [:], pin: pin, renderedActions: renderedActions)
+      arguments: arguments, environment: [:], pin: pin, renderedActions: renderedActions,
+      symmetryGenerators: symmetryGenerators)
   }
 
   private func request(
@@ -318,11 +324,12 @@ extension TemporalSymmetryCheck {
       bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
-      finiteGraphCase: finiteGraphCase, runID: runID,
+      finiteGraphCase: finiteGraphCase,
+      runID: runID,
       referenceArtifacts: toolchain.artifacts)
   }
 
-  private func symmetryPermutations(members: [TLAValue]) throws -> [SymmetryPermutation] {
+  private func symmetryGenerators(members: [TLAValue]) throws -> [SymmetryPermutation] {
     let names = try members.map { member in
       guard case .constant(let name) = member else {
         throw EvidenceFormatError.invalidField(
