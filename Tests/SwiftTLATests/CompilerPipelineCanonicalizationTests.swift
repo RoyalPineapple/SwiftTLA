@@ -1731,6 +1731,342 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(4))
     }
 
+    @Test("bounded local calls retain variable-initialization dependencies from their arguments")
+    func boundedLocalCallsRetainInitializationDependencies() throws {
+        let compilation = try TLASpec(
+            name: "BoundedLocalInitializerDependency",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(.letIn([
+                        .init(
+                            "Bounded",
+                            parameters: ["candidate"],
+                            domain: .setLiteral([.int(0)]),
+                            body: .int(1)
+                        )
+                    ], .recursiveCall("Bounded", [.variable("source")]))),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "source", initial: .int(0))
+            ],
+            actions: [],
+            invariants: []
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(1))
+    }
+
+    @Test("recursive call arguments retain variable-initialization dependencies")
+    func recursiveCallArgumentsRetainInitializationDependencies() throws {
+        let compilation = try TLASpec(
+            name: "RecursiveInitializerDependency",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(.recursiveCall("Resolve", [.int(1)])),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "source", initial: .int(0))
+            ],
+            actions: [],
+            invariants: [],
+            recursiveFuncs: [
+                .init(
+                    name: "Resolve",
+                    params: ["candidate"],
+                    body: .ifThenElse(
+                        .equal(.variable("candidate"), .int(0)),
+                        .variable("candidate"),
+                        .recursiveCall("Resolve", [.variable("source")])
+                    )
+                )
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(0))
+    }
+
+    @Test("unused recursive operator arguments do not create variable-initialization cycles")
+    func unusedRecursiveOperatorArgumentsDoNotCreateInitializationCycles() throws {
+        let compilation = try TLASpec(
+            name: "UnusedRecursiveInitializerOperator",
+            variables: [
+                .init(
+                    name: "owner",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Resolve", arity: 2),
+                        [
+                            .operator(.lambda(.init(parameters: ["unused"], body: .int(0)))),
+                            .value(.bool(false))
+                        ]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(
+                    name: "dependent",
+                    initialization: .expression(.variable("owner")),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Resolve",
+                    parameters: [.operator("ignored", arity: 1), .value("stop")],
+                    body: .ifThenElse(
+                        .variable("stop"),
+                        .int(1),
+                        .operatorApplication(
+                            .reference("Resolve", arity: 2),
+                            [
+                                .operator(.lambda(.init(
+                                    parameters: ["unused"],
+                                    body: .variable("dependent")
+                                ))),
+                                .value(.bool(true))
+                            ]
+                        )
+                    )
+                )
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "owner", in: state, compilation: compilation) == .int(1))
+        #expect(try renderedValue(named: "dependent", in: state, compilation: compilation) == .int(1))
+    }
+
+    @Test("forwarded recursive operator arguments terminate variable-initialization analysis")
+    func forwardedRecursiveOperatorArgumentsTerminateInitializationAnalysis() throws {
+        let compilation = try TLASpec(
+            name: "ForwardedRecursiveInitializerOperator",
+            variables: [
+                .init(
+                    name: "value",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Resolve", arity: 2),
+                        [
+                            .operator(.lambda(.init(parameters: ["ignored"], body: .int(1)))),
+                            .value(.bool(true))
+                        ]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Resolve",
+                    parameters: [.operator("operation", arity: 1), .value("stop")],
+                    body: .ifThenElse(
+                        .variable("stop"),
+                        .operatorApplication(
+                            .reference("operation", arity: 1),
+                            [.value(.int(0))]
+                        ),
+                        .operatorApplication(
+                            .reference("Resolve", arity: 2),
+                            [
+                                .operator(.reference("operation", arity: 1)),
+                                .value(.bool(true))
+                            ]
+                        )
+                    )
+                )
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "value", in: state, compilation: compilation) == .int(1))
+    }
+
+    @Test("recursive operator lambdas retain their call-site lexical scope")
+    func recursiveOperatorLambdasRetainCallSiteScope() throws {
+        let compilation = try TLASpec(
+            name: "RecursiveInitializerOperatorScope",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Resolve", arity: 2),
+                        [
+                            .operator(.lambda(.init(
+                                parameters: ["ignored"],
+                                body: .variable("source")
+                            ))),
+                            .value(.bool(false))
+                        ]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "source", initial: .int(4))
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Resolve",
+                    parameters: [.operator("operation", arity: 1), .value("stop")],
+                    body: .ifThenElse(
+                        .variable("stop"),
+                        .operatorApplication(
+                            .reference("operation", arity: 1),
+                            [.value(.int(0))]
+                        ),
+                        .operatorApplication(
+                            .reference("Resolve", arity: 2),
+                            [
+                                .operator(.lambda(.init(
+                                    parameters: ["value"],
+                                    body: .operatorApplication(
+                                        .reference("operation", arity: 1),
+                                        [.value(.variable("value"))]
+                                    )
+                                ))),
+                                .value(.bool(true))
+                            ]
+                        )
+                    )
+                )
+            ]
+        ).compile()
+        let initializationOrder = compilation.semantics.variableInitializations.map { initialization in
+            compilation.layout.variables.first { $0.id == initialization.variable }?.declaration.name
+        }
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(initializationOrder == ["source", "derived"])
+        #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(4))
+    }
+
+    @Test("recursive operator demands reach every rotated parameter")
+    func recursiveOperatorDemandsReachEveryRotatedParameter() throws {
+        let constantZero = FormalOperator.lambda(.init(parameters: ["ignored"], body: .int(0)))
+        let compilation = try TLASpec(
+            name: "RotatedRecursiveInitializerOperators",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Resolve", arity: 3),
+                        [
+                            .operator(constantZero),
+                            .operator(constantZero),
+                            .value(.int(2))
+                        ]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "source", initial: .int(4))
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Resolve",
+                    parameters: [
+                        .operator("first", arity: 1),
+                        .operator("second", arity: 1),
+                        .value("remaining")
+                    ],
+                    body: .ifThenElse(
+                        .equal(.variable("remaining"), .int(0)),
+                        .operatorApplication(
+                            .reference("first", arity: 1),
+                            [.value(.int(0))]
+                        ),
+                        .operatorApplication(
+                            .reference("Resolve", arity: 3),
+                            [
+                                .operator(.reference("second", arity: 1)),
+                                .operator(.lambda(.init(
+                                    parameters: ["ignored"],
+                                    body: .variable("source")
+                                ))),
+                                .value(.subtract(.variable("remaining"), .int(1)))
+                            ]
+                        )
+                    )
+                )
+            ]
+        ).compile()
+        let initializationOrder = compilation.semantics.variableInitializations.map { initialization in
+            compilation.layout.variables.first { $0.id == initialization.variable }?.declaration.name
+        }
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(initializationOrder == ["source", "derived"])
+        #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(4))
+    }
+
+    @Test("recursive operator arguments retain transitive variable-initialization dependencies")
+    func recursiveOperatorArgumentsRetainTransitiveInitializationDependencies() throws {
+        let compilation = try TLASpec(
+            name: "RecursiveInitializerOperatorDependency",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Resolve", arity: 3),
+                        [
+                            .operator(.lambda(.init(parameters: ["ignored"], body: .int(0)))),
+                            .value(.int(0)),
+                            .value(.bool(false))
+                        ]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "source", initial: .int(4))
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Resolve",
+                    parameters: [
+                        .operator("operation", arity: 1),
+                        .value("candidate"),
+                        .value("stop")
+                    ],
+                    body: .ifThenElse(
+                        .variable("stop"),
+                        .operatorApplication(
+                            .reference("operation", arity: 1),
+                            [.value(.variable("candidate"))]
+                        ),
+                        .operatorApplication(
+                            .reference("Resolve", arity: 3),
+                            [
+                                .operator(.lambda(.init(
+                                    parameters: ["value"],
+                                    body: .variable("value")
+                                ))),
+                                .value(.variable("source")),
+                                .value(.bool(true))
+                            ]
+                        )
+                    )
+                )
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(4))
+    }
+
     @Test("formal values remain substitutional during variable initialization")
     func formalValuesRemainSubstitutionalDuringInitialization() throws {
         let compilation = try TLASpec(

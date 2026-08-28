@@ -60,7 +60,17 @@ private struct EvaluatorBindings {
 private struct EvaluatorScope {
     var bindings: EvaluatorBindings
     var localOperators: [OperatorID: CompiledLocalOperator]
-    var operatorBindings: [OperatorID: CompiledFormalOperator]
+    var operatorBindings: [OperatorID: EvaluatorOperatorBinding]
+}
+
+private final class EvaluatorOperatorBinding {
+    let operation: CompiledFormalOperator
+    let scope: EvaluatorScope
+
+    init(_ operation: CompiledFormalOperator, scope: EvaluatorScope) {
+        self.operation = operation
+        self.scope = scope
+    }
 }
 
 private enum EvaluatorCollection {
@@ -94,7 +104,11 @@ private enum EvaluatorTask {
     case foldInitial(CompiledFormalLambda, members: [CompiledValue], scope: EvaluatorScope)
     case foldStep(CompiledFormalLambda, members: [CompiledValue], index: Int, result: CompiledValue, scope: EvaluatorScope)
     case foldResult(CompiledFormalLambda, members: [CompiledValue], index: Int, scope: EvaluatorScope)
-    case formalCall(CompiledFormalOperator, arguments: [CompiledFormalCallArgument], scope: EvaluatorScope)
+    case formalCall(
+        EvaluatorOperatorBinding,
+        arguments: [CompiledFormalCallArgument],
+        argumentScope: EvaluatorScope
+    )
     case recursiveCall(OperatorID, arguments: [CompiledStateExpr], scope: EvaluatorScope)
     case recursiveReturn
     case localDomain(CompiledStateExpr, scope: EvaluatorScope)
@@ -108,7 +122,6 @@ struct CompiledEvaluator: Sendable {
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
     let localOperators: [OperatorID: CompiledLocalOperator]
-    let operatorBindings: [OperatorID: CompiledFormalOperator]
     private static let maximumRecursiveDepth = 4_096
 
     init(
@@ -117,8 +130,7 @@ struct CompiledEvaluator: Sendable {
         layout: CompiledLayout,
         bindings: CompiledBindings = .init(),
         enabledActions: Set<ActionID> = [],
-        localOperators: [OperatorID: CompiledLocalOperator] = [:],
-        operatorBindings: [OperatorID: CompiledFormalOperator] = [:]
+        localOperators: [OperatorID: CompiledLocalOperator] = [:]
     ) {
         self.variableValue = { try state.value(for: $0) }
         self.semantics = semantics
@@ -126,7 +138,6 @@ struct CompiledEvaluator: Sendable {
         self.bindings = bindings
         self.enabledActions = enabledActions
         self.localOperators = localOperators
-        self.operatorBindings = operatorBindings
     }
 
     init(
@@ -145,14 +156,13 @@ struct CompiledEvaluator: Sendable {
         self.bindings = .init()
         self.enabledActions = []
         self.localOperators = [:]
-        self.operatorBindings = [:]
     }
 
     func evaluate(_ expression: CompiledStateExpr) throws -> CompiledValue {
         let scope = EvaluatorScope(
             bindings: .init(inherited: bindings),
             localOperators: localOperators,
-            operatorBindings: operatorBindings
+            operatorBindings: [:]
         )
         var tasks = [EvaluatorTask.expression(expression, scope)]
         var values: [CompiledValue] = []
@@ -580,27 +590,35 @@ struct CompiledEvaluator: Sendable {
                 let result = try popValue(from: &values)
                 tasks.append(.foldStep(operation, members: members, index: index + 1, result: result, scope: scope))
 
-            case .formalCall(let operation, let arguments, let scope):
-                switch operation {
+            case .formalCall(let boundOperation, let arguments, let argumentScope):
+                switch boundOperation.operation {
                 case .lambda(let lambda):
                     guard lambda.parameters.count == arguments.count else {
                         throw EvalError.typeMismatch("Formal operator argument count differs")
                     }
-                    var callScope = scope
+                    var callScope = boundOperation.scope
                     for (parameter, argument) in zip(lambda.parameters, arguments) {
                         guard case .value(let expression) = argument else {
                             throw EvalError.typeMismatch("Expected a formal value argument")
                         }
-                        callScope.bindings = callScope.bindings.binding(expression, from: scope, to: parameter)
+                        callScope.bindings = callScope.bindings.binding(
+                            expression,
+                            from: argumentScope,
+                            to: parameter
+                        )
                     }
                     tasks.append(.expression(lambda.body, callScope))
 
                 case .reference(let id, let arity):
-                    if let supplied = scope.operatorBindings[id] {
-                        guard supplied.arity == arity else {
+                    if let supplied = boundOperation.scope.operatorBindings[id] {
+                        guard supplied.operation.arity == arity else {
                             throw EvalError.typeMismatch("Formal operator argument count differs")
                         }
-                        tasks.append(.formalCall(supplied, arguments: arguments, scope: scope))
+                        tasks.append(.formalCall(
+                            supplied,
+                            arguments: arguments,
+                            argumentScope: argumentScope
+                        ))
                         continue
                     }
                     guard let definition = formalDefinitions[id] else {
@@ -611,16 +629,20 @@ struct CompiledEvaluator: Sendable {
                     else {
                         throw EvalError.typeMismatch("Formal operator argument count differs")
                     }
-                    var callScope = scope
+                    var callScope = boundOperation.scope
                     for (parameter, argument) in zip(definition.parameters, arguments) {
                         switch (parameter, argument) {
                         case (.value(let binder), .value(let expression)):
-                            callScope.bindings = callScope.bindings.binding(expression, from: scope, to: binder)
+                            callScope.bindings = callScope.bindings.binding(
+                                expression,
+                                from: argumentScope,
+                                to: binder
+                            )
                         case (.operator(let operatorID, let expectedArity), .operator(let supplied)):
                             guard supplied.arity == expectedArity else {
                                 throw EvalError.typeMismatch("Formal operator argument count differs")
                             }
-                            callScope.operatorBindings[operatorID] = supplied
+                            callScope.operatorBindings[operatorID] = .init(supplied, scope: argumentScope)
                         default:
                             throw EvalError.typeMismatch("Expected a formal value argument")
                         }
@@ -709,7 +731,11 @@ struct CompiledEvaluator: Sendable {
                     {
                         tasks.append(.recursiveCall(id, arguments: [], scope: scope))
                     } else {
-                        tasks.append(.formalCall(.reference(id, arity: 0), arguments: [], scope: scope))
+                        tasks.append(.formalCall(
+                            .init(.reference(id, arity: 0), scope: scope),
+                            arguments: [],
+                            argumentScope: scope
+                        ))
                     }
                 case .add(let lhs, let rhs):
                     tasks.append(.finish(expression))
@@ -898,15 +924,15 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.expression(sequence, scope))
                 case .lambdaApplication(let operation, let arguments):
                     tasks.append(.formalCall(
-                        .lambda(operation),
+                        .init(.lambda(operation), scope: scope),
                         arguments: arguments.map(CompiledFormalCallArgument.value),
-                        scope: scope
+                        argumentScope: scope
                     ))
                 case .operatorApplication(let operation, let arguments):
                     tasks.append(.formalCall(
-                        .reference(operation, arity: arguments.count),
+                        .init(.reference(operation, arity: arguments.count), scope: scope),
                         arguments: arguments,
-                        scope: scope
+                        argumentScope: scope
                     ))
                 case .letValue(let binder, let expression, let body):
                     var bodyScope = scope
