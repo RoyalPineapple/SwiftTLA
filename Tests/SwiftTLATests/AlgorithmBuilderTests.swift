@@ -248,7 +248,7 @@ struct AlgorithmBuilderTests {
             .compile()
             .renderedTLAModuleBundle()
             .tla
-        #expect(module.contains("advance(b1) =="))
+        #expect(module.contains("advance(_process) =="))
         #expect(module.contains("__swift_tla_binder_") == false)
     }
 

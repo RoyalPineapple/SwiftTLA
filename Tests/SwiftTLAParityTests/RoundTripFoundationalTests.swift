@@ -33,6 +33,27 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     .map { try $0.projection(using: compilation.layout) }
 }
 
+private func renderedStateExpression(
+  _ expression: StateExpr,
+  variables: [String] = ["x", "a", "b", "s"]
+) throws -> String {
+  try TLASpec(
+    name: "StateExpressionRendering",
+    variables: variables.map { NamedVar(name: $0, initial: .int(0)) },
+    actions: [NamedAction(name: "Tick", body: .guard_(.bool(true)))],
+    invariants: [NamedInvariant(name: "Rendered", body: expression)]
+  ).compile().renderedTLAModuleBundle().tla
+}
+
+private func renderedActionExpression(_ expression: ActionExpr) throws -> String {
+  try TLASpec(
+    name: "ActionExpressionRendering",
+    variables: [NamedVar(name: "x", initial: .int(0))],
+    actions: [NamedAction(name: "Rendered", body: expression)],
+    invariants: []
+  ).compile().renderedTLAModuleBundle().tla
+}
+
 // MARK: - Var<T> operators: full matrix
 
 @Suite(.serialized) struct VarOperatorMatrix {
@@ -44,17 +65,17 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       ("*", 2, "(x * 2)"),
       ("%", 5, "(x % 5)")
     ])
-  func arithmetic(_ op: String, _ val: Int, _ expected: String) {
+  func arithmetic(_ op: String, _ val: Int, _ expected: String) throws {
     let x = Var<Int>("x")
-    let result: String
+    let expression: StateExpr
     switch op {
-    case "+": result = (x + val).raw.description
-    case "-": result = (x - val).raw.description
-    case "*": result = (x * val).raw.description
-    case "%": result = (x % val).raw.description
-    default: result = ""
+    case "+": expression = (x + val).raw
+    case "-": expression = (x - val).raw
+    case "*": expression = (x * val).raw
+    case "%": expression = (x % val).raw
+    default: expression = .int(0)
     }
-    #expect(result == expected)
+    #expect(try renderedStateExpression(expression).contains("Rendered == \(expected)"))
   }
 
   @Test(
@@ -68,19 +89,19 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       (">", 0, "(x > 0)"),
       (">=", 1, "(x >= 1)")
     ])
-  func comparison(_ op: String, _ val: Int, _ expected: String) {
+  func comparison(_ op: String, _ val: Int, _ expected: String) throws {
     let x = Var<Int>("x")
-    let result: String
+    let expression: StateExpr
     switch op {
-    case "==": result = (x == val).description
-    case "!=": result = (x != val).description
-    case "<": result = (x < val).description
-    case "<=": result = (x <= val).description
-    case ">": result = (x > val).description
-    case ">=": result = (x >= val).description
-    default: result = ""
+    case "==": expression = x == val
+    case "\u{21}=": expression = .notEqual(x.stateExpr, .int(val))
+    case "<": expression = x < val
+    case "<=": expression = x <= val
+    case ">": expression = x > val
+    case ">=": expression = x >= val
+    default: expression = .bool(false)
     }
-    #expect(result == expected)
+    #expect(try renderedStateExpression(expression).contains("Rendered == \(expected)"))
   }
 
   @Test(
@@ -149,7 +170,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       ("ifThen", "(IF TRUE THEN 1 ELSE 2)"),
       ("enabled", "ENABLED Tick")
     ] as [(String, String)])
-  func stateExprMatrix(_ caseName: String, _ expected: String) {
+  func stateExprMatrix(_ caseName: String, _ expected: String) throws {
     let e: StateExpr
     switch caseName {
     case "valueInt": e = .value(.int(42))
@@ -172,35 +193,36 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     case "enabled": e = .enabledAction("Tick")
     default: e = .value(.int(0))
     }
-    #expect(e.description == expected)
+    #expect(try renderedStateExpression(e).contains("Rendered == \(expected)"))
   }
 
-  @Test func varVsVar() {
+  @Test func varVsVar() throws {
     let a = Var<Int>("a")
     let b = Var<Int>("b")
-    #expect((a == b).description == "(a = b)")
-    #expect((a != b).description == "(a /= b)")
-    #expect((a < b).description == "(a < b)")
+    #expect(try renderedStateExpression(a == b).contains("Rendered == (a = b)"))
+    #expect(try renderedStateExpression(.notEqual(a.stateExpr, b.stateExpr)).contains("Rendered == (a /= b)"))
+    #expect(try renderedStateExpression(a < b).contains("Rendered == (a < b)"))
   }
 
-  @Test func prefix() {
+  @Test func prefix() throws {
     let x = Var<Int>("x")
-    #expect((-x).description == "(-x)")
+    #expect(try renderedStateExpression(.negate(x.stateExpr)).contains("Rendered == (-x)"))
   }
 
-  @Test func stringComparison() {
+  @Test func stringComparison() throws {
     let s = Var<String>("s")
-    #expect((s == "right").description == "(s = \"right\")")
+    #expect(try renderedStateExpression(s == "right").contains("Rendered == (s = \"right\")"))
   }
 
-  @Test func assignmentAndWhen() {
+  @Test func assignmentAndWhen() throws {
     let x = Var<Int>("x")
     let a = x.becomes(1)
-    #expect(a.description.contains("x' = 1"))
+    #expect(try renderedActionExpression(a).contains("x' = 1"))
     let g = x.becomes(1).when(x == 0)
-    #expect(g.description.contains("(x = 0)") && g.description.contains("x' = 1"))
+    let guarded = try renderedActionExpression(g)
+    #expect(guarded.contains("(x = 0)") && guarded.contains("x' = 1"))
     let s = x.stays
-    #expect(s.description.contains("UNCHANGED x"))
+    #expect(try renderedActionExpression(s).contains("UNCHANGED x"))
   }
 }
 
@@ -296,12 +318,11 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
 
 }
 
-// MARK: - StateExpr: every case tested via CaseIterable
+// MARK: - State expression compilation
 
-/// Every StateExpr variant must have a non-empty description and be Codable round-trippable
-@Suite(.serialized) struct StateExprCompleteTests {
-  @Test("Every StateExpr case has a description")
-  func allCasesHaveDescriptions() {
+@Suite(.serialized) struct StateExpressionCompilationTests {
+  @Test("compiled rendering accepts every state expression case")
+  func compiledRenderingAcceptsEveryStateExpressionCase() throws {
     let cases: [StateExpr] = [
       .value(.int(1)), .value(.bool(true)), .value(.string("x")),
       .variable("v"),
@@ -340,9 +361,13 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       .choose(.setLiteral([.int(1)]), "x0", .bool(true)),
       .enabledAction("Foo")
     ]
-    for e in cases {
-      #expect(!e.description.isEmpty, "\(e) has no description")
-    }
+    let spec = TLASpec(
+      name: "StateExpressionCases",
+      variables: [NamedVar(name: "v", initial: .int(0)), NamedVar(name: "x", initial: .int(0))],
+      actions: [NamedAction(name: "Foo", body: .guard_(.bool(true)))],
+      invariants: cases.enumerated().map { .init(name: "Case\($0.offset)", body: $0.element) }
+    )
+    #expect(try spec.compile().semantics.invariants.count == cases.count)
   }
 
   @Test("StateExpr evaluates correctly in state")
@@ -471,7 +496,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     #expect(labels.map(\.arguments) == [[.int(1)], [.int(2)]])
     #expect(
       Set(transitions.map(\.action)) == ["moveElevator(1)", "moveElevator(2)"])
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator(b0) =="))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator(id) =="))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator__0 == moveElevator(1)"))
   }
 
@@ -858,7 +883,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       FormalDefinition("Double", parameters: [], body: fun)
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("Double == [b0 \\in {1, 2} |-> (b0 * 10)]"))
+    #expect(tla.contains("Double == [p \\in {1, 2} |-> (p * 10)]"))
   }
 }
 

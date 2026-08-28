@@ -260,7 +260,7 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
     public var description: String { diagnostic.actual }
 }
 
-public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
+public indirect enum StateExpr: Hashable, Sendable {
     case sourceIssue(SourceModelIssue)
     case value(TLAValue)
     case variable(String)
@@ -338,90 +338,6 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case letValue(String, StateExpr, StateExpr)
     case letIn([LocalOperator], StateExpr)
 
-    public var description: String {
-        do {
-            return try authoredPlusCalSource(path: "description", validatingIdentifiers: false)
-        } catch {
-            return "<invalid formal expression>"
-        }
-    }
-}
-
-
-private extension FormalCallArgument {
-    var referencedLocalOperators: Set<String> {
-        switch self {
-        case .value(let expression): localOperatorCalls(in: expression)
-        case .operator(.lambda(let lambda)): localOperatorCalls(in: lambda.body)
-        case .operator(.reference): []
-        }
-    }
-}
-
-func localOperatorCalls(in expression: StateExpr) -> Set<String> {
-    switch expression {
-    case .sourceIssue, .value, .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
-        return []
-    case .recursiveCall(let name, let arguments):
-        return Set([name]).union(
-            arguments.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1)) }
-        )
-    case .letValue(_, let value, let body):
-        return localOperatorCalls(in: value).union(localOperatorCalls(in: body))
-    case .letIn:
-        // Nested scopes bring their own recursive declarations.
-        return []
-    case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
-         .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
-         .domain(let value), .sequenceFromSet(let value):
-        return localOperatorCalls(in: value)
-    case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
-         .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
-         .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
-         .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
-         .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
-         .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
-         .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
-         .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
-         .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
-        return localOperatorCalls(in: lhs).union(localOperatorCalls(in: rhs))
-    case .ifThenElse(let condition, let then, let otherwise):
-        return localOperatorCalls(in: condition)
-            .union(localOperatorCalls(in: then))
-            .union(localOperatorCalls(in: otherwise))
-    case .setLiteral(let values), .tupleLiteral(let values):
-        return values.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1)) }
-    case .tupleAccess(let tuple, _), .recordAccess(let tuple, _):
-        return localOperatorCalls(in: tuple)
-    case .recordLiteral(let fields):
-        return fields.fields.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1.value)) }
-    case .functionLiteral(let domain, _, let body), .setFilter(let domain, _, let body),
-         .forAll(let domain, _, let body), .exists(let domain, _, let body), .choose(let domain, _, let body):
-        return localOperatorCalls(in: domain).union(localOperatorCalls(in: body))
-    case .setMap(let value, _, let domain):
-        return localOperatorCalls(in: value).union(localOperatorCalls(in: domain))
-    case .except(let function, let key, let value):
-        return localOperatorCalls(in: function)
-            .union(localOperatorCalls(in: key))
-            .union(localOperatorCalls(in: value))
-    case .caseExpr(let pairs, let fallback):
-        return pairs.reduce(into: fallback.map(localOperatorCalls(in:)) ?? Set<String>()) {
-            $0.formUnion(localOperatorCalls(in: $1))
-        }
-    case .integerRange(let lower, let upper):
-        return localOperatorCalls(in: lower).union(localOperatorCalls(in: upper))
-    case .foldFunction(let operation, let initial, let sequence):
-        return localOperatorCalls(in: operation.body)
-            .union(localOperatorCalls(in: initial))
-            .union(localOperatorCalls(in: sequence))
-    case .operatorApplication(let operation, let arguments):
-        let operatorCalls: Set<String>
-        switch operation {
-        case .lambda(let lambda): operatorCalls = localOperatorCalls(in: lambda.body)
-        case .reference: operatorCalls = []
-        }
-        return arguments.reduce(into: operatorCalls) { $0.formUnion($1.referencedLocalOperators) }
-    }
 }
 
 extension StateExpr {

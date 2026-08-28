@@ -358,7 +358,7 @@ struct CompiledTLARenderer {
         }
     }
 
-    private func variableName(_ id: VariableID) throws -> String {
+    func variableName(_ id: VariableID) throws -> String {
         guard layout.variables.indices.contains(id.ordinal) else { throw missing("variable", id.ordinal) }
         return layout.variables[id.ordinal].declaration.name
     }
@@ -371,6 +371,16 @@ struct CompiledTLARenderer {
     func binderName(_ id: BinderID) throws -> String {
         guard let name = bindings.binderName(id) else { throw missing("binder", id.ordinal) }
         return name
+    }
+
+    func procedureName(_ id: ProcedureID) throws -> String {
+        guard let procedure = layout.procedure(id) else { throw missing("procedure", id.ordinal) }
+        return procedure.name
+    }
+
+    func controlLocationSourceName(_ id: ControlLocationID) throws -> String {
+        guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
+        return location.sourceName
     }
 
     private func fieldName(_ id: FieldID) throws -> String {

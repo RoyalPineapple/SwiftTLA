@@ -367,8 +367,16 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
             return declaration
         }
         procedures = algorithm.procedures
-        processes = zip(algorithm.processes, processNames).map {
-            .init(process: $0.0, name: $0.1)
+        processes = zip(algorithm.processes, processNames).enumerated().map { index, value in
+            .init(
+                process: value.0,
+                name: value.1,
+                owner: .process(
+                    algorithm: algorithm.name,
+                    ordinal: index,
+                    typeName: value.0.typeName
+                )
+            )
         }
         sequentialSteps = algorithm.sequentialSteps
     }
@@ -380,13 +388,15 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
 
 internal struct AuthoredPlusCalProcessPlan: Sendable {
     let name: String
+    let owner: ControlOwner
     let domain: [TLAValue]
     let fairness: AlgorithmFairness
     let locals: [AlgorithmStateModel]
     let steps: [AlgorithmStepModel]
 
-    init(process: AlgorithmProcessModel, name: String) {
+    init(process: AlgorithmProcessModel, name: String, owner: ControlOwner) {
         self.name = name
+        self.owner = owner
         domain = process.domain
         fairness = process.fairness
         locals = process.components.compactMap {
@@ -395,6 +405,72 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
         }
         steps = process.steps
     }
+}
+
+internal struct CompiledAuthoredPlusCalAlgorithmPlan: Sendable {
+    let name: String
+    let sequentialFairness: SequentialAlgorithmFairness
+    let shared: [CompiledAuthoredPlusCalState]
+    let procedures: [CompiledAuthoredPlusCalProcedure]
+    let processes: [CompiledAuthoredPlusCalProcess]
+    let sequentialSteps: [CompiledAuthoredPlusCalStep]
+}
+
+internal struct CompiledAuthoredPlusCalState: Sendable {
+    enum Initialization: Sendable {
+        case value(TLAValue)
+        case expression(CompiledStateExpr)
+        case memberOf(CompiledStateExpr)
+    }
+
+    let variable: VariableID
+    let initialization: Initialization
+}
+
+internal struct CompiledAuthoredPlusCalProcedure: Sendable {
+    let id: ProcedureID
+    let parameters: [BinderID]
+    let locals: [CompiledAuthoredPlusCalState]
+    let steps: [CompiledAuthoredPlusCalStep]
+}
+
+internal struct CompiledAuthoredPlusCalProcess: Sendable {
+    let name: String
+    let domain: [TLAValue]
+    let fairness: AlgorithmFairness
+    let locals: [CompiledAuthoredPlusCalState]
+    let steps: [CompiledAuthoredPlusCalStep]
+}
+
+internal struct CompiledAuthoredPlusCalStep: Sendable {
+    let label: ControlLocationID
+    let statements: [CompiledAuthoredPlusCalStatement]
+    let loopCondition: CompiledStateExpr?
+}
+
+internal struct CompiledAuthoredPlusCalAssignment: Sendable {
+    let target: CompiledAuthoredPlusCalLValue
+    let value: CompiledStateExpr
+}
+
+internal enum CompiledAuthoredPlusCalLValue: Sendable {
+    case root(VariableID)
+    case function(root: VariableID, key: CompiledStateExpr)
+}
+
+internal indirect enum CompiledAuthoredPlusCalStatement: Sendable {
+    case await(CompiledStateExpr)
+    case assert(CompiledStateExpr)
+    case set(target: CompiledAuthoredPlusCalLValue, value: CompiledStateExpr)
+    case parallel([CompiledAuthoredPlusCalAssignment])
+    case letBinding(variable: BinderID, value: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
+    case with(variable: BinderID, source: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
+    case ifElse(CompiledStateExpr, [CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
+    case either([CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
+    case goto(ControlLocationID)
+    case call(target: ProcedureID, arguments: [CompiledStateExpr])
+    case `return`
+    case skip
 }
 
 func algorithmCompilationEncoding(_ model: AlgorithmModel) -> String {

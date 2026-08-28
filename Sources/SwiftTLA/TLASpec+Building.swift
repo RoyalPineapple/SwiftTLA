@@ -240,15 +240,15 @@ extension TLASpec {
   }
 
   func authoredPlusCalModule(
+    algorithm plusCalAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?,
     semantics: CompiledSemantics,
     layout: CompiledLayout,
-    bindings: CompiledBindingTable,
     formalRenderer: CompiledTLARenderer,
     renderedRefinements: [String]
   ) throws -> AuthoredPlusCalModule? {
     guard sourceAlgorithms.count == 1,
           let algorithm = sourceAlgorithms.first,
-          let plusCalAlgorithm = authoredPlusCalAlgorithmPlan
+          let plusCalAlgorithm
     else {
       return nil
     }
@@ -264,9 +264,20 @@ extension TLASpec {
       .init(code: .compilationIdentityMismatch, stage: .rendering, path: "authoredPlusCal.properties", expected: "a compiled property for identity \(id.ordinal)", actual: "no compiled property", nextSafeAction: "Compile the model again from its current source.")
     }
     func propertyID(_ property: AuthoredPlusCalProperty) throws -> PropertyID {
-      let path = property.bindingPath
-      guard case .property(let id) = bindings.references[path] else {
-        throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering, path: path, expected: "a bound property identity", actual: "no property identity", nextSafeAction: "Compile the model again from its current source.")
+      let kind: CompiledDeclaration.Kind
+      switch property {
+      case .invariant: kind = .invariant
+      case .temporal: kind = .temporalProperty
+      }
+      guard let id = layout.propertyID(kind: kind, named: property.name) else {
+        throw CompilationDiagnostic(
+          code: .compilationIdentityMismatch,
+          stage: .lowering,
+          path: "authoredPlusCal.properties.\(property.name)",
+          expected: "a compiled property identity",
+          actual: "no compiled property named '\(property.name)'",
+          nextSafeAction: "Compile the model from its current source."
+        )
       }
       return id
     }
@@ -457,13 +468,6 @@ private enum AuthoredPlusCalProperty {
   var name: String {
     switch self {
     case .invariant(let name), .temporal(let name): name
-    }
-  }
-
-  var bindingPath: String {
-    switch self {
-    case .invariant(let name): "invariants.\(name).declaration"
-    case .temporal(let name): "temporalProperties.\(name).declaration"
     }
   }
 }

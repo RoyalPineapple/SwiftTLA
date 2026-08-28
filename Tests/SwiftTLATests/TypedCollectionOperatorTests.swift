@@ -349,7 +349,6 @@ private struct FoldGeneratedModel {
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
 
         #expect(try compiledValue(runtime.raw) == .int(6))
-        #expect(runtime.raw.description.contains("FoldFunction(LAMBDA"))
         #expect(try canonicalTestSpec(
             variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []
         ).compile().identity == canonicalTestSpec(

@@ -159,7 +159,7 @@ struct ModelCheckOutcomeTests {
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("Min(b0, b1) == (IF (b0 < b1) THEN b0 ELSE b1)"))
+    #expect(tla.contains("Min(m, n) == (IF (m < n) THEN m ELSE n)"))
   }
 
   @Test func extendsNaturals() throws {

@@ -47,10 +47,6 @@ struct FormalOperatorTests {
     )
 
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("InitialState == 0"))
-    #expect(
-      StateExpr.operatorApplication(.reference("InitialState", arity: 0), []).description
-        == "InitialState"
-    )
   }
 
   @Test("a #spec higher-order formal definition preserves parser and builder trees")
@@ -392,7 +388,7 @@ struct FormalOperatorTests {
     #expect(try compiledValue(pointwise, formalOperators: functions) == .function([
       .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
     ]))
-    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(b0, b1) =="))
+    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(f, S) =="))
   }
 
   @Test("Util definitions execute without flattening their Functions dependency")

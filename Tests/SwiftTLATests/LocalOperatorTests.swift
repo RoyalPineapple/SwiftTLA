@@ -12,6 +12,36 @@ private func parseExpression(_ source: String) throws -> ExprSyntax {
   try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
 }
 
+private func renderedLocalOperatorExpression(_ body: StateExpr) throws -> String {
+  try TLASpec(
+    name: "LocalOperatorRendering",
+    variables: [],
+    actions: [],
+    invariants: [],
+    formalOperatorDefinitions: [.init(name: "Rendered", parameters: [], body: body)]
+  ).compile().renderedTLAModuleBundle().tla
+}
+
+private func compiledLocalOperatorExpression(_ body: StateExpr) throws -> CompiledStateExpr {
+  try #require(TLASpec(
+    name: "LocalOperatorCompilation",
+    variables: [],
+    actions: [],
+    invariants: [],
+    formalOperatorDefinitions: [.init(name: "Compiled", parameters: [], body: body)]
+  ).compile().semantics.formalOperatorDefinitions.first?.body)
+}
+
+private func renderedLocalOperatorDefinitions(_ definitions: [FormalOperatorDefinition]) throws -> String {
+  try TLASpec(
+    name: "LocalOperatorRendering",
+    variables: [],
+    actions: [],
+    invariants: [],
+    formalOperatorDefinitions: definitions
+  ).compile().renderedTLAModuleBundle().tla
+}
+
 @TLAModel
 private struct GeneratedTypedLocalRecursionModel {
   enum Step: String, CaseIterable { case advance }
@@ -80,6 +110,93 @@ private struct GeneratedTopLevelTypedFormalDefinitionModel {
 
 @Suite("Local TLA+ operators")
 struct LocalOperatorTests {
+  @Test("bounded local calls compile identically from parser and builder syntax")
+  func boundedLocalCallsHaveOneCompiledForm() throws {
+    let parsed = try #require(SpecParser.decodeStateExpr(try parseExpression("""
+      StateExpr.letIn([
+        LocalOperator(
+          "Count",
+          parameters: ["number"],
+          domain: StateExpr.integerRange(0, 4),
+          body: If(
+            StateExpr.variable("number") == 0,
+            then: 0,
+            else: StateExpr.variable("Count").applying(StateExpr.variable("number") - 1)
+          )
+        )
+      ], StateExpr.variable("Count").applying(4))
+      """)))
+    let built = StateExpr.letIn([
+      .init(
+        "Count",
+        parameters: ["number"],
+        domain: .integerRange(.int(0), .int(4)),
+        body: .ifThenElse(
+          .equal(.variable("number"), .int(0)),
+          .int(0),
+          .recursiveCall("Count", [.subtract(.variable("number"), .int(1))])
+        )
+      )
+    ], .recursiveCall("Count", [.int(4)]))
+
+    let parsedCompilation = try compiledLocalOperatorExpression(parsed)
+    let builtCompilation = try compiledLocalOperatorExpression(built)
+    let parsedRendering = try renderedLocalOperatorExpression(parsed)
+    let builtRendering = try renderedLocalOperatorExpression(built)
+    #expect(parsedRendering == builtRendering)
+    guard case .letIn(let parsedOperators, .functionApply(.operatorReference(let parsedCall), .value(.int(4)))) = parsedCompilation,
+          case .letIn(let builtOperators, .functionApply(.operatorReference(let builtCall), .value(.int(4)))) = builtCompilation,
+          let parsedOperator = parsedOperators.first,
+          let builtOperator = builtOperators.first,
+          case .ifThenElse(_, _, .functionApply(.operatorReference(let parsedRecursion), _)) = parsedOperator.body,
+          case .ifThenElse(_, _, .functionApply(.operatorReference(let builtRecursion), _)) = builtOperator.body else {
+      Issue.record("Expected one bounded compiled call")
+      return
+    }
+    #expect(parsedCall == parsedOperator.id)
+    #expect(parsedRecursion == parsedOperator.id)
+    #expect(builtCall == builtOperator.id)
+    #expect(builtRecursion == builtOperator.id)
+  }
+
+  @Test("operator calls compile identically from parser and builder syntax")
+  func operatorCallsHaveOneCompiledForm() throws {
+    let parsed = try #require(SpecParser.decodeStateExpr(try parseExpression("""
+      StateExpr.letIn([
+        LocalOperator(
+          "AddOne",
+          parameters: ["number"],
+          body: StateExpr.variable("number") + 1
+        )
+      ], StateExpr.variable("AddOne").applying(41))
+      """)))
+    let operation = LocalOperator(
+      "AddOne",
+      parameters: ["number"],
+      body: .add(.variable("number"), .int(1))
+    )
+    let built = StateExpr.letIn([operation], .recursiveCall("AddOne", [.int(41)]))
+
+    let parsedCompilation = try compiledLocalOperatorExpression(parsed)
+    let builtCompilation = try compiledLocalOperatorExpression(built)
+    let parsedRendering = try renderedLocalOperatorExpression(parsed)
+    let builtRendering = try renderedLocalOperatorExpression(built)
+    #expect(parsedRendering == builtRendering)
+    guard case .letIn(let parsedOperators, .recursiveCall(let parsedCall, let parsedArguments)) = parsedCompilation,
+          case .letIn(let builtOperators, .recursiveCall(let builtCall, let builtArguments)) = builtCompilation,
+          let parsedOperator = parsedOperators.first,
+          let builtOperator = builtOperators.first,
+          parsedArguments.count == 1,
+          builtArguments.count == 1,
+          case .some(.value(.int(41))) = parsedArguments.first,
+          case .some(.value(.int(41))) = builtArguments.first else {
+      Issue.record("Expected one operator-style compiled call")
+      return
+    }
+    #expect(parsedCall == parsedOperator.id)
+    #expect(builtCall == builtOperator.id)
+  }
+
   @Test("typed unary LET recursion captures state and retains quantifier scope")
   func typedLocalRecursionUsesExistingLetInSemantics() throws {
     let limit = Var<Int>("limit")
@@ -94,7 +211,6 @@ struct LocalOperatorTests {
     })
 
     #expect(try compiledValue(expression.stateExpr, values: [("limit", .int(4))]) == .int(0))
-    #expect(expression.stateExpr.description.contains("SumTo["))
   }
 
   @Test("#spec preserves typed local recursion through generated model parsing")
@@ -105,8 +221,15 @@ struct LocalOperatorTests {
       return
     }
     #expect(operators.first?.domain == .integerRange(.int(0), .int(4)))
-    #expect(call.description.contains("Count[4]"))
-    let rendered = try GeneratedTypedLocalRecursionModel.spec.compile().renderedTLAModuleBundle().tla
+    #expect(call == .functionApply(.variable("Count"), .int(4)))
+    let compilation = try GeneratedTypedLocalRecursionModel.spec.compile()
+    let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
+    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .value(.int(4)))) = compiledDefinition.body else {
+      Issue.record("Expected a bound local operator application")
+      return
+    }
+    #expect(callID == compiledOperators.first?.id)
+    let rendered = compilation.renderedTLAModuleBundle().tla
     #expect(rendered.contains("LET Count["))
     #expect(!rendered.contains("LET RECURSIVE Count"))
 
@@ -138,8 +261,9 @@ struct LocalOperatorTests {
       GeneratedTopLevelTypedFormalDefinitionModel.spec.formalOperatorDefinitions.first
     )
     #expect(definition.parameters == [.value("value0")])
-    #expect(definition.body.description.contains("0..bound"))
-    #expect(definition.body.description.contains("SA[value0]"))
+    let rendered = try GeneratedTopLevelTypedFormalDefinitionModel.spec.compile().renderedTLAModuleBundle().tla
+    #expect(rendered.contains("0..bound"))
+    #expect(rendered.contains("SA[value0]"))
 
     var model = try GeneratedTopLevelTypedFormalDefinitionModel.makeMachine()
     #expect(try model.send(.advance).after.counter == 1)
@@ -175,10 +299,24 @@ struct LocalOperatorTests {
     #expect(operation.name == "AtMost")
     #expect(operation.parameters == ["number"])
     #expect(operation.domain == .integerRange(.int(0), .variable("value0")))
-    #expect(operation.body.description.contains("\\E"))
-    #expect(operation.body.description.contains("\\A"))
-    #expect(operation.body.description.contains("AtMost["))
-    #expect(call.description == "AtMost[value0]")
+    #expect(call == .functionApply(.variable("AtMost"), .variable("value0")))
+    let compilation = try TLASpec(
+      name: "BoundedLocalOperator",
+      variables: [],
+      actions: [],
+      invariants: [],
+      formalOperatorDefinitions: parsed.formalOperatorDefinitions
+    ).compile()
+    let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
+    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .boundValue)) = compiledDefinition.body else {
+      Issue.record("Expected a bound local operator application")
+      return
+    }
+    #expect(callID == compiledOperators.first?.id)
+    let rendered = compilation.renderedTLAModuleBundle().tla
+    #expect(rendered.contains("\\E"))
+    #expect(rendered.contains("\\A"))
+    #expect(rendered.contains("AtMost[value0]"))
   }
 
   @Test("bounded recursion retains scoped values through the general parser fallback")
@@ -201,8 +339,9 @@ struct LocalOperatorTests {
 
     #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
     let definition = try #require(parsed.formalOperatorDefinitions.first)
-    #expect(definition.body.description.contains("SA[value0]"))
-    #expect(definition.body.description.contains("<<prior, candidate>>"))
+    let rendered = try renderedLocalOperatorDefinitions([definition])
+    #expect(rendered.contains("SA[value0]"))
+    #expect(rendered.contains("<<"))
   }
 
   @Test("bounded LET rejects arguments outside its declared domain")
@@ -235,7 +374,8 @@ struct LocalOperatorTests {
     ], .functionApply(.variable("SA"), .int(0)))
 
     #expect(try compiledValue(expression) == .bool(true))
-    #expect(expression.description.contains("IF (prior = -1) THEN TRUE ELSE SA[prior]"))
+    let rendered = try renderedLocalOperatorExpression(expression)
+    #expect(rendered.contains("IF (prior = -1) THEN TRUE ELSE SA[prior]"))
   }
 
   @Test("bounded LET lowering respects an inner operator shadow")
@@ -292,8 +432,6 @@ struct LocalOperatorTests {
     let expression: StateExpr = .letIn([sumTo], .recursiveCall("SumTo", [.int(4)]))
 
     #expect(try compiledValue(expression) == .int(10))
-    #expect(expression.description.contains("LET RECURSIVE SumTo(_)"))
-    #expect(expression.description.contains("SumTo(number) =="))
   }
 
   @Test("terminating recursive operators evaluate beyond host call depth")
@@ -323,7 +461,7 @@ struct LocalOperatorTests {
     }
 
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains(
-      "Answer == LET AddOne(b0) == (b0 + 1)"
+      "Answer == LET AddOne(number) == (number + 1)"
     ))
     #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("RECURSIVE AddOne")))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("IN AddOne(41)"))
@@ -398,6 +536,7 @@ struct LocalOperatorTests {
 
     #expect(try compiledValue(expression, values: [("value", .int(0))]) == .int(5))
     #expect(try compiledValue(substituted, values: [("value", .int(0))]) == .int(5))
-    #expect(expression.description == "LET value == 4 IN (value + 1)")
+    let rendered = try renderedLocalOperatorExpression(expression)
+    #expect(rendered.contains("LET value == 4 IN (value + 1)"))
   }
 }

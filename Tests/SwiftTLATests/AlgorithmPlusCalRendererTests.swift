@@ -125,9 +125,12 @@ struct AlgorithmPlusCalRendererTests {
             }
         })
 
-        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
+        let compilation = try TLASpec("QuantifiedBinder") { algorithm }.compile()
+        let rendered = try compilation.renderedPlusCalBundle().root.tla
+        let compiledMachine = compilation.renderedTLAModuleBundle().root.tla
 
         #expect(rendered.contains("await \\A item_1 \\in {0, 1} : (item_1 >= count);"))
+        #expect(compiledMachine.contains("\\A item_1 \\in {0, 1}"))
     }
 
     @Test("keeps prelude helpers outside and state helpers inside define")
@@ -338,9 +341,9 @@ struct AlgorithmPlusCalRendererTests {
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
-        #expect(rendered.contains("procedure work(parameter0)"))
+        #expect(rendered.contains("procedure work(parameter0_1)"))
         #expect(rendered.contains("enter:"))
-        #expect(rendered.contains("output := (parameter0 + offset);"))
+        #expect(rendered.contains("output := (parameter0_1 + offset);"))
         #expect(rendered.contains("call work(7);"))
         #expect(rendered.contains("{\n  start:"))
     }
@@ -451,5 +454,50 @@ struct AlgorithmPlusCalRendererTests {
         #expect(try spec.compile().renderedPlusCalBundle().root.tla.contains(
             "EXTENDS Integers, Naturals, FiniteSets, Sequences"
         ))
+    }
+
+    @Test("authored PlusCal renders mutual LET recursion from bound operator identities")
+    func rendersBoundMutualLocalRecursion() throws {
+        let expression = StateExpr.letIn(
+            [
+                LocalOperator("First", body: .recursiveCall("Second", [])),
+                LocalOperator("Second", body: .recursiveCall("First", []))
+            ],
+            .recursiveCall("First", [])
+        )
+        let specification = TLASpec("MutualLocalRecursion") {
+            Algorithm("MutualLocalRecursion") {
+                Do(TestControlLabel.stop) {
+                    When(expression)
+                    Stop()
+                }
+            }
+        }
+
+        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
+
+        #expect(rendered.contains("RECURSIVE First, Second"))
+    }
+
+    @Test("nested LET shadowing keeps recursion with the bound declaration")
+    func rendersBoundNestedLocalRecursion() throws {
+        let inner = LocalOperator("Repeat", body: .recursiveCall("Repeat", []))
+        let outer = LocalOperator(
+            "Repeat",
+            body: .letIn([inner], .recursiveCall("Repeat", []))
+        )
+        let expression = StateExpr.letIn([outer], .recursiveCall("Repeat", []))
+        let specification = TLASpec("NestedLocalRecursion") {
+            Algorithm("NestedLocalRecursion") {
+                Do(TestControlLabel.stop) {
+                    When(expression)
+                    Stop()
+                }
+            }
+        }
+
+        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
+
+        #expect(rendered.components(separatedBy: "RECURSIVE Repeat").count == 2)
     }
 }
