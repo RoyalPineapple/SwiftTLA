@@ -156,44 +156,36 @@ public struct CompiledSpecification: Sendable {
         renderedActionPlan
     }
 
-    package func actionRequest(
-        ordinal: Int,
-        formalArguments: [TLAValue]
-    ) throws -> CompiledActionRequest {
-        guard layout.actions.indices.contains(ordinal) else {
-            throw GeneratedMachineError.noMatchingSuccessor
-        }
-        return try actionRequest(
-            action: layout.actions[ordinal].id,
-            formalArguments: formalArguments
-        )
-    }
-
-    func actionRequest(
-        action: ActionID,
-        formalArguments: [TLAValue]
-    ) throws -> CompiledActionRequest {
-        guard semantics.actions.contains(where: { $0.id == action }) else {
-            throw GeneratedMachineError.noMatchingSuccessor
-        }
-        return .init(
-            action: action,
-            arguments: formalArguments.map { .init(formal: $0) }
-        )
-    }
-
-    func matches(_ arguments: [CompiledValue], request: CompiledActionRequest) -> Bool {
-        arguments == request.arguments
-    }
-
     package func generatedActionInput(
         for request: CompiledActionRequest
-    ) throws -> (ordinal: Int, formalArguments: [TLAValue]) {
-        guard let action = layout.actions.first(where: { $0.id == request.action }) else {
-            throw GeneratedMachineError.noMatchingSuccessor
+    ) throws -> (surfaceOrdinal: Int, formalArguments: [TLAValue])? {
+        guard let compiledAction = layout.actions.first(where: { $0.id == request.action }) else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .runtime,
+                path: "compiled action \(request.action.ordinal)",
+                expected: "an action in the current compiled layout",
+                actual: "no action at that compiled identity",
+                nextSafeAction: "Compile the generated machine from its current source declaration."
+            )
+        }
+        if compiledAction.declaration.name == CompilerControlSymbol.terminatingAction.rawValue {
+            return nil
+        }
+        guard let surfaceOrdinal = machineSurfacePlan.actions.firstIndex(where: {
+            $0.compiledAction == request.action
+        }) else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .runtime,
+                path: "compiled action \(request.action.ordinal)",
+                expected: "a generated action for the compiled source action",
+                actual: "no generated action at that compiled identity",
+                nextSafeAction: "Compile the generated machine from its current source declaration."
+            )
         }
         return (
-            ordinal: action.id.ordinal,
+            surfaceOrdinal: surfaceOrdinal,
             formalArguments: try request.arguments.map { try $0.rendered(using: layout) }
         )
     }

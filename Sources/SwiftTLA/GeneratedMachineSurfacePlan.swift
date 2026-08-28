@@ -35,15 +35,18 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     }
 
     package struct Action: Sendable, Equatable {
+        package let compiledAction: ActionID
         package let swiftIdentifier: String
         package let bindings: [Binding]
         package let symmetricCollection: SymmetricCollection?
 
         package init(
+            compiledAction: ActionID,
             swiftIdentifier: String,
             bindings: [Binding],
             symmetricCollection: SymmetricCollection?
         ) {
+            self.compiledAction = compiledAction
             self.swiftIdentifier = swiftIdentifier
             self.bindings = bindings
             self.symmetricCollection = symmetricCollection
@@ -166,6 +169,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 }
             }
             return Action(
+                compiledAction: layoutAction.id,
                 swiftIdentifier: identifier,
                 bindings: try action.bindings.map { binding in
                     Binding(
