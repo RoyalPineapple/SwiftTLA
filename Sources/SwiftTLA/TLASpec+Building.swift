@@ -109,12 +109,23 @@ extension TLASpec {
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.sourceAlgorithms = sourceAlgorithms
+    self.authoredPlusCalAlgorithmPlan = nil
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }
 }
 
 extension TLASpec {
   func loweredSourceModel() throws -> TLASpec {
+    guard sourceAlgorithms.count <= 1 else {
+      throw CompilationDiagnostic(
+        code: .duplicateAlgorithm,
+        stage: .validation,
+        path: "algorithms",
+        expected: "one canonical Algorithm declaration",
+        actual: "\(sourceAlgorithms.count) Algorithm declarations",
+        nextSafeAction: "Combine the declarations into one Algorithm."
+      )
+    }
     try validateCapabilityAdmission()
     var variables = variables
     var actions = actions
@@ -123,14 +134,18 @@ extension TLASpec {
     var fairness = fairness
     var constraint = constraint
     var formalOperatorDefinitions = formalOperatorDefinitions
+    var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
 
     if algorithmPhase == .source {
       for algorithm in sourceAlgorithms {
         try algorithm.requireValid()
+        let authoredPlusCalPlan = AuthoredPlusCalAlgorithmPlan(algorithm.model)
         let lowered = try AlgorithmLowerer.lower(
           algorithm.model,
+          processNames: authoredPlusCalPlan.processNames,
           formalOperatorDefinitions: formalOperatorDefinitions
         )
+        authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
         actions += lowered.actions
         invariants += lowered.invariants
@@ -185,6 +200,7 @@ extension TLASpec {
       symmetricCollections: symmetricCollections,
       sourceAlgorithms: sourceAlgorithms
     )
+    lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
     lowered.algorithmPhase = .lowered
     return lowered
   }
@@ -230,15 +246,17 @@ extension TLASpec {
     formalRenderer: CompiledTLARenderer,
     renderedRefinements: [String]
   ) throws -> AuthoredPlusCalModule? {
-    guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
+    guard sourceAlgorithms.count == 1,
+          let algorithm = sourceAlgorithms.first,
+          let plusCalAlgorithm = authoredPlusCalAlgorithmPlan
+    else {
       return nil
     }
-    let plusCalAlgorithm = algorithm.model.plusCalProjection()
     let declarationSections = try authoredPlusCalDeclarationSections(
       semantics: semantics,
       formalRenderer: formalRenderer
     )
-    let propertyPlan = try authoredPlusCalProperties(in: plusCalAlgorithm)
+    let propertyPlan = try authoredPlusCalProperties(in: algorithm.model)
     let sourceProperties = propertyPlan.properties
     let invariantsByID = Dictionary(uniqueKeysWithValues: semantics.invariants.map { ($0.id, $0) })
     let temporalPropertiesByID = Dictionary(uniqueKeysWithValues: semantics.temporalProperties.map { ($0.id, $0) })
@@ -299,7 +317,6 @@ extension TLASpec {
       constants: authoredPlusCalPrelude,
       preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
-      processNames: AlgorithmLowerer.processNames(for: plusCalAlgorithm),
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: postTranslationDeclarations,
       refinements: renderedRefinements

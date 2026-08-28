@@ -29,55 +29,6 @@ struct AlgorithmPlusCalRendererTests {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    @Test("unsupported components produce rendering diagnostics")
-    func rejectsUnsupportedComponents() {
-        let cases: [(AlgorithmModel, String)] = [
-            (
-                AlgorithmModel(
-                    name: "UnsupportedTopLevel",
-                    components: [.unsupported(.genericFairness)]
-                ),
-                "components[0]"
-            ),
-            (
-                AlgorithmModel(
-                    name: "UnsupportedProcess",
-                    components: [
-                        .process(.init(
-                            typeName: "Node",
-                            domain: [.string("node")],
-                            fairness: .none,
-                            components: [.unsupported(.algorithmAssume)]
-                        ))
-                    ]
-                ),
-                "components[0].components[0]"
-            )
-        ]
-
-        for (algorithm, expectedPath) in cases {
-            let renderer = AlgorithmPlusCalRenderer(module: .init(
-                name: algorithm.name,
-                extendsModules: ["Integers"],
-                constants: [],
-                preludeDeclarations: [],
-                algorithm: algorithm,
-                processNames: AlgorithmLowerer.processNames(for: algorithm),
-                defineDeclarations: [],
-                postTranslationDeclarations: [],
-                refinements: []
-            ))
-            do {
-                _ = try renderer.render()
-                Issue.record("Expected unsupported component rendering to fail.")
-            } catch let diagnostic as AlgorithmPlusCalRenderDiagnostic {
-                #expect(diagnostic.path == expectedPath)
-            } catch {
-                Issue.record("Expected AlgorithmPlusCalRenderDiagnostic, received \(error).")
-            }
-        }
-    }
-
     @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
         let algorithm = Algorithm("RenderedProcess", scoped: { scope in

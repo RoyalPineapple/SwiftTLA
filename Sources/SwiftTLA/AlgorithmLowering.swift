@@ -23,21 +23,6 @@ enum AlgorithmLowerer {
     }
     private static let processBinding = CompilerBindingSymbol.process
 
-    static func processNames(for algorithm: AlgorithmModel) -> [String] {
-        var used = algorithm.authoredIdentifiers
-        return algorithm.processes.indices.map { index in
-            let stem = "pcalProcess\(index + 1)"
-            var candidate = stem
-            var suffix = 2
-            while used.contains(candidate) {
-                candidate = "\(stem)_\(suffix)"
-                suffix += 1
-            }
-            used.insert(candidate)
-            return candidate
-        }
-    }
-
     private static func lowered(_ specification: TLASpec) -> TLASpec {
         var specification = specification
         specification.algorithmPhase = .lowered
@@ -46,6 +31,7 @@ enum AlgorithmLowerer {
 
     static func lower(
         _ algorithm: AlgorithmModel,
+        processNames: [String],
         formalOperatorDefinitions: [FormalOperatorDefinition] = []
     ) throws -> TLASpec {
         let resolvedFormalOperators = formalOperatorDefinitions + algorithm.formalOperatorDefinitions
@@ -57,7 +43,6 @@ enum AlgorithmLowerer {
             )
         }
         let requiresProgramCounter = requiresProgramCounter(for: algorithm)
-        let processNames = processNames(for: algorithm)
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state

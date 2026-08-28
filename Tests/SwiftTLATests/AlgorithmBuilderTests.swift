@@ -4,6 +4,47 @@ import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    @Test("compilation rejects multiple Algorithms")
+    func rejectsMultipleAlgorithms() {
+        let specification = TLASpec("MultipleAlgorithms") {
+            Algorithm("First") {
+                Do(TestControlLabel.done) { Stop() }
+            }
+            Algorithm("Second") {
+                Do(TestControlLabel.done) { Stop() }
+            }
+        }
+
+        do {
+            _ = try specification.compile()
+            Issue.record("Expected multiple Algorithm declarations to fail compilation.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .duplicateAlgorithm)
+            #expect(diagnostic.path == "algorithms")
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, received \(error).")
+        }
+    }
+
+    @Test("specializing a lowered Algorithm preserves its authored PlusCal plan")
+    func specializationPreservesAuthoredPlusCalPlan() throws {
+        let source = TLASpec("SpecializedAlgorithm", scoped: { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Algorithm("SpecializedAlgorithm") {
+                Do(TestControlLabel.advance) {
+                    Assign(value, to: value + 1)
+                }
+            }
+        })
+        let lowered = try source.loweredSourceModel()
+        let specialized = lowered.specializing(parameters: [:])
+
+        #expect(specialized.algorithmPhase == .lowered)
+        #expect(specialized.authoredPlusCalAlgorithmPlan?.name == "SpecializedAlgorithm")
+        let rendered = try specialized.compile().renderedPlusCalBundle().root.tla
+        #expect(rendered.components(separatedBy: "(*--algorithm SpecializedAlgorithm").count == 2)
+    }
+
     private enum ProcedureName: String, CaseIterable {
         case work
     }

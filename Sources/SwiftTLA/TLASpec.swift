@@ -272,12 +272,9 @@ public struct TLASpec: Sendable {
   public let refinements: [RefinementDecl]
   public let symmetrySets: [SymmetrySet]
   public let symmetricCollections: [SymmetricCollectionDecl]
-  /// Canonical Algorithm declarations retained solely for source rendering.
-  ///
-  /// The formal runtime still uses the one lowered `TLASpec` representation.
-  /// Keeping these declarations lets a tooling boundary render the exact
-  /// authored Algorithm as PlusCal without reconstructing it from TLA+ AST.
+  /// The authored Algorithm declaration used to create the compiled PlusCal plan.
   let sourceAlgorithms: [Algorithm]
+  var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
   var algorithmPhase: AlgorithmPhase
   public init(
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
@@ -314,6 +311,7 @@ public struct TLASpec: Sendable {
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.sourceAlgorithms = sourceAlgorithms
+    self.authoredPlusCalAlgorithmPlan = nil
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }
 

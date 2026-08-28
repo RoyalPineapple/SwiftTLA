@@ -337,6 +337,66 @@ internal struct AlgorithmModel: Sendable {
     }
 }
 
+internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
+    let name: String
+    let sequentialFairness: SequentialAlgorithmFairness
+    let shared: [AlgorithmStateModel]
+    let procedures: [AlgorithmProcedureModel]
+    let processes: [AuthoredPlusCalProcessPlan]
+    let sequentialSteps: [AlgorithmStepModel]
+
+    init(_ source: AlgorithmModel) {
+        let algorithm = source.plusCalProjection()
+        var used = algorithm.authoredIdentifiers
+        let processNames = algorithm.processes.indices.map { index in
+            let stem = "pcalProcess\(index + 1)"
+            var candidate = stem
+            var suffix = 2
+            while used.contains(candidate) {
+                candidate = "\(stem)_\(suffix)"
+                suffix += 1
+            }
+            used.insert(candidate)
+            return candidate
+        }
+
+        name = algorithm.name
+        sequentialFairness = algorithm.sequentialFairness
+        shared = algorithm.components.compactMap {
+            guard case .shared(let declaration) = $0 else { return nil }
+            return declaration
+        }
+        procedures = algorithm.procedures
+        processes = zip(algorithm.processes, processNames).map {
+            .init(process: $0.0, name: $0.1)
+        }
+        sequentialSteps = algorithm.sequentialSteps
+    }
+
+    var processNames: [String] {
+        processes.map(\.name)
+    }
+}
+
+internal struct AuthoredPlusCalProcessPlan: Sendable {
+    let name: String
+    let domain: [TLAValue]
+    let fairness: AlgorithmFairness
+    let locals: [AlgorithmStateModel]
+    let steps: [AlgorithmStepModel]
+
+    init(process: AlgorithmProcessModel, name: String) {
+        self.name = name
+        domain = process.domain
+        fairness = process.fairness
+        locals = process.components.compactMap {
+            guard case .local(let declaration) = $0 else { return nil }
+            return declaration
+        }
+        steps = process.steps
+    }
+}
+
 func algorithmCompilationEncoding(_ model: AlgorithmModel) -> String {
     var next = 0
     var nodes: [(path: String, value: String)] = []

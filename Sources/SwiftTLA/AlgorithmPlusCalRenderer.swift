@@ -30,8 +30,7 @@ internal struct AuthoredPlusCalModule: Sendable {
     let extendsModules: [String]
     let constants: [String]
     let preludeDeclarations: [String]
-    let algorithm: AlgorithmModel
-    let processNames: [String]
+    let algorithm: AuthoredPlusCalAlgorithmPlan
     let defineDeclarations: [String]
     let postTranslationDeclarations: [String]
     let refinements: [String]
@@ -356,13 +355,9 @@ internal struct AlgorithmPlusCalRenderer {
         let algorithmName = try authoredPlusCalIdentifier(model.name, path: "algorithm.name")
         lines.append("(*--\(fairness)algorithm \(algorithmName) {")
 
-        let shared = model.components.compactMap { component -> AlgorithmStateModel? in
-            guard case .shared(let declaration) = component else { return nil }
-            return declaration
-        }
-        if !shared.isEmpty {
+        if model.shared.isEmpty == false {
             lines.append("variables")
-            lines += try declarations(shared, indent: "  ", terminator: ";", path: "shared")
+            lines += try declarations(model.shared, indent: "  ", terminator: ";", path: "shared")
         }
         if !module.defineDeclarations.isEmpty {
             lines.append("define {")
@@ -370,41 +365,16 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("}")
         }
 
-        var processIndex = 0
-        for (index, component) in model.components.enumerated() {
-            switch component {
-            case .shared:
-                continue
-            case .procedure(let procedure):
-                lines += try render(procedure: procedure, path: "components[\(index)]")
-            case .process(let process):
-                lines += try render(
-                    process: process,
-                    processName: module.processNames[processIndex],
-                    path: "components[\(index)]"
-                )
-                processIndex += 1
-            case .step:
-                // Sequential steps share the algorithm's C-syntax brace body.
-                continue
-            case .invariant, .temporal, .formalOperator:
-                // Properties are emitted once after the PlusCal comment.
-                continue
-            case .stateConstraint:
-                // The operator is emitted after the PlusCal comment, where
-                // the official translator preserves it for TLC's CONSTRAINT.
-                continue
-            case .unsupported(let construct):
-                throw unsupported(construct, path: "components[\(index)]")
-            case .local:
-                throw unsupported(path: "components[\(index)]", expected: "a process or procedure local declaration", actual: "top-level local declaration")
-            }
+        for (index, procedure) in model.procedures.enumerated() {
+            lines += try render(procedure: procedure, path: "procedures[\(index)]")
+        }
+        for (index, process) in model.processes.enumerated() {
+            lines += try render(process: process, path: "processes[\(index)]")
         }
 
-        let sequential = model.sequentialSteps
-        if !sequential.isEmpty {
+        if model.sequentialSteps.isEmpty == false {
             lines.append("{")
-            for (index, step) in sequential.enumerated() {
+            for (index, step) in model.sequentialSteps.enumerated() {
                 lines += try render(step: step, indent: "  ", path: "sequentialSteps[\(index)]")
             }
             lines.append("}")
@@ -435,8 +405,7 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     private func render(
-        process: AlgorithmProcessModel,
-        processName: String,
+        process: AuthoredPlusCalProcessPlan,
         path: String
     ) throws -> [String] {
         let fairness: String
@@ -445,36 +414,16 @@ internal struct AlgorithmPlusCalRenderer {
         case .weak: fairness = "fair "
         case .strong: fairness = "fair+ "
         }
-        // The header identifier names the process set. `self` is the
-        // language-defined identifier for its current member inside the body.
-        // Keep the IR-only name out of the source and avoid collisions with
-        // declarations authored in this algorithm.
-        var lines = ["", "\(fairness)process (\(processName) \\in \(set(process.domain)))"]
-        let locals = process.components.compactMap { component -> AlgorithmStateModel? in
-            guard case .local(let declaration) = component else { return nil }
-            return declaration
-        }
-        if !locals.isEmpty {
+        // The header identifier names the process set. `self` names its
+        // current member inside the process body.
+        var lines = ["", "\(fairness)process (\(process.name) \\in \(set(process.domain)))"]
+        if process.locals.isEmpty == false {
             lines.append("variables")
-            lines += try declarations(locals, indent: "  ", terminator: ";", path: "\(path).locals")
+            lines += try declarations(process.locals, indent: "  ", terminator: ";", path: "\(path).locals")
         }
         lines.append("{")
-        for (index, component) in process.components.enumerated() {
-            switch component {
-            case .local:
-                continue
-            case .step(let step):
-                lines += try render(step: step, indent: "  ", path: "\(path).components[\(index)]")
-            case .invariant, .temporal, .formalOperator:
-                // Properties are emitted once after the PlusCal comment.
-                continue
-            case .stateConstraint:
-                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "process state constraint")
-            case .unsupported(let construct):
-                throw unsupported(construct, path: "\(path).components[\(index)]")
-            case .shared, .process, .procedure:
-                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "nested algorithm component")
-            }
+        for (index, step) in process.steps.enumerated() {
+            lines += try render(step: step, indent: "  ", path: "\(path).steps[\(index)]")
         }
         lines.append("}")
         return lines
@@ -522,7 +471,7 @@ internal struct AlgorithmPlusCalRenderer {
     private func render(statement: AlgorithmStatementModel, indent: String, path: String) throws -> [String] {
         switch statement {
         case .rejected(let diagnostic):
-            throw unsupported(path: path, expected: "a validated algorithm statement", actual: diagnostic.rawValue)
+            throw unplannedStatement(diagnostic.rawValue, path: path)
         case .await(let condition): return ["\(indent)await \(try expression(condition, path: "\(path).condition"));"]
         case .assert(let condition): return ["\(indent)assert \(try expression(condition, path: "\(path).condition"));"]
         case .set(let target, let value):
@@ -563,13 +512,7 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("\(indent)};")
             return lines
         case .choose:
-            throw AlgorithmPlusCalRenderDiagnostic(
-                failedConcept: "choice rendering",
-                path: path,
-                expected: "a compiled with statement",
-                actual: "an unprojected choose statement",
-                nextSafeAction: "Compile the model again from its current source."
-            )
+            throw unplannedStatement("choose", path: path)
         case .goto(let label):
             return ["\(indent)goto \(try authoredPlusCalIdentifier(label.name, path: "\(path).label"));"]
         case .call(let target, let arguments):
@@ -580,13 +523,7 @@ internal struct AlgorithmPlusCalRenderer {
             return ["\(indent)call \(name)(\(values));"]
         case .return: return ["\(indent)return;"]
         case .stop:
-            throw AlgorithmPlusCalRenderDiagnostic(
-                failedConcept: "stop rendering",
-                path: path,
-                expected: "a compiled goto statement",
-                actual: "an unprojected stop statement",
-                nextSafeAction: "Compile the model again from its current source."
-            )
+            throw unplannedStatement("stop", path: path)
         case .skip: return ["\(indent)skip;"]
         }
     }
@@ -607,27 +544,14 @@ internal struct AlgorithmPlusCalRenderer {
         "{\(values.map(\.description).joined(separator: ", "))}"
     }
 
-    private func unsupported(path: String, expected: String, actual: String) -> AlgorithmPlusCalRenderDiagnostic {
-        AlgorithmPlusCalRenderDiagnostic(
-            failedConcept: "semantic-free PlusCal source rendering",
+    private func unplannedStatement(_ statement: String, path: String) -> CompilationDiagnostic {
+        .init(
+            code: .invalidAuthoredPlusCalPlan,
+            stage: .rendering,
             path: path,
-            expected: expected,
-            actual: actual,
-            nextSafeAction: "Use the supported direct PlusCal form, or extend the renderer with a syntax-only spelling before retrying."
-        )
-    }
-
-    private func unsupported(
-        _ construct: DeclaredLanguageConstruct,
-        path: String
-    ) -> AlgorithmPlusCalRenderDiagnostic {
-        let capability = LanguageCapabilityLedger.capability(for: construct)
-        return AlgorithmPlusCalRenderDiagnostic(
-            failedConcept: "PlusCal rendering of \(construct.rawValue)",
-            path: path,
-            expected: capability.boundary,
-            actual: "\(construct.rawValue) inside Algorithm",
-            nextSafeAction: capability.nextSafeAction
+            expected: "a planned authored PlusCal statement",
+            actual: statement,
+            nextSafeAction: "Compile the model again from its current source."
         )
     }
 

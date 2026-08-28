@@ -355,6 +355,8 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateVariable
         case duplicateAction
         case duplicateInvariant
+        case duplicateAlgorithm
+        case invalidAuthoredPlusCalPlan
         case invalidSymmetricCollection
         case invalidSymmetryDeclaration
         case duplicateRecordField
