@@ -844,6 +844,25 @@ struct AlgorithmBuilderTests {
         }
     }
 
+    @Test("authored control labels begin with a formal identifier character")
+    func leadingDigitControlLabelBlocksCompilation() {
+        let algorithm = Algorithm(model: .init(
+            name: "InvalidControlLabel",
+            components: [
+                .step(.init(label: .init(name: "1start"), statements: [.stop]))
+            ]
+        ))
+
+        do {
+            _ = try TLASpec("InvalidControlLabel") { algorithm }.compile()
+            Issue.record("Expected invalid control label compilation to fail.")
+        } catch let error as AlgorithmValidationError {
+            #expect(error.diagnostics.map(\.code).contains(.invalidName))
+        } catch {
+            Issue.record("Expected AlgorithmValidationError, got \(error)")
+        }
+    }
+
     @Test("authored PlusCal evaluates a later guard before atomic updates")
     func authoredPlusCalMovesLaterGuardBeforeAtomicUpdates() throws {
         let algorithm = Algorithm("ReadAfterWrite", scoped: { scope in

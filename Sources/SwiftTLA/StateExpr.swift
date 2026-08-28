@@ -14,7 +14,12 @@ func generatedBinderName(
     let fileID = String(describing: file)
     let component = fileID.split(separator: "/").last ?? "binder"
     let stem = component.split(separator: ".").first ?? component
-    return "__binder_\(stem)_\(line)_\(column)"
+    let identifierStem = String(stem.map { character in
+        character.isASCII && (character.isLetter || character.isNumber || character == "_")
+            ? character
+            : "_"
+    })
+    return "__binder_\(identifierStem)_\(line)_\(column)"
 }
 
 /// A local TLA+ operator declared inside a `LET … IN` expression.
@@ -80,14 +85,6 @@ public indirect enum FormalOperator: Hashable, Sendable {
         }
     }
 
-    var tlaSource: String {
-        switch self {
-        case .lambda(let lambda):
-            "LAMBDA \(lambda.parameters.joined(separator: ", ")) : \(lambda.body)"
-        case .reference(let name, _):
-            name
-        }
-    }
 }
 
 /// One argument supplied to a formal operator call.
@@ -338,151 +335,16 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case letIn([LocalOperator], StateExpr)
 
     public var description: String {
-        switch self {
-        case .sourceIssue(let issue): return issue.description
-        case .value(let v): return v.description
-        case .variable(let n): return n
-        case .processLocalFamily(let name): return "processLocalFamily(\(name))"
-        case .currentProcess: return "currentProcess"
-        case .programCounter: return CompilerControlSymbol.programCounter.rawValue
-        case .procedureStack: return CompilerControlSymbol.stack.rawValue
-        case .controlLocation(let reference): return TLAValue.string(reference.sourceName).description
-        case .add(let a, let b): return "(\(a) + \(b))"
-        case .subtract(let a, let b): return "(\(a) - \(b))"
-        case .multiply(let a, let b): return "(\(a) * \(b))"
-        case .divide(let a, let b): return "(\(a) \\div \(b))"
-        case .modulo(let a, let b): return "(\(a) % \(b))"
-        case .negate(let a): return "(-\(a))"
-        case .integerDivide(let a, let b): return "(\(a) \\div \(b))"
-        case .equal(let a, let b): return "(\(a) = \(b))"
-        case .notEqual(let a, let b): return "(\(a) /= \(b))"
-        case .lessThan(let a, let b): return "(\(a) < \(b))"
-        case .lessOrEqual(let a, let b): return "(\(a) <= \(b))"
-        case .greaterThan(let a, let b): return "(\(a) > \(b))"
-        case .greaterOrEqual(let a, let b): return "(\(a) >= \(b))"
-        case .and(let a, let b): return "(\(a) /\\ \(b))"
-        // The conditional preserves left-to-right, short-circuit evaluation
-        // when the right operand contains a partial function application.
-        case .or(let a, let b): return "(IF \(a) THEN TRUE ELSE \(b))"
-        case .not(let a): return "(~\(a))"
-        case .ifThenElse(let c, let t, let f): return "(IF \(c) THEN \(t) ELSE \(f))"
-        case .setLiteral(let elems):
-            if elems.isEmpty { return "{}" }
-            return "{\(elems.map(\.description).joined(separator: ", "))}"
-        case .in(let e, let s): return "(\(e) \\in \(s))"
-        case .subset(let a, let b): return "(\(a) \\subseteq \(b))"
-        case .union(let a, let b): return "(\(a) \\cup \(b))"
-        case .intersection(let a, let b): return "(\(a) \\cap \(b))"
-        case .setDifference(let a, let b): return "(\(a) \\ \(b))"
-        case .cardinality(let s): return "Cardinality(\(s))"
-        case .setFilter(let s, let qv, let p): return "{\(qv) \\in \(s) : \(p)}"
-        case .setMap(let e, let qv, let s): return "{\(e) : \(qv) \\in \(s)}"
-        case .powerSet(let s): return "SUBSET \(s)"
-        case .unionAll(let s): return "UNION \(s)"
-        case .integerRange(let lower, let upper): return "\(lower)..\(upper)"
-        case .tupleLiteral(let elems): return "<<\(elems.map(\.description).joined(separator: ", "))>>"
-        case .tupleAccess(let t, let i): return "\(t)[\(i)]"
-        case .tupleDynamicAccess(let tuple, let index): return "\(tuple)[\(index)]"
-        case .tupleLength(let t): return "Len(\(t))"
-        case .tupleAppend(let t, let e): return "Append(\(t), \(e))"
-        case .tupleHead(let t): return "Head(\(t))"
-        case .tupleTail(let t): return "Tail(\(t))"
-        case .tupleConcatenate(let a, let b): return "(\(a) \\o \(b))"
-        case .recordLiteral(let fields):
-            let orderedKeys: [String]
-            if fields.value(named: CompilerControlSymbol.procedure.rawValue) != nil, fields.value(named: CompilerControlSymbol.programCounter.rawValue) != nil {
-                orderedKeys = [CompilerControlSymbol.procedure.rawValue, CompilerControlSymbol.programCounter.rawValue]
-                    + fields.fields.map(\.name).filter { $0 != CompilerControlSymbol.procedure.rawValue && $0 != CompilerControlSymbol.programCounter.rawValue }
-            } else {
-                orderedKeys = fields.fields.map(\.name)
-            }
-            let entries = orderedKeys.compactMap { name in
-                fields.value(named: name).map { "\(name) |-> \($0)" }
-            }
-            return "[\(entries.joined(separator: ", "))]"
-        case .recordAccess(let r, let f): return "(\(r)).\(f)"
-        case .domain(let f): return "DOMAIN \(f)"
-        case .functionLiteral(let d, let qv, let e): return "[\(qv) \\in \(d) |-> \(e)]"
-        case .functionApply(let f, let x): return "\(f)[\(x)]"
-        case .except(let f, let x, let e):
-            // Functions need ![key]; records accept !["field"] in TLC.
-            return "[\(f) EXCEPT ![\(x)] = \(e)]"
-
-        case .caseExpr(let pairs, let other):
-            guard pairs.isEmpty == false else { return "CASE <missing condition and value branch>" }
-            guard pairs.count.isMultiple(of: 2) else {
-                return "CASE <unmatched condition \(pairs.last.map(String.init(describing:)) ?? "missing")>"
-            }
-            let cases = stride(from: 0, to: pairs.count, by: 2).map {
-                "\(pairs[$0]) -> \(pairs[$0 + 1])"
-            }.joined(separator: " [] ")
-            if let o = other { return "CASE \(cases) [] OTHER -> \(o)" }
-            return "CASE \(cases)"
-        case .forAll(let s, let qv, let p): return "\\A \(qv) \\in \(s) : \(p)"
-        case .exists(let s, let qv, let p): return "\\E \(qv) \\in \(s) : \(p)"
-        case .choose(let s, let qv, let p): return "CHOOSE \(qv) \\in \(s) : \(p)"
-        case .enabledAction(let a): return "ENABLED \(a)"
-        case .sequenceFromSet(let s): return "SeqFromSet(\(s))"
-        case .setSum(let f, let s): return "Sum(\(f), \(s))"
-        case .functionSet(let d, let r): return "[\(d) -> \(r)]"
-        case .foldFunction(let operation, let initial, let sequence):
-            return "FoldFunction(LAMBDA \(operation.parameters.joined(separator: ", ")) : \(operation.body), \(initial), \(sequence))"
-        case .operatorApplication(let operation, let arguments):
-            let arguments = arguments.map(\.tlaSource).joined(separator: ", ")
-            if operation.isLambda { return "(\(operation.tlaSource))(\(arguments))" }
-            return arguments.isEmpty ? operation.tlaSource : "\(operation.tlaSource)(\(arguments))"
-        case .recursiveCall(let n, let a):
-            return a.isEmpty ? n : "\(n)(\(a.map(\.description).joined(separator: ", ")))"
-        case .letValue(let name, let value, let body):
-            return "LET \(name) == \(value) IN \(body)"
-        case .letIn(let operators, let body):
-            let names = Set(operators.map(\.name))
-            let recursiveNames = operators
-                .filter { $0.domain == nil }
-                .flatMap { localOperatorCalls(in: $0.body) }
-                .filter(names.contains)
-            let recursiveDeclaration: String
-            if recursiveNames.isEmpty {
-                recursiveDeclaration = ""
-            } else {
-                recursiveDeclaration = "RECURSIVE " + operators
-                    .filter { recursiveNames.contains($0.name) }
-                    .map { operation in
-                        let slots = operation.parameters.map { _ in "_" }.joined(separator: ", ")
-                        return operation.parameters.isEmpty ? operation.name : "\(operation.name)(\(slots))"
-                    }
-                    .joined(separator: ", ") + "\n    "
-            }
-            let declarations = operators.map { operation in
-                let parameters: String
-                if let domain = operation.domain {
-                    parameters = "[\(operation.parameters[0]) \\in \(domain)]"
-                } else {
-                    parameters = operation.parameters.isEmpty ? "" : "(\(operation.parameters.joined(separator: ", ")))"
-                }
-                return "\(operation.name)\(parameters) == \(operation.body)"
-            }.joined(separator: "\n    ")
-            return "LET \(recursiveDeclaration)\(declarations)\nIN \(body)"
+        do {
+            return try authoredPlusCalSource(path: "description", validatingIdentifiers: false)
+        } catch {
+            return "<invalid formal expression>"
         }
     }
 }
 
-
-private extension FormalOperator {
-    var isLambda: Bool {
-        if case .lambda = self { return true }
-        return false
-    }
-}
 
 private extension FormalCallArgument {
-    var tlaSource: String {
-        switch self {
-        case .value(let expression): expression.description
-        case .operator(let operation): operation.tlaSource
-        }
-    }
-
     var referencedLocalOperators: Set<String> {
         switch self {
         case .value(let expression): localOperatorCalls(in: expression)
@@ -492,7 +354,7 @@ private extension FormalCallArgument {
     }
 }
 
-private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
+func localOperatorCalls(in expression: StateExpr) -> Set<String> {
     switch expression {
     case .sourceIssue, .value, .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
         return []

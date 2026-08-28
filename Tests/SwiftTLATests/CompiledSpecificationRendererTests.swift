@@ -6,16 +6,16 @@ import Testing
 struct CompiledSpecificationRendererTests {
     @Test("compilation rejects a module name that requires renderer rewriting")
     func compilationRejectsInvalidModuleName() {
-        let specification = TLASpec(name: "Invalid Root", variables: [], actions: [], invariants: [])
-
-        do {
-            _ = try specification.compile()
-            Issue.record("Expected an invalid module name diagnostic.")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.code == .invalidSpecificationName)
-            #expect(diagnostic.stage == .validation)
-        } catch {
-            Issue.record("Expected CompilationDiagnostic, got \(error).")
+        for name in ["Invalid Root", "MODULE"] {
+            do {
+                _ = try TLASpec(name: name, variables: [], actions: [], invariants: []).compile()
+                Issue.record("Expected an invalid module name diagnostic for \(name).")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .invalidSpecificationName)
+                #expect(diagnostic.stage == .validation)
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, got \(error).")
+            }
         }
     }
 

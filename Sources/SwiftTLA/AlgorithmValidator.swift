@@ -216,7 +216,7 @@ internal enum AlgorithmProcedureValidator {
 
     private static func validateName(_ name: String, at anchor: AlgorithmDiagnosticAnchor, diagnostics: inout [AlgorithmDiagnostic]) {
         if name.hasPrefix("__pcal_") { diagnostics.append(.init(.reservedName, at: anchor)) }
-        else if name.isEmpty || name.contains(where: { !$0.isLetter && !$0.isNumber && $0 != "_" }) {
+        else if isPlusCalDeclarationName(name) == false {
             diagnostics.append(.init(.invalidName, at: anchor))
         }
     }

@@ -8,27 +8,27 @@ struct ClientCentricModuleTests {
     let keys = SetExpr<TestKey>(.key)
     let values = SetExpr<TestValue>(.none)
     let initial = StateExpr.functionLiteral(keys.stateExpr, "key", .value(.string("none")))
+    let snapshot = ModuleCall(
+      as: Bool.self,
+      "CC", "SnapshotIsolation", Expr<Function<TestKey, TestValue>>(initial),
+      Expr<SetExpr<TupleExpr<Int>>>(.setLiteral([]))
+    )
     let consumer = TLASpec("ClientCentricConsumer") {
       Import(KeyValueStoreUtil.module)
       Instance("CC", of: ClientCentric.module, with: [
         ModuleArgument("Keys", value: keys),
         ModuleArgument("Values", value: values)
       ])
+      Invariant("SnapshotIsolation") { snapshot.raw }
     }
 
-    let snapshot = ModuleCall(
-      as: Bool.self,
-      "CC", "SnapshotIsolation", Expr<Function<TestKey, TestValue>>(initial),
-      Expr<SetExpr<TupleExpr<Int>>>(.setLiteral([]))
-    )
-    let closure = try FormalModuleClosure.resolve(root: consumer)
-    #expect(try compiledValue(
-      snapshot.raw,
-      recursiveFunctions: closure.linkedOperators.recursiveFunctions,
-      formalOperators: closure.linkedOperators.formalOperatorDefinitions
-    ) == .bool(true))
-    #expect(try consumer.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
+    let compilation = try consumer.compile()
+    let runtime = CompiledRuntime(compilation: compilation)
+    let state = try #require(try runtime.initialStates().first)
+    let invariant = try #require(compilation.semantics.invariants.first)
+    #expect(try runtime.invariantHolds(invariant, in: state))
+    #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
+    #expect(compilation.renderedTLAModuleBundle().tla.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
   }
 
   @Test("a selected injective function can concatenate as a TLA sequence")

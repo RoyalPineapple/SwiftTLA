@@ -116,6 +116,14 @@ private struct CompilerPipelineCollectionModel {
 
 @Suite("Compiler pipeline canonicalization")
 struct CompilerPipelineCanonicalizationTests {
+    @Test("compiler-generated binders are formal identifiers")
+    func generatedBindersUseFormalIdentifiers() {
+        let name = generatedBinderName(file: "Module/SpecParser+Algorithm.swift", line: 12, column: 3)
+
+        #expect(name == "__binder_SpecParser_Algorithm_12_3")
+        #expect(isFormalIdentifier(name))
+    }
+
     @Test("module assumptions are state-independent")
     func moduleAssumptionsAreStateIndependent() {
         let stateRead = TLASpec("StateDependentAssumption") {
@@ -1253,6 +1261,33 @@ struct CompilerPipelineCanonicalizationTests {
         }
     }
 
+    @Test("quantified binders use formal identifiers")
+    func invalidQuantifiedBinderBlocksCompilation() {
+        let spec = TLASpec(
+            name: "InvalidQuantifiedBinder",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .guard_(.forAll(.setLiteral([.int(1)]), "1item", .bool(true)))
+                        && .unchanged(.named("counter"))
+                )
+            ],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected invalid quantified binder compilation to fail.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidFormalDeclaration)
+            #expect(diagnostic.stage == .binding)
+            #expect(diagnostic.path.contains("binder.1item"))
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
     @Test("assignment to an action binder fails at the binding gate")
     func assignmentToBinderBlocksCompilation() {
         let spec = TLASpec(
@@ -1968,8 +2003,8 @@ struct CompilerPipelineCanonicalizationTests {
             _ = try specification.compile()
             Issue.record("Expected invalid action parameters to fail compilation")
         } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.code == .invalidActionBinding)
-            #expect(diagnostic.stage == .lowering)
+            #expect(diagnostic.code == .invalidFormalDeclaration)
+            #expect(diagnostic.stage == .binding)
         } catch {
             Issue.record("Expected CompilationDiagnostic, got \(error)")
         }
@@ -1977,24 +2012,37 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("invalid formal declarations fail during compilation")
     func invalidFormalDeclarationsFailDuringCompilation() {
-        let specification = TLASpec(
-            name: "InvalidFormalDeclaration",
-            variables: [],
-            actions: [],
-            invariants: [],
-            formalOperatorDefinitions: [
-                .init(name: "", parameters: [], body: .value(.bool(true)))
-            ]
-        )
+        let specifications = [
+            TLASpec(name: "InvalidVariable", variables: [.init(name: "IF", initial: .int(0))], actions: [], invariants: []),
+            TLASpec(name: "InvalidInvariant", variables: [], actions: [], invariants: [.init(name: "Bad Name", body: .bool(true))]),
+            TLASpec(name: "InvalidTemporal", variables: [], actions: [], invariants: [], temporalProperties: [.init(name: "TEMPORAL", expr: .always(.bool(true)))]),
+            TLASpec(name: "InvalidConstant", variables: [], constants: [.init("CONSTANT", .int(1))], actions: [], invariants: []),
+            TLASpec(name: "InvalidOperator", variables: [], actions: [], invariants: [], formalOperatorDefinitions: [.init(name: "", parameters: [], body: .bool(true))])
+        ]
 
-        do {
-            _ = try specification.compile()
-            Issue.record("Expected invalid formal declaration to fail compilation")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.code == .invalidFormalDeclaration)
-            #expect(diagnostic.stage == .binding)
-        } catch {
-            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        for specification in specifications {
+            do {
+                _ = try specification.compile()
+                Issue.record("Expected \(specification.name) to fail compilation")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .invalidFormalDeclaration)
+                #expect(diagnostic.stage == .validation)
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, got \(error)")
+            }
         }
+    }
+
+    @Test("compiled layout owns legal rendered action names")
+    func compiledLayoutOwnsRenderedActionNames() throws {
+        let compilation = try TLASpec(
+            name: "RenderedActionName",
+            variables: [.init(name: "value", initial: .int(0))],
+            actions: [.init(name: "IF", body: .unchanged(.named("value")))],
+            invariants: []
+        ).compile()
+
+        #expect(compilation.description.actions[0].name == "IF")
+        #expect(compilation.description.actions[0].renderedName == "_IF")
     }
 }

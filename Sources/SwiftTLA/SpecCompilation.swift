@@ -1,7 +1,7 @@
 import Foundation
 import CryptoKit
 
-private func isTLAModuleIdentifier(_ name: String) -> Bool {
+func isFormalIdentifier(_ name: String) -> Bool {
     func isLetter(_ scalar: Unicode.Scalar) -> Bool {
         (65...90).contains(scalar.value) || (97...122).contains(scalar.value)
     }
@@ -10,6 +10,30 @@ private func isTLAModuleIdentifier(_ name: String) -> Bool {
     return name.unicodeScalars.dropFirst().allSatisfy {
         $0 == "_" || isLetter($0) || (48...57).contains($0.value)
     }
+}
+
+private let tlaReservedWords: Set<String> = [
+    "ACTION", "ACTIONS", "ASSUME", "ASSUMPTION", "AXIOM", "BY", "CASE", "CHOOSE",
+    "CONSTANT", "CONSTANTS", "COROLLARY", "DEF", "DEFINE", "DEFS", "DOMAIN", "ELSE",
+    "ENABLED", "EXCEPT", "EXTENDS", "HAVE", "HIDE", "IF", "IN", "INSTANCE", "LAMBDA",
+    "LEMMA", "LET", "LOCAL", "MODULE", "NEW", "OBVIOUS", "OMITTED", "ONLY", "OTHER",
+    "PICK", "PROOF", "PROPOSITION", "PROVE", "QED", "RECURSIVE", "SF_", "STATE",
+    "SUBSET", "SUFFICES", "TAKE", "TEMPORAL", "TEMPORALS", "THEN", "THEOREM", "UNCHANGED",
+    "UNION", "USE", "VARIABLE", "VARIABLES", "WF_", "WITH", "WITNESS"
+]
+
+private let plusCalReservedWords: Set<String> = [
+    "algorithm", "assert", "await", "begin", "call", "define", "do", "either", "else",
+    "elsif", "end", "fair", "goto", "if", "macro", "or", "print", "procedure", "process",
+    "return", "skip", "then", "variable", "variables", "when", "while", "with"
+]
+
+func isTLADeclarationName(_ name: String) -> Bool {
+    isFormalIdentifier(name) && tlaReservedWords.contains(name) == false
+}
+
+func isPlusCalDeclarationName(_ name: String) -> Bool {
+    isTLADeclarationName(name) && plusCalReservedWords.contains(name) == false
 }
 
 /// Identifies one canonical compiled specification.
@@ -457,15 +481,9 @@ public extension SpecParser.ParsedSpecComponents {
     }
 }
 
-public extension TLASpec {
-    /// Validates and identifies this specification before it reaches a formal
-    /// consumer. Structural module linking is added to this gate by the linker.
-    func compile() throws -> CompiledSpecification {
-        try loweredSourceModel().compileLowered()
-    }
-
-    private func compileLowered() throws -> CompiledSpecification {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+private extension TLASpec {
+    func validateSourceDeclarationNames() throws {
+        guard name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             throw CompilationDiagnostic(
                 code: .emptySpecificationName,
                 stage: .validation,
@@ -475,17 +493,76 @@ public extension TLASpec {
                 nextSafeAction: "Give the specification a stable name, then compile again."
             )
         }
-        guard isTLAModuleIdentifier(name) else {
+        guard isTLADeclarationName(name) else {
             throw CompilationDiagnostic(
                 code: .invalidSpecificationName,
                 stage: .validation,
                 path: "specification.name",
-                expected: "a TLA+ module identifier",
+                expected: "a formal module identifier that is not a reserved word",
                 actual: name,
-                nextSafeAction: "Use letters, digits, and underscores, beginning with a letter or underscore."
+                nextSafeAction: "Use an ASCII identifier that is not reserved by TLA+ or PlusCal."
             )
         }
 
+        func requireDeclaration(_ value: String, kind: String, path: String) throws {
+            guard isTLADeclarationName(value) else {
+                throw CompilationDiagnostic(
+                    code: .invalidFormalDeclaration,
+                    stage: .validation,
+                    path: path,
+                    expected: "a formal identifier that is not a reserved word",
+                    actual: "invalid \(kind) name '\(value)'",
+                    nextSafeAction: "Use an ASCII identifier that is not reserved by TLA+."
+                )
+            }
+        }
+
+        let symmetricCollectionNames = Set(symmetricCollections.map(\.name))
+        let declarationGroups: [([String], String, String)] = [
+            (variables.filter { symmetricCollectionNames.contains($0.name) == false }.map(\.name), "variable", "variables"),
+            (constants.map(\.name), "constant", "constants"),
+            (invariants.map(\.name), "invariant", "invariants"),
+            (temporalProperties.map(\.name), "temporal property", "temporalProperties"),
+            (recursiveFuncs.map(\.name), "recursive operator", "recursiveFunctions"),
+            (formalOperatorDefinitions.map(\.name), "formal operator", "formalOperators"),
+            (moduleInstances.map(\.name), "module instance", "moduleInstances"),
+            (refinements.map(\.name), "refinement", "refinements")
+        ]
+
+        for (names, kind, path) in declarationGroups {
+            for (index, declaration) in names.enumerated() {
+                try requireDeclaration(declaration, kind: kind, path: "\(path)[\(index)].name")
+            }
+        }
+
+        for (configurationIndex, configuration) in importConfigurations.enumerated() {
+            try requireDeclaration(
+                configuration.moduleName,
+                kind: "module",
+                path: "importConfigurations[\(configurationIndex)].moduleName"
+            )
+            for (replacementIndex, replacement) in configuration.replacements.enumerated() {
+                for (value, field) in [(replacement.operatorName, "operatorName"), (replacement.definitionName, "definitionName")] {
+                    try requireDeclaration(
+                        value,
+                        kind: "module replacement",
+                        path: "importConfigurations[\(configurationIndex)].replacements[\(replacementIndex)].\(field)"
+                    )
+                }
+            }
+        }
+    }
+}
+
+public extension TLASpec {
+    /// Validates and identifies this specification before it reaches a formal
+    /// consumer. Structural module linking is added to this gate by the linker.
+    func compile() throws -> CompiledSpecification {
+        try validateSourceDeclarationNames()
+        return try loweredSourceModel().compileLowered()
+    }
+
+    private func compileLowered() throws -> CompiledSpecification {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
@@ -493,6 +570,9 @@ public extension TLASpec {
         try validateSymmetryDeclarations()
         try validateRefinements()
         let closure = try FormalModuleClosure.resolve(root: self)
+        for entry in closure.entries where entry.id != closure.root.id {
+            try entry.module.validateSourceDeclarationNames()
+        }
         let layout = CompiledLayout(spec: self, closure: closure)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)

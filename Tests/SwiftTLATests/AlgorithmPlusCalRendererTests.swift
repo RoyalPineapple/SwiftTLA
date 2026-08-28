@@ -159,6 +159,25 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("previous = -1"))
     }
 
+    @Test("renders legal quantified binders in authored expressions")
+    func rendersLegalQuantifiedBinder() throws {
+        let algorithm = Algorithm("QuantifiedBinder", scoped: { scope in
+            let count = scope.sharedVar("count", initial: 0)
+            Do(TestControlLabel.stop) {
+                When(StateExpr.forAll(
+                    .setLiteral([.int(0), .int(1)]),
+                    "item_1",
+                    StateExpr.variable("item_1") >= count.expr
+                ))
+                Stop()
+            }
+        })
+
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
+
+        #expect(rendered.contains("await \\A item_1 \\in {0, 1} : (item_1 >= count);"))
+    }
+
     @Test("keeps prelude helpers outside and state helpers inside define")
     func rendersStructuredDeclarationSections() throws {
         let spec = TLASpec("Sections") {
