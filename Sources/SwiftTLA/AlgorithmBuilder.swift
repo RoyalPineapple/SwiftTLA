@@ -2078,6 +2078,9 @@ internal enum AlgorithmValidator {
         if paths.contains(where: { Set($0).count != $0.count }) {
             diagnostics.append(AlgorithmDiagnostic(.duplicateRootWrite, at: .algorithm))
         }
+        if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
+            diagnostics.append(AlgorithmDiagnostic(.invalidAtomicControlFlow, at: .algorithm))
+        }
         validateStatements(step.statements, at: .algorithm, labels: allSteps, diagnostics: &diagnostics)
     }
 
@@ -2127,6 +2130,9 @@ internal enum AlgorithmValidator {
         let paths = writePaths(step.statements)
         if paths.contains(where: { Set($0).count != $0.count }) {
             diagnostics.append(AlgorithmDiagnostic(.duplicateRootWrite, at: anchor))
+        }
+        if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
+            diagnostics.append(AlgorithmDiagnostic(.invalidAtomicControlFlow, at: anchor))
         }
         validateStatements(step.statements, at: anchor, labels: labels, diagnostics: &diagnostics)
     }
@@ -2183,6 +2189,35 @@ internal enum AlgorithmValidator {
             }
             paths = paths.flatMap { path in statementPaths.map { path + $0 } }
         }
+    }
+
+    static func controlTransferCounts(_ statements: [AlgorithmStatementModel]) -> [Int] {
+        var paths = [0]
+        var index = statements.startIndex
+        while index < statements.endIndex {
+            let statement = statements[index]
+            let statementPaths: [Int]
+            if case .call = statement,
+               statements.indices.contains(index + 1),
+               case .return = statements[index + 1] {
+                statementPaths = [1]
+                index += 2
+            } else {
+                switch statement {
+                case .goto, .call, .return, .stop:
+                    statementPaths = [1]
+                case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
+                    statementPaths = controlTransferCounts(body)
+                case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
+                    statementPaths = controlTransferCounts(then) + controlTransferCounts(otherwise)
+                case .rejected, .await, .assert, .set, .skip:
+                    statementPaths = [0]
+                }
+                index += 1
+            }
+            paths = paths.flatMap { path in statementPaths.map { path + $0 } }
+        }
+        return paths
     }
 
     private static func validateDomain(

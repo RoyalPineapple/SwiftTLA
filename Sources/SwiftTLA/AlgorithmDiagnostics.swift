@@ -6,6 +6,7 @@ public enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case duplicateLabel
     case invalidTarget
     case duplicateRootWrite
+    case invalidAtomicControlFlow
     case missingStop
     case invalidAlgorithmComponent
     case invalidSequentialFairness

@@ -71,18 +71,24 @@ internal struct AlgorithmModel: Sendable {
                     names.insert(declaration.root)
                 case .step(let step):
                     names.insert(step.label.name)
+                    names.formUnion(step.statements.algorithmScopeNames)
                 case .process(let process):
                     collect(process.components, into: &names)
                 case .procedure(let procedure):
                     names.insert(procedure.name)
                     procedure.parameters.forEach { names.insert($0.root) }
                     procedure.locals.forEach { names.insert($0.root) }
-                    procedure.steps.forEach { names.insert($0.label.name) }
+                    procedure.steps.forEach {
+                        names.insert($0.label.name)
+                        names.formUnion($0.statements.algorithmScopeNames)
+                    }
                 case .invariant(let invariant):
                     names.insert(invariant.name)
                 case .temporal(let temporal):
                     names.insert(temporal.name)
-                case .formalOperator, .stateConstraint, .unsupported:
+                case .formalOperator(let definition):
+                    names.insert(definition.name)
+                case .stateConstraint, .unsupported:
                     continue
                 }
             }
@@ -100,6 +106,18 @@ internal struct AlgorithmModel: Sendable {
                 return declaration.root
             }
         })
+        var usedBindings = authoredIdentifiers
+        var nextBinding = 0
+
+        func binding() -> String {
+            while true {
+                let candidate = "__atomic_\(nextBinding)"
+                nextBinding += 1
+                if usedBindings.insert(candidate).inserted {
+                    return candidate
+                }
+            }
+        }
 
         func lowerAnonymousLambdas(_ value: StateExpr) -> StateExpr {
             StateExpr.renamingRecursiveCalls(
@@ -144,7 +162,7 @@ internal struct AlgorithmModel: Sendable {
         }
 
         func statements(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
-            values.map { statement in
+            let projected = values.map { statement in
                 statement.replacingCurrentProcess(with: .variable("self"))
             }.map { statement in
                 localRoots.reduce(statement) { result, root in
@@ -153,6 +171,119 @@ internal struct AlgorithmModel: Sendable {
             }.map { statement in
                 statement.mappingExpressions(lowerAnonymousLambdas)
             }
+            return schedule(projected)
+        }
+
+        func call(
+            _ target: String,
+            arguments: [StateExpr],
+            after assignments: [AlgorithmStatementModel],
+            followedBy suffix: [AlgorithmStatementModel]
+        ) -> [AlgorithmStatementModel] {
+            guard arguments.isEmpty == false, assignments.isEmpty == false else {
+                return assignments + [.call(target: target, arguments: arguments)] + suffix
+            }
+            let bindings = arguments.map { argument in (name: binding(), value: argument) }
+            let call = AlgorithmStatementModel.call(
+                target: target,
+                arguments: bindings.map { .variable($0.name) }
+            )
+            return bindings.reversed().reduce(assignments + [call] + suffix) { body, value in
+                [.letBinding(variable: value.name, value: value.value, body)]
+            }
+        }
+
+        func movingScope(
+            _ variable: String,
+            body: [AlgorithmStatementModel],
+            over suffix: [AlgorithmStatementModel]
+        ) -> (String, [AlgorithmStatementModel]) {
+            guard suffix.algorithmScopeNames.contains(variable) else { return (variable, body) }
+            let fresh = StateExpr.freshBoundName(
+                variable,
+                avoiding: usedBindings
+                    .union(body.algorithmScopeNames)
+                    .union(suffix.algorithmScopeNames)
+            )
+            usedBindings.insert(fresh)
+            return (
+                fresh,
+                body.map {
+                    $0.substitutingVariable(
+                        variable,
+                        with: .variable(fresh),
+                        assignmentTargets: .replaceWhenVariable
+                    )
+                }
+            )
+        }
+
+        func schedule(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
+            var reads: [AlgorithmStatementModel] = []
+            var assignments: [AlgorithmStatementModel] = []
+            var terminals: [AlgorithmStatementModel] = []
+
+            for (index, statement) in values.enumerated() {
+                let suffix = Array(values.dropFirst(index + 1))
+                switch statement {
+                case .set:
+                    assignments.append(statement)
+                case .await, .assert, .skip, .rejected:
+                    reads.append(statement)
+                case .goto, .return, .stop:
+                    terminals.append(statement)
+                case .call(let target, let arguments):
+                    return reads + call(
+                        target,
+                        arguments: arguments,
+                        after: assignments,
+                        followedBy: suffix
+                    ) + terminals
+                case .letBinding(let variable, let value, let body):
+                    let scoped = movingScope(variable, body: body, over: suffix)
+                    return reads + [
+                        .letBinding(
+                            variable: scoped.0,
+                            value: value,
+                            schedule(assignments + scoped.1 + suffix + terminals)
+                        )
+                    ]
+                case .with(let variable, let source, let body):
+                    let scoped = movingScope(variable, body: body, over: suffix)
+                    return reads + [
+                        .with(
+                            variable: scoped.0,
+                            source: source,
+                            schedule(assignments + scoped.1 + suffix + terminals)
+                        )
+                    ]
+                case .choose(let variable, let domain, let body):
+                    let scoped = movingScope(variable, body: body, over: suffix)
+                    return reads + [
+                        .choose(
+                            variable: scoped.0,
+                            domain: domain,
+                            schedule(assignments + scoped.1 + suffix + terminals)
+                        )
+                    ]
+                case .ifElse(let condition, let then, let otherwise):
+                    return reads + [
+                        .ifElse(
+                            condition,
+                            schedule(assignments + then + suffix + terminals),
+                            schedule(assignments + otherwise + suffix + terminals)
+                        )
+                    ]
+                case .either(let first, let second):
+                    return reads + [
+                        .either(
+                            schedule(assignments + first + suffix + terminals),
+                            schedule(assignments + second + suffix + terminals)
+                        )
+                    ]
+                }
+            }
+            return reads + assignments + terminals
         }
 
         func step(_ value: AlgorithmStepModel) -> AlgorithmStepModel {
