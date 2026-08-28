@@ -2160,6 +2160,24 @@ private enum ParserNode: String, FiniteTLAValueDomain {
 }
 
 @Suite(.serialized) struct TypedFacadeSyntaxTests {
+    @Test("typed facade grammar accepts only its declared module qualification")
+    func admitsOnlyDeclaredTypedFacadeQualification() throws {
+        let unqualified = try parseExpression("SetExpr<Int>()")
+        let swiftTLAQualified = try parseExpression("SwiftTLA.SetExpr<Int>()")
+        let unrelatedQualified = try parseExpression("Other.SetExpr<Int>()")
+        let unqualifiedParameter = try parseExpression(#"Parameter("value")"#)
+        let swiftTLAQualifiedParameter = try parseExpression(#"SwiftTLA.Parameter("value")"#)
+        let unrelatedQualifiedParameter = try parseExpression(#"Other.Parameter("value")"#)
+        let parameter = StateExpr.variable("value")
+
+        #expect(SpecParser.decodeTypedFacadeValue(unqualified) == .value(.set([])))
+        #expect(SpecParser.decodeTypedFacadeValue(swiftTLAQualified) == .value(.set([])))
+        #expect(SpecParser.decodeTypedFacadeValue(unrelatedQualified) == nil)
+        #expect(SpecParser.decodeTypedFacadeValue(unqualifiedParameter) == parameter)
+        #expect(SpecParser.decodeTypedFacadeValue(swiftTLAQualifiedParameter) == parameter)
+        #expect(SpecParser.decodeTypedFacadeValue(unrelatedQualifiedParameter) == nil)
+    }
+
     @Test("qualified empty set uses its structural type")
     func parsesQualifiedEmptySet() throws {
         #expect(

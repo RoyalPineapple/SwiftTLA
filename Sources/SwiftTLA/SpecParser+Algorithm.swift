@@ -827,9 +827,9 @@ extension ParserSession {
                   let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
                   let emptySet = initialSyntax.as(FunctionCallExprSyntax.self),
                   emptySet.arguments.isEmpty,
-                  let generic = emptySet.calledExpression.as(GenericSpecializationExprSyntax.self),
-                  terminalTypeName(in: generic.expression) == "SetExpr",
-                  let element = generic.genericArgumentClause.arguments.first?.argument,
+                  let type = typedFacadeType(emptySet.calledExpression),
+                  type.name == "SetExpr",
+                  let element = type.argument(at: 0),
                   let typeName = Self.sourceTypeSpelling(element) {
             state = AlgorithmStateModel(
                 root: declaredName,

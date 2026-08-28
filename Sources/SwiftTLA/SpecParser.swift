@@ -1279,7 +1279,7 @@ final class ParserSession {
         expectedEnumType: String? = nil
     ) -> StateExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
-           let constructor = terminalTypeName(in: call.calledExpression),
+           let constructor = compilerGrammarName(in: call.calledExpression),
            constructor == "FormalModuleParameter" || constructor == "Parameter",
            let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
             return .variable(name)
@@ -1399,7 +1399,18 @@ final class ParserSession {
         return nil
     }
 
+    func compilerGrammarName(in expression: ExprSyntax?) -> String? {
+        let base = expression?.as(GenericSpecializationExprSyntax.self)?.expression ?? expression
+        guard let base,
+              let path = Self.sourceTypePath(base),
+              let name = path.last
+        else { return nil }
+        let qualification = Array(path.dropLast())
+        return qualification.isEmpty || qualification == ["SwiftTLA"] ? name : nil
+    }
+
     struct TypedFacadeType {
+        let qualification: [String]
         let name: String
         let arguments: [TypeSyntax]
 
@@ -1414,7 +1425,8 @@ final class ParserSession {
         var renderedSourceName: String? {
             let renderedArguments = arguments.compactMap(ParserSession.sourceTypeSpelling)
             guard renderedArguments.count == arguments.count else { return nil }
-            return "\(name)<\(renderedArguments.joined(separator: ", "))>"
+            let sourceName = (qualification + [name]).joined(separator: ".")
+            return "\(sourceName)<\(renderedArguments.joined(separator: ", "))>"
         }
     }
 
@@ -1487,18 +1499,25 @@ final class ParserSession {
     }
 
     private func typedFacadeValueShape(_ type: TypeSyntax) -> TypedFacadeValueShape? {
-        let name: String
-        let arguments: [TypeSyntax]
+        let facade: TypedFacadeType
         if let identifier = type.as(IdentifierTypeSyntax.self) {
-            name = identifier.name.text
-            arguments = identifier.genericArgumentClause?.arguments.map(\.argument) ?? []
+            facade = .init(
+                qualification: [],
+                name: identifier.name.text,
+                arguments: identifier.genericArgumentClause?.arguments.map(\.argument) ?? []
+            )
         } else if let member = type.as(MemberTypeSyntax.self) {
-            name = member.name.text
-            arguments = member.genericArgumentClause?.arguments.map(\.argument) ?? []
+            guard member.baseType.as(IdentifierTypeSyntax.self)?.name.text == "SwiftTLA"
+            else { return nil }
+            facade = .init(
+                qualification: ["SwiftTLA"],
+                name: member.name.text,
+                arguments: member.genericArgumentClause?.arguments.map(\.argument) ?? []
+            )
         } else {
             return nil
         }
-        return typedFacadeValueShape(.init(name: name, arguments: arguments))
+        return typedFacadeValueShape(facade)
     }
 
     /// Preserves a supported type's Swift spelling for generated Swift output.
@@ -1528,12 +1547,26 @@ final class ParserSession {
 
     func typedFacadeType(_ expression: ExprSyntax?) -> TypedFacadeType? {
         guard let generic = expression?.as(GenericSpecializationExprSyntax.self),
-              let name = terminalTypeName(in: generic.expression)
+              let name = compilerGrammarName(in: generic.expression),
+              let path = Self.sourceTypePath(generic.expression)
         else { return nil }
+        let qualification = Array(path.dropLast())
         return .init(
+            qualification: qualification,
             name: name,
             arguments: generic.genericArgumentClause.arguments.map(\.argument)
         )
+    }
+
+    private static func sourceTypePath(_ expression: ExprSyntax) -> [String]? {
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            return [reference.baseName.text]
+        }
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              let base = member.base,
+              let qualification = sourceTypePath(base)
+        else { return nil }
+        return qualification + [member.declName.baseName.text]
     }
 
     static func terminalTypeName(_ type: TypeSyntax) -> String? {

@@ -18,17 +18,19 @@ extension ParserSession {
             for binding in variable.bindings {
                 guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
-                  terminalTypeName(in: specialization.expression) == "SymmetricCollectionVar",
+                  let type = typedFacadeType(call.calledExpression),
+                  type.name == "SymmetricCollectionVar",
                   let formalName = call.arguments.first?.expression
                     .as(StringLiteralExprSyntax.self)?.representedLiteralValue
                 else { continue }
-                let arguments = Array(specialization.genericArgumentClause.arguments)
-                guard arguments.count == 2 else { continue }
+                guard let element = type.argument(at: 0),
+                      let value = type.argument(at: 1),
+                      type.arguments.count == 2
+                else { continue }
                 types[name] = .init(
                     formalName: formalName,
-                    element: arguments[0].argument,
-                    value: arguments[1].argument
+                    element: element,
+                    value: value
                 )
             }
         }
@@ -54,7 +56,7 @@ extension ParserSession {
             result.diagnostics.append(.init(
                 message: "Symmetric collections require SymmetricCollectionVar<Element, Value>, "
                     + "a positive integer literal scope, and a literal uniform initial value.",
-                source: call.description
+                source: call
             ))
             return
         }
@@ -93,7 +95,7 @@ extension ParserSession {
         guard let memberName = collectionActionMemberName(in: closure) else {
             result.diagnostics.append(.init(
                 message: "Collection action '\(actionName)' requires one named opaque member parameter.",
-                source: closure.description
+                source: closure
             ))
             return
         }
@@ -115,7 +117,7 @@ extension ParserSession {
             if result.diagnostics.count == diagnosticCount {
                 result.diagnostics.append(.init(
                     message: "Collection action '\(actionName)' contains an unsupported action expression.",
-                    source: closure.description
+                    source: closure
                 ))
             }
             return
@@ -166,7 +168,7 @@ extension ParserSession {
     func identityDiagnostic(
         collection: String,
         action: String,
-        source: String,
+        source: Syntax,
         detail: String
     ) -> SourceParseDiagnostic {
         .init(
@@ -292,7 +294,7 @@ extension ParserSession {
     private final class CollectionMemberUseValidator: SyntaxVisitor {
         struct Violation {
             let detail: String
-            let source: String
+            let source: Syntax
         }
 
         let member: String
@@ -321,7 +323,7 @@ extension ParserSession {
                node.declName.baseName.text == "domain" {
                 violations.append(.init(
                     detail: "Raw verification-domain access is unavailable",
-                    source: node.description
+                    source: Syntax(node)
                 ))
             }
             return .visitChildren
@@ -347,7 +349,7 @@ extension ParserSession {
                    target != collection {
                     violations.append(.init(
                         detail: "Cross-collection member use is unavailable (including '\(target)')",
-                        source: node.description
+                        source: Syntax(node)
                     ))
                 }
             }
@@ -359,7 +361,7 @@ extension ParserSession {
                expression.baseName.text == member {
                 violations.append(.init(
                     detail: "String interpolation of a member token is unavailable",
-                    source: node.description
+                    source: Syntax(node)
                 ))
             }
             return .visitChildren
@@ -370,12 +372,12 @@ extension ParserSession {
             if closureDepth > 1 {
                 violations.append(.init(
                     detail: "Capturing a member token in a nested closure is unavailable",
-                    source: node.description
+                    source: Syntax(node)
                 ))
             } else if !permittedMemberOffsets.contains(node.positionAfterSkippingLeadingTrivia.utf8Offset) {
                 violations.append(.init(
                     detail: "Member identity observation or cross-collection use is unavailable",
-                    source: node.description
+                    source: Syntax(node)
                 ))
             }
             return .visitChildren
@@ -541,7 +543,7 @@ extension ParserSession {
         else {
             result.diagnostics.append(.init(
                 message: "Constant requires a literal name and a static TLA+ value.",
-                source: call.description,
+                source: call,
                 expected: "Constant(\"Name\", value)",
                 nextSafeAction: "Use a literal constant name and a static typed value."
             ))
@@ -552,7 +554,7 @@ extension ParserSession {
         else {
             result.diagnostics.append(.init(
                 message: "Constant '\(name)' must be static; dynamic formal expressions are not constant values.",
-                source: args[1].expression.description,
+                source: args[1].expression,
                 expected: "a literal value or SetExpr<Element>(...) with static members",
                 nextSafeAction: "Use a closed typed value such as SetExpr<Element>(.first, .second)."
             ))
