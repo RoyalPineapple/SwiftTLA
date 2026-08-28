@@ -1358,12 +1358,14 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try TLASpec(
             name: "InitializerDependencyOrder",
             variables: [
+                .init(name: "firstIndependent", initial: .int(10)),
                 .init(
                     name: "derived",
                     initialization: .expression(.add(.variable("choice"), .int(1))),
                     generatedSwiftType: "Int",
                     origin: .source
                 ),
+                .init(name: "secondIndependent", initial: .int(20)),
                 .init(
                     name: "choice",
                     initialization: .memberOf(.integerRange(.int(1), .variable("limit"))),
@@ -1376,7 +1378,11 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         ).compile()
         let states = try CompiledRuntime(compilation: compilation).initialStates()
+        let initializationOrder = compilation.semantics.variableInitializations.map { initialization in
+            compilation.layout.variables.first { $0.id == initialization.variable }?.declaration.name
+        }
 
+        #expect(initializationOrder == ["firstIndependent", "secondIndependent", "limit", "choice", "derived"])
         #expect(Set(try states.map {
             try renderedValue(named: "derived", in: $0, compilation: compilation)
         }) == [.int(2), .int(3), .int(4)])
@@ -1552,7 +1558,36 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try renderedValue(named: "owner", in: state, compilation: compilation) == .int(1))
     }
 
-    @Test("action enabledness hidden in a formal definition cannot initialize a variable")
+    @Test("action enabledness cannot initialize a variable")
+    func actionEnablednessCannotInitializeVariable() {
+        let spec = TLASpec(
+            name: "DirectEnabledInitializer",
+            variables: [
+                .init(
+                    name: "ready",
+                    initialization: .expression(.enabledAction("stay")),
+                    generatedSwiftType: "Bool",
+                    origin: .source
+                )
+            ],
+            actions: [.init(name: "stay", body: .unchanged(.named("ready")))],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected action enabledness to be rejected in a variable initializer")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .actionEnablednessInInitializer)
+            #expect(diagnostic.stage == .lowering)
+            #expect(diagnostic.path == "variables.ready.initialization")
+            #expect(diagnostic.actual == "the initializer evaluates action enabledness")
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("formal definitions cannot hide action enabledness in variable initializers")
     func formalDefinitionCannotHideEnablednessInVariableInitialization() {
         let spec = TLASpec(
             name: "EnabledInitializer",
@@ -1575,9 +1610,11 @@ struct CompilerPipelineCanonicalizationTests {
 
         do {
             _ = try spec.compile()
-            Issue.record("Expected an invalid variable-initialization diagnostic")
+            Issue.record("Expected action enabledness to be rejected through the formal definition")
         } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.code == .invalidVariableInitialization)
+            #expect(diagnostic.code == .actionEnablednessInInitializer)
+            #expect(diagnostic.path == "variables.ready.initialization")
+            #expect(diagnostic.actual == "the initializer evaluates action enabledness")
         } catch {
             Issue.record("Expected CompilationDiagnostic, got \(error)")
         }

@@ -330,7 +330,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFormalDeclaration
         case invalidFormalOperatorApplication
         case missingVariableInitializer
-        case invalidVariableInitialization
+        case actionEnablednessInInitializer
         case cyclicVariableInitialization
         case stateDependentAssumption
         case invalidSymmetricMember

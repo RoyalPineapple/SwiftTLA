@@ -205,7 +205,7 @@ struct CompiledLowerer {
             if analysis.requiresCompleteState {
                 let name = layout.variables.first { $0.id == variable }?.declaration.name ?? "unknown"
                 throw CompilationDiagnostic(
-                    code: .invalidVariableInitialization,
+                    code: .actionEnablednessInInitializer,
                     stage: .lowering,
                     path: "variables.\(name).initialization",
                     expected: "an initializer that can be evaluated before a complete state exists",
