@@ -171,6 +171,7 @@ struct CompiledControlLocation: Hashable, Sendable {
 struct CompiledModuleInstanceLayout: Hashable, Sendable {
     let id: ModuleInstanceID
     let namespace: String
+    let moduleName: String
 }
 
 struct CompiledLayout: Hashable, Sendable {
@@ -250,7 +251,11 @@ struct CompiledLayout: Hashable, Sendable {
         }
         self.controlLocations = controlLocations
         moduleInstances = spec.moduleInstances.enumerated().map {
-            .init(id: .init(ordinal: $0.offset), namespace: $0.element.name)
+            .init(
+                id: .init(ordinal: $0.offset),
+                namespace: $0.element.name,
+                moduleName: $0.element.module.name
+            )
         }
         declarations = variables.map(\.declaration)
             + actions.map(\.declaration)
@@ -349,7 +354,9 @@ struct CompiledLayout: Hashable, Sendable {
         let fieldEncoding = fields.map { field in
             "\(field.id.ordinal):\(field.renderedName.utf8.count):\(field.renderedName)"
         }.joined(separator: "|")
-        let instanceEncoding = moduleInstances.map { "\($0.id.ordinal):\($0.namespace)" }.joined(separator: "|")
+        let instanceEncoding = moduleInstances.map {
+            "\($0.id.ordinal):\($0.namespace.utf8.count):\($0.namespace)\($0.moduleName.utf8.count):\($0.moduleName)"
+        }.joined(separator: "|")
         return "declarations[\(declarationEncoding)]actions[\(actionEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]instances[\(instanceEncoding)]"
     }
 

@@ -438,14 +438,23 @@ extension TLASpec {
         dependencies: definition.plusCalDependencies
       )
     }
-    let instances = moduleInstances.map { instance in
-      let arguments = instanceArguments(for: instance).map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
-      let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+    guard moduleInstances.count == semantics.moduleInstances.count else {
+      throw CompilationDiagnostic(
+        code: .compilationIdentityMismatch,
+        stage: .rendering,
+        path: "authoredPlusCal.instances",
+        expected: "compiled module instances aligned with this source model",
+        actual: "\(semantics.moduleInstances.count) compiled instances for \(moduleInstances.count) declared instances",
+        nextSafeAction: "Compile the model again from its current source."
+      )
+    }
+    let instances = try zip(moduleInstances, semantics.moduleInstances).map { pair in
+      let (source, compiled) = pair
       return AuthoredPlusCalDeclaration(
-        name: instance.name,
-        text: "\(instance.name) == INSTANCE \(instance.module.name)\(withClause)",
-        phase: instance.plusCalPhase,
-        dependencies: instance.plusCalDependencies
+        name: source.name,
+        text: try formalRenderer.moduleInstance(compiled),
+        phase: source.plusCalPhase,
+        dependencies: source.plusCalDependencies
       )
     }
     return try AuthoredPlusCalDeclarationSections(definitions + instances)

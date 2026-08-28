@@ -1893,7 +1893,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
             actions: [],
             invariants: [],
             formalOperatorDefinitions: [definition]
-        ).compile().renderedTLAModuleBundle().tla.contains("SA("))
+        ).compile().renderedTLAModuleBundle().tla.contains("SA["))
     }
 
     @Test func typedFormalDefinitionParsesPairLiterals() throws {

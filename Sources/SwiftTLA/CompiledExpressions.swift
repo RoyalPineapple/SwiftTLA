@@ -577,6 +577,16 @@ struct CompiledFormalModuleReplacement: Sendable {
     let expression: CompiledStateExpr
 }
 
+struct CompiledModuleArgument: Sendable {
+    let parameter: String
+    let value: CompiledStateExpr
+}
+
+struct CompiledModuleInstance: Sendable {
+    let id: ModuleInstanceID
+    let arguments: [CompiledModuleArgument]
+}
+
 struct CompiledSymmetrySet: Sendable {
     let values: Set<TLAValue>
 }
@@ -600,6 +610,7 @@ struct CompiledSemantics: Sendable {
     let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]
     let recursiveFunctions: [CompiledRecursiveFunction]
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
+    let moduleInstances: [CompiledModuleInstance]
     let symmetrySets: [CompiledSymmetrySet]
     let symmetricCollections: [CompiledSymmetricCollection]
 }

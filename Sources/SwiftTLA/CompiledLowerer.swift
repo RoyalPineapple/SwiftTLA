@@ -179,6 +179,22 @@ struct CompiledLowerer {
                 )
             }
         }
+        let moduleInstances = try spec.moduleInstances.enumerated().map { offset, instance in
+            guard let id = layout.moduleInstanceID(named: instance.name) else {
+                throw diagnostic(path: "moduleInstances[\(offset)].declaration")
+            }
+            let arguments = try spec.instanceArguments(for: instance).enumerated().map { argumentOffset, argument in
+                CompiledModuleArgument(
+                    parameter: argument.parameter,
+                    value: try lower(
+                        argument.value,
+                        at: "moduleInstances[\(offset)].arguments[\(argumentOffset)]",
+                        scope: rootScope
+                    )
+                )
+            }
+            return CompiledModuleInstance(id: id, arguments: arguments)
+        }
         let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
         let linkedFormalOperators = try closure.linkedOperators.formalOperatorDefinitions
             .filter { !localFormalNames.contains($0.name) }
@@ -246,6 +262,7 @@ struct CompiledLowerer {
             formalOperatorDefinitions: allFormalOperators,
             recursiveFunctions: allRecursiveFunctions,
             formalModuleReplacements: formalModuleReplacements,
+            moduleInstances: moduleInstances,
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: symmetry.values)
             },

@@ -1009,12 +1009,8 @@ public extension TLASpec {
             lines.append(rendered.body)
             lines.append("")
         }
-        for instance in moduleInstances {
-            let arguments = instanceArguments(for: instance).map { argument in
-                "\(argument.parameter) <- \(argument.value)"
-            }.joined(separator: ", ")
-            let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-            lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
+        for instance in semantics.moduleInstances {
+            lines.append(try renderer.moduleInstance(instance))
             lines.append("")
         }
         for definition in definitionsAfterInstances {

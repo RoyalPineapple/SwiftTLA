@@ -120,6 +120,17 @@ struct CompiledTLARenderer {
         "\(replacement.definitionName) == \(try state(replacement.expression))"
     }
 
+    func moduleInstance(_ instance: CompiledModuleInstance) throws -> String {
+        guard let layout = layout.moduleInstances.first(where: { $0.id == instance.id }) else {
+            throw missing("module instance", instance.id.ordinal)
+        }
+        let arguments = try instance.arguments.map {
+            "\($0.parameter) <- \(try state($0.value))"
+        }.joined(separator: ", ")
+        let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+        return "\(layout.namespace) == INSTANCE \(layout.moduleName)\(withClause)"
+    }
+
     func state(_ expression: CompiledStateExpr) throws -> String {
         var tasks = [StateRenderingTask.expression(expression)]
         var parts: [String] = []
@@ -282,15 +293,15 @@ struct CompiledTLARenderer {
                         .text(", "), .expression(sequence), .text(")")
                     ])
                 case .lambdaApplication(let lambda, let arguments):
-                    var rendered: [StateRenderingTask] = []
-                    for (index, pair) in zip(lambda.parameters, arguments).enumerated() {
-                        if index > 0 { rendered.append(.text(" ")) }
-                        rendered.append(.text("\(try binderName(pair.0)) == "))
-                        rendered.append(.expression(pair.1))
+                    var rendered: [StateRenderingTask] = [
+                        .formalOperator(.lambda(lambda)), .text(")(")
+                    ]
+                    for (index, argument) in arguments.enumerated() {
+                        if index > 0 { rendered.append(.text(", ")) }
+                        rendered.append(.expression(argument))
                     }
-                    parts.append("LET ")
-                    rendered.append(.text(" IN "))
-                    rendered.append(.expression(lambda.body))
+                    parts.append("(")
+                    rendered.append(.text(")"))
                     schedule(rendered)
                 case .operatorApplication(let operation, let arguments):
                     parts.append(try operatorName(operation))

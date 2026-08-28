@@ -516,8 +516,8 @@ struct LivenessConformanceTests {
             Issue.record("Expected fairness binding to fail")
         } catch let error as CompilationDiagnostic {
             #expect(error.code == .unknownReference)
-            #expect(error.path == "fairness[0]")
-            #expect(error.actual == "fairness references 'missing'")
+            #expect(error.path == "fairness[0].action")
+            #expect(error.actual == "unresolved action 'missing'")
         } catch {
             Issue.record("Expected a compilation diagnostic, got \(error)")
         }
