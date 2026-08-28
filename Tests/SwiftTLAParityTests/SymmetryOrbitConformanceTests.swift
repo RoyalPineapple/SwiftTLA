@@ -1,4 +1,5 @@
 import Testing
+import SwiftTLA
 import UpstreamParity
 
 struct SymmetryOrbitConformanceTests {
@@ -110,8 +111,8 @@ struct SymmetryOrbitConformanceTests {
     #expect(differences.map(\.kind) == [.reducedInitialStates])
   }
 
-  @Test("Raw and reduced graphs retain the same observable names")
-  func observableNameDifferenceIsStructured() throws {
+  @Test("A reduced graph cannot use an undeclared action")
+  func undeclaredReducedActionIsStructured() throws {
     let rawStates = [state("A"), state("B")]
     let reducedState = state("A")
     let input = try comparisonInput(
@@ -128,7 +129,7 @@ struct SymmetryOrbitConformanceTests {
       Issue.record("Expected a structured difference")
       return
     }
-    #expect(differences.map(\.kind) == [.observableNames])
+    #expect(differences.map(\.kind) == [.undeclaredAction])
   }
 
   @Test("Orbit derivation closes a generator group before partitioning states")
@@ -193,8 +194,89 @@ struct SymmetryOrbitConformanceTests {
     #expect(comparison.quotientTransitions.count == 1)
   }
 
+  @Test("Action identity follows the executable source representative")
+  func actionIdentityFollowsExecutableSourceRepresentative() throws {
+    let states = [state("A"), state("B")]
+    let rawEdges = [
+      CanonicalEdge(source: states[0].key, action: "Choose__0", target: states[0].key),
+      CanonicalEdge(source: states[1].key, action: "Choose__1", target: states[1].key)
+    ]
+    let input = try comparisonInput(
+      swiftRaw: run(states: states, edges: rawEdges),
+      swiftReduced: run(states: [states[0]], edges: [rawEdges[0]]),
+      tlcRaw: run(states: states, edges: rawEdges),
+      tlcReduced: run(states: [states[1]], edges: [rawEdges[1]]),
+      renderedActions: nestedChooseActions()
+    )
+    guard case .exact(let comparison) = try compareSymmetryOrbits(input) else {
+      Issue.record("Expected exact orbit comparison")
+      return
+    }
+    #expect(comparison.quotientTransitions.map(\.action) == ["Choose__0"])
+  }
+
+  @Test("Actions remain distinct when the source state distinguishes their arguments")
+  func sourceStatePreservesDistinctActionOrbits() throws {
+    let states = [state("A"), state("B")]
+    let rawEdges = [
+      CanonicalEdge(source: states[0].key, action: "Choose__0", target: states[0].key),
+      CanonicalEdge(source: states[0].key, action: "Choose__1", target: states[1].key),
+      CanonicalEdge(source: states[1].key, action: "Choose__1", target: states[1].key),
+      CanonicalEdge(source: states[1].key, action: "Choose__0", target: states[0].key)
+    ]
+    let input = try comparisonInput(
+      swiftRaw: run(states: states, edges: rawEdges),
+      swiftReduced: run(states: [states[0]], edges: [
+        CanonicalEdge(source: states[0].key, action: "Choose__0", target: states[0].key),
+        CanonicalEdge(source: states[0].key, action: "Choose__1", target: states[0].key)
+      ]),
+      tlcRaw: run(states: states, edges: rawEdges),
+      tlcReduced: run(states: [states[1]], edges: [
+        CanonicalEdge(source: states[1].key, action: "Choose__1", target: states[1].key),
+        CanonicalEdge(source: states[1].key, action: "Choose__0", target: states[1].key)
+      ]),
+      renderedActions: nestedChooseActions()
+    )
+    guard case .exact(let comparison) = try compareSymmetryOrbits(input) else {
+      Issue.record("Expected exact orbit comparison")
+      return
+    }
+    #expect(comparison.quotientTransitions.count == 2)
+  }
+
+  @Test("The declared action plan is closed under symmetry")
+  func actionPlanMustBeClosedUnderSymmetry() throws {
+    let states = [state("A"), state("B")]
+    let edge = CanonicalEdge(source: states[1].key, action: "Choose__0", target: states[1].key)
+    let rawRun = try run(states: states, edges: [edge])
+    let reduced = try run(states: [states[1]], edges: [edge])
+    let input = try comparisonInput(
+      swiftRaw: rawRun,
+      swiftReduced: reduced,
+      tlcRaw: rawRun,
+      tlcReduced: reduced,
+      renderedActions: [nestedChooseActions()[0]]
+    )
+    #expect(throws: SymmetryOrbitAdapterError.actionPlanNotClosed(action: "Choose__0")) {
+      _ = try compareSymmetryOrbits(input)
+    }
+  }
+
   private func state(_ member: String) -> CanonicalState {
     CanonicalState(bindings: ["members": .constant(member)])
+  }
+
+  private func nestedChooseActions() -> [RenderedAction] {
+    ["A", "B"].enumerated().map { index, member in
+      RenderedAction(
+        sourceName: "Choose",
+        arguments: [.tuple([
+          .constant(member),
+          .record(["member": .constant(member)])
+        ])],
+        renderedName: "Choose__\(index)"
+      )
+    }
   }
 
   private func run(
@@ -229,7 +311,10 @@ struct SymmetryOrbitConformanceTests {
     swiftRaw: CompletedGraphRun,
     swiftReduced: CompletedGraphRun,
     tlcRaw: CompletedGraphRun,
-    tlcReduced: CompletedGraphRun
+    tlcReduced: CompletedGraphRun,
+    renderedActions: [RenderedAction] = [
+      RenderedAction(sourceName: "step", arguments: [], renderedName: "step")
+    ]
   ) throws -> SymmetryOrbitComparisonInput {
     try SymmetryOrbitComparisonInput(
       caseID: "scope-2",
@@ -237,6 +322,7 @@ struct SymmetryOrbitConformanceTests {
       swiftReduced: swiftReduced,
       tlcRaw: tlcRaw,
       tlcReduced: tlcReduced,
+      renderedActions: renderedActions,
       permutations: [
         try SymmetryPermutation(constantMapping: ["A": "A", "B": "B"]),
         try SymmetryPermutation(constantMapping: ["A": "B", "B": "A"])

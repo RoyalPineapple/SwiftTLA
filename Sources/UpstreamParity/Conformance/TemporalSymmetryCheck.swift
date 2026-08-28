@@ -254,6 +254,7 @@ package struct TemporalSymmetryCheck: Sendable {
       swiftReduced: swiftReduced,
       tlcRaw: rawTLC,
       tlcReduced: reducedTLC,
+      renderedActions: renderedActions,
       permutations: permutations,
       maximumPermutationCount: maximumPermutationCount
     )

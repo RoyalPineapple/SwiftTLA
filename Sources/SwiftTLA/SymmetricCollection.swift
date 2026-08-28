@@ -156,27 +156,16 @@ struct SymmetryPlan: Sendable {
     self.groups = groups
   }
 
-  func canonicalState(
-    _ state: CompiledState,
-    values: [CompiledValue]
-  ) throws -> (state: CompiledState, values: [CompiledValue]) {
+  func canonicalState(_ state: CompiledState) throws -> CompiledState {
     try state.requireIdentity(compilationIdentity)
-    let candidates = groups.reduce([(state: state, values: values)]) { candidates, group in
+    let candidates = groups.reduce([state]) { candidates, group in
       candidates.flatMap { candidate in
         group.map { mapping in
-          (
-            state: candidate.state.transformingFormalValues { applyMapping($0, mapping) },
-            values: candidate.values.map {
-              $0.transformingFormalValues { applyMapping($0, mapping) }
-            }
-          )
+          candidate.transformingFormalValues { applyMapping($0, mapping) }
         }
       }
     }
-    return candidates.min {
-      guard $0.state == $1.state else { return $0.state < $1.state }
-      return $0.values.lexicographicallyPrecedes($1.values)
-    } ?? (state: state, values: values)
+    return candidates.min() ?? state
   }
 
   private static func permutations(

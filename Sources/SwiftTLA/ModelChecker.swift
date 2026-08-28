@@ -270,7 +270,7 @@ private func compiledBFS(
     }
 
     func representative(_ state: CompiledState) throws -> CompiledState {
-        try symmetry.canonicalState(state, values: []).state
+        try symmetry.canonicalState(state)
     }
 
     for seed in seeds {
@@ -324,12 +324,8 @@ private func compiledBFS(
         }
 
         for successor in successors {
-            let canonical = try symmetry.canonicalState(
-                successor.state,
-                values: successor.arguments
-            )
-            let formalArguments = try canonical.values.map { try $0.rendered(using: layout) }
-            let successorKey = canonical.state
+            let successorKey = try symmetry.canonicalState(successor.state)
+            let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
             let targetID: StateGraph.StateID
             if let existing = stateToID[successorKey] {
                 targetID = existing

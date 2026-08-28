@@ -9,6 +9,10 @@ package enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
   case reducedStateOutsideOrbit(source: SymmetryGraphSource, stateID: String)
   case multipleReducedRepresentatives(source: SymmetryGraphSource, representative: String)
   case missingReducedRepresentative(source: SymmetryGraphSource, representative: String)
+  case duplicateActionCall
+  case duplicateRenderedAction(String)
+  case undeclaredAction(String)
+  case actionPlanNotClosed(action: String)
 }
 
 package struct SymmetryPermutation: Equatable, Sendable {
@@ -48,7 +52,7 @@ package struct SymmetryPermutation: Equatable, Sendable {
       .joined(separator: "|")
   }
 
-  private func apply(_ value: CanonicalValue) throws -> CanonicalValue {
+  func apply(_ value: CanonicalValue) throws -> CanonicalValue {
     switch value {
     case .constant(let name):
       .constant(constantMapping[name] ?? name)
@@ -69,6 +73,7 @@ package struct SymmetryPermutation: Equatable, Sendable {
 package struct SymmetryOrbitDerivation: Equatable, Sendable {
   package let orbits: [[CanonicalStateKey]]
   package let representativeForState: [CanonicalStateKey: CanonicalStateKey]
+  let group: [SymmetryPermutation]
 
   package init(
     states: [CanonicalState],
@@ -110,6 +115,7 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
     }
     self.orbits = derived.sorted { $0[0] < $1[0] }
     self.representativeForState = representatives
+    self.group = closure
   }
 
   private static func closure(
