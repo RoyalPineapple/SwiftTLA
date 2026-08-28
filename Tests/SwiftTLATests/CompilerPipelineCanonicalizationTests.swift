@@ -1459,6 +1459,33 @@ struct CompilerPipelineCanonicalizationTests {
         }
     }
 
+    @Test("a self-dependent variable initializer fails compilation")
+    func selfDependentVariableInitializerFailsCompilation() {
+        let spec = TLASpec(
+            name: "SelfDependentInitializer",
+            variables: [
+                .init(
+                    name: "value",
+                    initialization: .expression(.variable("value")),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                )
+            ],
+            actions: [],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected a cyclic variable-initialization diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .cyclicVariableInitialization)
+            #expect(diagnostic.actual == "dependency cycle value -> value")
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
     @Test("unused local operators do not create variable-initialization cycles")
     func unusedLocalOperatorsDoNotCreateInitializationCycles() throws {
         let compilation = try TLASpec(
@@ -1546,6 +1573,46 @@ struct CompilerPipelineCanonicalizationTests {
         let state = try firstCompiledState(in: compilation)
 
         #expect(try renderedValue(named: "owner", in: state, compilation: compilation) == .int(1))
+    }
+
+    @Test("invoked operator arguments retain variable-initialization dependencies")
+    func invokedOperatorArgumentsRetainInitializationDependencies() throws {
+        let compilation = try TLASpec(
+            name: "InvokedInitializerOperatorArgument",
+            variables: [
+                .init(
+                    name: "derived",
+                    initialization: .expression(.operatorApplication(
+                        .reference("Apply", arity: 2),
+                        [
+                            .operator(.lambda(.init(
+                                parameters: ["ignored"],
+                                body: .variable("source")
+                            ))),
+                            .value(.int(0))
+                        ]
+                    )),
+                    generatedSwiftType: "Int",
+                    origin: .source
+                ),
+                .init(name: "source", initial: .int(4))
+            ],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                .init(
+                    name: "Apply",
+                    parameters: [.operator("operation", arity: 1), .value("value")],
+                    body: .operatorApplication(
+                        .reference("operation", arity: 1),
+                        [.value(.variable("value"))]
+                    )
+                )
+            ]
+        ).compile()
+        let state = try firstCompiledState(in: compilation)
+
+        #expect(try renderedValue(named: "derived", in: state, compilation: compilation) == .int(4))
     }
 
     @Test("formal values remain substitutional during variable initialization")
