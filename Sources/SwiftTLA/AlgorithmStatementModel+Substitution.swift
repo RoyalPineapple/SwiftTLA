@@ -69,6 +69,8 @@ extension AlgorithmStatementModel {
             .assert(expression(value))
         case .set(let originalTarget, let value):
             .set(target: target(originalTarget), value: expression(value))
+        case .parallel(let assignments):
+            .parallel(assignments.map { .init(target: target($0.target), value: expression($0.value)) })
         case .letBinding(let variable, let value, let body):
             { () -> AlgorithmStatementModel in
                 let scoped = scopedBody(variable: variable, body: body)
@@ -190,6 +192,16 @@ extension AlgorithmStatementModel {
                 return .rejected(diagnostic)
             }
             return .set(target: substitutedTarget, value: expression(value))
+        case .parallel(let assignments):
+            var substituted: [AlgorithmAssignmentModel] = []
+            for assignment in assignments {
+                guard let substitutedTarget = target(assignment.target) else {
+                    guard case .reject(let diagnostic) = assignmentTargets else { continue }
+                    return .rejected(diagnostic)
+                }
+                substituted.append(.init(target: substitutedTarget, value: expression(assignment.value)))
+            }
+            return .parallel(substituted)
         case .letBinding(let variable, let value, let body):
             let scoped = scopedBody(variable: variable, body: body)
             return .letBinding(variable: scoped.variable, value: expression(value), scoped.body)
@@ -227,6 +239,14 @@ extension Array where Element == AlgorithmStatementModel {
                 names.formUnion(value.freeVariableNames)
                 if case .function(_, let key) = target {
                     names.formUnion(key.freeVariableNames)
+                }
+            case .parallel(let assignments):
+                for assignment in assignments {
+                    names.insert(assignment.target.root)
+                    names.formUnion(assignment.value.freeVariableNames)
+                    if case .function(_, let key) = assignment.target {
+                        names.formUnion(key.freeVariableNames)
+                    }
                 }
             case .letBinding(let variable, let value, let body):
                 names.insert(variable)

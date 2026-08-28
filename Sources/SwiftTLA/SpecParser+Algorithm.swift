@@ -1401,6 +1401,8 @@ extension ParserSession {
                 continue
             case .set(let target, _):
                 if target.root == parameter { return true }
+            case .parallel(let assignments):
+                if assignments.contains(where: { $0.target.root == parameter }) { return true }
             case .letBinding(let binder, _, let body),
                  .with(let binder, _, let body),
                  .choose(let binder, _, let body):

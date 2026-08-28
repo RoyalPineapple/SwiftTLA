@@ -77,6 +77,7 @@ struct ProcedureLoweringTests {
         let rendered = compilation.renderedTLAModuleBundle().tla
         #expect(rendered.contains("pc' = \"enter\""))
         #expect(rendered.contains("pc' = \"procedure.work.enter\"") == false)
+        #expect(rendered.contains("[procedure |-> \"work\", pc |->"))
 
         let afterReturn = try apply("procedure.work.enter", in: compilation, to: afterCall)
         #expect(try value(named: "output", in: afterReturn, compilation: compilation) == .int(8))

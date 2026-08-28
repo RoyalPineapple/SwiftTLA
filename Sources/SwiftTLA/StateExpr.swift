@@ -167,6 +167,10 @@ public struct StateRecordExpression: Hashable, Sendable {
         self.init(fields.map { .init(name: $0.key, value: $0.value) })
     }
 
+    init(orderedFields: [Field]) {
+        fields = orderedFields
+    }
+
     public func value(named name: String) -> StateExpr? {
         fields.first { $0.name == name }?.value
     }

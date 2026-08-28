@@ -299,6 +299,7 @@ extension TLASpec {
       constants: authoredPlusCalPrelude,
       preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
+      processNames: AlgorithmLowerer.processNames(for: plusCalAlgorithm),
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: postTranslationDeclarations,
       refinements: renderedRefinements

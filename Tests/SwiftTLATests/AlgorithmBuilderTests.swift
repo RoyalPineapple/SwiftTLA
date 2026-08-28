@@ -998,9 +998,11 @@ struct AlgorithmBuilderTests {
         let projected = source.plusCalProjection()
         let step = try #require(projected.sequentialSteps.first)
         guard case .with(let binder, _, let body) = step.statements.first,
-              body.count == 2,
-              case .set(_, .variable(let selectedValue)) = body[0],
-              case .set(_, .variable(let copiedValue)) = body[1]
+              body.count == 1,
+              case .parallel(let assignments) = body[0],
+              assignments.count == 2,
+              case .variable(let selectedValue) = assignments[0].value,
+              case .variable(let copiedValue) = assignments[1].value
         else {
             Issue.record("Expected one capture-free scheduled scope.")
             return
@@ -1008,6 +1010,36 @@ struct AlgorithmBuilderTests {
         #expect((binder == "value") == false)
         #expect(selectedValue == binder)
         #expect(copiedValue == "value")
+    }
+
+    @Test("PlusCal projection owns choice, parallel updates, and stopping control")
+    func plusCalProjectionOwnsStatementLowering() throws {
+        let source = AlgorithmModel(
+            name: "ProjectedStatements",
+            components: [
+                .step(.init(label: .init(name: "advance"), statements: [
+                    .choose(variable: "selected", domain: [.int(1), .int(2)], [
+                        .set(target: .root("value"), value: .variable("selected"))
+                    ]),
+                    .stop
+                ]))
+            ]
+        )
+
+        let step = try #require(source.plusCalProjection().sequentialSteps.first)
+        guard case .with(let binder, let source, let body) = step.statements.first,
+              binder == "selected",
+              source == .setLiteral([.value(.int(1)), .value(.int(2))]),
+              body.count == 2,
+              case .parallel(let assignments) = body[0],
+              assignments.count == 1,
+              assignments[0].target.root == "value",
+              case .goto(let destination) = body[1]
+        else {
+            Issue.record("Expected one projected choice path.")
+            return
+        }
+        #expect(destination.name == CompilerControlSymbol.done.rawValue)
     }
 
     @Test("moving an independent update under a choice preserves successor multiplicity")

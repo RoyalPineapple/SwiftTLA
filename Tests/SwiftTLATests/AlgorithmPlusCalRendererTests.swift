@@ -62,6 +62,7 @@ struct AlgorithmPlusCalRendererTests {
                 constants: [],
                 preludeDeclarations: [],
                 algorithm: algorithm,
+                processNames: AlgorithmLowerer.processNames(for: algorithm),
                 defineDeclarations: [],
                 postTranslationDeclarations: [],
                 refinements: []

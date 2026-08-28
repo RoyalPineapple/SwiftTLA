@@ -44,24 +44,7 @@ internal struct AlgorithmModel: Sendable {
         }
     }
 
-    /// Names the generated PlusCal process operators exactly as pcal.trans
-    /// does, including collisions with authored declarations.
-    func translatedProcessNames() -> [String] {
-        var used = authoredIdentifiers
-        return processes.indices.map { index in
-            let stem = "pcalProcess\(index + 1)"
-            var candidate = stem
-            var suffix = 2
-            while used.contains(candidate) {
-                candidate = "\(stem)_\(suffix)"
-                suffix += 1
-            }
-            used.insert(candidate)
-            return candidate
-        }
-    }
-
-    private var authoredIdentifiers: Set<String> {
+    var authoredIdentifiers: Set<String> {
         func collect(_ components: [AlgorithmComponentModel], into names: inout Set<String>) {
             for component in components {
                 switch component {
@@ -175,18 +158,19 @@ internal struct AlgorithmModel: Sendable {
         func call(
             _ target: String,
             arguments: [StateExpr],
-            after assignments: [AlgorithmStatementModel],
+            after assignments: [AlgorithmAssignmentModel],
             followedBy suffix: [AlgorithmStatementModel]
         ) -> [AlgorithmStatementModel] {
+            let assignmentGroup = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
             guard arguments.isEmpty == false, assignments.isEmpty == false else {
-                return assignments + [.call(target: target, arguments: arguments)] + suffix
+                return assignmentGroup + [.call(target: target, arguments: arguments)] + suffix
             }
             let bindings = arguments.map { argument in (name: binding(), value: argument) }
             let call = AlgorithmStatementModel.call(
                 target: target,
                 arguments: bindings.map { .variable($0.name) }
             )
-            return bindings.reversed().reduce(assignments + [call] + suffix) { body, value in
+            return bindings.reversed().reduce(assignmentGroup + [call] + suffix) { body, value in
                 [.letBinding(variable: value.name, value: value.value, body)]
             }
         }
@@ -216,20 +200,28 @@ internal struct AlgorithmModel: Sendable {
             )
         }
 
+        func assignmentStatements(_ assignments: [AlgorithmAssignmentModel]) -> [AlgorithmStatementModel] {
+            assignments.map { .set(target: $0.target, value: $0.value) }
+        }
+
         func schedule(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
             var reads: [AlgorithmStatementModel] = []
-            var assignments: [AlgorithmStatementModel] = []
+            var assignments: [AlgorithmAssignmentModel] = []
             var terminals: [AlgorithmStatementModel] = []
 
             for (index, statement) in values.enumerated() {
                 let suffix = Array(values.dropFirst(index + 1))
                 switch statement {
-                case .set:
-                    assignments.append(statement)
+                case .set(let target, let value):
+                    assignments.append(.init(target: target, value: value))
+                case .parallel(let values):
+                    assignments.append(contentsOf: values)
                 case .await, .assert, .skip, .rejected:
                     reads.append(statement)
-                case .goto, .return, .stop:
+                case .goto, .return:
                     terminals.append(statement)
+                case .stop:
+                    terminals.append(.goto(.init(name: CompilerControlSymbol.done.rawValue)))
                 case .call(let target, let arguments):
                     return reads + call(
                         target,
@@ -243,7 +235,7 @@ internal struct AlgorithmModel: Sendable {
                         .letBinding(
                             variable: scoped.0,
                             value: value,
-                            schedule(assignments + scoped.1 + suffix + terminals)
+                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
                         )
                     ]
                 case .with(let variable, let source, let body):
@@ -252,36 +244,37 @@ internal struct AlgorithmModel: Sendable {
                         .with(
                             variable: scoped.0,
                             source: source,
-                            schedule(assignments + scoped.1 + suffix + terminals)
+                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
                         )
                     ]
                 case .choose(let variable, let domain, let body):
                     let scoped = movingScope(variable, body: body, over: suffix)
                     return reads + [
-                        .choose(
+                        .with(
                             variable: scoped.0,
-                            domain: domain,
-                            schedule(assignments + scoped.1 + suffix + terminals)
+                            source: .setLiteral(domain.map(StateExpr.value)),
+                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
                         )
                     ]
                 case .ifElse(let condition, let then, let otherwise):
                     return reads + [
                         .ifElse(
                             condition,
-                            schedule(assignments + then + suffix + terminals),
-                            schedule(assignments + otherwise + suffix + terminals)
+                            schedule(assignmentStatements(assignments) + then + suffix + terminals),
+                            schedule(assignmentStatements(assignments) + otherwise + suffix + terminals)
                         )
                     ]
                 case .either(let first, let second):
                     return reads + [
                         .either(
-                            schedule(assignments + first + suffix + terminals),
-                            schedule(assignments + second + suffix + terminals)
+                            schedule(assignmentStatements(assignments) + first + suffix + terminals),
+                            schedule(assignmentStatements(assignments) + second + suffix + terminals)
                         )
                     ]
                 }
             }
-            return reads + assignments + terminals
+            let assignmentGroup = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
+            return reads + assignmentGroup + terminals
         }
 
         func step(_ value: AlgorithmStepModel) -> AlgorithmStepModel {
@@ -373,6 +366,8 @@ func algorithmCompilationEncoding(_ model: AlgorithmModel) -> String {
         case .await(let expression): result = "await(\(state(expression, environment)))"
         case .assert(let expression): result = "assert(\(state(expression, environment)))"
         case .set(let target, let expression): result = "set(\(lvalue(target, environment)),\(state(expression, environment)))"
+        case .parallel(let assignments):
+            result = "parallel([\(assignments.map { "set(\(lvalue($0.target, environment)),\(state($0.value, environment)))" }.joined(separator: ","))])"
         case .letBinding(let variable, let expression, let body):
             let value = state(expression, environment)
             let (name, extended) = fresh(variable, environment: environment, next: &next)
@@ -575,11 +570,17 @@ internal enum AlgorithmLValueModel: Sendable, Equatable {
     }
 }
 
+internal struct AlgorithmAssignmentModel: Sendable, Equatable {
+    let target: AlgorithmLValueModel
+    let value: StateExpr
+}
+
 internal indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case rejected(AlgorithmDiagnosticCode)
     case await(StateExpr)
     case assert(StateExpr)
     case set(target: AlgorithmLValueModel, value: StateExpr)
+    case parallel([AlgorithmAssignmentModel])
     case letBinding(variable: String, value: StateExpr, [AlgorithmStatementModel])
     case with(variable: String, source: StateExpr, [AlgorithmStatementModel])
     case ifElse(StateExpr, [AlgorithmStatementModel], [AlgorithmStatementModel])

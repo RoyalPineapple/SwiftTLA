@@ -31,6 +31,7 @@ internal struct AuthoredPlusCalModule: Sendable {
     let constants: [String]
     let preludeDeclarations: [String]
     let algorithm: AlgorithmModel
+    let processNames: [String]
     let defineDeclarations: [String]
     let postTranslationDeclarations: [String]
     let refinements: [String]
@@ -197,16 +198,7 @@ extension StateExpr {
         case .tupleTail(let tuple): return "Tail(\(try source(tuple, "tuple")))"
         case .tupleConcatenate(let lhs, let rhs): return try binary(lhs, " \\o ", rhs)
         case .recordLiteral(let fields):
-            let orderedFields: [StateRecordExpression.Field]
-            if fields.value(named: CompilerControlSymbol.procedure.rawValue) == nil
-                || fields.value(named: CompilerControlSymbol.programCounter.rawValue) == nil {
-                orderedFields = fields.fields
-            } else {
-                let leading = [CompilerControlSymbol.procedure.rawValue, CompilerControlSymbol.programCounter.rawValue]
-                orderedFields = leading.compactMap { name in fields.fields.first { $0.name == name } }
-                    + fields.fields.filter { leading.contains($0.name) == false }
-            }
-            let entries = try orderedFields.enumerated().map { index, field in
+            let entries = try fields.fields.enumerated().map { index, field in
                 let name = try authoredPlusCalIdentifier(
                     field.name,
                     path: "\(path).fields[\(index)].name",
@@ -378,7 +370,6 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("}")
         }
 
-        let processNames = model.translatedProcessNames()
         var processIndex = 0
         for (index, component) in model.components.enumerated() {
             switch component {
@@ -389,7 +380,7 @@ internal struct AlgorithmPlusCalRenderer {
             case .process(let process):
                 lines += try render(
                     process: process,
-                    processName: processNames[processIndex],
+                    processName: module.processNames[processIndex],
                     path: "components[\(index)]"
                 )
                 processIndex += 1
@@ -523,35 +514,9 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     private func render(statements: [AlgorithmStatementModel], indent: String, path: String) throws -> [String] {
-        var lines: [String] = []
-        var index = statements.startIndex
-
-        while index < statements.endIndex {
-            // Compilation schedules one parallel assignment group at the end
-            // of each reachable lexical path.
-            if case .set = statements[index] {
-                var assignments: [(target: AlgorithmLValueModel, value: StateExpr)] = []
-                repeat {
-                    guard case .set(let target, let value) = statements[index] else { break }
-                    assignments.append((target, value))
-                    index = statements.index(after: index)
-                } while index < statements.endIndex && {
-                    if case .set = statements[index] { return true }
-                    return false
-                }()
-
-                let rendered = try assignments.enumerated().map { offset, assignment in
-                    "\(try lvalue(assignment.target, path: "\(path)[\(index)].assignments[\(offset)].target")) := \(try expression(assignment.value, path: "\(path)[\(index)].assignments[\(offset)].value"))"
-                }
-                    .joined(separator: " || ")
-                lines.append("\(indent)\(rendered);")
-                continue
-            }
-
-            lines += try render(statement: statements[index], indent: indent, path: "\(path)[\(index)]")
-            index = statements.index(after: index)
+        try statements.enumerated().flatMap { index, statement in
+            try render(statement: statement, indent: indent, path: "\(path)[\(index)]")
         }
-        return lines
     }
 
     private func render(statement: AlgorithmStatementModel, indent: String, path: String) throws -> [String] {
@@ -562,6 +527,11 @@ internal struct AlgorithmPlusCalRenderer {
         case .assert(let condition): return ["\(indent)assert \(try expression(condition, path: "\(path).condition"));"]
         case .set(let target, let value):
             return ["\(indent)\(try lvalue(target, path: "\(path).target")) := \(try expression(value, path: "\(path).value"));"]
+        case .parallel(let assignments):
+            let rendered = try assignments.enumerated().map { index, assignment in
+                "\(try lvalue(assignment.target, path: "\(path)[\(index)].target")) := \(try expression(assignment.value, path: "\(path)[\(index)].value"))"
+            }.joined(separator: " || ")
+            return ["\(indent)\(rendered);"]
         case .letBinding(let variable, let value, let body):
             let binder = try authoredPlusCalIdentifier(variable, path: "\(path).binder")
             var lines = ["\(indent)with (\(binder) = \(try expression(value, path: "\(path).value"))) {"]
@@ -592,13 +562,14 @@ internal struct AlgorithmPlusCalRenderer {
             lines += try render(statements: second, indent: indent + "  ", path: "\(path).second")
             lines.append("\(indent)};")
             return lines
-        case .choose(let variable, let domain, let body):
-            // `Choose` is SwiftTLA's bounded spelling of PlusCal's with-member choice.
-            let binder = try authoredPlusCalIdentifier(variable, path: "\(path).binder")
-            var lines = ["\(indent)with (\(binder) \\in \(set(domain))) {"]
-            lines += try render(statements: body, indent: indent + "  ", path: "\(path).body")
-            lines.append("\(indent)};")
-            return lines
+        case .choose:
+            throw AlgorithmPlusCalRenderDiagnostic(
+                failedConcept: "choice rendering",
+                path: path,
+                expected: "a compiled with statement",
+                actual: "an unprojected choose statement",
+                nextSafeAction: "Compile the model again from its current source."
+            )
         case .goto(let label):
             return ["\(indent)goto \(try authoredPlusCalIdentifier(label.name, path: "\(path).label"));"]
         case .call(let target, let arguments):
@@ -608,7 +579,14 @@ internal struct AlgorithmPlusCalRenderer {
             }.joined(separator: ", ")
             return ["\(indent)call \(name)(\(values));"]
         case .return: return ["\(indent)return;"]
-        case .stop: return ["\(indent)goto Done;"]
+        case .stop:
+            throw AlgorithmPlusCalRenderDiagnostic(
+                failedConcept: "stop rendering",
+                path: path,
+                expected: "a compiled goto statement",
+                actual: "an unprojected stop statement",
+                nextSafeAction: "Compile the model again from its current source."
+            )
         case .skip: return ["\(indent)skip;"]
         }
     }

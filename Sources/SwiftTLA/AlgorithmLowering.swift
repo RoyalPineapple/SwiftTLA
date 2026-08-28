@@ -22,6 +22,22 @@ enum AlgorithmLowerer {
         }
     }
     private static let processBinding = CompilerBindingSymbol.process
+
+    static func processNames(for algorithm: AlgorithmModel) -> [String] {
+        var used = algorithm.authoredIdentifiers
+        return algorithm.processes.indices.map { index in
+            let stem = "pcalProcess\(index + 1)"
+            var candidate = stem
+            var suffix = 2
+            while used.contains(candidate) {
+                candidate = "\(stem)_\(suffix)"
+                suffix += 1
+            }
+            used.insert(candidate)
+            return candidate
+        }
+    }
+
     private static func lowered(_ specification: TLASpec) -> TLASpec {
         var specification = specification
         specification.algorithmPhase = .lowered
@@ -41,7 +57,7 @@ enum AlgorithmLowerer {
             )
         }
         let requiresProgramCounter = requiresProgramCounter(for: algorithm)
-        let translatedProcessNames = algorithm.translatedProcessNames()
+        let processNames = processNames(for: algorithm)
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state
@@ -215,7 +231,7 @@ enum AlgorithmLowerer {
                     body = completingControl(loweredStatements, fallthrough: nextLabel)
                 }
                 let generatedAction = NamedAction(
-                    name: requiresProgramCounter ? atomic.label.name : translatedProcessNames[processIndex],
+                    name: requiresProgramCounter ? atomic.label.name : processNames[processIndex],
                     body: ActionNormalization.complete(
                         requiresProgramCounter
                             ? .and(
@@ -376,6 +392,8 @@ enum AlgorithmLowerer {
                 return true
             case .assert, .goto, .call, .return, .stop:
                 return true
+            case .parallel:
+                return false
             case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
                 return containsControlTransfer(body)
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
@@ -647,6 +665,14 @@ enum AlgorithmLowerer {
             case .root(let root): return .assign(.named(root), value)
             case .function(let root, let key): return .assign(.named(root), .except(.variable(root), key, value))
             }
+        case .parallel(let assignments):
+            return lowerSequential(
+                assignments.map { .set(target: $0.target, value: $0.value) },
+                nextLabel: nextLabel,
+                procedures: procedures,
+                owner: owner,
+                control: control
+            )
         case .letBinding(let variable, let value, let body):
             return .define(variable, value, lowerSequential(body, nextLabel: nextLabel, procedures: procedures, owner: owner, control: control))
         case .with(let variable, let source, let body):
@@ -690,7 +716,9 @@ enum AlgorithmLowerer {
             + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
         let push = ActionExpr.assign(
             .procedureStack,
-            .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), .procedureStack)
+            .tupleConcatenate(.tupleLiteral([.recordLiteral(.init(orderedFields: frameFields.map {
+                .init(name: $0.0, value: $0.1)
+            }))]), .procedureStack)
         )
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign(.named($0.0.root), $0.1)
@@ -771,7 +799,9 @@ enum AlgorithmLowerer {
             .except(
                 .procedureStack,
                 process,
-                .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), stack)
+                .tupleConcatenate(.tupleLiteral([.recordLiteral(.init(orderedFields: frameFields.map {
+                    .init(name: $0.0, value: $0.1)
+                }))]), stack)
             )
         )
         let parameterAssignments = zip(procedure.parameters, arguments).map {
@@ -866,6 +896,8 @@ enum AlgorithmLowerer {
                     name: "__pcal_assert",
                     body: .or(.not(executed), condition)
                 )]
+            case .parallel:
+                return []
             case .ifElse(let condition, let then, let otherwise):
                 return sequentialAssertionInvariants(in: then, label: label, executionCondition: executionCondition, pathCondition: .and(pathCondition, condition))
                     + sequentialAssertionInvariants(in: otherwise, label: label, executionCondition: executionCondition, pathCondition: .and(pathCondition, .not(condition)))
@@ -998,6 +1030,16 @@ enum AlgorithmLowerer {
                         rewrite(key, localRoots: localRoots),
                         value))
             }
+        case .parallel(let assignments):
+            return lower(
+                assignments.map { .set(target: $0.target, value: $0.value) },
+                localRoots: localRoots,
+                processDomain: processDomain,
+                procedures: procedures,
+                owner: owner,
+                nextLabel: nextLabel,
+                control: control
+            )
         case .letBinding(let variable, let value, let body):
             return .define(
                 variable,
@@ -1087,6 +1129,8 @@ enum AlgorithmLowerer {
                         body: predicate
                     )
                 }
+            case .parallel:
+                return []
             case .ifElse(let condition, let then, let otherwise):
                 let condition = rewrite(condition, localRoots: localRoots)
                 return assertionInvariants(
@@ -1232,7 +1276,7 @@ enum AlgorithmLowerer {
             case .tupleTail(let tuple): return .tupleTail(rewritten(tuple, localRoots: localRoots))
             case .tupleConcatenate(let lhs, let rhs): return .tupleConcatenate(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
             case .recordLiteral(let fields):
-                return .recordLiteral(.init(fields.fields.map {
+                return .recordLiteral(.init(orderedFields: fields.fields.map {
                     .init(name: $0.name, value: rewritten($0.value, localRoots: localRoots))
                 }))
             case .recordAccess(let record, let field): return .recordAccess(rewritten(record, localRoots: localRoots), field)
