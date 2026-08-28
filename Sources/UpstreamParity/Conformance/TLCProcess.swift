@@ -45,6 +45,7 @@ package struct TLCProcessExecutionFailure: Equatable, Sendable {
 /// so a user sees the importing source line and the missing file directly.
 package enum TLCModuleBundleError: Error, Equatable, Sendable {
   case unreadableModule(path: String, reason: String)
+  case invalidDeclaredClosure(TLAModuleBundleIntegrityError)
   case missingImportedModule(
     module: String,
     importedBy: String,
@@ -143,16 +144,8 @@ package struct TLCProcessRequest: Equatable, Sendable {
     do {
       try bundle.validateDeclaredClosure()
     } catch {
-      if let error = error as? TLCModuleBundleError {
-        throw TLCProcessError.invalidModuleBundle(error)
-      }
-      if case TLAModuleBundleIntegrityError.missingModule(let dependency, let importedBy, let line) = error {
-        throw TLCProcessError.invalidModuleBundle(.missingImportedModule(
-          module: dependency,
-          importedBy: "\(importedBy).tla",
-          line: line,
-          expectedFile: "\(dependency).tla"
-        ))
+      if let error = error as? TLAModuleBundleIntegrityError {
+        throw TLCProcessError.invalidModuleBundle(.invalidDeclaredClosure(error))
       }
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
         path: bundle.root.name + ".tla", reason: redactingSecrets(in: error.localizedDescription)
@@ -195,29 +188,47 @@ package struct TLCProcessRequest: Equatable, Sendable {
     }
   }
 
-  /// Reads an explicitly declared root, configuration, and import list.
-  /// This is the only URL-to-bundle boundary; it never enumerates a directory.
+  /// Reads an explicitly declared root, configuration, and complete import closure.
+  /// The dependency edges define the bundle staged for TLC.
   package static func declaredBundle(
     root: URL,
     configuration: URL,
-    imports: [URL] = []
+    imports: [URL] = [],
+    dependencies: [TLAModuleBundle.ModuleDependency] = []
   ) throws -> TLAModuleBundle {
-    do {
-      let rootFile = TLAModuleFile(
-        name: root.deletingPathExtension().lastPathComponent,
-        tla: try String(contentsOf: root, encoding: .utf8),
-        cfg: try String(contentsOf: configuration, encoding: .utf8)
-      )
-      let importedFiles = try imports.map { url in
-        TLAModuleFile(
-          name: url.deletingPathExtension().lastPathComponent,
-          tla: try String(contentsOf: url, encoding: .utf8)
-        )
+    let rootFile = TLAModuleFile(
+      name: root.deletingPathExtension().lastPathComponent,
+      tla: try readUTF8(root),
+      cfg: try readUTF8(configuration)
+    )
+    let importedFiles = try imports.map { url in
+      let module = url.deletingPathExtension().lastPathComponent
+      guard FileManager.default.fileExists(atPath: url.path) else {
+        let importer = dependencies.first(where: {
+          $0.importedModule == module
+        })?.importingModule ?? root.deletingPathExtension().lastPathComponent
+        throw TLCProcessError.invalidModuleBundle(.missingImportedModule(
+          module: module,
+          importedBy: "\(importer).tla",
+          line: 0,
+          expectedFile: url.path
+        ))
       }
-      return TLAModuleBundle.external(root: rootFile, imports: importedFiles)
+      return TLAModuleFile(name: module, tla: try readUTF8(url))
+    }
+    return TLAModuleBundle.external(
+      root: rootFile,
+      imports: importedFiles,
+      dependencies: dependencies
+    )
+  }
+
+  private static func readUTF8(_ url: URL) throws -> String {
+    do {
+      return try String(contentsOf: url, encoding: .utf8)
     } catch {
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
-        path: root.path, reason: redactingSecrets(in: error.localizedDescription)
+        path: url.path, reason: redactingSecrets(in: error.localizedDescription)
       ))
     }
   }

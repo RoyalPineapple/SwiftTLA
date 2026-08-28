@@ -40,7 +40,11 @@ cat >"$TMP/local-fixtures.json" <<JSON
     "id": "local-fixture",
     "module": "local/LocalFixture.tla",
     "configuration": "local/LocalFixture.cfg",
-    "imports": ["local/LocalImport.tla"]
+    "imports": ["local/LocalImport.tla"],
+    "dependencies": [{
+      "importingModule": "LocalFixture",
+      "importedModule": "LocalImport"
+    }]
   }]
 }
 JSON

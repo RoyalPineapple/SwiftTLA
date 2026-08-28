@@ -50,6 +50,82 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
     #expect(names == ["OnlyThis.cfg", "OnlyThis.tla"])
   }
 
+  @Test("a missing declared module fails before TLC staging")
+  func rejectsMissingDeclaredModule() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let root = directory.appendingPathComponent("Root.tla")
+    let configuration = directory.appendingPathComponent("Root.cfg")
+    let middle = directory.appendingPathComponent("Middle.tla")
+    let missing = directory.appendingPathComponent("Required.tla")
+    try "---- MODULE Root ----\n====\n".write(
+      to: root, atomically: true, encoding: .utf8)
+    try "SPECIFICATION Spec\n".write(
+      to: configuration, atomically: true, encoding: .utf8)
+    try "---- MODULE Middle ----\n====\n".write(
+      to: middle, atomically: true, encoding: .utf8)
+
+    #expect(throws: TLCProcessError.invalidModuleBundle(.missingImportedModule(
+      module: "Required",
+      importedBy: "Middle.tla",
+      line: 0,
+      expectedFile: missing.path
+    ))) {
+      _ = try TLCProcessRequest.declaredBundle(
+        root: root,
+        configuration: configuration,
+        imports: [middle, missing],
+        dependencies: [
+          .init(
+            importingModule: "Root",
+            importedModule: "Middle",
+            structuralPath: ["fixture", "dependencies", "0"]
+          ),
+          .init(
+            importingModule: "Middle",
+            importedModule: "Required",
+            structuralPath: ["fixture", "dependencies", "1"]
+          )
+        ]
+      )
+    }
+  }
+
+  @Test("a disconnected declared module fails before TLC staging")
+  func rejectsDisconnectedDeclaredModule() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let root = directory.appendingPathComponent("Root.tla")
+    let configuration = directory.appendingPathComponent("Root.cfg")
+    let imported = directory.appendingPathComponent("Imported.tla")
+    try "---- MODULE Root ----\n====\n".write(to: root, atomically: true, encoding: .utf8)
+    try "SPECIFICATION Spec\n".write(to: configuration, atomically: true, encoding: .utf8)
+    try "---- MODULE Imported ----\n====\n".write(to: imported, atomically: true, encoding: .utf8)
+    let request = TLCProcessRequest(
+      javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
+      jar: directory.appendingPathComponent("tla2tools.jar"),
+      bridgeClasses: directory.appendingPathComponent("bridge"),
+      bundle: try TLCProcessRequest.declaredBundle(
+        root: root,
+        configuration: configuration,
+        imports: [imported]
+      ),
+      graphEvents: directory.appendingPathComponent("events.jsonl"),
+      traceOutput: directory.appendingPathComponent("trace.json"),
+      workingDirectory: directory.appendingPathComponent("work"),
+      finiteGraphCase: try fixtureCase(try toolchainPin()),
+      runID: UUID()
+    )
+
+    #expect(throws: TLCProcessError.invalidModuleBundle(.invalidDeclaredClosure(
+      .unreachableModule(module: "Imported", root: "Root")
+    ))) {
+      _ = try request.stageDeclaredBundle()
+    }
+  }
+
   @Test("the TLC pin matches the locked standard-module inventory")
   func pinnedInventoryMatchesTheToolchainLock() throws {
     let root = URL(fileURLWithPath: #filePath)

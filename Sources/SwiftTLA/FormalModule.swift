@@ -23,6 +23,8 @@ public struct TLAModuleFile: Sendable, Equatable {
 public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStringConvertible {
   case duplicateModule(String)
   case missingModule(module: String, importedBy: String, line: Int)
+  case undeclaredModule(module: String, root: String)
+  case unreachableModule(module: String, root: String)
   case cyclicModule(module: String, path: [String])
 
   public var description: String {
@@ -31,6 +33,10 @@ public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStr
       return "The module bundle contains more than one \(name).tla source file."
     case .missingModule(let module, let importedBy, let line):
       return "\(importedBy).tla line \(line) requires \(module).tla, but the bundle does not contain it."
+    case .undeclaredModule(let module, let root):
+      return "The bundle rooted at \(root).tla contains undeclared module \(module).tla."
+    case .unreachableModule(let module, let root):
+      return "The declared module \(module).tla is not reachable from \(root).tla."
     case .cyclicModule(let module, let path):
       return "The module bundle has a cycle through \(module): \(path.joined(separator: " -> "))."
     }
@@ -39,7 +45,7 @@ public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStr
 
 /// The complete source input required to run TLC for one SwiftTLA model.
 public struct TLAModuleBundle: Sendable, Equatable {
-  /// One linked module's provenance in a compiler-produced bundle.
+  /// One linked module's provenance in a module bundle.
   public struct OwnershipEntry: Sendable, Equatable, Codable {
     public let moduleName: String
     public let owningRoot: String
@@ -76,7 +82,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
       ownership: [OwnershipEntry],
       dependencies: [ModuleDependency]
     )
-    case external
+    case external(dependencies: [ModuleDependency])
   }
 
   public let root: TLAModuleFile
@@ -86,7 +92,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
   init(
     root: TLAModuleFile,
     imports: [TLAModuleFile] = [],
-    provenance: Provenance = .external
+    provenance: Provenance
   ) {
     self.root = root
     self.imports = imports
@@ -94,18 +100,24 @@ public struct TLAModuleBundle: Sendable, Equatable {
   }
 
   /// Creates a bundle supplied by an external formal-source boundary.
+  /// The imports contain the complete nonstandard module closure.
   package static func external(
     root: TLAModuleFile,
-    imports: [TLAModuleFile] = []
+    imports: [TLAModuleFile] = [],
+    dependencies: [ModuleDependency] = []
   ) -> Self {
-    Self(root: root, imports: imports, provenance: .external)
+    return Self(
+      root: root,
+      imports: imports,
+      provenance: .external(dependencies: dependencies)
+    )
   }
 
   public var tla: String { root.tla }
   public var cfg: String { root.cfg ?? "" }
   public var files: [TLAModuleFile] { imports + [root] }
 
-  /// Checks that compiler-rendered files materialize their declared closure.
+  /// Checks that the bundle materializes its declared module closure.
   public func validateDeclaredClosure() throws {
     var sources: [String: TLAModuleFile] = [:]
     for file in files {
@@ -115,23 +127,55 @@ public struct TLAModuleBundle: Sendable, Equatable {
       sources[file.name] = file
     }
 
-    guard case let .compiled(_, ownership, dependencies) = provenance else {
-      return
+    let dependencies: [ModuleDependency]
+    let expectedModules: Set<String>
+    let ownsRoot: Bool
+    switch provenance {
+    case .compiled(_, let compiledOwnership, let compiledDependencies):
+      dependencies = compiledDependencies
+      expectedModules = Set(compiledOwnership.map(\.moduleName))
+      ownsRoot = compiledOwnership.contains(where: {
+        $0.moduleName == root.name && $0.owningRoot == root.name
+      })
+    case .external(let declaredDependencies):
+      dependencies = declaredDependencies
+      expectedModules = Set(sources.keys)
+      ownsRoot = true
     }
-
-    let expectedModules = Set(ownership.map(\.moduleName))
-    guard expectedModules == Set(sources.keys),
-          ownership.contains(where: { $0.moduleName == root.name }) else {
+    guard ownsRoot else {
       throw TLAModuleBundleIntegrityError.missingModule(
         module: root.name,
         importedBy: root.name,
         line: 0
       )
     }
+    let missingModules = expectedModules.subtracting(sources.keys)
+    if let missing = missingModules.sorted().first {
+      let importingModule = dependencies.first(where: {
+        $0.importedModule == missing
+      })?.importingModule ?? root.name
+      throw TLAModuleBundleIntegrityError.missingModule(
+        module: missing,
+        importedBy: importingModule,
+        line: 0
+      )
+    }
+    if let unexpected = Set(sources.keys).subtracting(expectedModules).sorted().first {
+      throw TLAModuleBundleIntegrityError.undeclaredModule(
+        module: unexpected,
+        root: root.name
+      )
+    }
 
     for dependency in dependencies {
-      guard sources[dependency.importingModule] != nil,
-            sources[dependency.importedModule] != nil else {
+      guard sources.keys.contains(dependency.importingModule) else {
+        throw TLAModuleBundleIntegrityError.missingModule(
+          module: dependency.importingModule,
+          importedBy: root.name,
+          line: 0
+        )
+      }
+      guard sources.keys.contains(dependency.importedModule) else {
         throw TLAModuleBundleIntegrityError.missingModule(
           module: dependency.importedModule,
           importedBy: dependency.importingModule,
@@ -158,6 +202,12 @@ public struct TLAModuleBundle: Sendable, Equatable {
     }
 
     try visit(root.name)
+    if let unreachable = Set(sources.keys).subtracting(visited).sorted().first {
+      throw TLAModuleBundleIntegrityError.unreachableModule(
+        module: unreachable,
+        root: root.name
+      )
+    }
   }
 }
 

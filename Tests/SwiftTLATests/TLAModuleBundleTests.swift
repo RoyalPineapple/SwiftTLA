@@ -45,6 +45,52 @@ private struct InstancedFormalModuleGeneratedModel {
 
 @Suite("TLA+ module bundles")
 struct TLAModuleBundleTests {
+  @Test("an external bundle requires a rooted dependency graph")
+  func externalBundleRequiresRootedDependencies() {
+    let root = TLAModuleFile(name: "Root", tla: "---- MODULE Root ----\n====\n")
+    let imported = TLAModuleFile(name: "Imported", tla: "---- MODULE Imported ----\n====\n")
+    let disconnected = TLAModuleBundle.external(root: root, imports: [imported])
+
+    #expect(throws: TLAModuleBundleIntegrityError.unreachableModule(
+      module: "Imported",
+      root: "Root"
+    )) {
+      try disconnected.validateDeclaredClosure()
+    }
+
+    let connected = TLAModuleBundle.external(
+      root: root,
+      imports: [imported],
+      dependencies: [.init(
+        importingModule: "Root",
+        importedModule: "Imported",
+        structuralPath: ["Root", "Imported"]
+      )]
+    )
+    #expect(throws: Never.self) {
+      try connected.validateDeclaredClosure()
+    }
+  }
+
+  @Test("a compiled bundle rejects an undeclared source file")
+  func compiledBundleRejectsUndeclaredSource() throws {
+    let compiled = try TLASpec("Root") {}.compile().renderedTLAModuleBundle()
+    let bundle = TLAModuleBundle(
+      root: compiled.root,
+      imports: compiled.imports + [
+        TLAModuleFile(name: "Unexpected", tla: "---- MODULE Unexpected ----\n====\n")
+      ],
+      provenance: compiled.provenance
+    )
+
+    #expect(throws: TLAModuleBundleIntegrityError.undeclaredModule(
+      module: "Unexpected",
+      root: "Root"
+    )) {
+      try bundle.validateDeclaredClosure()
+    }
+  }
+
   @Test("a generated model preserves its imported module")
   func generatedModelRetainsImportedModule() throws {
     let bundle = try ImportedFormalModuleGeneratedModel.spec.compile().renderedTLAModuleBundle()
