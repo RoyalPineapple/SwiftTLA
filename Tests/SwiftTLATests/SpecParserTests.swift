@@ -78,7 +78,7 @@ private func parserEnum(
     private func parseAlgorithm(
         _ closure: ClosureExprSyntax,
         enumDefinitions: [ParserEnumDefinition] = []
-    ) -> SpecParser.ParsedSpecComponents {
+    ) -> ParsedSpecComponents {
         SpecParser.parseSpecClosure(
             closure,
             enumDefinitions: [controlLabels] + enumDefinitions
@@ -86,14 +86,14 @@ private func parserEnum(
     }
 
     private func compile(
-        _ parsed: SpecParser.ParsedSpecComponents,
+        _ parsed: ParsedSpecComponents,
         named name: String
     ) throws -> CompiledSpecification {
         try parsed.compile(specificationName: name)
     }
 
     private func loweredSource(
-        _ parsed: SpecParser.ParsedSpecComponents,
+        _ parsed: ParsedSpecComponents,
         named name: String
     ) throws -> TLASpec {
         try parsed.sourceModel(specificationName: name).loweredSourceModel()
@@ -1856,7 +1856,10 @@ private enum ParserNode: String, FiniteTLAValueDomain {
                 Stop()
             }
         })
-        #expect(parsed.algorithmFidelityTokens == [AlgorithmFidelityToken(model: built.model)])
+        #expect(
+            parsed.sourceAlgorithms.first.map { algorithmCompilationEncoding($0.model) }
+                == algorithmCompilationEncoding(built.model)
+        )
     }
 
     @Test func typedFormalDefinitionParsesClosureBindersAndLocalRecursion() throws {

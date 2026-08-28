@@ -272,9 +272,6 @@ public struct TLASpec: Sendable {
   public let refinements: [RefinementDecl]
   public let symmetrySets: [SymmetrySet]
   public let symmetricCollections: [SymmetricCollectionDecl]
-  /// Opaque source-level Algorithm evidence. This is distinct from the
-  /// lowered variables/actions and never exposes the Algorithm IR.
-  let algorithmFidelityTokens: [AlgorithmFidelityToken]
   /// Canonical Algorithm declarations retained solely for source rendering.
   ///
   /// The formal runtime still uses the one lowered `TLASpec` representation.
@@ -294,7 +291,6 @@ public struct TLASpec: Sendable {
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [], refinements: [RefinementDecl] = [], symmetrySets: [SymmetrySet] = [],
     symmetricCollections: [SymmetricCollectionDecl] = [],
-    algorithmFidelityTokens: [AlgorithmFidelityToken] = [],
     sourceAlgorithms: [Algorithm] = []
   ) {
     self.name = name
@@ -317,7 +313,6 @@ public struct TLASpec: Sendable {
     self.refinements = refinements
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
-    self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }

@@ -1,5 +1,3 @@
-import Foundation
-
 internal struct AlgorithmModel: Sendable {
     let name: String
     let sequentialFairness: SequentialAlgorithmFairness
@@ -346,24 +344,7 @@ internal struct AlgorithmModel: Sendable {
     }
 }
 
-/// Opaque pre-lowering evidence for an authored `Algorithm`.
-///
-/// The token deliberately exposes neither the Algorithm IR nor a lowered
-/// `TLASpec`. It is retained solely to make parser/builder fidelity checks
-/// observe source-level distinctions that lowering can erase.
-public struct AlgorithmFidelityToken: Sendable, Hashable {
-    let canonicalForm: String
-
-    internal init(model: AlgorithmModel) {
-        canonicalForm = algorithmCanonicalEncoding(model)
-    }
-
-    var encodedCanonicalForm: String {
-        Data(canonicalForm.utf8).base64EncodedString()
-    }
-}
-
-private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
+func algorithmCompilationEncoding(_ model: AlgorithmModel) -> String {
     var next = 0
     var nodes: [(path: String, value: String)] = []
     func record(_ path: String, _ value: String) -> String {
