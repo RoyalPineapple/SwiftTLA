@@ -190,5 +190,4 @@ running state, use the generated `Actor`. See
 ## Requirements
 
 - macOS 14+
-- Swift 5.9+
-- Xcode 16+
+- Xcode 16.4

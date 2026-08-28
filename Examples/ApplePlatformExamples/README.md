@@ -1,6 +1,6 @@
 # Apple Platform Examples
 
-This package contains two separate SwiftTLA consumer applications:
+This macOS package contains two separate SwiftTLA consumer applications:
 
 - `bluetooth-example`: a CoreBluetooth central and per-peripheral actor example.
 - `bluetooth-cli`: the same Bluetooth actor as a terminal scanner. Use

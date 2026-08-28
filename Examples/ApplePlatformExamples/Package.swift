@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "ApplePlatformExamples",
-    platforms: [.macOS(.v14), .iOS(.v17), .macCatalyst(.v17), .tvOS(.v17), .watchOS(.v10)],
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "Bluetooth", targets: ["Bluetooth"]),
         .library(name: "AVPipeline", targets: ["AVPipeline"]),
