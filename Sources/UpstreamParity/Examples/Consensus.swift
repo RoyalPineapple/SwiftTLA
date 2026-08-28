@@ -55,14 +55,9 @@ package struct ConsensusModel: Sendable {
 }
 
 extension Example {
-    package static let consensus = Entry(
-        id: "byzpaxos/Consensus",
-        upstreamSpec: "byzpaxos",
-        upstreamModule: "specifications/byzpaxos/Consensus.tla",
-        upstreamCfg: "specifications/byzpaxos/Consensus.cfg",
+    package static let consensus = FiniteModelFixture(
         expectedDistinct: 4,
         maximumStateLimit: 50_000,
         spec: ConsensusModel.spec,
-        notes: "Published PlusCal consensus safety model with Value = {v1, v2, v3}."
     )
 }

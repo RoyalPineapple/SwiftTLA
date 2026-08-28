@@ -68,14 +68,9 @@ extension Example {
     /// This native count is not an upstream-TLC parity claim: TLC's `CHOOSE`
     /// ordering is an external implementation detail that still needs a graph
     /// comparison before this entry can be marked as parity-validated.
-    package static let reachable = Entry(
-        id: "MisraReachability/Reachable",
-        upstreamSpec: "MisraReachability",
-        upstreamModule: "specifications/MisraReachability/Reachable.tla",
-        upstreamCfg: "specifications/MisraReachability/MCReachable.cfg",
+    package static let reachable = FiniteModelFixture(
         expectedDistinct: 8,
         maximumStateLimit: 50_000,
         spec: ReachableModel.spec,
-        notes: "Bounded source port with the published four-node, two-successor graph constraint; native count pinned pending external TLC graph comparison."
     )
 }

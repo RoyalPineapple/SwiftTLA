@@ -144,14 +144,9 @@ package struct ChangRobertsModel: Sendable {
 }
 
 extension Example {
-    package static let changRobertsN3 = Entry(
-        id: "ChangRoberts/ChangRoberts_N3",
-        upstreamSpec: "chang_roberts",
-        upstreamModule: "specifications/chang_roberts/ChangRoberts.tla",
-        upstreamCfg: "specifications/chang_roberts/MCChangRoberts.cfg",
+    package static let changRobertsN3 = FiniteModelFixture(
         expectedDistinct: 137,
         maximumStateLimit: 50_000,
         spec: ChangRobertsModel.spec,
-        notes: "N=3, Id=i. 137 states matching upstream. Generated PlusCal-shaped processes.",
     )
 }

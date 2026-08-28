@@ -61,14 +61,9 @@ package struct BinarySearchModel: Sendable {
 }
 
 extension Example {
-    package static let binarySearch = Entry(
-        id: "LoopInvariance/BinarySearch",
-        upstreamSpec: "LoopInvariance",
-        upstreamModule: "specifications/LoopInvariance/BinarySearch.tla",
-        upstreamCfg: "specifications/LoopInvariance/MCBinarySearch.cfg",
+    package static let binarySearch = FiniteModelFixture(
         expectedDistinct: 27_963,
         maximumStateLimit: 100_000,
         spec: BinarySearchModel.spec,
-        notes: "Published BinarySearch with Values = 1...5 and MaxSeqLen = 8."
     )
 }

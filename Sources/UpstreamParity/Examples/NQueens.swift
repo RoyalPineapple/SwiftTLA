@@ -62,14 +62,9 @@ package struct NQueensModel: Sendable {
 }
 
 extension Example {
-    package static let nQueensFour = Entry(
-        id: "N-Queens/QueensPluscal/FourQueens",
-        upstreamSpec: "N-Queens",
-        upstreamModule: "specifications/N-Queens/QueensPluscal.tla",
-        upstreamCfg: "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.cfg",
+    package static let nQueensFour = FiniteModelFixture(
         expectedDistinct: 786,
         maximumStateLimit: 50_000,
         spec: NQueensModel.spec,
-        notes: "Published sequential PlusCal N-Queens algorithm, specialized to N=4."
     )
 }
