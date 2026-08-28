@@ -204,9 +204,9 @@ func tlaLocationArgumentIdentity(_ argument: String) -> String {
 
 /// The source-controlled declaration for a finite conformance case.
 package struct FiniteGraphManifest: Decodable, Sendable {
-    package static let schema = "FiniteGraphCases"
+    private static let schema = "FiniteGraphCases"
 
-    package let schema: String
+    private let schema: String
     package let cases: [Case]
 
     package struct Case: Decodable, Sendable {

@@ -304,12 +304,11 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       .appendingPathComponent("Tests/Fixtures/FiniteGraph/TLCTrace/violation-counterexample.json")
     let evidence = try TLCTraceParser().parseCounterexample(Data(contentsOf: traceURL))
     #expect(evidence.states.count == 4)
-    #expect(evidence.actions == ["Next", "Next", "Next"])
+    #expect(evidence.transitions.map(\.name) == ["Next", "Next", "Next"])
     #expect(
       evidence.states.map { $0.bindings["x"] } == [
         .integer(0), .integer(1), .integer(2), .integer(3)
       ])
-    #expect(evidence.canonicalTrace(id: "violation").steps.count == 3)
   }
 }
 

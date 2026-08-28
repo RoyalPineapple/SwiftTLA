@@ -558,8 +558,8 @@ struct TLCTemporalAdapterTests {
         traceFails: traceFails)
     }
 
-    static func reference(_ url: URL, path: String) throws -> RetainedFileReference {
-      try RetainedFileReference(path: path, sha256: SHA256.hex(Data(contentsOf: url)))
+    static func reference(_ url: URL, path: String) throws -> SourceInputPin {
+      try SourceInputPin(path: path, sha256: SHA256.hex(Data(contentsOf: url)))
     }
   }
 }

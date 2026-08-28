@@ -27,23 +27,12 @@ package struct TLCCounterexampleAction: Equatable, Sendable {
 }
 
 package struct TLCCounterexampleEvidence: Equatable, Sendable {
-    package let rawJSON: Data
     package let states: [CanonicalState]
     package let transitions: [TLCCounterexampleAction]
 
-    package var actions: [String] { transitions.map(\.name) }
-
-    package init(rawJSON: Data, states: [CanonicalState], transitions: [TLCCounterexampleAction]) {
-        self.rawJSON = rawJSON
+    init(states: [CanonicalState], transitions: [TLCCounterexampleAction]) {
         self.states = states
         self.transitions = transitions
-    }
-
-    package func canonicalTrace(id: String) -> GraphTrace {
-        GraphTrace(
-            id: id,
-            steps: transitions.map { GraphTraceStep(state: $0.source.key, action: $0.name) }
-        )
     }
 }
 
@@ -86,7 +75,7 @@ package struct TLCTraceParser: Sendable {
                 }
             }
         }
-        return TLCCounterexampleEvidence(rawJSON: data, states: states.map(\.state), transitions: transitions)
+        return TLCCounterexampleEvidence(states: states.map(\.state), transitions: transitions)
     }
 
     private struct NumberedState {

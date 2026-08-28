@@ -230,6 +230,21 @@ package enum GraphRunOutcome: Hashable, Sendable {
         if case .exhaustiveSuccess = self { return true }
         return false
     }
+
+    var serializedRecord: [String: String] {
+        switch self {
+        case .exhaustiveSuccess:
+            ["kind": "exhaustiveSuccess"]
+        case .invariantViolation(let message):
+            ["kind": "invariantViolation", "message": message]
+        case .deadlock(let state):
+            ["kind": "deadlock", "state": state.canonicalEncoding]
+        case .incomplete(let reason):
+            ["kind": "incomplete", "reason": reason]
+        case .executionError(let message):
+            ["kind": "executionError", "message": message]
+        }
+    }
 }
 
 package struct GraphTraceStep: Hashable, Sendable {
