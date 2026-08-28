@@ -188,25 +188,27 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
     }
 
     private func candidates() throws -> [(action: Action, compiledState: CompiledState)] {
-        try CompiledRuntime(compilation: compilation).successors(from: compiledState).map { successor in
+        try CompiledRuntime(compilation: compilation).successors(from: compiledState).compactMap { successor in
             let request = CompiledActionRequest(
                 action: successor.action,
                 arguments: successor.arguments
             )
-            let input = try compilation.generatedActionInput(for: request)
+            guard let input = try compilation.generatedActionInput(for: request) else {
+                return nil
+            }
             let plan = compilation.machineSurfacePlan
-            guard actionDecoders.indices.contains(input.ordinal),
-                  plan.actions.indices.contains(input.ordinal) else {
+            guard actionDecoders.indices.contains(input.surfaceOrdinal),
+                  plan.actions.indices.contains(input.surfaceOrdinal) else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .runtime,
-                    path: "machineSurfacePlan.actions[\(input.ordinal)]",
-                    expected: "one generated action decoder and surface action at compiled ordinal \(input.ordinal)",
+                    path: "machineSurfacePlan.actions[\(input.surfaceOrdinal)]",
+                    expected: "one generated action decoder and surface action at generated ordinal \(input.surfaceOrdinal)",
                     actual: "\(actionDecoders.count) decoders and \(plan.actions.count) surface actions",
                     nextSafeAction: "Compile the generated machine from its current source declaration."
                 )
             }
-            let planAction = plan.actions[input.ordinal]
+            let planAction = plan.actions[input.surfaceOrdinal]
             let generatedValues: [_GeneratedMachineValue]
             if let collection = planAction.symmetricCollection {
                 guard input.formalArguments.count == 1,
@@ -214,7 +216,7 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .runtime,
-                        path: "machineSurfacePlan.actions[\(input.ordinal)].\(planAction.swiftIdentifier)",
+                        path: "machineSurfacePlan.actions[\(input.surfaceOrdinal)].\(planAction.swiftIdentifier)",
                         expected: "one compiled argument from \(collection.members.count) declared symmetric members",
                         actual: "\(input.formalArguments.count) arguments: \(input.formalArguments)",
                         nextSafeAction: "Compile the generated machine from its current source declaration."
@@ -226,7 +228,7 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .runtime,
-                        path: "machineSurfacePlan.actions[\(input.ordinal)].\(planAction.swiftIdentifier)",
+                        path: "machineSurfacePlan.actions[\(input.surfaceOrdinal)].\(planAction.swiftIdentifier)",
                         expected: "\(planAction.bindings.count) compiled action arguments",
                         actual: "\(input.formalArguments.count) compiled action arguments",
                         nextSafeAction: "Compile the generated machine from its current source declaration."
@@ -238,12 +240,12 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                 }
             }
             var values = Decoder(generatedValues)
-            let action = try actionDecoders[input.ordinal](&values)
+            let action = try actionDecoders[input.surfaceOrdinal](&values)
             guard values.isAtEnd else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .runtime,
-                    path: "machineSurfacePlan.actions[\(input.ordinal)].decoder",
+                    path: "machineSurfacePlan.actions[\(input.surfaceOrdinal)].decoder",
                     expected: "every generated action value consumed once",
                     actual: "\(values.remainingCount) unconsumed generated action values",
                     nextSafeAction: "Compile the generated machine from its current source declaration."
