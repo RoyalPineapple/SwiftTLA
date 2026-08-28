@@ -220,14 +220,9 @@ package struct PaxosModel: Sendable {
 }
 
 extension Example {
-    package static let paxosSmall = Entry(
-        id: "Paxos/Small",
-        upstreamSpec: "Paxos",
-        upstreamModule: "specifications/Paxos/Paxos.tla",
-        upstreamCfg: "specifications/Paxos/MCPaxos.cfg",
+    package static let paxosSmall = FiniteModelFixture(
         expectedDistinct: 81,
         maximumStateLimit: 50_000,
         spec: PaxosModel.spec,
-        notes: "One acceptor, one proposed value, and ballots 0 and 1."
     )
 }

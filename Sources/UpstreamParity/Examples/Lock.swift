@@ -60,14 +60,9 @@ package struct LockModel: Sendable {
 }
 
 extension Example {
-    package static let lockTwoProcess = Entry(
-        id: "locks_auxiliary_vars/Lock_N2",
-        upstreamSpec: "locks_auxiliary_vars",
-        upstreamModule: "specifications/locks_auxiliary_vars/Lock.tla",
-        upstreamCfg: "specifications/locks_auxiliary_vars/Lock.cfg",
+    package static let lockTwoProcess = FiniteModelFixture(
         expectedDistinct: 12,
         maximumStateLimit: 50_000,
         spec: LockModel.spec,
-        notes: "Two-process PlusCal lock. TLC = 12."
     )
 }

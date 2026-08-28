@@ -74,14 +74,9 @@ package struct PetersonModel: Sendable {
 }
 
 extension Example {
-    package static let petersonTwoProcess = Entry(
-        id: "locks_auxiliary_vars/Peterson_N2",
-        upstreamSpec: "locks_auxiliary_vars",
-        upstreamModule: "specifications/locks_auxiliary_vars/Peterson.tla",
-        upstreamCfg: "specifications/locks_auxiliary_vars/Peterson.cfg",
+    package static let petersonTwoProcess = FiniteModelFixture(
         expectedDistinct: 42,
         maximumStateLimit: 50_000,
         spec: PetersonModel.spec,
-        notes: "Two-process PlusCal Peterson mutex with function-shaped flags and explicit control state."
     )
 }

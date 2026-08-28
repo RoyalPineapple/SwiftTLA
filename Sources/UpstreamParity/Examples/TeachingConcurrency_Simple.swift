@@ -119,25 +119,15 @@ package struct TeachingSimpleN3Model: Sendable {
 }
 
 extension Example {
-    package static let teachingSimpleN2 = Entry(
-        id: "TeachingConcurrency/Simple_N2",
-        upstreamSpec: "TeachingConcurrency",
-        upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
-        upstreamCfg: nil,
+    package static let teachingSimpleN2 = FiniteModelFixture(
         expectedDistinct: 13,
         maximumStateLimit: 50_000,
         spec: TeachingSimpleN2Model.spec,
-        notes: "N=2, one PlusCal process family with function-shaped x, y, and pc state. TLC = 13."
     )
 
-    package static let teachingSimpleN3 = Entry(
-        id: "TeachingConcurrency/Simple_N3",
-        upstreamSpec: "TeachingConcurrency",
-        upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
-        upstreamCfg: nil,
+    package static let teachingSimpleN3 = FiniteModelFixture(
         expectedDistinct: 51,
         maximumStateLimit: 50_000,
         spec: TeachingSimpleN3Model.spec,
-        notes: "N=3, one PlusCal process family with function-shaped x, y, and pc state. TLC = 51."
     )
 }

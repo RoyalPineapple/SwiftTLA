@@ -106,16 +106,3 @@ extension GameOfLifeModel {
         )
     }
 }
-
-extension Example {
-    package static let gameOfLife = Entry(
-        id: "GameOfLife/N4",
-        upstreamSpec: "GameOfLife",
-        upstreamModule: "specifications/GameOfLife/GameOfLife.tla",
-        upstreamCfg: "specifications/GameOfLife/GameOfLife.cfg",
-        expectedDistinct: 2,
-        maximumStateLimit: 50_000,
-        spec: GameOfLifeModel.spec,
-        notes: "N=4 blinker over a typed finite position domain and total-function grid."
-    )
-}

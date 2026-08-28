@@ -160,14 +160,9 @@ package struct DijkstraMutexModel: Sendable {
 }
 
 extension Example {
-    package static let dijkstraMutex = Entry(
-        id: "dijkstra-mutex/LSpec_N3",
-        upstreamSpec: "dijkstra-mutex",
-        upstreamModule: "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.tla",
-        upstreamCfg: "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.cfg",
+    package static let dijkstraMutex = FiniteModelFixture(
         expectedDistinct: 90_882,
         maximumStateLimit: 100_000,
         spec: DijkstraMutexModel.spec,
-        notes: "Published three-process Dijkstra mutex. TLC = 90,882."
     )
 }

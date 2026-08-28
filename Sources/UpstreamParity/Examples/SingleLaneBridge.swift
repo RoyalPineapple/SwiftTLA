@@ -307,16 +307,3 @@ package struct SingleLaneBridgeModel: Sendable {
         }
     }
 }
-
-extension Example {
-    static let singleLaneBridge = Example.Entry(
-        id: "SingleLaneBridge/MC",
-        upstreamSpec: "SingleLaneBridge",
-        upstreamModule: "specifications/SingleLaneBridge/SingleLaneBridge.tla",
-        upstreamCfg: "specifications/SingleLaneBridge/MC.cfg",
-        expectedDistinct: 3605,
-        maximumStateLimit: 50_000,
-        spec: SingleLaneBridgeModel.spec,
-        notes: "2R+2L, bridge {4,5}. Typed finite domains and direct actions. 3605 states.",
-    )
-}

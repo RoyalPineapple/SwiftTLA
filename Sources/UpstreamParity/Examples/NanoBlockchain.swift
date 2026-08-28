@@ -315,16 +315,3 @@ package struct NanoBlockchainModel: Sendable {
         )
     }
 }
-
-extension Example {
-    package static let nanoBlockchain = Entry(
-        id: "NanoBlockchain/Small",
-        upstreamSpec: "NanoBlockchain",
-        upstreamModule: "specifications/NanoBlockchain/Nano.tla",
-        upstreamCfg: "specifications/NanoBlockchain/MCNanoSmall.cfg",
-        expectedDistinct: 24577,
-        maximumStateLimit: 50_000,
-        spec: NanoBlockchainModel.spec,
-        notes: "2 nodes and 3 hashes with typed blocks, signatures, ledgers, and received sets."
-    )
-}

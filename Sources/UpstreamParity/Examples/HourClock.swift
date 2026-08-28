@@ -16,14 +16,9 @@ package struct HourClockModel: Sendable {
 }
 
 extension Example {
-    package static let hourClock = Entry(
-        id: "SpecifyingSystems/HourClock",
-        upstreamSpec: "SpecifyingSystems",
-        upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
+    package static let hourClock = FiniteModelFixture(
         expectedDistinct: 12,
         maximumStateLimit: 50_000,
         spec: HourClockModel.spec,
-        notes: "Direct single-action TLA+ model. It exactly matches the published 12-state graph.",
     )
 }

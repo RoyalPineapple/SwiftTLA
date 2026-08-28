@@ -103,14 +103,9 @@ package struct AsynchInterfaceModel: Sendable {
 }
 
 extension Example {
-    package static let asynchInterface = Entry(
-        id: "SpecifyingSystems/AsynchInterface",
-        upstreamSpec: "SpecifyingSystems",
-        upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",
+    package static let asynchInterface = FiniteModelFixture(
         expectedDistinct: 12,
         maximumStateLimit: 50_000,
         spec: AsynchInterfaceModel.spec,
-        notes: "Asynchronous interface record, authored as a typed record and finite formal initial domain. TLC = 12."
     )
 }

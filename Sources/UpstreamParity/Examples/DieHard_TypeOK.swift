@@ -26,14 +26,9 @@ package struct DieHardModel: Sendable {
 }
 
 extension Example {
-    package static let dieHardTypeOK = Entry(
-        id: "DieHard/TypeOK",
-        upstreamSpec: "DieHard",
-        upstreamModule: "specifications/DieHard/DieHard.tla",
-        upstreamCfg: nil,
+    package static let dieHardTypeOK = FiniteModelFixture(
         expectedDistinct: 16,
         maximumStateLimit: 50_000,
         spec: DieHardModel.spec,
-        notes: "Upstream cfg adds NotSolved (intentional fail). TypeOK-only = 16 both sides.",
     )
 }

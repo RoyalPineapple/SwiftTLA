@@ -237,14 +237,9 @@ package enum LeastCircularSubstringModel {
 }
 
 extension Example {
-    package static let leastCircularSubstring = Entry(
-        id: "LeastCircularSubstring/MCLeastCircularSubstringSmall",
-        upstreamSpec: "LeastCircularSubstring",
-        upstreamModule: "specifications/LeastCircularSubstring/LeastCircularSubstring.tla",
-        upstreamCfg: "specifications/LeastCircularSubstring/MCLeastCircularSubstringSmall.cfg",
+    package static let leastCircularSubstring = FiniteModelFixture(
         expectedDistinct: 8_554,
         maximumStateLimit: 10_000,
         spec: LeastCircularSubstringModel.spec,
-        notes: "Published Kellogg Booth least-circular-substring model with CharSetSize = 2 and MaxStringLength = 6."
     )
 }

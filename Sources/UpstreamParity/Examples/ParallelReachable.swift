@@ -97,14 +97,9 @@ extension Example {
     /// A bounded source port of `MCParReach` with the published finite
     /// process and graph constraints. Its native count is pinned here;
     /// external TLC graph comparison remains separate evidence.
-    package static let parallelReachable = Entry(
-        id: "MisraReachability/ParReach",
-        upstreamSpec: "MisraReachability",
-        upstreamModule: "specifications/MisraReachability/ParReach.tla",
-        upstreamCfg: "specifications/MisraReachability/MCParReach.cfg",
+    package static let parallelReachable = FiniteModelFixture(
         expectedDistinct: 393,
         maximumStateLimit: 50_000,
         spec: ParallelReachableModel.spec,
-        notes: "Bounded source port with four nodes, two workers, and a static two-successors-per-node graph selection."
     )
 }

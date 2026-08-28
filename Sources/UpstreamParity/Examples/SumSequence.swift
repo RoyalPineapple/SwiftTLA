@@ -44,14 +44,9 @@ extension Example {
     /// This source model has no published TLC configuration. The expected
     /// state count is pinned by the local finite bounds above, not claimed as
     /// upstream TLC parity.
-    package static let sumSequence = Entry(
-        id: "LoopInvariance/SumSequence",
-        upstreamSpec: "LoopInvariance",
-        upstreamModule: "specifications/LoopInvariance/SumSequence.tla",
-        upstreamCfg: nil,
+    package static let sumSequence = FiniteModelFixture(
         expectedDistinct: 182,
         maximumStateLimit: 50_000,
         spec: SumSequenceModel.spec,
-        notes: "Bounded source port: values -1...1 and sequence length at most three. No published TLC model configuration."
     )
 }

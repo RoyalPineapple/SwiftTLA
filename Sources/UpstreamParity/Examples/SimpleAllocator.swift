@@ -100,16 +100,3 @@ package struct SimpleAllocatorModel: Sendable {
         }
     }
 }
-
-extension Example {
-    package static let simpleAllocator = Entry(
-        id: "allocator/SimpleAllocator",
-        upstreamSpec: "allocator",
-        upstreamModule: "specifications/allocator/SimpleAllocator.tla",
-        upstreamCfg: "specifications/allocator/SimpleAllocator.cfg",
-        expectedDistinct: 400,
-        maximumStateLimit: 50_000,
-        spec: SimpleAllocatorModel.spec,
-        notes: "Clients={c1,c2,c3} Resources={r1,r2}. Request/Allocate/Return. TLC = 400.",
-    )
-}

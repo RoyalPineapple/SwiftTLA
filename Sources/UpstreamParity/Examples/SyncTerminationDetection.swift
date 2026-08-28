@@ -68,14 +68,9 @@ package struct SyncTerminationDetectionModel: Sendable {
 }
 
 extension Example {
-    package static let syncTD = Entry(
-        id: "ewd840/SyncTerminationDetection",
-        upstreamSpec: "ewd840",
-        upstreamModule: "specifications/ewd840/SyncTerminationDetection.tla",
-        upstreamCfg: "specifications/ewd840/SyncTerminationDetection.cfg",
+    package static let syncTD = FiniteModelFixture(
         expectedDistinct: 9,
         maximumStateLimit: 50_000,
         spec: SyncTerminationDetectionModel.spec,
-        notes: "Three-node abstract termination detection, using typed finite functions. TLC = 9."
     )
 }

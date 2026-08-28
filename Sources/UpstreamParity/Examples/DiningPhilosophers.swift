@@ -175,14 +175,9 @@ package struct DiningPhilosophersModel: Sendable {
 }
 
 extension Example {
-    static let diningPhilosophersNP5 = Example.Entry(
-        id: "DiningPhilosophers/DiningPhilosophers",
-        upstreamSpec: "DiningPhilosophers",
-        upstreamModule: "specifications/DiningPhilosophers/DiningPhilosophers.tla",
-        upstreamCfg: "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
+    static let diningPhilosophersNP5 = FiniteModelFixture(
         expectedDistinct: 67,
         maximumStateLimit: 50_000,
         spec: DiningPhilosophersModel.spec,
-        notes: "NP=5. Canonical PlusCal-shaped process model with typed fork records.",
     )
 }

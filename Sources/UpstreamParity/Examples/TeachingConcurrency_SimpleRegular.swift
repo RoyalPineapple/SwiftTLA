@@ -68,14 +68,9 @@ package struct TeachingSimpleRegularN8Model: Sendable {
 }
 
 extension Example {
-    package static let teachingSimpleRegularN8 = Entry(
-        id: "TeachingConcurrency/SimpleRegular_N8",
-        upstreamSpec: "TeachingConcurrency",
-        upstreamModule: "specifications/TeachingConcurrency/SimpleRegular.tla",
-        upstreamCfg: "specifications/TeachingConcurrency/SimpleRegular.cfg",
+    package static let teachingSimpleRegularN8 = FiniteModelFixture(
         expectedDistinct: 277_726,
         maximumStateLimit: 300_000,
         spec: TeachingSimpleRegularN8Model.spec,
-        notes: "N=8 regular-register process family. TLC = 277,726."
     )
 }

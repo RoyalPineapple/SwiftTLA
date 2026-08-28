@@ -51,14 +51,9 @@ package struct FindHighestModel: Sendable {
 }
 
 extension Example {
-    package static let findHighest = Entry(
-        id: "LearnProofs/FindHighest",
-        upstreamSpec: "LearnProofs",
-        upstreamModule: "specifications/LearnProofs/FindHighest.tla",
-        upstreamCfg: "specifications/LearnProofs/MCFindHighest.cfg",
+    package static let findHighest = FiniteModelFixture(
         expectedDistinct: 742,
         maximumStateLimit: 50_000,
         spec: FindHighestModel.spec,
-        notes: "Published FindHighest with MaxLength = 3 and MaxNat = 4."
     )
 }

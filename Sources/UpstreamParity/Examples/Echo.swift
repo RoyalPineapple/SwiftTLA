@@ -126,14 +126,9 @@ extension Example {
     /// A bounded source port of MCEcho: three fully connected nodes and `a`
     /// as TLC's deterministic choice of initiator. The typed record spells
     /// the upstream `sndr` field as the clearer Swift name `sender`.
-    package static let echo = Entry(
-        id: "echo/Echo",
-        upstreamSpec: "echo",
-        upstreamModule: "specifications/echo/Echo.tla",
-        upstreamCfg: "specifications/echo/MCEcho.cfg",
+    package static let echo = FiniteModelFixture(
         expectedDistinct: 75,
         maximumStateLimit: 50_000,
         spec: EchoModel.spec,
-        notes: "Bounded Echo source port on the three-node fully connected graph. Native and upstream TLC state count = 75; exact graph comparison remains separate evidence."
     )
 }

@@ -143,14 +143,9 @@ package struct BakeryN2Model: Sendable {
 }
 
 extension Example {
-    package static let bakeryN2 = Entry(
-        id: "Bakery/N2",
-        upstreamSpec: "Bakery-Boulangerie",
-        upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",
-        upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",
+    package static let bakeryN2 = FiniteModelFixture(
         expectedDistinct: 2303,
         maximumStateLimit: 50_000,
         spec: BakeryN2Model.spec,
-        notes: "N=2, MaxNat=2. One fair PlusCal process family lowered to typed functions and program counters."
     )
 }

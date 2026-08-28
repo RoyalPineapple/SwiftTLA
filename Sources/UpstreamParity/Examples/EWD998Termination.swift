@@ -169,14 +169,9 @@ package struct EWD998TerminationModel: Sendable {
 }
 
 extension Example {
-    package static let ewd998 = Entry(
-        id: "ewd998/AsyncTerminationDetection",
-        upstreamSpec: "ewd998",
-        upstreamModule: "specifications/ewd998/AsyncTerminationDetection.tla",
-        upstreamCfg: "specifications/ewd998/AsyncTerminationDetection.cfg",
+    package static let ewd998 = FiniteModelFixture(
         expectedDistinct: 4097,
         maximumStateLimit: 50_000,
         spec: EWD998TerminationModel.spec,
-        notes: "N=4. Typed active/pending functions and parameterized asynchronous actions. Constraint pending<=3. Safe."
     )
 }
