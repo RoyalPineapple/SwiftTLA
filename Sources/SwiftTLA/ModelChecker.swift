@@ -122,7 +122,7 @@ package struct ModelChecker {
         self.configuration = configuration
     }
 
-    func check() throws -> CheckResult {
+    func check() throws -> ModelCheckOutcome {
         let exploration = try explore()
         if let result = try RefinementChecker(compilation: compilation).check(exploration) {
             return result
@@ -133,20 +133,34 @@ package struct ModelChecker {
 
     package func explore() throws -> ModelExplorationResult { try runExploration() }
 
-    func checkLiveness() throws -> CheckResult {
+    func checkLiveness() throws -> ModelCheckOutcome {
         let exploration = try explore()
         guard case .ok = exploration.result else { return exploration.result }
         guard compilation.semantics.temporalProperties.isEmpty == false else { return exploration.result }
 
-        let analyses = exploration.analyzeTemporalProperties(in: compilation)
+        let analyses = try exploration.analyzeTemporalProperties(in: compilation)
         for (property, result) in zip(compilation.semantics.temporalProperties, analyses) {
             switch result.status {
             case .satisfied:
                 continue
             case .violated:
-                return .livenessViolated("\(property.name): \(result.reason.rawValue)")
+                guard let witness = result.witness else {
+                    throw CompilationDiagnostic(
+                        code: .compilationIdentityMismatch,
+                        stage: .checking,
+                        path: "temporalProperties.\(property.name).witness",
+                        expected: "a fair-lasso witness for the violated property",
+                        actual: "the violated analysis has no witness",
+                        nextSafeAction: "Explore the compiled specification again before checking liveness."
+                    )
+                }
+                return .livenessViolated(
+                    property: property.name,
+                    reason: result.reason,
+                    witness: witness
+                )
             case .unavailable:
-                return .error("Liveness unavailable: \(result.diagnostic ?? result.reason.rawValue)")
+                return .livenessUnavailable(property: property.name, reason: result.reason)
             }
         }
         return .ok(statesCount: exploration.graph.states.count)
@@ -161,13 +175,13 @@ package struct ModelChecker {
         let initialStates = try runtime.initialStates()
         guard !initialStates.isEmpty else {
             return emptyExploration(
-                result: .error("No initial states")
+                result: .noInitialStates
             )
         }
 
         guard try runtime.assumeHolds(in: initialStates[0]) else {
             return emptyExploration(
-                result: .error("ASSUME failed")
+                result: .assumptionViolated
             )
         }
 
@@ -192,7 +206,7 @@ package struct ModelChecker {
 
 
     private func emptyExploration(
-        result: CheckResult
+        result: ModelCheckOutcome
     ) -> ModelExplorationResult {
         ModelExplorationResult(
             graph: StateGraph(
@@ -379,7 +393,6 @@ package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case refinement
     case assumption
     case initialState
-    case evaluation
 }
 
 /// One safely projected state in a counterexample trace.
@@ -401,10 +414,6 @@ package struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible 
 }
 
 /// Inspection-ready evidence for a model-checking failure.
-///
-/// This companion is the public diagnostic boundary: it retains the named formal
-/// property, the failing state, counterexample trace when there is one, the
-/// expected condition, actual result, mutation outcome, and recovery step.
 package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
     public let kind: ModelCheckingFailureKind
     public let subject: String?
@@ -412,7 +421,6 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
     public let actual: String
     public let state: TLAStateProjectionResult?
     public let trace: [ModelTraceEvidence]
-    public let stateCommitted: Bool
     public let nextSafeAction: String
 
     public init(
@@ -422,7 +430,6 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
         actual: String,
         state: TLAStateProjectionResult? = nil,
         trace: [ModelTraceEvidence] = [],
-        stateCommitted: Bool = false,
         nextSafeAction: String
     ) {
         self.kind = kind
@@ -431,7 +438,6 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
         self.actual = actual
         self.state = state
         self.trace = trace
-        self.stateCommitted = stateCommitted
         self.nextSafeAction = nextSafeAction
     }
 
@@ -447,19 +453,25 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
             stateText = ""
         }
         let traceText = trace.isEmpty ? "" : " Trace: " + trace.map(\.description).joined(separator: " → ") + "."
-        return "\(kind.rawValue)\(label): expected \(expected); found \(actual).\(stateText)\(traceText) State was \(stateCommitted ? "committed" : "not committed"). Next: \(nextSafeAction)"
+        return "\(kind.rawValue)\(label): expected \(expected); found \(actual).\(stateText)\(traceText) Next: \(nextSafeAction)"
     }
 }
 
-package indirect enum CheckResult: CustomStringConvertible {
+package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
     case ok(statesCount: Int)
     case invariantViolated(invariant: String, state: TLAStateProjection, trace: [TraceStep])
     case depthExceeded(statesCount: Int, limit: Int)
     case deadlocked(state: TLAStateProjection)
-    case livenessViolated(String)
-    case error(String)
+    case noInitialStates
+    case assumptionViolated
+    case livenessViolated(
+        property: String,
+        reason: TemporalDiagnosticReason,
+        witness: FairLassoWitness
+    )
+    case livenessUnavailable(property: String, reason: TemporalDiagnosticReason)
     case refinementViolated(refinement: String, evidence: RefinementFailureEvidence)
-    case refinementUnproven(refinement: String, exploration: CheckResult)
+    case refinementUnproven(refinement: String, exploration: ModelCheckOutcome)
 
     /// The typed explanation of a failed check, including projected state and
     /// counterexample evidence.
@@ -492,23 +504,35 @@ package indirect enum CheckResult: CustomStringConvertible {
                 state: .projected(state),
                 nextSafeAction: "Inspect the guards and explicit unchanged clauses for this state."
             )
-        case .livenessViolated(let message):
+        case .noInitialStates:
+            return .init(
+                kind: .initialState,
+                expected: "at least one initial state",
+                actual: "the compiled initial-state relation is empty",
+                nextSafeAction: "Declare an initializer with at least one formal value."
+            )
+        case .assumptionViolated:
+            return .init(
+                kind: .assumption,
+                expected: "the compiled assumption to evaluate to true",
+                actual: "false",
+                nextSafeAction: "Revise the assumption or its constant inputs."
+            )
+        case .livenessViolated(let property, let reason, _):
             return .init(
                 kind: .liveness,
+                subject: property,
                 expected: "the declared temporal property to hold",
-                actual: message,
+                actual: reason.rawValue,
                 nextSafeAction: "Inspect the lasso or fairness diagnostic and revise the temporal property or transition relation."
             )
-        case .error(let message):
-            let kind: ModelCheckingFailureKind
-            if message == "No initial states" { kind = .initialState }
-            else if message == "ASSUME failed" { kind = .assumption }
-            else { kind = .evaluation }
+        case .livenessUnavailable(let property, let reason):
             return .init(
-                kind: kind,
-                expected: kind == .assumption ? "ASSUME to evaluate to true" : "a complete evaluable model-checking step",
-                actual: message,
-                nextSafeAction: "Inspect the named construct in the diagnostic and correct the model before rerunning verification."
+                kind: .liveness,
+                subject: property,
+                expected: "complete typed liveness evidence",
+                actual: reason.rawValue,
+                nextSafeAction: "Complete the declared exploration inputs before checking the temporal property."
             )
         case .refinementViolated(let refinement, let evidence):
             switch evidence {
@@ -550,7 +574,8 @@ package indirect enum CheckResult: CustomStringConvertible {
             return diagnostic?.description ?? "Invariant violation"
         case .depthExceeded(let count, let l):
             return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
-        case .deadlocked, .livenessViolated, .error, .refinementViolated:
+        case .deadlocked, .noInitialStates, .assumptionViolated,
+             .livenessViolated, .livenessUnavailable, .refinementViolated:
             return diagnostic?.description ?? "Verification diagnostic unavailable"
         case .refinementUnproven:
             return diagnostic?.description ?? "Refinement is unproven"
@@ -558,7 +583,7 @@ package indirect enum CheckResult: CustomStringConvertible {
     }
 }
 
-package struct TraceStep: CustomStringConvertible {
+package struct TraceStep: Sendable, CustomStringConvertible {
     public let state: TLAStateProjection
     public let action: String
     public var description: String { "[" + action + "] " + state.description }

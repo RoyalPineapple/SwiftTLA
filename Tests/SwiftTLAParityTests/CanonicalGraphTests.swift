@@ -152,4 +152,36 @@ struct CanonicalGraphTests {
             ])
         }
     }
+
+    @Test("typed checker failures become graph boundary outcomes")
+    func exportsTypedCheckerFailures() throws {
+        let value = Var<Int>("value")
+        let configuration = try FiniteExplorationConfiguration(
+            maximumStateLimit: 10,
+            symmetryReduction: .disabled
+        )
+        let cases: [(TLASpec, GraphRunOutcome)] = [
+            (
+                TLASpec("EmptyInitialStateRelation") {
+                    Variable(value, in: [Int]())
+                },
+                .executionError("the compiled initial-state relation is empty")
+            ),
+            (
+                TLASpec("FalseCompiledAssumption") {
+                    Assume(false)
+                    Variable(value, 0)
+                },
+                .executionError("the compiled assumption evaluated to false")
+            )
+        ]
+
+        for (specification, expected) in cases {
+            let exploration = try ModelChecker(
+                compilation: specification.compile(),
+                configuration: configuration
+            ).explore()
+            #expect(try SwiftGraphExporter().export(exploration).outcome == expected)
+        }
+    }
 }

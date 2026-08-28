@@ -91,7 +91,7 @@ package struct SwiftGraphExporter: Sendable {
   }
 
   private func canonicalOutcome(
-    _ result: CheckResult,
+    _ result: ModelCheckOutcome,
     states: [StateGraph.StateID: CanonicalState]
   ) throws -> GraphRunOutcome {
     switch result {
@@ -107,10 +107,14 @@ package struct SwiftGraphExporter: Sendable {
       return .deadlock(canonical.key)
     case .depthExceeded:
       return .incomplete(reason: result.description)
-    case .livenessViolated(let message):
-      return .invariantViolation(message)
-    case .error(let message):
-      return .executionError(message)
+    case .noInitialStates:
+      return .executionError("the compiled initial-state relation is empty")
+    case .assumptionViolated:
+      return .executionError("the compiled assumption evaluated to false")
+    case .livenessViolated(let property, let reason, _):
+      return .invariantViolation("\(property): \(reason.rawValue)")
+    case .livenessUnavailable:
+      return .incomplete(reason: result.description)
     case .refinementViolated(let refinement, _):
       return .invariantViolation(refinement)
     case .refinementUnproven:
@@ -119,7 +123,7 @@ package struct SwiftGraphExporter: Sendable {
   }
 
   private func canonicalTrace(
-    _ result: CheckResult,
+    _ result: ModelCheckOutcome,
     states: [StateGraph.StateID: CanonicalState]
   ) throws -> GraphTrace? {
     guard case .invariantViolated(_, _, let trace) = result else { return nil }

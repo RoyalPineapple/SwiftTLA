@@ -12,7 +12,7 @@ struct TemporalSymmetryCheckTests {
         compilation: compilation,
         configuration: temporalCase.exploration
       ).explore()
-      let analyses = exploration.analyzeTemporalProperties(in: compilation)
+      let analyses = try exploration.analyzeTemporalProperties(in: compilation)
       #expect(analyses.allSatisfy { $0.status == .violated })
     }
   }

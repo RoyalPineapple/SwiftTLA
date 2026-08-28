@@ -47,7 +47,7 @@ import UpstreamParity
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
+    let results = try LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
       .analyze(initialStateIDs: exploration.initialStateIDs)
     #expect(results.map(\.status) == [.satisfied])
   }
@@ -62,7 +62,7 @@ import UpstreamParity
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
+    let results = try LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
       .analyze(initialStateIDs: exploration.initialStateIDs)
     #expect(results.map(\.status) == [.violated])
   }

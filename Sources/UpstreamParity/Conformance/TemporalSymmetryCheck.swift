@@ -360,7 +360,7 @@ extension TemporalSymmetryCheck {
     temporalCase: TemporalCase,
     exploration: ModelExplorationResult
   ) throws -> TemporalPropertyResult {
-    let analyses = exploration.analyzeTemporalProperties(in: compilation)
+    let analyses = try exploration.analyzeTemporalProperties(in: compilation)
     guard let analysis = analyses.first else {
       throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "compiled temporal property")
     }

@@ -57,7 +57,7 @@ package struct StateGraph: Sendable {
 package struct ModelExplorationResult {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
-    public let result: CheckResult
+    public let result: ModelCheckOutcome
     package let compilationIdentity: CompilationIdentity
     package let configuration: FiniteExplorationConfiguration
     let compiledStates: [StateGraph.StateID: CompiledState]
@@ -70,7 +70,7 @@ package struct ModelExplorationResult {
     public init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
-        result: CheckResult,
+        result: ModelCheckOutcome,
         compilationIdentity: CompilationIdentity,
         configuration: FiniteExplorationConfiguration
     ) {
@@ -85,7 +85,7 @@ package struct ModelExplorationResult {
     init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
-        result: CheckResult,
+        result: ModelCheckOutcome,
         compilationIdentity: CompilationIdentity,
         configuration: FiniteExplorationConfiguration,
         compiledStates: [StateGraph.StateID: CompiledState]

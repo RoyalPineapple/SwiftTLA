@@ -12,7 +12,11 @@ package enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case missingInitialStateIdentity = "missing-initial-state-identity"
     case incompleteExploration = "incomplete-exploration"
     case unknownAction = "unknown-action"
-    case evaluationFailed = "evaluation-failed"
+}
+
+enum TemporalEvaluationError: Error, Equatable {
+    case predicate(state: StateGraph.StateID, cause: EvalError)
+    case leadsToTrigger(state: StateGraph.StateID, cause: EvalError)
 }
 
 package struct FairLassoWitness: Equatable, Sendable {
@@ -37,8 +41,8 @@ package struct FairLassoWitness: Equatable, Sendable {
 extension ModelExplorationResult {
     package func analyzeTemporalProperties(
         in compilation: CompiledSpecification
-    ) -> [TemporalAnalysisResult] {
-        LivenessChecker(
+    ) throws -> [TemporalAnalysis] {
+        try LivenessChecker(
             compilation: compilation,
             graph: graph,
             states: compiledStates
@@ -49,10 +53,9 @@ extension ModelExplorationResult {
     }
 }
 
-package struct TemporalAnalysisResult: Equatable, Sendable {
+package struct TemporalAnalysis: Equatable, Sendable {
     public let status: TemporalAnalysisStatus
     public let reason: TemporalDiagnosticReason
-    public let diagnostic: String?
     public let witness: FairLassoWitness?
     public let propertyValues: [StateGraph.StateID: Bool]
     public let enabledActions: [String: [StateGraph.StateID: Bool]]
@@ -62,7 +65,6 @@ package struct TemporalAnalysisResult: Equatable, Sendable {
     public init(
         status: TemporalAnalysisStatus,
         reason: TemporalDiagnosticReason,
-        diagnostic: String? = nil,
         witness: FairLassoWitness? = nil,
         propertyValues: [StateGraph.StateID: Bool] = [:],
         enabledActions: [String: [StateGraph.StateID: Bool]] = [:],
@@ -71,7 +73,6 @@ package struct TemporalAnalysisResult: Equatable, Sendable {
     ) {
         self.status = status
         self.reason = reason
-        self.diagnostic = diagnostic
         self.witness = witness
         self.propertyValues = propertyValues
         self.enabledActions = enabledActions
@@ -102,9 +103,9 @@ package struct LivenessChecker {
     public func analyze(
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
-    ) -> [TemporalAnalysisResult] {
-        return compilation.semantics.temporalProperties.map {
-            analyze(
+    ) throws -> [TemporalAnalysis] {
+        try compilation.semantics.temporalProperties.map {
+            try analyze(
                 $0.expression,
                 fairness: compilation.semantics.fairness,
                 initialStateIDs: initialStateIDs,
@@ -120,7 +121,7 @@ package struct LivenessChecker {
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool,
         compilation: CompiledSpecification
-    ) -> TemporalAnalysisResult {
+    ) throws -> TemporalAnalysis {
         let form: TemporalForm
         let predicate: CompiledStateExpr
         let trigger: CompiledStateExpr?
@@ -131,29 +132,27 @@ package struct LivenessChecker {
         case .eventuallyAlways(let value): form = .eventuallyAlways; predicate = value; trigger = nil
         case .leadsTo(let from, let to): form = .leadsTo; predicate = to; trigger = from
         }
-        return analyze(
+        return try analyze(
             form: form,
             fairness: fairness,
             initialStateIDs: initialStateIDs,
             isComplete: isComplete,
             predicate: { state in
-                guard let compiledState = states[state] else {
-                    throw CompilationDiagnostic(
-                        code: .compilationIdentityMismatch,
-                        stage: .validation,
-                        path: "liveness.graph.state",
-                        expected: "a compiled state",
-                        actual: "no compiled state",
-                        nextSafeAction: "Explore the compiled model again before checking liveness."
-                    )
+                let compiledState = try compiledState(for: state)
+                do {
+                    return try predicateHolds(predicate, in: compiledState, compilation: compilation)
+                } catch let error as EvalError {
+                    throw TemporalEvaluationError.predicate(state: state, cause: error)
                 }
-                return try predicateHolds(predicate, in: compiledState, compilation: compilation)
             },
             trigger: trigger.map { trigger in
                 { state in
-                    guard let compiledState = states[state] else { return false }
-                    return try predicateHolds(trigger, in: compiledState, compilation: compilation)
-                        && !predicateHolds(predicate, in: compiledState, compilation: compilation)
+                    let compiledState = try compiledState(for: state)
+                    do {
+                        return try predicateHolds(trigger, in: compiledState, compilation: compilation)
+                    } catch let error as EvalError {
+                        throw TemporalEvaluationError.leadsToTrigger(state: state, cause: error)
+                    }
                 }
             }
         )
@@ -189,7 +188,7 @@ package struct LivenessChecker {
         isComplete: Bool,
         predicate: (StateGraph.StateID) throws -> Bool,
         trigger: ((StateGraph.StateID) throws -> Bool)?
-    ) -> TemporalAnalysisResult {
+    ) throws -> TemporalAnalysis {
         guard isComplete else {
             return .init(status: .unavailable, reason: .incompleteExploration)
         }
@@ -201,14 +200,9 @@ package struct LivenessChecker {
             return .init(status: .unavailable, reason: .unknownAction)
         }
 
-        let values: [StateGraph.StateID: Bool]
-        do {
-            values = try Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
-                (state, try predicate(state))
-            })
-        } catch {
-            return .init(status: .unavailable, reason: .evaluationFailed, diagnostic: String(describing: error))
-        }
+        let values = try Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
+            (state, try predicate(state))
+        })
         let enabled = enabledness(for: fairness)
         let allStates = Set(graph.states.keys)
         let negative = Set(values.compactMap { $0.value ? nil : $0.key })
@@ -225,16 +219,18 @@ package struct LivenessChecker {
             search = .init(cycleStates: allStates, prefixStates: [], cycleRequiredStates: negative)
         case .leadsTo:
             guard let trigger else {
-                return .init(status: .unavailable, reason: .evaluationFailed, diagnostic: "Missing leads-to trigger")
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .checking,
+                    path: "liveness.leadsTo.trigger",
+                    expected: "a compiled trigger predicate",
+                    actual: "the leads-to trigger is absent",
+                    nextSafeAction: "Compile the temporal property again before checking liveness."
+                )
             }
-            let triggers: Set<StateGraph.StateID>
-            do {
-                triggers = Set(try graph.states.keys.compactMap { state in
-                    try trigger(state) ? state : nil
-                })
-            } catch {
-                return .init(status: .unavailable, reason: .evaluationFailed, diagnostic: String(describing: error))
-            }
+            let triggers = Set(try graph.states.keys.compactMap { state in
+                try trigger(state) ? state : nil
+            }).intersection(negative)
             search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative, cycleRequiredStates: [])
         }
 
@@ -286,6 +282,20 @@ package struct LivenessChecker {
         compilation: CompiledSpecification
     ) throws -> Bool {
         return try CompiledRuntime(compilation: compilation).predicateHolds(predicate, in: state)
+    }
+
+    private func compiledState(for state: StateGraph.StateID) throws -> CompiledState {
+        guard let compiledState = states[state] else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .checking,
+                path: "liveness.state",
+                expected: "a state produced by this compilation",
+                actual: "state \(state) has no compiled value",
+                nextSafeAction: "Explore the compiled specification again before checking liveness."
+            )
+        }
+        return compiledState
     }
 
     private func graphHasOnlyCompiledActions() -> Bool {
