@@ -39,6 +39,8 @@ struct TLCTemporalAdapterTests {
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("tlc-graph.jsonl").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("temporal-comparison.json").path))
+    #expect(FileManager.default.fileExists(
+      atPath: fixture.output.appendingPathComponent("complete-graph-pass").path) == false)
   }
 
   @Test("TLC temporal adapter rejects equal property outcomes over different graphs")
@@ -118,14 +120,17 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter rejects an incomplete declared complete-graph pass")
   func rejectsIncompleteCompleteGraphPass() throws {
     let fixture = try Fixture()
-    let stream = try temporalGraphStream(
-      case: fixture.completeGraphCase,
-      runID: fixture.completeGraphRequest.runID)
+    let propertyStream = try temporalGraphStream(
+      case: fixture.launchCase, runID: fixture.request.runID)
+    let graphStream = try temporalGraphStream(
+      case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID)
     #expect(throws: TLCTemporalAdapterError.incompleteGraph) {
       try TLCTemporalAdapter(
-        processAdapter: TLCProcessAdapter(executor: FixtureExecutor(
-          stream: stream,
-          result: Fixture.temporalViolation)))
+        processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
+          propertyStream: propertyStream,
+          graphStream: graphStream,
+          graphRunID: fixture.completeGraphRequest.runID,
+          graphResult: Fixture.temporalViolation)))
         .capture(try fixture.input())
     }
   }
@@ -366,6 +371,7 @@ struct TLCTemporalAdapterTests {
     let graphStream: Data
     let graphRunID: UUID
     let propertyResult: TLCProcessResult
+    let graphResult: TLCProcessResult
     let trace: Data?
     let traceFails: Bool
 
@@ -374,6 +380,7 @@ struct TLCTemporalAdapterTests {
       graphStream: Data,
       graphRunID: UUID,
       propertyResult: TLCProcessResult = Fixture.temporalViolation,
+      graphResult: TLCProcessResult = Fixture.success,
       trace: Data? = nil,
       traceFails: Bool = false
     ) {
@@ -381,6 +388,7 @@ struct TLCTemporalAdapterTests {
       self.graphStream = graphStream
       self.graphRunID = graphRunID
       self.propertyResult = propertyResult
+      self.graphResult = graphResult
       self.trace = trace
       self.traceFails = traceFails
     }
@@ -393,7 +401,7 @@ struct TLCTemporalAdapterTests {
       }
       if request.runID == graphRunID {
         try graphStream.write(to: request.graphEvents, options: .atomic)
-        return Fixture.success
+        return graphResult
       }
       try propertyStream.write(to: request.graphEvents, options: .atomic)
       return propertyResult
