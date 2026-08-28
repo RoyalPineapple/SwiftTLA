@@ -280,30 +280,6 @@ func helperProcessDirectory() throws -> URL {
   try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
   return directory
 }
-func helperProcessRequest(
-  executable: URL,
-  in directory: URL,
-  environment: [String: String]
-) throws -> TLCProcessRequest {
-  let module = directory.appendingPathComponent("Module.tla")
-  let configuration = directory.appendingPathComponent("Module.cfg")
-  try "---- MODULE Module ----\n====\n".write(to: module, atomically: true, encoding: .utf8)
-  try "SPECIFICATION Spec\n".write(to: configuration, atomically: true, encoding: .utf8)
-  return TLCProcessRequest(
-    javaExecutable: executable,
-    jar: URL(fileURLWithPath: "/tmp/jar"),
-    bridgeClasses: directory,
-    bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
-    graphEvents: directory.appendingPathComponent("events.jsonl"),
-    traceOutput: directory.appendingPathComponent("trace.json"),
-    workingDirectory: directory,
-    finiteGraphCase: try caseForFiles(
-      id: "helper", module: module, configuration: configuration, arguments: [],
-      environment: environment
-    ),
-    runID: UUID()
-  )
-}
 func launchRequest(
   finiteGraphCase: FiniteGraphCase, module: URL, configuration: URL
 ) throws -> TLCProcessRequest {
