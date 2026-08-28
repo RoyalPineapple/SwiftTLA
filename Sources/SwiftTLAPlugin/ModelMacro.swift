@@ -52,14 +52,10 @@ enum TLASpecVerifier {
             source.closure,
             enumDefinitions: enumDefinitions
         )
-        if let diagnostic = parsed.diagnostics.first {
-            throw diagnostic
-        }
-        if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty {
+        let compilation = try parsed.compile(specificationName: source.name)
+        if parsed.hasStateDeclarations == false {
             throw SimpleError("No variables in spec")
         }
-
-        let compilation = try parsed.compile(specificationName: source.name)
 
         return MacroCompilation(
             typeName: typeName,
@@ -262,7 +258,7 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         let parsed: MacroCompilation
         do {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
-        } catch let diagnostic as SpecParser.SourceParseDiagnostic {
+        } catch let diagnostic as SourceParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []
         } catch {
@@ -371,7 +367,7 @@ private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
 }
 
 package func parserDiagnostic(
-    _ diagnostic: SpecParser.SourceParseDiagnostic,
+    _ diagnostic: SourceParseDiagnostic,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     let finder = ParserDiagnosticNodeFinder(
@@ -400,11 +396,11 @@ private func modelCompilationDiagnostic(
 }
 
 private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
-    let location: SpecParser.SourceParseDiagnostic.SourceSpan.Location
+    let location: CompilerSourceSpan.Location
     var node: Syntax?
 
     init(
-        location: SpecParser.SourceParseDiagnostic.SourceSpan.Location
+        location: CompilerSourceSpan.Location
     ) {
         self.location = location
         super.init(viewMode: .sourceAccurate)

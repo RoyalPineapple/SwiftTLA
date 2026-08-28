@@ -3,26 +3,24 @@ import SwiftParser
 import SwiftBasicFormat
 import Foundation
 
-/// Parses SwiftSyntax AST nodes into DSL types (StateExpr, ActionExpr, etc.).
-/// Every AST pattern maps deterministically to a DSL value.
-/// Tests live in SpecParserTests.
-public struct ParserEnumDefinition: Sendable {
-    public let typeName: String
-    public let cases: TLARecord
-    public let finiteValues: [TLAValue]
+/// Enumeration facts used while the macro front end decodes one model.
+package struct ParserEnumDefinition: Sendable {
+    let typeName: String
+    let cases: TLARecord
+    let finiteValues: [TLAValue]
 
-    public init(typeName: String, cases: TLARecord, finiteValues: [TLAValue]? = nil) {
+    package init(typeName: String, cases: TLARecord, finiteValues: [TLAValue]? = nil) {
         self.typeName = typeName
         self.cases = cases
         self.finiteValues = finiteValues ?? cases.fields.map(\.value)
     }
 
-    public func value(named name: String) -> TLAValue? {
+    func value(named name: String) -> TLAValue? {
         cases.value(named: name)
     }
 }
 
-public final class ParserSession {
+final class ParserSession {
     enum FormalModuleProvider: Equatable {
         case folds
         case functions
@@ -434,10 +432,8 @@ public final class ParserSession {
         )
     }
 
-    /// Parses `Finished()` for a sequential algorithm and
-    /// `Finished(process)` for an `Each` process family. The public DSL keeps
-    /// the generated program counter private; both spellings lower to its
-    /// canonical formal representation here.
+    /// Lowers sequential and process-family completion predicates to the
+    /// compiler-owned program counter.
     private func decodeFinishedControlLocation(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
@@ -2030,38 +2026,34 @@ public final class ParserSession {
 
 }
 
-/// Stateless public parser entry points. Every call owns a fresh parser
-/// session, while a full specification parse creates one session explicitly.
-public enum SpecParser {
-    public typealias ParsedSpecComponents = ParserSession.ParsedSpecComponents
-    public typealias SourceParseDiagnostic = ParserSession.SourceParseDiagnostic
-
-    public static func parseSpecClosure(
+/// Package parser entry points create a fresh session for each source tree.
+package enum SpecParser {
+    package static func parseSpecClosure(
         _ closure: ClosureExprSyntax,
         enumDefinitions: [ParserEnumDefinition] = []
     ) -> ParsedSpecComponents {
         ParserSession(enumDefinitions: enumDefinitions).parseSpecClosure(closure)
     }
 
-    public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+    static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         ParserSession().decodeStateExpr(expression)
     }
 
-    public static func decodeTypedFacadeValue(
+    static func decodeTypedFacadeValue(
         _ expression: ExprSyntax
     ) -> StateExpr? {
         ParserSession().decodeTypedFacadeValue(expression, scope: .empty)
     }
 
-    public static func decodeActionExpr(_ expression: ExprSyntax) -> ActionExpr? {
+    static func decodeActionExpr(_ expression: ExprSyntax) -> ActionExpr? {
         ParserSession().decodeActionExpr(expression)
     }
 
-    public static func decodeActionFromClosure(_ closure: ClosureExprSyntax) -> ActionExpr? {
+    static func decodeActionFromClosure(_ closure: ClosureExprSyntax) -> ActionExpr? {
         ParserSession().decodeActionFromClosure(closure)
     }
 
-    public static func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
+    static func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
         ParserSession().decodeTemporal(call)
     }
 

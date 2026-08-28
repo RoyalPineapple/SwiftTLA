@@ -37,7 +37,6 @@ extension TLASpec {
     let refinements = components.compactMap { $0 as? RefinementDecl }
     var symmetrySets: [SymmetrySet] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
-    var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
     var sourceAlgorithms: [Algorithm] = []
     // Collect the definitions needed to materialize closed Algorithm initial values.
     for comp in components {
@@ -63,7 +62,6 @@ extension TLASpec {
           controlOwner: nil
         ))
       } else if let algorithm = comp as? Algorithm {
-        algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
         sourceAlgorithms.append(algorithm)
       } else if let i = comp as? InvDecl {
         invariants.append(NamedInvariant(name: i.name, body: i.body))
@@ -110,7 +108,6 @@ extension TLASpec {
     self.refinements = refinements
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
-    self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }
@@ -186,7 +183,6 @@ extension TLASpec {
       refinements: refinements,
       symmetrySets: symmetrySets,
       symmetricCollections: symmetricCollections,
-      algorithmFidelityTokens: algorithmFidelityTokens,
       sourceAlgorithms: sourceAlgorithms
     )
     lowered.algorithmPhase = .lowered

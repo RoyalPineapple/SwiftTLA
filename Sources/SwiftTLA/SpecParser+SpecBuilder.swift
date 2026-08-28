@@ -2,154 +2,36 @@ import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
 
+package struct ParsedSpecComponents {
+    var variables: [NamedVar] = []
+    var actions: [NamedAction] = []
+    var symmetricCollections: [SymmetricCollectionDecl] = []
+    var diagnostics: [SourceParseDiagnostic] = []
+    var invariants: [(name: String, body: StateExpr)] = []
+    var temporal: [(name: String, expr: TemporalExpr)] = []
+    var fairness: [FairnessCondition] = []
+    var constraint: StateExpr?
+    var imports: [TLASpec] = []
+    var importConfigurations: [FormalModuleConfiguration] = []
+    var moduleInstances: [FormalModuleInstance] = []
+    var refinements: [RefinementDecl] = []
+    var extendsModules: [StandardModule] = []
+    var sourceAlgorithms: [Algorithm] = []
+    var formalParameters: [FormalModuleParameter] = []
+    var formalOperatorDefinitions: [FormalOperatorDefinition] = []
+    var symmetrySets: [SymmetrySet] = []
+    var constants: [ConstantDecl] = []
+    var instanceBindings: [String: FormalModuleInstance] = [:]
+    var algorithmBindings: [String: Algorithm] = [:]
+    var moduleBindings: [String: TLASpec] = [:]
+
+    package var hasStateDeclarations: Bool {
+        variables.isEmpty == false || sourceAlgorithms.isEmpty == false
+    }
+}
+
 extension ParserSession {
     // MARK: - Unified spec builder parser
-
-    public struct ParsedSpecComponents {
-        public var variables: [NamedVar] = []
-        public var actions: [NamedAction] = []
-        public var symmetricCollections: [SymmetricCollectionDecl] = []
-        public var diagnostics: [SourceParseDiagnostic] = []
-        public var invariants: [(name: String, body: StateExpr)] = []
-        public var temporal: [(name: String, expr: TemporalExpr)] = []
-        public var fairness: [FairnessCondition] = []
-        public var constraint: StateExpr?
-        public var imports: [TLASpec] = []
-        public var importConfigurations: [FormalModuleConfiguration] = []
-        public var moduleInstances: [FormalModuleInstance] = []
-        public var refinements: [RefinementDecl] = []
-        public var extendsModules: [StandardModule] = []
-        public var sourceAlgorithms: [Algorithm] = []
-        public var formalParameters: [FormalModuleParameter] = []
-        public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
-        public var symmetrySets: [SymmetrySet] = []
-        /// Authored algorithms in the source model.
-        public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
-        public var constants: [ConstantDecl] = []
-        var instanceBindings: [String: FormalModuleInstance] = [:]
-        var algorithmBindings: [String: Algorithm] = [:]
-        var moduleBindings: [String: TLASpec] = [:]
-    }
-
-    /// Evidence retained when the source parser cannot form a formal model.
-    public struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
-        public struct SourceSpan: Sendable, Hashable, CustomStringConvertible {
-            public enum Location: Sendable, Hashable, CustomStringConvertible {
-                case utf8Offset(Int)
-                case unavailable
-
-                public var description: String {
-                    switch self {
-                    case .utf8Offset(let offset): return "UTF-8 offset \(offset)"
-                    case .unavailable: return "source offset unavailable"
-                    }
-                }
-            }
-
-            public let location: Location
-            public let utf8Length: Int
-
-            public init(location: Location, utf8Length: Int) {
-                self.location = location
-                self.utf8Length = utf8Length
-            }
-
-            public var description: String {
-                "\(location), length \(utf8Length)"
-            }
-        }
-
-        /// Short stable summary for clients that already display a headline.
-        public let message: String
-        /// The exact Swift source fragment that the parser rejected.
-        public let source: String
-        public let sourceSpan: SourceSpan
-        public let expected: String
-        public let actual: String
-        public let nextSafeAction: String
-        public let capabilityDiagnostic: LanguageCapabilityDiagnostic?
-
-        public init(
-            message: String,
-            source: String,
-            expected: String = "a supported SwiftTLA declaration or expression",
-            actual: String = "",
-            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
-        ) {
-            self.init(
-                message: message,
-                source: source,
-                sourceSpan: SourceSpan(location: .unavailable, utf8Length: source.utf8.count),
-                expected: expected,
-                actual: actual,
-                nextSafeAction: nextSafeAction
-            )
-        }
-
-        public init(
-            message: String,
-            source: String,
-            sourceSpan: SourceSpan,
-            expected: String = "a supported SwiftTLA declaration or expression",
-            actual: String = "",
-            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again.",
-            capabilityDiagnostic: LanguageCapabilityDiagnostic? = nil
-        ) {
-            self.message = message
-            self.source = source
-            self.sourceSpan = sourceSpan
-            self.expected = expected
-            self.actual = actual.isEmpty ? source.trimmingCharacters(in: .whitespacesAndNewlines) : actual
-            self.nextSafeAction = nextSafeAction
-            self.capabilityDiagnostic = capabilityDiagnostic
-        }
-
-        public init(capability: LanguageCapabilityDiagnostic) {
-            self.init(
-                message: capability.headline,
-                source: capability.source,
-                sourceSpan: capability.sourceSpan,
-                expected: capability.expected,
-                actual: capability.actual,
-                nextSafeAction: capability.nextSafeAction,
-                capabilityDiagnostic: capability
-            )
-        }
-
-        public init<Node: SyntaxProtocol>(
-            message: String,
-            source: Node,
-            expected: String = "a supported SwiftTLA declaration or expression",
-            actual: String = "",
-            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
-        ) {
-            let fragment = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.init(
-                message: message,
-                source: fragment,
-                sourceSpan: SourceSpan(
-                    location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
-                    utf8Length: fragment.utf8.count
-                ),
-                expected: expected,
-                actual: actual,
-                nextSafeAction: nextSafeAction
-            )
-        }
-
-        public var renderedMessage: String {
-            capabilityDiagnostic?.description ?? message
-        }
-
-        public var description: String {
-            if let capabilityDiagnostic {
-                return capabilityDiagnostic.description
-            }
-            return "What failed: \(message) Where: \(sourceSpan). Expected: \(expected). "
-                + "Actual: \(actual). "
-                + "Next safe action: \(nextSafeAction)"
-        }
-    }
 
       func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
@@ -179,7 +61,6 @@ extension ParserSession {
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let algorithm = result.algorithmBindings[reference.baseName.text] {
-                result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
                 result.sourceAlgorithms.append(algorithm)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &result)
@@ -712,7 +593,6 @@ extension ParserSession {
         switch name {
         case "Algorithm":
             if let algorithm = parseAlgorithm(call, into: &result) {
-                result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
                 result.sourceAlgorithms.append(algorithm)
             }
         case "SymmetricCollection":
@@ -1617,7 +1497,7 @@ public struct LanguageCapabilityDiagnostic: Error, Sendable, Hashable, CustomStr
     public let operation: Operation
     public let source: String
     public let sourcePath: [String]
-    public let sourceSpan: SpecParser.SourceParseDiagnostic.SourceSpan
+    public let sourceSpan: CompilerSourceSpan
     public let expected: String
     public let actual: String
     public let nextSafeAction: String
@@ -1628,7 +1508,7 @@ public struct LanguageCapabilityDiagnostic: Error, Sendable, Hashable, CustomStr
         operation: Operation,
         source: String,
         sourcePath: [String] = [],
-        sourceSpan: SpecParser.SourceParseDiagnostic.SourceSpan,
+        sourceSpan: CompilerSourceSpan,
         expected: String,
         actual: String,
         nextSafeAction: String

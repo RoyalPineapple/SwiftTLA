@@ -3,8 +3,8 @@ import Testing
 
 @Suite("Procedure Lowering")
 struct ProcedureLoweringTests {
-    @Test("pre-lowering Algorithm fidelity alpha-normalizes local statement binders")
-    func algorithmFidelityAlphaNormalizesScopedBinders() {
+    @Test("compiled Algorithm identity alpha-normalizes local statement binders")
+    func compiledAlgorithmIdentityAlphaNormalizesScopedBinders() {
         func model(letName: String, withName: String, chooseName: String) -> AlgorithmModel {
             AlgorithmModel(
                 name: "ScopedFidelity",
@@ -23,18 +23,18 @@ struct ProcedureLoweringTests {
             )
         }
 
-        let parsed = AlgorithmFidelityToken(model: model(letName: "first", withName: "second", chooseName: "third"))
-        let built = AlgorithmFidelityToken(model: model(letName: "x", withName: "y", chooseName: "z"))
+        let parsed = algorithmCompilationEncoding(model(letName: "first", withName: "second", chooseName: "third"))
+        let built = algorithmCompilationEncoding(model(letName: "x", withName: "y", chooseName: "z"))
         #expect(parsed == built)
     }
 
-    @Test("different algorithms have different source tokens")
-    func differentAlgorithmsHaveDifferentSourceTokens() {
-        let expected = AlgorithmFidelityToken(model: AlgorithmModel(
+    @Test("different algorithms have different compiled identities")
+    func differentAlgorithmsHaveDifferentCompiledIdentities() {
+        let expected = algorithmCompilationEncoding(AlgorithmModel(
             name: "FidelityDifference",
             components: [.step(.init(label: .init(name: "start"), statements: [.skip]))]
         ))
-        let actual = AlgorithmFidelityToken(model: AlgorithmModel(
+        let actual = algorithmCompilationEncoding(AlgorithmModel(
             name: "FidelityDifference",
             components: [.step(.init(label: .init(name: "start"), statements: [.stop]))]
         ))

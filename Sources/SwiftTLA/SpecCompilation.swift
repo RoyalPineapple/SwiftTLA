@@ -434,7 +434,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
     }
 }
 
-extension SpecParser.ParsedSpecComponents {
+extension ParsedSpecComponents {
     func sourceModel(
         specificationName: String,
         additionalInvariants: [NamedInvariant] = []
@@ -462,13 +462,12 @@ extension SpecParser.ParsedSpecComponents {
             refinements: refinements,
             symmetrySets: symmetrySets,
             symmetricCollections: symmetricCollections,
-            algorithmFidelityTokens: algorithmFidelityTokens,
             sourceAlgorithms: sourceAlgorithms
         )
     }
 }
 
-public extension SpecParser.ParsedSpecComponents {
+package extension ParsedSpecComponents {
     /// Compiles parser output and generated-machine type facts.
     func compile(
         specificationName: String,
@@ -1573,7 +1572,7 @@ private struct CanonicalSpecificationEncoder {
             ])
         }
         list("symmetricCollections", symmetricCollections) { $0 }
-        list("algorithmTokens", spec.algorithmFidelityTokens) { $0.encodedCanonicalForm }
+        list("sourceAlgorithms", spec.sourceAlgorithms) { algorithmCompilationEncoding($0.model) }
     }
 
     private func canonicalVariable(_ variable: NamedVar) -> String {
