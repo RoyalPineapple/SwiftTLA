@@ -1,30 +1,3 @@
-public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
-    public let failedConcept: String
-    public let path: String
-    public let expected: String
-    public let actual: String
-    public let nextSafeAction: String
-
-    public init(
-        failedConcept: String,
-        path: String,
-        expected: String,
-        actual: String,
-        nextSafeAction: String
-    ) {
-        self.failedConcept = failedConcept
-        self.path = path
-        self.expected = expected
-        self.actual = actual
-        self.nextSafeAction = nextSafeAction
-    }
-
-    public var description: String {
-        "PlusCal rendering failed: \(failedConcept). Path: \(path). Expected: \(expected). "
-            + "Actual: \(actual). Next safe action: \(nextSafeAction)"
-    }
-}
-
 internal struct AuthoredPlusCalModule: Sendable {
     let name: String
     let extendsModules: [String]
@@ -48,8 +21,9 @@ private func authoredPlusCalIdentifier(
 ) throws -> String {
     let isValid = allowingReservedWord ? isFormalIdentifier(name) : isPlusCalDeclarationName(name)
     guard validatingIdentifiers == false || isValid else {
-        throw AlgorithmPlusCalRenderDiagnostic(
-            failedConcept: "formal identifier rendering",
+        throw CompilationDiagnostic(
+            code: .invalidFormalDeclaration,
+            stage: .rendering,
             path: path,
             expected: "an ASCII identifier beginning with a letter or underscore",
             actual: "invalid identifier '\(name)'",
@@ -122,8 +96,9 @@ extension StateExpr {
         switch self {
         case .sourceIssue(let issue):
             if validatingIdentifiers == false { return issue.description }
-            throw AlgorithmPlusCalRenderDiagnostic(
-                failedConcept: "formal expression rendering",
+            throw CompilationDiagnostic(
+                code: .invalidFormalDeclaration,
+                stage: .rendering,
                 path: path,
                 expected: "a validated formal expression",
                 actual: issue.description,
@@ -131,8 +106,9 @@ extension StateExpr {
             )
         case .processLocalFamily(let name):
             if validatingIdentifiers == false { return "processLocalFamily(\(name))" }
-            throw AlgorithmPlusCalRenderDiagnostic(
-                failedConcept: "process-local expression rendering",
+            throw CompilationDiagnostic(
+                code: .invalidAuthoredPlusCalPlan,
+                stage: .rendering,
                 path: path,
                 expected: "a process-local reference projected for the current process",
                 actual: "unresolved process-local family '\(name)'",
@@ -140,8 +116,9 @@ extension StateExpr {
             )
         case .currentProcess:
             if validatingIdentifiers == false { return "currentProcess" }
-            throw AlgorithmPlusCalRenderDiagnostic(
-                failedConcept: "current-process expression rendering",
+            throw CompilationDiagnostic(
+                code: .invalidAuthoredPlusCalPlan,
+                stage: .rendering,
                 path: path,
                 expected: "the projected PlusCal self identifier",
                 actual: "an unresolved current-process expression",
@@ -224,8 +201,9 @@ extension StateExpr {
                         ? "CASE <missing condition and value branch>"
                         : "CASE <unmatched condition \(pairs.last.map(String.init(describing:)) ?? "missing")>"
                 }
-                throw AlgorithmPlusCalRenderDiagnostic(
-                    failedConcept: "CASE expression rendering",
+                throw CompilationDiagnostic(
+                    code: .invalidFormalDeclaration,
+                    stage: .rendering,
                     path: path,
                     expected: "complete condition and value pairs",
                     actual: pairs.isEmpty ? "no CASE branches" : "an unmatched CASE branch",

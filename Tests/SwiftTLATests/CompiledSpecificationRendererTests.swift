@@ -92,7 +92,7 @@ struct CompiledSpecificationRendererTests {
             name: "DirectOnly", variables: [], actions: [], invariants: []
         ).compile()
 
-        #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
+        #expect(throws: CompilationDiagnostic.self) {
             try compilation.renderedPlusCalBundle()
         }
     }

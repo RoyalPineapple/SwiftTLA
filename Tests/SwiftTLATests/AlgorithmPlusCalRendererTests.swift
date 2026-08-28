@@ -304,7 +304,7 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("rejects unresolved authored declaration dependencies")
     func rejectsMissingDeclarationDependency() {
-        #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
+        #expect(throws: CompilationDiagnostic.self) {
             try AuthoredPlusCalDeclarationSections([
                 .init(name: "UsesMissing", text: "UsesMissing == TRUE", phase: .define, dependencies: ["Missing"])
             ])
@@ -313,7 +313,7 @@ struct AlgorithmPlusCalRendererTests {
 
     @Test("rejects cyclic authored declaration dependencies")
     func rejectsCyclicDeclarationDependency() {
-        #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
+        #expect(throws: CompilationDiagnostic.self) {
             try AuthoredPlusCalDeclarationSections([
                 .init(name: "First", text: "First == TRUE", phase: .define, dependencies: ["Second"]),
                 .init(name: "Second", text: "Second == TRUE", phase: .define, dependencies: ["First"])

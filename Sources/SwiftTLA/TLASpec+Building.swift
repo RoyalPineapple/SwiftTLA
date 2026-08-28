@@ -297,8 +297,9 @@ extension TLASpec {
           Set(sourcePropertyNames + topLevelPropertyNames)
             .union(propertyPlan.translatorOwnedNames) == Set(loweredPropertyNames)
     else {
-        throw AlgorithmPlusCalRenderDiagnostic(
-          failedConcept: "authored PlusCal property export",
+        throw CompilationDiagnostic(
+          code: .invalidAuthoredPlusCalPlan,
+          stage: .lowering,
           path: "TLASpec.properties",
           expected: "one rendered typed property for every lowered property",
           actual: "Algorithm properties \(sourcePropertyNames); top-level typed properties \(topLevelPropertyNames); lowered properties \(loweredPropertyNames)",
@@ -478,8 +479,15 @@ struct AuthoredPlusCalDeclarationSections {
       var pending = declarations.filter { $0.phase == phase }
       var result: [String] = []
       let declared = Set(declarations.compactMap(\.name))
-      if let unresolved = pending.first(where: { $0.dependencies.contains(where: { !declared.contains($0) }) }) {
-        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: unresolved.name ?? "unnamed", expected: "a declared dependency", actual: unresolved.dependencies.joined(separator: ", "), nextSafeAction: "Declare the dependency or remove its placement edge.")
+      if let unresolved = pending.first(where: { $0.dependencies.contains(where: { declared.contains($0) == false }) }) {
+        throw CompilationDiagnostic(
+          code: .invalidAuthoredPlusCalPlan,
+          stage: .lowering,
+          path: unresolved.name ?? "unnamed",
+          expected: "a declared dependency",
+          actual: unresolved.dependencies.joined(separator: ", "),
+          nextSafeAction: "Declare the dependency or remove its placement edge."
+        )
       }
       while let index = pending.firstIndex(where: { declaration in
         declaration.dependencies.allSatisfy(emitted.contains)
@@ -488,8 +496,15 @@ struct AuthoredPlusCalDeclarationSections {
         result.append(declaration.text)
         if let name = declaration.name { emitted.insert(name) }
       }
-      if !pending.isEmpty {
-        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: pending.compactMap(\.name).joined(separator: ","), expected: "an acyclic declaration dependency graph", actual: "cyclic dependencies", nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase.")
+      if pending.isEmpty == false {
+        throw CompilationDiagnostic(
+          code: .invalidAuthoredPlusCalPlan,
+          stage: .lowering,
+          path: pending.compactMap(\.name).joined(separator: ","),
+          expected: "an acyclic declaration dependency graph",
+          actual: "cyclic dependencies",
+          nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase."
+        )
       }
       return result
     }

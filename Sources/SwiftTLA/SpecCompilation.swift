@@ -309,8 +309,9 @@ public struct CompiledSpecification: Sendable {
     /// Returns the source-faithful PlusCal bundle produced by compilation.
     public func renderedPlusCalBundle() throws -> TLAModuleBundle {
         guard let renderedPlusCalModuleBundle else {
-            throw AlgorithmPlusCalRenderDiagnostic(
-                failedConcept: "authored PlusCal module root",
+            throw CompilationDiagnostic(
+                code: .invalidAuthoredPlusCalPlan,
+                stage: .rendering,
                 path: "TLASpec.sourceAlgorithms",
                 expected: "exactly one authored Algorithm",
                 actual: "no authored PlusCal module in this compilation",
