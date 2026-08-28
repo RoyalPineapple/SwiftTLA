@@ -213,10 +213,10 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(module.contains("(_b0 = b0)"))
     }
 
-    @Test("compiled binder names do not shadow theorem names")
-    func compiledBinderNamesDoNotShadowTheoremNames() throws {
-        let spec = TLASpec("BinderTheoremCollision") {
-            Theorem(name: "b0", always: .value(.bool(true)))
+    @Test("compiled binder names do not shadow temporal property names")
+    func compiledBinderNamesDoNotShadowTemporalPropertyNames() throws {
+        let spec = TLASpec("BinderPropertyCollision") {
+            Always("b0", .value(.bool(true)))
             Invariant("Safe") {
                 .forAll(
                     .setLiteral([.value(.int(1))]),
@@ -228,7 +228,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let module = try spec.compile().renderedTLAModuleBundle().root.tla
 
-        #expect(spec.theorems.map(\.name) == ["b0"])
+        #expect(spec.temporalProperties.map(\.name) == ["b0"])
         #expect(module.contains("\\A _b0 \\in"))
     }
 
@@ -1756,7 +1756,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let variants = [
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], checkDeadlock: true),
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], theorems: [Theorem(name: "Safety", always: .value(.bool(true)))]),
+            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], temporalProperties: [.init(name: "Safety", expr: .always(.value(.bool(true))))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
             {
                 let collection = SymmetricCollectionDecl(

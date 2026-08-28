@@ -124,7 +124,7 @@ extension TLASpec {
             actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, controlOwner: $0.controlOwner) },
             invariants: invariants.map { .init(name: $0.name, body: state($0.body)) }, temporalProperties: temporalProperties,
             fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
-            theorems: theorems, extendsModules: extendsModules, constraint: constraint.map(state),
+            extendsModules: extendsModules, constraint: constraint.map(state),
             recursiveFuncs: recursiveFuncs.map { .init(name: $0.name, params: $0.params, body: state($0.body)) },
             formalOperatorDefinitions: formalOperatorDefinitions.map { .init(name: $0.name, parameters: $0.parameters, body: state($0.body), plusCalPhase: $0.plusCalPhase, plusCalDependencies: $0.plusCalDependencies) },
             imports: imports, importConfigurations: importConfigurations, moduleInstances: moduleInstances, refinements: [],

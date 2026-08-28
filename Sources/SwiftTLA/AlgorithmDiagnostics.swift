@@ -99,8 +99,6 @@ internal enum AlgorithmCapabilityValidator {
             "generic fairness declaration"
         case .algorithmAssume:
             "Assume declaration"
-        case .algorithmTheorem:
-            "Theorem declaration"
         default:
             construct.rawValue
         }

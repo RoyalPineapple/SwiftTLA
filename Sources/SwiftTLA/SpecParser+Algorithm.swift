@@ -34,7 +34,6 @@ private enum AlgorithmSourceConstruct: Equatable {
     case eventuallyAlways
     case fairness
     case assume
-    case theorem
     case stateConstraint
     case awaitCondition
     case assert
@@ -64,7 +63,6 @@ private enum AlgorithmSourceConstruct: Equatable {
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways: .temporalProperty
         case .fairness: .genericFairness
         case .assume: .algorithmAssume
-        case .theorem: .algorithmTheorem
         case .stateConstraint: .stateConstraint
         case .awaitCondition: .awaitCondition
         case .assert: .assertion
@@ -125,7 +123,6 @@ private enum AlgorithmSourceConstruct: Equatable {
         case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
             self = .fairness
         case "Assume": self = .assume
-        case "Theorem": self = .theorem
         case "StateConstraint": self = .stateConstraint
         case "Await", "When": self = .awaitCondition
         case "Assert": self = .assert
@@ -476,7 +473,7 @@ extension ParserSession {
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
             guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
             return .temporal(temporal)
-        case .fairness, .assume, .theorem:
+        case .fairness, .assume:
             return .unsupported(construct.declaredConstruct)
         case .stateConstraint:
             guard let argument = call.arguments.first,

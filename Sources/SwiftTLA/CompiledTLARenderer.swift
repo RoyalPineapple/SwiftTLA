@@ -116,15 +116,6 @@ struct CompiledTLARenderer {
         return "\(refinement.name) == \(instance.namespace)!\(target)"
     }
 
-    func theorem(_ theorem: CompiledTheorem) throws -> String {
-        switch theorem.body {
-        case .temporal(let expression):
-            return "\(theorem.name) == Spec => \(try temporal(expression))"
-        case .state(let expression):
-            return "\(theorem.name) == Spec => []\(try state(expression))"
-        }
-    }
-
     func formalModuleReplacement(_ replacement: CompiledFormalModuleReplacement) throws -> String {
         "\(replacement.definitionName) == \(try state(replacement.expression))"
     }

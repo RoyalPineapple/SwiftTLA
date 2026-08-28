@@ -1212,10 +1212,6 @@ public enum AlgorithmBuilder {
         [AlgorithmElement(model: .unsupported(.algorithmAssume))]
     }
 
-    public static func buildExpression(_ component: TheoremDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .unsupported(.algorithmTheorem))]
-    }
-
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
         [AlgorithmElement(model: .stateConstraint(component.body))]
     }

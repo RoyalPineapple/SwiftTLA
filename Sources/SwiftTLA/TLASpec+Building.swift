@@ -24,7 +24,6 @@ extension TLASpec {
     var fairness: [FairnessCondition] = []
     var constants: [ConstantDecl] = []
     var formalParameters: [FormalModuleParameter] = []
-    var theorems: [TheoremDecl] = []
     var assumes: StateExpr?
     var extendsMods: [StandardModule] = [.integers]
     var deadlockFlag = false
@@ -76,8 +75,6 @@ extension TLASpec {
         constants.append(c)
       } else if let parameter = comp as? FormalModuleParameter {
         formalParameters.append(parameter)
-      } else if let th = comp as? TheoremDecl {
-        theorems.append(th)
       } else if let a = comp as? AssumeDecl {
         assumes = assumes.map { .and($0, a.expr) } ?? a.expr
       } else if let e = comp as? ExtendsDecl {
@@ -103,7 +100,6 @@ extension TLASpec {
     self.fairness = fairness
     self.assume = assumes
     self.checkDeadlock = deadlockFlag
-    self.theorems = theorems
     self.extendsModules = canonicalStandardModules(extendsMods)
     self.constraint = constraint
     self.recursiveFuncs = recursiveFuncs
@@ -180,7 +176,6 @@ extension TLASpec {
       fairness: fairness,
       assume: assume,
       checkDeadlock: checkDeadlock,
-      theorems: theorems,
       extendsModules: extendsModules,
       constraint: constraint,
       recursiveFuncs: recursiveFuncs,

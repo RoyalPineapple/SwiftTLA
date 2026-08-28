@@ -135,29 +135,22 @@ struct AlgorithmBuilderTests {
         }
     }
 
-    @Test("unsupported Algorithm property placement retains its construct")
-    func unsupportedAlgorithmPropertyPlacementRetainsItsConstruct() {
-        let cases: [(DeclaredLanguageConstruct, Algorithm)] = [
-            (.algorithmAssume, Algorithm("UnsupportedAssume") {
-                Assume(false)
-            }),
-            (.algorithmTheorem, Algorithm("UnsupportedTheorem") {
-                Theorem(name: "Safety", always: .value(.bool(true)))
-            })
-        ]
+    @Test("Algorithm assumptions fail before lowering")
+    func algorithmAssumptionsFailBeforeLowering() {
+        let algorithm = Algorithm("UnsupportedAssume") {
+            Assume(false)
+        }
 
-        for (construct, algorithm) in cases {
-            do {
-                _ = try TLASpec("\(construct.rawValue)Gate") { algorithm }.compile()
-                Issue.record("Expected \(construct.rawValue) to prevent compilation.")
-            } catch let diagnostic as LanguageCapabilityDiagnostic {
-                #expect(diagnostic.construct.construct == construct)
-                #expect(diagnostic.operation == .compilation)
-                #expect(diagnostic.expected == LanguageCapabilityLedger.capability(for: construct).boundary)
-                #expect(diagnostic.nextSafeAction == LanguageCapabilityLedger.capability(for: construct).nextSafeAction)
-            } catch {
-                Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
-            }
+        do {
+            _ = try TLASpec("AssumeGate") { algorithm }.compile()
+            Issue.record("Expected the Algorithm assumption to prevent compilation.")
+        } catch let diagnostic as LanguageCapabilityDiagnostic {
+            #expect(diagnostic.construct.construct == .algorithmAssume)
+            #expect(diagnostic.operation == .compilation)
+            #expect(diagnostic.expected == LanguageCapabilityLedger.capability(for: .algorithmAssume).boundary)
+            #expect(diagnostic.nextSafeAction == LanguageCapabilityLedger.capability(for: .algorithmAssume).nextSafeAction)
+        } catch {
+            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
         }
     }
 

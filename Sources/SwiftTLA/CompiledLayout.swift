@@ -811,14 +811,6 @@ struct BindingValidator {
             references["\(path).declaration"] = .property(id)
             try validate(temporal.expr, at: path)
         }
-        for theorem in spec.theorems {
-            let path = "theorems.\(theorem.name)"
-            if let state = theorem.stateBody {
-                try validateExpression(state, at: path, scope: [:])
-            } else if let temporal = theorem.temporalBody {
-                try validate(temporal, at: path)
-            }
-        }
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
         for definition in spec.formalOperatorDefinitions {

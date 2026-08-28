@@ -257,7 +257,6 @@ public struct TLASpec: Sendable {
   public let fairness: [FairnessCondition]
   public let assume: StateExpr?
   public let checkDeadlock: Bool
-  public let theorems: [TheoremDecl]
   public let extendsModules: [StandardModule]
   public let constraint: StateExpr?
   public let recursiveFuncs: [RecursiveFunc]
@@ -288,7 +287,7 @@ public struct TLASpec: Sendable {
     formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
-    theorems: [TheoremDecl] = [], extendsModules: [StandardModule] = [.integers],
+    extendsModules: [StandardModule] = [.integers],
     constraint: StateExpr? = nil,
     recursiveFuncs: [RecursiveFunc] = [],
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
@@ -308,7 +307,6 @@ public struct TLASpec: Sendable {
     self.fairness = fairness
     self.assume = assume
     self.checkDeadlock = checkDeadlock
-    self.theorems = theorems
     self.extendsModules = canonicalStandardModules(extendsModules)
     self.constraint = constraint
     self.recursiveFuncs = recursiveFuncs
@@ -531,22 +529,6 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
     plusCalDependencies: dependsOn
   ))
 }
-public struct TheoremDecl: SpecComponent, Sendable, Equatable {
-  public let name: String
-  public let temporalBody: TemporalExpr?
-  public let stateBody: StateExpr?
-  init(name: String, temporal: TemporalExpr) {
-    self.name = name
-    self.temporalBody = temporal
-    self.stateBody = nil
-  }
-  init(name: String, state: StateExpr) {
-    self.name = name
-    self.temporalBody = nil
-    self.stateBody = state
-  }
-}
-
 /// A named refinement of this specification by a module-instance specification.
 public struct RefinementDecl: SpecComponent, Sendable, Equatable {
   public enum Operator: Sendable, Equatable {
@@ -672,7 +654,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalModuleParameter) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalOperatorDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
@@ -892,15 +873,6 @@ public func Parameter(
   kind: FormalModuleParameterKind = .constant
 ) -> FormalModuleParameter {
   FormalModuleParameter(name, kind: kind)
-}
-public func Theorem(name: String, @InvariantBuilder always: () -> StateExpr) -> TheoremDecl {
-  TheoremDecl(name: name, state: always())
-}
-public func Theorem(name: String, always state: StateExpr) -> TheoremDecl {
-  TheoremDecl(name: name, state: state)
-}
-public func Theorem(name: String, temporal: TemporalExpr) -> TheoremDecl {
-  TheoremDecl(name: name, temporal: temporal)
 }
 public func Assume(_ expr: some StateExprConvertible) -> AssumeDecl {
   AssumeDecl(expr.stateExpr)

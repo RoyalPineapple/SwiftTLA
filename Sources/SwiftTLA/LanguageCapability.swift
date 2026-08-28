@@ -28,7 +28,6 @@ public enum DeclaredLanguageConstruct: String, CaseIterable, Sendable, Hashable 
     case genericFairness = "WeakFairness / StrongFairness"
     case sequentialAlgorithmFairness = "Algorithm fairness"
     case algorithmAssume = "Assume in Algorithm"
-    case algorithmTheorem = "Theorem in Algorithm"
     case temporalRefinementLiveSpec = ".liveSpec refinement"
     case temporalRefinementLiveSpecEquals = ".liveSpecEquals refinement"
 
@@ -155,13 +154,13 @@ public enum LanguageCapabilityLedger {
                 boundary: "Generic TLA fairness is not admitted inside Algorithm.",
                 nextSafeAction: "Use Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness."
             )
-        case .algorithmAssume, .algorithmTheorem:
+        case .algorithmAssume:
             unsupportedRecord(
                 construct,
                 sourceDecoding: .supported,
                 resultBuilderConstruction: .supported,
-                boundary: "Assume and Theorem are not admitted inside Algorithm.",
-                nextSafeAction: "Place the declaration outside Algorithm in the formal specification."
+                boundary: "Assume is not admitted inside Algorithm.",
+                nextSafeAction: "Place the assumption outside Algorithm in the formal specification."
             )
         case .temporalRefinementLiveSpec, .temporalRefinementLiveSpecEquals:
             unsupportedRecord(
