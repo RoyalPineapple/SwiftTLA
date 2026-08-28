@@ -94,6 +94,17 @@ struct CompiledRuntime {
         return try boolean(predicate, in: state, enabledActions: try enabledActions(in: state))
     }
 
+    func evaluate(_ expressions: [CompiledStateExpr], in state: CompiledState) throws -> [CompiledValue] {
+        try state.requireIdentity(compilation.identity)
+        let evaluator = CompiledEvaluator(
+            state: state,
+            semantics: semantics,
+            layout: layout,
+            enabledActions: try enabledActions(in: state)
+        )
+        return try expressions.map(evaluator.evaluate)
+    }
+
     private func constraintHolds(in state: CompiledState) throws -> Bool {
         guard let constraint = semantics.constraint else { return true }
         return try boolean(constraint, in: state)

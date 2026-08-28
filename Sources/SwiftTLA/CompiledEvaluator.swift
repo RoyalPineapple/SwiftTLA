@@ -1010,7 +1010,10 @@ package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {
     guard let invariant = compilation.semantics.invariants.first else {
         throw CompiledEvaluationError.unresolvedOperator
     }
-    return try CompiledEvaluator(state: state, semantics: compilation.semantics, layout: compilation.layout)
-        .evaluate(invariant.body)
-        .rendered(using: compilation.layout)
+    guard let value = try CompiledRuntime(compilation: compilation)
+        .evaluate([invariant.body], in: state)
+        .first else {
+        throw CompiledEvaluationError.unresolvedOperator
+    }
+    return try value.rendered(using: compilation.layout)
 }
