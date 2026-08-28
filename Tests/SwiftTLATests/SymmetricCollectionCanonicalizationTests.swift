@@ -272,7 +272,7 @@ struct SymmetricCollectionCanonicalizationTests {
     }.compile()
 
     let collection = try #require(compilation.semantics.symmetricCollections.first)
-    let variable = try #require(compilation.layout.variableID(named: devices.name))
+    let variable = try #require(compilation.layout.testVariableID(named: devices.name))
     #expect(collection.variable == variable)
     #expect(collection.domainSymbol == "DevicesKeys")
   }

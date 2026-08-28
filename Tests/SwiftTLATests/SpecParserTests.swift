@@ -1459,7 +1459,7 @@ private func parserEnum(
         """)
         let parsed = SpecParser.parseSpecClosure(closure)
         let compilation = try parsed.compile(specificationName: "DependentInitialDomain")
-        let choice = try #require(compilation.layout.variableID(named: "choice"))
+        let choice = try #require(compilation.layout.testVariableID(named: "choice"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
 
         #expect(Set(try states.map {

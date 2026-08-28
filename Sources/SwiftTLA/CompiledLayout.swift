@@ -217,7 +217,7 @@ struct CompiledLayout: Hashable, Sendable {
         let controlLocations = Self.controlLocations(
             in: spec.sourceAlgorithms,
             actions: spec.actions,
-            hasProgramCounter: spec.variables.contains { $0.name == CompilerControlSymbol.programCounter.rawValue }
+            hasProgramCounter: spec.variables.contains { $0.origin == .programCounter }
         )
         actions = Self.actions(
             spec.actions,
@@ -263,10 +263,6 @@ struct CompiledLayout: Hashable, Sendable {
             + temporalProperties.map(\.declaration)
     }
 
-    func variableID(named name: String) -> VariableID? {
-        variables.first { $0.declaration.name == name }?.id
-    }
-
     func programCounterID() -> VariableID? {
         variables.first {
             $0.declaration.origin == .programCounter
@@ -279,21 +275,8 @@ struct CompiledLayout: Hashable, Sendable {
         }?.id
     }
 
-    func actionID(named name: String) -> ActionID? {
-        actions.first { $0.declaration.name == name }?.id
-    }
-
-    func propertyID(kind: CompiledDeclaration.Kind, named name: String) -> PropertyID? {
-        let properties = kind == .invariant ? stateProperties : temporalProperties
-        return properties.first { $0.declaration.name == name }?.id
-    }
-
     func moduleInstanceID(named namespace: String) -> ModuleInstanceID? {
         moduleInstances.first { $0.namespace == namespace }?.id
-    }
-
-    func procedureID(named name: String) -> ProcedureID? {
-        procedures.first { $0.name == name }?.id
     }
 
     func procedure(_ id: ProcedureID) -> CompiledProcedureLayout? {
@@ -301,31 +284,12 @@ struct CompiledLayout: Hashable, Sendable {
         return procedures[id.ordinal]
     }
 
-    func fieldID(named name: String) -> FieldID? {
-        fields.first { $0.renderedName == name }?.id
-    }
-
     func field(_ id: FieldID) -> CompiledFieldLayout? {
         fields.first { $0.id == id }
     }
 
-    func controlLocationID(owner: ControlOwner, named sourceName: String) -> ControlLocationID? {
-        controlLocations.first {
-            $0.owner == owner && $0.sourceName == sourceName
-        }?.id
-    }
-
     func controlLocation(_ id: ControlLocationID) -> CompiledControlLocation? {
         controlLocations.first { $0.id == id }
-    }
-
-    func controlLocationID(for reference: ControlLocationReference) -> ControlLocationID? {
-        if let owner = reference.owner {
-            return controlLocationID(owner: owner, named: reference.sourceName)
-        }
-        let matches = controlLocations.filter { $0.sourceName == reference.sourceName }
-        guard matches.count == 1 else { return nil }
-        return matches.first?.id
     }
 
     var canonicalEncoding: String {

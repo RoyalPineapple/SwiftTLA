@@ -193,6 +193,30 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("CountIsZero =="))
     }
 
+    @Test("compiled authored properties preserve their lowered identities")
+    func compiledAuthoredPropertiesPreserveLoweredIdentities() throws {
+        let source = TLASpec("PropertyIdentity") {
+            Invariant("TopLevel") { true }
+            Algorithm("PropertyIdentity") {
+                Do(TestControlLabel.done) { Stop() }
+                Invariant("AuthoredInvariant") { true }
+                Eventually("AuthoredTemporal", true)
+            }
+        }
+        let lowered = try source.loweredSourceModel()
+        let closure = try FormalModuleClosure.resolve(root: lowered)
+        let layout = CompiledLayout(spec: lowered, closure: closure)
+        var lowerer = CompiledLowerer(spec: lowered, closure: closure, layout: layout)
+        let semantics = try lowerer.lower(spec: lowered)
+        let sourcePlan = try #require(lowered.authoredPlusCalAlgorithmPlan)
+        let plan = try lowerer.authoredPlusCalPlan(sourcePlan)
+
+        #expect(semantics.invariants.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1)])
+        #expect(semantics.temporalProperties.map(\.id) == [.init(ordinal: 2)])
+        #expect(plan.properties.map(\.id) == [.init(ordinal: 1), .init(ordinal: 2)])
+        #expect(plan.properties.map(\.name) == ["AuthoredInvariant", "AuthoredTemporal"])
+    }
+
     @Test("compilation leaves standard process termination to the PlusCal translator")
     func plansTranslatorTermination() throws {
         let algorithm = Algorithm("TranslatorTermination") {

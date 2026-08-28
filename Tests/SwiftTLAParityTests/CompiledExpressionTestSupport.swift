@@ -1,6 +1,16 @@
 @testable import SwiftTLA
 import Testing
 
+extension CompiledLayout {
+  func testVariableID(named name: String) -> VariableID? {
+    variables.first { $0.declaration.name == name }?.id
+  }
+
+  func testActionID(named name: String) -> ActionID? {
+    actions.first { $0.declaration.name == name }?.id
+  }
+}
+
 func compiledValue(
   _ expression: StateExpr,
   values: [(String, TLAValue)] = [],
@@ -29,7 +39,7 @@ func compiledValue(
   )
   let compilation = try specification.compile()
   let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-  let result = try #require(compilation.layout.variableID(named: resultName))
+  let result = try #require(compilation.layout.testVariableID(named: resultName))
   return try initial.value(for: result).rendered(using: compilation.layout)
 }
 

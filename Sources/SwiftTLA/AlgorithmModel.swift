@@ -414,6 +414,25 @@ internal struct CompiledAuthoredPlusCalAlgorithmPlan: Sendable {
     let procedures: [CompiledAuthoredPlusCalProcedure]
     let processes: [CompiledAuthoredPlusCalProcess]
     let sequentialSteps: [CompiledAuthoredPlusCalStep]
+    let properties: [CompiledAuthoredPlusCalProperty]
+    let translatorOwnedPropertyNames: Set<String>
+}
+
+internal enum CompiledAuthoredPlusCalProperty: Sendable {
+    case invariant(id: PropertyID, name: String)
+    case temporal(id: PropertyID, name: String)
+
+    var id: PropertyID {
+        switch self {
+        case .invariant(let id, _), .temporal(let id, _): id
+        }
+    }
+
+    var name: String {
+        switch self {
+        case .invariant(_, let name), .temporal(_, let name): name
+        }
+    }
 }
 
 internal struct CompiledAuthoredPlusCalState: Sendable {

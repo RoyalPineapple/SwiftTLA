@@ -236,7 +236,7 @@ struct ProcedureLoweringTests {
         in compilation: CompiledSpecification,
         from state: CompiledState
     ) throws -> [CompiledState] {
-        let action = try #require(compilation.layout.actionID(named: label))
+        let action = try #require(compilation.layout.testActionID(named: label))
         return try CompiledRuntime(compilation: compilation)
             .successors(for: action, from: state)
             .filter { successor in
@@ -247,7 +247,7 @@ struct ProcedureLoweringTests {
     }
 
     private func value(named name: String, in state: CompiledState, compilation: CompiledSpecification) throws -> TLAValue {
-        let variable = try #require(compilation.layout.variableID(named: name))
+        let variable = try #require(compilation.layout.testVariableID(named: name))
         return try state.value(for: variable).rendered(using: compilation.layout)
     }
 

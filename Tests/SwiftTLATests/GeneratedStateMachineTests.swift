@@ -325,7 +325,7 @@ struct GeneratedRangeInitializedAlgorithmTests {
     @Test("compiled initialization preserves every finite SharedVar value")
     func generatedRangePreservesEveryInitialHour() throws {
         let compilation = try GeneratedRangeInitializedAlgorithm.spec.compile()
-        let hour = try #require(compilation.layout.variableID(named: "hour"))
+        let hour = try #require(compilation.layout.testVariableID(named: "hour"))
         let initialHours = try CompiledRuntime(compilation: compilation).initialStates().map {
             try $0.value(for: hour).rendered(using: compilation.layout)
         }
@@ -483,7 +483,7 @@ struct GeneratedDependentInitialAlgorithmTests {
     @Test("#spec preserves a dependent typed function initializer")
     func generatedModelPreservesDependentInitialStates() throws {
         let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
-        let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
+        let mirrors = try #require(compilation.layout.testVariableID(named: "mirrors"))
         let states = try CompiledRuntime(compilation: compilation).initialStates().map {
             try $0.value(for: mirrors).rendered(using: compilation.layout)
         }

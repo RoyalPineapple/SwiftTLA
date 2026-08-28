@@ -565,7 +565,7 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(runtime.raw) == .set(expectedMembers))
 
         let compilation = try NonEmptySubsetGeneratedModel.spec.compile()
-        let selectedKeys = try #require(compilation.layout.variableID(named: "selectedKeys"))
+        let selectedKeys = try #require(compilation.layout.testVariableID(named: "selectedKeys"))
         let initialStates = try CompiledRuntime(compilation: compilation).initialStates()
         #expect(initialStates.count == 3)
         let initialValues = try Set(initialStates.map {

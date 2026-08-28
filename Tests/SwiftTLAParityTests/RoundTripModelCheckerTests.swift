@@ -33,7 +33,7 @@ private func compiledSuccessors(
   )
   let compilation = try spec.compile()
   let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-  let step = try #require(compilation.layout.actionID(named: "step"))
+  let step = try #require(compilation.layout.testActionID(named: "step"))
   let states = try CompiledRuntime(compilation: compilation).successors(for: step, from: initial).map(\.state)
   return (compilation, states)
 }
@@ -43,7 +43,7 @@ private func value(
   in state: CompiledState,
   compilation: CompiledSpecification
 ) throws -> TLAValue {
-  let variable = try #require(compilation.layout.variableID(named: name))
+  let variable = try #require(compilation.layout.testVariableID(named: name))
   return try state.value(for: variable).rendered(using: compilation.layout)
 }
 
@@ -324,7 +324,7 @@ struct ModelCheckOutcomeTests {
     arguments: [TLAValue] = [],
     from state: CompiledState
   ) throws -> CompiledState {
-    let action = try #require(compilation.layout.actionID(named: name))
+    let action = try #require(compilation.layout.testActionID(named: name))
     return try #require(try CompiledRuntime(compilation: compilation)
       .successors(for: action, from: state)
       .first { successor in
@@ -352,7 +352,7 @@ struct ModelCheckOutcomeTests {
     in state: CompiledState,
     compilation: CompiledSpecification
   ) throws -> TLAValue {
-    let variable = try #require(compilation.layout.variableID(named: name))
+    let variable = try #require(compilation.layout.testVariableID(named: name))
     return try state.value(for: variable).rendered(using: compilation.layout)
   }
 
@@ -456,7 +456,7 @@ struct ModelCheckOutcomeTests {
     }
 
     let advanced = try successor(compilation, named: "advance", arguments: [.int(1)], from: initial)
-    let action = try #require(compilation.layout.actionID(named: "advance"))
+    let action = try #require(compilation.layout.testActionID(named: "advance"))
     let runtime = CompiledRuntime(compilation: compilation)
     #expect(try runtime.successors(for: action, from: advanced).contains { successor in
       try successor.arguments.map { try $0.rendered(using: compilation.layout) } == [.int(1)]
@@ -666,12 +666,12 @@ struct ModelCheckOutcomeTests {
     }
     let compilation = try spec.compile()
     let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    let advance = try #require(compilation.layout.actionID(named: "advance"))
+    let advance = try #require(compilation.layout.testActionID(named: "advance"))
     let successors = try CompiledRuntime(compilation: compilation)
       .successors(for: advance, from: initial)
     #expect(successors.count == 2)
     let observed = try Set(successors.map { successor in
-      try successor.state.value(for: #require(compilation.layout.variableID(named: "phases")))
+      try successor.state.value(for: #require(compilation.layout.testVariableID(named: "phases")))
         .rendered(using: compilation.layout)
     })
     #expect(observed == Set<TLAValue>([
@@ -782,12 +782,12 @@ struct ModelCheckOutcomeTests {
       }
     }
     let compilation = try spec.compile()
-    let action = try #require(compilation.layout.actionID(named: "init"))
+    let action = try #require(compilation.layout.testActionID(named: "init"))
     let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
     let next = try #require(try CompiledRuntime(compilation: compilation)
       .successors(for: action, from: state)
       .first?.state)
-    let phasesID = try #require(compilation.layout.variableID(named: "phases"))
+    let phasesID = try #require(compilation.layout.testVariableID(named: "phases"))
     #expect(
       try next.value(for: phasesID).rendered(using: compilation.layout)
         == .function(["first": "done", "second": "done"]))

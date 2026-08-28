@@ -49,6 +49,7 @@ struct CompiledLowerer {
     private let formalParameters: Set<String>
     private let symmetricMembers: [TLAValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
+    private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
     private let rootOperators: [String: OperatorID]
     private var operatorArities: [OperatorID: Int]
@@ -71,6 +72,7 @@ struct CompiledLowerer {
         formalParameters = Set(spec.formalParameters.map(\.name))
         symmetricMembers = spec.symmetricCollections.flatMap(\.metadata.members)
         self.incomingModuleParameters = incomingModuleParameters
+        authoredAlgorithm = spec.sourceAlgorithms.first?.model
         var renderedNames = spec.renderedDeclarationNames()
         renderedNames.formUnion(spec.symmetricCollections.flatMap(\.metadata.generatedSymbols))
         renderedNames.formUnion(spec.symmetrySets.map { "Symm\($0.variableName)" })
@@ -105,36 +107,51 @@ struct CompiledLowerer {
         for constant in spec.constants {
             try validateValue(constant.value, at: "constants.\(constant.name)")
         }
+        guard spec.variables.count == layout.variables.count,
+              spec.actions.count == layout.actions.count,
+              spec.invariants.count == layout.stateProperties.count,
+              spec.temporalProperties.count == layout.temporalProperties.count
+        else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .lowering,
+                path: "layout.declarations",
+                expected: "layout counts matching variables \(spec.variables.count), actions \(spec.actions.count), invariants \(spec.invariants.count), and temporal properties \(spec.temporalProperties.count)",
+                actual: "variables \(layout.variables.count), actions \(layout.actions.count), invariants \(layout.stateProperties.count), and temporal properties \(layout.temporalProperties.count)",
+                nextSafeAction: "Compile the model again from its current source."
+            )
+        }
         var initializations: [VariableID: CompiledVariableInitialization] = [:]
-        for declaration in spec.variables {
+        for (declaration, variableLayout) in zip(spec.variables, layout.variables) {
             let path = "variables.\(declaration.name)"
-            guard let id = layout.variableID(named: declaration.name) else {
-                throw diagnostic(path: "\(path).declaration")
-            }
             if case .value(let value) = declaration.initialization,
                spec.symmetricCollections.contains(where: { $0.name == declaration.name }) == false {
                 try validateValue(value, at: "\(path).initialization")
             }
-            initializations[id] = try lower(declaration.initialization, at: "\(path).initialization", scope: rootScope)
-        }
-        let actions: [CompiledAction] = try spec.actions.map {
-            try lower($0)
-        }
-        let actionsByID = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
-        let invariants: [CompiledInvariant] = try spec.invariants.map {
-            CompiledInvariant(
-                id: try property(kind: .invariant, named: $0.name, at: "invariants.\($0.name).declaration"),
-                name: $0.name,
-                body: try lower($0.body, at: "invariants.\($0.name).body", scope: rootScope)
+            initializations[variableLayout.id] = try lower(
+                declaration.initialization,
+                at: "\(path).initialization",
+                scope: rootScope
             )
         }
-        let temporalProperties = try spec.temporalProperties.map {
+        let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
+            try lower($0.0, id: $0.1.id)
+        }
+        let actionsByID = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
+        let invariants: [CompiledInvariant] = try zip(spec.invariants, layout.stateProperties).map {
+            CompiledInvariant(
+                id: $0.1.id,
+                name: $0.0.name,
+                body: try lower($0.0.body, at: "invariants.\($0.0.name).body", scope: rootScope)
+            )
+        }
+        let temporalProperties = try zip(spec.temporalProperties, layout.temporalProperties).map {
             CompiledTemporal(
-                id: try property(kind: .temporalProperty, named: $0.name, at: "temporalProperties.\($0.name).declaration"),
-                name: $0.name,
+                id: $0.1.id,
+                name: $0.0.name,
                 expression: try lower(
-                    $0.expr,
-                    at: "temporalProperties.\($0.name)",
+                    $0.0.expr,
+                    at: "temporalProperties.\($0.0.name)",
                     scope: rootScope
                 )
             )
@@ -284,7 +301,19 @@ struct CompiledLowerer {
     mutating func authoredPlusCalPlan(
         _ plan: AuthoredPlusCalAlgorithmPlan
     ) throws -> CompiledAuthoredPlusCalAlgorithmPlan {
-        .init(
+        guard let authoredAlgorithm else { throw diagnostic(path: "authoredPlusCal") }
+        guard plan.procedures.count == layout.procedures.count else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .lowering,
+                path: "authoredPlusCal.procedures",
+                expected: "\(plan.procedures.count) compiled procedure identities",
+                actual: "\(layout.procedures.count) layout procedure identities",
+                nextSafeAction: "Compile the model again from its current source."
+            )
+        }
+        let propertyPlan = try authoredPlusCalProperties(in: authoredAlgorithm)
+        return .init(
             name: plan.name,
             sequentialFairness: plan.sequentialFairness,
             shared: try plan.shared.enumerated().map {
@@ -294,12 +323,12 @@ struct CompiledLowerer {
                     scope: rootScope
                 )
             },
-            procedures: try plan.procedures.enumerated().map { index, procedure in
+            procedures: try zip(plan.procedures, layout.procedures).enumerated().map { index, value in
+                let procedure = value.0
                 let path = "authoredPlusCal.procedures[\(index)]"
-                guard let id = layout.procedureID(named: procedure.name) else { throw diagnostic(path: path) }
                 let scope = try bind(procedure.parameters.map(\.root), at: "\(path).parameters", scope: rootScope)
                 return .init(
-                    id: id,
+                    id: value.1.id,
                     parameters: try procedure.parameters.map {
                         try bound($0.root, in: scope, at: "\(path).parameters")
                     },
@@ -349,8 +378,86 @@ struct CompiledLowerer {
                     at: "authoredPlusCal.sequentialSteps[\($0.offset)]",
                     scope: rootScope
                 )
-            }
+            },
+            properties: propertyPlan.properties,
+            translatorOwnedPropertyNames: propertyPlan.translatorOwnedNames
         )
+    }
+
+    private func authoredPlusCalProperties(
+        in algorithm: AlgorithmModel
+    ) throws -> (properties: [CompiledAuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
+        func isTranslatorTermination(_ temporal: NamedTemporal) -> Bool {
+            guard temporal.name == "Termination", algorithm.processes.count == 1,
+                  case .eventually(let expression) = temporal.expr,
+                  case .forAll(let domain, let binding, let predicate) = expression,
+                  domain == .setLiteral(algorithm.processes[0].domain.map(StateExpr.value))
+            else { return false }
+            switch predicate {
+            case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
+                 .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
+                return location.sourceName == CompilerControlSymbol.done.rawValue && process == binding
+            default:
+                return false
+            }
+        }
+
+        func propertyID(
+            kind: CompiledDeclaration.Kind,
+            named name: String,
+            at path: String
+        ) throws -> PropertyID {
+            let properties = kind == .invariant ? layout.stateProperties : layout.temporalProperties
+            guard let property = properties.first(where: { $0.declaration.name == name }) else {
+                throw diagnostic(path: path, actual: "unresolved property '\(name)'")
+            }
+            return property.id
+        }
+
+        func collect(
+            _ components: [AlgorithmComponentModel],
+            path: String
+        ) throws -> (properties: [CompiledAuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
+            var properties: [CompiledAuthoredPlusCalProperty] = []
+            var translatorOwnedNames: Set<String> = []
+            for (index, component) in components.enumerated() {
+                let componentPath = "\(path)[\(index)]"
+                switch component {
+                case .invariant(let invariant):
+                    properties.append(.invariant(
+                        id: try propertyID(kind: .invariant, named: invariant.name, at: componentPath),
+                        name: invariant.name
+                    ))
+                case .temporal(let temporal):
+                    if isTranslatorTermination(temporal) {
+                        translatorOwnedNames.insert(temporal.name)
+                    } else if temporal.name == "Termination" {
+                        throw CompilationDiagnostic(
+                            code: .duplicateRenderedModuleDefinition,
+                            stage: .rendering,
+                            path: componentPath,
+                            expected: "the translator's standard Termination predicate for this process family",
+                            actual: "a distinct property named Termination",
+                            nextSafeAction: "Give the property a distinct name, or declare the standard process termination property."
+                        )
+                    } else {
+                        properties.append(.temporal(
+                            id: try propertyID(kind: .temporalProperty, named: temporal.name, at: componentPath),
+                            name: temporal.name
+                        ))
+                    }
+                case .process(let process):
+                    let nested = try collect(process.components, path: "\(componentPath).components")
+                    properties += nested.properties
+                    translatorOwnedNames.formUnion(nested.translatorOwnedNames)
+                case .shared, .procedure, .formalOperator, .stateConstraint, .unsupported, .local, .step:
+                    continue
+                }
+            }
+            return (properties, translatorOwnedNames)
+        }
+
+        return try collect(algorithm.components, path: "components")
     }
 
     private mutating func authoredPlusCalState(
@@ -448,7 +555,7 @@ struct CompiledLowerer {
             case .goto(let label):
                 return .goto(try controlLocation(.init(label.name), owner: owner, at: "\(statementPath).label"))
             case .call(let target, let arguments):
-                guard let procedure = layout.procedureID(named: target) else {
+                guard let procedure = layout.procedures.first(where: { $0.name == target })?.id else {
                     throw diagnostic(path: "\(statementPath).procedure")
                 }
                 return .call(
@@ -633,11 +740,10 @@ struct CompiledLowerer {
         return .init(scope: scope, isStrong: condition.isStrong)
     }
 
-    private mutating func lower(_ action: NamedAction) throws -> CompiledAction {
+    private mutating func lower(_ action: NamedAction, id: ActionID) throws -> CompiledAction {
         if let issue = action.sourceIssue {
             throw issue.compilationDiagnostic(stage: .binding, path: "actions.\(action.name).bindings")
         }
-        let id = try self.action(named: action.name, at: "actions.\(action.name).declaration")
         var scope = rootScope
         let bindings = try action.bindings.map {
             for (index, value) in $0.values.enumerated() {
@@ -752,7 +858,11 @@ struct CompiledLowerer {
                     else { references = [] }
                     lowered.append(.init(expression: expression, operatorReferences: references))
                 case .controlLocation(let reference):
-                    guard let location = layout.controlLocationID(for: reference) else {
+                    let matches = layout.controlLocations.filter { location in
+                        location.sourceName == reference.sourceName
+                            && (reference.owner.map { $0 == location.owner } ?? true)
+                    }
+                    guard matches.count == 1, let location = matches.first?.id else {
                         throw CompilationDiagnostic(
                             code: .unknownControlLocation,
                             stage: .binding,
@@ -1481,7 +1591,9 @@ struct CompiledLowerer {
         at path: String
     ) throws -> CompiledStateExpr {
         if let binder = scope.values[name] { return .boundValue(binder) }
-        if let variable = layout.variableID(named: name) { return .stateVariable(variable) }
+        if let variable = layout.variables.first(where: { $0.declaration.name == name })?.id {
+            return .stateVariable(variable)
+        }
         if let value = constants.first(where: { $0.name == name })?.value {
             return .value(value)
         }
@@ -1510,7 +1622,7 @@ struct CompiledLowerer {
     }
 
     private func variable(named name: String, at path: String) throws -> VariableID {
-        guard let variable = layout.variableID(named: name) else {
+        guard let variable = layout.variables.first(where: { $0.declaration.name == name })?.id else {
             throw diagnostic(path: path, actual: "unresolved variable '\(name)'")
         }
         return variable
@@ -1539,7 +1651,9 @@ struct CompiledLowerer {
                     nextSafeAction: "Assign a declared state variable."
                 )
             }
-            if let variable = layout.variableID(named: name) { return variable }
+            if let variable = layout.variables.first(where: { $0.declaration.name == name })?.id {
+                return variable
+            }
             if knownBinderNames.contains(name) {
                 throw CompilationDiagnostic(
                     code: .assignmentToBinder,
@@ -1555,21 +1669,10 @@ struct CompiledLowerer {
     }
 
     private func action(named name: String, at path: String) throws -> ActionID {
-        guard let action = layout.actionID(named: name) else {
+        guard let action = layout.actions.first(where: { $0.declaration.name == name })?.id else {
             throw diagnostic(path: path, actual: "unresolved action '\(name)'")
         }
         return action
-    }
-
-    private func property(
-        kind: CompiledDeclaration.Kind,
-        named name: String,
-        at path: String
-    ) throws -> PropertyID {
-        guard let property = layout.propertyID(kind: kind, named: name) else {
-            throw diagnostic(path: path, actual: "unresolved property '\(name)'")
-        }
-        return property
     }
 
     private func controlLocation(
@@ -1577,8 +1680,23 @@ struct CompiledLowerer {
         owner: ControlOwner,
         at path: String
     ) throws -> ControlLocationID {
-        let location = layout.controlLocationID(owner: owner, named: reference.sourceName)
-            ?? layout.controlLocationID(for: reference)
+        let resolvedOwner: ControlOwner
+        if reference.sourceName == CompilerControlSymbol.done.rawValue {
+            let algorithm: String
+            switch owner {
+            case .sequential(let name), .process(let name, _, _), .procedure(let name, _), .generated(let name, _):
+                algorithm = name
+            }
+            resolvedOwner = .generated(
+                algorithm: algorithm,
+                purpose: CompilerControlSymbol.done.rawValue
+            )
+        } else {
+            resolvedOwner = owner
+        }
+        let location = layout.controlLocations.first {
+            $0.owner == resolvedOwner && $0.sourceName == reference.sourceName
+        }?.id
         guard let location else {
             throw diagnostic(path: path, actual: "unresolved control location '\(reference.sourceName)'")
         }
@@ -1596,7 +1714,7 @@ struct CompiledLowerer {
                 nextSafeAction: "Use an ASCII identifier beginning with a letter or underscore."
             )
         }
-        guard let field = layout.fieldID(named: name) else {
+        guard let field = layout.fields.first(where: { $0.renderedName == name })?.id else {
             throw diagnostic(path: path, actual: "unresolved field '\(name)'")
         }
         return field

@@ -460,7 +460,7 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__1_1_1 == board(2, 20, 200)"))
 
     let compilation = try spec.compile()
-    let action = try #require(compilation.layout.actionID(named: "board"))
+    let action = try #require(compilation.layout.testActionID(named: "board"))
     let runtime = CompiledRuntime(compilation: compilation)
     let initial = try #require(try runtime.initialStates().first)
     let successors = try runtime.successors(for: action, from: initial)
@@ -468,7 +468,7 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       try successor.arguments.map { try $0.rendered(using: compilation.layout) }
         == [.int(2), .int(20), .int(200)]
     })
-    let floorID = try #require(compilation.layout.variableID(named: "floor"))
+    let floorID = try #require(compilation.layout.testVariableID(named: "floor"))
     #expect(try next.state.value(for: floorID).rendered(using: compilation.layout) == .int(222))
     #expect(try successors.contains { successor in
       try successor.arguments.map { try $0.rendered(using: compilation.layout) }
@@ -658,7 +658,7 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     }
 
     let compilation = try spec.compile()
-    let variable = try #require(compilation.layout.variableID(named: "x"))
+    let variable = try #require(compilation.layout.testVariableID(named: "x"))
     let initialValues = try CompiledRuntime(compilation: compilation).initialStates().map {
       try $0.value(for: variable).rendered(using: compilation.layout)
     }
