@@ -23,4 +23,11 @@ struct InvalidGeneratedRawSurface {
 let machine = try InvalidGeneratedRawSurface.makeMachine()
 let rawState = machine.tlaSnapshot()
 let transitionEvidence = InvalidGeneratedRawSurface.TransitionEvidence.self
-_ = (rawState, transitionEvidence)
+typealias RawStorage = _GeneratedMachineStorage<
+  InvalidGeneratedRawSurface.State,
+  InvalidGeneratedRawSurface.Action
+>
+let compiledState = RawStorage.State.self
+let formalArguments = RawStorage.ActionArguments.self
+let ordinalExecution = RawStorage.successors
+_ = (rawState, transitionEvidence, compiledState, formalArguments, ordinalExecution)

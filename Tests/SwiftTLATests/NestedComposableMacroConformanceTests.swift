@@ -134,6 +134,8 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.status != 0)
         #expect(result.output.contains("has no member 'tlaSnapshot'"))
         #expect(result.output.contains("TransitionEvidence"))
+        #expect(result.output.contains("ActionArguments"))
+        #expect(result.output.contains("successors"))
     }
 
     @Test("Generated actor cannot expose raw state")

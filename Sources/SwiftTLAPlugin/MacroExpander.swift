@@ -21,31 +21,14 @@ enum MacroExpander {
         let collectionArguments = plan.symmetricCollections.map {
             ", \($0.formalName): \($0.formalName)"
         }.joined()
-        let machineInitializerParameters = ([
-            "storage: _GeneratedMachineStorage",
-            "storageState: _GeneratedMachineStorage.State"
-        ] + collectionParameters)
-            .joined(separator: ", ")
-        let collectionAssignments = plan.symmetricCollections.map {
-            "_\($0.formalName)Members = \($0.formalName)"
-        }
-        let machineInitializerAssignments = ([
-            "_storage = storage",
-            "_storageState = storageState"
-        ] + collectionAssignments + [
-            "_state = try State(storage: storage, storageState: storageState\(collectionArguments))"
-        ])
-            .joined(separator: "\n            ")
+        let stateDecoder = "{ values in try State(values: &values\(collectionArguments)) }"
+        let actionDecoders = generateActionDecoders(actions: plan.actions)
+        let actionValidator = generateActionValidator(actions: plan.actions)
 
-        decls.append(DeclSyntax(stringLiteral: "private let _storage: _GeneratedMachineStorage"))
-        decls.append(DeclSyntax(stringLiteral: "private var _storageState: _GeneratedMachineStorage.State"))
-        decls.append(DeclSyntax(stringLiteral: "private var _state: State"))
-        decls.append(contentsOf: plan.symmetricCollections.map { collection in
-            DeclSyntax(stringLiteral: "private let _\(collection.formalName)Members: [\(collection.elementType).ID]")
-        })
+        decls.append(DeclSyntax(stringLiteral: "private var _storage: _GeneratedMachineStorage<State, Action>"))
         decls.append(DeclSyntax(stringLiteral: """
-        private init(\(machineInitializerParameters)) throws {
-            \(machineInitializerAssignments)
+        private init(storage: _GeneratedMachineStorage<State, Action>) {
+            _storage = storage
         }
         """))
 
@@ -55,37 +38,87 @@ enum MacroExpander {
             enumInfos: model.enumInfos
         )))
         decls.append(contentsOf: generateGeneratedMachineStorageMembers(
-            actions: plan.actions,
-            symmetricCollections: plan.symmetricCollections
+            actions: plan.actions
         ))
         decls.append(contentsOf: generateActorMembers(model: model))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         public static func makeMachine(\(collectionParameters.joined(separator: ", "))) throws -> Self {
-            let storage = _GeneratedMachineStorage(compilation: try _compiledSpecification())
-            let initialStates = try storage.initialStates()
-            guard initialStates.count == 1 else {
-                if initialStates.isEmpty {
-                    throw GeneratedMachineError.noInitialState
-                }
-                throw GeneratedMachineError.ambiguousInitialState
-            }
-            return try Self(
-                storage: storage,
-                storageState: initialStates[0]\(collectionArguments)
-            )
+            Self(storage: try _GeneratedMachineStorage(
+                compilation: try _compiledSpecification(),
+                initial: nil,
+                stateDecoder: \(stateDecoder),
+                actionDecoders: [\(actionDecoders)],
+                actionValidator: \(actionValidator)
+            ))
         }
         public static func makeMachine(_ initial: State\(appendedCollectionParameters)) throws -> Self {
-            let storage = _GeneratedMachineStorage(compilation: try _compiledSpecification())
-            return try Self(
-                storage: storage,
-                storageState: try storage.initialState { candidate in
-                    try State(storage: storage, storageState: candidate\(collectionArguments)) == initial
-                }\(collectionArguments)
-            )
+            Self(storage: try _GeneratedMachineStorage(
+                compilation: try _compiledSpecification(),
+                initial: initial,
+                stateDecoder: \(stateDecoder),
+                actionDecoders: [\(actionDecoders)],
+                actionValidator: \(actionValidator)
+            ))
         }
         """))
         return decls
+    }
+
+    static func generateActionDecoders(actions: [MachineSurfacePlan.Action]) -> String {
+        actions.map { action in
+            if let collection = action.symmetricCollection {
+                return """
+                { values in
+                    let member = try values.decodeMember(
+                        applicationMembers: \(collection.formalName)
+                    )
+                    return .\(action.swiftIdentifier)(member: member)
+                }
+                """
+            }
+            let decoding = action.bindings.compactMap { binding in
+                binding.isPublic
+                    ? "let \(binding.formalName) = try values.decode(as: \(binding.swiftType).self)"
+                    : nil
+            }.joined(separator: "\n                    ")
+            let publicBindings = action.bindings.filter(\.isPublic)
+            let arguments = publicBindings.map {
+                "\($0.formalName): \($0.formalName)"
+            }.joined(separator: ", ")
+            return """
+            { values in
+                \(decoding)
+                return .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")
+            }
+            """
+        }.joined(separator: ",\n                ")
+    }
+
+    static func generateActionValidator(actions: [MachineSurfacePlan.Action]) -> String {
+        let cases = actions.map { action in
+            if let collection = action.symmetricCollection {
+                return """
+                case .\(action.swiftIdentifier)(member: let member):
+                    guard \(collection.formalName).contains(member) else {
+                        throw GeneratedMachineStateDiagnostic.typeMismatch(
+                            path: "\(collection.formalName).member",
+                            expected: "an application ID bound when the machine was created",
+                            actual: String(describing: member)
+                        )
+                    }
+                """
+            }
+            return "case .\(action.swiftIdentifier): break"
+        }.joined(separator: "\n                ")
+        guard cases.isEmpty == false else { return "{ _ in }" }
+        return """
+        { action in
+            switch action {
+            \(cases)
+            }
+        }
+        """
     }
 
     static func generateCompilationIdentityCheck(model: MacroCompilation) -> [DeclSyntax] {
@@ -143,104 +176,10 @@ enum MacroExpander {
             return "case \(action.swiftIdentifier)(\(parameters))"
         }.joined(separator: "\n    ")
 
-        let actionOrdinalCases = actions.enumerated().map { ordinal, action in
-            let pattern = action.symmetricCollection == nil
-                ? ".\(action.swiftIdentifier)"
-                : ".\(action.swiftIdentifier)(member: _)"
-            return "case \(pattern): return \(ordinal)"
-        }.joined(separator: "\n        ")
-
-        let actionArgumentCases = actions.map { action in
-            if let collection = action.symmetricCollection {
-                let formalMembers = collection.members.map(codegenTLAValue).joined(separator: ", ")
-                return """
-                case .\(action.swiftIdentifier)(member: let member):
-                    guard let memberOrdinal = _\(collection.formalName)Members.firstIndex(of: member) else {
-                        throw GeneratedMachineStateDiagnostic.typeMismatch(
-                            path: "\(collection.formalName).member",
-                            expected: "an application ID bound when the machine was created",
-                            actual: String(describing: member)
-                        )
-                    }
-                    let formalMembers: [TLAValue] = [\(formalMembers)]
-                    return [formalMembers[memberOrdinal]]
-                """
-            }
-            let publicBindings = action.bindings.filter(\.isPublic)
-            let arguments = action.bindings.map { binding in
-                binding.isPublic
-                    ? "\(binding.formalName).tlaValue"
-                    : codegenTLAValue(binding.domain[0])
-            }.joined(separator: ", ")
-            let pattern = publicBindings.isEmpty
-                ? ".\(action.swiftIdentifier)"
-                : ".\(action.swiftIdentifier)(\(publicBindings.map { "let \($0.formalName)" }.joined(separator: ", ")))"
-            return "case \(pattern): return [\(arguments)]"
-        }.joined(separator: "\n        ")
-
-        let labelCases = actions.enumerated().map { ordinal, action -> String in
-            if let collection = action.symmetricCollection {
-                let formalMembers = collection.members.map(codegenTLAValue).joined(separator: ", ")
-                return """
-                case \(ordinal) where arguments.count == 1:
-                    let formalMembers: [TLAValue] = [\(formalMembers)]
-                    guard let memberOrdinal = formalMembers.firstIndex(where: {
-                        arguments.matches($0, at: 0)
-                    }), _\(collection.formalName)Members.indices.contains(memberOrdinal) else {
-                        throw GeneratedMachineError.invalidGeneratedActionArguments
-                    }
-                    return .\(action.swiftIdentifier)(member: _\(collection.formalName)Members[memberOrdinal])
-                """
-            }
-            let publicBindings = action.bindings.filter(\.isPublic)
-            if action.bindings.isEmpty {
-                return "case \(ordinal) where arguments.isEmpty: return .\(action.swiftIdentifier)"
-            }
-            let bindings = action.bindings.enumerated().compactMap { index, binding in
-                binding.isPublic
-                    ? "let \(binding.formalName) = try arguments.value(at: \(index), as: \(binding.swiftType).self)"
-                    : nil
-            }.joined(separator: "\n                    ")
-            let fixedArguments = action.bindings.enumerated().compactMap { index, binding in
-                binding.isPublic ? nil : "arguments.matches(\(codegenTLAValue(binding.domain[0])), at: \(index))"
-            }
-            let arguments = publicBindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
-            let guardFixedArguments = fixedArguments.isEmpty
-                ? ""
-                : "guard \(fixedArguments.joined(separator: ", ")) else { throw GeneratedMachineError.invalidGeneratedActionArguments }\n                    "
-            return """
-                case \(ordinal) where arguments.count == \(action.bindings.count):
-                    \(bindings)
-                    \(guardFixedArguments)return .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")
-                """
-        }.joined(separator: "\n        ")
-
         return [
             DeclSyntax(stringLiteral: """
         public enum Action: Hashable, Sendable {
             \(cases)
-        }
-        """),
-            DeclSyntax(stringLiteral: """
-        private static func _actionOrdinal(for action: Action) -> Int {
-            switch action {
-            \(actionOrdinalCases)
-            }
-        }
-        """),
-            DeclSyntax(stringLiteral: """
-        private func _actionArguments(for action: Action) throws -> [any TLAValueConvertible] {
-            switch action {
-            \(actionArgumentCases)
-            }
-        }
-        """),
-            DeclSyntax(stringLiteral: """
-        private func _action(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) throws -> Action {
-            switch ordinal {
-            \(labelCases)
-            default: throw GeneratedMachineError.invalidGeneratedActionOrdinal
-            }
         }
         """)
         ]
@@ -296,12 +235,8 @@ extension MacroExpander {
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax {
                             FunctionParameterSyntax(
-                                firstName: "storage",
-                                type: TypeSyntax(stringLiteral: "_GeneratedMachineStorage")
-                            )
-                            FunctionParameterSyntax(
-                                firstName: "storageState",
-                                type: TypeSyntax(stringLiteral: "_GeneratedMachineStorage.State")
+                                firstName: "values",
+                                type: TypeSyntax(stringLiteral: "inout _GeneratedMachineStorage<State, Action>.Decoder")
                             )
                             for collection in variables.compactMap(\.symmetricCollection) {
                                 FunctionParameterSyntax(
@@ -333,33 +268,11 @@ extension MacroExpander {
             let key = String(reflecting: variable.formalName)
             let typeName = variable.swiftType
             if let collection = variable.symmetricCollection {
-                let formalMembers = collection.members.map(codegenTLAValue).joined(separator: ", ")
                 return """
-                guard \(collection.formalName).count == \(collection.members.count),
-                      Set(\(collection.formalName)).count == \(collection.formalName).count else {
-                    throw GeneratedMachineStateDiagnostic.typeMismatch(
-                        path: \(key),
-                        expected: "\(collection.members.count) unique application IDs",
-                        actual: "\\(\(collection.formalName).count) supplied IDs"
-                    )
-                }
-                self.\(collection.formalName) = try Dictionary(uniqueKeysWithValues: zip(
-                    \(collection.formalName),
-                    [\(formalMembers)]
-                ).map { id, formalMember in
-                    guard let value: \(collection.valueType) = try storage.collectionValue(
-                        at: \(variable.storageOrdinal),
-                        for: formalMember,
-                        as: \(collection.valueType).self,
-                        in: storageState
-                    ) else {
-                        throw GeneratedMachineStateDiagnostic.missingRequiredValue(
-                            path: \(key),
-                            expected: "a compiled value for every symmetric member"
-                        )
-                    }
-                    return (id, value)
-                })
+                self.\(collection.formalName) = try values.decodeCollection(
+                    applicationMembers: \(collection.formalName),
+                    as: \(collection.valueType).self
+                )
                 """
             }
             if let info = enumInfos.first(where: { $0.typeName == typeName }) {
@@ -367,7 +280,7 @@ extension MacroExpander {
                     .joined(separator: "\n")
                 return """
                 do {
-                let value = try storage.value(at: \(variable.storageOrdinal), as: String.self, in: storageState)
+                let value = try values.decode(as: String.self)
                 switch value {
                 \(cases)
                 default:
@@ -377,18 +290,13 @@ extension MacroExpander {
                 """
             }
             let type = typeName
-            if type == "TLAValue" {
+            if ["Int", "Bool", "String"].contains(typeName) == false {
                 return """
-                self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: TLAValue.self, in: storageState)
-                """
-            }
-            if !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
-                return """
-                self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: \(typeName).self, in: storageState)
+                self.\(variable.formalName) = try values.decode(as: \(typeName).self)
                 """
             }
             return """
-            self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: \(type).self, in: storageState)
+            self.\(variable.formalName) = try values.decode(as: \(type).self)
             """
         }.joined(separator: "\n")
     }

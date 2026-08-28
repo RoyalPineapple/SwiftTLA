@@ -6,9 +6,6 @@ public enum GeneratedMachineError: Error, Sendable {
     case noMatchingSuccessor
     case ambiguousAction
     case liveMachineUnavailable(String)
-    case invalidGeneratedActionOrdinal
-    case invalidGeneratedActionArguments
-    case invalidGeneratedVariableOrdinal
 }
 
 /// Reports a generated state that cannot decode one compiled value.

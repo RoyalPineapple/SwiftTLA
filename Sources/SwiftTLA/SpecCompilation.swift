@@ -156,36 +156,6 @@ public struct CompiledSpecification: Sendable {
         renderedActionPlan
     }
 
-    package func actionRequest(
-        ordinal: Int,
-        formalArguments: [TLAValue]
-    ) throws -> CompiledActionRequest {
-        guard layout.actions.indices.contains(ordinal) else {
-            throw GeneratedMachineError.noMatchingSuccessor
-        }
-        return try actionRequest(
-            action: layout.actions[ordinal].id,
-            formalArguments: formalArguments
-        )
-    }
-
-    func actionRequest(
-        action: ActionID,
-        formalArguments: [TLAValue]
-    ) throws -> CompiledActionRequest {
-        guard semantics.actions.contains(where: { $0.id == action }) else {
-            throw GeneratedMachineError.noMatchingSuccessor
-        }
-        return .init(
-            action: action,
-            arguments: formalArguments.map { .init(formal: $0) }
-        )
-    }
-
-    func matches(_ arguments: [CompiledValue], request: CompiledActionRequest) -> Bool {
-        arguments == request.arguments
-    }
-
     package func generatedActionInput(
         for request: CompiledActionRequest
     ) throws -> (ordinal: Int, formalArguments: [TLAValue]) {
