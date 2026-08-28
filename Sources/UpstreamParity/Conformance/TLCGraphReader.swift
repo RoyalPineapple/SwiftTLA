@@ -202,12 +202,10 @@ package struct TLCGraphReader: Sendable {
             })
     }
 
-    package func readCompletedGraph(_ data: Data, result: TLCProcessResult) throws -> CompletedGraphRun {
-        let stream = try parse(data)
-        return try makeCompletedGraphRun(stream, result: result)
-    }
-
-    package func makeCompletedGraphRun(_ stream: TLCGraphEventStream, result: TLCProcessResult) throws -> CompletedGraphRun {
+    package func makeCompletedGraphRun(
+        _ stream: TLCGraphEventStream,
+        outcome: TLCExecutionOutcome
+    ) throws -> CompletedGraphRun {
         var canonicalStatesByFingerprint: [String: CanonicalState] = [:]
         func canonicalRepresentative(_ state: TLCGraphState) throws -> CanonicalState {
             if let existing = canonicalStatesByFingerprint[state.fingerprint] {
@@ -233,26 +231,27 @@ package struct TLCGraphReader: Sendable {
         return try CompletedGraphRun(
             graph: graph,
             observableActions: Set(stream.transitions.map(\.action)),
-            outcome: canonicalOutcome(result)
+            outcome: graphOutcome(outcome)
         )
     }
 
-    private func canonicalOutcome(_ result: TLCProcessResult) -> GraphRunOutcome {
-        if result.reportedExhaustiveCompletion { return .exhaustiveSuccess }
-        if result.isViolation {
-            let message = (result.stdout + "\n" + result.stderr)
-                .split(separator: "\n")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first(where: isInvariantViolationDiagnostic) ?? "TLC reported a violation"
-            return message == "TLC reported a violation"
-                ? .executionError("TLC reported a violation without an invariant diagnostic")
-                : .invariantViolation(message)
+    private func graphOutcome(_ outcome: TLCExecutionOutcome) -> GraphRunOutcome {
+        switch outcome {
+        case .completed:
+            return .exhaustiveSuccess
+        case .assumptionViolation:
+            return .executionError("TLC assumption violation")
+        case .deadlock:
+            return .executionError("TLC deadlock violation")
+        case .safetyViolation:
+            return .invariantViolation("TLC safety property violation")
+        case .livenessViolation:
+            return .executionError("TLC liveness violation during finite graph exploration")
+        case .assertionViolation:
+            return .executionError("TLC assertion violation")
+        case .failed(let exitStatus):
+            return .executionError("TLC execution failed with exit status \(exitStatus)")
         }
-        return .executionError("TLC did not report exhaustive completion (exit \(result.status))")
-    }
-
-    private func isInvariantViolationDiagnostic(_ line: String) -> Bool {
-        line.hasPrefix("Error: Invariant ") && line.hasSuffix(" is violated.")
     }
 
     private func validateCommon(_ object: [String: Any], line: Int, expectedSequence: Int, runID: inout UUID?) throws {

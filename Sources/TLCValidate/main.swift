@@ -207,6 +207,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 workingDirectory: runRoot,
                 finiteGraphCase: finiteGraphCase,
                 runID: options.runID ?? UUID(),
+                invocation: .finiteGraph,
                 referenceArtifacts: referenceArtifacts
             )
             let check = FiniteGraphCheck().run(

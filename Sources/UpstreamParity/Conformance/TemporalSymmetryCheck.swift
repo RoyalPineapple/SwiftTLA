@@ -165,7 +165,8 @@ package struct TemporalSymmetryCheck: Sendable {
       traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
       finiteGraphCase: launch,
-      runID: UUID(), referenceArtifacts: toolchain.artifacts)
+      runID: UUID(), invocation: .temporalProperty,
+      referenceArtifacts: toolchain.artifacts)
     let graphBundle = try externalBundle(
       source: source,
       renderedConfiguration: TemporalCaseConfiguration.renderedGraphConfiguration)
@@ -181,7 +182,7 @@ package struct TemporalSymmetryCheck: Sendable {
       graphEvents: work.appendingPathComponent("complete-graph-events.jsonl"),
       traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
       workingDirectory: work,
-      finiteGraphCase: graphCase, runID: UUID(),
+      finiteGraphCase: graphCase, runID: UUID(), invocation: .finiteGraph,
       referenceArtifacts: toolchain.artifacts)
     return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, request: request,
@@ -330,6 +331,7 @@ extension TemporalSymmetryCheck {
       workingDirectory: work,
       finiteGraphCase: finiteGraphCase,
       runID: runID,
+      invocation: .finiteGraph,
       referenceArtifacts: toolchain.artifacts)
   }
 
@@ -374,13 +376,23 @@ extension TemporalSymmetryCheck {
       let keys = try SwiftGraphExporter().canonicalStates(exploration).mapValues {
         $0.key.canonicalEncoding
       }
-      let cycle = witness.cycle.map { keys[$0] ?? "" }
-      guard !cycle.contains("") else {
-        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso state")
+      func identity(of state: StateGraph.StateID) throws -> String {
+        guard let identity = keys[state] else {
+          throw EvidenceFormatError.invalidField(
+            record: temporalCase.id,
+            field: "Swift lasso state"
+          )
+        }
+        return identity
       }
-      let closedCycle = cycle.first == cycle.last ? cycle : cycle + [cycle[0]]
+      let prefix = try witness.prefix.map(identity)
+      let cycle = try witness.cycle.map(identity)
+      guard let first = cycle.first else {
+        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso cycle")
+      }
+      let closedCycle = cycle.last == first ? cycle : cycle + [first]
       let lasso = try TemporalLassoWitness(
-        prefixStateIDs: witness.prefix.compactMap { keys[$0] }, cycleStateIDs: closedCycle)
+        prefixStateIDs: prefix, cycleStateIDs: closedCycle)
       return .violated(lasso)
     case .unavailable:
       return .unavailable

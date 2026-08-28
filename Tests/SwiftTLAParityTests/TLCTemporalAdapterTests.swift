@@ -23,8 +23,7 @@ struct TLCTemporalAdapterTests {
   func retainsExactEvidence() throws {
     let fixture = try Fixture()
     let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
-    let graph = try TLCGraphReader(finiteGraphCase: fixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.success)
+    let graph = try completedGraph(stream, for: fixture.launchCase)
     let swiftResult = TemporalPropertyResult.satisfied
     let input = try fixture.input(swiftRun: graph, swiftResult: swiftResult)
     let comparison = try TLCTemporalAdapter(
@@ -48,10 +47,7 @@ struct TLCTemporalAdapterTests {
     let fixture = try Fixture()
     let tlcStream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let swiftStream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
-    let swiftGraph = try TLCGraphReader(finiteGraphCase: fixture.launchCase).readCompletedGraph(
-      swiftStream,
-      result: Fixture.success
-    )
+    let swiftGraph = try completedGraph(swiftStream, for: fixture.launchCase)
     let swiftResult = TemporalPropertyResult.satisfied
 
     let comparison = try TLCTemporalAdapter(
@@ -102,8 +98,7 @@ struct TLCTemporalAdapterTests {
   func recordsUnattributableTemporalTraceAsUnavailable() throws {
     let fixture = try Fixture()
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
-    let graph = try TLCGraphReader(finiteGraphCase: fixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.temporalViolation)
+    let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let swiftResult = TemporalPropertyResult.satisfied
     let comparison = try TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
@@ -139,8 +134,7 @@ struct TLCTemporalAdapterTests {
   func capturesPinnedLoopBackLasso() throws {
     let fixture = try Fixture()
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
-    let graph = try TLCGraphReader(finiteGraphCase: fixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.temporalViolation)
+    let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = TemporalPropertyResult.violated(
       try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
@@ -161,8 +155,7 @@ struct TLCTemporalAdapterTests {
   func reportsPropertyOutcomeDifference() throws {
     let fixture = try Fixture()
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
-    let graph = try TLCGraphReader(finiteGraphCase: fixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.temporalViolation)
+    let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let comparison = try TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
         propertyStream: stream,
@@ -181,8 +174,7 @@ struct TLCTemporalAdapterTests {
   func bindsActionlessLasso() throws {
     let fixture = try Fixture()
     let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
-    let graph = try TLCGraphReader(finiteGraphCase: fixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.temporalViolation)
+    let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = TemporalPropertyResult.violated(
       try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
@@ -201,8 +193,8 @@ struct TLCTemporalAdapterTests {
   func bindsNamedSameStateDumpStepOnlyWithDeclaredStuttering() throws {
     let rejectedFixture = try Fixture()
     let stream = try graphStream(case: rejectedFixture.launchCase, runID: rejectedFixture.request.runID)
-    let graph = try TLCGraphReader(finiteGraphCase: rejectedFixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.temporalViolation)
+    let graph = try completedGraph(
+      stream, for: rejectedFixture.launchCase, outcome: .livenessViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = TemporalPropertyResult.violated(
       try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
@@ -216,8 +208,8 @@ struct TLCTemporalAdapterTests {
 
     let admittedFixture = try Fixture()
     let admittedStream = try graphStream(case: admittedFixture.launchCase, runID: admittedFixture.request.runID)
-    let admittedGraph = try TLCGraphReader(finiteGraphCase: admittedFixture.launchCase).readCompletedGraph(
-      admittedStream, result: Fixture.temporalViolation)
+    let admittedGraph = try completedGraph(
+      admittedStream, for: admittedFixture.launchCase, outcome: .livenessViolation)
     let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
     let admittedSwiftResult = TemporalPropertyResult.violated(
       try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
@@ -238,8 +230,7 @@ struct TLCTemporalAdapterTests {
   func rejectsForeignTraceEvenWhenItsLoopCloses() throws {
     let fixture = try Fixture()
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
-    let graph = try TLCGraphReader(finiteGraphCase: fixture.launchCase).readCompletedGraph(
-      stream, result: Fixture.temporalViolation)
+    let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = TemporalPropertyResult.violated(
       try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
@@ -272,7 +263,7 @@ struct TLCTemporalAdapterTests {
     let resultJSON = try JSONSerialization.jsonObject(
       with: Data(contentsOf: fixture.output.appendingPathComponent("tlc-process.json"))) as? [String: Any]
     let primary = resultJSON?["primary"] as? [String: Any]
-    #expect(primary?["exitStatus"] as? Int == 12)
+    #expect(primary?["exitStatus"] as? Int == 13)
   }
 
   @Test("TLC temporal adapter rejects a trace path that collides with generated evidence")
@@ -413,7 +404,7 @@ struct TLCTemporalAdapterTests {
     static let success = TLCProcessResult(
       status: 0, stdout: "Model checking completed. No error has been found.", stderr: "")
     static let temporalViolation = TLCProcessResult(
-      status: 12, stdout: "Error: Temporal property is violated.", stderr: "")
+      status: 13, stdout: "Error: Temporal property is violated.", stderr: "")
 
     let root: URL
     let module: URL
@@ -464,7 +455,7 @@ struct TLCTemporalAdapterTests {
         bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
         workingDirectory: root,
-        finiteGraphCase: launchCase, runID: UUID())
+        finiteGraphCase: launchCase, runID: UUID(), invocation: .temporalProperty)
       completeGraphRequest = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
@@ -472,11 +463,10 @@ struct TLCTemporalAdapterTests {
         graphEvents: root.appendingPathComponent("complete-events.jsonl"),
         traceOutput: root.appendingPathComponent("complete-trace.json"),
         workingDirectory: root,
-        finiteGraphCase: completeGraphCase, runID: UUID())
-      swiftRun = try TLCGraphReader(finiteGraphCase: launchCase).readCompletedGraph(
+        finiteGraphCase: completeGraphCase, runID: UUID(), invocation: .finiteGraph)
+      swiftRun = try completedGraph(
         graphStream(case: launchCase, runID: request.runID),
-        result: Self.success
-      )
+        for: launchCase)
     }
 
     func input(
@@ -519,6 +509,7 @@ struct TLCTemporalAdapterTests {
         runID: request.runID,
         timeout: request.timeout,
         traceMode: request.traceMode,
+        invocation: request.invocation,
         referenceArtifacts: request.referenceArtifacts
       )
     }
@@ -539,6 +530,7 @@ struct TLCTemporalAdapterTests {
         runID: completeGraphRequest.runID,
         timeout: completeGraphRequest.timeout,
         traceMode: completeGraphRequest.traceMode,
+        invocation: completeGraphRequest.invocation,
         referenceArtifacts: completeGraphRequest.referenceArtifacts
       )
     }
@@ -586,6 +578,15 @@ private func graphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) thr
   ]) { $1 }
   let footerData = try JSONSerialization.data(withJSONObject: footer, options: [.sortedKeys])
   return body + footerData + Data([10])
+}
+
+private func completedGraph(
+  _ stream: Data,
+  for finiteGraphCase: FiniteGraphCase,
+  outcome: TLCExecutionOutcome = .completed
+) throws -> CompletedGraphRun {
+  let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+  return try reader.makeCompletedGraphRun(reader.parse(stream), outcome: outcome)
 }
 
 private func temporalGraphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {
