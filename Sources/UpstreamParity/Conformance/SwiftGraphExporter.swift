@@ -32,10 +32,7 @@ package struct SwiftGraphExporter: Sendable {
     _ exploration: ModelExplorationResult,
     renderedActionNames: [String: String]
   ) throws -> CompletedGraphRun {
-    let states = Dictionary(
-      uniqueKeysWithValues: try exploration.graph.states.map { identifier, projection in
-        (identifier, try canonicalState(projection))
-      })
+    let states = try canonicalStates(exploration)
     let initialStates = try exploration.initialStateIDs.map { identifier in
       guard let state = states[identifier] else {
         throw SwiftGraphExporterError.initialStateMissing(identifier.id)
@@ -70,6 +67,15 @@ package struct SwiftGraphExporter: Sendable {
       trace: try canonicalTrace(
         exploration.result, states: states)
     )
+  }
+
+  package func canonicalStates(
+    _ exploration: ModelExplorationResult
+  ) throws -> [StateGraph.StateID: CanonicalState] {
+    try Dictionary(
+      uniqueKeysWithValues: exploration.graph.states.map { identifier, projection in
+        (identifier, try canonicalState(projection))
+      })
   }
 
   private func canonicalState(

@@ -60,6 +60,60 @@ struct TemporalSymmetryCheckTests {
     }
   }
 
+  @Test("Temporal and symmetry cases retain unavailable outcomes")
+  func unavailableCasesRetainOutcomes() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "TemporalSymmetryCheckTests-\(UUID())",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let source = root.appendingPathComponent("TemporalFixture.tla")
+    try Data("---- MODULE TemporalFixture ----\n====\n".utf8).write(to: source)
+    let exploration = try FiniteExplorationConfiguration(
+      maximumStateLimit: 10,
+      symmetryReduction: .disabled
+    )
+    let temporalCase = try TemporalCase(
+      id: "temporal",
+      sourceInput: try RetainedFileReference(
+        path: "TemporalFixture.tla",
+        sha256: SHA256.hex(Data(contentsOf: source))
+      ),
+      configuration: .init(property: .always, fairness: .none, allowsImplicitStuttering: false),
+      exploration: exploration
+    )
+    let symmetryCase = try SymmetryCase(
+      id: "symmetry",
+      scope: 2,
+      rawExploration: exploration,
+      reducedExploration: try .init(
+        maximumStateLimit: 10,
+        symmetryReduction: .enabled(maximumPermutationCount: 2)
+      )
+    )
+    let output = root.appendingPathComponent("evidence", isDirectory: true)
+    let outcomes = try TemporalSymmetryCheck().run(.init(
+      manifest: try .init(temporalCases: [temporalCase], symmetryCases: [symmetryCase]),
+      projectRoot: root,
+      outputDirectory: output,
+      toolRoot: root.appendingPathComponent("missing-toolchain", isDirectory: true),
+      referencePin: try testReferencePin()
+    ))
+
+    #expect(outcomes.map(\.outcome) == [.unavailable, .unavailable])
+    for caseID in ["temporal", "symmetry"] {
+      let record = try #require(try JSONSerialization.jsonObject(
+        with: Data(contentsOf: output
+          .appendingPathComponent(caseID, isDirectory: true)
+          .appendingPathComponent("case-outcome.json"))
+      ) as? [String: String])
+      #expect(record["caseID"] == caseID)
+      #expect(record["outcome"] == TemporalSymmetryOutcome.unavailable.rawValue)
+      #expect(record["diagnostic"]?.isEmpty == false)
+    }
+  }
+
   private func registeredManifest() throws -> TemporalSymmetryManifest {
     try JSONDecoder().decode(
       TemporalSymmetryManifest.self,

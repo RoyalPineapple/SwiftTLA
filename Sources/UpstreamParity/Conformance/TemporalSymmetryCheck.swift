@@ -50,60 +50,82 @@ package struct TemporalSymmetryCheck: Sendable {
     let root = try RetainedFiles.projectRoot(input.projectRoot)
     let output = try RetainedFiles.outputDirectory(input.outputDirectory, beneath: root)
     let temporalOutcomes = try input.manifest.temporalCases.map { temporalCase in
-      let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
-      let exploration = try ModelChecker(
-        compilation: compilation,
-        configuration: temporalCase.exploration
-      ).explore()
-      let outcome: TemporalSymmetryOutcome
-      let code: String
+      let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
       do {
-        let capture = try captureTemporal(
+        let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
+        let exploration = try ModelChecker(
+          compilation: compilation,
+          configuration: temporalCase.exploration
+        ).explore()
+        let comparison = try captureTemporal(
           compilation: compilation, temporalCase: temporalCase,
           exploration: exploration, toolRoot: input.toolRoot,
           referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
           outputDirectory: output.appendingPathComponent(temporalCase.id, isDirectory: true))
-        switch capture {
-        case .comparison(let comparison):
-          switch comparison.status {
-          case .exact: outcome = .exact
-          case .propertyOutcomeDifference, .graphDifference: outcome = .difference
-          case .unavailable: outcome = .unavailable
-          }
-          code = comparison.status.rawValue
-        case .failure(let diagnostic):
-          outcome = .unavailable
-          code = diagnostic.code
+        let outcome: TemporalSymmetryOutcome = switch comparison.status {
+        case .exact: .exact
+        case .propertyOutcomeDifference, .graphDifference: .difference
+        case .unavailable: .unavailable
         }
+        observed = (outcome, comparison.status.rawValue)
       } catch {
-        outcome = .unavailable
-        code = "pinned-tlc-runtime-unavailable: \(String(describing: error))"
+        observed = (
+          .unavailable,
+          "pinned-tlc-runtime-unavailable: \(String(describing: error))"
+        )
       }
-      return try TemporalSymmetryCheckOutcome(
-        caseID: temporalCase.id, outcome: outcome, diagnostic: code)
+      return try retainOutcome(
+        caseID: temporalCase.id,
+        outcome: observed.outcome,
+        diagnostic: observed.diagnostic,
+        beneath: output
+      )
     }
 
     let symmetryOutcomes = try input.manifest.symmetryCases.map { symmetryCase in
-      let spec = symmetryConformanceSpec(scope: symmetryCase.scope)
-      let compilation = try spec.compile()
-      let outcome: TemporalSymmetryOutcome
-      let code: String
+      let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
       do {
+        let compilation = try symmetryConformanceSpec(scope: symmetryCase.scope).compile()
         let result = try captureSymmetry(
           compilation: compilation, symmetryCase: symmetryCase,
           toolRoot: input.toolRoot, referencePin: input.referencePin,
           projectRoot: root, evidenceRoot: output,
           outputDirectory: output.appendingPathComponent(symmetryCase.id, isDirectory: true))
-        outcome = result
-        code = result == .exact ? "exact" : "symmetry-comparison-difference"
+        observed = (result, result == .exact ? "exact" : "symmetry-comparison-difference")
       } catch {
-        outcome = .unavailable
-        code = "pinned-tlc-symmetry-unavailable: \(String(describing: error))"
+        observed = (
+          .unavailable,
+          "pinned-tlc-symmetry-unavailable: \(String(describing: error))"
+        )
       }
-      return try TemporalSymmetryCheckOutcome(
-        caseID: symmetryCase.id, outcome: outcome, diagnostic: code)
+      return try retainOutcome(
+        caseID: symmetryCase.id,
+        outcome: observed.outcome,
+        diagnostic: observed.diagnostic,
+        beneath: output
+      )
     }
     return temporalOutcomes + symmetryOutcomes
+  }
+
+  private func retainOutcome(
+    caseID: String,
+    outcome: TemporalSymmetryOutcome,
+    diagnostic: String,
+    beneath outputDirectory: URL
+  ) throws -> TemporalSymmetryCheckOutcome {
+    let value = try TemporalSymmetryCheckOutcome(
+      caseID: caseID,
+      outcome: outcome,
+      diagnostic: diagnostic
+    )
+    let directory = outputDirectory.appendingPathComponent(caseID, isDirectory: true)
+    try RetainedFiles.createDirectory(directory, beneath: outputDirectory)
+    try RetainedFiles.writeJSON(
+      ["caseID": value.caseID, "outcome": value.outcome.rawValue, "diagnostic": value.diagnostic],
+      to: directory.appendingPathComponent("case-outcome.json")
+    )
+    return value
   }
 
   private func captureTemporal(
@@ -115,12 +137,10 @@ package struct TemporalSymmetryCheck: Sendable {
     projectRoot: URL,
     evidenceRoot: URL,
     outputDirectory: URL
-  ) throws -> TLCTemporalCapture {
+  ) throws -> TemporalComparison {
     let swiftRun = try SwiftGraphExporter().export(exploration)
     let swiftResult = try temporalResult(
       compilation: compilation, temporalCase: temporalCase, exploration: exploration)
-    let casesURL = projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")
-    let toolchainURL = projectRoot.appendingPathComponent("Verification/FiniteGraph/toolchain.json")
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
@@ -163,10 +183,9 @@ package struct TemporalSymmetryCheck: Sendable {
       workingDirectory: work,
       finiteGraphCase: graphCase, runID: UUID(),
       referenceArtifacts: toolchain.artifacts)
-    return TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
+    return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, request: request,
       completeGraphRequest: completeGraphRequest, swiftRun: swiftRun, swiftResult: swiftResult,
-      manifestURL: casesURL, toolchainURL: toolchainURL,
       sourceInputURL: source, outputDirectory: outputDirectory))
   }
 
@@ -367,7 +386,9 @@ extension TemporalSymmetryCheck {
       guard let witness = analysis.witness else {
         throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso")
       }
-      let keys = try stateKeys(exploration)
+      let keys = try SwiftGraphExporter().canonicalStates(exploration).mapValues {
+        $0.key.canonicalEncoding
+      }
       let cycle = witness.cycle.map { keys[$0] ?? "" }
       guard !cycle.contains("") else {
         throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso state")
@@ -379,16 +400,6 @@ extension TemporalSymmetryCheck {
     case .unavailable:
       return .unavailable
     }
-  }
-
-  private func stateKeys(_ exploration: ModelExplorationResult) throws -> [StateGraph.StateID: String] {
-    try Dictionary(uniqueKeysWithValues: exploration.graph.states.map { id, projection in
-      let bindings = try Dictionary(
-        uniqueKeysWithValues: projection.entries.map { entry in
-          (entry.token.description, try CanonicalValue(entry.value))
-        })
-      return (id, CanonicalState(bindings: bindings).key.canonicalEncoding)
-    })
   }
 
 }
@@ -414,11 +425,6 @@ private struct ResolvedTLCToolchain {
         jarManifest: "", runtime: .init(version: "", vendor: "", architecture: architecture, properties: [:])),
       javaExecutable: java, directory: projectRoot)
     try pin.validate(artifacts)
-  }
-}
-
-private extension Dictionary where Key == StateGraph.StateID, Value == Bool {
-  func mapKeys<T: Hashable>(_ transform: (Key) -> T) -> [T: Bool] {[T: Bool](uniqueKeysWithValues: map { (transform($0.key), $0.value) })
   }
 }
 
