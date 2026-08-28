@@ -398,18 +398,15 @@ package enum ModelCheckingFailureKind: String, Sendable, Equatable {
 /// One safely projected state in a counterexample trace.
 package struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
     public let action: String
-    public let state: TLAStateProjectionResult
+    public let state: TLAStateProjection
 
     package init(action: String, state: TLAStateProjection) {
         self.action = action
-        self.state = .projected(state)
+        self.state = state
     }
 
     public var description: String {
-        switch state {
-        case .projected(let projection): "[\(action)] \(projection)"
-        case .unavailable(let diagnostic): "[\(action)] state unavailable: \(diagnostic)"
-        }
+        "[\(action)] \(state)"
     }
 }
 
@@ -419,7 +416,7 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
     public let subject: String?
     public let expected: String
     public let actual: String
-    public let state: TLAStateProjectionResult?
+    public let state: TLAStateProjection?
     public let trace: [ModelTraceEvidence]
     public let nextSafeAction: String
 
@@ -428,7 +425,7 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
         subject: String? = nil,
         expected: String,
         actual: String,
-        state: TLAStateProjectionResult? = nil,
+        state: TLAStateProjection? = nil,
         trace: [ModelTraceEvidence] = [],
         nextSafeAction: String
     ) {
@@ -445,10 +442,7 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
         let label = subject.map { " \($0)" } ?? ""
         let stateText: String
         if let state {
-            switch state {
-            case .projected(let projection): stateText = " State: \(projection)."
-            case .unavailable(let projectionError): stateText = " State could not be projected: \(projectionError)."
-            }
+            stateText = " State: \(state)."
         } else {
             stateText = ""
         }
@@ -485,7 +479,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                 subject: invariant,
                 expected: "the invariant to evaluate to true",
                 actual: "false",
-                state: .projected(state),
+                state: state,
                 trace: trace.map { .init(action: $0.action, state: $0.state) },
                 nextSafeAction: "Inspect the final trace transition and revise the action guard, update, or invariant."
             )
@@ -501,7 +495,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                 kind: .deadlock,
                 expected: "at least one enabled action",
                 actual: "no action produced a successor",
-                state: .projected(state),
+                state: state,
                 nextSafeAction: "Inspect the guards and explicit unchanged clauses for this state."
             )
         case .noInitialStates:
@@ -542,7 +536,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                     subject: refinement,
                     expected: "the mapped concrete initial state to be an abstract initial state",
                     actual: "mapped state \(mapped); abstract initial states \(abstractInitialStates)",
-                    state: .projected(mapped),
+                    state: mapped,
                     nextSafeAction: "Inspect the refinement mapping and abstract initial condition."
                 )
             case .transition(let action, let source, let target, let mappedSource, let mappedTarget, let abstractSuccessors):
@@ -551,7 +545,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                     subject: refinement,
                     expected: "an abstract successor or stuttering step for action \(action)",
                     actual: "\(source) to \(target) maps to \(mappedSource) to \(mappedTarget); abstract successors \(abstractSuccessors)",
-                    state: .projected(source),
+                    state: source,
                     trace: [.init(action: action, state: target)],
                     nextSafeAction: "Inspect the refinement mapping and the named action update."
                 )
