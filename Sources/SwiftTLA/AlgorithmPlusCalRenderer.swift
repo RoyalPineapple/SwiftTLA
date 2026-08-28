@@ -237,10 +237,8 @@ internal struct AlgorithmPlusCalRenderer {
         var index = statements.startIndex
 
         while index < statements.endIndex {
-            // A `Do` body captures every assignment right-hand side from the
-            // pre-state.  PlusCal spells that relation with `||`; rendering
-            // ordinary sequential `:=` statements changes an authored swap
-            // into two sequential writes.
+            // Compilation schedules one parallel assignment group at the end
+            // of each reachable lexical path.
             if case .set = statements[index] {
                 var assignments: [(target: AlgorithmLValueModel, value: StateExpr)] = []
                 repeat {

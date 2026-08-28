@@ -844,6 +844,185 @@ struct AlgorithmBuilderTests {
         }
     }
 
+    @Test("authored PlusCal evaluates a later guard before atomic updates")
+    func authoredPlusCalMovesLaterGuardBeforeAtomicUpdates() throws {
+        let algorithm = Algorithm("ReadAfterWrite", scoped: { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Do(TestControlLabel.advance) {
+                Assign(value, to: value + 1)
+                When(value > 0)
+            }
+        })
+
+        let compilation = try TLASpec("ReadAfterWrite") { algorithm }.compile()
+        let rendered = try compilation
+            .renderedPlusCalBundle()
+            .root.tla
+        let guardRange = try #require(rendered.range(of: "await (value > 0);"))
+        let assignmentRange = try #require(rendered.range(of: "value := (value + 1);"))
+        #expect(guardRange.lowerBound < assignmentRange.lowerBound)
+
+        let initial = try firstCompiledState(in: compilation)
+        #expect(try compiledSuccessors(
+            named: "advance",
+            arguments: [],
+            in: compilation,
+            from: initial
+        ).isEmpty)
+    }
+
+    @Test("authored PlusCal emits one update group for separated assignments")
+    func authoredPlusCalGroupsSeparatedAssignments() throws {
+        let algorithm = Algorithm("SeparatedUpdates", scoped: { scope in
+            let first = scope.sharedVar("first", initial: 1)
+            let second = scope.sharedVar("second", initial: 0)
+            Do(TestControlLabel.advance) {
+                Assign(first, to: first + 1)
+                Skip()
+                Assign(second, to: first + 1)
+            }
+        })
+
+        let compilation = try TLASpec("SeparatedUpdates") { algorithm }.compile()
+        let rendered = try compilation
+            .renderedPlusCalBundle()
+            .root.tla
+        #expect(rendered.contains("first := (first + 1) || second := (first + 1);"))
+
+        let initial = try firstCompiledState(in: compilation)
+        let successor = try #require(try compiledSuccessors(
+            named: "advance",
+            arguments: [],
+            in: compilation,
+            from: initial
+        ).first)
+        #expect(try renderedValue(named: "first", in: successor, compilation: compilation) == .int(2))
+        #expect(try renderedValue(named: "second", in: successor, compilation: compilation) == .int(2))
+    }
+
+    @Test("atomic paths reject competing transfers and accept exclusive transfers")
+    func atomicPathsRequireOneControlTransfer() {
+        let competing = Algorithm("CompetingTransfers") {
+            Do(TestControlLabel.advance) {
+                Goto(TestControlLabel.done)
+                Stop()
+            }
+            Do(TestControlLabel.done) { Stop() }
+        }
+        let exclusive = Algorithm("ExclusiveTransfers") {
+            Do(TestControlLabel.advance) {
+                Either {
+                    Goto(TestControlLabel.done)
+                } or: {
+                    Stop()
+                }
+            }
+            Do(TestControlLabel.done) { Stop() }
+        }
+
+        #expect(competing.validate().map(\.code).contains(.invalidAtomicControlFlow))
+        #expect(throws: AlgorithmValidationError.self) {
+            try TLASpec("CompetingTransfers") { competing }.compile()
+        }
+        #expect(exclusive.validate().map(\.code).contains(.invalidAtomicControlFlow) == false)
+    }
+
+    @Test("mutually exclusive nested update paths remain representable")
+    func acceptsMutuallyExclusiveNestedUpdatePaths() throws {
+        let algorithm = Algorithm("NestedUpdates", scoped: { scope in
+            let chooseFirst = scope.sharedVar("chooseFirst", initial: true)
+            let common = scope.sharedVar("common", initial: 0)
+            let first = scope.sharedVar("first", initial: 0)
+            let second = scope.sharedVar("second", initial: 0)
+            Do(TestControlLabel.advance) {
+                Assign(common, to: common + 1)
+                If(chooseFirst) {
+                    With(SetExpr<Int>.literal(1, 2)) { selected in
+                        Assign(first, to: selected)
+                    }
+                } else: {
+                    Let(second + 1) { selected in
+                        Assign(second, to: selected)
+                    }
+                }
+            }
+        })
+
+        #expect(algorithm.validate().isEmpty)
+        let rendered = try TLASpec("NestedUpdates") { algorithm }
+            .compile()
+            .renderedPlusCalBundle()
+            .root.tla
+        #expect(rendered.components(separatedBy: "common := (common + 1)").count == 3)
+        #expect(rendered.contains("common := (common + 1) || first := __binder_"))
+        #expect(rendered.contains("common := (common + 1) || second := __binder_"))
+    }
+
+    @Test("moving a continuation under a binder preserves its outer names")
+    func scheduledContinuationAvoidsBinderCapture() throws {
+        let source = AlgorithmModel(
+            name: "CaptureFreeSchedule",
+            components: [
+                .step(.init(label: .init(name: "advance"), statements: [
+                    .with(
+                        variable: "value",
+                        source: .setLiteral([.int(1), .int(2)]),
+                        [
+                            .set(target: .root("selected"), value: .variable("value"))
+                        ]
+                    ),
+                    .set(target: .root("copied"), value: .variable("value"))
+                ]))
+            ]
+        )
+
+        let projected = source.plusCalProjection()
+        let step = try #require(projected.sequentialSteps.first)
+        guard case .with(let binder, _, let body) = step.statements.first,
+              body.count == 2,
+              case .set(_, .variable(let selectedValue)) = body[0],
+              case .set(_, .variable(let copiedValue)) = body[1]
+        else {
+            Issue.record("Expected one capture-free scheduled scope.")
+            return
+        }
+        #expect((binder == "value") == false)
+        #expect(selectedValue == binder)
+        #expect(copiedValue == "value")
+    }
+
+    @Test("moving an independent update under a choice preserves successor multiplicity")
+    func scheduledChoicePreservesSuccessorMultiplicity() throws {
+        let original = Algorithm("ScheduledChoice", scoped: { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Do(TestControlLabel.advance) {
+                With(SetExpr<Int>.literal(1, 2)) { _ in Skip() }
+                Assign(value, to: value + 1)
+            }
+        })
+        let scheduled = Algorithm(model: original.model.plusCalProjection())
+
+        let originalCompilation = try TLASpec("OriginalChoice") { original }.compile()
+        let scheduledCompilation = try TLASpec("ScheduledChoice") { scheduled }.compile()
+        let originalInitial = try firstCompiledState(in: originalCompilation)
+        let scheduledInitial = try firstCompiledState(in: scheduledCompilation)
+        let originalValues = try compiledSuccessors(
+            named: "advance",
+            arguments: [],
+            in: originalCompilation,
+            from: originalInitial
+        ).map { try renderedValue(named: "value", in: $0, compilation: originalCompilation) }
+        let scheduledValues = try compiledSuccessors(
+            named: "advance",
+            arguments: [],
+            in: scheduledCompilation,
+            from: scheduledInitial
+        ).map { try renderedValue(named: "value", in: $0, compilation: scheduledCompilation) }
+
+        #expect(originalValues == scheduledValues)
+        #expect(originalValues == [.int(1), .int(1)])
+    }
+
     @Test("lowering initializes pc and binds every atomic action to a process")
     func lowersControlStateAndActionBindings() throws {
         let algorithm = Algorithm("BoundedCounter", scoped: { scope in

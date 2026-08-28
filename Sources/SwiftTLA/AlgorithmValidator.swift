@@ -93,6 +93,9 @@ internal enum AlgorithmProcedureValidator {
         if paths.contains(where: { Set($0).count != $0.count }) {
             diagnostics.append(.init(.duplicateRootWrite, at: anchor))
         }
+        if AlgorithmValidator.controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
+            diagnostics.append(.init(.invalidAtomicControlFlow, at: anchor))
+        }
         validateStatements(step.statements, at: anchor, labels: labels, procedures: procedures, arities: arities, inProcedure: inProcedure, diagnostics: &diagnostics)
     }
 

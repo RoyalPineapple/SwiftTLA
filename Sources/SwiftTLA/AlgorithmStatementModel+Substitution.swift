@@ -216,7 +216,7 @@ extension AlgorithmStatementModel {
     }
 }
 
-private extension Array where Element == AlgorithmStatementModel {
+extension Array where Element == AlgorithmStatementModel {
     var algorithmScopeNames: Set<String> {
         reduce(into: []) { names, statement in
             switch statement {

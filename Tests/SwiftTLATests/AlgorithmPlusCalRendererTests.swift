@@ -339,6 +339,51 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("{\n  start:"))
     }
 
+    @Test("procedure call capture avoids authored binders and retains tail return")
+    func procedureCallCaptureAvoidsAuthoredBindersAndRetainsTailReturn() throws {
+        let model = AlgorithmModel(
+            name: "ScheduledTailCall",
+            components: [
+                .shared(.init(root: "output", initialization: .value(.int(0)))),
+                .procedure(.init(
+                    name: "outer",
+                    parameters: [],
+                    components: [
+                        .step(.init(label: .init(name: "enter"), statements: [
+                            .letBinding(variable: "__atomic_0", value: .int(1), [
+                                .set(target: .root("output"), value: .variable("__atomic_0")),
+                                .call(target: "inner", arguments: [.variable("output")]),
+                                .return
+                            ])
+                        ]))
+                    ]
+                )),
+                .procedure(.init(
+                    name: "inner",
+                    parameters: [.init(root: "input", initial: .int(0), swiftTypeName: "Int")],
+                    components: [
+                        .step(.init(label: .init(name: "enter"), statements: [.return]))
+                    ]
+                )),
+                .step(.init(label: .init(name: "start"), statements: [
+                    .call(target: "outer", arguments: [])
+                ])),
+                .step(.init(label: .init(name: "finished"), statements: [.stop]))
+            ]
+        )
+
+        let rendered = try renderedSourceAlgorithmPlusCal(Algorithm(model: model))
+        let authoredBinding = try #require(rendered.range(of: "with (__atomic_0 = 1)"))
+        let capturedArgument = try #require(rendered.range(of: "with (__atomic_1 = output)"))
+        let assignment = try #require(rendered.range(of: "output := __atomic_0;"))
+        let call = try #require(rendered.range(of: "call inner(__atomic_1);"))
+        let tailReturn = try #require(rendered.range(of: "return;", range: call.upperBound..<rendered.endIndex))
+        #expect(authoredBinding.lowerBound < capturedArgument.lowerBound)
+        #expect(capturedArgument.lowerBound < assignment.lowerBound)
+        #expect(assignment.lowerBound < call.lowerBound)
+        #expect(call.lowerBound < tailReturn.lowerBound)
+    }
+
     @Test("compilation renders the authored Algorithm and its state constraint")
     func rendersAuthoredAlgorithmAndStateConstraint() throws {
         let spec = TLASpec("Retained") {
