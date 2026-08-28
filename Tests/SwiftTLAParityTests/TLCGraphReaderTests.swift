@@ -331,7 +331,7 @@ extension TLCGraphReaderTests {
     #expect(Date().timeIntervalSince(started) < 3)
   }
 
-  @Test("production TLC execution rejects a banner outside the pinned revision")
+  @Test("the TLC pin rejects a banner from another revision")
   func rejectsWrongTLCBanner() throws {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -346,7 +346,7 @@ extension TLCGraphReaderTests {
     }
   }
 
-  @Test("production TLC execution uses only the declared environment")
+  @Test("the TLC subprocess uses only the declared environment")
   func excludesHostEnvironmentAndPreservesAllowlist() throws {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
