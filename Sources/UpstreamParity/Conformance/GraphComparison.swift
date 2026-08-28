@@ -97,8 +97,8 @@ func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
         case .outcome(let tlc, let swift):
             [
                 "kind": "outcome",
-                "tlc": tlc.serializedRecord,
-                "swift": swift.serializedRecord
+                "tlc": CompletedGraphRunRecords.outcomeRecord(tlc),
+                "swift": CompletedGraphRunRecords.outcomeRecord(swift)
             ]
         }
     }

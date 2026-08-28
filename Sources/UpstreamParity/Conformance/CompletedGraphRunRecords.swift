@@ -48,13 +48,28 @@ package enum CompletedGraphRunRecords {
     records.append([
       "type": "complete",
       "eligible": run.isPassEligible,
-      "outcome": run.outcome.serializedRecord,
+      "outcome": outcomeRecord(run.outcome),
       "initialStateCount": run.graph.initialStateKeys.count,
       "stateCount": run.graph.states.count,
       "edgeCount": run.graph.edgeOccurrences.values.reduce(0, +),
       "traceCount": run.trace == nil ? 0 : 1
     ])
     return records
+  }
+
+  static func outcomeRecord(_ outcome: GraphRunOutcome) -> [String: String] {
+    switch outcome {
+    case .exhaustiveSuccess:
+      ["kind": "exhaustiveSuccess"]
+    case .invariantViolation(let message):
+      ["kind": "invariantViolation", "message": message]
+    case .deadlock(let state):
+      ["kind": "deadlock", "state": state.canonicalEncoding]
+    case .incomplete(let reason):
+      ["kind": "incomplete", "reason": reason]
+    case .executionError(let message):
+      ["kind": "executionError", "message": message]
+    }
   }
 
 }
