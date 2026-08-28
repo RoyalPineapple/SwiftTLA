@@ -40,6 +40,17 @@ A release commit is ready when all of these facts hold for that exact commit:
 An incomplete, bounded, unavailable, or warning-only conformance run does not
 satisfy a release requirement.
 
+Finite graph and temporal-symmetry qualification accept the exact merged
+SwiftTLA SHA:
+
+```sh
+gh workflow run finite-graph.yml --ref main -f swift_tla_sha="$swift_tla_sha"
+gh workflow run temporal-symmetry-conformance.yml --ref main -f swift_tla_sha="$swift_tla_sha"
+```
+
+Scheduled runs qualify the `main` revision that triggered the workflow. Each
+retained artifact name contains the resolved SwiftTLA SHA, run ID, and attempt.
+
 ## Readiness record
 
 The release record contains only the identities needed to reproduce the
