@@ -15,10 +15,14 @@ remaining public-boundary checks:
 - `InvalidGeneratedActorRawSurface` must fail for the same private boundary on
   the generated actor.
 
-The invalid-package tests require the compiler diagnostics that identify the
-unavailable API. A successful job therefore proves both sides of the public
-boundary: supported typed calls compile, and private compiler machinery does
-not.
+The invalid-package tests require compiler diagnostics for raw-member access.
+A successful job proves that supported typed calls compile and that generated
+machines and actors do not expose raw formal state or transition evidence.
+
+Attached macro expansions type-check in the consuming module. The underscored
+`_GeneratedMachineStorage`, `_TLAFiniteEnum`, and `_TLAValueEnum` declarations
+are public expansion support for that boundary. Generated application code uses
+them privately; application code uses the generated machine and actor.
 
 GitHub Actions records the job status and logs.
 

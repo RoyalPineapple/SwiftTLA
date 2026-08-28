@@ -269,8 +269,9 @@ let compilation = try BoundedCounter.spec.compile()
 let bundle = compilation.renderedTLAModuleBundle()
 ```
 
-The generated Swift machine, local exploration, and rendered formal bundle
-come from that one compilation.
+The generated machine compiles the same source and checks its compiled identity
+against the identity recorded during macro expansion. Explicit compilations
+drive local exploration and formal rendering.
 
 ## API reference
 
