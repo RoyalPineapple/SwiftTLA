@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import Testing
 import SwiftTLA
-import UpstreamParity
+@testable import UpstreamParity
 @Suite(.serialized)
 struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCompletedGraphRun() throws {

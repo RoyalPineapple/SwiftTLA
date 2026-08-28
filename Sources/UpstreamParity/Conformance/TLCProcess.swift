@@ -624,7 +624,7 @@ package enum TLCReferenceInspector {
   }
 }
 
-package func executeProcess(
+func executeProcess(
   executable: URL,
   arguments: [String],
   directory: URL,
