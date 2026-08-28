@@ -6,6 +6,7 @@
       "module": "hour-clock/HourClock.tla",
       "configuration": "hour-clock/HourClock.cfg",
       "imports": [],
+      "dependencies": [],
       "exploration": {
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
@@ -18,6 +19,7 @@
       "module": "die-hard-type-ok/DieHard.tla",
       "configuration": "die-hard-type-ok/DieHard.cfg",
       "imports": [],
+      "dependencies": [],
       "exploration": {
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
@@ -30,6 +32,7 @@
       "module": "multicar-elevator/MultiCarElevator.tla",
       "configuration": "multicar-elevator/MultiCarElevator.cfg",
       "imports": [],
+      "dependencies": [],
       "exploration": {
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"

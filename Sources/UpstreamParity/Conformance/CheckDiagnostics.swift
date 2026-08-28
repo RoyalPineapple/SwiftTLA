@@ -141,6 +141,15 @@ extension TLCProcessError {
           nextSafeAction: "Check the emitted module file permissions and encoding, then write a fresh bundle before retrying.",
           evidence: evidence
         )
+      case .invalidDeclaredClosure(let failure):
+        return .init(
+          whatFailed: "The declared TLC module closure is invalid.",
+          whereItFailed: "module bundle rooted at \(request.bundle.root.name)",
+          expected: "One complete dependency graph rooted at \(request.bundle.root.name).",
+          actual: failure.description,
+          nextSafeAction: "Correct the declared module files or dependency edges, then rerun TLC.",
+          evidence: evidence
+        )
       case .missingImportedModule(let module, let importedBy, let line, let expectedFile):
         return .init(
           whatFailed: "The emitted module bundle is missing an imported formal module.",

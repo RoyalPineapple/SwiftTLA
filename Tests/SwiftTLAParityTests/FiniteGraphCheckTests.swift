@@ -17,6 +17,30 @@ struct FiniteGraphCheckTests {
     }
   }
 
+  @Test("finite graph manifests reject unknown dependency fields")
+  func rejectsUnknownDependencyFields() {
+    #expect(throws: EvidenceFormatError.invalidField(
+      record: "decode",
+      field: "unknown field inferred"
+    )) {
+      try JSONDecoder().decode(FiniteGraphManifest.self, from: manifest(
+        dependencies: """
+          [{
+            "importingModule": "Fixture",
+            "importedModule": "Imported",
+            "inferred": true
+          }]
+          """,
+        exploration: """
+          {
+            "maximumStateLimit": 10,
+            "symmetryReduction": "disabled"
+          }
+          """
+      ))
+    }
+  }
+
   @Test("finite graph manifests require unreduced Swift exploration")
   func rejectsSymmetryReduction() {
     #expect(throws: EvidenceFormatError.self) {
@@ -30,7 +54,7 @@ struct FiniteGraphCheckTests {
     }
   }
 
-  private func manifest(exploration: String) -> Data {
+  private func manifest(dependencies: String = "[]", exploration: String) -> Data {
     Data("""
       {
         "schema": "FiniteGraphCases",
@@ -39,6 +63,7 @@ struct FiniteGraphCheckTests {
           "module": "Fixture.tla",
           "configuration": "Fixture.cfg",
           "imports": [],
+          "dependencies": \(dependencies),
           "exploration": \(exploration),
           "moduleSHA256": "\(String(repeating: "a", count: 64))",
           "cfgSHA256": "\(String(repeating: "b", count: 64))"

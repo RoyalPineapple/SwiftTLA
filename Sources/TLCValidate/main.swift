@@ -194,7 +194,14 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             let bundle = try TLCProcessRequest.declaredBundle(
                 root: inputPath(declaration.module, within: inputRoot),
                 configuration: inputPath(declaration.configuration, within: inputRoot),
-                imports: try declaration.imports.map { try inputPath($0, within: inputRoot) }
+                imports: try declaration.imports.map { try inputPath($0, within: inputRoot) },
+                dependencies: declaration.dependencies.enumerated().map { index, dependency in
+                    .init(
+                        importingModule: dependency.importingModule,
+                        importedModule: dependency.importedModule,
+                        structuralPath: [declaration.id, "dependencies", String(index)]
+                    )
+                }
             )
             let request = TLCProcessRequest(
                 javaExecutable: java,

@@ -214,12 +214,28 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let module: String
         package let configuration: String
         package let imports: [String]
+        package let dependencies: [Dependency]
         package let moduleSHA256: String
         package let cfgSHA256: String
         package let exploration: FiniteExplorationConfiguration
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, module, configuration, imports, moduleSHA256, cfgSHA256, exploration
+            case id, module, configuration, imports, dependencies, moduleSHA256, cfgSHA256, exploration
+        }
+
+        package struct Dependency: Decodable, Sendable {
+            package let importingModule: String
+            package let importedModule: String
+
+            private enum CodingKeys: String, CodingKey, CaseIterable {
+                case importingModule, importedModule
+            }
+
+            package init(from decoder: Decoder) throws {
+                let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+                importingModule = try container.decode(String.self, forKey: .importingModule)
+                importedModule = try container.decode(String.self, forKey: .importedModule)
+            }
         }
 
         package init(from decoder: Decoder) throws {
@@ -228,6 +244,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
             imports = try container.decode([String].self, forKey: .imports)
+            dependencies = try container.decode([Dependency].self, forKey: .dependencies)
             moduleSHA256 = try container.decode(String.self, forKey: .moduleSHA256)
             cfgSHA256 = try container.decode(String.self, forKey: .cfgSHA256)
             exploration = try container.decode(
@@ -238,8 +255,11 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func validate() throws {
-            guard !id.isEmpty, !module.isEmpty, !configuration.isEmpty,
-                  Set(imports).count == imports.count, imports.allSatisfy({ !$0.isEmpty }) else {
+            guard id.isEmpty == false, module.isEmpty == false, configuration.isEmpty == false,
+                  Set(imports).count == imports.count, imports.allSatisfy({ $0.isEmpty == false }),
+                  dependencies.allSatisfy({
+                      $0.importingModule.isEmpty == false && $0.importedModule.isEmpty == false
+                  }) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "case declaration")
             }
             guard case .disabled = exploration.symmetryReduction else {
