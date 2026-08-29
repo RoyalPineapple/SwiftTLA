@@ -6,7 +6,7 @@ import SwiftTLAMacros
 /// Every node begins with its own identifier in its inbox. A delivery keeps a
 /// larger identifier moving clockwise, drops a smaller one, and elects the
 /// identifier that returns to its originating node. The generated machine owns
-/// the transition runtime; a view only chooses which enabled delivery to make.
+/// transition execution; a view only chooses which enabled delivery to make.
 @TLAModel
 public struct ChangRoberts {
     public enum Node: String, CaseIterable, FiniteTLAValueDomain {

@@ -8,19 +8,19 @@ private func parseClosure(_ source: String) throws -> ClosureExprSyntax {
   try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
 }
 
-public struct MacroDevice: Identifiable, Sendable {
+public struct IntegerDevice: Identifiable, Sendable {
   public let id: Int
 }
 
-public struct StringMacroDevice: Identifiable, Sendable {
+public struct StringDevice: Identifiable, Sendable {
   public let id: String
 }
 
 @TLAModel
-public struct GeneratedSymmetricRuntime: Sendable {
+public struct GeneratedSymmetricMachine: Sendable {
   public static var spec: TLASpec {
-    TLASpec("GeneratedSymmetricRuntime") {
-      let devices = SymmetricCollectionVar<MacroDevice, Int>("devices")
+    TLASpec("GeneratedSymmetricMachine") {
+      let devices = SymmetricCollectionVar<IntegerDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
@@ -30,10 +30,10 @@ public struct GeneratedSymmetricRuntime: Sendable {
 }
 
 @TLAModel
-public struct GeneratedExpressionSymmetricRuntime {
+public struct GeneratedExpressionSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedExpressionSymmetricRuntime") {
-      let devices = SymmetricCollectionVar<MacroDevice, Int>("devices")
+    TLASpec("GeneratedExpressionSymmetricMachine") {
+      let devices = SymmetricCollectionVar<IntegerDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] < 5 && devices.update(member, to: devices[member] + 1)
@@ -43,10 +43,10 @@ public struct GeneratedExpressionSymmetricRuntime {
 }
 
 @TLAModel
-public struct GeneratedScopedSymmetricRuntime {
+public struct GeneratedScopedSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedScopedSymmetricRuntime") {
-      let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
+    TLASpec("GeneratedScopedSymmetricMachine") {
+      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
@@ -56,11 +56,11 @@ public struct GeneratedScopedSymmetricRuntime {
 }
 
 @TLAModel
-public struct GeneratedSharedGuardSymmetricRuntime {
+public struct GeneratedSharedGuardSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedSharedGuardSymmetricRuntime") {
+    TLASpec("GeneratedSharedGuardSymmetricMachine") {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
+      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
       Variable(phase, 4)
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
@@ -71,10 +71,10 @@ public struct GeneratedSharedGuardSymmetricRuntime {
 }
 
 @TLAModel
-public struct GeneratedMultiStatementSymmetricRuntime {
+public struct GeneratedMultiStatementSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedMultiStatementSymmetricRuntime") {
-      let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
+    TLASpec("GeneratedMultiStatementSymmetricMachine") {
+      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 || devices[member] == 1
@@ -86,10 +86,10 @@ public struct GeneratedMultiStatementSymmetricRuntime {
 }
 
 @TLAModel
-public struct GeneratedDisjunctiveSymmetricRuntime {
+public struct GeneratedDisjunctiveSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedDisjunctiveSymmetricRuntime") {
-      let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
+    TLASpec("GeneratedDisjunctiveSymmetricMachine") {
+      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
         (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
@@ -100,11 +100,11 @@ public struct GeneratedDisjunctiveSymmetricRuntime {
 }
 
 @TLAModel
-public struct GeneratedAllSatisfyPredicateRuntime {
+public struct GeneratedAllSatisfyPredicateMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedAllSatisfyPredicateRuntime") {
+    TLASpec("GeneratedAllSatisfyPredicateMachine") {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
+      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
       Variable(phase, 0)
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       SwiftTLA.Action("advance") {
@@ -115,11 +115,11 @@ public struct GeneratedAllSatisfyPredicateRuntime {
 }
 
 @TLAModel
-public struct GeneratedContainsPredicateRuntime {
+public struct GeneratedContainsPredicateMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedContainsPredicateRuntime") {
+    TLASpec("GeneratedContainsPredicateMachine") {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<StringMacroDevice, Int>("devices")
+      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
       Variable(phase, 0)
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       SwiftTLA.Action("advance") {
@@ -130,7 +130,7 @@ public struct GeneratedContainsPredicateRuntime {
 }
 
 @Suite(.serialized)
-struct SymmetricCollectionMacroRuntimeTests {
+struct SymmetricCollectionGeneratedMachineTests {
   private func compiledSuccessors(
     in compilation: CompiledSpecification,
     from values: [CompiledValue]
@@ -259,7 +259,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       return
     }
     let devices = SymmetricCollectionVar<Device, Int>("devices")
-    let runtimeBuilt = TLASpec("CollectionActionBehavior") {
+    let built = TLASpec("CollectionActionBehavior") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
@@ -267,12 +267,12 @@ struct SymmetricCollectionMacroRuntimeTests {
     }
 
     let parsedCompilation = try parsed.compile(specificationName: "CollectionActionBehavior")
-    let runtimeCompilation = try runtimeBuilt.compile()
-    let advanced = try collectionValue([1], in: runtimeBuilt)
+    let builtCompilation = try built.compile()
+    let advanced = try collectionValue([1], in: built)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(try compiledSuccessors(in: parsedCompilation, from: [.init(formal: initial)])
-      == compiledSuccessors(in: runtimeCompilation, from: [.init(formal: initial)]))
+      == compiledSuccessors(in: builtCompilation, from: [.init(formal: initial)]))
     #expect(try compiledSuccessors(in: parsedCompilation, from: [.init(formal: advanced)]).isEmpty)
   }
 
@@ -372,7 +372,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   @Test("Generated state binds the exact collection population to application IDs")
   func macroBindsExactApplicationIDs() throws {
     let deviceID = 42
-    var model = try GeneratedSymmetricRuntime.makeMachine(
+    var model = try GeneratedSymmetricMachine.makeMachine(
       .init(devices: [deviceID: 0]),
       devices: [deviceID]
     )
@@ -392,7 +392,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   @Test("Generated actors wrap the same exact collection population")
   func actorBindsExactApplicationIDs() async throws {
     let deviceID = 42
-    let actor = try GeneratedSymmetricRuntime.Actor(devices: [deviceID])
+    let actor = try GeneratedSymmetricMachine.Actor(devices: [deviceID])
 
     let transition = try await actor.send(.begin(member: deviceID))
 
@@ -404,17 +404,17 @@ struct SymmetricCollectionMacroRuntimeTests {
   @Test("Generated machines require one unique application ID per compiled member")
   func macroRequiresTheExactPopulation() {
     #expect(throws: GeneratedMachineStateDiagnostic.self) {
-      _ = try GeneratedScopedSymmetricRuntime.makeMachine(devices: ["only-one"])
+      _ = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["only-one"])
     }
     #expect(throws: GeneratedMachineStateDiagnostic.self) {
-      _ = try GeneratedScopedSymmetricRuntime.makeMachine(devices: ["same", "same"])
+      _ = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["same", "same"])
     }
   }
 
   @Test("Generated collection actions evaluate expression-backed updates")
   func macroEvaluatesExpressionBackedUpdates() throws {
     let deviceID = 42
-    var model = try GeneratedExpressionSymmetricRuntime.makeMachine(devices: [deviceID])
+    var model = try GeneratedExpressionSymmetricMachine.makeMachine(devices: [deviceID])
 
     for expected in 1...5 {
       _ = try model.send(.advance(member: deviceID))
@@ -431,7 +431,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let eligible = "eligible"
     let wrongPhase = "wrong-phase"
     let ids = [eligible, wrongPhase]
-    var model = try GeneratedScopedSymmetricRuntime.makeMachine(devices: ids)
+    var model = try GeneratedScopedSymmetricMachine.makeMachine(devices: ids)
 
     _ = try model.send(.begin(member: wrongPhase))
 
@@ -447,7 +447,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   @Test("Generated routing evaluates shared authored guards before its update")
   func macroEvaluatesTheCompleteAuthoredGuard() throws {
     let deviceID = "shared-guard"
-    var model = try GeneratedSharedGuardSymmetricRuntime.makeMachine(devices: [deviceID])
+    var model = try GeneratedSharedGuardSymmetricMachine.makeMachine(devices: [deviceID])
 
     #expect(throws: GeneratedMachineError.self) {
       try model.send(.begin(member: deviceID))
@@ -458,13 +458,13 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Compiled collection actions preserve ActionBuilder statement precedence")
   func compiledActionPreservesMultiStatementPrecedence() throws {
-    let boundedState = try collectionValue([0, 1], in: GeneratedMultiStatementSymmetricRuntime.spec)
-    let compilation = try GeneratedMultiStatementSymmetricRuntime.spec.compile()
+    let boundedState = try collectionValue([0, 1], in: GeneratedMultiStatementSymmetricMachine.spec)
+    let compilation = try GeneratedMultiStatementSymmetricMachine.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
       in: compilation,
       from: [.init(formal: boundedState)]
     )
-    let expected = try collectionValue([0, 11], in: GeneratedMultiStatementSymmetricRuntime.spec)
+    let expected = try collectionValue([0, 11], in: GeneratedMultiStatementSymmetricMachine.spec)
     #expect(try boundedSuccessors.map {
       try renderedValue(named: "devices", in: $0, compilation: compilation)
     } == [expected])
@@ -472,20 +472,20 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Compiled and generated actions apply the update from the enabled disjunct")
   func actionsPreserveBranchSpecificCollectionUpdates() throws {
-    let boundedState = try collectionValue([2, 1], in: GeneratedDisjunctiveSymmetricRuntime.spec)
-    let compilation = try GeneratedDisjunctiveSymmetricRuntime.spec.compile()
+    let boundedState = try collectionValue([2, 1], in: GeneratedDisjunctiveSymmetricMachine.spec)
+    let compilation = try GeneratedDisjunctiveSymmetricMachine.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
       in: compilation,
       from: [.init(formal: boundedState)]
     )
-    let expected = try collectionValue([22, 1], in: GeneratedDisjunctiveSymmetricRuntime.spec)
+    let expected = try collectionValue([22, 1], in: GeneratedDisjunctiveSymmetricMachine.spec)
     #expect(try boundedSuccessors.map {
       try renderedValue(named: "devices", in: $0, compilation: compilation)
     } == [expected])
 
     let selected = "selected"
     let rejected = "rejected"
-    var model = try GeneratedDisjunctiveSymmetricRuntime.makeMachine(
+    var model = try GeneratedDisjunctiveSymmetricMachine.makeMachine(
       devices: [selected, rejected]
     )
 
@@ -501,15 +501,15 @@ struct SymmetricCollectionMacroRuntimeTests {
   @Test("Ordinary allSatisfy actions use every declared collection value")
   func macroEvaluatesAllSatisfyAcrossTheDeclaredPopulation() throws {
     let ids = ["one", "two"]
-    var allowed = try GeneratedAllSatisfyPredicateRuntime.makeMachine(devices: ids)
+    var allowed = try GeneratedAllSatisfyPredicateMachine.makeMachine(devices: ids)
 
     let allowedEvidence = try allowed.send(.advance)
     #expect(allowed.state.phase == 1)
     #expect(allowedEvidence.before.phase == 0)
     #expect(allowedEvidence.after.phase == 1)
 
-    let compilation = try GeneratedAllSatisfyPredicateRuntime.spec.compile()
-    let formalDevices = try collectionValue([0, 1], in: GeneratedAllSatisfyPredicateRuntime.spec)
+    let compilation = try GeneratedAllSatisfyPredicateMachine.spec.compile()
+    let formalDevices = try collectionValue([0, 1], in: GeneratedAllSatisfyPredicateMachine.spec)
     #expect(try compiledSuccessors(
       in: compilation,
       from: [.integer(0), .init(formal: formalDevices)]
@@ -519,7 +519,7 @@ struct SymmetricCollectionMacroRuntimeTests {
   @Test("Ordinary contains actions use every declared collection value")
   func macroEvaluatesContainsAcrossTheDeclaredPopulation() throws {
     let ids = ["one", "two"]
-    var rejected = try GeneratedContainsPredicateRuntime.makeMachine(devices: ids)
+    var rejected = try GeneratedContainsPredicateMachine.makeMachine(devices: ids)
 
     let rejectedSnapshot = rejected.state
     #expect(throws: GeneratedMachineError.self) {
@@ -527,8 +527,8 @@ struct SymmetricCollectionMacroRuntimeTests {
     }
     #expect(rejected.state == rejectedSnapshot)
 
-    let compilation = try GeneratedContainsPredicateRuntime.spec.compile()
-    let formalDevices = try collectionValue([0, 1], in: GeneratedContainsPredicateRuntime.spec)
+    let compilation = try GeneratedContainsPredicateMachine.spec.compile()
+    let formalDevices = try collectionValue([0, 1], in: GeneratedContainsPredicateMachine.spec)
     let successors = try compiledSuccessors(
       in: compilation,
       from: [.integer(0), .init(formal: formalDevices)]

@@ -691,7 +691,7 @@ struct GeneratedStateMachineTests {
         #expect(invalidMiddleParameter.state == before)
     }
 
-    @Test("Three-parameter actions preserve one ordered contract across builder, parser, macro, runtime, and export")
+    @Test("Three-parameter actions preserve one contract across source, compilation, generated execution, and rendering")
     func threeParameterActionIsConsistentAcrossEveryExecutionPath() throws {
         let sourceText = """
         {

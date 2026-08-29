@@ -104,19 +104,19 @@ struct TLAModuleBundleTests {
     let source = "{ Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2)) }"
     let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
-    let runtime = TLASpec("Imported") {
+    let built = TLASpec("Imported") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
     }
     let parserTree = canonicalTestSpec(
       variables: [], actions: [], invariants: [], imports: parsed.imports,
       importConfigurations: parsed.importConfigurations
     )
-    let runtimeTree = canonicalTestSpec(
-      variables: [], actions: [], invariants: [], imports: runtime.imports,
-      importConfigurations: runtime.importConfigurations
+    let builtTree = canonicalTestSpec(
+      variables: [], actions: [], invariants: [], imports: built.imports,
+      importConfigurations: built.importConfigurations
     )
 
-    #expect(try parserTree.compile().identity == runtimeTree.compile().identity)
+    #expect(try parserTree.compile().identity == builtTree.compile().identity)
   }
 
   @Test("the parser retains formal module parameters for builder fidelity")
@@ -124,18 +124,18 @@ struct TLAModuleBundleTests {
     let source = "{ Parameter(\"Base\") }"
     let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(closure)
-    let runtime = TLASpec("Parameterized") {
+    let built = TLASpec("Parameterized") {
       Parameter("Base")
     }
     let parserTree = canonicalTestSpec(
       variables: [], actions: [], invariants: [], formalParameters: parsed.formalParameters
     )
-    let runtimeTree = canonicalTestSpec(
-      variables: [], actions: [], invariants: [], formalParameters: runtime.formalParameters
+    let builtTree = canonicalTestSpec(
+      variables: [], actions: [], invariants: [], formalParameters: built.formalParameters
     )
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(try parserTree.compile().identity == runtimeTree.compile().identity)
+    #expect(try parserTree.compile().identity == builtTree.compile().identity)
   }
 
   @Test("a generated model preserves a named module instance")
@@ -233,7 +233,7 @@ struct TLAModuleBundleTests {
     #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 7)
   }
 
-  @Test("an import remains a source dependency and resolves its operators at runtime")
+  @Test("an import remains a source dependency and links its operators during compilation")
   func importedOperatorIsBundledAndExecutable() throws {
     let arithmetic = TLASpec("FormalArithmetic") {
       DefineRecursive("Twice", params: ["value"]) {

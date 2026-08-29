@@ -324,8 +324,7 @@ final class ParserSession {
             return .integerRange(lowerExpression, upperExpression)
         }
         // Empty typed formal values are ordinary initializers in the Swift
-        // surface. Decode them directly so the source parser and runtime
-        // builder agree on the same collection-shaped initial state.
+        // surface. Decode them directly into their collection-shaped source value.
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.arguments.isEmpty,
            call.trailingClosure == nil,
@@ -405,9 +404,7 @@ final class ParserSession {
             let operand = decodeStateExpr(prefix.expression)
             if prefix.operator.text == "!", let operand { return .not(operand) }
             if prefix.operator.text == "-", let operand {
-                // Keep a spelled negative literal identical to the runtime
-                // builder's integer literal. This matters to the parser-tree
-                // check even though both forms evaluate to the same value.
+                // Preserve a spelled negative literal as one integer value.
                 if case .value(.int(let value)) = operand {
                     return .value(.int(-value))
                 }
@@ -515,8 +512,8 @@ final class ParserSession {
         }
     }
 
-    /// Parses `ZeroBasedSequence<Element>.filled(length:with:)` into the
-    /// TLA+ function literal used by the runtime builder.
+    /// Parses `ZeroBasedSequence<Element>.filled(length:with:)` into its
+    /// TLA+ function literal.
     private func decodeZeroBasedSequenceFill(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
@@ -839,8 +836,7 @@ final class ParserSession {
            ) {
             return name == "Exists" ? .exists(domain, parameter, predicate) : .forAll(domain, parameter, predicate)
         }
-        // `OneOf` is a type-level union: its alternatives retain their
-        // underlying TLA+ value and therefore need no runtime wrapper.
+        // `OneOf` alternatives retain their underlying TLA+ value.
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            access.base?.as(DeclReferenceExprSyntax.self) != nil,
@@ -988,9 +984,8 @@ final class ParserSession {
             switch prefix.operator.text {
             case "!": return .not(operand)
             case "-":
-                // The runtime typed facade receives `-1` as an Int literal.
-                // Canonicalize the macro-side spelling the same way before a
-                // bounded collection expands it into many formal values.
+                // Preserve `-1` as one integer value before a bounded collection
+                // expands it into formal values.
                 if case .value(.int(let value)) = operand {
                     return .value(.int(-value))
                 }

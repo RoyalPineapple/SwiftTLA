@@ -18,8 +18,8 @@ does. SwiftPM still builds every test target before running the selected
 suites; the wrapper's isolated scratch directory keeps that build out of the
 working tree.
 
-`SwiftTLAParityTests` contains the slower upstream corpus, TLC/oracle,
-core-governance, and temporal/symmetry checks:
+`SwiftTLAParityTests` contains the slower upstream corpus, finite-graph,
+and temporal/symmetry conformance checks:
 
 ```sh
 ./scripts/local-validation.sh swiftpm-test "UpstreamParityTests"
