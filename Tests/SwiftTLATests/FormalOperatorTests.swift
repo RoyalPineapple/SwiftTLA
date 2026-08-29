@@ -70,8 +70,8 @@ struct FormalOperatorTests {
     #expect(try compiledValue(expression) == .int(5))
   }
 
-  @Test("a formal lambda application renders through local bindings")
-  func rendersFormalLambdaApplicationThroughLocalBindings() throws {
+  @Test("a formal lambda application renders as TLA+ lambda syntax")
+  func rendersFormalLambdaApplication() throws {
     let lambda = FormalOperator.lambda(.init(
       parameters: ["value"],
       body: .add(.variable("value"), .int(1))
@@ -88,8 +88,7 @@ struct FormalOperatorTests {
 
     let rendered = try spec.compile().renderedTLAModuleBundle().root.tla
 
-    #expect(rendered.contains("LET "))
-    #expect(rendered.contains("(LAMBDA") == false)
+    #expect(rendered.contains("(LAMBDA value : (value + 1))(counter)"))
   }
 
   @Test("compilation rejects formal operator arity mismatches")
