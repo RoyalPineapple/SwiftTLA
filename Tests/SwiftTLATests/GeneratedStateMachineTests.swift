@@ -525,21 +525,6 @@ struct NestedAdapterConcurrencyTests {
     }
 }
 
-// MARK: - HourClock spec with invariants
-
-@TLAModel
-struct HourClock {
-    static var spec: TLASpec {
-        TLASpec("HourClock") {
-            let hr = Var<Int>("hr")
-            Variable(hr, 1)
-            SwiftTLA.Action("Tick") { hr.becomes(hr + 1).when(hr < 12) }
-            SwiftTLA.Action("Reset") { (hr == 12) && hr.becomes(1) }
-            Invariant("TypeOK") { hr >= 1 && hr <= 12 }
-        }
-    }
-}
-
 // MARK: - Counter with explicit invariant
 
 @TLAModel
@@ -574,34 +559,34 @@ struct MultiVar {
 // MARK: - Builder-only: Var initial in constructor, no explicit Variable()
 
 @TLAModel
-struct BuilderOnlyClock {
+struct GeneratedAlgorithmMachine {
     enum Step: String, CaseIterable { case tick }
 
     static var spec: TLASpec {
-        #spec("BuilderOnlyClock") {
-            Algorithm("BuilderOnlyClock", scoped: { scope in
-                let hr = scope.sharedVar("hr", initial: 1)
+        #spec("GeneratedAlgorithmMachine") {
+            Algorithm("GeneratedAlgorithmMachine", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 1)
                 Do(Step.tick) {
-                    If(hr < 12) {
-                        Assign(hr, to: hr + 1)
+                    If(count < 12) {
+                        Assign(count, to: count + 1)
                     } else: {
-                        Assign(hr, to: 1)
+                        Assign(count, to: 1)
                     }
                 }
-                Invariant("valid") { hr >= 1 && hr <= 12 }
+                Invariant("valid") { count >= 1 && count <= 12 }
             })
         }
     }
 }
 
 @TLAModel
-struct TwoCarElevatorMachine {
+struct SingleParameterActionMachine {
     static var spec: TLASpec {
-        TLASpec("TwoCarElevatorMachine") {
-            let floor = Var<Int>("floor")
-            Variable(floor, 0)
-            SwiftTLA.Action("moveElevator", parameters: [ActionParameter("id", values: [1, 2])]) {
-                floor.becomes(1)
+        TLASpec("SingleParameterActionMachine") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            SwiftTLA.Action("select", parameters: [ActionParameter("choice", values: [1, 2])]) {
+                value.becomes(1)
             }
         }
     }
@@ -612,14 +597,14 @@ struct TwoCarElevatorMachine {
 struct ThreeParameterActionMachine {
     static var spec: TLASpec {
         TLASpec("ThreeParameterActionMachine") {
-            let floor = Var<Int>("floor")
-            Variable(floor, 0)
-            SwiftTLA.Action("board", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            SwiftTLA.Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
             ]) {
-                floor.becomes(1)
+                value.becomes(1)
             }
         }
     }
@@ -630,17 +615,17 @@ struct ThreeParameterActionMachine {
 struct EndToEndThreeParameterActionMachine {
     static var spec: TLASpec {
         TLASpec("EndToEndThreeParameterActionMachine") {
-            let floor = Var<Int>("floor")
-            let person = Expr<Int>(.variable("person"))
-            let elevator = Expr<Int>(.variable("elevator"))
-            let direction = Expr<Int>(.variable("direction"))
-            Variable(floor, 0)
-            SwiftTLA.Action("board", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
+            let value = Var<Int>("value")
+            let source = Expr<Int>(.variable("source"))
+            let destination = Expr<Int>(.variable("destination"))
+            let amount = Expr<Int>(.variable("amount"))
+            Variable(value, 0)
+            SwiftTLA.Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
             ]) {
-                floor.becomes(person + elevator + direction)
+                value.becomes(source + destination + amount)
             }
         }
     }
@@ -685,56 +670,56 @@ struct GeneratedStateMachineTests {
 
     @Test("Model macro generates a parameterized action")
     func modelParameterizedAction() throws {
-        var elevator = try TwoCarElevatorMachine.makeMachine()
-        _ = try elevator.send(.moveElevator(id: 1))
-        #expect(elevator.state.floor == 1)
+        var machine = try SingleParameterActionMachine.makeMachine()
+        _ = try machine.send(.select(choice: 1))
+        #expect(machine.state.value == 1)
     }
 
     @Test("Generated actions retain every declared parameter")
     func generatedActionsRetainEveryDeclaredParameter() throws {
         var enabled = try ThreeParameterActionMachine.makeMachine()
-        _ = try enabled.send(.board(person: 2, elevator: 20, direction: 200))
-        #expect(enabled.state.floor == 1)
+        _ = try enabled.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(enabled.state.value == 1)
         #expect(ThreeParameterActionMachine.spec.actions[0].bindings.map(\.name) == [
-            "person", "elevator", "direction"
+            "source", "destination", "amount"
         ])
 
         var invalidMiddleParameter = try ThreeParameterActionMachine.makeMachine()
         let before = invalidMiddleParameter.state
         #expect(throws: GeneratedMachineError.self) {
-            try invalidMiddleParameter.send(.board(person: 2, elevator: 30, direction: 200))
+            try invalidMiddleParameter.send(.transfer(source: 2, destination: 30, amount: 200))
         }
-        #expect(invalidMiddleParameter.state.floor == 0)
+        #expect(invalidMiddleParameter.state.value == 0)
         #expect(invalidMiddleParameter.state == before)
     }
 
     @Test("Three-parameter actions preserve one ordered contract across builder, parser, macro, runtime, and export")
     func threeParameterActionIsConsistentAcrossEveryExecutionPath() throws {
-        let source = """
+        let sourceText = """
         {
-            Action("board", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
+            Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
             ]) {
-                floor.becomes(person + elevator + direction)
+                value.becomes(source + destination + amount)
             }
         }
         """
-        let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+        let closure = try #require(Parser.parse(source: sourceText).statements.first?.item.as(ClosureExprSyntax.self))
         let parsed = SpecParser.parseSpecClosure(closure)
-        let floor = Var<Int>("floor")
-        let person = Expr<Int>(.variable("person"))
-        let elevator = Expr<Int>(.variable("elevator"))
-        let direction = Expr<Int>(.variable("direction"))
+        let value = Var<Int>("value")
+        let source = Expr<Int>(.variable("source"))
+        let destination = Expr<Int>(.variable("destination"))
+        let amount = Expr<Int>(.variable("amount"))
         let builder = TLASpec("EndToEndThreeParameterActionMachine") {
-            Variable(floor, 0)
-            Action("board", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
+            Variable(value, 0)
+            Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
             ]) {
-                floor.becomes(person + elevator + direction)
+                value.becomes(source + destination + amount)
             }
         }
 
@@ -757,95 +742,95 @@ struct GeneratedStateMachineTests {
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let initialActions = try machine.enabledActions()
         let expectedActions: [EndToEndThreeParameterActionMachine.Action] = [
-            .board(person: 1, elevator: 10, direction: 100), .board(person: 1, elevator: 10, direction: 200),
-            .board(person: 1, elevator: 20, direction: 100), .board(person: 1, elevator: 20, direction: 200),
-            .board(person: 2, elevator: 10, direction: 100), .board(person: 2, elevator: 10, direction: 200),
-            .board(person: 2, elevator: 20, direction: 100), .board(person: 2, elevator: 20, direction: 200)
+            .transfer(source: 1, destination: 10, amount: 100), .transfer(source: 1, destination: 10, amount: 200),
+            .transfer(source: 1, destination: 20, amount: 100), .transfer(source: 1, destination: 20, amount: 200),
+            .transfer(source: 2, destination: 10, amount: 100), .transfer(source: 2, destination: 10, amount: 200),
+            .transfer(source: 2, destination: 20, amount: 100), .transfer(source: 2, destination: 20, amount: 200)
         ]
         #expect(initialActions == expectedActions)
-        #expect(try machine.isEnabled(.board(person: 2, elevator: 20, direction: 200)))
-        #expect(try machine.isEnabled(.board(person: 2, elevator: 30, direction: 200)) == false)
+        #expect(try machine.isEnabled(.transfer(source: 2, destination: 20, amount: 200)))
+        #expect(try machine.isEnabled(.transfer(source: 2, destination: 30, amount: 200)) == false)
 
         let renderedCalls = try builder.compile().renderedActions()
-        #expect(renderedCalls.map(\.sourceName) == Array(repeating: "board", count: 8))
+        #expect(renderedCalls.map(\.sourceName) == Array(repeating: "transfer", count: 8))
         #expect(renderedCalls.map(\.arguments) == expectedArguments)
         #expect(renderedCalls.map(\.renderedName) == [
-            "board__0_0_0", "board__0_0_1", "board__0_1_0", "board__0_1_1",
-            "board__1_0_0", "board__1_0_1", "board__1_1_0", "board__1_1_1"
+            "transfer__0_0_0", "transfer__0_0_1", "transfer__0_1_0", "transfer__0_1_1",
+            "transfer__1_0_0", "transfer__1_0_1", "transfer__1_1_0", "transfer__1_1_1"
         ])
 
         let compilation = try builder.compile()
         let initial = try firstCompiledState(in: compilation)
         let successor = try #require(try compiledSuccessors(
-            named: "board",
+            named: "transfer",
             arguments: [.int(2), .int(20), .int(200)],
             in: compilation,
             from: initial
         ).first)
-        #expect(try renderedValue(named: "floor", in: successor, compilation: compilation) == .int(222))
+        #expect(try renderedValue(named: "value", in: successor, compilation: compilation) == .int(222))
         #expect(try compiledSuccessors(
-            named: "board",
+            named: "transfer",
             arguments: [.int(2), .int(30), .int(200)],
             in: compilation,
             from: initial
         ).isEmpty)
-        #expect(try renderedValue(named: "floor", in: initial, compilation: compilation) == .int(0))
+        #expect(try renderedValue(named: "value", in: initial, compilation: compilation) == .int(0))
 
         var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = generatedMachine.state
-        let evidence = try generatedMachine.send(.board(person: 2, elevator: 20, direction: 200))
-        #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
-        #expect(evidence.after.floor == 222)
+        let evidence = try generatedMachine.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(evidence.action == .transfer(source: 2, destination: 20, amount: 200))
+        #expect(evidence.after.value == 222)
         #expect(throws: GeneratedMachineError.self) {
-            try generatedMachine.send(.board(person: 2, elevator: 30, direction: 200))
+            try generatedMachine.send(.transfer(source: 2, destination: 30, amount: 200))
         }
-        #expect(generatedMachine.state.floor == 222)
-        #expect(before.floor == 0)
+        #expect(generatedMachine.state.value == 222)
+        #expect(before.value == 0)
     }
 
-    @Test("Canonical generated machine preserves typed actions, transitions, and failed snapshots")
-    func canonicalGeneratedMachineUsesCheckedThreeArgumentActions() throws {
+    @Test("Generated machine preserves typed actions, transitions, and failed snapshots")
+    func generatedMachineUsesCheckedThreeArgumentActions() throws {
         var machine = try ThreeParameterActionMachine.makeMachine()
-        let action = ThreeParameterActionMachine.Action.board(person: 2, elevator: 20, direction: 200)
+        let action = ThreeParameterActionMachine.Action.transfer(source: 2, destination: 20, amount: 200)
         let evidence = try machine.send(action)
 
         #expect(evidence.action == action)
-        #expect(evidence.before.floor == 0)
-        #expect(evidence.after.floor == 1)
+        #expect(evidence.before.value == 0)
+        #expect(evidence.after.value == 1)
 
         let before = machine.state
         #expect(throws: GeneratedMachineError.self) {
-            try machine.send(.board(person: 2, elevator: 30, direction: 200))
+            try machine.send(.transfer(source: 2, destination: 30, amount: 200))
         }
         #expect(machine.state == before)
     }
 
-    @Test("Canonical generated execution publishes complete parameterized transitions")
-    func canonicalGeneratedExecutionPreservesParameterizedTransition() throws {
+    @Test("Generated execution publishes complete parameterized transitions")
+    func generatedExecutionPreservesParameterizedTransition() throws {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = machine.state
 
-        let evidence = try machine.send(.board(person: 2, elevator: 20, direction: 200))
+        let evidence = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
         let after = machine.state
 
-        #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
-        #expect(evidence.before.floor == 0)
-        #expect(evidence.after.floor == 222)
-        #expect(before.floor == 0)
-        #expect(after.floor == 222)
+        #expect(evidence.action == .transfer(source: 2, destination: 20, amount: 200))
+        #expect(evidence.before.value == 0)
+        #expect(evidence.after.value == 222)
+        #expect(before.value == 0)
+        #expect(after.value == 222)
     }
 
-    @Test("Actor returns the canonical three-argument transition")
-    func actorMatchesCanonicalThreeArgumentTransition() async throws {
+    @Test("Actor returns the value machine's three-argument transition")
+    func actorMatchesValueMachineThreeArgumentTransition() async throws {
         var model = try ThreeParameterActionMachine.makeMachine()
-        let expected = try model.send(.board(person: 2, elevator: 20, direction: 200))
+        let expected = try model.send(.transfer(source: 2, destination: 20, amount: 200))
 
         let actor = try ThreeParameterActionMachine.Actor()
-        let acted = try await actor.send(.board(person: 2, elevator: 20, direction: 200))
+        let acted = try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
 
         #expect(acted.action == expected.action)
-        #expect(acted.before.floor == expected.before.floor)
-        #expect(acted.after.floor == expected.after.floor)
+        #expect(acted.before.value == expected.before.value)
+        #expect(acted.after.value == expected.after.value)
     }
 
     @Test("Rejected generated labels preserve model and actor state")
@@ -853,7 +838,7 @@ struct GeneratedStateMachineTests {
         var model = try ThreeParameterActionMachine.makeMachine()
         let modelBefore = model.state
         do {
-            _ = try model.send(.board(person: 2, elevator: 30, direction: 200))
+            _ = try model.send(.transfer(source: 2, destination: 30, amount: 200))
             Issue.record("Expected rejected model action")
         } catch {
             #expect(error is GeneratedMachineError)
@@ -863,7 +848,7 @@ struct GeneratedStateMachineTests {
         let actor = try ThreeParameterActionMachine.Actor()
         let actorBefore = await actor.state
         await #expect(throws: GeneratedMachineError.self) {
-            try await actor.send(.board(person: 2, elevator: 30, direction: 200))
+            try await actor.send(.transfer(source: 2, destination: 30, amount: 200))
         }
         #expect(await actor.state == actorBefore)
     }
@@ -882,12 +867,12 @@ struct GeneratedStateMachineTests {
         #expect(result.output.contains("incorrect argument label in call (have 'name:body:binding:', expected 'name:body:bindings:')"))
     }
 
-    @Test("Algorithm builder preserves an initialized clock")
-    func builderOnlyClockRuntime() throws {
-        let compilation = try BuilderOnlyClock.spec.compile()
-        var machine = try BuilderOnlyClock.makeMachine()
-        #expect(machine.state.hr == 1)
-        #expect(try machine.send(.tick).after.hr == 2)
+    @Test("Algorithm builder preserves initialized generated state")
+    func generatedAlgorithmInitialState() throws {
+        let compilation = try GeneratedAlgorithmMachine.spec.compile()
+        var machine = try GeneratedAlgorithmMachine.makeMachine()
+        #expect(machine.state.count == 1)
+        #expect(try machine.send(.tick).after.count == 2)
         let result = try ModelChecker(
             compilation: compilation,
             configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)

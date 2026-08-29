@@ -56,8 +56,8 @@ struct NestedComposableMacroConformanceTests {
 
     @Test("Three-parameter invocation identity survives value and actor execution")
     func threeParameterIdentityRemainsDistinctAcrossExecutionSurfaces() async throws {
-        let first = EndToEndThreeParameterActionMachine.Action.board(person: 1, elevator: 10, direction: 100)
-        let selected = EndToEndThreeParameterActionMachine.Action.board(person: 2, elevator: 20, direction: 200)
+        let first = EndToEndThreeParameterActionMachine.Action.transfer(source: 1, destination: 10, amount: 100)
+        let selected = EndToEndThreeParameterActionMachine.Action.transfer(source: 2, destination: 20, amount: 200)
         let available = try EndToEndThreeParameterActionMachine.makeMachine().enabledActions()
         let actor = try ThreeParameterActionMachine.Actor()
 
@@ -66,10 +66,10 @@ struct NestedComposableMacroConformanceTests {
         #expect(available.contains(first))
         #expect(available.contains(selected))
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let result = try machine.send(.board(person: 2, elevator: 20, direction: 200))
-        #expect(result.after.floor == 222)
-        let acted = try await actor.send(.board(person: 2, elevator: 20, direction: 200))
-        #expect(acted.action == .board(person: 2, elevator: 20, direction: 200))
+        let result = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(result.after.value == 222)
+        let acted = try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(acted.action == .transfer(source: 2, destination: 20, amount: 200))
     }
 
     @Test("Generated macro surfaces are structurally Sendable without unchecked conformance")

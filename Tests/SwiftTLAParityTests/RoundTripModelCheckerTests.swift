@@ -174,48 +174,25 @@ struct ModelCheckOutcomeTests {
   }
 }
 
-// MARK: - Core example parity (same shapes as Examples/)
-
-@Suite(.serialized) struct GoldenTests {
-  @Test("HourClock = 12 states")
-  func hourClock12() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, 1)
-      Action("HCnxt") {
-        (hr != 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1)
-      }
-      Invariant("HCini") { hr >= 1 && hr <= 12 }
-    }
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count == 12)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = result { true } else { false } }())
+@Suite(.serialized) struct ReachableGraphContractTests {
+  @Test("HourClock canonical model has its declared reachable graph")
+  func hourClockCanonicalGraph() throws {
+    let fixture = Example.hourClock
+    let graph = try ModelChecker(
+      compilation: fixture.spec.compile(),
+      configuration: try .init(maximumStateLimit: fixture.maximumStateLimit, symmetryReduction: .disabled)
+    ).exploreGraph()
+    #expect(graph.states.count == fixture.expectedDistinct)
   }
 
-  @Test("DieHard = 16 states")
-  func dieHard16() throws {
-    let big = Var<Int>("big")
-    let small = Var<Int>("small")
-    let spec = TLASpec("DieHard") {
-      Variable(big, 0)
-      Variable(small, 0)
-      Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
-      Action("FillSmallJug") { small.becomes(3) }
-      Action("FillBigJug") { big.becomes(5) }
-      Action("EmptySmallJug") { small.becomes(0) }
-      Action("EmptyBigJug") { big.becomes(0) }
-      Action("SmallToBig") {
-        (big + small <= 5) && big.becomes(big + small) && small.becomes(0)
-          || (big + small > 5) && big.becomes(5) && small.becomes(small - (5 - big))
-      }
-      Action("BigToSmall") {
-        (big + small <= 3) && small.becomes(big + small) && big.becomes(0)
-          || (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
-      }
-    }
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count == 16)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = result { true } else { false } }())
+  @Test("DieHard canonical model has its declared reachable graph")
+  func dieHardCanonicalGraph() throws {
+    let fixture = Example.dieHardTypeOK
+    let graph = try ModelChecker(
+      compilation: fixture.spec.compile(),
+      configuration: try .init(maximumStateLimit: fixture.maximumStateLimit, symmetryReduction: .disabled)
+    ).exploreGraph()
+    #expect(graph.states.count == fixture.expectedDistinct)
   }
 
   @Test("Allocator = 4 states")
@@ -358,24 +335,24 @@ struct ModelCheckOutcomeTests {
 
   @Test("compiled execution applies an action")
   func applyAction() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, 1)
-      Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
+    let count = Var<Int>("count")
+    let spec = TLASpec("IncrementingCounter") {
+      Variable(count, 1)
+      Action("increment") { count.becomes(count + 1).when(count < 12) }
     }
     let compilation = try spec.compile()
     let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    let next = try successor(compilation, named: "Tick", from: state)
-    #expect(try value("hr", in: next, compilation: compilation) == .int(2))
+    let next = try successor(compilation, named: "increment", from: state)
+    #expect(try value("count", in: next, compilation: compilation) == .int(2))
   }
 
   @Test("compiled execution checks invariants")
   func checkInvariant() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, 1)
-      Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
-      Invariant("Positive") { hr > 0 }
+    let count = Var<Int>("count")
+    let spec = TLASpec("PositiveCounter") {
+      Variable(count, 1)
+      Action("increment") { count.becomes(count + 1).when(count < 12) }
+      Invariant("Positive") { count > 0 }
     }
     let compilation = try spec.compile()
     let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
@@ -385,15 +362,15 @@ struct ModelCheckOutcomeTests {
 
   @Test("compiled execution lists available actions")
   func availableActions() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, 1)
-      Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
+    let count = Var<Int>("count")
+    let spec = TLASpec("AvailableAction") {
+      Variable(count, 1)
+      Action("increment") { count.becomes(count + 1).when(count < 12) }
     }
     let compilation = try spec.compile()
     let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
     let available = try successors(compilation, from: state).map(\.action)
-    #expect(available.contains("Tick"))
+    #expect(available.contains("increment"))
   }
 
   @Test("compiled successor relation matches checked transitions from every reachable state")
@@ -484,18 +461,6 @@ struct ModelCheckOutcomeTests {
     }
   }
 
-  @Test("compiled execution applies a declared action")
-  func appliesDeclaredAction() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, 1)
-      Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
-    }
-    let compilation = try spec.compile()
-    let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    let next = try successor(compilation, named: "Tick", from: state)
-    #expect(try value("hr", in: next, compilation: compilation) == .int(2))
-  }
 }
 
 @Suite(.serialized) struct CheckerSelfProofTests {

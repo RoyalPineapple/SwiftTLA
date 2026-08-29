@@ -728,7 +728,7 @@ struct AlgorithmBuilderTests {
 
     @Test("typed first-slice builders preserve ordered process steps")
     func buildsBoundedAlgorithm() throws {
-        let algorithm = Algorithm("ChangRoberts", scoped: { scope in
+        let algorithm = Algorithm("OrderedProcessSteps", scoped: { scope in
             let maximum = scope.sharedVar("maximum", initial: 0)
             Each(Node.all, scoped: { node, scope in
                 let inbox = scope.localVar("inbox", initial: 0)
@@ -1492,12 +1492,12 @@ struct AlgorithmBuilderTests {
 
     @Test("SharedVar range expands to the declared finite initial states")
     func lowersNondeterministicSharedInitialization() throws {
-        let algorithm = Algorithm("HourClock", scoped: { scope in
-            let hour = scope.sharedVar("hour", in: 1...3)
+        let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in
+            let value = scope.sharedVar("value", in: 1...3)
             Each(Node.all) { _ in
                 Do(TestControlLabel.tick) {
-                    When(hour < 3)
-                    Assign(hour, to: hour + 1)
+                    When(value < 3)
+                    Assign(value, to: value + 1)
                     Stop()
                 }
             }
@@ -1505,11 +1505,11 @@ struct AlgorithmBuilderTests {
 
         let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
-        let hour = try #require(compilation.layout.testVariableID(named: "hour"))
+        let value = try #require(compilation.layout.testVariableID(named: "value"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
 
-        #expect(Set(try states.map { try $0.value(for: hour).rendered(using: compilation.layout) }) == [.int(1), .int(2), .int(3)])
-        #expect(spec.variables.first { $0.name == "hour" }?.initialization == .memberOf(.setLiteral([
+        #expect(Set(try states.map { try $0.value(for: value).rendered(using: compilation.layout) }) == [.int(1), .int(2), .int(3)])
+        #expect(spec.variables.first { $0.name == "value" }?.initialization == .memberOf(.setLiteral([
             .value(.int(1)), .value(.int(2)), .value(.int(3))
         ])))
     }

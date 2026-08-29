@@ -2454,7 +2454,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         ))
     }
 
-    @Test func parseHourClockStyleNestedOr() throws {
+    @Test func parsesNestedGuardedDisjunction() throws {
         let result = SpecParser.decodeActionExpr(
             try parseExpression("(x != 12) && x.becomes(x + 1) || (x == 12) && x.becomes(1)")
         )
@@ -2594,10 +2594,10 @@ private let cameraModeDefinition = parserEnum(
     @Test func parsesVariadicActionParametersInDeclarationOrder() throws {
         let source = """
         {
-            Action("moveElevator", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
+            Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
             ]) {
                 floor.becomes(1)
             }
@@ -2606,7 +2606,7 @@ private let cameraModeDefinition = parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(closure)
         #expect(parsed.actions.count == 1)
-        #expect(parsed.actions[0].bindings.map(\.name) == ["person", "elevator", "direction"])
+        #expect(parsed.actions[0].bindings.map(\.name) == ["source", "destination", "amount"])
         #expect(parsed.actions[0].bindings.map(\.values) == [
             [.int(1), .int(2)], [.int(10), .int(20)], [.int(100), .int(200)]
         ])
@@ -2643,10 +2643,10 @@ private let cameraModeDefinition = parserEnum(
     @Test func diagnosesInvalidDomainsAtEveryParameterPosition() throws {
         let source = """
         {
-            Action("moveElevator", parameters: [
-                ActionParameter("person", values: personIDs),
-                ActionParameter("elevator", values: []),
-                ActionParameter("direction", values: [1, 1])
+            Action("transfer", parameters: [
+                ActionParameter("source", values: sourceIDs),
+                ActionParameter("destination", values: []),
+                ActionParameter("amount", values: [1, 1])
             ]) {
                 floor.becomes(1)
             }
@@ -2656,9 +2656,9 @@ private let cameraModeDefinition = parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
-            "Parameterized action 'moveElevator' parameter 'person' requires an explicitly written finite values array.",
-            "Parameterized action 'moveElevator' parameter 'elevator' requires a non-empty finite values array.",
-            "Parameterized action 'moveElevator' parameter 'direction' has duplicate finite-domain values."
+            "Parameterized action 'transfer' parameter 'source' requires an explicitly written finite values array.",
+            "Parameterized action 'transfer' parameter 'destination' requires a non-empty finite values array.",
+            "Parameterized action 'transfer' parameter 'amount' has duplicate finite-domain values."
         ])
     }
 
