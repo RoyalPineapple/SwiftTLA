@@ -1,9 +1,8 @@
 # Generated machines
 
-`@TLAModel` turns a compiled `TLASpec` declaration into a typed Swift state
-machine. The generated value is the normal application surface: it holds one
-complete `State`, accepts typed `Action` values, and publishes a complete new
-state for each successful transition.
+`@TLAModel` generates a typed Swift state machine from a compiled `TLASpec`.
+The machine holds one complete `State` and accepts typed `Action` values. Each
+successful action returns a `Transition` with the state before and after it.
 
 ```swift
 var machine = try Counter.makeMachine()
@@ -11,8 +10,8 @@ let transition = try machine.send(.advance)
 let state = transition.after
 ```
 
-The model is useful before any formal-tool vocabulary is needed. Its formal
-bundle and bounded exploration remain available through compilation.
+Application code uses the generated machine. Formal tools use the compiled
+specification and rendered bundles.
 
 ## Generate a machine
 
@@ -32,11 +31,6 @@ import SwiftTLAMacros
 struct BoundedCounter {
     enum Process: String, FiniteTLAValueDomain {
         case only
-
-        static var defaultValue: Self { .only }
-        static let finiteValues: [Process] = [.only]
-
-        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     enum Step: String, CaseIterable {
@@ -68,9 +62,9 @@ Each generated model exposes these value types:
 - `Action` contains declared actions and their typed parameters.
 - `Transition` contains the action and the state before and after it.
 
-`send(_:)` applies one action. `isEnabled(_:)` asks whether that action is
-currently permitted. Both operations can throw a generated-machine diagnostic;
-a rejected action leaves `state` unchanged.
+`send(_:)` applies one action. `isEnabled(_:)` reports whether that action is
+currently permitted. Both operations can throw a generated-machine diagnostic.
+A rejected action leaves `state` unchanged.
 
 **Example ID:** `generated-machine-direct-action`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/DirectAction.swift`
@@ -93,8 +87,8 @@ func runDirectAction() throws {
 }
 ```
 
-Use `isEnabled(_:)` to drive a control affordance, but always handle a failed
-`send(_:)`: state can change between rendering a view and receiving an event.
+Use `isEnabled(_:)` to control user actions. Handle each error from
+`send(_:)` because application events can arrive after the view changes.
 
 ## SwiftUI
 
@@ -128,7 +122,7 @@ struct CounterView: View {
                     diagnostic = String(describing: error)
                 }
             }
-            if !diagnostic.isEmpty {
+            if diagnostic.isEmpty == false {
                 Text(diagnostic)
             }
         }
@@ -145,15 +139,14 @@ struct CounterView: View {
 }
 ```
 
-The fixture uses an explicit throwing factory at its boundary. The view works
-only with generated state and actions, and it presents a rejected action as
-application state.
+The view creates the machine with its throwing factory. It reads generated
+state and sends generated actions. It stores each action error for display.
 
 ## Effects and presentation data
 
 The generated machine owns state that controls which transition can occur.
-Platform handles, received data, diagnostics, and animation remain ordinary
-application state. They do not duplicate the machine's transition state.
+Platform handles, received data, diagnostics, and animation are presentation
+data.
 
 The platform examples use this division directly:
 
@@ -167,12 +160,12 @@ An effect first applies the action that authorizes it. When the platform
 reports an outcome, the application sends the corresponding typed action back
 to the same machine.
 
-## Advanced execution
+## Actor
 
-`Actor` owns a generated machine value when an application needs asynchronous
-coordination. It serializes `send(_:)` and exposes the same generated `State`
-and `Action` values used by value and SwiftUI code. Its initializer accepts the
-same typed initial state as `makeMachine(_:)`.
+`Actor` is a thin asynchronous adapter over one generated value machine. It
+serializes `send(_:)` and exposes the same generated `State` and `Action`
+values. Its initializer accepts the same typed initial state as
+`makeMachine(_:)`.
 
 **Example ID:** `generated-machine-actor`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
@@ -187,11 +180,6 @@ import SwiftTLAMacros
 struct CounterHost {
     enum Process: String, FiniteTLAValueDomain {
         case only
-
-        static var defaultValue: Self { .only }
-        static let finiteValues: [Process] = [.only]
-
-        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     enum Step: String, CaseIterable {
@@ -227,11 +215,10 @@ func runActorAccess() async throws {
 }
 ```
 
-## Test a model integration
+## Validate the generated API
 
-Test the state before and after a transition, the enabled condition, and a
-rejected action. These tests verify integration with the generated Swift API;
-they do not extend the model's declared finite verification bounds.
+Validate the state before and after a transition. Also validate the enabled
+condition and a rejected action. These tests exercise the generated Swift API.
 
 **Example ID:** `generated-machine-testing`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/GeneratedMachineTests.swift`
@@ -260,18 +247,18 @@ func runGeneratedMachineTesting() throws {
 }
 ```
 
-## Formal verification
+## Compile and render
 
-Compile the same model when an application needs to inspect, render, or explore it:
+Compile the source model before inspection, rendering, or exploration:
 
 ```swift
 let compilation = try BoundedCounter.spec.compile()
 let bundle = compilation.renderedTLAModuleBundle()
 ```
 
-The generated machine compiles the same source and checks its compiled identity
-against the identity recorded during macro expansion. Explicit compilations
-drive local exploration and formal rendering.
+The generated machine compiles the same source and compares its compilation
+identity with the identity from macro expansion. Explicit compilations drive
+bounded exploration and formal rendering.
 
 ## API reference
 
@@ -287,11 +274,3 @@ drive local exploration and formal rendering.
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |
 | Generated `Actor` | Serializes access to one generated machine value. |
 | Generated `enabledActions()` | Lists the typed actions enabled by the current state. |
-
-## Stable contract
-
-| Claim area | Evidence |
-| --- | --- |
-| Generated machine members | `Sources/SwiftTLAPlugin/MacroExpander.swift` and `Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift` |
-| Generated machine errors | `Sources/SwiftTLA/GeneratedMachineError.swift` |
-| Compilable examples | The fixtures named beside each example ID |

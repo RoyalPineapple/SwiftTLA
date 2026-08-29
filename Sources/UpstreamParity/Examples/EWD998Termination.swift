@@ -3,8 +3,6 @@ import SwiftTLA
 /// Dijkstra's asynchronous ring-termination detector from EWD 998.
 ///
 /// The finite node domain and its two shared functions are formal values.
-/// Parameterized actions replace the old raw existential action bodies, so the
-/// same authoring surface drives the parser, builder, and generated machine.
 package struct EWD998TerminationModel: Sendable {
     package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case zero = 0

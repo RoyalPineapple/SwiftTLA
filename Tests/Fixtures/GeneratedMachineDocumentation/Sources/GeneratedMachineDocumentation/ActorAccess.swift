@@ -7,11 +7,6 @@ import SwiftTLAMacros
 struct CounterHost {
     enum Process: String, FiniteTLAValueDomain {
         case only
-
-        static var defaultValue: Self { .only }
-        static let finiteValues: [Process] = [.only]
-
-        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     enum Step: String, CaseIterable {

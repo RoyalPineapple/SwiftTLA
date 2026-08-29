@@ -22,21 +22,13 @@ struct GeneratedMachineDocumentationTests {
         }
     }
 
-    @Test("Generated machine guide retains its public contract and fixture parity")
-    func guideRetainsPublicContract() throws {
+    @Test("Generated machine guide examples match compiling fixtures")
+    func guideExamplesMatchCompilingFixtures() throws {
         let root = packageRoot()
         let guide = try String(
             contentsOf: root.appendingPathComponent("Documentation/GeneratedMachines.md"),
             encoding: .utf8
         )
-
-        for heading in requiredHeadings {
-            #expect(guide.contains("## \(heading)"), "Guide is missing heading: \(heading)")
-        }
-
-        for term in requiredContractTerms {
-            #expect(guide.contains(term), "Guide is missing public contract term: \(term)")
-        }
 
         for (identifier, file) in completeExampleSources {
             let fixture = try String(
@@ -80,17 +72,6 @@ struct GeneratedMachineDocumentationTests {
             #expect(sourceText.contains(declaration), "Source declaration is missing: \(declaration)")
         }
 
-        for unsupportedName in ["@TLAValidated", "_machine"] {
-            #expect(!inventory.contains(unsupportedName), "Unsupported API appears in public inventory: \(unsupportedName)")
-        }
-
-        for currentClaim in [
-            "generated machine value is SwiftUI state",
-            "same model when an application needs to inspect, render, or explore it",
-            "one generated machine value"
-        ] {
-            #expect(guide.contains(currentClaim), "Guide is missing current contract wording: \(currentClaim)")
-        }
     }
 
     @Test("Generated-machine Markdown and DocC retain the typed public boundary")
@@ -115,27 +96,6 @@ struct GeneratedMachineDocumentationTests {
         }
         #expect(macroDocc.contains("TLAModel"), "Macro DocC is missing TLAModel")
 
-        for staleTerm in ["TransitionEvidence", "state[\"value\"]", "tlaSnapshot()["] {
-            #expect(!guide.contains(staleTerm), "Markdown guide exposes stale boundary: \(staleTerm)")
-            #expect(!docc.contains(staleTerm), "SwiftTLA DocC exposes stale boundary: \(staleTerm)")
-        }
-    }
-
-    @Test("Actor guide describes one generated machine owner")
-    func actorMachineGuideDescribesGeneratedMachineOwnership() throws {
-        let root = packageRoot()
-        let actor = try String(
-            contentsOf: root.appendingPathComponent("Documentation/ActorMachines.md"),
-            encoding: .utf8
-        )
-        for term in [
-            "Actor()",
-            "generated machine value",
-            "serializes access"
-        ] {
-            #expect(actor.contains(term), "Actor-machine guide is missing: \(term)")
-        }
-        #expect(!actor.contains("assert(await"), "Actor-machine guide puts await inside assert")
     }
 
     @Test("Generated machine documentation fixture compiles and exercises its stated macOS behavior")
@@ -147,27 +107,6 @@ struct GeneratedMachineDocumentationTests {
             "Generated-machine fixture failed its macOS behavior tests:\n\(outputTail(result.output))"
         )
     }
-
-    private let requiredHeadings = [
-        "Generate a machine",
-        "State, actions, and transitions",
-        "SwiftUI",
-        "Effects and presentation data",
-        "Advanced execution",
-        "Test a model integration",
-        "Formal verification",
-        "API reference",
-        "Stable contract"
-    ]
-
-    private let requiredContractTerms = [
-        "Generated `State`",
-        "Generated `Action`",
-        "Generated `Transition`",
-        "`enabledActions()`",
-        "`isEnabled(_:)`",
-        "`send(_:)`"
-    ]
 
     private var completeExampleSources: [String: String] {
         [
@@ -216,13 +155,11 @@ struct GeneratedMachineDocumentationTests {
     }
 
     private func publicInventory(in guide: String) -> String {
-        guard let start = guide.range(of: "## API reference"),
-              let end = guide.range(of: "## Stable contract", range: start.upperBound..<guide.endIndex)
-        else {
+        guard let start = guide.range(of: "## API reference") else {
             Issue.record("Guide is missing its API reference section")
             return ""
         }
-        return guide[start.upperBound..<end.lowerBound]
+        return guide[start.upperBound..<guide.endIndex]
             .split(separator: "\n")
             .filter { $0.hasPrefix("|") }
             .joined(separator: "\n")

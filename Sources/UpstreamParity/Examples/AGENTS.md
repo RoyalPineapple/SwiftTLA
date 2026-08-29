@@ -58,7 +58,7 @@ requires the same identity before it creates the generated machine.
 
 After a port:
 
-1. Add or preserve the `Example.Entry` metadata and declared finite outcome.
+1. Add or preserve the `Example.FiniteModelFixture` and its declared finite outcome.
 2. Compile the source model and run its focused bounded-exploration test.
 3. For an `@TLAModel` port, exercise `makeMachine()` so its compilation-identity
    contract runs.
@@ -69,7 +69,7 @@ After a port:
 
 - Keep upstream variable names, module names, action labels, and invariant
   names unless the lowerer necessarily creates internal labels.
-- File names are PascalCase. Entry IDs retain the upstream category/spec name.
-- Record the upstream module and configuration in `Example.Entry`.
+- File names are PascalCase. Fixture names retain the upstream model name.
+- Record the upstream module and configuration in `Verification/FiniteGraph/cases.json`.
 - A failure must report the next useful fact: the declaration, action,
   invariant, bound expression, or graph edge that differs.

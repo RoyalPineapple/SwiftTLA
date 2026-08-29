@@ -8,19 +8,22 @@ Each generated model exposes these `Sendable` value types:
 
 - `State`: immutable typed values for declared variables.
 - `Action`: a typed action identity and typed parameters.
-- `Transition`: typed action, state before, and state after for one successful transition.
+- `Transition`: the typed action and state before and after one successful transition.
 
 
 ## Direct value-model execution
 
-`send(_:)` applies one typed action. `isEnabled(_:)` checks whether one typed action
-is currently permitted. Both methods can throw. `state` contains the complete current
-typed state.
+`send(_:)` applies one typed action. `isEnabled(_:)` reports whether one action
+is permitted in the current state. Both methods can throw. `state` contains
+the complete current typed state.
+
+SwiftUI stores the generated machine directly in `@State`. A successful
+`send(_:)` replaces the complete value with its next state.
 
 ## Generated actor
 
-`Actor` owns one generated machine value. It serializes
-`send(_:)` and exposes the machine's typed initial state, state, and actions.
+`Actor` is a thin asynchronous adapter over one generated machine value. It
+serializes `send(_:)` and exposes the same typed state and actions.
 
 ```swift
 let actor = try Counter.Actor()

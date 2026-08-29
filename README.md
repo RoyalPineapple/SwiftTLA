@@ -1,13 +1,12 @@
 # SwiftTLA
 
-**SwiftTLA declares how an application is allowed to change state.**
+**SwiftTLA turns typed state rules into a typed Swift machine.**
 
-Define explicit state, permitted actions, and rules that must hold. SwiftTLA
-generates a typed Swift machine your application can run. The same model can
-also drive bounded exploration and direct TLA+ rendering. A model with one
-authored `Algorithm` also renders a source-faithful PlusCal bundle. Selected
-finite cases compare SwiftTLA's exploration with independent pinned TLC
-fixtures.
+Write one Swift source model for state, actions, and invariants. `compile()`
+binds names, links modules, and creates one immutable compiled specification.
+`@TLAModel` generates typed `State`, `Action`, and `Transition` values from that
+meaning. SwiftUI stores the generated value machine directly. The generated
+`Actor` serializes access to the same value machine.
 
 **One model. Typed application state. Bounded formal evidence.**
 
@@ -17,7 +16,7 @@ Swift source model
         ▼
 CompiledSpecification
  ├── generated State, Action, Transition, and machine
- ├── bounded exploration
+ ├── private runtime and bounded exploration
  └── rendered TLA+ bundle and, for one authored Algorithm, PlusCal bundle
 
 Generated machine
@@ -107,7 +106,7 @@ print(result.after)
 ## Use the machine in SwiftUI
 
 The generated state is ordinary Swift value state. A view renders it and sends
-typed actions; the machine keeps each transition atomic.
+typed actions. The machine keeps each transition atomic.
 
 **Example ID:** `readme-clock-swiftui`
 
@@ -155,32 +154,29 @@ struct ClockView: View {
 ```
 
 `machine` is the generated value stored by the view. A failed action throws and
-leaves the machine state unchanged; this view stores the diagnostic for display.
-Use the generated actor when the application needs shared asynchronous state;
-it stores the same generated machine value behind actor isolation.
+leaves the machine state unchanged. This view stores the diagnostic for display.
+Use the generated actor for shared asynchronous state. It stores the same
+generated machine value behind actor isolation.
 
 ## Add bounded assurance
 
 This clock's compiled specification renders direct TLA+ and its authored
 PlusCal algorithm. Finite graph comparison compares bounded SwiftTLA
-exploration with TLC's exploration of a pinned reference fixture. See
-[Finite graph comparison](Documentation/FiniteGraphComparison.md) for the
-retained evidence and precise claim.
+exploration with a pinned TLC run. See
+[Finite graph comparison](Documentation/FiniteGraphComparison.md).
 
 ## Use it where state order matters
 
-SwiftTLA is for systems where correct operations can still fail in the wrong
-order: concurrent tasks, retries, cancellation, sync, background work,
-permissions, protocols, and distributed systems.
+SwiftTLA applies to concurrent tasks, retries, cancellation, sync, background
+work, permissions, protocols, and distributed systems.
 
 Use generated `State` and action cases for value-based state. For shared
 running state, use the generated `Actor`. See
-[Generated Machines](Documentation/GeneratedMachines.md) and
-[Actor Machines](Documentation/ActorMachines.md).
+[Generated Machines](Documentation/GeneratedMachines.md).
 
 ## Learn more
 
-- [Supported language fragment](Documentation/Design.md)
+- [Compiler design](Documentation/Design.md)
 - [Production readiness](Documentation/ProductionReadiness.md)
 - [Finite graph comparison](Documentation/FiniteGraphComparison.md)
 - [Temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md)

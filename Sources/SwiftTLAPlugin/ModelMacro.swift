@@ -278,16 +278,19 @@ public struct FiniteEnumMacro: MemberMacro {
         providingMembersOf declaration: some DeclGroupSyntax,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        guard let enumDeclaration = declaration.as(EnumDeclSyntax.self),
-              let firstCase = enumDeclaration.memberBlock.members.lazy.compactMap({
-                  $0.decl.as(EnumCaseDeclSyntax.self)?.elements.first?.name.text
-              }).first
-        else {
+        guard let enumDeclaration = declaration.as(EnumDeclSyntax.self) else {
             throw SimpleError("A SwiftTLA finite enum must declare at least one case")
         }
+        let cases = enumDeclaration.memberBlock.members.flatMap {
+            $0.decl.as(EnumCaseDeclSyntax.self)?.elements.map(\.name.text) ?? []
+        }
+        guard let firstCase = cases.first else {
+            throw SimpleError("A SwiftTLA finite enum must declare at least one case")
+        }
+        let finiteValues = cases.map { ".\($0)" }.joined(separator: ", ")
         return [
             "public static var defaultValue: Self { .\(raw: firstCase) }",
-            "public static var finiteValues: [Self] { Array(allCases) }"
+            "public static var finiteValues: [Self] { [\(raw: finiteValues)] }"
         ]
     }
 
