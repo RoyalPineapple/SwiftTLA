@@ -1283,17 +1283,15 @@ public struct Algorithm: Sendable, SpecComponent {
         self.model = model
     }
 
-    public func validate() -> [AlgorithmDiagnostic] {
+    package func validate() -> [AlgorithmDiagnostic] {
         AlgorithmValidator.validate(model)
     }
 
     @discardableResult
-    public func requireValid() throws -> Algorithm {
+    package func requireValid() throws -> Algorithm {
         let diagnostics = validate()
-        guard diagnostics.isEmpty else {
-            throw AlgorithmValidationError(diagnostics)
-        }
-        return self
+        guard let diagnostic = diagnostics.first else { return self }
+        throw diagnostic.compilationDiagnostic(algorithmName: model.name)
     }
 }
 

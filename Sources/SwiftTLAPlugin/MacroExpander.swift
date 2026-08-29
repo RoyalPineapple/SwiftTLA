@@ -124,7 +124,7 @@ enum MacroExpander {
     static func generateCompilationIdentityCheck(model: MacroCompilation) -> [DeclSyntax] {
         let expectedIdentity = model.compilation.identity.value
         let compilationSource = """
-        static let _expectedCompilationIdentity = \"\(expectedIdentity)\"
+        private static let _expectedCompilationIdentity = \"\(expectedIdentity)\"
         private static func _compiledSpecification() throws -> CompiledSpecification {
             let compilation = try Self.spec.compile()
             guard compilation.identity.value == _expectedCompilationIdentity else {
@@ -141,23 +141,6 @@ enum MacroExpander {
         }
         """
         return [DeclSyntax(stringLiteral: compilationSource)]
-    }
-
-    static func codegenTLAValue(_ value: TLAValue) -> String {
-        switch value {
-        case .int(let n): return "TLAValue.int(\(n))"
-        case .bool(let b): return "TLAValue.bool(\(b))"
-        case .string(let s): return "TLAValue.string(\"\(s)\")"
-        case .set(let s): return "TLAValue.set([\(s.map(codegenTLAValue).joined(separator: ", "))])"
-        case .tuple(let t): return "TLAValue.tuple([\(t.map(codegenTLAValue).joined(separator: ", "))])"
-        case .record(let r):
-            let fields = r.fields.map { "\"\($0.name)\": \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return fields.isEmpty ? "TLAValue.record([:])" : "TLAValue.record([\(fields)])"
-        case .function(let f):
-            let entries = f.map { "\(codegenTLAValue($0.key)): \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return entries.isEmpty ? "TLAValue.function([:])" : "TLAValue.function([\(entries)])"
-        case .constant(let c): return "TLAValue.constant(\"\(c)\")"
-        }
     }
 
     static func generateAction(actions: [MachineSurfacePlan.Action]) -> [DeclSyntax] {

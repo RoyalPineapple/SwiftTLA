@@ -19,7 +19,7 @@ public struct TLARecord: Hashable, Sendable {
         fields.first { $0.name == name }?.value
     }
 
-    public func replacing(_ value: TLAValue, for name: String) -> TLARecord {
+    package func replacing(_ value: TLAValue, for name: String) -> TLARecord {
         var replaced = false
         let updated = fields.map { field -> Field in
             guard field.name == name else { return field }
@@ -259,7 +259,7 @@ extension TLAValue: Comparable {
         case (.bool(let a), .bool(let b)): return (a ? 1 : 0) < (b ? 1 : 0)
         case (.string(let a), .string(let b)): return a < b
         case (.set(let a), .set(let b)):
-            return sorted(a).lexicographicallyPrecedes(sorted(b))
+            return a.sorted().lexicographicallyPrecedes(b.sorted())
         case (.tuple(let a), .tuple(let b)):
             return a.lexicographicallyPrecedes(b)
         case (.record(let a), .record(let b)):
@@ -269,10 +269,6 @@ extension TLAValue: Comparable {
         case (.constant(let a), .constant(let b)): return a < b
         default: return false
         }
-    }
-
-    public static func sorted(_ values: Set<TLAValue>) -> [TLAValue] {
-        Array(values).sorted()
     }
 
     private var orderingKind: Int {
@@ -303,8 +299,8 @@ extension TLAValue: Comparable {
         _ lhs: [TLAValue: TLAValue],
         precede rhs: [TLAValue: TLAValue]
     ) -> Bool {
-        let leftKeys = sorted(Set(lhs.keys))
-        let rightKeys = sorted(Set(rhs.keys))
+        let leftKeys = lhs.keys.sorted()
+        let rightKeys = rhs.keys.sorted()
         for (leftKey, rightKey) in zip(leftKeys, rightKeys) {
             if (leftKey == rightKey) == false { return leftKey < rightKey }
             guard let leftValue = lhs[leftKey], let rightValue = rhs[rightKey] else {
@@ -315,22 +311,6 @@ extension TLAValue: Comparable {
         return leftKeys.count < rightKeys.count
     }
 
-    public static func functionSet(domain: Set<TLAValue>, range: Set<TLAValue>) -> Set<TLAValue> {
-        let domainArr = domain.sorted()
-        let rangeArr = range.sorted()
-        var result = Set<TLAValue>()
-        func build(_ idx: Int, _ cur: [(TLAValue, TLAValue)]) {
-            if idx == domainArr.count {
-                result.insert(.function(Dictionary(uniqueKeysWithValues: cur)))
-                return
-            }
-            for r in rangeArr {
-                build(idx + 1, cur + [(domainArr[idx], r)])
-            }
-        }
-        if !domainArr.isEmpty { build(0, []) } else { result.insert(.function([:])) }
-        return result
-    }
 }
 
 extension TLAValue: ExpressibleByStringLiteral {

@@ -246,37 +246,37 @@ public struct TLASpec: Sendable {
     case source
     case lowered
   }
-  public let name: String
-  public let variables: [NamedVar]
-  public let constants: [ConstantDecl]
+  package let name: String
+  package let variables: [NamedVar]
+  package let constants: [ConstantDecl]
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
-  public let formalParameters: [FormalModuleParameter]
-  public let actions: [NamedAction]
-  public let invariants: [NamedInvariant]
-  public let temporalProperties: [NamedTemporal]
-  public let fairness: [FairnessCondition]
-  public let assume: StateExpr?
-  public let checkDeadlock: Bool
-  public let extendsModules: [StandardModule]
-  public let constraint: StateExpr?
-  public let recursiveFuncs: [RecursiveFunc]
+  package let formalParameters: [FormalModuleParameter]
+  package let actions: [NamedAction]
+  package let invariants: [NamedInvariant]
+  package let temporalProperties: [NamedTemporal]
+  package let fairness: [FairnessCondition]
+  package let assume: StateExpr?
+  package let checkDeadlock: Bool
+  package let extendsModules: [StandardModule]
+  package let constraint: StateExpr?
+  package let recursiveFuncs: [RecursiveFunc]
   /// Executable, higher-order operator definitions. These remain formal AST
   /// data so the checker and runtime apply the same semantics.
-  public let formalOperatorDefinitions: [FormalOperatorDefinition]
+  package let formalOperatorDefinitions: [FormalOperatorDefinition]
   /// Imported modules remain separate source files and resolve their operators at runtime.
-  public let imports: [TLASpec]
+  package let imports: [TLASpec]
   /// Model-scoped replacement bindings for imported module operators.
-  public let importConfigurations: [FormalModuleConfiguration]
+  package let importConfigurations: [FormalModuleConfiguration]
   /// Named source-level TLA+ `INSTANCE` declarations.
-  public let moduleInstances: [FormalModuleInstance]
-  public let refinements: [RefinementDecl]
-  public let symmetrySets: [SymmetrySet]
-  public let symmetricCollections: [SymmetricCollectionDecl]
+  package let moduleInstances: [FormalModuleInstance]
+  package let refinements: [RefinementDecl]
+  package let symmetrySets: [SymmetrySet]
+  package let symmetricCollections: [SymmetricCollectionDecl]
   /// The authored Algorithm declaration used to create the compiled PlusCal plan.
   let sourceAlgorithms: [Algorithm]
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
   var algorithmPhase: AlgorithmPhase
-  public init(
+  package init(
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
     formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
@@ -315,7 +315,7 @@ public struct TLASpec: Sendable {
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }
 
-  public var description: String {
+  package var description: String {
     var lines = ["Spec \"\(name)\""]
     lines.append("  Variables:")
     for v in variables { lines.append("    \(v)") }
@@ -334,7 +334,7 @@ public struct TLASpec: Sendable {
     return lines.joined(separator: "\n")
   }
 }
-public protocol SpecComponent {}
+public protocol SpecComponent: Sendable {}
 /// The legal source section for a declaration in an authored PlusCal module.
 public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
   case prelude
@@ -540,7 +540,7 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
   }
 
   public let name: String
-  public let instance: FormalModuleInstanceReference
+  package let instance: FormalModuleInstanceReference
   public let `operator`: Operator
   public let mappings: [RefinementMapping]
 

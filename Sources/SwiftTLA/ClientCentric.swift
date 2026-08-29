@@ -3,7 +3,7 @@
 /// `ClientCentric` is a real parameterized TLA+ module.  It deliberately keeps
 /// its isolation definitions in the formal AST so a consumer can both emit an
 /// `INSTANCE` for TLC and evaluate the same bounded invariant in SwiftTLA.
-public enum ClientCentric {
+package enum ClientCentric {
   private static func call(_ name: String, _ values: StateExpr...) -> StateExpr {
     .operatorApplication(.reference(name, arity: values.count), values.map(FormalCallArgument.value))
   }
@@ -12,7 +12,7 @@ public enum ClientCentric {
     .reference(name, arity: arity)
   }
 
-  public static let module = TLASpec("ClientCentric") {
+  package static let module = TLASpec("ClientCentric") {
     Extends(.naturals, .tlc)
     Parameter("Keys", kind: .variable)
     Parameter("Values", kind: .variable)

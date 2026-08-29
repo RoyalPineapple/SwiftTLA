@@ -1,4 +1,3 @@
-import Foundation
 import Testing
 @testable import SwiftTLA
 
@@ -19,7 +18,7 @@ struct CompiledSpecificationRendererTests {
         }
     }
 
-    @Test("an invalid closure cannot render or materialize a bundle")
+    @Test("an invalid closure cannot render a bundle")
     func invalidClosureHasNoRenderedOutcome() throws {
         let invalid = TLASpec(
             name: "InvalidRoot",
@@ -28,16 +27,9 @@ struct CompiledSpecificationRendererTests {
             invariants: [],
             importConfigurations: [.init(moduleName: "Missing", replacements: [])]
         )
-        let destination = temporaryDirectory().appendingPathComponent("bundle")
-        defer { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
-
         #expect(throws: CompilationDiagnostic.self) {
             try invalid.compile().renderedTLAModuleBundle()
         }
-        #expect(throws: CompilationDiagnostic.self) {
-            try invalid.compile().materializeModuleBundle(to: destination)
-        }
-        #expect(!FileManager.default.fileExists(atPath: destination.path))
     }
 
     @Test("rendering carries each shared dependency and its source ownership once")
@@ -128,50 +120,4 @@ struct CompiledSpecificationRendererTests {
         }
     }
 
-    @Test("materialization publishes the complete compiled bundle in one directory")
-    func materializationPublishesCompleteBundle() throws {
-        let compilation = try compiledBundle()
-        let parent = temporaryDirectory()
-        let destination = parent.appendingPathComponent("bundle")
-        defer { try? FileManager.default.removeItem(at: parent) }
-        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
-
-        try compilation.materializeModuleBundle(to: destination)
-
-        #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("Support.tla").path))
-        #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("Root.tla").path))
-        #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("Root.cfg").path))
-        let manifest = try String(contentsOf: destination.appendingPathComponent("bundle-manifest.json"))
-        #expect(manifest.contains(compilation.identity.value))
-        #expect(manifest.contains("Support"))
-    }
-
-    @Test("a failed final rename leaves no partial replacement bundle")
-    func failedMaterializationPreservesExistingDestination() throws {
-        let compilation = try compiledBundle()
-        let parent = temporaryDirectory()
-        let destination = parent.appendingPathComponent("bundle")
-        defer { try? FileManager.default.removeItem(at: parent) }
-        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
-        try Data("existing output".utf8).write(to: destination)
-
-        do {
-            try compilation.materializeModuleBundle(to: destination)
-            Issue.record("Expected the final directory rename to reject an occupied destination.")
-        } catch {}
-
-        #expect(try Data(contentsOf: destination) == Data("existing output".utf8))
-        let siblings = try FileManager.default.contentsOfDirectory(atPath: parent.path)
-        #expect(!siblings.contains { $0.contains("swifttla-staging") })
-    }
-
-    private func compiledBundle() throws -> CompiledSpecification {
-        let support = TLASpec(name: "Support", variables: [], actions: [], invariants: [])
-        let root = TLASpec(name: "Root", variables: [], actions: [], invariants: [], imports: [support])
-        return try root.compile()
-    }
-
-    private func temporaryDirectory() -> URL {
-        FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-    }
 }

@@ -456,7 +456,15 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try KeyValueStoreUtil.module.compile().materializeModuleBundle(to: directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let bundle = try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle()
+        for file in bundle.files {
+            try file.tla.write(
+                to: directory.appendingPathComponent("\(file.name).tla"),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
@@ -472,7 +480,7 @@ private struct FoldGeneratedModel {
             data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
         ) ?? "<non-UTF-8 SANY output>"
         #expect(process.terminationStatus == 0, "SANY rejected bundled Util:\n\(text)")
-        #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
+        #expect(bundle.imports.map(\.name) == ["Folds", "Functions"])
     }
 
     @Test("bounded sequence domains and terminal predicates parse as formal expressions")

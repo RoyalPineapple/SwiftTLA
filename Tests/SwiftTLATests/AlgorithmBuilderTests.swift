@@ -427,7 +427,7 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().map(\.code).contains(.statementMacroAssignmentTarget))
         let spec = TLASpec("RejectedMacroTarget") { algorithm }
-        #expect(throws: AlgorithmValidationError.self) {
+        #expect(throws: CompilationDiagnostic.self) {
             try spec.compile()
         }
     }
@@ -720,7 +720,7 @@ struct AlgorithmBuilderTests {
             let diagnostics = algorithm.validate()
             #expect(diagnostics.map(\.code) == [.invalidSequentialFairness])
             #expect(diagnostics.map(\.anchor) == [.algorithm])
-            #expect(throws: AlgorithmValidationError.self) {
+            #expect(throws: CompilationDiagnostic.self) {
                 try TLASpec(algorithm.model.name) { algorithm }.compile()
             }
         }
@@ -882,7 +882,7 @@ struct AlgorithmBuilderTests {
         #expect(codes.contains(.duplicateLabel))
         #expect(codes.contains(.invalidTarget))
         #expect(codes.contains(.duplicateRootWrite))
-        #expect(throws: AlgorithmValidationError.self) {
+        #expect(throws: CompilationDiagnostic.self) {
             try invalid.requireValid()
         }
     }
@@ -899,10 +899,11 @@ struct AlgorithmBuilderTests {
         do {
             _ = try TLASpec("InvalidControlLabel") { algorithm }.compile()
             Issue.record("Expected invalid control label compilation to fail.")
-        } catch let error as AlgorithmValidationError {
-            #expect(error.diagnostics.map(\.code).contains(.invalidName))
+        } catch let error as CompilationDiagnostic {
+            #expect(error.code == .invalidAlgorithm)
+            #expect(error.actual == AlgorithmDiagnosticCode.invalidName.rawValue)
         } catch {
-            Issue.record("Expected AlgorithmValidationError, got \(error)")
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
         }
     }
 
@@ -983,7 +984,7 @@ struct AlgorithmBuilderTests {
         }
 
         #expect(competing.validate().map(\.code).contains(.invalidAtomicControlFlow))
-        #expect(throws: AlgorithmValidationError.self) {
+        #expect(throws: CompilationDiagnostic.self) {
             try TLASpec("CompetingTransfers") { competing }.compile()
         }
         #expect(exclusive.validate().map(\.code).contains(.invalidAtomicControlFlow) == false)
