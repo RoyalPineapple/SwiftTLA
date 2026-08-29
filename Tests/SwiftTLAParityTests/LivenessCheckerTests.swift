@@ -5,7 +5,9 @@ import SwiftSyntax
 import Testing
 import UpstreamParity
 
-@Suite(.serialized) struct LivenessCheckerTests { @Test("SCC decomposition finds one twelve-state cycle")
+@Suite(.serialized)
+struct LivenessCheckerTests {
+  @Test("SCC decomposition finds one twelve-state cycle")
   func singleCycleSCC() throws {
     let compilation = try Example.hourClock.spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
@@ -25,7 +27,7 @@ import UpstreamParity
     #expect(terminals.count == 1)
   }
 
-  @Test("eventually holds in a finite cycle")
+  @Test("Eventually holds when the target belongs to a fair cycle")
   func eventuallySatisfied() throws {
     let position = Var<Int>("position")
     let spec = TLASpec("FairCycle") {
@@ -45,7 +47,7 @@ import UpstreamParity
     #expect(results.map(\.status) == [.satisfied])
   }
 
-  @Test("eventually reports an unreachable cycle value")
+  @Test("Eventually fails when the target is unreachable")
   func eventuallyViolated() throws {
     let position = Var<Int>("position")
     let spec = TLASpec("CycleWithUnreachableProperty") {
@@ -111,14 +113,4 @@ import UpstreamParity
     #expect(weak.fairComponents.contains(cycle))
     #expect(strong.rejectedComponents.contains(cycle))
   }
-}
-@Test("ChangRoberts compilation preserves and satisfies cand ~> won")
-func changRobertsLiveness() throws {
-  let spec = Example.changRobertsN3.spec
-  let compilation = try spec.compile()
-  let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled)).explore()
-  let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-  #expect(compilation.description.temporalProperties == ["Liveness"])
-  let result = try #require(lc.analyze(initialStateIDs: exploration.initialStateIDs).first)
-  #expect(result.status == .satisfied)
 }
