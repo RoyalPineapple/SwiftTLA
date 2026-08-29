@@ -65,9 +65,8 @@ package struct ReachableModel: Sendable {
 
 extension Example {
     /// The static graph selection matches the published configuration shape.
-    /// This native count is not an upstream-TLC parity claim: TLC's `CHOOSE`
-    /// ordering is an external implementation detail that still needs a graph
-    /// comparison before this entry can be marked as parity-validated.
+    /// The graph comparator evaluates exact parity across TLC's `CHOOSE`
+    /// ordering and SwiftTLA's compiled transitions.
     package static let reachable = FiniteModelFixture(
         expectedDistinct: 8,
         maximumStateLimit: 50_000,

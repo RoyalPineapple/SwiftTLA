@@ -41,9 +41,8 @@ package struct SumSequenceModel: Sendable {
 }
 
 extension Example {
-    /// This source model has no published TLC configuration. The expected
-    /// state count is pinned by the local finite bounds above, not claimed as
-    /// upstream TLC parity.
+    /// Local finite bounds pin this fixture's expected state count. The source
+    /// fidelity gate validates its builder and parser representations.
     package static let sumSequence = FiniteModelFixture(
         expectedDistinct: 182,
         maximumStateLimit: 50_000,

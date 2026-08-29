@@ -894,11 +894,9 @@ extension ParserSession {
         )
     }
 
-    /// An immutable `let` in an Algorithm is a compile-time formal alias,
-    /// not a state variable or host-language computation. Accept only closed
-    /// expressions that the DSL evaluator can reduce now. The same value is
-    /// then visible to subsequent syntax decoding through the parser's formal
-    /// constant table.
+    /// An immutable `let` in an Algorithm is a compile-time formal alias.
+    /// Closed expressions are evaluated and retained in the parser's formal
+    /// constant table for subsequent syntax decoding.
     private func parseAlgorithmLexicalValue(
         _ declaration: VariableDeclSyntax
     ) -> (name: String, value: TLAValue, shape: TypedFacadeValueShape?)? {
@@ -1068,9 +1066,8 @@ extension ParserSession {
         return result
     }
 
-    /// Parses a Swift `let` inside a formal block as a lexical formal alias.
-    /// It never evaluates host-language code. The initializer must be an
-    /// expression the formal parser can represent.
+    /// Parses a Swift `let` inside a formal block as a lexical formal alias
+    /// whose initializer is represented by the formal parser.
     private func parseFormalLet(
         _ declaration: VariableDeclSyntax,
         scope: TypedFacadeScope

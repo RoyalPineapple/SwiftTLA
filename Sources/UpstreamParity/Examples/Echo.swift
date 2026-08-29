@@ -61,8 +61,8 @@ package struct EchoModel: Sendable {
                 ))
 
                 Each(Node.all, scoped: { selfID, scope in
-                    // The root never reads `parent`; its concrete default keeps
-                    // the Swift value type finite while matching the algorithm.
+                    // The root's concrete `parent` default keeps the Swift value
+                    // type finite while matching the algorithm.
                     let parent: LocalVariable<Node> = scope.localVar("parent", initial: .a)
                     let children: LocalVariable<SetExpr<Node>> = scope.localVar("children", initial: SetExpr<Node>())
                     let received: LocalVariable<Int> = scope.localVar("received", initial: 0)

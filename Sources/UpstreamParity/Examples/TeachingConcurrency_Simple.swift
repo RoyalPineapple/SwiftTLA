@@ -4,9 +4,8 @@ import SwiftTLAMacros
 /// Two bounded instances of the upstream `Simple` PlusCal algorithm.
 ///
 /// The upstream model has one `x` and one `y` function, indexed by the
-/// process identifier. `Each` lowers to exactly that function-shaped state
-/// and its generated `pc` function; the Swift source does not unroll a
-/// separate action or program counter for every process.
+/// process identifier. `Each` lowers to that function-shaped state and its
+/// generated `pc` function.
 package struct TeachingSimpleN2Model: Sendable {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case p0

@@ -161,8 +161,7 @@ final class ParserSession {
         }
     }
 
-    /// Facts that exist for one syntax tree only. They never escape into a
-    /// later parse or another macro expansion.
+    /// Facts scoped to one syntax tree and macro expansion.
     var constants: [ConstantDecl] = []
     let enumDefinitions: [ParserEnumDefinition]
     /// Tuple-shaped algorithm state currently in scope. This lets the parser
@@ -418,9 +417,8 @@ final class ParserSession {
         return nil
     }
 
-    /// Parses `Domain.all.members(before: process)`, the typed formal set of
-    /// members declared before a process. This stays finite and explicit; it
-    /// is not a Swift collection operation.
+    /// Parses `Domain.all.members(before: process)` as the finite formal set
+    /// of members declared before a process.
     private func decodePrecedingFormalMembers(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
@@ -494,9 +492,8 @@ final class ParserSession {
         return label
     }
 
-    /// Independently expands the bounded `Sequences(of:lengths:)` spelling
-    /// used by the algorithm builder. This is the finite model-checking form
-    /// of TLA+ `Seq(S)`, not a Swift array literal.
+    /// Expands the bounded `Sequences(of:lengths:)` spelling into the finite
+    /// model-checking form of TLA+ `Seq(S)`.
     private func decodeBoundedSequenceDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
@@ -1051,8 +1048,8 @@ final class ParserSession {
               let access = call.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
 
-        // `OneOf` preserves an ordinary TLA+ union, so lifting an
-        // alternative does not emit a tag or wrapper value.
+        // `OneOf` preserves an ordinary TLA+ union and lifts each alternative
+        // as its underlying formal value.
         if ["first", "second"].contains(access.declName.baseName.text),
            let unionType = typedFacadeType(access.base),
            unionType.name == "OneOf",

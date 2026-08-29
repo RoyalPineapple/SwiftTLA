@@ -357,8 +357,7 @@ extension ParserSession {
         }
     }
 
-    /// Resolves a supported low-level variable call expression.
-    /// Returns nil if the call is not a variable constructor.
+    /// Resolves a supported low-level variable constructor.
     func resolveVarCall(
         _ fc: FunctionCallExprSyntax,
         in declarationScope: String? = nil
@@ -438,8 +437,8 @@ extension ParserSession {
         return (expression: decoded, elementType: elementType)
     }
 
-    /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
-    /// This is syntax-only: the parser must not consult the runtime builder.
+    /// Reads the formal element type from the `SetExpr<Element>.literal(...)`
+    /// SwiftSyntax nodes.
     func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where",
