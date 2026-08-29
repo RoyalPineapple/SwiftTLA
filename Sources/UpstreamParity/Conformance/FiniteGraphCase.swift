@@ -210,7 +210,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
     package let cases: [Case]
 
     package struct Case: Decodable, Sendable {
-        package let id: String
+        package let sourceModel: FiniteGraphSourceModel
+        package var id: String { sourceModel.rawValue }
         package let module: String
         package let configuration: String
         package let imports: [String]
@@ -220,7 +221,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let exploration: FiniteExplorationConfiguration
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, module, configuration, imports, dependencies, moduleSHA256, cfgSHA256, exploration
+            case sourceModel, module, configuration, imports, dependencies, moduleSHA256, cfgSHA256, exploration
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -240,7 +241,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
         package init(from decoder: Decoder) throws {
             let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-            id = try container.decode(String.self, forKey: .id)
+            sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
             imports = try container.decode([String].self, forKey: .imports)
@@ -255,7 +256,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func validate() throws {
-            guard id.isEmpty == false, module.isEmpty == false, configuration.isEmpty == false,
+            guard module.isEmpty == false, configuration.isEmpty == false,
                   Set(imports).count == imports.count, imports.allSatisfy({ $0.isEmpty == false }),
                   dependencies.allSatisfy({
                       $0.importingModule.isEmpty == false && $0.importedModule.isEmpty == false
@@ -287,15 +288,32 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         guard schema == Self.schema, !cases.isEmpty else {
             throw EvidenceFormatError.invalidSchema(schema)
         }
-        var ids = Set<String>()
+        var sourceModels = Set<FiniteGraphSourceModel>()
         for finiteGraphCase in cases {
             try finiteGraphCase.validate()
-            guard ids.insert(finiteGraphCase.id).inserted else {
-                throw EvidenceFormatError.duplicateID(kind: "case", id: finiteGraphCase.id)
+            guard sourceModels.insert(finiteGraphCase.sourceModel).inserted else {
+                throw EvidenceFormatError.duplicateID(
+                    kind: "source model",
+                    id: finiteGraphCase.sourceModel.rawValue
+                )
             }
         }
     }
 
+}
+
+package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, Sendable {
+    case hourClock = "hour-clock"
+    case dieHardTypeOK = "die-hard-type-ok"
+    case multiCarElevator = "multicar-elevator"
+
+    package var spec: TLASpec {
+        switch self {
+        case .hourClock: Example.hourClock.spec
+        case .dieHardTypeOK: Example.dieHardTypeOK.spec
+        case .multiCarElevator: MultiCarElevator.spec
+        }
+    }
 }
 
 package struct TLCReferenceArtifacts: Equatable, Sendable {

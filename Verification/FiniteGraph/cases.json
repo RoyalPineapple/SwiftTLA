@@ -2,7 +2,7 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
-      "id": "hour-clock",
+      "sourceModel": "hour-clock",
       "module": "hour-clock/HourClock.tla",
       "configuration": "hour-clock/HourClock.cfg",
       "imports": [],
@@ -15,7 +15,7 @@
       "cfgSHA256": "c1e28ec8c38919b15577a0a7148840ba1d4e4c6541ea43e36edd482c5ff16687"
     },
     {
-      "id": "die-hard-type-ok",
+      "sourceModel": "die-hard-type-ok",
       "module": "die-hard-type-ok/DieHard.tla",
       "configuration": "die-hard-type-ok/DieHard.cfg",
       "imports": [],
@@ -28,7 +28,7 @@
       "cfgSHA256": "d653a6add3e94b67cd6ccdc7e7473ab0a381df7931ecaf3c8760fad4bcabdc7d"
     },
     {
-      "id": "multicar-elevator",
+      "sourceModel": "multicar-elevator",
       "module": "multicar-elevator/MultiCarElevator.tla",
       "configuration": "multicar-elevator/MultiCarElevator.cfg",
       "imports": [],

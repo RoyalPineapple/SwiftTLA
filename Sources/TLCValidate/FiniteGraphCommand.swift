@@ -73,12 +73,3 @@ func inputPath(_ relativePath: String, within root: String) throws -> URL {
         throw FiniteGraphCLIError.invalidManifest("input path escapes the pinned checkout")
     }
 }
-
-func sourceSpecification(_ identifier: String) throws -> TLASpec {
-    switch identifier {
-    case "hour-clock": return Example.hourClock.spec
-    case "die-hard-type-ok": return Example.dieHardTypeOK.spec
-    case "multicar-elevator": return MultiCarElevator.spec
-    default: throw FiniteGraphCLIError.unsupportedSwiftSpec(identifier)
-    }
-}
