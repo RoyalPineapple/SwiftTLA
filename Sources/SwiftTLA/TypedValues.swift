@@ -317,8 +317,14 @@ public func Select<Value: TLAValueType>(
   )
   do {
     return Expr(.value(try evaluateClosed(choice)))
+  } catch let error as EvalError {
+    return Expr(.sourceIssue(.staticSelection(error.description)))
+  } catch let error as CompilationDiagnostic {
+    return Expr(.sourceIssue(.staticSelection(error.description)))
+  } catch let error as CompiledEvaluationError {
+    return Expr(.sourceIssue(.staticSelection(error.description)))
   } catch {
-    return Expr(.sourceIssue(.staticSelection(String(describing: error))))
+    return Expr(.sourceIssue(.staticSelection("The selection reached an unclassified compiler failure")))
   }
 }
 

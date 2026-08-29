@@ -26,12 +26,13 @@ struct CompiledRuntime {
                 }
             case .memberOf(let set):
                 assignments = try assignments.flatMap { values in
-                    guard case .set(let members) = try CompiledEvaluator(
+                    let value = try CompiledEvaluator(
                         variableValues: values,
                         semantics: semantics,
                         layout: layout
-                    ).evaluate(set) else {
-                        throw EvalError.typeMismatch("Variable initialization requires a set")
+                    ).evaluate(set)
+                    guard case .set(let members) = value else {
+                        throw EvalError.expected(.set, actual: [value])
                     }
                     return CompiledValue.sorted(members).map { member in
                         var values = values
@@ -124,13 +125,14 @@ struct CompiledRuntime {
         in state: CompiledState,
         enabledActions: Set<ActionID> = []
     ) throws -> Bool {
-        guard case .boolean(let result) = try CompiledEvaluator(
+        let value = try CompiledEvaluator(
             state: state,
             semantics: semantics,
             layout: layout,
             enabledActions: enabledActions
-        ).evaluate(expression) else {
-            throw EvalError.typeMismatch("Expected a boolean")
+        ).evaluate(expression)
+        guard case .boolean(let result) = value else {
+            throw EvalError.expected(.boolean, actual: [value])
         }
         return result
     }

@@ -87,7 +87,7 @@ struct CompiledLowererTraversalTests {
         let operation = operations.first,
         arguments.count == 1,
         let argument = arguments.first,
-        case .value(.value(.int(3))) = argument,
+        case .value(.value(.integer(3))) = argument,
         case .boundValue(let bodyBinder) = operation.body,
         let parameter = operation.parameters.first
         else {

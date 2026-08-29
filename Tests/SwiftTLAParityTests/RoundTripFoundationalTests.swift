@@ -17,10 +17,10 @@ private func compiledSuccessors(
     invariants: []
   )
   let compilation = try spec.compile()
-  let state = try CompiledState(
-    projection: projection(values),
-    compilation: compilation
-  )
+  let compiledValues = try variables.map { variable in
+    CompiledValue(formal: try #require(values.first { $0.0 == variable }?.1))
+  }
+  let state = try CompiledState(values: compiledValues, compilation: compilation)
   let action = try #require(compilation.semantics.actions.first)
   return try CompiledRuntime(compilation: compilation)
     .successors(for: action.id, from: state)
@@ -447,7 +447,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     }
 
     #expect(spec.actions[0].bindings.map(\.name) == ["source", "destination", "amount"])
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
+    let compilation = try spec.compile()
+    let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let labels = try #require(graph.transitions[.init(0)]).map(\.label)
     let expectedArguments: [[TLAValue]] = [
       [.int(1), .int(10), .int(100)], [.int(1), .int(10), .int(200)],
@@ -455,11 +456,10 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
       [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
     ]
-    #expect(labels.map(\.arguments) == expectedArguments)
+    #expect(try labels.map { try $0.formalArguments(using: compilation.layout) } == expectedArguments)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__0_0_0 == transfer(1, 10, 100)"))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__1_1_1 == transfer(2, 20, 200)"))
 
-    let compilation = try spec.compile()
     let action = try #require(compilation.layout.testActionID(named: "transfer"))
     let runtime = CompiledRuntime(compilation: compilation)
     let initial = try #require(try runtime.initialStates().first)
@@ -489,11 +489,12 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
 
     #expect(spec.actions[0].bindings.map(\.name) == ["choice"])
     #expect(spec.actions[0].bindings[0].values == [.int(1), .int(2)])
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
+    let compilation = try spec.compile()
+    let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
     let labels = transitions.map(\.label)
     #expect(labels.map(\.action) == ["select", "select"])
-    #expect(labels.map(\.arguments) == [[.int(1)], [.int(2)]])
+    #expect(try labels.map { try $0.formalArguments(using: compilation.layout) } == [[.int(1)], [.int(2)]])
     #expect(
       Set(transitions.map(\.action)) == ["select(1)", "select(2)"])
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("select(choice) =="))

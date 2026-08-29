@@ -2009,11 +2009,21 @@ internal enum AlgorithmValidator {
     static func validate(_ model: AlgorithmModel) -> [AlgorithmDiagnostic] {
         var diagnostics: [AlgorithmDiagnostic] = []
         validateName(model.name, at: .algorithm, diagnostics: &diagnostics)
-        diagnostics += AlgorithmProcedureValidator.procedureDiagnostics(for: model)
+        let procedureNames = model.procedures.map(\.name)
+        let procedures = Set(procedureNames)
+        let procedureArities = model.procedures.reduce(into: [String: Int]()) {
+            $0[$1.name] = $1.parameters.count
+        }
+        if procedures.count < procedureNames.count {
+            diagnostics.append(.init(.duplicateProcedure, at: .algorithm))
+        }
+        let procedureVariables = model.procedures.flatMap { procedure in
+            procedure.parameters.map(\.root) + procedure.locals.map(\.root)
+        }
+        if Set(procedureVariables).count < procedureVariables.count {
+            diagnostics.append(.init(.duplicateProcedureVariable, at: .algorithm))
+        }
 
-        // PlusCal has two distinct control shapes: a `begin` body with one
-        // scalar pc, and a process set with a function-valued pc. Mixing them
-        // would silently invent a third semantics, so reject it.
         if !model.processes.isEmpty, !model.sequentialSteps.isEmpty {
             diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: .algorithm))
         }
@@ -2031,9 +2041,21 @@ internal enum AlgorithmValidator {
             case .shared(let state):
                 validateName(state.root, at: .algorithm, diagnostics: &diagnostics)
             case .process(let process):
-                validate(process, index: index, diagnostics: &diagnostics)
-            case .procedure:
-                break
+                validate(
+                    process,
+                    index: index,
+                    procedures: procedures,
+                    procedureArities: procedureArities,
+                    diagnostics: &diagnostics
+                )
+            case .procedure(let procedure):
+                validate(
+                    procedure,
+                    index: index,
+                    procedures: procedures,
+                    procedureArities: procedureArities,
+                    diagnostics: &diagnostics
+                )
             case .invariant(let invariant):
                 validateName(invariant.name, at: .algorithm, diagnostics: &diagnostics)
             case .temporal(let temporal):
@@ -2045,7 +2067,13 @@ internal enum AlgorithmValidator {
             case .stateConstraint:
                 break
             case .step(let step):
-                validateSequential(step, labels: Set(model.sequentialSteps.map(\.label.name)), diagnostics: &diagnostics)
+                validateSequential(
+                    step,
+                    labels: Set(model.sequentialSteps.map(\.label.name)),
+                    procedures: procedures,
+                    procedureArities: procedureArities,
+                    diagnostics: &diagnostics
+                )
             case .local:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: .algorithm))
             }
@@ -2056,6 +2084,8 @@ internal enum AlgorithmValidator {
     private static func validateSequential(
         _ step: AlgorithmStepModel,
         labels: Set<String>,
+        procedures: Set<String>,
+        procedureArities: [String: Int],
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
         let allSteps = labels
@@ -2067,12 +2097,22 @@ internal enum AlgorithmValidator {
         if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
             diagnostics.append(AlgorithmDiagnostic(.invalidAtomicControlFlow, at: .algorithm))
         }
-        validateStatements(step.statements, at: .algorithm, labels: allSteps, diagnostics: &diagnostics)
+        validateStatements(
+            step.statements,
+            at: .algorithm,
+            labels: allSteps,
+            procedures: procedures,
+            procedureArities: procedureArities,
+            inProcedure: false,
+            diagnostics: &diagnostics
+        )
     }
 
     private static func validate(
         _ process: AlgorithmProcessModel,
         index: Int,
+        procedures: Set<String>,
+        procedureArities: [String: Int],
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
         let processAnchor = AlgorithmDiagnosticAnchor.process(index)
@@ -2092,7 +2132,14 @@ internal enum AlgorithmValidator {
             case .local(let state):
                 validateName(state.root, at: processAnchor, diagnostics: &diagnostics)
             case .step(let step):
-                validate(step, process: index, labels: Set(labels), diagnostics: &diagnostics)
+                validate(
+                    step,
+                    process: index,
+                    labels: Set(labels),
+                    procedures: procedures,
+                    procedureArities: procedureArities,
+                    diagnostics: &diagnostics
+                )
             case .invariant(let invariant):
                 validateName(invariant.name, at: processAnchor, diagnostics: &diagnostics)
             case .invalidPlacement:
@@ -2110,6 +2157,8 @@ internal enum AlgorithmValidator {
         _ step: AlgorithmStepModel,
         process: Int,
         labels: Set<String>,
+        procedures: Set<String>,
+        procedureArities: [String: Int],
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
         let anchor = AlgorithmDiagnosticAnchor.step(process: process, label: step.label.name)
@@ -2120,39 +2169,122 @@ internal enum AlgorithmValidator {
         if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
             diagnostics.append(AlgorithmDiagnostic(.invalidAtomicControlFlow, at: anchor))
         }
-        validateStatements(step.statements, at: anchor, labels: labels, diagnostics: &diagnostics)
+        validateStatements(
+            step.statements,
+            at: anchor,
+            labels: labels,
+            procedures: procedures,
+            procedureArities: procedureArities,
+            inProcedure: false,
+            diagnostics: &diagnostics
+        )
+    }
+
+    private static func validate(
+        _ procedure: AlgorithmProcedureModel,
+        index: Int,
+        procedures: Set<String>,
+        procedureArities: [String: Int],
+        diagnostics: inout [AlgorithmDiagnostic]
+    ) {
+        let anchor = AlgorithmDiagnosticAnchor.process(index)
+        validateName(procedure.name, at: anchor, diagnostics: &diagnostics)
+        let labels = procedure.steps.map(\.label.name)
+        if labels.isEmpty || Set(labels).count < labels.count {
+            diagnostics.append(.init(.duplicateLabel, at: anchor))
+        }
+        procedure.parameters.forEach {
+            validateName($0.root, at: anchor, diagnostics: &diagnostics)
+        }
+        procedure.locals.forEach {
+            validateName($0.root, at: anchor, diagnostics: &diagnostics)
+        }
+        for step in procedure.steps {
+            let stepAnchor = AlgorithmDiagnosticAnchor.step(process: index, label: step.label.name)
+            validateName(step.label.name, at: stepAnchor, diagnostics: &diagnostics)
+            let paths = writePaths(step.statements)
+            if paths.contains(where: { Set($0).count < $0.count }) {
+                diagnostics.append(.init(.duplicateRootWrite, at: stepAnchor))
+            }
+            if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
+                diagnostics.append(.init(.invalidAtomicControlFlow, at: stepAnchor))
+            }
+            validateStatements(
+                step.statements,
+                at: stepAnchor,
+                labels: Set(labels),
+                procedures: procedures,
+                procedureArities: procedureArities,
+                inProcedure: true,
+                diagnostics: &diagnostics
+            )
+        }
+        for component in procedure.components {
+            switch component {
+            case .local, .step, .invalidPlacement:
+                break
+            case .shared, .process, .procedure, .invariant, .temporal,
+                 .formalOperator, .stateConstraint:
+                diagnostics.append(.init(.invalidAlgorithmComponent, at: anchor))
+            }
+        }
     }
 
     private static func validateStatements(
         _ statements: [AlgorithmStatementModel],
         at anchor: AlgorithmDiagnosticAnchor,
         labels: Set<String>,
+        procedures: Set<String>,
+        procedureArities: [String: Int],
+        inProcedure: Bool,
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
-        for statement in statements {
+        for (index, statement) in statements.enumerated() {
             switch statement {
             case .rejected(let code):
                 diagnostics.append(AlgorithmDiagnostic(code, at: anchor))
             case .await, .assert, .skip:
                 break
             case .letBinding(_, _, let body), .with(_, _, let body):
-                validateStatements(body, at: anchor, labels: labels, diagnostics: &diagnostics)
+                validateStatements(body, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
             case .set(let target, _):
                 validateName(target.root, at: anchor, diagnostics: &diagnostics)
             case .parallel(let assignments):
                 assignments.forEach { validateName($0.target.root, at: anchor, diagnostics: &diagnostics) }
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
-                validateStatements(then, at: anchor, labels: labels, diagnostics: &diagnostics)
-                validateStatements(otherwise, at: anchor, labels: labels, diagnostics: &diagnostics)
+                validateStatements(then, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
+                validateStatements(otherwise, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
             case .choose(_, let domain, let body):
                 validateDomain(domain, at: anchor, diagnostics: &diagnostics)
-                validateStatements(body, at: anchor, labels: labels, diagnostics: &diagnostics)
+                validateStatements(body, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
             case .goto(let label):
                 if !labels.contains(label.name) {
                     diagnostics.append(AlgorithmDiagnostic(.invalidTarget, at: anchor))
                 }
-            case .call, .return:
-                break
+            case .call(let target, let arguments):
+                if procedures.contains(target) == false {
+                    diagnostics.append(.init(.invalidProcedureTarget, at: anchor))
+                }
+                if let expected = procedureArities[target],
+                   expected < arguments.count || expected > arguments.count {
+                    diagnostics.append(.init(.invalidProcedureArity, at: anchor))
+                }
+                let followedByReturn: Bool
+                if statements.indices.contains(index + 1), case .return = statements[index + 1] {
+                    followedByReturn = true
+                } else {
+                    followedByReturn = false
+                }
+                if index < statements.index(before: statements.endIndex), followedByReturn == false {
+                    diagnostics.append(.init(.invalidProcedureControlFlow, at: anchor))
+                }
+            case .return:
+                if inProcedure == false {
+                    diagnostics.append(.init(.invalidProcedureReturn, at: anchor))
+                }
+                if index < statements.index(before: statements.endIndex) {
+                    diagnostics.append(.init(.invalidProcedureControlFlow, at: anchor))
+                }
             case .stop:
                 break
             }

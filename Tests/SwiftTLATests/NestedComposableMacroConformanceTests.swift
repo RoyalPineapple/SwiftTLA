@@ -14,15 +14,23 @@ struct NestedComposableMacroConformanceTests {
             }
             Constraint(value <= 2)
         }
-        let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
         let compilation = try spec.compile()
+        let exploration = try ModelChecker(
+            compilation: compilation,
+            configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)
+        ).explore()
+        let graph = exploration.graph
 
-        for (sourceID, source) in graph.states {
-            let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
+        for sourceID in graph.states.keys {
+            let checked = try (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
                 guard let successor = graph.states[transition.target] else { return nil }
-                return (transition.label.action, transition.label.arguments, successor)
+                return (
+                    transition.label.action,
+                    try transition.label.formalArguments(using: compilation.layout),
+                    successor
+                )
             }
-            let state = try CompiledState(projection: source, compilation: compilation)
+            let state = try #require(exploration.compiledStates[sourceID])
             let runtimeSuccessors = try CompiledRuntime(compilation: compilation)
                 .successors(from: state)
                 .map { successor in
@@ -109,7 +117,7 @@ struct NestedComposableMacroConformanceTests {
         let result = try buildExternalConsumer("InvalidDynamicModelName")
 
         #expect(result.status != 0)
-        #expect(result.output.contains("must be a string literal; dynamic names cannot form a stable compilation identity"))
+        #expect(result.output.contains("requires a literal module name"))
     }
 
     @Test("Model macro rejects observer-backed instance state")

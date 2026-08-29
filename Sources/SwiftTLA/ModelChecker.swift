@@ -364,7 +364,8 @@ private func compiledBFS(
                     label: .init(
                         action: successor.action,
                         formalName: actionName,
-                        arguments: formalArguments
+                        arguments: successor.arguments,
+                        formalArguments: formalArguments
                     ),
                     target: targetID
                 )

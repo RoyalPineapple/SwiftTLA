@@ -2,10 +2,6 @@ struct CompiledState: Hashable, Sendable, Comparable {
     private let compilationIdentity: CompilationIdentity
     private let values: [CompiledValue]
 
-    init(formalValues values: [TLAValue], compilation: CompiledSpecification) throws {
-        try self.init(values: values.map { .init(formal: $0) }, compilation: compilation)
-    }
-
     init(values: [CompiledValue], compilation: CompiledSpecification) throws {
         guard values.count == compilation.layout.variables.count else {
             throw CompiledEvaluationError.invalidStateLayout(
@@ -14,28 +10,6 @@ struct CompiledState: Hashable, Sendable, Comparable {
             )
         }
         self.init(validatedValues: values, compilationIdentity: compilation.identity)
-    }
-
-    init(projection: TLAStateProjection, compilation: CompiledSpecification) throws {
-        let expectedNames = Set(compilation.layout.variables.map(\.declaration.name))
-        let actualNames = Set(projection.entries.map { $0.token.description })
-        guard actualNames == expectedNames else {
-            throw CompiledEvaluationError.invalidStateLayout(
-                expected: expectedNames.count,
-                actual: actualNames.count
-            )
-        }
-        let values: [CompiledValue] = try compilation.layout.variables.map { variable in
-            guard let token = TLAStateProjection.Token(validating: variable.declaration.name),
-                  let value = projection.value(for: token) else {
-                throw CompiledEvaluationError.invalidStateLayout(
-                    expected: expectedNames.count,
-                    actual: actualNames.count
-                )
-            }
-            return CompiledValue(formal: value)
-        }
-        try self.init(values: values, compilation: compilation)
     }
 
     func value(for variable: VariableID) throws -> CompiledValue {
@@ -62,15 +36,11 @@ struct CompiledState: Hashable, Sendable, Comparable {
         return updated
     }
 
-    func transformingFormalValues(_ transform: (TLAValue) -> TLAValue) -> CompiledState {
+    func applying(_ mapping: [CompiledValue: CompiledValue]) -> CompiledState {
         CompiledState(
-            validatedValues: values.map { $0.transformingFormalValues(transform) },
+            validatedValues: values.map { $0.applying(mapping) },
             compilationIdentity: compilationIdentity
         )
-    }
-
-    func contains(_ value: TLAValue) -> Bool {
-        values.contains { $0.contains(value) }
     }
 
     func projection(using layout: CompiledLayout) throws -> TLAStateProjection {
@@ -138,7 +108,7 @@ struct CompiledBindings: Sendable {
     }
 }
 
-enum CompiledEvaluationError: Error, Sendable {
+enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
     case uninitializedVariable(VariableID)
@@ -149,4 +119,21 @@ enum CompiledEvaluationError: Error, Sendable {
     case unboundBinder(BinderID)
     case unresolvedOperator
     case conflictingAssignment(VariableID)
+
+    var description: String {
+        switch self {
+        case .invalidStateLayout(let expected, let actual):
+            "Compiled state requires \(expected) slots; received \(actual)"
+        case .invalidVariableID(let id): "Variable ID \(id.ordinal) is outside the compiled layout"
+        case .uninitializedVariable(let id): "Variable ID \(id.ordinal) has no initialized value"
+        case .invalidControlLocationID(let id): "Control location ID \(id.ordinal) is outside the compiled layout"
+        case .invalidFieldID(let id): "Field ID \(id.ordinal) is outside the compiled layout"
+        case .invalidRecordKey: "A compiled record key cannot be rendered as a field name"
+        case .invalidCompilationIdentity(let expected, let actual):
+            "Compiled state identity \(actual) does not match \(expected)"
+        case .unboundBinder(let id): "Binder ID \(id.ordinal) has no value in this scope"
+        case .unresolvedOperator: "The compiled operator is unavailable"
+        case .conflictingAssignment(let id): "Variable ID \(id.ordinal) has conflicting assignments"
+        }
+    }
 }

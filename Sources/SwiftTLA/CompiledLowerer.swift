@@ -47,7 +47,7 @@ struct CompiledLowerer {
     let layout: CompiledLayout
     private let constants: [ConstantDecl]
     private let formalParameters: Set<String>
-    private let symmetricMembers: [TLAValue]
+    private let symmetricMembers: [CompiledValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
     private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
@@ -70,7 +70,7 @@ struct CompiledLowerer {
         self.layout = layout
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
-        symmetricMembers = spec.symmetricCollections.flatMap(\.metadata.members)
+        symmetricMembers = layout.variables.compactMap(\.symmetricCollection).flatMap(\.members)
         self.incomingModuleParameters = incomingModuleParameters
         authoredAlgorithm = spec.sourceAlgorithms.first?.model
         var renderedNames = spec.renderedDeclarationNames()
@@ -281,12 +281,17 @@ struct CompiledLowerer {
             formalModuleReplacements: formalModuleReplacements,
             moduleInstances: moduleInstances,
             symmetrySets: spec.symmetrySets.map { symmetry in
-                .init(values: symmetry.values)
+                .init(values: Set(symmetry.values.map(CompiledValue.init(formal:))))
             },
             symmetricCollections: try spec.symmetricCollections.map { collection in
-                .init(
-                    variable: try variable(named: collection.name, at: "variables.\(collection.name).declaration"),
-                    members: collection.metadata.members,
+                let variable = try variable(named: collection.name, at: "variables.\(collection.name).declaration")
+                guard layout.variables.indices.contains(variable.ordinal),
+                      let compiledCollection = layout.variables[variable.ordinal].symmetricCollection else {
+                    throw diagnostic(path: "variables.\(collection.name).declaration")
+                }
+                return .init(
+                    variable: variable,
+                    members: compiledCollection.members,
                     domainSymbol: collection.metadata.domainSymbol,
                     initial: .init(formal: collection.metadata.initial)
                 )
@@ -356,7 +361,7 @@ struct CompiledLowerer {
                 )
                 return .init(
                     name: process.name,
-                    domain: process.domain,
+                    domain: process.domain.map(CompiledValue.init(formal:)),
                     fairness: process.fairness,
                     locals: try process.locals.enumerated().map {
                         try authoredPlusCalState($0.element, at: "\(path).locals[\($0.offset)]", scope: scope)
@@ -467,7 +472,7 @@ struct CompiledLowerer {
     ) throws -> CompiledAuthoredPlusCalState {
         let initialization: CompiledAuthoredPlusCalState.Initialization
         switch declaration.initialization {
-        case .value(let value): initialization = .value(value)
+        case .value(let value): initialization = .expression(.value(.init(formal: value)))
         case .expression(let expression):
             initialization = .expression(try lower(expression, at: "\(path).initialization", scope: scope))
         case .memberOf(let expression):
@@ -699,7 +704,7 @@ struct CompiledLowerer {
         at path: String
     ) throws -> CompiledFairnessCondition {
         let action: ActionID
-        let arguments: [TLAValue]?
+        let arguments: [CompiledValue]?
         switch condition {
         case .weakFairnessNext:
             return .init(scope: .next, isStrong: false)
@@ -713,7 +718,7 @@ struct CompiledLowerer {
             arguments = nil
         case .weakFairnessActionCall(let value), .strongFairnessActionCall(let value):
             action = try self.action(named: value.name, at: "\(path).action")
-            arguments = value.arguments
+            arguments = value.arguments.map(CompiledValue.init(formal:))
             for (index, argument) in value.arguments.enumerated() {
                 try validateValue(argument, at: "\(path).arguments[\(index)]")
             }
@@ -722,12 +727,13 @@ struct CompiledLowerer {
               let compiled = actions[action]
         else { throw diagnostic(path: path) }
         if let arguments, accepts(arguments, for: compiled) == false {
+            let renderedArguments = try arguments.map { try $0.rendered(using: layout) }
             throw CompilationDiagnostic(
                 code: .unknownReference,
                 stage: .lowering,
                 path: path,
                 expected: "a declared finite action call",
-                actual: "fairness references '\(formalActionCall(named: declaration.declaration.name, arguments: arguments))'",
+                actual: "fairness references '\(formalActionCall(named: declaration.declaration.name, arguments: renderedArguments))'",
                 nextSafeAction: "Use an action call declared by the source model."
             )
         }
@@ -758,7 +764,7 @@ struct CompiledLowerer {
             return CompiledActionBinding(
                 binder: binder,
                 sourceName: $0.name,
-                values: $0.values,
+                values: $0.values.map(CompiledValue.init(formal:)),
                 generatedSwiftType: $0.generatedSwiftType
             )
         }
@@ -788,7 +794,7 @@ struct CompiledLowerer {
         )
     }
 
-    private func accepts(_ arguments: [TLAValue], for action: CompiledAction) -> Bool {
+    private func accepts(_ arguments: [CompiledValue], for action: CompiledAction) -> Bool {
         arguments.count == action.bindings.count
             && zip(arguments, action.bindings).allSatisfy { argument, binding in
                 binding.values.contains(argument)
@@ -826,7 +832,7 @@ struct CompiledLowerer {
                 case .sourceIssue(let issue): throw issue.compilationDiagnostic(stage: .lowering, path: path)
                 case .value(let value):
                     try validateValue(value, at: path)
-                    lowered.append(.init(expression: .value(value), operatorReferences: []))
+                    lowered.append(.init(expression: .value(.init(formal: value)), operatorReferences: []))
                 case .currentProcess:
                     throw CompilationDiagnostic(
                         code: .unknownReference,
@@ -1595,7 +1601,7 @@ struct CompiledLowerer {
             return .stateVariable(variable)
         }
         if let value = constants.first(where: { $0.name == name })?.value {
-            return .value(value)
+            return .value(.init(formal: value))
         }
         if formalParameters.contains(name) { return .value(.constant(name)) }
         if incomingModuleParameters.contains(where: { $0.operatorName == name }) {
@@ -1850,13 +1856,15 @@ struct CompiledLowerer {
     }
 
     private func validateValue(_ value: TLAValue, at path: String) throws {
-        guard let member = symmetricMembers.first(where: { valueContains(value, $0) }) else { return }
+        let compiled = CompiledValue(formal: value)
+        guard let member = symmetricMembers.first(where: { compiled.contains($0) }) else { return }
+        let renderedMember = try member.rendered(using: layout)
         throw CompilationDiagnostic(
             code: .invalidSymmetricCollection,
             stage: .binding,
             path: path,
             expected: "logic invariant under exchangeable member renaming",
-            actual: "authored expression names compiler-owned symmetric member '\(member)'",
+            actual: "authored expression names compiler-owned symmetric member '\(renderedMember)'",
             nextSafeAction: "Use the symmetric collection declaration instead of a concrete member."
         )
     }

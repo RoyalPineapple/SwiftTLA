@@ -138,8 +138,6 @@ extension ParserSession {
                     result.algorithmBindings[sourceName] = algorithm
                 }
             } else if typedFacadeType(call.calledExpression)?.name == "SymmetricCollectionVar" {
-                // `SymmetricCollection` owns the declaration; this handle only
-                // gives that declaration its authored source name and types.
                 continue
             } else if resolveVarCall(call, in: declarationScope) != nil {
                 containsVariableConstructor = true
@@ -188,14 +186,8 @@ extension ParserSession {
         let parsed = parseSpecClosure(body)
         do {
             result.moduleBindings[sourceName] = try parsed.sourceModel(specificationName: moduleName)
-        } catch let diagnostic as SourceParseDiagnostic {
+        } catch let diagnostic {
             result.diagnostics.append(diagnostic)
-        } catch {
-            result.diagnostics.append(.init(
-                message: "Formal module '\(moduleName)' could not be constructed.",
-                source: call,
-                actual: String(describing: error)
-            ))
         }
     }
 
@@ -321,8 +313,20 @@ extension ParserSession {
                     ))
                     continue
                 }
-                guard args.count >= 2,
-                      let initial = parsedInitialValue(args[1].expression) else {
+                guard args.count >= 2 else {
+                    result.diagnostics.append(.init(
+                        message: "Var requires a supported initial formal value.",
+                        source: fc
+                    ))
+                    continue
+                }
+                let initial: TLAValue
+                switch parsedInitialValue(args[1].expression) {
+                case .value(let value): initial = value
+                case .failure(let diagnostic):
+                    result.diagnostics.append(diagnostic)
+                    continue
+                case nil:
                     result.diagnostics.append(.init(
                         message: "Var requires a supported initial formal value.",
                         source: fc
@@ -337,7 +341,13 @@ extension ParserSession {
                     origin: .source
                 ))
             } else {
-                guard let initial = parsedInitialValue(args[0].expression) else {
+                let initial: TLAValue
+                switch parsedInitialValue(args[0].expression) {
+                case .value(let value): initial = value
+                case .failure(let diagnostic):
+                    result.diagnostics.append(diagnostic)
+                    continue
+                case nil:
                     result.diagnostics.append(.init(
                         message: "Var requires a supported initial formal value.",
                         source: fc
@@ -556,15 +566,41 @@ extension ParserSession {
         return enumCaseTypeName(from: expression)
     }
 
-    /// Evaluates a closed typed formal initializer through the same expression
-    /// decoder used for actions. Literal-only parsing is insufficient for
-    /// values such as `IntRange(1, through: 4)`.
-    func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue? {
-        if let decoded = decodeStateExpr(expression),
-           let value = try? evaluateClosed(decoded) {
-            return value
+    enum ParsedInitialValue {
+        case value(TLAValue)
+        case failure(SourceParseDiagnostic)
+    }
+
+    func parsedInitialValue(_ expression: ExprSyntax) -> ParsedInitialValue? {
+        if let decoded = decodeStateExpr(expression) {
+            do {
+                return .value(try evaluateClosed(decoded))
+            } catch let error as EvalError {
+                return .failure(.init(
+                    message: "The initial value could not be evaluated.",
+                    source: expression,
+                    actual: error.description
+                ))
+            } catch let error as CompilationDiagnostic {
+                return .failure(.init(
+                    message: "The initial value could not be compiled.",
+                    source: expression,
+                    actual: error.description
+                ))
+            } catch let error as CompiledEvaluationError {
+                return .failure(.init(
+                    message: "The initial value reached an invalid compiled operation.",
+                    source: expression,
+                    actual: error.description
+                ))
+            } catch {
+                return .failure(.init(
+                    message: "The initial value reached an unclassified compiler failure.",
+                    source: expression
+                ))
+            }
         }
-        return parseInitialExpr(expression)
+        return parseInitialExpr(expression).map(ParsedInitialValue.value)
     }
 
     func parseBuilderCall(

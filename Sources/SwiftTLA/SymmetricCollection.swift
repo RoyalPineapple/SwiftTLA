@@ -121,7 +121,7 @@ package struct SymmetricCollectionMetadata: Equatable, Sendable {
 
 struct SymmetryPlan: Sendable {
   private let compilationIdentity: CompilationIdentity
-  private let groups: [[[TLAValue: TLAValue]]]
+  private let groups: [[[CompiledValue: CompiledValue]]]
 
   init(
     compilation: CompiledSpecification,
@@ -140,7 +140,7 @@ struct SymmetryPlan: Sendable {
     }
 
     var permutationCount = 1
-    var groups: [[[TLAValue: TLAValue]]] = []
+    var groups: [[[CompiledValue: CompiledValue]]] = []
     for members in domains {
       let permutations = try Self.permutations(
         of: members,
@@ -161,7 +161,7 @@ struct SymmetryPlan: Sendable {
     let candidates = groups.reduce([state]) { candidates, group in
       candidates.flatMap { candidate in
         group.map { mapping in
-          candidate.transformingFormalValues { applyMapping($0, mapping) }
+          candidate.applying(mapping)
         }
       }
     }
@@ -169,14 +169,14 @@ struct SymmetryPlan: Sendable {
   }
 
   private static func permutations(
-    of values: [TLAValue],
+    of values: [CompiledValue],
     maximumCount: Int,
     precedingCount: Int,
     limit: Int
-  ) throws -> [[TLAValue]] {
-    var permutations: [[TLAValue]] = [[]]
+  ) throws -> [[CompiledValue]] {
+    var permutations: [[CompiledValue]] = [[]]
     for value in values {
-      var next: [[TLAValue]] = []
+      var next: [[CompiledValue]] = []
       for permutation in permutations {
         for index in 0...permutation.count {
           guard next.count < maximumCount else {

@@ -249,7 +249,7 @@ package struct LivenessChecker {
             reason: witness == nil ? .satisfied : .violatingFairLasso,
             witness: witness,
             propertyValues: values,
-            enabledActions: renderedEnabledness(enabled),
+            enabledActions: try renderedEnabledness(enabled),
             fairComponents: components.fair,
             rejectedComponents: components.rejected
         )
@@ -257,14 +257,15 @@ package struct LivenessChecker {
 
     private func renderedEnabledness(
         _ enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
-    ) -> [String: [StateGraph.StateID: Bool]] {
-        enabled.reduce(into: [:]) { result, entry in
-            let name = renderedName(for: entry.key)
-            result[name] = entry.value
+    ) throws -> [String: [StateGraph.StateID: Bool]] {
+        var rendered: [String: [StateGraph.StateID: Bool]] = [:]
+        for entry in enabled {
+            rendered[try renderedName(for: entry.key)] = entry.value
         }
+        return rendered
     }
 
-    private func renderedName(for scope: CompiledFairnessCondition.Scope) -> String {
+    private func renderedName(for scope: CompiledFairnessCondition.Scope) throws -> String {
         switch scope {
         case .next:
             return "Next"
@@ -272,7 +273,10 @@ package struct LivenessChecker {
             return compilation.layout.actions[action.ordinal].declaration.name
         case .actionCall(let call):
             let name = compilation.layout.actions[call.action.ordinal].declaration.name
-            return formalActionCall(named: name, arguments: call.arguments)
+            return formalActionCall(
+                named: name,
+                arguments: try call.arguments.map { try $0.rendered(using: compilation.layout) }
+            )
         }
     }
 

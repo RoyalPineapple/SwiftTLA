@@ -221,7 +221,7 @@ struct CompiledTLARenderer {
                         .expression(condition), .text(" THEN "), .expression(then),
                         .text(" ELSE "), .expression(otherwise), .text(")")
                     ])
-                case .value(let value): parts.append(value.description)
+                case .value(let value): parts.append(try value.rendered(using: layout).description)
                 case .stateVariable(let variable): parts.append(try variableName(variable))
                 case .boundValue(let binder): parts.append(try binderName(binder))
                 case .controlLocation(let location): parts.append(try controlLocationName(location))

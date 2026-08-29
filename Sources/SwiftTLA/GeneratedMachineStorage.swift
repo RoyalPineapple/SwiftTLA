@@ -1,7 +1,7 @@
 fileprivate enum _GeneratedMachineValue: Sendable {
-    case value(TLAValue, path: String)
+    case value(CompiledValue, path: String)
     case member(Int)
-    case collection([TLAValue], path: String)
+    case collection([CompiledValue], path: String)
 
     var diagnosticKind: String {
         switch self {
@@ -15,10 +15,12 @@ fileprivate enum _GeneratedMachineValue: Sendable {
 public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hashable & Sendable>: Sendable {
     public struct Decoder: Sendable {
         private let values: [_GeneratedMachineValue]
+        private let layout: CompiledLayout
         private var index = 0
 
-        fileprivate init(_ values: [_GeneratedMachineValue]) {
+        fileprivate init(_ values: [_GeneratedMachineValue], layout: CompiledLayout) {
             self.values = values
+            self.layout = layout
         }
 
         public mutating func decode<Value: TLAValueType>(
@@ -28,7 +30,7 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                 ? values[index].diagnosticKind
                 : "no input at index \(index) among \(values.count) decoder inputs"
             guard values.indices.contains(index),
-                  case .value(let formal, let path) = values[index] else {
+                  case .value(let compiled, let path) = values[index] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .runtime,
@@ -39,6 +41,7 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                 )
             }
             defer { index += 1 }
+            let formal = try compiled.rendered(using: layout)
             guard let value = Value(formalValue: formal) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: path,
@@ -76,24 +79,25 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
             as _: Value.Type = Value.self
         ) throws -> [Member: Value] {
             guard values.indices.contains(index),
-                  case .collection(let formalValues, let path) = values[index] else {
+                  case .collection(let compiledValues, let path) = values[index] else {
                 throw GeneratedMachineStateDiagnostic.missingRequiredValue(
                     path: "generated collection",
                     expected: "one compiled collection value"
                 )
             }
             let uniqueApplicationMemberCount = Set(applicationMembers).count
-            guard formalValues.count == applicationMembers.count,
+            guard compiledValues.count == applicationMembers.count,
                   uniqueApplicationMemberCount == applicationMembers.count else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: path,
-                    expected: "\(formalValues.count) unique application IDs",
+                    expected: "\(compiledValues.count) unique application IDs",
                     actual: "\(uniqueApplicationMemberCount) unique IDs from \(applicationMembers.count) supplied IDs"
                 )
             }
             index += 1
-            return try Dictionary(uniqueKeysWithValues: zip(applicationMembers, formalValues).map {
-                applicationMember, formalValue in
+            return try Dictionary(uniqueKeysWithValues: zip(applicationMembers, compiledValues).map {
+                applicationMember, compiledValue in
+                let formalValue = try compiledValue.rendered(using: layout)
                 guard let value = Value(formalValue: formalValue) else {
                     throw GeneratedMachineStateDiagnostic.missingRequiredValue(
                         path: path,
@@ -210,36 +214,41 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
             }
             let planAction = plan.actions[input.surfaceOrdinal]
             let generatedValues: [_GeneratedMachineValue]
-            if let collection = planAction.symmetricCollection {
-                guard input.formalArguments.count == 1,
-                      let memberIndex = collection.members.firstIndex(of: input.formalArguments[0]) else {
+            if case .some = planAction.symmetricCollection {
+                guard input.arguments.count == 1,
+                      let action = compilation.semantics.actions.first(where: { $0.id == request.action }),
+                      let collectionVariable = action.symmetricCollection,
+                      compilation.layout.variables.indices.contains(collectionVariable.ordinal),
+                      let compiledMembers = compilation.layout.variables[collectionVariable.ordinal]
+                        .symmetricCollection?.members,
+                      let memberIndex = compiledMembers.firstIndex(of: input.arguments[0]) else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .runtime,
                         path: "machineSurfacePlan.actions[\(input.surfaceOrdinal)].\(planAction.swiftIdentifier)",
-                        expected: "one compiled argument from \(collection.members.count) declared symmetric members",
-                        actual: "\(input.formalArguments.count) arguments: \(input.formalArguments)",
+                        expected: "one compiled argument from the declared symmetric members",
+                        actual: "\(input.arguments.count) compiled arguments",
                         nextSafeAction: "Compile the generated machine from its current source declaration."
                     )
                 }
                 generatedValues = [.member(memberIndex)]
             } else {
-                guard input.formalArguments.count == planAction.bindings.count else {
+                guard input.arguments.count == planAction.bindings.count else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .runtime,
                         path: "machineSurfacePlan.actions[\(input.surfaceOrdinal)].\(planAction.swiftIdentifier)",
                         expected: "\(planAction.bindings.count) compiled action arguments",
-                        actual: "\(input.formalArguments.count) compiled action arguments",
+                        actual: "\(input.arguments.count) compiled action arguments",
                         nextSafeAction: "Compile the generated machine from its current source declaration."
                     )
                 }
-                generatedValues = zip(planAction.bindings, input.formalArguments).compactMap {
-                    binding, formal in
-                    binding.isPublic ? .value(formal, path: binding.formalName) : nil
+                generatedValues = zip(planAction.bindings, input.arguments).compactMap {
+                    binding, compiled in
+                    binding.isPublic ? .value(compiled, path: binding.formalName) : nil
                 }
             }
-            var values = Decoder(generatedValues)
+            var values = Decoder(generatedValues, layout: compilation.layout)
             let action = try actionDecoders[input.surfaceOrdinal](&values)
             guard values.isAtEnd else {
                 throw CompilationDiagnostic(
@@ -268,18 +277,30 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                 )
             }
             let layout = compilation.layout.variables[variable.storageOrdinal]
-            let formal = try state.value(for: layout.id).rendered(using: compilation.layout)
-            guard let collection = variable.symmetricCollection else {
-                return _GeneratedMachineValue.value(formal, path: variable.formalName)
+            let compiled = try state.value(for: layout.id)
+            guard case .some = variable.symmetricCollection else {
+                return _GeneratedMachineValue.value(compiled, path: variable.formalName)
             }
-            guard case .function(let entries) = formal else {
+            guard case .function(let entries) = compiled,
+                  let compiledMembers = layout.symmetricCollection?.members else {
+                let actual = switch compiled {
+                case .integer: "integer"
+                case .boolean: "boolean"
+                case .string: "string"
+                case .controlLocation: "control location"
+                case .set: "set"
+                case .tuple: "tuple"
+                case .record: "record"
+                case .function: "function without symmetric collection layout"
+                case .constant: "constant"
+                }
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: variable.formalName,
                     expected: "a compiled function over the declared symmetric members",
-                    actual: String(describing: formal)
+                    actual: actual
                 )
             }
-            let memberValues = try collection.members.map { member in
+            let memberValues = try compiledMembers.map { member in
                 guard let value = entries[member] else {
                     throw GeneratedMachineStateDiagnostic.missingRequiredValue(
                         path: variable.formalName,
@@ -290,7 +311,7 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
             }
             return _GeneratedMachineValue.collection(memberValues, path: variable.formalName)
         }
-        return Decoder(values)
+        return Decoder(values, layout: compilation.layout)
     }
 
     private static func validateStateDecoder(_ decoder: Decoder) throws {

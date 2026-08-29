@@ -612,7 +612,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .eventually(.equal(.stateVariable(let variable), .value(.int(0)))) = compilation.semantics.temporalProperties[0].expression else {
+        guard case .eventually(.equal(.stateVariable(let variable), .value(.integer(0)))) = compilation.semantics.temporalProperties[0].expression else {
             Issue.record("Expected a compiled temporal predicate")
             return
         }
@@ -655,7 +655,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(formalValues: [.int(0), .int(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0), .integer(0)], compilation: compilation)
         let action = try #require(compilation.semantics.actions.first)
         let nextStates = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
@@ -683,7 +683,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0)], compilation: compilation)
         let action = try #require(compilation.semantics.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
@@ -716,7 +716,7 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [double]
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0)], compilation: compilation)
         let action = try #require(compilation.semantics.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
@@ -767,7 +767,7 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [applyTwice]
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0)], compilation: compilation)
         let action = try #require(compilation.semantics.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
@@ -875,7 +875,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let first = compilation.layout.variables[0].id
         let second = compilation.layout.variables[1].id
-        let state = try CompiledState(formalValues: [.int(1), .int(2)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(1), .integer(2)], compilation: compilation)
         let updated = try state.updating(second, to: .integer(3))
         let stateFirst = try state.value(for: first)
         let stateSecond = try state.value(for: second)
@@ -903,7 +903,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         ).compile()
 
-        let foreignState = try CompiledState(formalValues: [.int(0)], compilation: first)
+        let foreignState = try CompiledState(values: [.integer(0)], compilation: first)
         #expect(throws: CompiledEvaluationError.self) {
             try CompiledRuntime(compilation: second).successors(from: foreignState)
         }
@@ -927,7 +927,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(formalValues: [.int(1)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(1)], compilation: compilation)
 
         guard case .existsAction(
             let binder,
@@ -1039,7 +1039,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(formalValues: [], compilation: compilation)
+        let state = try CompiledState(values: [], compilation: compilation)
 
         guard case .guard_(let compiled) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled guard")
@@ -1062,7 +1062,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(formalValues: [.int(1)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(1)], compilation: compilation)
 
         let action = compilation.semantics.actions[0]
         let successors = try CompiledRuntime(compilation: compilation)
@@ -2242,7 +2242,10 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(declaration.verificationScope == 2)
         #expect(action.bindings.isEmpty)
         #expect(compiledAction.bindings.count == 1)
-        #expect(compiledAction.bindings[0].values == declaration.metadata.members)
+        #expect(
+            compiledAction.bindings[0].values
+                == declaration.metadata.members.map(CompiledValue.init(formal:))
+        )
         #expect(compiledAction.symmetricCollection == compilation.layout.testVariableID(named: "devices"))
         #expect(machineVariable.swiftType == "[CompilerPipelineMember.ID: Int]")
         #expect(machineCollection.formalName == "devices")
@@ -2283,7 +2286,10 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(firstAction == secondAction)
         #expect(firstAction.bindings.isEmpty)
-        #expect(compiledAction.bindings[0].values == specification.symmetricCollections[0].metadata.members)
+        #expect(
+            compiledAction.bindings[0].values
+                == specification.symmetricCollections[0].metadata.members.map(CompiledValue.init(formal:))
+        )
         guard case .existsAction = compiledAction.body else {
             Issue.record("Expected the authored nested existential to remain in the compiled body")
             return

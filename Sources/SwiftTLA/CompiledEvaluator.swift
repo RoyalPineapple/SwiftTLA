@@ -1,15 +1,88 @@
-enum EvalError: Error, CustomStringConvertible, Equatable {
-    case typeMismatch(String)
+enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
+    enum ValueShape: String, Equatable, Sendable {
+        case integer
+        case boolean
+        case set
+        case sets
+        case setOfSets = "set of sets"
+        case sequence
+        case nonemptySequence = "nonempty sequence"
+        case function
+        case functionAndSet = "function and set"
+        case integerFunctionValues = "integer function values"
+        case functionSetDomains = "function-set domains"
+        case recordField = "record field"
+    }
+
+    enum Callable: String, Equatable, Sendable {
+        case foldFunction = "FoldFunction"
+        case formalOperator = "formal operator"
+        case recursiveOperator = "recursive operator"
+    }
+
+    enum FormalArgumentKind: Equatable, Sendable {
+        case value
+        case `operator`(arity: Int)
+    }
+
+    case expected(ValueShape, actual: [CompiledValue])
+    case noSatisfyingChoice
+    case noMatchingCase
+    case functionArgumentOutsideDomain(CompiledValue)
+    case tupleIndexOutsideDomain(CompiledValue)
+    case recordFieldUnavailable(CompiledValue)
+    case invalidArity(Callable, expected: Int, actual: Int)
+    case invalidFormalArgument(expected: FormalArgumentKind, actual: FormalArgumentKind)
+    case recursiveArgumentOutsideDomain
+    case invalidContinuation(availableValues: Int)
+    case collectionState
+    case powerSetTooLarge(actualCount: Int, maximumCount: Int)
     case divisionByZero
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
 
     var description: String {
         switch self {
-        case .typeMismatch(let message): return "Type mismatch: \(message)"
+        case .expected(let expected, let actual):
+            return "Expected \(expected.rawValue); received \(actual.map(\.kindDescription).joined(separator: ", "))"
+        case .noSatisfyingChoice: return "No value satisfies CHOOSE"
+        case .noMatchingCase: return "No CASE branch matched"
+        case .functionArgumentOutsideDomain(let argument):
+            return "Function argument \(argument.kindDescription) is outside its domain"
+        case .tupleIndexOutsideDomain(let argument):
+            return "Tuple index \(argument.kindDescription) is outside its domain"
+        case .recordFieldUnavailable(let argument):
+            return "Record field \(argument.kindDescription) is unavailable"
+        case .invalidArity(let callable, let expected, let actual):
+            return "\(callable.rawValue) requires \(expected) arguments; received \(actual)"
+        case .invalidFormalArgument(let expected, let actual):
+            return "Formal argument kind differs: expected \(expected); received \(actual)"
+        case .recursiveArgumentOutsideDomain:
+            return "Recursive operator argument is outside its declared domain"
+        case .invalidContinuation(let availableValues):
+            return "Evaluator continuation has \(availableValues) values"
+        case .collectionState: return "Collection evaluation reached an invalid state"
+        case .powerSetTooLarge(let actualCount, let maximumCount):
+            return "Power-set input has \(actualCount) members; the maximum is \(maximumCount)"
         case .divisionByZero: return "Division by zero"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
         case .recursionDepthExceeded(let limit): return "Evaluation exceeded recursive depth \(limit)"
+        }
+    }
+}
+
+private extension CompiledValue {
+    var kindDescription: String {
+        switch self {
+        case .integer: "integer"
+        case .boolean: "boolean"
+        case .string: "string"
+        case .controlLocation: "control location"
+        case .set: "set"
+        case .tuple: "tuple"
+        case .record: "record"
+        case .function: "function"
+        case .constant: "constant"
         }
     }
 }
@@ -176,14 +249,14 @@ struct CompiledEvaluator: Sendable {
 
         func integer(_ value: CompiledValue) throws -> Int {
             guard case .integer(let integer) = value else {
-                throw EvalError.typeMismatch("Expected an integer")
+                throw EvalError.expected(.integer, actual: [value])
             }
             return integer
         }
 
         func boolean(_ value: CompiledValue) throws -> Bool {
             guard case .boolean(let boolean) = value else {
-                throw EvalError.typeMismatch("Expected a boolean")
+                throw EvalError.expected(.boolean, actual: [value])
             }
             return boolean
         }
@@ -202,9 +275,9 @@ struct CompiledEvaluator: Sendable {
             case (.exists, _):
                 return .boolean(false)
             case (.choose, _):
-                throw EvalError.typeMismatch("No value satisfies CHOOSE")
+                throw EvalError.noSatisfyingChoice
             default:
-                throw EvalError.typeMismatch("Invalid collection evaluation")
+                throw EvalError.collectionState
             }
         }
 
@@ -262,54 +335,57 @@ struct CompiledEvaluator: Sendable {
                     let member = try popValue(from: &values)
                     let setValue = try popValue(from: &values)
                     guard case .set(let set) = setValue else {
-                        throw EvalError.typeMismatch("Expected a set")
+                        throw EvalError.expected(.set, actual: [setValue])
                     }
                     values.append(.boolean(set.contains(member)))
                 case .subset:
                     let rhs = try popValue(from: &values)
                     let lhs = try popValue(from: &values)
                     guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
-                        throw EvalError.typeMismatch("Expected sets")
+                        throw EvalError.expected(.sets, actual: [lhs, rhs])
                     }
                     values.append(.boolean(lhs.isSubset(of: rhs)))
                 case .union:
                     let rhs = try popValue(from: &values)
                     let lhs = try popValue(from: &values)
                     guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
-                        throw EvalError.typeMismatch("Expected sets")
+                        throw EvalError.expected(.sets, actual: [lhs, rhs])
                     }
                     values.append(.set(lhs.union(rhs)))
                 case .intersection:
                     let rhs = try popValue(from: &values)
                     let lhs = try popValue(from: &values)
                     guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
-                        throw EvalError.typeMismatch("Expected sets")
+                        throw EvalError.expected(.sets, actual: [lhs, rhs])
                     }
                     values.append(.set(lhs.intersection(rhs)))
                 case .setDifference:
                     let rhs = try popValue(from: &values)
                     let lhs = try popValue(from: &values)
                     guard case .set(let lhs) = lhs, case .set(let rhs) = rhs else {
-                        throw EvalError.typeMismatch("Expected sets")
+                        throw EvalError.expected(.sets, actual: [lhs, rhs])
                     }
                     values.append(.set(lhs.subtracting(rhs)))
                 case .cardinality:
-                    guard case .set(let set) = try popValue(from: &values) else {
-                        throw EvalError.typeMismatch("Expected a set")
+                    let value = try popValue(from: &values)
+                    guard case .set(let set) = value else {
+                        throw EvalError.expected(.set, actual: [value])
                     }
                     values.append(.integer(set.count))
                 case .powerSet:
-                    guard case .set(let set) = try popValue(from: &values) else {
-                        throw EvalError.typeMismatch("Expected a set")
+                    let value = try popValue(from: &values)
+                    guard case .set(let set) = value else {
+                        throw EvalError.expected(.set, actual: [value])
                     }
                     values.append(try powerSet(of: set))
                 case .unionAll:
-                    guard case .set(let members) = try popValue(from: &values) else {
-                        throw EvalError.typeMismatch("Expected a set")
+                    let value = try popValue(from: &values)
+                    guard case .set(let members) = value else {
+                        throw EvalError.expected(.set, actual: [value])
                     }
                     values.append(.set(try members.reduce(into: Set<CompiledValue>()) { result, member in
                         guard case .set(let nested) = member else {
-                            throw EvalError.typeMismatch("Expected a set of sets")
+                            throw EvalError.expected(.setOfSets, actual: [member])
                         }
                         result.formUnion(nested)
                     }))
@@ -340,14 +416,15 @@ struct CompiledEvaluator: Sendable {
                     tuple.append(element)
                     values.append(.tuple(tuple))
                 case .tupleHead:
-                    guard let first = try sequenceElements(from: popValue(from: &values)).first else {
-                        throw EvalError.typeMismatch("Expected a nonempty tuple")
+                    let sequence = try sequenceElements(from: popValue(from: &values))
+                    guard let first = sequence.first else {
+                        throw EvalError.expected(.nonemptySequence, actual: [.tuple(sequence)])
                     }
                     values.append(first)
                 case .tupleTail:
                     let tuple = try sequenceElements(from: popValue(from: &values))
                     guard tuple.isEmpty == false else {
-                        throw EvalError.typeMismatch("Expected a nonempty tuple")
+                        throw EvalError.expected(.nonemptySequence, actual: [.tuple(tuple)])
                     }
                     values.append(.tuple(Array(tuple.dropFirst())))
                 case .tupleConcatenate:
@@ -360,18 +437,20 @@ struct CompiledEvaluator: Sendable {
                         .init(key: $0.0.key, value: $0.1)
                     })))
                 case .recordAccess(_, _, let key):
-                    guard case .record(let record) = try popValue(from: &values),
+                    let recordValue = try popValue(from: &values)
+                    guard case .record(let record) = recordValue,
                           let value = record.value(for: key)
                     else {
-                        throw EvalError.typeMismatch("Expected record field")
+                        throw EvalError.expected(.recordField, actual: [recordValue])
                     }
                     values.append(value)
                 case .domain:
-                    switch try popValue(from: &values) {
+                    let value = try popValue(from: &values)
+                    switch value {
                     case .function(let function): values.append(.set(Set(function.keys)))
                     case .record(let record): values.append(.set(Set(record.fields.map(\.key))))
                     case .tuple(let tuple): values.append(.set(Set(tuple.indices.map { .integer($0 + 1) })))
-                    default: throw EvalError.typeMismatch("Expected a function")
+                    default: throw EvalError.expected(.function, actual: [value])
                     }
                 case .functionApply:
                     let function = try popValue(from: &values)
@@ -379,36 +458,42 @@ struct CompiledEvaluator: Sendable {
                     switch function {
                     case .function(let function):
                         guard let value = function[key] else {
-                            throw EvalError.typeMismatch("Function argument is outside its domain")
+                            throw EvalError.functionArgumentOutsideDomain(key)
                         }
                         values.append(value)
                     case .tuple(let tuple):
                         guard case .integer(let index) = key, index >= 1, index <= tuple.count else {
-                            throw EvalError.typeMismatch("Tuple index is outside its domain")
+                            throw EvalError.tupleIndexOutsideDomain(key)
                         }
                         values.append(tuple[index - 1])
                     case .record(let record):
                         guard case .string = key, let value = record.value(for: key) else {
-                            throw EvalError.typeMismatch("Record field is unavailable")
+                            throw EvalError.recordFieldUnavailable(key)
                         }
                         values.append(value)
                     default:
-                        throw EvalError.typeMismatch("Expected a function")
+                        throw EvalError.expected(.function, actual: [function])
                     }
                 case .sequenceFromSet:
-                    guard case .set(let set) = try popValue(from: &values) else {
-                        throw EvalError.typeMismatch("Expected a set")
+                    let value = try popValue(from: &values)
+                    guard case .set(let set) = value else {
+                        throw EvalError.expected(.set, actual: [value])
                     }
                     values.append(.tuple(CompiledValue.sorted(set)))
                 case .setSum:
-                    guard case .set(let members) = try popValue(from: &values),
-                          case .function(let function) = try popValue(from: &values)
+                    let membersValue = try popValue(from: &values)
+                    let functionValue = try popValue(from: &values)
+                    guard case .set(let members) = membersValue,
+                          case .function(let function) = functionValue
                     else {
-                        throw EvalError.typeMismatch("Expected a function and a set")
+                        throw EvalError.expected(.functionAndSet, actual: [functionValue, membersValue])
                     }
                     values.append(.integer(try members.reduce(0) { total, member in
                         guard let result = function[member], case .integer(let value) = result else {
-                            throw EvalError.typeMismatch("Expected integer function values")
+                            throw EvalError.expected(
+                                .integerFunctionValues,
+                                actual: function[member].map { [$0] } ?? []
+                            )
                         }
                         return total + value
                     }))
@@ -417,7 +502,7 @@ struct CompiledEvaluator: Sendable {
                     let domain = try popValue(from: &values)
                     values.append(try functionSet(domain: domain, range: range))
                 default:
-                    throw EvalError.typeMismatch("Invalid evaluator continuation")
+                    throw EvalError.invalidContinuation(availableValues: values.count)
                 }
 
             case .booleanResult:
@@ -437,8 +522,9 @@ struct CompiledEvaluator: Sendable {
                 }
 
             case .collectionStart(let mode, let binder, let body, let scope):
-                guard case .set(let set) = try popValue(from: &values) else {
-                    throw EvalError.typeMismatch("Expected a set")
+                let value = try popValue(from: &values)
+                guard case .set(let set) = value else {
+                    throw EvalError.expected(.set, actual: [value])
                 }
                 let members = CompiledValue.sorted(set)
                 let accumulated: EvaluatorCollectionValues
@@ -506,7 +592,7 @@ struct CompiledEvaluator: Sendable {
                         continue
                     }
                 default:
-                    throw EvalError.typeMismatch("Invalid collection evaluation")
+                    throw EvalError.collectionState
                 }
                 tasks.append(.collectionStep(
                     mode,
@@ -521,7 +607,7 @@ struct CompiledEvaluator: Sendable {
             case .caseBranch(let branches, let index, let otherwise, let scope):
                 guard index < branches.count else {
                     guard let otherwise else {
-                        throw EvalError.typeMismatch("No CASE branch matched")
+                        throw EvalError.noMatchingCase
                     }
                     tasks.append(.expression(otherwise, scope))
                     continue
@@ -543,7 +629,7 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.exceptKey(function: function))
                     tasks.append(.expression(key, scope))
                 default:
-                    throw EvalError.typeMismatch("Expected a function")
+                    throw EvalError.expected(.function, actual: [function])
                 }
 
             case .exceptKey(let function):
@@ -555,11 +641,11 @@ struct CompiledEvaluator: Sendable {
                     values.append(.function(function))
                 case .record(let record):
                     guard case .string = key else {
-                        throw EvalError.typeMismatch("Expected a record field")
+                        throw EvalError.expected(.recordField, actual: [key])
                     }
                     values.append(.record(record.replacing(replacement, for: key)))
                 default:
-                    throw EvalError.typeMismatch("Expected a function")
+                    throw EvalError.expected(.function, actual: [function])
                 }
 
             case .foldSequence(let operation, let initial, let scope):
@@ -573,7 +659,11 @@ struct CompiledEvaluator: Sendable {
 
             case .foldStep(let operation, let members, let index, let result, let scope):
                 guard operation.parameters.count == 2 else {
-                    throw EvalError.typeMismatch("FoldFunction requires two parameters")
+                    throw EvalError.invalidArity(
+                        .foldFunction,
+                        expected: 2,
+                        actual: operation.parameters.count
+                    )
                 }
                 guard index < members.count else {
                     values.append(result)
@@ -594,12 +684,22 @@ struct CompiledEvaluator: Sendable {
                 switch boundOperation.operation {
                 case .lambda(let lambda):
                     guard lambda.parameters.count == arguments.count else {
-                        throw EvalError.typeMismatch("Formal operator argument count differs")
+                        throw EvalError.invalidArity(
+                            .formalOperator,
+                            expected: lambda.parameters.count,
+                            actual: arguments.count
+                        )
                     }
                     var callScope = boundOperation.scope
                     for (parameter, argument) in zip(lambda.parameters, arguments) {
                         guard case .value(let expression) = argument else {
-                            throw EvalError.typeMismatch("Expected a formal value argument")
+                            guard case .operator(let operation) = argument else {
+                                throw EvalError.invalidFormalArgument(expected: .value, actual: .value)
+                            }
+                            throw EvalError.invalidFormalArgument(
+                                expected: .value,
+                                actual: .operator(arity: operation.arity)
+                            )
                         }
                         callScope.bindings = callScope.bindings.binding(
                             expression,
@@ -612,7 +712,11 @@ struct CompiledEvaluator: Sendable {
                 case .reference(let id, let arity):
                     if let supplied = boundOperation.scope.operatorBindings[id] {
                         guard supplied.operation.arity == arity else {
-                            throw EvalError.typeMismatch("Formal operator argument count differs")
+                            throw EvalError.invalidArity(
+                                .formalOperator,
+                                expected: arity,
+                                actual: supplied.operation.arity
+                            )
                         }
                         tasks.append(.formalCall(
                             supplied,
@@ -627,7 +731,11 @@ struct CompiledEvaluator: Sendable {
                     guard definition.parameters.count == arity,
                           definition.parameters.count == arguments.count
                     else {
-                        throw EvalError.typeMismatch("Formal operator argument count differs")
+                        throw EvalError.invalidArity(
+                            .formalOperator,
+                            expected: definition.parameters.count,
+                            actual: arguments.count
+                        )
                     }
                     var callScope = boundOperation.scope
                     for (parameter, argument) in zip(definition.parameters, arguments) {
@@ -640,11 +748,25 @@ struct CompiledEvaluator: Sendable {
                             )
                         case (.operator(let operatorID, let expectedArity), .operator(let supplied)):
                             guard supplied.arity == expectedArity else {
-                                throw EvalError.typeMismatch("Formal operator argument count differs")
+                                throw EvalError.invalidArity(
+                                    .formalOperator,
+                                    expected: expectedArity,
+                                    actual: supplied.arity
+                                )
                             }
                             callScope.operatorBindings[operatorID] = .init(supplied, scope: argumentScope)
                         default:
-                            throw EvalError.typeMismatch("Expected a formal value argument")
+                            let expected: EvalError.FormalArgumentKind
+                            let actual: EvalError.FormalArgumentKind
+                            switch parameter {
+                            case .value: expected = .value
+                            case .operator(_, let arity): expected = .operator(arity: arity)
+                            }
+                            switch argument {
+                            case .value: actual = .value
+                            case .operator(let operation): actual = .operator(arity: operation.arity)
+                            }
+                            throw EvalError.invalidFormalArgument(expected: expected, actual: actual)
                         }
                     }
                     tasks.append(.expression(definition.body, callScope))
@@ -658,7 +780,11 @@ struct CompiledEvaluator: Sendable {
                 tasks.append(.recursiveReturn)
                 if let operation = scope.localOperators[id] {
                     guard operation.parameters.count == arguments.count else {
-                        throw EvalError.typeMismatch("Recursive operator argument count differs")
+                        throw EvalError.invalidArity(
+                            .recursiveOperator,
+                            expected: operation.parameters.count,
+                            actual: arguments.count
+                        )
                     }
                     var callScope = scope
                     for (parameter, argument) in zip(operation.parameters, arguments) {
@@ -666,7 +792,11 @@ struct CompiledEvaluator: Sendable {
                     }
                     if let domain = operation.domain {
                         guard let parameter = operation.parameters.first else {
-                            throw EvalError.typeMismatch("Recursive operator domain requires one parameter")
+                            throw EvalError.invalidArity(
+                                .recursiveOperator,
+                                expected: 1,
+                                actual: operation.parameters.count
+                            )
                         }
                         tasks.append(.localDomain(operation.body, scope: callScope))
                         tasks.append(.expression(.in(.boundValue(parameter), domain), callScope))
@@ -679,7 +809,11 @@ struct CompiledEvaluator: Sendable {
                     throw CompiledEvaluationError.unresolvedOperator
                 }
                 guard function.parameters.count == arguments.count else {
-                    throw EvalError.typeMismatch("Recursive operator argument count differs")
+                    throw EvalError.invalidArity(
+                        .recursiveOperator,
+                        expected: function.parameters.count,
+                        actual: arguments.count
+                    )
                 }
                 var callScope = scope
                 for (parameter, argument) in zip(function.parameters, arguments) {
@@ -692,7 +826,7 @@ struct CompiledEvaluator: Sendable {
 
             case .localDomain(let body, let scope):
                 if try popValue(from: &values) == .boolean(false) {
-                    throw EvalError.typeMismatch("Recursive operator argument is outside its domain")
+                    throw EvalError.recursiveArgumentOutsideDomain
                 }
                 tasks.append(.expression(body, scope))
 
@@ -704,7 +838,7 @@ struct CompiledEvaluator: Sendable {
             case .expression(let expression, let scope):
                 switch expression {
                 case .value(let value):
-                    values.append(.init(formal: value))
+                    values.append(value)
                 case .stateVariable(let variable):
                     values.append(try variableValue(variable))
                 case .boundValue(let binder):
@@ -951,7 +1085,7 @@ struct CompiledEvaluator: Sendable {
         }
 
         guard values.count == 1, let value = values.first else {
-            throw EvalError.typeMismatch("Invalid evaluator result")
+            throw EvalError.invalidContinuation(availableValues: values.count)
         }
         return value
     }
@@ -960,14 +1094,14 @@ struct CompiledEvaluator: Sendable {
 private extension CompiledEvaluator {
     func popValue(from values: inout [CompiledValue]) throws -> CompiledValue {
         guard let value = values.popLast() else {
-            throw EvalError.typeMismatch("Invalid evaluator continuation")
+            throw EvalError.invalidContinuation(availableValues: 0)
         }
         return value
     }
 
     func popValues(_ count: Int, from values: inout [CompiledValue]) throws -> [CompiledValue] {
         guard values.count >= count else {
-            throw EvalError.typeMismatch("Invalid evaluator continuation")
+            throw EvalError.invalidContinuation(availableValues: values.count)
         }
         let start = values.count - count
         let result = Array(values[start...])
@@ -982,18 +1116,21 @@ private extension CompiledEvaluator {
         case .function(let values):
             return try (0..<values.count).map { offset in
                 guard let element = values[.integer(offset + 1)] else {
-                    throw EvalError.typeMismatch("Expected a sequence function")
+                    throw EvalError.expected(.sequence, actual: [.function(values)])
                 }
                 return element
             }
         default:
-            throw EvalError.typeMismatch("Expected a sequence")
+            throw EvalError.expected(.sequence, actual: [value])
         }
     }
 
     func powerSet(of values: Set<CompiledValue>) throws -> CompiledValue {
         guard values.count < Int.bitWidth else {
-            throw EvalError.typeMismatch("Set is too large to enumerate its power set")
+            throw EvalError.powerSetTooLarge(
+                actualCount: values.count,
+                maximumCount: Int.bitWidth - 1
+            )
         }
         let members = Array(values)
         return .set(Set((0..<(1 << members.count)).map { mask in
@@ -1007,7 +1144,7 @@ private extension CompiledEvaluator {
         guard case .set(let domainValues) = domain,
               case .set(let rangeValues) = range
         else {
-            throw EvalError.typeMismatch("Expected function-set domains")
+            throw EvalError.expected(.functionSetDomains, actual: [domain, range])
         }
         let orderedDomain = CompiledValue.sorted(domainValues)
         let orderedRange = CompiledValue.sorted(rangeValues)

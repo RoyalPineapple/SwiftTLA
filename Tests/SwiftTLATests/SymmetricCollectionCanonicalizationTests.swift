@@ -23,8 +23,9 @@ struct SymmetricCollectionCanonicalizationTests {
 
   private func independentlyCanonicalizedGraph(
     _ graph: StateGraph,
-    groups: [[TLAValue]]
-  ) -> CanonicalGraph {
+    groups: [[TLAValue]],
+    layout: CompiledLayout
+  ) throws -> CanonicalGraph {
     let canonicalState = { projection in
       independentlyCanonicalizedState(projection, groups: groups)
     }
@@ -35,11 +36,11 @@ struct SymmetricCollectionCanonicalizationTests {
       for edge in edges {
         guard let target = graph.states[edge.target] else { continue }
         let sourceRepresentative = canonicalState(source)
-        let arguments = mappings.compactMap { mapping -> [String]? in
+        let arguments = try mappings.compactMap { mapping -> [String]? in
           guard encode(applyPermutation(source.entries, mapping: mapping)) == sourceRepresentative else {
             return nil
           }
-          return edge.label.arguments.map {
+          return try edge.label.formalArguments(using: layout).map {
             encode(applyPermutation($0, mapping: mapping))
           }
         }.min { $0.lexicographicallyPrecedes($1) }
@@ -145,9 +146,12 @@ struct SymmetricCollectionCanonicalizationTests {
     }
   }
 
-  private func explorationGraphs(for spec: TLASpec) throws -> (raw: StateGraph, reduced: StateGraph) {
+  private func explorationGraphs(
+    for spec: TLASpec
+  ) throws -> (compilation: CompiledSpecification, raw: StateGraph, reduced: StateGraph) {
     let compilation = try spec.compile()
     return (
+      compilation: compilation,
       raw: try ModelChecker(
         compilation: compilation,
         configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100_000, symmetryReduction: .disabled)
@@ -188,7 +192,10 @@ struct SymmetricCollectionCanonicalizationTests {
     let initial = try #require(exploration.initialStateIDs.first)
     let transitions = try #require(exploration.graph.transitions[initial])
     #expect(transitions.count == 2)
-    #expect(Set(transitions.flatMap(\.label.arguments)) == Set(spec.symmetricCollections[0].metadata.members))
+    #expect(
+      Set(transitions.flatMap(\.label.arguments))
+        == Set(spec.symmetricCollections[0].metadata.members.map(CompiledValue.init(formal:)))
+    )
   }
 
   @Test("Nested symmetric values are quotient-canonicalized without collapsing identities")
@@ -219,8 +226,8 @@ struct SymmetricCollectionCanonicalizationTests {
     let graphs = try explorationGraphs(for: symmetric)
     let groups = symmetric.symmetricCollections.map { $0.metadata.members }
     #expect(storesOneRepresentativePerOrbit(graphs.reduced, groups: groups))
-    #expect(independentlyCanonicalizedGraph(graphs.raw, groups: groups)
-      == independentlyCanonicalizedGraph(graphs.reduced, groups: groups))
+    #expect(try independentlyCanonicalizedGraph(graphs.raw, groups: groups, layout: graphs.compilation.layout)
+      == independentlyCanonicalizedGraph(graphs.reduced, groups: groups, layout: graphs.compilation.layout))
   }
 
   @Test("Independent collection groups preserve the exhaustive orbit quotient at scopes one through four")
@@ -241,8 +248,8 @@ struct SymmetricCollectionCanonicalizationTests {
       let graphs = try explorationGraphs(for: symmetric)
       let groups = symmetric.symmetricCollections.map { $0.metadata.members }
       #expect(storesOneRepresentativePerOrbit(graphs.reduced, groups: groups))
-      #expect(independentlyCanonicalizedGraph(graphs.raw, groups: groups)
-        == independentlyCanonicalizedGraph(graphs.reduced, groups: groups))
+      #expect(try independentlyCanonicalizedGraph(graphs.raw, groups: groups, layout: graphs.compilation.layout)
+        == independentlyCanonicalizedGraph(graphs.reduced, groups: groups, layout: graphs.compilation.layout))
     }
   }
 

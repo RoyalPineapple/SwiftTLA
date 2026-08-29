@@ -21,8 +21,8 @@ struct CompilerBoundaryDiagnosticTests {
         do {
             _ = try TLASpecVerifier.collectEnumVariables(from: model.memberBlock.members)
             Issue.record("Expected an explicit unsupported enum raw value to fail.")
-        } catch {
-            #expect(String(describing: error).contains("requires a supported literal raw value"))
+        } catch let error as ModelMacroError {
+            #expect(error == .invalidEnumRawValue(caseName: "waiting"))
         }
     }
 
