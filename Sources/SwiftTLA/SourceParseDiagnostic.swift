@@ -30,13 +30,19 @@ public struct CompilerSourceSpan: Sendable, Hashable, CustomStringConvertible {
 
 /// Parser facts used to emit a source compiler diagnostic.
 package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
+    package enum Code: String, Sendable, Hashable {
+        case unsupportedLanguageConstruct = "unsupported-language-construct"
+        case invalidLanguagePlacement = "invalid-language-placement"
+    }
+
+    package let code: Code?
     package let message: String
     package let source: String
+    package let sourcePath: [String]
     package let sourceSpan: CompilerSourceSpan
     package let expected: String
     package let actual: String
     package let nextSafeAction: String
-    package let capabilityDiagnostic: LanguageCapabilityDiagnostic?
 
     init(
         message: String,
@@ -46,8 +52,10 @@ package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringCon
         nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
     ) {
         self.init(
+            code: nil,
             message: message,
             source: source,
+            sourcePath: [],
             sourceSpan: CompilerSourceSpan(location: .unavailable, utf8Length: source.utf8.count),
             expected: expected,
             actual: actual,
@@ -56,33 +64,23 @@ package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringCon
     }
 
     init(
+        code: Code? = nil,
         message: String,
         source: String,
+        sourcePath: [String] = [],
         sourceSpan: CompilerSourceSpan,
         expected: String = "a supported SwiftTLA declaration or expression",
         actual: String = "",
-        nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again.",
-        capabilityDiagnostic: LanguageCapabilityDiagnostic? = nil
+        nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
     ) {
+        self.code = code
         self.message = message
         self.source = source
+        self.sourcePath = sourcePath
         self.sourceSpan = sourceSpan
         self.expected = expected
         self.actual = actual.isEmpty ? source.trimmingCharacters(in: .whitespacesAndNewlines) : actual
         self.nextSafeAction = nextSafeAction
-        self.capabilityDiagnostic = capabilityDiagnostic
-    }
-
-    init(capability: LanguageCapabilityDiagnostic) {
-        self.init(
-            message: capability.headline,
-            source: capability.source,
-            sourceSpan: capability.sourceSpan,
-            expected: capability.expected,
-            actual: capability.actual,
-            nextSafeAction: capability.nextSafeAction,
-            capabilityDiagnostic: capability
-        )
     }
 
     init<Node: SyntaxProtocol>(
@@ -94,8 +92,10 @@ package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringCon
     ) {
         let fragment = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(
+            code: nil,
             message: message,
             source: fragment,
+            sourcePath: [],
             sourceSpan: CompilerSourceSpan(
                 location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
                 utf8Length: fragment.utf8.count
@@ -107,14 +107,15 @@ package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringCon
     }
 
     package var renderedMessage: String {
-        capabilityDiagnostic?.description ?? message
+        description
     }
 
     package var description: String {
-        if let capabilityDiagnostic {
-            return capabilityDiagnostic.description
-        }
-        return "What failed: \(message) Where: \(sourceSpan). Expected: \(expected). "
+        let codeDescription = code.map { "Code: \($0.rawValue). " } ?? ""
+        let location = sourcePath.isEmpty
+            ? sourceSpan.description
+            : "\(sourcePath.joined(separator: ".")), \(sourceSpan)"
+        return "\(codeDescription)What failed: \(message) Where: \(location). Expected: \(expected). "
             + "Actual: \(actual). "
             + "Next safe action: \(nextSafeAction)"
     }

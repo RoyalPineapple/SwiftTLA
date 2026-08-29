@@ -73,9 +73,8 @@ struct CompiledRuntime {
             throw CompiledEvaluationError.unresolvedOperator
         }
         return try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout, enabledActions: enabledActions)
-            .enumerateResults(action)
+            .enumerateSuccessors(action)
             .filter { successor in try constraintHolds(in: successor.state) }
-            .map { .init(action: actionID, arguments: $0.arguments, state: $0.state) }
     }
 
     func assumeHolds(in state: CompiledState) throws -> Bool {

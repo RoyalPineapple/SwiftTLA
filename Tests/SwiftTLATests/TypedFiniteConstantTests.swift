@@ -20,7 +20,7 @@ private struct TypedFiniteConstantGeneratedModel {
 }
 
 @TLAModel
-private struct VoteProofShapedConstantGeneratedModel {
+private struct NestedFiniteConstantGeneratedModel {
     enum Value: String, FiniteTLAValueDomain {
         case v1, v2
         static var defaultValue: Self { .v1 }
@@ -34,7 +34,7 @@ private struct VoteProofShapedConstantGeneratedModel {
     }
 
     static var spec: TLASpec {
-        #spec("VoteProofShapedConstantGeneratedModel") {
+        #spec("NestedFiniteConstantGeneratedModel") {
             Constant("Value", SetExpr<Value>(Value.v1, .v2))
             Constant("Acceptor", SetExpr<Acceptor>(.a1, Acceptor.a2, .a3))
             Constant("Quorum", SetExpr<SetExpr<Acceptor>>(
@@ -78,8 +78,8 @@ struct TypedFiniteConstantTests {
         #expect(try TypedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
-    @Test func generatedModelRetainsVoteProofShapedFiniteEnumConstants() throws {
-        #expect(VoteProofShapedConstantGeneratedModel.spec.constants == [
+    @Test func generatedModelRetainsNestedFiniteEnumConstants() throws {
+        #expect(NestedFiniteConstantGeneratedModel.spec.constants == [
             ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
             ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),
             ConstantDecl("Quorum", .set([
@@ -87,8 +87,8 @@ struct TypedFiniteConstantTests {
                 .set([.string("a2"), .string("a3")])
             ]))
         ])
-        #expect(try VoteProofShapedConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
-        #expect(try VoteProofShapedConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
+        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
+        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
     }
 
     @Test func parserDiagnosesDynamicConstantValues() throws {

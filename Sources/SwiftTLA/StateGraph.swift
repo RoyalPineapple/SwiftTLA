@@ -54,7 +54,7 @@ package struct StateGraph: Sendable {
     }
 }
 
-package struct ModelExplorationResult {
+package struct FiniteExploration {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
     public let result: ModelCheckOutcome

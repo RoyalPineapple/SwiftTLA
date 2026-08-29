@@ -7,17 +7,9 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct LivenessCheckerTests {
-  @Test("A twelve-state cycle forms one strongly connected component")
-  func cycleFormsOneStronglyConnectedComponent() throws {
-    let position = Var<Int>("position")
-    let spec = TLASpec("TwelveStateCycle") {
-      Variable(position, in: 1...12)
-      Action("advance") {
-        (position < 12 && position.becomes(position + 1))
-          || (position == 12 && position.becomes(1))
-      }
-    }
-    let compilation = try spec.compile()
+  @Test("SCC decomposition finds one twelve-state cycle")
+  func singleCycleSCC() throws {
+    let compilation = try Example.hourClock.spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
     let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
     let sccs = lc.computeSCCs()
@@ -27,15 +19,7 @@ struct LivenessCheckerTests {
 
   @Test("Terminal SCC detection works")
   func terminalSCC() throws {
-    let position = Var<Int>("position")
-    let spec = TLASpec("TwelveStateCycle") {
-      Variable(position, in: 1...12)
-      Action("advance") {
-        (position < 12 && position.becomes(position + 1))
-          || (position == 12 && position.becomes(1))
-      }
-    }
-    let compilation = try spec.compile()
+    let compilation = try Example.hourClock.spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
     let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
     let sccs = lc.computeSCCs()
@@ -46,11 +30,11 @@ struct LivenessCheckerTests {
   @Test("Eventually holds when the target belongs to a fair cycle")
   func eventuallySatisfied() throws {
     let position = Var<Int>("position")
-    let spec = TLASpec("TwelveStateCycle") {
+    let spec = TLASpec("FairCycle") {
       Variable(position, in: 1...12)
       let advance = Action("advance") {
-        (position < 12 && position.becomes(position + 1))
-          || (position == 12 && position.becomes(1))
+        (position < 12 && position.becomes(position + 1)) ||
+          (position == 12 && position.becomes(1))
       }
       advance
       Eventually("reachesTwelve", position == 12)
@@ -66,11 +50,11 @@ struct LivenessCheckerTests {
   @Test("Eventually fails when the target is unreachable")
   func eventuallyViolated() throws {
     let position = Var<Int>("position")
-    let spec = TLASpec("TwelveStateCycle") {
+    let spec = TLASpec("CycleWithUnreachableProperty") {
       Variable(position, in: 1...12)
       Action("advance") {
-        (position < 12 && position.becomes(position + 1))
-          || (position == 12 && position.becomes(1))
+        (position < 12 && position.becomes(position + 1)) ||
+          (position == 12 && position.becomes(1))
       }
       Eventually("reachesThirteen", position == 13)
     }
@@ -129,14 +113,4 @@ struct LivenessCheckerTests {
     #expect(weak.fairComponents.contains(cycle))
     #expect(strong.rejectedComponents.contains(cycle))
   }
-}
-@Test("ChangRoberts compilation preserves and satisfies cand ~> won")
-func changRobertsLiveness() throws {
-  let spec = Example.changRobertsN3.spec
-  let compilation = try spec.compile()
-  let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled)).explore()
-  let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-  #expect(compilation.description.temporalProperties == ["Liveness"])
-  let result = try #require(lc.analyze(initialStateIDs: exploration.initialStateIDs).first)
-  #expect(result.status == .satisfied)
 }

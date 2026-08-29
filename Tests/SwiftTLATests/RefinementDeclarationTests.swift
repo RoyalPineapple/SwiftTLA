@@ -69,13 +69,13 @@ struct RefinementDeclarationTests {
   func parserBindsDeclaredInstance() throws {
     let source = """
     {
-      let consensus = TLASpec("Consensus") {
+      let abstractProtocol = TLASpec("AbstractProtocol") {
         Parameter("Value")
         let chosen = Var<SetExpr<Int>>("chosen", SetExpr<Int>())
         Variable(chosen)
         Action("Next") { chosen.stays }
       }
-      let C = Instance("C", of: consensus)
+      let C = Instance("C", of: abstractProtocol)
       C
       Refinement(name: "Refines", instance: C, operator: .spec, mappings: [.init(FormalModuleParameter("Value"), from: SetExpr<Int>(0)), .init(Var<SetExpr<Int>>("chosen"), from: SetExpr<Int>())])
     }
@@ -91,12 +91,12 @@ struct RefinementDeclarationTests {
 
     let value = FormalModuleParameter("Value")
     let chosen = Var<SetExpr<Int>>("chosen", SetExpr<Int>())
-    let consensus = TLASpec("Consensus") {
+    let abstractProtocol = TLASpec("AbstractProtocol") {
       value
       Variable(chosen)
       Action("Next") { chosen.stays }
     }
-    let instance = Instance("C", of: consensus)
+    let instance = Instance("C", of: abstractProtocol)
     let builder = TLASpec("Parsed") {
       instance
       Refinement(name: "Refines", instance: instance, mappings: [
@@ -114,12 +114,12 @@ struct RefinementDeclarationTests {
   func parserRetainsTemporalTarget() throws {
     let source = """
     {
-      let consensus = TLASpec("Consensus") {
+      let abstractProtocol = TLASpec("AbstractProtocol") {
         let chosen = Var<Int>("chosen", 0)
         Variable(chosen)
         Action("Next") { chosen.stays }
       }
-      let C = Instance("C", of: consensus)
+      let C = Instance("C", of: abstractProtocol)
       C
       Refinement(name: "Refines", instance: C, operator: .liveSpec, mappings: [])
     }

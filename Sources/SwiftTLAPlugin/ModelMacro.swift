@@ -261,6 +261,9 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         } catch let diagnostic as SourceParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []
+        } catch let diagnostic as CompilationDiagnostic {
+            context.diagnose(modelCompilationDiagnostic(diagnostic, in: declaration))
+            return []
         } catch {
             context.diagnose(modelCompilationDiagnostic(error, in: declaration))
             return []
@@ -377,6 +380,21 @@ package func parserDiagnostic(
     return Diagnostic(
         node: finder.resolvedNode() ?? Syntax(declaration),
         message: ParserDiagnosticMessage(message: diagnostic.renderedMessage)
+    )
+}
+
+private func modelCompilationDiagnostic(
+    _ diagnostic: CompilationDiagnostic,
+    in declaration: some DeclGroupSyntax
+) -> Diagnostic {
+    Diagnostic(
+        node: Syntax(declaration),
+        message: ModelCompilationDiagnosticMessage(
+            whatFailed: "compilation failed [\(diagnostic.code.rawValue)] at \(diagnostic.stage.rawValue) \(diagnostic.path)",
+            expected: diagnostic.expected,
+            actual: diagnostic.actual,
+            nextSafeAction: diagnostic.nextSafeAction
+        )
     )
 }
 

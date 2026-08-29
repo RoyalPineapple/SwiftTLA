@@ -150,12 +150,12 @@ private func parserEnum(
         do {
             _ = try compile(parsed, named: "ProcedureCapability")
             Issue.record("Expected unsupported procedure fairness to stop compilation.")
-        } catch let diagnostic as LanguageCapabilityDiagnostic {
-            #expect(diagnostic.construct.construct == .genericFairness)
-            #expect(diagnostic.operation == .compilation)
-            #expect(diagnostic.sourcePath == ["algorithm", "components[0]", "procedure", "components[1]"])
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAlgorithmFairnessPlacement)
+            #expect(diagnostic.stage == .validation)
+            #expect(diagnostic.path == "algorithm.components[0].procedure.components[1]")
         } catch {
-            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+            Issue.record("Expected CompilationDiagnostic, received \(error).")
         }
     }
 
@@ -518,17 +518,15 @@ private func parserEnum(
         #expect(parsed.variables.isEmpty)
         #expect(parsed.actions.isEmpty)
         #expect(parsed.sourceAlgorithms.isEmpty)
-        let diagnostic = try #require(parsed.diagnostics.first?.capabilityDiagnostic)
-        #expect(diagnostic.code == .unsupportedConstruct)
-        #expect(diagnostic.construct == .unregistered(sourceName: "UnsupportedAlgorithmConstruct"))
-        #expect(diagnostic.operation == .sourceDecoding)
+        let diagnostic = try #require(parsed.diagnostics.first)
+        #expect(diagnostic.code == .unsupportedLanguageConstruct)
         #expect(diagnostic.sourcePath == ["Algorithm", "UnsupportedAlgorithmConstruct"])
-        #expect(diagnostic.expected == "a registered Algorithm declaration with supported source decoding")
-        #expect(diagnostic.actual == "unregistered Algorithm declaration 'UnsupportedAlgorithmConstruct'")
-        #expect(diagnostic.nextSafeAction == "Use an admitted Algorithm declaration.")
+        #expect(diagnostic.expected == "a supported Algorithm declaration")
+        #expect(diagnostic.actual == "unknown Algorithm declaration 'UnsupportedAlgorithmConstruct'")
+        #expect(diagnostic.nextSafeAction == "Use a declaration supported by Algorithm.")
     }
 
-    @Test("Unknown Algorithm statement calls retain capability diagnostics at every nesting depth")
+    @Test("Unknown Algorithm statement calls retain source diagnostics at every nesting depth")
     func unknownAlgorithmStatementCallsAreRejectedAsUnregisteredInNestedBodies() throws {
         let cases = [
             (
@@ -572,20 +570,18 @@ private func parserEnum(
             let parsed = parseAlgorithm(try parseClosure(source))
 
             #expect(parsed.sourceAlgorithms.isEmpty)
-            let diagnostic = try #require(parsed.diagnostics.first?.capabilityDiagnostic)
-            #expect(diagnostic.code == .unsupportedConstruct)
-            #expect(diagnostic.construct == .unregistered(sourceName: testCase.name))
-            #expect(diagnostic.operation == .sourceDecoding)
+            let diagnostic = try #require(parsed.diagnostics.first)
+            #expect(diagnostic.code == .unsupportedLanguageConstruct)
             #expect(diagnostic.sourcePath == ["Algorithm", testCase.name])
             #expect(diagnostic.sourceSpan.location != .unavailable)
-            #expect(diagnostic.expected == "a registered Algorithm declaration with supported source decoding")
-            #expect(diagnostic.actual == "unregistered Algorithm declaration '\(testCase.name)'")
-            #expect(diagnostic.nextSafeAction == "Use an admitted Algorithm declaration.")
+            #expect(diagnostic.expected == "a supported Algorithm declaration")
+            #expect(diagnostic.actual == "unknown Algorithm declaration '\(testCase.name)'")
+            #expect(diagnostic.nextSafeAction == "Use a declaration supported by Algorithm.")
             #expect(!parsed.diagnostics.contains { $0.message.contains("Unsupported Algorithm declaration") })
         }
     }
 
-    @Test("Formal expression closures stay outside Algorithm capability admission")
+    @Test("Formal expression closures stay outside Algorithm declaration parsing")
     func formalExpressionClosuresDoNotBecomeAlgorithmDeclarations() throws {
         let source = """
         {
@@ -2458,7 +2454,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         ))
     }
 
-    @Test func parseHourClockStyleNestedOr() throws {
+    @Test func parsesNestedGuardedDisjunction() throws {
         let result = SpecParser.decodeActionExpr(
             try parseExpression("(x != 12) && x.becomes(x + 1) || (x == 12) && x.becomes(1)")
         )
@@ -2598,10 +2594,10 @@ private let cameraModeDefinition = parserEnum(
     @Test func parsesVariadicActionParametersInDeclarationOrder() throws {
         let source = """
         {
-            Action("moveElevator", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
+            Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
             ]) {
                 floor.becomes(1)
             }
@@ -2610,7 +2606,7 @@ private let cameraModeDefinition = parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(closure)
         #expect(parsed.actions.count == 1)
-        #expect(parsed.actions[0].bindings.map(\.name) == ["person", "elevator", "direction"])
+        #expect(parsed.actions[0].bindings.map(\.name) == ["source", "destination", "amount"])
         #expect(parsed.actions[0].bindings.map(\.values) == [
             [.int(1), .int(2)], [.int(10), .int(20)], [.int(100), .int(200)]
         ])
@@ -2647,10 +2643,10 @@ private let cameraModeDefinition = parserEnum(
     @Test func diagnosesInvalidDomainsAtEveryParameterPosition() throws {
         let source = """
         {
-            Action("moveElevator", parameters: [
-                ActionParameter("person", values: personIDs),
-                ActionParameter("elevator", values: []),
-                ActionParameter("direction", values: [1, 1])
+            Action("transfer", parameters: [
+                ActionParameter("source", values: sourceIDs),
+                ActionParameter("destination", values: []),
+                ActionParameter("amount", values: [1, 1])
             ]) {
                 floor.becomes(1)
             }
@@ -2660,9 +2656,9 @@ private let cameraModeDefinition = parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
-            "Parameterized action 'moveElevator' parameter 'person' requires an explicitly written finite values array.",
-            "Parameterized action 'moveElevator' parameter 'elevator' requires a non-empty finite values array.",
-            "Parameterized action 'moveElevator' parameter 'direction' has duplicate finite-domain values."
+            "Parameterized action 'transfer' parameter 'source' requires an explicitly written finite values array.",
+            "Parameterized action 'transfer' parameter 'destination' requires a non-empty finite values array.",
+            "Parameterized action 'transfer' parameter 'amount' has duplicate finite-domain values."
         ])
     }
 

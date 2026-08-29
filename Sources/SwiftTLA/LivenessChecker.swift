@@ -38,7 +38,7 @@ package struct FairLassoWitness: Equatable, Sendable {
     }
 }
 
-extension ModelExplorationResult {
+extension FiniteExploration {
     package func analyzeTemporalProperties(
         in compilation: CompiledSpecification
     ) throws -> [TemporalAnalysis] {

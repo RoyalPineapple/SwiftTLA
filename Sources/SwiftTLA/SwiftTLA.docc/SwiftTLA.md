@@ -32,19 +32,12 @@ Compilation can throw `CompilationDiagnostic`. The diagnostic identifies the
 stage, code, source path, expected value, actual value, and next safe action.
 Fix that source relationship before you compile again.
 
-## Inspect language support
+## Language support
 
-`LanguageCapabilityLedger` records the support dimensions for each
-`DeclaredLanguageConstruct`.
-
-```swift
-let procedure = LanguageCapabilityLedger.capability(for: .procedure)
-let capabilities = LanguageCapabilityLedger.all
-```
-
-The parser and result builders use the same ledger. An unsupported required
-dimension produces `LanguageCapabilityDiagnostic`, which identifies the
-construct, operation, source path, and required action.
+`compile()` is the language-support check. Successful compilation provides one
+compiled meaning to execution, generated Swift, TLA+ rendering, and PlusCal
+rendering. Source and compilation diagnostics identify the exact rejected
+declaration and its compiler phase.
 
 ## Materialize a linked bundle
 
@@ -92,13 +85,6 @@ and `Documentation/PublicAPIValidation.md` for direct generated-API checks.
 - ``CompilationDiagnostic``
 - ``TLAModuleBundle``
 - ``TLAModuleBundleIntegrityError``
-
-### Language capabilities
-
-- ``DeclaredLanguageConstruct``
-- ``LanguageCapability``
-- ``LanguageCapabilityLedger``
-- ``LanguageCapabilityDiagnostic``
 
 ### Generated-machine errors
 

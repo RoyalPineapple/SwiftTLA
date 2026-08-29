@@ -131,7 +131,7 @@ package struct ModelChecker {
     }
     func exploreGraph() throws -> StateGraph { try explore().graph }
 
-    package func explore() throws -> ModelExplorationResult { try runExploration() }
+    package func explore() throws -> FiniteExploration { try runExploration() }
 
     func checkLiveness() throws -> ModelCheckOutcome {
         let exploration = try explore()
@@ -166,7 +166,7 @@ package struct ModelChecker {
         return .ok(statesCount: exploration.graph.states.count)
     }
 
-    private func runExploration() throws -> ModelExplorationResult {
+    private func runExploration() throws -> FiniteExploration {
         let symmetry = try SymmetryPlan(
             compilation: compilation,
             reduction: configuration.symmetryReduction
@@ -194,7 +194,7 @@ package struct ModelChecker {
             configuration: configuration,
             symmetry: symmetry
         )
-        return ModelExplorationResult(
+        return FiniteExploration(
             graph: exploration.graph,
             initialStateIDs: exploration.initialStateIDs,
             result: exploration.result,
@@ -207,8 +207,8 @@ package struct ModelChecker {
 
     private func emptyExploration(
         result: ModelCheckOutcome
-    ) -> ModelExplorationResult {
-        ModelExplorationResult(
+    ) -> FiniteExploration {
+        FiniteExploration(
             graph: StateGraph(
                 specName: compilation.description.name,
                 variableNames: compilation.layout.variables.map(\.declaration.name),
@@ -232,7 +232,7 @@ private func compiledBFS(
     specificationName: String,
     configuration: FiniteExplorationConfiguration,
     symmetry: SymmetryPlan
-) throws -> ModelExplorationResult {
+) throws -> FiniteExploration {
     var queue: [CompiledState] = []
     var stateToID: [CompiledState: StateGraph.StateID] = [:]
     var idToState: [StateGraph.StateID: CompiledState] = [:]
@@ -258,7 +258,7 @@ private func compiledBFS(
         )
     }
 
-    func boundedResult() throws -> ModelExplorationResult {
+    func boundedResult() throws -> FiniteExploration {
         .init(
             graph: try graph(),
             initialStateIDs: initialStateIDs,

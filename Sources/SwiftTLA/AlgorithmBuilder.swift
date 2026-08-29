@@ -1198,11 +1198,11 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: FairnessDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .unsupported(.genericFairness))]
+        [AlgorithmElement(model: .invalidPlacement(.genericFairness))]
     }
 
     public static func buildExpression(_ component: AssumeDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .unsupported(.algorithmAssume))]
+        [AlgorithmElement(model: .invalidPlacement(.assumption))]
     }
 
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
@@ -2040,7 +2040,7 @@ internal enum AlgorithmValidator {
                 validateName(invariant.name, at: .algorithm, diagnostics: &diagnostics)
             case .temporal(let temporal):
                 validateName(temporal.name, at: .algorithm, diagnostics: &diagnostics)
-            case .unsupported:
+            case .invalidPlacement:
                 break
             case .formalOperator(let definition):
                 validateName(definition.name, at: .algorithm, diagnostics: &diagnostics)
@@ -2097,7 +2097,7 @@ internal enum AlgorithmValidator {
                 validate(step, process: index, labels: Set(labels), diagnostics: &diagnostics)
             case .invariant(let invariant):
                 validateName(invariant.name, at: processAnchor, diagnostics: &diagnostics)
-            case .unsupported:
+            case .invalidPlacement:
                 continue
             case .temporal, .formalOperator, .stateConstraint:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))

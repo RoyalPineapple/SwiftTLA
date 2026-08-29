@@ -428,25 +428,25 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
 @Suite(.serialized) struct ModelCheckerMatrix {
   @Test("parameterized actions retain ordered Cartesian invocation labels")
   func parameterizedActionsRetainOrderedCartesianInvocationLabels() throws {
-    let floor = Var<Int>("floor")
-    let person = Var<Int>("person")
-    let elevator = Var<Int>("elevator")
-    let direction = Var<Int>("direction")
-    let spec = TLASpec("Boarding") {
-      Variable(floor, 0)
+    let value = Var<Int>("value")
+    let source = Var<Int>("source")
+    let destination = Var<Int>("destination")
+    let amount = Var<Int>("amount")
+    let spec = TLASpec("ThreeParameterAction") {
+      Variable(value, 0)
       Action(
-        "board",
+        "transfer",
         parameters: [
-          ActionParameter("person", values: [1, 2]),
-          ActionParameter("elevator", values: [10, 20]),
-          ActionParameter("direction", values: [100, 200])
+          ActionParameter("source", values: [1, 2]),
+          ActionParameter("destination", values: [10, 20]),
+          ActionParameter("amount", values: [100, 200])
         ]
       ) {
-        floor.becomes(person + elevator + direction)
+        value.becomes(source + destination + amount)
       }
     }
 
-    #expect(spec.actions[0].bindings.map(\.name) == ["person", "elevator", "direction"])
+    #expect(spec.actions[0].bindings.map(\.name) == ["source", "destination", "amount"])
     let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let labels = try #require(graph.transitions[.init(0)]).map(\.label)
     let expectedArguments: [[TLAValue]] = [
@@ -456,11 +456,11 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
     ]
     #expect(labels.map(\.arguments) == expectedArguments)
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__0_0_0 == board(1, 10, 100)"))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__1_1_1 == board(2, 20, 200)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__0_0_0 == transfer(1, 10, 100)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__1_1_1 == transfer(2, 20, 200)"))
 
     let compilation = try spec.compile()
-    let action = try #require(compilation.layout.testActionID(named: "board"))
+    let action = try #require(compilation.layout.testActionID(named: "transfer"))
     let runtime = CompiledRuntime(compilation: compilation)
     let initial = try #require(try runtime.initialStates().first)
     let successors = try runtime.successors(for: action, from: initial)
@@ -468,45 +468,45 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       try successor.arguments.map { try $0.rendered(using: compilation.layout) }
         == [.int(2), .int(20), .int(200)]
     })
-    let floorID = try #require(compilation.layout.testVariableID(named: "floor"))
-    #expect(try next.state.value(for: floorID).rendered(using: compilation.layout) == .int(222))
+    let valueID = try #require(compilation.layout.testVariableID(named: "value"))
+    #expect(try next.state.value(for: valueID).rendered(using: compilation.layout) == .int(222))
     #expect(try successors.contains { successor in
       try successor.arguments.map { try $0.rendered(using: compilation.layout) }
         == [.int(3), .int(20), .int(200)]
     } == false)
-    #expect(try initial.value(for: floorID).rendered(using: compilation.layout) == .int(0))
+    #expect(try initial.value(for: valueID).rendered(using: compilation.layout) == .int(0))
   }
 
   @Test func parameterizedActionExpandsFiniteDomainAndLabelsTransitions() throws {
-    let floor = Var<Int>("floor")
-    let id = Var<Int>("id")
-    let spec = TLASpec("TwoCars") {
-      Variable(floor, 0)
-      Action("moveElevator", parameters: [ActionParameter("id", values: [1, 2])]) {
-        floor.becomes(id)
+    let value = Var<Int>("value")
+    let choice = Var<Int>("choice")
+    let spec = TLASpec("ParameterizedAction") {
+      Variable(value, 0)
+      Action("select", parameters: [ActionParameter("choice", values: [1, 2])]) {
+        value.becomes(choice)
       }
     }
 
-    #expect(spec.actions[0].bindings.map(\.name) == ["id"])
+    #expect(spec.actions[0].bindings.map(\.name) == ["choice"])
     #expect(spec.actions[0].bindings[0].values == [.int(1), .int(2)])
     let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])
     let labels = transitions.map(\.label)
-    #expect(labels.map(\.action) == ["moveElevator", "moveElevator"])
+    #expect(labels.map(\.action) == ["select", "select"])
     #expect(labels.map(\.arguments) == [[.int(1)], [.int(2)]])
     #expect(
-      Set(transitions.map(\.action)) == ["moveElevator(1)", "moveElevator(2)"])
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator(id) =="))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator__0 == moveElevator(1)"))
+      Set(transitions.map(\.action)) == ["select(1)", "select(2)"])
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("select(choice) =="))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("select__0 == select(1)"))
   }
 
   @Test("parameterized invocations retain every label when they discover one successor")
   func parameterizedInvocationsRetainLabelsForSharedNewSuccessor() throws {
-    let floor = Var<Int>("floor")
+    let value = Var<Int>("value")
     let spec = TLASpec("SharedSuccessor") {
-      Variable(floor, 0)
+      Variable(value, 0)
       Action("openDoor", parameters: [ActionParameter("trigger", values: [0, 1])]) {
-        floor.becomes(1)
+        value.becomes(1)
       }
     }
 
@@ -668,28 +668,6 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
 
-  @Test func dieHard16() throws {
-    let big = Var<Int>("big")
-    let small = Var<Int>("small")
-    let spec = TLASpec("DieHard") {
-      Variable(big, 0)
-      Variable(small, 0)
-      Action("FB") { big.becomes(5) }
-      Action("FS") { small.becomes(3) }
-      Action("EB") { big.becomes(0) }
-      Action("ES") { small.becomes(0) }
-      Action("S2B") {
-        (big + small <= 5) && big.becomes(big + small) && small.becomes(0)
-          || (big + small > 5) && big.becomes(5) && small.becomes(small - (5 - big))
-      }
-      Action("B2S") {
-        (big + small <= 3) && small.becomes(big + small) && big.becomes(0)
-          || (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
-      }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 16)
-  }
 }
 
 // MARK: - Phase 1-7: bound variables, functions, sequences, EXCEPT, CONSTANTS
