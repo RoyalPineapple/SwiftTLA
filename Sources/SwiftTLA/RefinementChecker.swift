@@ -16,7 +16,7 @@ package enum RefinementFailureEvidence: Sendable, Equatable {
 struct RefinementChecker {
     let compilation: CompiledSpecification
 
-    func check(_ exploration: ModelExploration) throws -> ModelCheckOutcome? {
+    func check(_ exploration: FiniteExploration) throws -> ModelCheckOutcome? {
         guard exploration.isComplete else {
             return compilation.refinements.first.map {
                 .refinementUnproven(refinement: $0.name, exploration: exploration.result)

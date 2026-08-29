@@ -275,7 +275,7 @@ struct UpstreamParityTests {
     }
 }
 
-private func explore(_ spec: TLASpec, maximumStateLimit: Int) throws -> ModelExploration {
+private func explore(_ spec: TLASpec, maximumStateLimit: Int) throws -> FiniteExploration {
     let compilation = try spec.compile()
     return try ModelChecker(
         compilation: compilation,
@@ -283,7 +283,7 @@ private func explore(_ spec: TLASpec, maximumStateLimit: Int) throws -> ModelExp
     ).explore()
 }
 
-private func isSuccessful(_ exploration: ModelExploration) -> Bool {
+private func isSuccessful(_ exploration: FiniteExploration) -> Bool {
     if case .ok = exploration.result { return true }
     return false
 }

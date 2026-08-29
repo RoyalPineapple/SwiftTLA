@@ -359,7 +359,7 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("state limits retain exactly the declared number of states")
     func stateLimitIsAnExactRetainedStateBoundary() throws {
-        func exploration(guarded: Bool) throws -> ModelExploration {
+        func exploration(guarded: Bool) throws -> FiniteExploration {
             let counter = Var<Int>("counter", 0)
             let action = counter.becomes(counter + 1)
             let spec = TLASpec("StateLimitBoundary") {

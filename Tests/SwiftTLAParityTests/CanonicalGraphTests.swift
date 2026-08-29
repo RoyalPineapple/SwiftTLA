@@ -94,7 +94,7 @@ struct CanonicalGraphTests {
         let compilationIdentity = try TLASpec("NormalizedFixture") {
             Variable(fixture, 0)
         }.compile().identity
-        let exploration = ModelExploration(
+        let exploration = FiniteExploration(
             graph: StateGraph(
                 specName: "NormalizedFixture",
                 variableNames: ["cars"],
