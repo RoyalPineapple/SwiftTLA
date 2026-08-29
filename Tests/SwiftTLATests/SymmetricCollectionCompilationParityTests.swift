@@ -38,8 +38,8 @@ struct SymmetricCollectionCompilationParityTests {
     }
   }
 
-  @Test("Parser and runtime collection specifications retain metadata, AST, states, and checking outcomes")
-  func parserRuntimeParityUsesTheSameOpaqueMemberSemantics() throws {
+  @Test("Parser and result-builder collection specifications retain metadata, AST, states, and checking outcomes")
+  func parserAndResultBuilderUseTheSameOpaqueMemberSemantics() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>("devices")
@@ -53,24 +53,24 @@ struct SymmetricCollectionCompilationParityTests {
       Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
     )
     let parsed = SpecParser.parseSpecClosure(closure)
-    let runtime = parserParitySpec(scope: 2)
+    let built = parserParitySpec(scope: 2)
     let parsedCompilation = try parsed.compile(specificationName: "OpaqueMemberSemantics2")
-    let runtimeCompilation = try runtime.compile()
+    let builtCompilation = try built.compile()
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.symmetricCollections.map(\.metadata)
-      == runtime.symmetricCollections.map(\.metadata))
-    #expect(parsedCompilation.description == runtimeCompilation.description)
+      == built.symmetricCollections.map(\.metadata))
+    #expect(parsedCompilation.description == builtCompilation.description)
     let parsedInitialStates = try CompiledRuntime(compilation: parsedCompilation).initialStates()
       .map { try $0.projection(using: parsedCompilation.layout) }
-    let runtimeInitialStates = try CompiledRuntime(compilation: runtimeCompilation).initialStates()
-      .map { try $0.projection(using: runtimeCompilation.layout) }
-    #expect(parsedInitialStates == runtimeInitialStates)
+    let builtInitialStates = try CompiledRuntime(compilation: builtCompilation).initialStates()
+      .map { try $0.projection(using: builtCompilation.layout) }
+    #expect(parsedInitialStates == builtInitialStates)
     let configuration = try FiniteExplorationConfiguration(
       maximumStateLimit: 100_000,
       symmetryReduction: .enabled(maximumPermutationCount: 100_000))
     #expect(try ModelChecker(compilation: parsedCompilation, configuration: configuration).check().description
-      == ModelChecker(compilation: runtimeCompilation, configuration: configuration).check().description)
+      == ModelChecker(compilation: builtCompilation, configuration: configuration).check().description)
   }
 
   private func oracleSpec(scope: Int) -> TLASpec {

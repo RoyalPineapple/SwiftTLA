@@ -73,7 +73,7 @@ public struct FormalLambda: Hashable, Sendable {
 /// A formal operator passed or applied by the specification.
 ///
 /// A lambda retains its parameters and body. A reference retains its operator
-/// name and required arity. The runtime and renderer consume the same form.
+/// name and required arity. Compilation lowers both forms to private operator identities.
 public indirect enum FormalOperator: Hashable, Sendable {
     case lambda(FormalLambda)
     case reference(String, arity: Int)

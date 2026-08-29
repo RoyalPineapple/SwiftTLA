@@ -4,10 +4,8 @@ import SwiftParser
 @testable import SwiftTLA
 import SwiftTLAMacros
 
-// Proves SpecParser's compact decoder produces the same AST as the runtime
-// builder for every expression form in the DSL. Each test parses a source
-// string and compares the result to the equivalent value built through
-// Swift's type system (operator overloads and method calls).
+// Proves the parser and result builder produce the same source AST for every
+// expression form in the DSL.
 
 // MARK: - Helpers
 

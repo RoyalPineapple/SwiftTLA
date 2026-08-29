@@ -1185,7 +1185,7 @@ extension ParserSession {
                 // `With(SetExpr<Pair<A, B>>) { first, second in ... }` is
                 // PlusCal's `with <<first, second>> \in Pairs`. Keep one
                 // formal selection, then bind both tuple positions inside its
-                // scope so the emitted TLA+ and runtime builder agree.
+                // scope so every source path retains the same tuple binding.
                 let tupleBinding = generatedBinderName()
                 let firstBinding = generatedBinderName()
                 let secondBinding = generatedBinderName()

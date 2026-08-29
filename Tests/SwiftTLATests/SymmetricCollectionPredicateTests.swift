@@ -2,55 +2,13 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
-import SwiftTLAMacros
 import Testing
 
-public struct PredicateMacroDevice: Identifiable, Sendable {
-  public let id: Int
+private struct PredicateDevice: Identifiable, Sendable {
+  let id: Int
 
-  public init(id: Int) {
+  init(id: Int) {
     self.id = id
-  }
-}
-
-public struct GeneratedPredicateRuntime {
-  public static var spec: TLASpec {
-    TLASpec("GeneratedPredicateRuntime") {
-      let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
-      CollectionAction("advance", on: devices) { member in
-        devices[member] == 0 && devices.update(member, to: 1)
-      }
-      Invariant("validPhase") {
-        devices.allSatisfy { phase in phase >= 0 && phase <= 1 }
-      }
-      Invariant("hasModeledPhase") {
-        devices.contains(where: { phase in phase >= 0 })
-      }
-    }
-  }
-}
-
-public struct GeneratedShorthandPredicateRuntime {
-  public static var spec: TLASpec {
-    TLASpec("GeneratedShorthandPredicateRuntime") {
-      let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
-      Variable(phase, 0)
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
-      Action("advance") {
-        devices.allSatisfy { $0 == 0 } && phase.becomes(1)
-      }
-      Action("reset") {
-        devices.contains(where: { $0 == 0 }) && phase.becomes(0)
-      }
-      Invariant("validPhase") {
-        devices.allSatisfy { $0 >= 0 && $0 <= 1 }
-      }
-      Invariant("hasModeledPhase") {
-        devices.contains(where: { $0 >= 0 })
-      }
-    }
   }
 }
 
@@ -70,31 +28,6 @@ struct SymmetricCollectionPredicateTests {
     #expect(try renderedInitialStates(in: parsedCompilation) == renderedInitialStates(in: directCompilation))
     #expect(try ModelChecker(compilation: parsedCompilation, configuration: symmetricExplorationConfiguration()).check().description
       == ModelChecker(compilation: directCompilation, configuration: symmetricExplorationConfiguration()).check().description)
-  }
-
-  @Test("macro and source-model compilation share collection binder identity")
-  func macroAndSourceModelCompilationShareCollectionBinderIdentity() throws {
-    let macroCompilation = try GeneratedPredicateRuntime.spec.compile()
-    let sourceCompilation = try GeneratedPredicateRuntime.spec.compile()
-
-    #expect(macroCompilation.identity == sourceCompilation.identity)
-    #expect(macroCompilation.renderedTLAModuleBundle().root.tla
-      == sourceCompilation.renderedTLAModuleBundle().root.tla)
-  }
-
-  @Test("Macro expansion retains collection predicate invariants and runtime parity")
-  func macroRuntimeMatchesDirectCollectionPredicateBehavior() throws {
-    let direct = directPredicateSpec()
-    let generated = GeneratedPredicateRuntime.spec
-
-    #expect(generated.symmetricCollections.map(\.metadata) == direct.symmetricCollections.map(\.metadata))
-    #expect(generated.invariants == direct.invariants)
-    let generatedCompilation = try generated.compile()
-    let directCompilation = try direct.compile()
-    #expect(try renderedInitialStates(in: generatedCompilation) == renderedInitialStates(in: directCompilation))
-    #expect(try ModelChecker(compilation: try generated.compile(), configuration: symmetricExplorationConfiguration()).check().description
-      == ModelChecker(compilation: try direct.compile(), configuration: symmetricExplorationConfiguration()).check().description)
-    #expect(!generated.invariants.description.contains("PredicateMacroDevice"))
   }
 
   @Test("Parser lowers shorthand collection predicates in ordinary action guards")
@@ -138,14 +71,15 @@ struct SymmetricCollectionPredicateTests {
     #expect(direct == builder)
   }
 
-  @Test("Macro expansion accepts shorthand collection predicates")
-  func macroExpansionAcceptsShorthandCollectionPredicates() throws {
-    let generated = GeneratedShorthandPredicateRuntime.spec
+  @Test("Shorthand collection predicates compile and check")
+  func shorthandCollectionPredicatesCompileAndCheck() throws {
+    let parsed = SpecParser.parseSpecClosure(try shorthandPredicateClosure())
+    let compilation = try parsed.compile(specificationName: "ShorthandCollectionPredicates")
 
-    #expect(generated.actions.count == 2)
-    #expect(generated.invariants.count == 2)
+    #expect(parsed.actions.count == 2)
+    #expect(parsed.invariants.count == 2)
     #expect(try ModelChecker(
-      compilation: try generated.compile(),
+      compilation: compilation,
       configuration: symmetricExplorationConfiguration()
     ).check().description.contains("OK"))
   }
@@ -154,7 +88,7 @@ struct SymmetricCollectionPredicateTests {
   func parserPreservesCollectionPredicateInvariantViolations() throws {
     let parsed = SpecParser.parseSpecClosure(try violatingPredicateClosure())
     let parsedCompilation = try parsed.compile(specificationName: "ViolatingPredicate")
-    let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
+    let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
     let direct = TLASpec("ViolatingPredicate") {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("break", on: devices) { member in
@@ -205,7 +139,7 @@ struct SymmetricCollectionPredicateTests {
   private func predicateClosure() throws -> ClosureExprSyntax {
     try parseClosure("""
     {
-      let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
+      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
@@ -223,7 +157,7 @@ struct SymmetricCollectionPredicateTests {
   private func violatingPredicateClosure() throws -> ClosureExprSyntax {
     try parseClosure("""
     {
-      let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
+      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("break", on: devices) { member in
         devices.update(member, to: 2)
@@ -239,7 +173,7 @@ struct SymmetricCollectionPredicateTests {
     try parseClosure("""
     {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
+      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
       Variable(phase, 0)
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       Action("advance") {
@@ -261,7 +195,7 @@ struct SymmetricCollectionPredicateTests {
   private func unsupportedPredicateClosure() throws -> ClosureExprSyntax {
     try parseClosure("""
     {
-      let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
+      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
       Invariant("unsupported") {
         devices.allSatisfy { phase in unmodeledPredicate(phase) }
@@ -281,7 +215,7 @@ struct SymmetricCollectionPredicateTests {
   }
 
   private func directPredicateSpec() -> TLASpec {
-    let devices = SymmetricCollectionVar<PredicateMacroDevice, Int>("devices")
+    let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
     return TLASpec("CollectionPredicateSemantics") {
       SymmetricCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in

@@ -260,10 +260,9 @@ public struct TLASpec: Sendable {
   package let extendsModules: [StandardModule]
   package let constraint: StateExpr?
   package let recursiveFuncs: [RecursiveFunc]
-  /// Executable, higher-order operator definitions. These remain formal AST
-  /// data so the checker and runtime apply the same semantics.
+  /// Executable, higher-order operator definitions retained as formal AST data.
   package let formalOperatorDefinitions: [FormalOperatorDefinition]
-  /// Imported modules remain separate source files and resolve their operators at runtime.
+  /// Imported modules remain separate source files; compilation links their operators.
   package let imports: [TLASpec]
   /// Model-scoped replacement bindings for imported module operators.
   package let importConfigurations: [FormalModuleConfiguration]

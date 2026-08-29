@@ -294,7 +294,7 @@ private struct FoldGeneratedModel {
         let parsed = SpecParser.decodeStateExpr(syntax)
 
         let values = IntRange(1, through: 4)
-        let runtime = values.filtering { value in value.expr % 2 == 0 }
+        let built = values.filtering { value in value.expr % 2 == 0 }
             .mapping { value in value.expr * value.expr }
             .union(SetExpr<Int>.literal(25))
 
@@ -308,12 +308,12 @@ private struct FoldGeneratedModel {
             actions: [("evaluate", .guard_(parsed), [])],
             invariants: []
         )
-        let runtimeModel = canonicalTestSpec(
+        let builtModel = canonicalTestSpec(
             variables: [],
-            actions: [("evaluate", .guard_(runtime.raw), [])],
+            actions: [("evaluate", .guard_(built.raw), [])],
             invariants: []
         )
-        #expect(try parsedModel.compile().identity == runtimeModel.compile().identity)
+        #expect(try parsedModel.compile().identity == builtModel.compile().identity)
     }
 
     @Test("typed collection operators execute in a generated model")
@@ -341,16 +341,16 @@ private struct FoldGeneratedModel {
     @Test("formal folds evaluate, emit TLC syntax, and survive parser fidelity")
     func foldFunctionIsFormalAndRoundTrips() throws {
         let values = TupleExpr<Int>.literal(1, 2, 3)
-        let runtime = Fold(values, startingWith: 0) { element, accumulated in
+        let built = Fold(values, startingWith: 0) { element, accumulated in
             element + accumulated
         }
         let source = "Fold(TupleExpr<Int>.literal(1, 2, 3), startingWith: 0) { element, accumulated in element + accumulated }"
         let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
 
-        #expect(try compiledValue(runtime.raw) == .int(6))
+        #expect(try compiledValue(built.raw) == .int(6))
         #expect(try canonicalTestSpec(
-            variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []
+            variables: [], actions: [("fold", .guard_(built.raw), [])], invariants: []
         ).compile().identity == canonicalTestSpec(
             variables: [], actions: [("fold", .guard_(parsed), [])], invariants: []
         ).compile().identity)
@@ -492,19 +492,19 @@ private struct FoldGeneratedModel {
         let terminalSource = "(!Finished()) || i == f.count + 1"
         let terminalSyntax = try parseExpression(terminalSource)
 
-        let runtime = Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
-        let sortedRuntime = SortedSequences(of: SetExpr<Int>.literal(0, 1, 2), lengths: 0...2)
+        let sequences = Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
+        let sortedSequences = SortedSequences(of: SetExpr<Int>.literal(0, 1, 2), lengths: 0...2)
         let parsed = try #require(SpecParser.decodeStateExpr(sequenceSyntax))
         let parsedSorted = try #require(SpecParser.decodeStateExpr(sortedSyntax))
 
-        #expect(try compiledValue(runtime.raw) == .set([
+        #expect(try compiledValue(sequences.raw) == .set([
             .tuple([]), .tuple([.int(0)]), .tuple([.int(1)]),
             .tuple([.int(0), .int(0)]), .tuple([.int(0), .int(1)]),
             .tuple([.int(1), .int(0)]), .tuple([.int(1), .int(1)])
         ]))
-        #expect(parsed == runtime.raw)
-        #expect(parsedSorted == sortedRuntime.raw)
-        #expect(try compiledValue(sortedRuntime.raw) == .set([
+        #expect(parsed == sequences.raw)
+        #expect(parsedSorted == sortedSequences.raw)
+        #expect(try compiledValue(sortedSequences.raw) == .set([
             .tuple([]),
             .tuple([.int(0)]), .tuple([.int(1)]), .tuple([.int(2)]),
             .tuple([.int(0), .int(0)]), .tuple([.int(0), .int(1)]), .tuple([.int(0), .int(2)]),
@@ -518,10 +518,10 @@ private struct FoldGeneratedModel {
         let source = "ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)"
         let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
-        let runtime = ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
+        let sequences = ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
 
-        #expect(parsed == runtime.raw)
-        #expect(try compiledValue(runtime.raw) == .set([
+        #expect(parsed == sequences.raw)
+        #expect(try compiledValue(sequences.raw) == .set([
             .function([:]),
             .function([.int(0): .int(0)]),
             .function([.int(0): .int(1)]),
@@ -562,15 +562,15 @@ private struct FoldGeneratedModel {
         let source = "NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))"
         let syntax = try parseExpression(source)
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
-        let runtime = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
+        let subsets = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
         let expectedMembers: Set<TLAValue> = [
             .set([.int(1)]),
             .set([.int(2)]),
             .set([.int(1), .int(2)])
         ]
 
-        #expect(parsed == runtime.raw)
-        #expect(try compiledValue(runtime.raw) == .set(expectedMembers))
+        #expect(parsed == subsets.raw)
+        #expect(try compiledValue(subsets.raw) == .set(expectedMembers))
 
         let compilation = try NonEmptySubsetGeneratedModel.spec.compile()
         let selectedKeys = try #require(compilation.layout.testVariableID(named: "selectedKeys"))

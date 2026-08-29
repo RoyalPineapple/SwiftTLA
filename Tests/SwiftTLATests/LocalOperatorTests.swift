@@ -255,7 +255,7 @@ struct LocalOperatorTests {
     #expect(try model.send(.advance).after.counter == 1)
   }
 
-  @Test("top-level typed formal definitions retain runtime and parser equality")
+  @Test("captured formal definitions survive compilation, rendering, and generated execution")
   func generatedTopLevelTypedFormalDefinitionRetainsCapture() throws {
     let definition = try #require(
       GeneratedTopLevelTypedFormalDefinitionModel.spec.formalOperatorDefinitions.first
