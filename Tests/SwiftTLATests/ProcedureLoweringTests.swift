@@ -11,7 +11,7 @@ struct ProcedureLoweringTests {
     }
 
     @Test("compiled Algorithm identity alpha-normalizes local statement binders")
-    func compiledAlgorithmIdentityAlphaNormalizesScopedBinders() {
+    func compiledAlgorithmIdentityAlphaNormalizesScopedBinders() throws {
         func model(letName: String, withName: String, chooseName: String) -> AlgorithmModel {
             AlgorithmModel(
                 name: "ScopedFidelity",
@@ -30,23 +30,31 @@ struct ProcedureLoweringTests {
             )
         }
 
-        let parsed = algorithmCompilationEncoding(model(letName: "first", withName: "second", chooseName: "third"))
-        let built = algorithmCompilationEncoding(model(letName: "x", withName: "y", chooseName: "z"))
-        #expect(parsed == built)
+        let parsed = try TLASpec("ScopedFidelity") {
+            Algorithm(model: model(letName: "first", withName: "second", chooseName: "third"))
+        }.compile()
+        let built = try TLASpec("ScopedFidelity") {
+            Algorithm(model: model(letName: "x", withName: "y", chooseName: "z"))
+        }.compile()
+        #expect(parsed.identity == built.identity)
     }
 
     @Test("different algorithms have different compiled identities")
-    func differentAlgorithmsHaveDifferentCompiledIdentities() {
-        let expected = algorithmCompilationEncoding(AlgorithmModel(
-            name: "FidelityDifference",
-            components: [.step(.init(label: .init(name: "start"), statements: [.skip]))]
-        ))
-        let actual = algorithmCompilationEncoding(AlgorithmModel(
-            name: "FidelityDifference",
-            components: [.step(.init(label: .init(name: "start"), statements: [.stop]))]
-        ))
+    func differentAlgorithmsHaveDifferentCompiledIdentities() throws {
+        let expected = try TLASpec("FidelityDifference") {
+            Algorithm(model: AlgorithmModel(
+                name: "FidelityDifference",
+                components: [.step(.init(label: .init(name: "start"), statements: [.skip]))]
+            ))
+        }.compile()
+        let actual = try TLASpec("FidelityDifference") {
+            Algorithm(model: AlgorithmModel(
+                name: "FidelityDifference",
+                components: [.step(.init(label: .init(name: "start"), statements: [.stop]))]
+            ))
+        }.compile()
 
-        #expect(expected != actual)
+        #expect((expected.identity == actual.identity) == false)
     }
 
     @Test("call and return restore the caller environment after one atomic procedure step")

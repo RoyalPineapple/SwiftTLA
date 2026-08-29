@@ -1851,10 +1851,9 @@ private enum ParserNode: String, FiniteTLAValueDomain {
                 Stop()
             }
         })
-        #expect(
-            parsed.sourceAlgorithms.first.map { algorithmCompilationEncoding($0.model) }
-                == algorithmCompilationEncoding(built.model)
-        )
+        let parsedCompilation = try parsed.compile(specificationName: "Formal")
+        let builderCompilation = try TLASpec("Formal") { built }.compile()
+        #expect(parsedCompilation.identity == builderCompilation.identity)
     }
 
     @Test func typedFormalDefinitionParsesClosureBindersAndLocalRecursion() throws {
