@@ -77,29 +77,22 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
         }
     }
 
-    func transformingFormalValues(_ transform: (TLAValue) -> TLAValue) -> CompiledValue {
+    func applying(_ mapping: [CompiledValue: CompiledValue]) -> CompiledValue {
+        if let replacement = mapping[self] { return replacement }
         switch self {
-        case .integer(let value):
-            return Self.formalValue(transform(.int(value)))
-        case .boolean(let value):
-            return Self.formalValue(transform(.bool(value)))
-        case .string(let value):
-            return Self.formalValue(transform(.string(value)))
-        case .constant(let value):
-            return Self.formalValue(transform(.constant(value)))
-        case .controlLocation:
+        case .integer, .boolean, .string, .constant, .controlLocation:
             return self
         case .set(let values):
-            return .set(Set(values.map { $0.transformingFormalValues(transform) }))
+            return .set(Set(values.map { $0.applying(mapping) }))
         case .tuple(let values):
-            return .tuple(values.map { $0.transformingFormalValues(transform) })
+            return .tuple(values.map { $0.applying(mapping) })
         case .record(let values):
             return .record(CompiledRecord(values.fields.map {
-                .init(key: $0.key.transformingFormalValues(transform), value: $0.value.transformingFormalValues(transform))
+                .init(key: $0.key.applying(mapping), value: $0.value.applying(mapping))
             }))
         case .function(let values):
             return .function(Dictionary(uniqueKeysWithValues: values.map {
-                ($0.key.transformingFormalValues(transform), $0.value.transformingFormalValues(transform))
+                ($0.key.applying(mapping), $0.value.applying(mapping))
             }))
         }
     }
@@ -123,15 +116,10 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
         }
     }
 
-    func contains(_ value: TLAValue) -> Bool {
+    func contains(_ value: CompiledValue) -> Bool {
+        if self == value { return true }
         switch self {
-        case .integer(let current):
-            return valueContains(.int(current), value)
-        case .boolean(let current):
-            return valueContains(.bool(current), value)
-        case .string(let current):
-            return valueContains(.string(current), value)
-        case .controlLocation:
+        case .integer, .boolean, .string, .controlLocation, .constant:
             return false
         case .set(let values):
             return values.contains { $0.contains(value) }
@@ -141,8 +129,6 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
             return values.fields.contains { $0.value.contains(value) }
         case .function(let values):
             return values.contains { $0.key.contains(value) || $0.value.contains(value) }
-        case .constant(let current):
-            return valueContains(.constant(current), value)
         }
     }
 

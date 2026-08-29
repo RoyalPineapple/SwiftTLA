@@ -31,6 +31,19 @@ struct LivenessConformanceTests {
         )
     }
 
+    private func compiledStates(
+        for graph: StateGraph,
+        compilation: CompiledSpecification
+    ) throws -> [StateGraph.StateID: CompiledState] {
+        let x = try #require(TLAStateProjection.Token(validating: "x"))
+        return try graph.states.mapValues { projection in
+            guard case .int(let value) = projection.value(for: x) else {
+                throw TLAStateProjectionDiagnostic.invalidValue(path: "x")
+            }
+            return try CompiledState(values: [.integer(value)], compilation: compilation)
+        }
+    }
+
     private func analyze(
         _ graph: StateGraph,
         property: TemporalExpr,
@@ -48,8 +61,8 @@ struct LivenessConformanceTests {
             fairness: fairness
         )
         let compilation = try spec.compile()
-        let transitions = graph.transitions.mapValues { transitions in
-            transitions.map { transition in
+        let transitions = try graph.transitions.mapValues { transitions in
+            try transitions.map { transition in
                 guard let action = compilation.layout.testActionID(named: transition.label.action) else {
                     return transition
                 }
@@ -57,7 +70,8 @@ struct LivenessConformanceTests {
                     label: .init(
                         action: action,
                         formalName: transition.label.action,
-                        arguments: transition.label.arguments
+                        arguments: transition.label.arguments,
+                        formalArguments: try transition.label.formalArguments(using: compilation.layout)
                     ),
                     target: transition.target
                 )
@@ -71,15 +85,7 @@ struct LivenessConformanceTests {
                 transitions: transitions,
                 states: graph.states
             ),
-            states: try graph.states.mapValues { projection in
-                try CompiledState(
-                    formalValues: graph.variableNames.compactMap { name in
-                        guard let token = TLAStateProjection.Token(validating: name) else { return nil }
-                        return projection.value(for: token)
-                    },
-                    compilation: compilation
-                )
-            }
+            states: try compiledStates(for: graph, compilation: compilation)
         )
         return try #require(checker.analyze(
             initialStateIDs: initialStateIDs,
@@ -463,9 +469,7 @@ struct LivenessConformanceTests {
             LivenessChecker(
                 compilation: compilation,
                 graph: sourceGraph,
-                states: try sourceGraph.states.mapValues {
-                    try CompiledState(projection: $0, compilation: compilation)
-                }
+                states: try compiledStates(for: sourceGraph, compilation: compilation)
             )
                 .analyze(initialStateIDs: [initial])
                 .first

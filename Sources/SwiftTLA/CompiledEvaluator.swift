@@ -704,7 +704,7 @@ struct CompiledEvaluator: Sendable {
             case .expression(let expression, let scope):
                 switch expression {
                 case .value(let value):
-                    values.append(.init(formal: value))
+                    values.append(value)
                 case .stateVariable(let variable):
                     values.append(try variableValue(variable))
                 case .boundValue(let binder):

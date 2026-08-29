@@ -18,7 +18,7 @@ struct CompiledCaseBranch: Sendable {
 }
 
 indirect enum CompiledStateExpr: Sendable {
-    case value(TLAValue)
+    case value(CompiledValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
     case controlLocation(ControlLocationID)
@@ -507,7 +507,7 @@ struct CompiledAction: Sendable {
 struct CompiledActionBinding: Sendable {
     let binder: BinderID
     let sourceName: String
-    let values: [TLAValue]
+    let values: [CompiledValue]
     let generatedSwiftType: String?
 }
 
@@ -533,7 +533,7 @@ struct CompiledTemporal: Sendable {
 
 struct CompiledActionCall: Hashable, Sendable {
     let action: ActionID
-    let arguments: [TLAValue]
+    let arguments: [CompiledValue]
 }
 
 struct CompiledFairnessCondition: Sendable {
@@ -588,12 +588,12 @@ struct CompiledModuleInstance: Sendable {
 }
 
 struct CompiledSymmetrySet: Sendable {
-    let values: Set<TLAValue>
+    let values: Set<CompiledValue>
 }
 
 struct CompiledSymmetricCollection: Sendable {
     let variable: VariableID
-    let members: [TLAValue]
+    let members: [CompiledValue]
     let domainSymbol: String
     let initial: CompiledValue
 }

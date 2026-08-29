@@ -133,9 +133,9 @@ public struct GeneratedContainsPredicateRuntime {
 struct SymmetricCollectionMacroRuntimeTests {
   private func compiledSuccessors(
     in compilation: CompiledSpecification,
-    from values: [TLAValue]
+    from values: [CompiledValue]
   ) throws -> [CompiledState] {
-    let state = try CompiledState(formalValues: values, compilation: compilation)
+    let state = try CompiledState(values: values, compilation: compilation)
     return try CompiledRuntime(compilation: compilation)
       .successors(from: state)
       .map(\.state)
@@ -271,9 +271,9 @@ struct SymmetricCollectionMacroRuntimeTests {
     let advanced = try collectionValue([1], in: runtimeBuilt)
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(try compiledSuccessors(in: parsedCompilation, from: [initial])
-      == compiledSuccessors(in: runtimeCompilation, from: [initial]))
-    #expect(try compiledSuccessors(in: parsedCompilation, from: [advanced]).isEmpty)
+    #expect(try compiledSuccessors(in: parsedCompilation, from: [.init(formal: initial)])
+      == compiledSuccessors(in: runtimeCompilation, from: [.init(formal: initial)]))
+    #expect(try compiledSuccessors(in: parsedCompilation, from: [.init(formal: advanced)]).isEmpty)
   }
 
   @Test("Parser preserves collection action precedence from syntax nodes")
@@ -462,7 +462,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let compilation = try GeneratedMultiStatementSymmetricRuntime.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
       in: compilation,
-      from: [boundedState]
+      from: [.init(formal: boundedState)]
     )
     let expected = try collectionValue([0, 11], in: GeneratedMultiStatementSymmetricRuntime.spec)
     #expect(try boundedSuccessors.map {
@@ -476,7 +476,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let compilation = try GeneratedDisjunctiveSymmetricRuntime.spec.compile()
     let boundedSuccessors = try compiledSuccessors(
       in: compilation,
-      from: [boundedState]
+      from: [.init(formal: boundedState)]
     )
     let expected = try collectionValue([22, 1], in: GeneratedDisjunctiveSymmetricRuntime.spec)
     #expect(try boundedSuccessors.map {
@@ -510,7 +510,10 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let compilation = try GeneratedAllSatisfyPredicateRuntime.spec.compile()
     let formalDevices = try collectionValue([0, 1], in: GeneratedAllSatisfyPredicateRuntime.spec)
-    #expect(try compiledSuccessors(in: compilation, from: [.int(0), formalDevices]).isEmpty)
+    #expect(try compiledSuccessors(
+      in: compilation,
+      from: [.integer(0), .init(formal: formalDevices)]
+    ).isEmpty)
   }
 
   @Test("Ordinary contains actions use every declared collection value")
@@ -528,7 +531,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let formalDevices = try collectionValue([0, 1], in: GeneratedContainsPredicateRuntime.spec)
     let successors = try compiledSuccessors(
       in: compilation,
-      from: [.int(0), formalDevices]
+      from: [.integer(0), .init(formal: formalDevices)]
     )
     #expect(successors.count == 1)
     #expect(try successors.map {

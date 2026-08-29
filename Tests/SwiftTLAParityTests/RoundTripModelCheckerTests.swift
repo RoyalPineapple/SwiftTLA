@@ -384,15 +384,23 @@ struct ModelCheckOutcomeTests {
       }
       Constraint(counter <= 2)
     }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let compilation = try spec.compile()
+    let exploration = try ModelChecker(
+      compilation: compilation,
+      configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)
+    ).explore()
+    let graph = exploration.graph
 
-    for (sourceID, source) in graph.states {
-      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
+    for sourceID in graph.states.keys {
+      let checked = try (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
         guard let successor = graph.states[transition.target] else { return nil }
-        return (transition.label.action, transition.label.arguments, successor)
+        return (
+          transition.label.action,
+          try transition.label.formalArguments(using: compilation.layout),
+          successor
+        )
       }
-      let runtimeState = try CompiledState(projection: source, compilation: compilation)
+      let runtimeState = try #require(exploration.compiledStates[sourceID])
       let runtimeSuccessors = try successors(compilation, from: runtimeState)
 
       #expect(multiset(runtimeSuccessors) == multiset(checked))

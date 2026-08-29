@@ -98,8 +98,8 @@ struct CompiledActionEnumerator {
             partial.flatMap { current in
                 binding.values.map { value in
                     .init(
-                        values: current.values.binding(.init(formal: value), to: binding.binder),
-                        arguments: current.arguments + [.init(formal: value)]
+                        values: current.values.binding(value, to: binding.binder),
+                        arguments: current.arguments + [value]
                     )
                 }
             }

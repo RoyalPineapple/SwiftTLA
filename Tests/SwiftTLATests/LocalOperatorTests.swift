@@ -144,8 +144,8 @@ struct LocalOperatorTests {
     let parsedRendering = try renderedLocalOperatorExpression(parsed)
     let builtRendering = try renderedLocalOperatorExpression(built)
     #expect(parsedRendering == builtRendering)
-    guard case .letIn(let parsedOperators, .functionApply(.operatorReference(let parsedCall), .value(.int(4)))) = parsedCompilation,
-          case .letIn(let builtOperators, .functionApply(.operatorReference(let builtCall), .value(.int(4)))) = builtCompilation,
+    guard case .letIn(let parsedOperators, .functionApply(.operatorReference(let parsedCall), .value(.integer(4)))) = parsedCompilation,
+          case .letIn(let builtOperators, .functionApply(.operatorReference(let builtCall), .value(.integer(4)))) = builtCompilation,
           let parsedOperator = parsedOperators.first,
           let builtOperator = builtOperators.first,
           case .ifThenElse(_, _, .functionApply(.operatorReference(let parsedRecursion), _)) = parsedOperator.body,
@@ -188,8 +188,8 @@ struct LocalOperatorTests {
           let builtOperator = builtOperators.first,
           parsedArguments.count == 1,
           builtArguments.count == 1,
-          case .some(.value(.int(41))) = parsedArguments.first,
-          case .some(.value(.int(41))) = builtArguments.first else {
+          case .some(.value(.integer(41))) = parsedArguments.first,
+          case .some(.value(.integer(41))) = builtArguments.first else {
       Issue.record("Expected one operator-style compiled call")
       return
     }
@@ -224,7 +224,7 @@ struct LocalOperatorTests {
     #expect(call == .recursiveCall("Count", [.int(4)]))
     let compilation = try GeneratedTypedLocalRecursionModel.spec.compile()
     let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
-    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .value(.int(4)))) = compiledDefinition.body else {
+    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .value(.integer(4)))) = compiledDefinition.body else {
       Issue.record("Expected a bound local operator application")
       return
     }

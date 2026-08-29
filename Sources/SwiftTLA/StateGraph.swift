@@ -3,23 +3,35 @@ package struct StateGraph: Sendable {
     public let variableNames: [String]
     public struct TransitionLabel: Hashable, Sendable, CustomStringConvertible {
         public let action: String
-        public let arguments: [TLAValue]
+        let arguments: [CompiledValue]
         let actionID: ActionID?
+        private let renderedDescription: String
 
         public init(_ formalActionCall: FormalActionCall) {
             self.action = formalActionCall.name
-            self.arguments = formalActionCall.arguments
+            self.arguments = formalActionCall.arguments.map(CompiledValue.init(formal:))
             self.actionID = nil
+            self.renderedDescription = formalActionCall.description
         }
 
-        init(action: ActionID, formalName: String, arguments: [TLAValue]) {
+        init(
+            action: ActionID,
+            formalName: String,
+            arguments: [CompiledValue],
+            formalArguments: [TLAValue]
+        ) {
             self.action = formalName
             self.arguments = arguments
             self.actionID = action
+            self.renderedDescription = formalActionCall(named: formalName, arguments: formalArguments)
         }
 
         public var description: String {
-            formalActionCall(named: action, arguments: arguments)
+            renderedDescription
+        }
+
+        func formalArguments(using layout: CompiledLayout) throws -> [TLAValue] {
+            try arguments.map { try $0.rendered(using: layout) }
         }
     }
 

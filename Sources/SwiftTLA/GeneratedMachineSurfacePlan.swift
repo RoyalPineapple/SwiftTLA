@@ -98,7 +98,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                     variable.id,
                     SymmetricCollection(
                         formalName: variable.declaration.name,
-                        members: declaration.members,
+                        members: try declaration.members.map { try $0.rendered(using: layout) },
                         elementType: elementType,
                         valueType: valueType
                     )
@@ -156,8 +156,17 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 )
             }
             if let collection {
+                guard let collectionVariable = action.symmetricCollection,
+                      layout.variables.indices.contains(collectionVariable.ordinal),
+                      let compiledMembers = layout.variables[collectionVariable.ordinal]
+                        .symmetricCollection?.members else {
+                    throw Self.missingDeclaration(
+                        "symmetric collection layout",
+                        named: layoutAction.declaration.name
+                    )
+                }
                 guard action.bindings.count == 1,
-                      action.bindings[0].values == collection.members else {
+                      action.bindings[0].values == compiledMembers else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .lowering,
@@ -176,10 +185,10 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                         formalName: collection == nil ? binding.sourceName : "member",
                         swiftType: try Self.generatedSwiftType(
                             explicit: binding.generatedSwiftType,
-                            fallback: binding.values[0],
+                            fallback: try binding.values[0].rendered(using: layout),
                             path: "actions.\(layoutAction.declaration.name).bindings.\(binding.sourceName)"
                         ),
-                        domain: binding.values
+                        domain: try binding.values.map { try $0.rendered(using: layout) }
                     )
                 },
                 symmetricCollection: collection

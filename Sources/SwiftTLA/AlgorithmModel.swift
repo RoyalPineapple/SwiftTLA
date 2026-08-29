@@ -437,7 +437,6 @@ internal enum CompiledAuthoredPlusCalProperty: Sendable {
 
 internal struct CompiledAuthoredPlusCalState: Sendable {
     enum Initialization: Sendable {
-        case value(TLAValue)
         case expression(CompiledStateExpr)
         case memberOf(CompiledStateExpr)
     }
@@ -455,7 +454,7 @@ internal struct CompiledAuthoredPlusCalProcedure: Sendable {
 
 internal struct CompiledAuthoredPlusCalProcess: Sendable {
     let name: String
-    let domain: [TLAValue]
+    let domain: [CompiledValue]
     let fairness: AlgorithmFairness
     let locals: [CompiledAuthoredPlusCalState]
     let steps: [CompiledAuthoredPlusCalStep]

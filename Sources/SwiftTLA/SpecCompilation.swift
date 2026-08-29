@@ -745,7 +745,7 @@ public extension TLASpec {
             guard !action.declaration.name.isEmpty else { continue }
             renderedActions.append(RenderedAction(
                 sourceName: action.declaration.name,
-                arguments: call.arguments,
+                arguments: try call.arguments.map { try $0.rendered(using: layout) },
                 renderedName: renderedName
             ))
         }
@@ -774,11 +774,11 @@ public extension TLASpec {
                 renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
                 renderedBody: try renderer.action(compiled.body),
-                calls: emittedActionCalls.compactMap { emitted in
+                calls: try emittedActionCalls.compactMap { emitted in
                     guard emitted.call.action == compiled.id else { return nil }
                     return RenderedAction(
                         sourceName: declaration.name,
-                        arguments: emitted.call.arguments,
+                        arguments: try emitted.call.arguments.map { try $0.rendered(using: layout) },
                         renderedName: emitted.renderedName
                     )
                 }
@@ -1363,7 +1363,7 @@ private func directActionCalls(
                 nextSafeAction: "Compile the model again from its current source."
             )
         }
-        func addCalls(_ position: Int, arguments: [TLAValue], indices: [Int]) {
+        func addCalls(_ position: Int, arguments: [CompiledValue], indices: [Int]) {
             guard position < action.bindings.count else {
                 let suffix = indices.isEmpty ? "" : "__\(indices.map(String.init).joined(separator: "_"))"
                 calls.append((

@@ -95,7 +95,7 @@ internal struct AlgorithmPlusCalRenderer {
         }
         // The header identifier names the process set. `self` names its
         // current member inside the process body.
-        var lines = ["", "\(fairness)process (\(process.name) \\in \(set(process.domain)))"]
+        var lines = ["", "\(fairness)process (\(process.name) \\in \(try set(process.domain)))"]
         if process.locals.isEmpty == false {
             lines.append("variables")
             lines += try declarations(process.locals, indent: "  ", terminator: ";")
@@ -118,7 +118,6 @@ internal struct AlgorithmPlusCalRenderer {
             let name = try formalRenderer.variableName(declaration.variable)
             let initializer: String
             switch declaration.initialization {
-            case .value(let value): initializer = "= \(value)"
             case .expression(let value): initializer = "= \(try expression(value))"
             case .memberOf(let set): initializer = "\\in \(try expression(set))"
             }
@@ -211,8 +210,9 @@ internal struct AlgorithmPlusCalRenderer {
         try formalRenderer.state(value)
     }
 
-    private func set(_ values: [TLAValue]) -> String {
-        "{\(values.map(\.description).joined(separator: ", "))}"
+    private func set(_ values: [CompiledValue]) throws -> String {
+        let rendered = try values.map { try $0.rendered(using: formalRenderer.layout).description }
+        return "{\(rendered.joined(separator: ", "))}"
     }
 
 }

@@ -185,7 +185,7 @@ struct GeneratedRestrictedProcessDomainTests {
         let compilation = try GeneratedRestrictedProcessDomain.spec.compile()
         let binding = try #require(compilation.semantics.actions.first?.bindings.first)
         #expect(binding.sourceName == "process")
-        #expect(binding.values == [.int(1)])
+        #expect(binding.values == [.integer(1)])
     }
 }
 
@@ -736,8 +736,13 @@ struct GeneratedStateMachineTests {
             [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
             [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
         ]
-        let graph = try ModelChecker(compilation: try builder.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
-        #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
+        let compilation = try builder.compile()
+        let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
+        #expect(
+            try graph.transitions[.init(0)]?.map {
+                try $0.label.formalArguments(using: compilation.layout)
+            } == expectedArguments
+        )
 
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let initialActions = try machine.enabledActions()
@@ -759,7 +764,6 @@ struct GeneratedStateMachineTests {
             "transfer__1_0_0", "transfer__1_0_1", "transfer__1_1_0", "transfer__1_1_1"
         ])
 
-        let compilation = try builder.compile()
         let initial = try firstCompiledState(in: compilation)
         let successor = try #require(try compiledSuccessors(
             named: "transfer",

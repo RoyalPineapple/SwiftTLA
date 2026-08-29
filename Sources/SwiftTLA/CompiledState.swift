@@ -2,10 +2,6 @@ struct CompiledState: Hashable, Sendable, Comparable {
     private let compilationIdentity: CompilationIdentity
     private let values: [CompiledValue]
 
-    init(formalValues values: [TLAValue], compilation: CompiledSpecification) throws {
-        try self.init(values: values.map { .init(formal: $0) }, compilation: compilation)
-    }
-
     init(values: [CompiledValue], compilation: CompiledSpecification) throws {
         guard values.count == compilation.layout.variables.count else {
             throw CompiledEvaluationError.invalidStateLayout(
@@ -14,28 +10,6 @@ struct CompiledState: Hashable, Sendable, Comparable {
             )
         }
         self.init(validatedValues: values, compilationIdentity: compilation.identity)
-    }
-
-    init(projection: TLAStateProjection, compilation: CompiledSpecification) throws {
-        let expectedNames = Set(compilation.layout.variables.map(\.declaration.name))
-        let actualNames = Set(projection.entries.map { $0.token.description })
-        guard actualNames == expectedNames else {
-            throw CompiledEvaluationError.invalidStateLayout(
-                expected: expectedNames.count,
-                actual: actualNames.count
-            )
-        }
-        let values: [CompiledValue] = try compilation.layout.variables.map { variable in
-            guard let token = TLAStateProjection.Token(validating: variable.declaration.name),
-                  let value = projection.value(for: token) else {
-                throw CompiledEvaluationError.invalidStateLayout(
-                    expected: expectedNames.count,
-                    actual: actualNames.count
-                )
-            }
-            return CompiledValue(formal: value)
-        }
-        try self.init(values: values, compilation: compilation)
     }
 
     func value(for variable: VariableID) throws -> CompiledValue {
@@ -62,15 +36,11 @@ struct CompiledState: Hashable, Sendable, Comparable {
         return updated
     }
 
-    func transformingFormalValues(_ transform: (TLAValue) -> TLAValue) -> CompiledState {
+    func applying(_ mapping: [CompiledValue: CompiledValue]) -> CompiledState {
         CompiledState(
-            validatedValues: values.map { $0.transformingFormalValues(transform) },
+            validatedValues: values.map { $0.applying(mapping) },
             compilationIdentity: compilationIdentity
         )
-    }
-
-    func contains(_ value: TLAValue) -> Bool {
-        values.contains { $0.contains(value) }
     }
 
     func projection(using layout: CompiledLayout) throws -> TLAStateProjection {
