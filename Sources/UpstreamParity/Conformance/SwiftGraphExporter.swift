@@ -10,7 +10,7 @@ package struct SwiftGraphExporter: Sendable {
   package init() {}
 
   package func export(
-    _ exploration: ModelExplorationResult,
+    _ exploration: ModelExploration,
     for finiteGraphCase: FiniteGraphCase
   ) throws -> CompletedGraphRun {
     let renderedActionNames = Dictionary(uniqueKeysWithValues: finiteGraphCase.renderedActions.map {
@@ -23,13 +23,13 @@ package struct SwiftGraphExporter: Sendable {
   }
 
   package func export(
-    _ exploration: ModelExplorationResult
+    _ exploration: ModelExploration
   ) throws -> CompletedGraphRun {
     try export(exploration, renderedActionNames: [:])
   }
 
   private func export(
-    _ exploration: ModelExplorationResult,
+    _ exploration: ModelExploration,
     renderedActionNames: [String: String]
   ) throws -> CompletedGraphRun {
     let states = try canonicalStates(exploration)
@@ -70,7 +70,7 @@ package struct SwiftGraphExporter: Sendable {
   }
 
   package func canonicalStates(
-    _ exploration: ModelExplorationResult
+    _ exploration: ModelExploration
   ) throws -> [StateGraph.StateID: CanonicalState] {
     try Dictionary(
       uniqueKeysWithValues: exploration.graph.states.map { identifier, projection in

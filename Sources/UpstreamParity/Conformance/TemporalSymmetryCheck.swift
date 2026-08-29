@@ -131,7 +131,7 @@ package struct TemporalSymmetryCheck: Sendable {
   private func captureTemporal(
     compilation: CompiledSpecification,
     temporalCase: TemporalCase,
-    exploration: ModelExplorationResult,
+    exploration: ModelExploration,
     toolRoot: URL,
     referencePin: TLCReferencePin,
     projectRoot: URL,
@@ -360,7 +360,7 @@ extension TemporalSymmetryCheck {
   private func temporalResult(
     compilation: CompiledSpecification,
     temporalCase: TemporalCase,
-    exploration: ModelExplorationResult
+    exploration: ModelExploration
   ) throws -> TemporalPropertyResult {
     let analyses = try exploration.analyzeTemporalProperties(in: compilation)
     guard let analysis = analyses.first else {

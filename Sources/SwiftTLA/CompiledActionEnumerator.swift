@@ -17,19 +17,20 @@ struct CompiledActionEnumerator {
     }
 
     func enumerate(_ action: CompiledAction) throws -> [CompiledState] {
-        try enumerateResults(action).map(\.state)
+        try enumerateSuccessors(action).map(\.state)
     }
 
-    func enumerateResults(_ action: CompiledAction) throws -> [CompiledActionResult] {
+    func enumerateSuccessors(_ action: CompiledAction) throws -> [CompiledSuccessor] {
         let choices = chooseActions(in: action.body)
         return try actionBindings(action.bindings).flatMap { binding in
             let selections = try selectChoices(choices, bindings: binding.values)
             return try selections.flatMap { selection in
                 let evaluationState = try state.updating(selection)
                 return try execute(action.body, state: evaluationState, bindings: binding.values).map { delta in
-                    CompiledActionResult(
+                    CompiledSuccessor(
+                        action: action.id,
+                        arguments: binding.arguments,
                         state: try state.updating(selection).updating(delta.assignments),
-                        arguments: binding.arguments
                     )
                 }
             }
@@ -141,11 +142,6 @@ struct CompiledActionEnumerator {
             return []
         }
     }
-}
-
-struct CompiledActionResult: Sendable {
-    let state: CompiledState
-    let arguments: [CompiledValue]
 }
 
 private struct CompiledActionBindingValues {
