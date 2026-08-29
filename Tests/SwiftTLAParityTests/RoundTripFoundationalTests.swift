@@ -671,7 +671,6 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
 
 }
 
-// MARK: - Phase 1-7: bound variables, functions, sequences, EXCEPT, CONSTANTS
 @Suite(.serialized) struct BoundVariableTests { @Test("Function literal with bound variable evaluates correctly")
   func functionLiteralWithBoundVar() throws {
     let p = Var<Int>("p")

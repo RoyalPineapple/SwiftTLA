@@ -556,8 +556,6 @@ struct MultiVar {
     }
 }
 
-// MARK: - Builder-only: Var initial in constructor, no explicit Variable()
-
 @TLAModel
 struct GeneratedAlgorithmMachine {
     enum Step: String, CaseIterable { case tick }
