@@ -5,12 +5,17 @@ import SwiftSyntax
 import Testing
 import UpstreamParity
 
-@Suite(.serialized) struct LivenessCheckerTests { @Test("SCC decomposition works on HourClock (12 states, 1 SCC)")
-  func hourClockSCC() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, in: 1...12)
-      Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+@Suite(.serialized)
+struct LivenessCheckerTests {
+  @Test("A twelve-state cycle forms one strongly connected component")
+  func cycleFormsOneStronglyConnectedComponent() throws {
+    let position = Var<Int>("position")
+    let spec = TLASpec("TwelveStateCycle") {
+      Variable(position, in: 1...12)
+      Action("advance") {
+        (position < 12 && position.becomes(position + 1))
+          || (position == 12 && position.becomes(1))
+      }
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
@@ -22,10 +27,13 @@ import UpstreamParity
 
   @Test("Terminal SCC detection works")
   func terminalSCC() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, in: 1...12)
-      Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+    let position = Var<Int>("position")
+    let spec = TLASpec("TwelveStateCycle") {
+      Variable(position, in: 1...12)
+      Action("advance") {
+        (position < 12 && position.becomes(position + 1))
+          || (position == 12 && position.becomes(1))
+      }
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
@@ -35,15 +43,18 @@ import UpstreamParity
     #expect(terminals.count == 1)
   }
 
-  @Test("eventually holds in the clock cycle")
+  @Test("Eventually holds when the target belongs to a fair cycle")
   func eventuallySatisfied() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, in: 1...12)
-      let tick = Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
-      tick
-      Eventually("reachesTwelve", hr == 12)
-      WeakFairness(tick)
+    let position = Var<Int>("position")
+    let spec = TLASpec("TwelveStateCycle") {
+      Variable(position, in: 1...12)
+      let advance = Action("advance") {
+        (position < 12 && position.becomes(position + 1))
+          || (position == 12 && position.becomes(1))
+      }
+      advance
+      Eventually("reachesTwelve", position == 12)
+      WeakFairness(advance)
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
@@ -52,13 +63,16 @@ import UpstreamParity
     #expect(results.map(\.status) == [.satisfied])
   }
 
-  @Test("eventually reports a missing clock value")
+  @Test("Eventually fails when the target is unreachable")
   func eventuallyViolated() throws {
-    let hr = Var<Int>("hr")
-    let spec = TLASpec("HourClock") {
-      Variable(hr, in: 1...12)
-      Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
-      Eventually("reachesThirteen", hr == 13)
+    let position = Var<Int>("position")
+    let spec = TLASpec("TwelveStateCycle") {
+      Variable(position, in: 1...12)
+      Action("advance") {
+        (position < 12 && position.becomes(position + 1))
+          || (position == 12 && position.becomes(1))
+      }
+      Eventually("reachesThirteen", position == 13)
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
