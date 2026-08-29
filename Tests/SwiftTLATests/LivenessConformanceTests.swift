@@ -427,7 +427,7 @@ struct LivenessConformanceTests {
         } catch let error as TemporalEvaluationError {
             #expect(error == .predicate(
                 state: initial,
-                cause: .typeMismatch("Expected a boolean")
+                cause: .expected(.boolean, actual: [.integer(1)])
             ))
         }
     }
@@ -446,7 +446,7 @@ struct LivenessConformanceTests {
         } catch let error as TemporalEvaluationError {
             #expect(error == .leadsToTrigger(
                 state: initial,
-                cause: .typeMismatch("Expected a boolean")
+                cause: .expected(.boolean, actual: [.integer(1)])
             ))
         }
     }

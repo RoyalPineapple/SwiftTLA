@@ -366,7 +366,7 @@ extension ParsedSpecComponents {
     func sourceModel(
         specificationName: String,
         additionalInvariants: [NamedInvariant] = []
-    ) throws -> TLASpec {
+    ) throws(SourceParseDiagnostic) -> TLASpec {
         if let diagnostic = diagnostics.first {
             throw diagnostic
         }

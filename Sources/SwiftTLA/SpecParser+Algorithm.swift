@@ -825,9 +825,6 @@ extension ParserSession {
         )
     }
 
-    /// An immutable `let` in an Algorithm is a compile-time formal alias.
-    /// Closed expressions are evaluated and retained in the parser's formal
-    /// constant table for subsequent syntax decoding.
     private func parseAlgorithmLexicalValue(
         _ declaration: VariableDeclSyntax
     ) -> (name: String, value: TLAValue, shape: TypedFacadeValueShape?)? {
@@ -842,8 +839,35 @@ extension ParserSession {
                 ?? "Algorithm let '\(name)' must be a closed formal value; its expression could not be decoded."
             return nil
         }
-        guard let value = try? evaluateClosed(expression) else {
-            algorithmParseFailure = "Algorithm let '\(name)' must be a closed formal value; it depends on runtime state or has no matching value."
+        let value: TLAValue
+        do {
+            value = try evaluateClosed(expression)
+        } catch let error as EvalError {
+            algorithmSourceDiagnostic = .init(
+                message: "Algorithm let '\(name)' could not be evaluated as a closed formal value.",
+                source: initializer,
+                actual: error.description
+            )
+            return nil
+        } catch let error as CompilationDiagnostic {
+            algorithmSourceDiagnostic = .init(
+                message: "Algorithm let '\(name)' could not be compiled as a closed formal value.",
+                source: initializer,
+                actual: error.description
+            )
+            return nil
+        } catch let error as CompiledEvaluationError {
+            algorithmSourceDiagnostic = .init(
+                message: "Algorithm let '\(name)' reached an invalid compiled operation.",
+                source: initializer,
+                actual: error.description
+            )
+            return nil
+        } catch {
+            algorithmSourceDiagnostic = .init(
+                message: "Algorithm let '\(name)' reached an unclassified compiler failure.",
+                source: initializer
+            )
             return nil
         }
         return (name, value, typedFacadeValueShape(initializer, scope: sourceScope))

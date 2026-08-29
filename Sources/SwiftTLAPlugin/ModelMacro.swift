@@ -33,11 +33,11 @@ enum TLASpecVerifier {
         } else if let a = declaration.as(ActorDeclSyntax.self) {
             typeName = a.name.text; memberList = a.memberBlock.members
         } else {
-            throw SimpleError("Must be applied to a struct, class, or actor")
+            throw ModelMacroError.invalidHost
         }
 
         guard let source = try Self.findSpec(in: memberList) else {
-            throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
+            throw ModelMacroError.missingSpecification(typeName: typeName)
         }
 
         let enumInfos = try Self.collectEnumVariables(from: memberList)
@@ -54,7 +54,7 @@ enum TLASpecVerifier {
         )
         let compilation = try parsed.compile(specificationName: source.name)
         if parsed.hasStateDeclarations == false {
-            throw SimpleError("No variables in spec")
+            throw ModelMacroError.emptyState
         }
 
         return MacroCompilation(
@@ -104,7 +104,7 @@ enum TLASpecVerifier {
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
             guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
-                throw SimpleError("The formal module name in TLASpec must be a string literal; dynamic names cannot form a stable compilation identity.")
+                throw ModelMacroError.dynamicModuleName(.builder)
             }
             guard let closure = call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self) else {
                 return nil
@@ -114,7 +114,7 @@ enum TLASpecVerifier {
         if let macro = expression.as(MacroExpansionExprSyntax.self),
            macro.macroName.text == "spec" {
             guard let name = macro.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
-                throw SimpleError("The formal module name in #spec must be a string literal; dynamic names cannot form a stable compilation identity.")
+                throw ModelMacroError.dynamicModuleName(.specMacro)
             }
             guard let closure = macro.trailingClosure else { return nil }
             return (name, closure)
@@ -157,9 +157,7 @@ enum TLASpecVerifier {
                                   let val = raw.representedLiteralValue {
                             value = .string(val)
                         } else {
-                            throw SimpleError(
-                                "Enum case '\(element.name.text)' requires a supported literal raw value."
-                            )
+                            throw ModelMacroError.invalidEnumRawValue(caseName: element.name.text)
                         }
                     } else if intBacked {
                         value = .int(idx)
@@ -212,9 +210,31 @@ enum TLASpecVerifier {
     }
 }
 
-struct SimpleError: Error, CustomStringConvertible {
-    let description: String
-    init(_ description: String) { self.description = description }
+enum ModelMacroError: Error, CustomStringConvertible, Equatable {
+    enum Source: String, Equatable {
+        case builder = "TLASpec"
+        case specMacro = "#spec"
+    }
+
+    case invalidHost
+    case missingSpecification(typeName: String)
+    case emptyState
+    case dynamicModuleName(Source)
+    case invalidEnumRawValue(caseName: String)
+    case emptyFiniteEnum
+    case emptyValueEnum
+
+    var description: String {
+        switch self {
+        case .invalidHost: "@TLAModel requires a struct, class, or actor"
+        case .missingSpecification(let typeName): "\(typeName) must declare a static spec"
+        case .emptyState: "The specification must declare at least one state variable"
+        case .dynamicModuleName(let source): "\(source.rawValue) requires a literal module name"
+        case .invalidEnumRawValue(let caseName): "Enum case '\(caseName)' requires an integer or string literal raw value"
+        case .emptyFiniteEnum: "A SwiftTLA finite enum must declare at least one case"
+        case .emptyValueEnum: "A SwiftTLA value enum must declare at least one case"
+        }
+    }
 }
 
 // MARK: - Macros
@@ -264,9 +284,11 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         } catch let diagnostic as CompilationDiagnostic {
             context.diagnose(modelCompilationDiagnostic(diagnostic, in: declaration))
             return []
-        } catch {
-            context.diagnose(modelCompilationDiagnostic(error, in: declaration))
+        } catch let diagnostic as ModelMacroError {
+            context.diagnose(modelMacroDiagnostic(diagnostic, in: declaration))
             return []
+        } catch {
+            throw error
         }
         return MacroExpander.generateStateMachineMembers(model: parsed)
     }
@@ -279,13 +301,13 @@ public struct FiniteEnumMacro: MemberMacro {
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         guard let enumDeclaration = declaration.as(EnumDeclSyntax.self) else {
-            throw SimpleError("A SwiftTLA finite enum must declare at least one case")
+            throw ModelMacroError.emptyFiniteEnum
         }
         let cases = enumDeclaration.memberBlock.members.flatMap {
             $0.decl.as(EnumCaseDeclSyntax.self)?.elements.map(\.name.text) ?? []
         }
         guard let firstCase = cases.first else {
-            throw SimpleError("A SwiftTLA finite enum must declare at least one case")
+            throw ModelMacroError.emptyFiniteEnum
         }
         let finiteValues = cases.map { ".\($0)" }.joined(separator: ", ")
         return [
@@ -307,7 +329,7 @@ public struct ValueEnumMacro: MemberMacro {
                   $0.decl.as(EnumCaseDeclSyntax.self)?.elements.first?.name.text
               }).first
         else {
-            throw SimpleError("A SwiftTLA value enum must declare at least one case")
+            throw ModelMacroError.emptyValueEnum
         }
         return ["public static var defaultValue: Self { .\(raw: firstCase) }"]
     }
@@ -353,9 +375,6 @@ private struct ParserDiagnosticMessage: DiagnosticMessage {
     let severity: DiagnosticSeverity = .error
 }
 
-/// SwiftDiagnostics only transports a rendered message, while the parser
-/// retains the structured diagnostic separately. Keep this rendering explicit
-/// so an error at the compiler boundary still answers the next useful question.
 private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
     let whatFailed: String
     let expected: String
@@ -370,6 +389,13 @@ private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
             + "Expected: \(expected). Actual: \(actual). "
             + "Next safe action: \(nextSafeAction)"
     }
+}
+
+private struct ModelMacroDiagnosticMessage: DiagnosticMessage {
+    let error: ModelMacroError
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-macro-failure")
+    let severity: DiagnosticSeverity = .error
+    var message: String { error.description }
 }
 
 package func parserDiagnostic(
@@ -401,18 +427,13 @@ private func modelCompilationDiagnostic(
     )
 }
 
-private func modelCompilationDiagnostic(
-    _ error: Error,
+private func modelMacroDiagnostic(
+    _ error: ModelMacroError,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     Diagnostic(
         node: Syntax(declaration),
-        message: ModelCompilationDiagnosticMessage(
-            whatFailed: "the formal model could not be parsed or verified",
-            expected: "a bounded @TLAModel specification whose declarations, imports, and properties are valid",
-            actual: String(describing: error),
-            nextSafeAction: "Inspect the reported formal construct, correct the model, and compile again; no generated state machine is available until this succeeds."
-        )
+        message: ModelMacroDiagnosticMessage(error: error)
     )
 }
 

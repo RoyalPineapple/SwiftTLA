@@ -62,8 +62,9 @@ struct CompiledActionEnumerator {
             _ = set
             return [.init()]
         case .existsAction(let binder, let set, let body):
-            guard case .set(let values) = try evaluator.evaluate(set) else {
-                throw EvalError.typeMismatch("WITH requires a set")
+            let value = try evaluator.evaluate(set)
+            guard case .set(let values) = value else {
+                throw EvalError.expected(.set, actual: [value])
             }
             return try values.flatMap { value in
                 try execute(body, state: state, bindings: bindings.binding(value, to: binder))
@@ -120,8 +121,9 @@ struct CompiledActionEnumerator {
                     bindings: bindings,
                     enabledActions: enabledActions
                 )
-                guard case .set(let values) = try evaluator.evaluate(choice.1) else {
-                    throw EvalError.typeMismatch("CHOOSE requires a set")
+                let value = try evaluator.evaluate(choice.1)
+                guard case .set(let values) = value else {
+                    throw EvalError.expected(.set, actual: [value])
                 }
                 return values.map { value in
                     var selected = selection

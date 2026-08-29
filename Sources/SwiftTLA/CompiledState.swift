@@ -108,7 +108,7 @@ struct CompiledBindings: Sendable {
     }
 }
 
-enum CompiledEvaluationError: Error, Sendable {
+enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
     case uninitializedVariable(VariableID)
@@ -119,4 +119,21 @@ enum CompiledEvaluationError: Error, Sendable {
     case unboundBinder(BinderID)
     case unresolvedOperator
     case conflictingAssignment(VariableID)
+
+    var description: String {
+        switch self {
+        case .invalidStateLayout(let expected, let actual):
+            "Compiled state requires \(expected) slots; received \(actual)"
+        case .invalidVariableID(let id): "Variable ID \(id.ordinal) is outside the compiled layout"
+        case .uninitializedVariable(let id): "Variable ID \(id.ordinal) has no initialized value"
+        case .invalidControlLocationID(let id): "Control location ID \(id.ordinal) is outside the compiled layout"
+        case .invalidFieldID(let id): "Field ID \(id.ordinal) is outside the compiled layout"
+        case .invalidRecordKey: "A compiled record key cannot be rendered as a field name"
+        case .invalidCompilationIdentity(let expected, let actual):
+            "Compiled state identity \(actual) does not match \(expected)"
+        case .unboundBinder(let id): "Binder ID \(id.ordinal) has no value in this scope"
+        case .unresolvedOperator: "The compiled operator is unavailable"
+        case .conflictingAssignment(let id): "Variable ID \(id.ordinal) has conflicting assignments"
+        }
+    }
 }

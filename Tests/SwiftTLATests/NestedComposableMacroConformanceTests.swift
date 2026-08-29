@@ -117,7 +117,7 @@ struct NestedComposableMacroConformanceTests {
         let result = try buildExternalConsumer("InvalidDynamicModelName")
 
         #expect(result.status != 0)
-        #expect(result.output.contains("must be a string literal; dynamic names cannot form a stable compilation identity"))
+        #expect(result.output.contains("requires a literal module name"))
     }
 
     @Test("Model macro rejects observer-backed instance state")
