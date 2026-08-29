@@ -208,6 +208,28 @@ struct TLCTemporalAdapterTests {
     #expect(lasso(in: comparison.tlcResult) != nil)
   }
 
+  @Test("TLC temporal adapter binds an always violation in the initial state")
+  func bindsInitialAlwaysViolation() throws {
+    let fixture = try Fixture(property: .always)
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let graph = try completedGraph(stream, for: fixture.launchCase)
+    let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
+    let swiftResult = TemporalPropertyResult.violated(
+      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
+    let comparison = try TLCTemporalAdapter(
+      processAdapter: TLCProcessAdapter(executor: try fixture.executor(
+        propertyStream: stream,
+        propertyResult: Fixture.safetyViolation,
+        trace: try numberedInitialStateTrace())))
+      .capture(try fixture.input(
+        swiftRun: graph,
+        swiftResult: swiftResult,
+        allowsImplicitStuttering: true))
+
+    #expect(comparison.status == .exact)
+    #expect(lasso(in: comparison.tlcResult)?.cycleStateIDs == [state, state])
+  }
+
   @Test("TLC temporal adapter binds a named same-state dump step only when the declared behavior allows stuttering")
   func bindsNamedSameStateDumpStepOnlyWithDeclaredStuttering() throws {
     let rejectedFixture = try Fixture()
@@ -407,7 +429,7 @@ struct TLCTemporalAdapterTests {
       if request.traceMode == .dumpJSON {
         if traceFails { throw TLCProcessError.failedToStart("trace failed") }
         if let trace { try trace.write(to: request.traceOutput, options: .atomic) }
-        return Fixture.temporalViolation
+        return propertyResult
       }
       if request.runID == graphRunID {
         try graphStream.write(to: request.graphEvents, options: .atomic)
@@ -424,6 +446,8 @@ struct TLCTemporalAdapterTests {
       status: 0, stdout: "Model checking completed. No error has been found.", stderr: "")
     static let temporalViolation = TLCProcessResult(
       status: 13, stdout: "Error: Temporal property is violated.", stderr: "")
+    static let safetyViolation = TLCProcessResult(
+      status: 12, stdout: "Error: Invariant P is violated.", stderr: "")
 
     let root: URL
     let module: URL
@@ -437,7 +461,7 @@ struct TLCTemporalAdapterTests {
     let completeGraphRequest: TLCProcessRequest
     let swiftRun: CompletedGraphRun
 
-    init() throws {
+    init(property: TemporalPropertyKind = .alwaysEventually) throws {
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCTemporalAdapterTests-\(UUID())")
       module = root.appendingPathComponent("TemporalFixture.tla")
       configuration = root.appendingPathComponent("TemporalFixture.cfg")
@@ -445,7 +469,7 @@ struct TLCTemporalAdapterTests {
       output = root.appendingPathComponent("evidence")
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       let caseConfiguration = TemporalCaseConfiguration(
-        property: .always,
+        property: property,
         fairness: .none,
         allowsImplicitStuttering: false)
       try Data("---- MODULE TemporalFixture ----\n====\n".utf8).write(to: module)
@@ -654,6 +678,14 @@ private func numberedStutteringTrace(action: String = "UnnamedAction") throws ->
       "state": [state],
       "action": [[state, ["name": action], state]]
     ]
+  ], options: [.sortedKeys])
+}
+
+private func numberedInitialStateTrace() throws -> Data {
+  let state: [Any] = [1, ["x": 1]]
+  return try JSONSerialization.data(withJSONObject: [
+    "vars": ["x"],
+    "counterexample": ["state": [state], "action": []]
   ], options: [.sortedKeys])
 }
 

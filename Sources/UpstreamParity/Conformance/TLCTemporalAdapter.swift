@@ -73,6 +73,7 @@ package struct TLCTemporalAdapter: Sendable {
       run: run,
       graph: completeGraph,
       outputDirectory: input.outputDirectory,
+      property: input.temporalCase.configuration.property,
       allowsImplicitStuttering: input.temporalCase.configuration.allowsImplicitStuttering)
     let comparison = try TemporalComparison(
       caseID: input.temporalCase.id,
@@ -167,12 +168,17 @@ extension TLCTemporalAdapter {
     run: TLCProcessRun,
     graph: CompletedGraphRun,
     outputDirectory: URL,
+    property: TemporalPropertyKind,
     allowsImplicitStuttering: Bool
   ) throws -> TemporalPropertyResult {
     if run.outcome == .completed {
       return .satisfied
     }
-    guard run.outcome == .livenessViolation,
+    let violationOutcome: TLCExecutionOutcome = switch property {
+    case .always: .safetyViolation
+    case .eventually, .alwaysEventually, .eventuallyAlways, .leadsTo: .livenessViolation
+    }
+    guard run.outcome == violationOutcome,
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path),
           let counterexample = try? TLCTraceParser().parseCounterexample(
             Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json"))),
