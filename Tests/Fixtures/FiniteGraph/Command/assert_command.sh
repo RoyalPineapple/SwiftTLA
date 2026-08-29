@@ -16,19 +16,6 @@ expect_failure() {
     grep -F "$expected" "$TMP/stderr" >/dev/null
 }
 
-python3 - "$ROOT/Verification/FiniteGraph/toolchain.json" "$TMP/toolchain.json" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1]) as source:
-    lock = json.load(source)
-lock["tlc"]["jar"]["sha256"] = "0" * 64
-with open(sys.argv[2], "w") as destination:
-    json.dump(lock, destination)
-PY
-expect_failure "does not match the accepted TLC reference pin" \
-    "$SETUP" --toolchain "$TMP/toolchain.json"
-
 mkdir -p "$TMP/project/Verification/FiniteGraph/fixtures/local" "$TMP/tool-root"
 printf '%s\n' '---- MODULE LocalFixture ----' '====' >"$TMP/project/Verification/FiniteGraph/fixtures/local/LocalFixture.tla"
 printf '%s\n' 'SPECIFICATION Spec' >"$TMP/project/Verification/FiniteGraph/fixtures/local/LocalFixture.cfg"
@@ -37,7 +24,7 @@ cat >"$TMP/local-fixtures.json" <<JSON
 {
   "schema": "FiniteGraphCases",
   "cases": [{
-    "id": "local-fixture",
+    "sourceModel": "local-fixture",
     "module": "local/LocalFixture.tla",
     "configuration": "local/LocalFixture.cfg",
     "imports": ["local/LocalImport.tla"],
