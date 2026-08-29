@@ -1450,10 +1450,7 @@ private func directActionCalls(
     return calls
 }
 
-/// Encodes the complete source model with unambiguous field boundaries.
-///
-/// Compilation identity includes action domains, every initialisation form,
-/// and the recursive contents of imported modules.
+/// Encodes the lowered declaration plan with unambiguous field boundaries.
 private struct CanonicalSpecificationEncoder {
     private var output = ""
 
@@ -1558,7 +1555,6 @@ private struct CanonicalSpecificationEncoder {
             ])
         }
         list("symmetricCollections", symmetricCollections) { $0 }
-        list("sourceAlgorithms", spec.sourceAlgorithms) { algorithmCompilationEncoding($0.model) }
     }
 
     private func canonicalVariable(_ variable: NamedVar) -> String {
