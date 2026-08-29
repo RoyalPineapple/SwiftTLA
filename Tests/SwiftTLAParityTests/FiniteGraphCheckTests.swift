@@ -4,6 +4,20 @@ import SwiftTLA
 import Testing
 import UpstreamParity
 struct FiniteGraphCheckTests {
+  @Test("finite graph staging consumes declared source model identities")
+  func stagesDeclaredSourceModels() throws {
+    let output = Pipe()
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/bash")
+    process.arguments = [projectURL("Tests/Fixtures/FiniteGraph/Command/assert_command.sh").path]
+    process.standardOutput = output
+    process.standardError = output
+    try process.run()
+    let message = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    process.waitUntilExit()
+    #expect(process.terminationStatus == 0, "\(message)")
+  }
+
   @Test("finite graph manifests reject unknown exploration fields")
   func rejectsUnknownExplorationFields() {
     #expect(throws: DecodingError.self) {

@@ -56,7 +56,7 @@ def staged_path(value, field, case_id):
     return destination
 
 for case in manifest.get("cases", []):
-    case_id = case.get("id")
+    case_id = case.get("sourceModel")
     if not isinstance(case_id, str) or not case_id:
         raise SystemExit("case identifier is incomplete")
     for field in ("module", "configuration"):
