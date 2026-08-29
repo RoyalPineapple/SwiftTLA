@@ -30,6 +30,14 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
+      name: "InvalidModelClassHost",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
+      name: "InvalidModelActorHost",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
       name: "InvalidGeneratedActorRawSurface",
       dependencies: generatedMachineDependencies
     ),

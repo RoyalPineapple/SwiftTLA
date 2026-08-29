@@ -23,18 +23,11 @@ struct MacroCompilation {
 
 enum TLASpecVerifier {
     static func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> MacroCompilation {
-        let typeName: String
-        let memberList: MemberBlockItemListSyntax
-
-        if let s = declaration.as(StructDeclSyntax.self) {
-            typeName = s.name.text; memberList = s.memberBlock.members
-        } else if let c = declaration.as(ClassDeclSyntax.self) {
-            typeName = c.name.text; memberList = c.memberBlock.members
-        } else if let a = declaration.as(ActorDeclSyntax.self) {
-            typeName = a.name.text; memberList = a.memberBlock.members
-        } else {
+        guard let declaration = declaration.as(StructDeclSyntax.self) else {
             throw ModelMacroError.invalidHost
         }
+        let typeName = declaration.name.text
+        let memberList = declaration.memberBlock.members
 
         guard let source = try Self.findSpec(in: memberList) else {
             throw ModelMacroError.missingSpecification(typeName: typeName)
@@ -226,7 +219,7 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
 
     var description: String {
         switch self {
-        case .invalidHost: "@TLAModel requires a struct, class, or actor"
+        case .invalidHost: "@TLAModel requires a struct"
         case .missingSpecification(let typeName): "\(typeName) must declare a static spec"
         case .emptyState: "The specification must declare at least one state variable"
         case .dynamicModuleName(let source): "\(source.rawValue) requires a literal module name"

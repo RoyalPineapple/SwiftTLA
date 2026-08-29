@@ -15,7 +15,7 @@ specification and rendered bundles.
 
 ## Generate a machine
 
-Import `SwiftTLA` and `SwiftTLAMacros`. Apply `@TLAModel` to a type with a
+Import `SwiftTLA` and `SwiftTLAMacros`. Apply `@TLAModel` to a struct with a
 `static var spec: TLASpec` declaration.
 
 **Example ID:** `generated-machine-bounded-model`

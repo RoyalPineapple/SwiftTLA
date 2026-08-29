@@ -12,6 +12,7 @@ fileprivate enum _GeneratedMachineValue: Sendable {
     }
 }
 
+@_documentation(visibility: internal)
 public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hashable & Sendable>: Sendable {
     public struct Decoder: Sendable {
         private let values: [_GeneratedMachineValue]

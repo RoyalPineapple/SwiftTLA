@@ -1,6 +1,6 @@
 import SwiftTLA
 
-/// Generates a typed model machine from the declaration's `TLASpec`.
+/// Generates a typed model machine from a struct's `TLASpec`.
 ///
 /// The generated surface includes `State`, `Action`, `Transition`, direct
 /// execution, and a typed actor that owns the generated machine value.

@@ -1,6 +1,7 @@
 # Generated machine surface
 
 `@TLAModel` generates a typed Swift state machine from one compiled model.
+Apply it to a struct with a static `TLASpec` declaration.
 
 ## Generated types
 

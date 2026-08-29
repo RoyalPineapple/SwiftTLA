@@ -1,7 +1,7 @@
 # ``SwiftTLA``
 
-Define a typed state-transition model in Swift. Compile it once, then execute
-the generated machine or render a formal bundle.
+Define a typed state-transition model in Swift. Compilation produces the
+meaning used by the generated machine and rendered formal bundles.
 
 ## Overview
 
