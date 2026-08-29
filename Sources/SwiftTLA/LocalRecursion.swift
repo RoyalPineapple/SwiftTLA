@@ -5,7 +5,7 @@ public struct LocalRecursion<Input: TLAValueType, Output: TLAValueType>: Sendabl
     fileprivate let name: String
 
     public func callAsFunction(_ input: some StateExprConvertible) -> Expr<Output> {
-        Expr(.functionApply(.variable(name), input.stateExpr))
+        Expr(.recursiveCall(name, [input.stateExpr]))
     }
 }
 

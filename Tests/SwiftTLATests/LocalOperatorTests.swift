@@ -221,7 +221,7 @@ struct LocalOperatorTests {
       return
     }
     #expect(operators.first?.domain == .integerRange(.int(0), .int(4)))
-    #expect(call == .functionApply(.variable("Count"), .int(4)))
+    #expect(call == .recursiveCall("Count", [.int(4)]))
     let compilation = try GeneratedTypedLocalRecursionModel.spec.compile()
     let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
     guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .value(.int(4)))) = compiledDefinition.body else {
@@ -299,7 +299,7 @@ struct LocalOperatorTests {
     #expect(operation.name == "AtMost")
     #expect(operation.parameters == ["number"])
     #expect(operation.domain == .integerRange(.int(0), .variable("value0")))
-    #expect(call == .functionApply(.variable("AtMost"), .variable("value0")))
+    #expect(call == .recursiveCall("AtMost", [.variable("value0")]))
     let compilation = try TLASpec(
       name: "BoundedLocalOperator",
       variables: [],
