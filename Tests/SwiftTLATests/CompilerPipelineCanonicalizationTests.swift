@@ -403,11 +403,36 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        #expect(compilation.layout.variableID(named: "first") == .init(ordinal: 0))
-        #expect(compilation.layout.variableID(named: "second") == .init(ordinal: 1))
-        #expect(compilation.layout.actionID(named: "advance") == .init(ordinal: 0))
-        #expect(compilation.layout.actionID(named: "hold") == .init(ordinal: 1))
+        #expect(compilation.layout.testVariableID(named: "first") == .init(ordinal: 0))
+        #expect(compilation.layout.testVariableID(named: "second") == .init(ordinal: 1))
+        #expect(compilation.layout.testActionID(named: "advance") == .init(ordinal: 0))
+        #expect(compilation.layout.testActionID(named: "hold") == .init(ordinal: 1))
         #expect(compilation.layout.declarations.map(\.name) == ["first", "second", "advance", "hold", "Safe"])
+    }
+
+    @Test("lowering rejects a layout from different declaration counts")
+    func loweringRejectsMismatchedLayoutCounts() throws {
+        let layoutSource = TLASpec(
+            name: "LayoutSource",
+            variables: [.init(name: "value", initial: .int(0))],
+            actions: [],
+            invariants: []
+        )
+        let loweredSource = TLASpec(name: "LoweredSource", variables: [], actions: [], invariants: [])
+        let closure = try FormalModuleClosure.resolve(root: layoutSource)
+        var lowerer = CompiledLowerer(
+            spec: layoutSource,
+            closure: closure,
+            layout: CompiledLayout(spec: layoutSource, closure: closure)
+        )
+
+        do {
+            _ = try lowerer.lower(spec: loweredSource)
+            Issue.record("Expected a compilation identity mismatch")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .compilationIdentityMismatch)
+            #expect(diagnostic.path == "layout.declarations")
+        }
     }
 
     @Test("compiled layout assigns scoped control-location identities")
@@ -453,6 +478,17 @@ struct CompilerPipelineCanonicalizationTests {
             .procedure(algorithm: "ControlLayout", name: "second"),
             .generated(algorithm: "ControlLayout", purpose: "Done")
         ])
+        let processStart = try #require(compilation.layout.controlLocations.first {
+            $0.owner == .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode")
+                && $0.sourceName == "start"
+        }?.id)
+        let firstProcedureStart = try #require(compilation.layout.controlLocations.first {
+            $0.owner == .procedure(algorithm: "ControlLayout", name: "first") && $0.sourceName == "start"
+        }?.id)
+        let secondProcedureStart = try #require(compilation.layout.controlLocations.first {
+            $0.owner == .procedure(algorithm: "ControlLayout", name: "second") && $0.sourceName == "start"
+        }?.id)
+        #expect(Set([processStart, firstProcedureStart, secondProcedureStart]).count == 3)
         let changed = Algorithm("ControlLayout", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Each(CompilerPipelineNode.all) { _ in
@@ -475,6 +511,25 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.identity != changedCompilation.identity)
     }
 
+    @Test("program-counter layout detection uses declaration origin")
+    func programCounterLayoutDetectionUsesOrigin() {
+        let sourceNamedPC = CompiledLayout(source: TLASpec(
+            name: "SourceNamedPC",
+            variables: [.init(name: "pc", initialization: .value(.int(0)), origin: .source)],
+            actions: [],
+            invariants: []
+        ))
+        let compilerControl = CompiledLayout(source: TLASpec(
+            name: "CompilerControl",
+            variables: [.init(name: "control", initialization: .value(.int(0)), origin: .programCounter)],
+            actions: [],
+            invariants: []
+        ))
+
+        #expect(sourceNamedPC.controlLocations.isEmpty)
+        #expect(compilerControl.controlLocations.map(\.sourceName) == ["Done"])
+    }
+
     @Test("compiled algorithm control state uses control-location identities")
     func compiledAlgorithmUsesControlLocationIdentities() throws {
         let algorithm = Algorithm("ControlRuntime", scoped: { scope in
@@ -491,7 +546,7 @@ struct CompilerPipelineCanonicalizationTests {
         })
         let compilation = try loweredSourceSpecification(algorithm).compile()
         let runtime = CompiledRuntime(compilation: compilation)
-        let pc = try #require(compilation.layout.variableID(named: "pc"))
+        let pc = try #require(compilation.layout.testVariableID(named: "pc"))
         let initial = try #require(runtime.initialStates().first)
 
         guard case .function(let initialControls) = try initial.value(for: pc) else {
@@ -1162,7 +1217,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        #expect(compilation.layout.variableID(named: "counter") == .init(ordinal: 0))
+        #expect(compilation.layout.testVariableID(named: "counter") == .init(ordinal: 0))
         let action = try #require(compilation.semantics.actions.first)
         guard case .and(
             .guard_(.forAll(_, let outer, .exists(_, let inner, .equal(.boundValue(let reference), _)))),
@@ -2188,7 +2243,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(action.bindings.isEmpty)
         #expect(compiledAction.bindings.count == 1)
         #expect(compiledAction.bindings[0].values == declaration.metadata.members)
-        #expect(compiledAction.symmetricCollection == compilation.layout.variableID(named: "devices"))
+        #expect(compiledAction.symmetricCollection == compilation.layout.testVariableID(named: "devices"))
         #expect(machineVariable.swiftType == "[CompilerPipelineMember.ID: Int]")
         #expect(machineCollection.formalName == "devices")
         #expect(compilation.machineSurfacePlan.symmetricCollections == [machineCollection])

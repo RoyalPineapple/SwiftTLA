@@ -17,7 +17,7 @@ func compiledSuccessors(
     in compilation: CompiledSpecification,
     from state: CompiledState
 ) throws -> [CompiledState] {
-    let action = try #require(compilation.layout.actionID(named: name))
+    let action = try #require(compilation.layout.testActionID(named: name))
     return try CompiledRuntime(compilation: compilation)
         .successors(for: action, from: state)
         .filter { successor in
@@ -31,6 +31,6 @@ func renderedValue(
     in state: CompiledState,
     compilation: CompiledSpecification
 ) throws -> TLAValue {
-    let variable = try #require(compilation.layout.variableID(named: name))
+    let variable = try #require(compilation.layout.testVariableID(named: name))
     return try state.value(for: variable).rendered(using: compilation.layout)
 }

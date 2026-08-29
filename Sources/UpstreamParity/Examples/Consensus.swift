@@ -3,10 +3,10 @@ import SwiftTLAMacros
 
 /// The published PlusCal consensus safety model.
 ///
-/// This is intentionally not a consensus protocol implementation. It states
-/// the core safety boundary: one nondeterministically selected value may be
-/// chosen, and no execution can choose a second value. The source uses a
-/// parameterless `Choose()` macro, a guarded `when`, and a scoped `with`.
+/// The model states the core safety boundary: one nondeterministically
+/// selected value may be chosen, and every execution preserves that choice.
+/// The source uses a parameterless `Choose()` macro, a guarded `when`, and a
+/// scoped `with`.
 @TLAModel
 package struct ConsensusModel: Sendable {
     package enum Value: String, CaseIterable, FiniteTLAValueDomain {

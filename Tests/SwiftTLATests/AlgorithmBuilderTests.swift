@@ -77,7 +77,7 @@ struct AlgorithmBuilderTests {
         in compilation: CompiledSpecification,
         from state: CompiledState
     ) throws -> [CompiledState] {
-        let action = try #require(compilation.layout.actionID(named: name))
+        let action = try #require(compilation.layout.testActionID(named: name))
         return try CompiledRuntime(compilation: compilation)
             .successors(for: action, from: state)
             .filter {
@@ -92,7 +92,7 @@ struct AlgorithmBuilderTests {
         in state: CompiledState,
         compilation: CompiledSpecification
     ) throws -> TLAValue {
-        let variable = try #require(compilation.layout.variableID(named: name))
+        let variable = try #require(compilation.layout.testVariableID(named: name))
         return try state.value(for: variable).rendered(using: compilation.layout)
     }
 
@@ -1411,7 +1411,7 @@ struct AlgorithmBuilderTests {
             .string("second"): .string("repeat")
         ]))
 
-        let count = try #require(compilation.layout.variableID(named: "count"))
+        let count = try #require(compilation.layout.testVariableID(named: "count"))
         let atLimit = try looped.updating(count, to: .integer(2))
         let exited = try successor(named: "repeat", arguments: [.string("first")], in: compilation, from: atLimit)
         #expect(try value(named: "pc", in: exited, compilation: compilation) == .function([
@@ -1458,7 +1458,7 @@ struct AlgorithmBuilderTests {
 
         let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
-        let count = try #require(compilation.layout.variableID(named: "count"))
+        let count = try #require(compilation.layout.testVariableID(named: "count"))
         #expect(try compilation.semantics.invariants.allSatisfy {
             try CompiledRuntime(compilation: compilation).invariantHolds($0, in: initial)
         })
@@ -1503,7 +1503,7 @@ struct AlgorithmBuilderTests {
 
         let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
-        let hour = try #require(compilation.layout.variableID(named: "hour"))
+        let hour = try #require(compilation.layout.testVariableID(named: "hour"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
 
         #expect(Set(try states.map { try $0.value(for: hour).rendered(using: compilation.layout) }) == [.int(1), .int(2), .int(3)])
@@ -1525,7 +1525,7 @@ struct AlgorithmBuilderTests {
 
         let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
-        let candidate = try #require(compilation.layout.variableID(named: "candidate"))
+        let candidate = try #require(compilation.layout.testVariableID(named: "candidate"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
         #expect(Set(try states.map { try $0.value(for: candidate).rendered(using: compilation.layout) }) == [
             .int(0), .int(1), .int(2)
@@ -1627,8 +1627,8 @@ struct AlgorithmBuilderTests {
 
         let spec = try loweredSourceSpecification(algorithm)
         let compilation = try spec.compile()
-        let seed = try #require(compilation.layout.variableID(named: "seed"))
-        let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
+        let seed = try #require(compilation.layout.testVariableID(named: "seed"))
+        let mirrors = try #require(compilation.layout.testVariableID(named: "mirrors"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
 
         #expect(Set(try states.map { try $0.value(for: seed).rendered(using: compilation.layout) }) == [.bool(false), .bool(true)])

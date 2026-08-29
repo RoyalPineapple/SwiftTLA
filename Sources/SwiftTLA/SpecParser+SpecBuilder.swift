@@ -357,22 +357,17 @@ extension ParserSession {
         }
     }
 
-    /// Resolves a supported low-level variable call expression.
-    /// Returns nil if the call is not a variable constructor.
+    /// Resolves a supported low-level variable constructor.
     func resolveVarCall(
         _ fc: FunctionCallExprSyntax,
         in declarationScope: String? = nil
     ) -> (String, String?)? {
-        if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
-            guard ref.baseName.text == "Var" else { return nil }
-            return (ref.baseName.text, nil)
+        if let type = typedFacadeType(fc.calledExpression) {
+            guard type.name == "Var" else { return nil }
+            return (type.name, type.argument(at: 0).flatMap(Self.sourceTypeSpelling))
         }
-        if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
-           let name = terminalTypeName(in: generic.expression) {
-            guard name == "Var" else { return nil }
-            let typeArgs = Array(generic.genericArgumentClause.arguments)
-            let swiftTypeName = typeArgs.first.flatMap { Self.sourceTypeSpelling($0.argument) }
-            return (name, swiftTypeName)
+        if compilerGrammarName(in: fc.calledExpression) == "Var" {
+            return ("Var", nil)
         }
         if let member = fc.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.text == "sharedVar",
@@ -383,8 +378,8 @@ extension ParserSession {
     }
 
     func resolveVarTypeArg(_ fc: FunctionCallExprSyntax) -> String? {
-        guard let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
-              terminalTypeName(in: generic.expression) == "Var"
+        guard let type = typedFacadeType(fc.calledExpression),
+              type.name == "Var"
         else {
             if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self),
                ref.baseName.text == "Var" {
@@ -392,8 +387,7 @@ extension ParserSession {
             }
             return nil
         }
-        let typeArgs = Array(generic.genericArgumentClause.arguments)
-        return typeArgs.first.flatMap { Self.sourceTypeSpelling($0.argument) }
+        return type.argument(at: 0).flatMap(Self.sourceTypeSpelling)
     }
 
     /// Extracts the value type from a variable declaration annotation without
@@ -443,8 +437,8 @@ extension ParserSession {
         return (expression: decoded, elementType: elementType)
     }
 
-    /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
-    /// This is syntax-only: the parser must not consult the runtime builder.
+    /// Reads the formal element type from the `SetExpr<Element>.literal(...)`
+    /// SwiftSyntax nodes.
     func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where",
@@ -756,7 +750,7 @@ extension ParserSession {
         else {
             result.diagnostics.append(.init(
                 message: "Symmetry requires a name and a finite domain.",
-                source: call.description,
+                source: call,
                 expected: "Symmetry(\"TxId\", Set(Transaction.all))"
             ))
             return
@@ -839,7 +833,7 @@ extension ParserSession {
 
     private func refinementTargetName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self) {
-            let constructor = terminalTypeName(in: call.calledExpression)
+            let constructor = compilerGrammarName(in: call.calledExpression)
             if constructor == "FormalModuleParameter" || constructor == "Parameter" {
                 return extractStringArg(call, index: 0)
             }
@@ -871,7 +865,7 @@ extension ParserSession {
         else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition requires a name, supported formal parameters, and a formal body expression.",
-                source: call.description,
+                source: call,
                 expected: "FormalDefinition(\"name\", parameters: [.value(\"value\")], body: expression) or FormalDefinition(\"name\", taking: Int.self) { value in expression }",
                 nextSafeAction: "Use the formal-parameter form or a unary/binary typed closure with supported formal expressions."
             ))
@@ -1384,7 +1378,7 @@ extension ParserSession {
         guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
             result.diagnostics.append(.init(
                 message: "Invariant declaration requires a name and a supported invariant expression.",
-                source: call.description
+                source: call
             ))
             return
         }

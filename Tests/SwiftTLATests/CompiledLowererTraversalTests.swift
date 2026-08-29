@@ -27,7 +27,7 @@ struct CompiledLowererTraversalTests {
             invariants: []
         ).compile()
         let compiledAction = try #require(compilation.semantics.actions.first)
-        let value = try #require(compilation.layout.variableID(named: "value"))
+        let value = try #require(compilation.layout.testVariableID(named: "value"))
         var compiled = compiledAction.body
         var previousBinder: BinderID?
         for level in 0..<128 {

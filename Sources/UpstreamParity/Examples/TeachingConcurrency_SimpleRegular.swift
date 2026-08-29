@@ -4,8 +4,8 @@ import SwiftTLAMacros
 /// The published eight-process bounded model of PlusCal `SimpleRegular`.
 ///
 /// Unlike `Simple`, each shared register holds the set of values a concurrent
-/// read may observe. The three labels are the upstream regular-register
-/// write/write/read steps; this is not a sequential Swift simulation.
+/// read may observe. The three labels preserve the upstream regular-register
+/// write/write/read steps.
 @TLAModel
 package struct TeachingSimpleRegularN8Model: Sendable {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {

@@ -89,8 +89,7 @@ public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: StateExprConvertib
 
 /// A value bound for one atomic `With` body.
 ///
-/// It exists only while constructing the algorithm IR. The lowerer turns it
-/// into a scoped TLA+ action binding; it is never runtime Swift state.
+/// It carries a scoped formal action binding while the algorithm IR is built.
 public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
     let expression: StateExpr
 
@@ -147,10 +146,7 @@ extension WithValue {
 }
 
 extension Expr {
-    /// Reads a finite function using a value selected by `With`.
-    ///
-    /// This keeps a scoped formal choice in the typed DSL; it is not a
-    /// host-language dictionary lookup.
+    /// Reads a finite formal function using a value selected by `With`.
     public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
     where T == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(raw, index.stateExpr))
@@ -194,8 +190,8 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
 
 /// One formal parameter in a bounded PlusCal statement macro.
 ///
-/// A macro parameter is an authoring handle, not a Swift value. Its body is
-/// substituted into the surrounding `Do` block before the algorithm lowers.
+/// Its body is substituted into the surrounding `Do` block before the
+/// algorithm lowers.
 public struct MacroParameter<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
 
@@ -245,9 +241,8 @@ extension MacroParameter where Value: FiniteTLAValueDomain {
 
 /// A PlusCal statement macro.
 ///
-/// Declare it inside `Algorithm`, then call it inside a `Do` body. The
-/// macro is formal syntax: it expands to statements in the same atomic step;
-/// it does not introduce a Swift function call or a separate transition.
+/// Declare it inside `Algorithm`, then call it inside a `Do` body. The macro
+/// expands to formal statements in the same atomic step.
 public struct StatementMacro: Sendable {
     private let parameterNames: [String]
     private let statements: [AlgorithmStatementModel]
@@ -368,7 +363,6 @@ public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
 /// A typed shared variable declaration.
 ///
 /// Declare it through the scope supplied by `TLASpec` or `Algorithm`.
-/// Application code never needs the engine-level `Var` type for this form.
 public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
@@ -476,8 +470,7 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
     public var expr: Expr<Value> { Expr(stateExpr) }
 
     /// Views this process-local declaration as the total function over its
-    /// process family. Use it for an algorithm property about all local
-    /// values, such as `Range(ops)`, not for a current-process read.
+    /// process family for properties such as `Range(ops)`.
     public func family<Process: FiniteTLAValueDomain>(
         for _: Process.Type
     ) -> Expr<Function<Process, Value>> {
@@ -565,8 +558,8 @@ extension SharedVariable where Value == Int {
 
 }
 
-// A process-local formal variable reads like a shared formal variable. The
-// distinction is scope and lowering, not an author-facing loss of arithmetic.
+// Process-local and shared formal variables use the same typed arithmetic
+// surface. Their scopes determine lowering.
 extension LocalVariable where Value == Int {
     public static func + (_ lhs: LocalVariable, _ rhs: Int) -> Expr<Int> {
         Expr(.add(lhs.stateExpr, .int(rhs)))
@@ -1305,8 +1298,6 @@ public struct Algorithm: Sendable, SpecComponent {
 }
 
 /// Declares one independently scheduled process for every member of `domain`.
-///
-/// `Each` is concurrent: its bodies do not run as a sequential Swift loop.
 public func Each<Value: FiniteTLAValueDomain>(
     _ domain: FiniteDomain<Value>,
     fairness: ProcessFairness = .none,
@@ -1386,9 +1377,8 @@ public func When(_ condition: some StateExprConvertible) -> StepStatement {
     Await(condition)
 }
 
-/// A PlusCal assertion. A false assertion becomes a generated formal safety
-/// check at this atomic program-counter location; it is not a Swift debug
-/// assertion and cannot be compiled out.
+/// A PlusCal assertion. A false assertion creates a generated formal safety
+/// check at this atomic program-counter location.
 public func Assert(_ condition: some StateExprConvertible) -> StepStatement {
     StepStatement(model: .assert(condition.stateExpr))
 }
@@ -1574,8 +1564,8 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
 /// Destructures a selected two-member formal tuple for one atomic block.
 ///
 /// This is the typed Swift spelling of PlusCal's
-/// `with <<first, second>> \in Pairs`. The generated bindings are still
-/// formal expressions and never become host-language tuple values.
+/// `with <<first, second>> \in Pairs`. The generated bindings are formal
+/// expressions.
 public func With<First: TLAValueType, Second: TLAValueType>(
     _ pairs: Expr<SetExpr<Pair<First, Second>>>,
     file: StaticString = #fileID,
@@ -1592,10 +1582,9 @@ public func With<First: TLAValueType, Second: TLAValueType>(
     }
 }
 
-/// Binds a deterministic formal value for one atomic block.
-///
-/// This is PlusCal's `with name = expression` form, not membership selection.
-/// It lowers to a scoped TLA+ `LET name == expression IN ...` expression.
+/// Binds PlusCal's deterministic `with name = expression` form for one atomic
+/// block. It lowers to a scoped TLA+ `LET name == expression IN ...`
+/// expression.
 public func Let<Value: TLAValueType>(
     _ value: Expr<Value>,
     file: StaticString = #fileID,
@@ -1621,7 +1610,6 @@ public func Let<Value: TLAValueType>(
 /// Tests whether a bounded formal set has a member that satisfies `predicate`.
 ///
 /// This is the typed Swift spelling of TLA+ `\\E value \\in domain : predicate`.
-/// The bound value is formal data, not a Swift collection element.
 public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
     file: StaticString = #fileID,
@@ -1968,8 +1956,8 @@ public func Choose<First: FiniteTLAValueDomain, Second: FiniteTLAValueDomain>(
 /// Binds one integer from an explicit, finite range for an atomic block.
 ///
 /// This is the natural bounded spelling of PlusCal `with (value \in Nat)`
-/// when a TLC configuration supplies the finite range. The range is formal
-/// data: the closure describes one choice branch, not a Swift loop.
+/// when a TLC configuration supplies the finite range. The range defines the
+/// formal choice branches explored by the runtime.
 public func Choose(
     _ domain: ClosedRange<Int>,
     file: StaticString = #fileID,

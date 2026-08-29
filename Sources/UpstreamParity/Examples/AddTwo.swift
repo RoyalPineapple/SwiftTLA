@@ -4,10 +4,10 @@ import SwiftTLAMacros
 /// The `Increase` algorithm from the upstream LearnProofs `AddTwo` module.
 ///
 /// The original PlusCal loop has one transition: add two and repeat. Its
-/// proof names two useful state properties: the value never becomes negative
-/// and it remains even. The upstream module has no finite TLC configuration,
+/// proof requires two state properties: the value is nonnegative and even.
+/// The upstream module has no finite TLC configuration,
 /// so this source-faithful model is checked by the builder/parser fidelity
-/// gate rather than added to the finite graph-count catalogue.
+/// gate.
 @TLAModel
 package struct AddTwoModel: Sendable {
     private enum Label: String, CaseIterable {

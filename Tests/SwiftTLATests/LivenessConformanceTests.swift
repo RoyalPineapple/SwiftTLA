@@ -50,7 +50,7 @@ struct LivenessConformanceTests {
         let compilation = try spec.compile()
         let transitions = graph.transitions.mapValues { transitions in
             transitions.map { transition in
-                guard let action = compilation.layout.actionID(named: transition.label.action) else {
+                guard let action = compilation.layout.testActionID(named: transition.label.action) else {
                     return transition
                 }
                 return .init(

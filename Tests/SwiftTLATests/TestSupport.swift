@@ -1,4 +1,15 @@
 import Foundation
+@testable import SwiftTLA
+
+extension CompiledLayout {
+    func testVariableID(named name: String) -> VariableID? {
+        variables.first { $0.declaration.name == name }?.id
+    }
+
+    func testActionID(named name: String) -> ActionID? {
+        actions.first { $0.declaration.name == name }?.id
+    }
+}
 
 private let externalPackageBuildLock = NSLock()
 
