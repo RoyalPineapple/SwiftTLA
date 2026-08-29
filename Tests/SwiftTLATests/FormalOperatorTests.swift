@@ -70,7 +70,7 @@ struct FormalOperatorTests {
     #expect(try compiledValue(expression) == .int(5))
   }
 
-  @Test("a formal lambda application renders as TLA+ lambda syntax")
+  @Test("a formal lambda application renders as a scoped TLA+ value expression")
   func rendersFormalLambdaApplication() throws {
     let lambda = FormalOperator.lambda(.init(
       parameters: ["value"],
@@ -88,7 +88,7 @@ struct FormalOperatorTests {
 
     let rendered = try spec.compile().renderedTLAModuleBundle().root.tla
 
-    #expect(rendered.contains("(LAMBDA value : (value + 1))(counter)"))
+    #expect(rendered.contains("(LET value == counter IN (value + 1))"))
   }
 
   @Test("compilation rejects formal operator arity mismatches")

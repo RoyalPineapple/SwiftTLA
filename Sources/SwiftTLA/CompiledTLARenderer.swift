@@ -293,14 +293,14 @@ struct CompiledTLARenderer {
                         .text(", "), .expression(sequence), .text(")")
                     ])
                 case .lambdaApplication(let lambda, let arguments):
-                    var rendered: [StateRenderingTask] = [
-                        .formalOperator(.lambda(lambda)), .text(")(")
-                    ]
-                    for (index, argument) in arguments.enumerated() {
-                        if index > 0 { rendered.append(.text(", ")) }
+                    var rendered: [StateRenderingTask] = []
+                    for (parameter, argument) in zip(lambda.parameters, arguments) {
+                        rendered.append(.text("LET \(try binderName(parameter)) == "))
                         rendered.append(.expression(argument))
+                        rendered.append(.text(" IN "))
                     }
                     parts.append("(")
+                    rendered.append(.expression(lambda.body))
                     rendered.append(.text(")"))
                     schedule(rendered)
                 case .operatorApplication(let operation, let arguments):

@@ -753,8 +753,8 @@ private func parserEnum(
         ])
     }
 
-    @Test("Algorithm parser preserves a process-bound formal lambda application")
-    func parsesProcessScopedFormalLambdaApplication() throws {
+    @Test("Algorithm parser preserves process-bound formal lambda meaning in both bundles")
+    func preservesProcessScopedFormalLambdaMeaning() throws {
         let source = """
         {
             Algorithm("ScopedFormalLambda") { scope in
@@ -791,10 +791,13 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "ScopedFormalLambda")
         #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
-        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("LAMBDA"))
-        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
-        #expect(rendered.contains("counters[self] + 1"))
-        #expect(rendered.contains("LAMBDA") == false)
+        let compilation = try specification.compile()
+        let direct = compilation.renderedTLAModuleBundle().root.tla
+        let authored = try compilation.renderedPlusCalBundle().root.tla
+        #expect(direct.contains("LET value == counters[_process] IN (value + 1)"))
+        #expect(direct.contains("LAMBDA") == false)
+        #expect(authored.contains("counters[self] + 1"))
+        #expect(authored.contains("LAMBDA") == false)
     }
 
     @Test("formal operator parsing failure retains all six diagnostic fields")
