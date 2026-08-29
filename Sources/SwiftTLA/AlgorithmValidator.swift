@@ -39,7 +39,7 @@ internal enum AlgorithmProcedureValidator {
                         diagnostics: &diagnostics
                     )
                 }
-            case .shared, .formalOperator, .invariant, .temporal, .stateConstraint, .unsupported, .local:
+            case .shared, .formalOperator, .invariant, .temporal, .stateConstraint, .invalidPlacement, .local:
                 break
             }
         }
@@ -70,7 +70,7 @@ internal enum AlgorithmProcedureValidator {
         }
         for component in procedure.components {
             switch component {
-            case .local, .step, .unsupported:
+            case .local, .step, .invalidPlacement:
                 continue
             case .shared, .process, .procedure, .invariant, .temporal,
                  .formalOperator, .stateConstraint:

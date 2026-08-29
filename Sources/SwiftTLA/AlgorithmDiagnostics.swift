@@ -48,7 +48,7 @@ public struct AlgorithmValidationError: Error, Sendable, Hashable {
     }
 }
 
-internal enum AlgorithmCapabilityValidator {
+internal enum AlgorithmPlacementValidator {
     static func validate(_ model: AlgorithmModel) throws {
         for (index, component) in model.components.enumerated() {
             try validate(component, path: ["algorithm", "components[\(index)]"])
@@ -60,8 +60,8 @@ internal enum AlgorithmCapabilityValidator {
         path: [String]
     ) throws {
         switch component {
-        case .unsupported(let construct):
-            throw diagnostic(for: construct, path: path)
+        case .invalidPlacement(let component):
+            throw diagnostic(for: component, path: path)
         case .process(let process):
             for (index, component) in process.components.enumerated() {
                 try validate(component, path: path + ["components[\(index)]"])
@@ -77,31 +77,28 @@ internal enum AlgorithmCapabilityValidator {
     }
 
     private static func diagnostic(
-        for construct: DeclaredLanguageConstruct,
+        for component: InvalidAlgorithmComponent,
         path: [String]
-    ) -> LanguageCapabilityDiagnostic {
-        let capability = LanguageCapabilityLedger.capability(for: construct)
-        return .init(
-            code: .unsupportedConstruct,
-            construct: .declared(construct: construct, authoredName: construct.rawValue),
-            operation: .compilation,
-            source: construct.rawValue,
-            sourcePath: path,
-            sourceSpan: .init(location: .unavailable, utf8Length: construct.rawValue.utf8.count),
-            expected: capability.boundary,
-            actual: "\(actualDescription(for: construct)) inside Algorithm",
-            nextSafeAction: capability.nextSafeAction
-        )
-    }
-
-    private static func actualDescription(for construct: DeclaredLanguageConstruct) -> String {
-        switch construct {
+    ) -> CompilationDiagnostic {
+        switch component {
         case .genericFairness:
-            "generic fairness declaration"
-        case .algorithmAssume:
-            "Assume declaration"
-        default:
-            construct.rawValue
+            .init(
+                code: .invalidAlgorithmFairnessPlacement,
+                stage: .validation,
+                path: path.joined(separator: "."),
+                expected: component.expectedPlacement,
+                actual: component.actualPlacement,
+                nextSafeAction: component.nextSafeAction
+            )
+        case .assumption:
+            .init(
+                code: .invalidAlgorithmAssumptionPlacement,
+                stage: .validation,
+                path: path.joined(separator: "."),
+                expected: component.expectedPlacement,
+                actual: component.actualPlacement,
+                nextSafeAction: component.nextSafeAction
+            )
         }
     }
 }

@@ -49,34 +49,11 @@ private enum AlgorithmSourceConstruct: Equatable {
     case with
     case letBinding
 
-    var declaredConstruct: DeclaredLanguageConstruct {
+    var invalidPlacement: InvalidAlgorithmComponent? {
         switch self {
-        case .formalDefinition: .formalDefinition
-        case .macro: .statementMacro
-        case .scopedState(.shared, _): .sharedVariable
-        case .scopedState(.local, _): .localVariable
-        case .procedure: .procedure
-        case .each: .each
-        case .doStep: .atomicStep
-        case .whileStep: .whileLoop
-        case .invariant: .invariant
-        case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways: .temporalProperty
         case .fairness: .genericFairness
-        case .assume: .algorithmAssume
-        case .stateConstraint: .stateConstraint
-        case .awaitCondition: .awaitCondition
-        case .assert: .assertion
-        case .assign: .assignment
-        case .goto: .goto
-        case .call: .call
-        case .return: .return
-        case .stop: .stop
-        case .skip: .skip
-        case .ifElse: .ifElse
-        case .either: .either
-        case .choose: .choose
-        case .with: .withBinding
-        case .letBinding: .letBinding
+        case .assume: .assumption
+        default: nil
         }
     }
 
@@ -149,88 +126,66 @@ private enum AlgorithmSourceConstruct: Equatable {
 }
 
 extension ParserSession {
-    private func algorithmReference(
-        for construct: AlgorithmSourceConstruct,
-        in expression: ExprSyntax
-    ) -> LanguageConstructReference {
-        .declared(
-            construct: construct.declaredConstruct,
-            authoredName: AlgorithmSourceConstruct.referenceName(in: expression)
-                ?? construct.declaredConstruct.rawValue
-        )
-    }
-
-    private func unsupportedSourceDecodingDiagnostic<Node: SyntaxProtocol>(
-        _ reference: LanguageConstructReference,
-        source: Node,
-        requireAdmission: Bool = false
-    ) -> LanguageCapabilityDiagnostic? {
-        let capability = LanguageCapabilityLedger.capability(for: reference)
-        guard capability?.dimensions.sourceDecoding != .supported
-            || (requireAdmission && capability?.status == .unsupported)
-        else {
-            return nil
-        }
+    private func unsupportedAlgorithmSourceDiagnostic<Node: SyntaxProtocol>(
+        named sourceName: String,
+        source: Node
+    ) -> SourceParseDiagnostic {
         let sourceText = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        let actual: String
-        if reference.construct == nil {
-            actual = "unregistered Algorithm declaration '\(reference.authoredName)'"
-        } else if capability?.dimensions.sourceDecoding == .supported {
-            actual = "Algorithm declaration '\(reference.authoredName)' is not admitted in Algorithm"
-        } else {
-            actual = "Algorithm declaration '\(reference.authoredName)' does not support source decoding"
-        }
         return .init(
-            code: .unsupportedConstruct,
-            construct: reference,
-            operation: .sourceDecoding,
+            code: .unsupportedLanguageConstruct,
+            message: "Algorithm declaration '\(sourceName)' is not supported.",
             source: sourceText,
-            sourcePath: ["Algorithm", reference.authoredName],
+            sourcePath: ["Algorithm", sourceName],
             sourceSpan: .init(
                 location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
                 utf8Length: sourceText.utf8.count
             ),
-            expected: capability?.boundary ?? "a registered Algorithm declaration with supported source decoding",
-            actual: actual,
-            nextSafeAction: capability?.nextSafeAction ?? "Use an admitted Algorithm declaration."
+            expected: "a supported Algorithm declaration",
+            actual: "unknown Algorithm declaration '\(sourceName)'",
+            nextSafeAction: "Use a declaration supported by Algorithm."
         )
     }
 
-    private func unsupportedSourceDecodingDiagnostic<Node: SyntaxProtocol>(
+    private func unsupportedAlgorithmSourceDiagnostic<Node: SyntaxProtocol>(
         in expression: ExprSyntax,
         source: Node
-    ) -> LanguageCapabilityDiagnostic? {
+    ) -> SourceParseDiagnostic? {
         guard let sourceName = AlgorithmSourceConstruct.referenceName(in: expression) else { return nil }
-        return unsupportedSourceDecodingDiagnostic(
-            .unregistered(sourceName: sourceName),
-            source: source,
-            requireAdmission: true
-        )
+        return unsupportedAlgorithmSourceDiagnostic(named: sourceName, source: source)
     }
 
-    private func admitsSourceDecoding(
-        _ construct: AlgorithmSourceConstruct,
-        expression: ExprSyntax
-    ) -> Bool {
-        LanguageCapabilityLedger.capability(
-            for: algorithmReference(for: construct, in: expression)
-        )?.dimensions.sourceDecoding == .supported
-    }
-
-    private func recordAlgorithmCapabilityDiagnostic<Node: SyntaxProtocol>(
-        _ reference: LanguageConstructReference,
+    private func recordAlgorithmSourceDiagnostic<Node: SyntaxProtocol>(
+        named sourceName: String,
         source: Node
     ) {
-        guard let diagnostic = unsupportedSourceDecodingDiagnostic(
-            reference,
-            source: source,
-            requireAdmission: true
-        ) else {
-            return
+        if algorithmSourceDiagnostic == nil {
+            algorithmSourceDiagnostic = unsupportedAlgorithmSourceDiagnostic(
+                named: sourceName,
+                source: source
+            )
         }
-        if algorithmCapabilityDiagnostic == nil {
-            algorithmCapabilityDiagnostic = diagnostic
-        }
+    }
+
+    private func recordInvalidAlgorithmPlacement<Node: SyntaxProtocol>(
+        _ component: InvalidAlgorithmComponent,
+        named sourceName: String,
+        source: Node
+    ) {
+        guard algorithmSourceDiagnostic == nil else { return }
+        let sourceText = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        algorithmSourceDiagnostic = .init(
+            code: .invalidLanguagePlacement,
+            message: "Algorithm declaration '\(sourceName)' is not valid in this position.",
+            source: sourceText,
+            sourcePath: ["Algorithm", sourceName],
+            sourceSpan: .init(
+                location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
+                utf8Length: sourceText.utf8.count
+            ),
+            expected: component.expectedPlacement,
+            actual: component.actualPlacement,
+            nextSafeAction: component.nextSafeAction
+        )
     }
 
     private func algorithmBuilderClosure(in call: FunctionCallExprSyntax) -> ClosureExprSyntax? {
@@ -244,14 +199,7 @@ extension ParserSession {
         into result: inout ParsedSpecComponents
     ) -> Algorithm? {
         algorithmParseFailure = nil
-        algorithmCapabilityDiagnostic = nil
-        if let diagnostic = unsupportedSourceDecodingDiagnostic(
-            .declared(construct: .algorithm, authoredName: "Algorithm"),
-            source: call
-        ) {
-            result.diagnostics.append(.init(capability: diagnostic))
-            return nil
-        }
+        algorithmSourceDiagnostic = nil
         guard let name = extractStringArg(call, index: 0),
               let closure = algorithmBuilderClosure(in: call)
         else {
@@ -346,8 +294,8 @@ extension ParserSession {
                 )
                 continue
             }
-            if let diagnostic = algorithmCapabilityDiagnostic {
-                result.diagnostics.append(.init(capability: diagnostic))
+            if let diagnostic = algorithmSourceDiagnostic {
+                result.diagnostics.append(diagnostic)
                 return nil
             }
             guard case .expr(let expression) = statement.item else {
@@ -360,8 +308,8 @@ extension ParserSession {
                 return nil
             }
             guard let call = expression.as(FunctionCallExprSyntax.self) else {
-                if let diagnostic = unsupportedSourceDecodingDiagnostic(in: expression, source: expression) {
-                    result.diagnostics.append(.init(capability: diagnostic))
+                if let diagnostic = unsupportedAlgorithmSourceDiagnostic(in: expression, source: expression) {
+                    result.diagnostics.append(diagnostic)
                     return nil
                 }
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
@@ -373,10 +321,10 @@ extension ParserSession {
                 return nil
             }
             guard let construct = AlgorithmSourceConstruct(call.calledExpression) else {
-                if let diagnostic = unsupportedSourceDecodingDiagnostic(
+                if let diagnostic = unsupportedAlgorithmSourceDiagnostic(
                     in: call.calledExpression, source: call
                 ) {
-                    result.diagnostics.append(.init(capability: diagnostic))
+                    result.diagnostics.append(diagnostic)
                     return nil
                 }
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
@@ -385,13 +333,6 @@ extension ParserSession {
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: expression
                 ))
-                return nil
-            }
-            if let diagnostic = unsupportedSourceDecodingDiagnostic(
-                algorithmReference(for: construct, in: call.calledExpression),
-                source: call
-            ) {
-                result.diagnostics.append(.init(capability: diagnostic))
                 return nil
             }
             if case .formalDefinition = construct {
@@ -415,8 +356,8 @@ extension ParserSession {
                 macros: macros,
                 scope: sourceScope
             ) else {
-                if let diagnostic = algorithmCapabilityDiagnostic {
-                    result.diagnostics.append(.init(capability: diagnostic))
+                if let diagnostic = algorithmSourceDiagnostic {
+                    result.diagnostics.append(diagnostic)
                     return nil
                 }
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
@@ -449,7 +390,6 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
-        guard admitsSourceDecoding(construct, expression: call.calledExpression) else { return nil }
         switch construct {
         case .procedure:
             return parseProcedure(call, macros: macros, scope: scope)
@@ -474,7 +414,8 @@ extension ParserSession {
             guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
             return .temporal(temporal)
         case .fairness, .assume:
-            return .unsupported(construct.declaredConstruct)
+            guard let invalidPlacement = construct.invalidPlacement else { return nil }
+            return .invalidPlacement(invalidPlacement)
         case .stateConstraint:
             guard let argument = call.arguments.first,
                   let condition = decodeAlgorithmStateExpression(argument.expression, scope: scope)
@@ -553,19 +494,15 @@ extension ParserSession {
                 guard let sourceName = AlgorithmSourceConstruct.referenceName(in: call.calledExpression) else {
                     return nil
                 }
-                recordAlgorithmCapabilityDiagnostic(.unregistered(sourceName: sourceName), source: call)
+                recordAlgorithmSourceDiagnostic(named: sourceName, source: call)
                 algorithmParseFailure = "Procedure '\(name)' accepts LocalVar declarations and Do or While blocks."
                 return nil
             }
-            if LanguageCapabilityLedger.capability(for: algorithmReference(
-                for: construct,
-                in: call.calledExpression
-            ))?.status == .unsupported {
-                components.append(.unsupported(construct.declaredConstruct))
+            if let invalidPlacement = construct.invalidPlacement {
+                components.append(.invalidPlacement(invalidPlacement))
                 continue
             }
-            guard admitsSourceDecoding(construct, expression: call.calledExpression),
-                  let component = parseEachComponent(
+            guard let component = parseEachComponent(
                     call,
                     construct: construct,
                     processParameter: "__pcal_sequential",
@@ -741,18 +678,14 @@ extension ParserSession {
                 guard let sourceName = AlgorithmSourceConstruct.referenceName(in: componentCall.calledExpression) else {
                     return nil
                 }
-                recordAlgorithmCapabilityDiagnostic(.unregistered(sourceName: sourceName), source: componentCall)
+                recordAlgorithmSourceDiagnostic(named: sourceName, source: componentCall)
                 return nil
             }
-            if LanguageCapabilityLedger.capability(for: algorithmReference(
-                for: construct,
-                in: componentCall.calledExpression
-            ))?.status == .unsupported {
-                components.append(.unsupported(construct.declaredConstruct))
+            if let invalidPlacement = construct.invalidPlacement {
+                components.append(.invalidPlacement(invalidPlacement))
                 continue
             }
-            guard admitsSourceDecoding(construct, expression: componentCall.calledExpression),
-                  let component = parseEachComponent(
+            guard let component = parseEachComponent(
                 componentCall,
                 construct: construct,
                 processParameter: parameter,
@@ -794,7 +727,6 @@ extension ParserSession {
               let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
               let construct = AlgorithmSourceConstruct(initializer.calledExpression),
-              admitsSourceDecoding(construct, expression: initializer.calledExpression),
               construct.isState(kind, in: declarationScope)
         else { return nil }
 
@@ -874,7 +806,6 @@ extension ParserSession {
         }
         guard declaration.bindings.count == 1,
               let construct = AlgorithmSourceConstruct(initializer.calledExpression),
-              admitsSourceDecoding(construct, expression: initializer.calledExpression),
               construct == .macro
         else { return nil }
         let macroScope = typedFacadeScope(
@@ -954,7 +885,6 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
-        guard admitsSourceDecoding(construct, expression: call.calledExpression) else { return nil }
         switch construct {
         case .doStep, .whileStep:
             guard let label = algorithmLabel(call.arguments.first?.expression),
@@ -1041,13 +971,17 @@ extension ParserSession {
                 guard let sourceName = AlgorithmSourceConstruct.referenceName(in: call.calledExpression) else {
                     return nil
                 }
-                recordAlgorithmCapabilityDiagnostic(.unregistered(sourceName: sourceName), source: call)
+                recordAlgorithmSourceDiagnostic(named: sourceName, source: call)
                 return nil
             }
-            recordAlgorithmCapabilityDiagnostic(
-                algorithmReference(for: construct, in: call.calledExpression), source: call
-            )
-            if algorithmCapabilityDiagnostic != nil { return nil }
+            if let invalidPlacement = construct.invalidPlacement {
+                recordInvalidAlgorithmPlacement(
+                    invalidPlacement,
+                    named: AlgorithmSourceConstruct.referenceName(in: call.calledExpression) ?? "Algorithm declaration",
+                    source: call
+                )
+                return nil
+            }
             guard let parsed = parseAlgorithmStatement(
                 call,
                 construct: construct,
@@ -1089,8 +1023,6 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmStatementModel? {
-        guard admitsSourceDecoding(construct, expression: call.calledExpression) else { return nil }
-
         switch construct {
         case .awaitCondition:
             guard let expression = call.arguments.first?.expression,

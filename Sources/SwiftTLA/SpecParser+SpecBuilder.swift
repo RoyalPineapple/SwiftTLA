@@ -190,8 +190,6 @@ extension ParserSession {
             result.moduleBindings[sourceName] = try parsed.sourceModel(specificationName: moduleName)
         } catch let diagnostic as SourceParseDiagnostic {
             result.diagnostics.append(diagnostic)
-        } catch let diagnostic as LanguageCapabilityDiagnostic {
-            result.diagnostics.append(.init(capability: diagnostic))
         } catch {
             result.diagnostics.append(.init(
                 message: "Formal module '\(moduleName)' could not be constructed.",
@@ -1473,60 +1471,4 @@ extension ParserSession {
         }
     }
 
-}
-
-public struct LanguageCapabilityDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
-    public enum Code: String, Sendable, Hashable {
-        case unsupportedConstruct = "unsupported-language-capability"
-    }
-
-    public enum Operation: String, Sendable, Hashable {
-        case sourceDecoding = "source decoding"
-        case resultBuilderConstruction = "result-builder construction"
-        case compilation = "compilation"
-    }
-
-    public let code: Code
-    public let construct: LanguageConstructReference
-    public let operation: Operation
-    public let source: String
-    public let sourcePath: [String]
-    public let sourceSpan: CompilerSourceSpan
-    public let expected: String
-    public let actual: String
-    public let nextSafeAction: String
-
-    public init(
-        code: Code,
-        construct: LanguageConstructReference,
-        operation: Operation,
-        source: String,
-        sourcePath: [String] = [],
-        sourceSpan: CompilerSourceSpan,
-        expected: String,
-        actual: String,
-        nextSafeAction: String
-    ) {
-        self.code = code
-        self.construct = construct
-        self.operation = operation
-        self.source = source
-        self.sourcePath = sourcePath
-        self.sourceSpan = sourceSpan
-        self.expected = expected
-        self.actual = actual
-        self.nextSafeAction = nextSafeAction
-    }
-
-    public var headline: String {
-        "Language capability '\(construct.authoredName)' is not supported during \(operation.rawValue)."
-    }
-
-    public var description: String {
-        let path = sourcePath.isEmpty ? "source path unavailable" : sourcePath.joined(separator: ".")
-        return "Code: \(code.rawValue). What failed: \(headline) "
-            + "Construct: \(construct.authoredName). Operation: \(operation.rawValue). "
-            + "Where: \(path), \(sourceSpan). Expected: \(expected). Actual: \(actual). "
-            + "Next safe action: \(nextSafeAction)"
-    }
 }

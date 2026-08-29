@@ -344,6 +344,8 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFiniteDomain
         case invalidFiniteDomainValue
         case invalidActionBinding
+        case invalidAlgorithmFairnessPlacement
+        case invalidAlgorithmAssumptionPlacement
         case invalidFormalDeclaration
         case invalidFormalOperatorApplication
         case missingVariableInitializer
@@ -435,9 +437,6 @@ extension ParsedSpecComponents {
         additionalInvariants: [NamedInvariant] = []
     ) throws -> TLASpec {
         if let diagnostic = diagnostics.first {
-            if let capabilityDiagnostic = diagnostic.capabilityDiagnostic {
-                throw capabilityDiagnostic
-            }
             throw diagnostic
         }
         return TLASpec(
@@ -697,9 +696,7 @@ public extension TLASpec {
             invariants: semantics.invariants.map(\.name),
             temporalProperties: semantics.temporalProperties.map(\.name),
             refinements: compiledRefinements.map(\.name),
-            stateConstraint: semantics.constraint.map { _ in
-                DeclaredLanguageConstruct.stateConstraint.rawValue
-            },
+            stateConstraint: semantics.constraint.map { _ in "StateConstraint" },
             procedures: layout.procedures.map {
                 .init(
                     algorithm: $0.algorithm,
@@ -1253,7 +1250,7 @@ public extension TLASpec {
                     path: "refinements.\(refinement.name).target",
                     expected: "a locally checked refinement target",
                     actual: "\(refinement.operator) requires temporal refinement checking",
-                    nextSafeAction: "Use .spec or implement the named temporal refinement capability."
+                    nextSafeAction: "Use a .spec refinement."
                 )
             }
             let targetModel = try instance.module.loweredSourceModel()

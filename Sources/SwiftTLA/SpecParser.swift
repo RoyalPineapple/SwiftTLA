@@ -172,7 +172,7 @@ final class ParserSession {
     var sourceScope = TypedFacadeScope.empty
     var sourceActionBindings: [String: NamedAction] = [:]
     var algorithmParseFailure: String?
-    var algorithmCapabilityDiagnostic: LanguageCapabilityDiagnostic?
+    var algorithmSourceDiagnostic: SourceParseDiagnostic?
 
     init(
         enumDefinitions: [ParserEnumDefinition] = []

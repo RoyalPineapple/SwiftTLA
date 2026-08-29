@@ -2,18 +2,18 @@ import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
 
-private enum TypedCapabilityContractLabel: String, CaseIterable {
+private enum CompiledProjectionLabel: String, CaseIterable {
     case advance
 }
 
-@Suite("Typed capability semantic contract")
-struct TypedCapabilitySemanticContractTests {
-    @Test("An admitted Algorithm supplies one compiled input to every downstream consumer")
-    func admittedAlgorithmUsesOneCompiledSpecificationAcrossConsumers() throws {
-        let specification = TLASpec("TypedCapabilitySemanticContract") {
-            Algorithm("TypedCapabilitySemanticContract", scoped: { scope in
+@Suite("Compiled specification projections")
+struct CompiledSpecificationProjectionTests {
+    @Test("Every downstream consumer retains one compiled specification")
+    func downstreamConsumersRetainOneCompilation() throws {
+        let specification = TLASpec("CompiledProjection") {
+            Algorithm("CompiledProjection", scoped: { scope in
                 let counter = scope.sharedVar("counter", initial: 0)
-                Do(TypedCapabilityContractLabel.advance) {
+                Do(CompiledProjectionLabel.advance) {
                     Assign(counter, to: counter + 1)
                     Stop()
                 }
@@ -28,7 +28,7 @@ struct TypedCapabilitySemanticContractTests {
             configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
         ).explore()
         let matchingCase = try FiniteGraphCase(
-            id: "typed-capability-contract",
+            id: "compiled-projection",
             exploration: exploration.configuration,
             moduleSHA256: String(repeating: "a", count: 64),
             cfgSHA256: String(repeating: "b", count: 64),
@@ -38,8 +38,8 @@ struct TypedCapabilitySemanticContractTests {
         )
         let completedRun = try SwiftGraphExporter().export(exploration, for: matchingCase)
 
-        #expect(tla.root.tla.contains("MODULE TypedCapabilitySemanticContract"))
-        #expect(plusCal.root.tla.contains("--algorithm TypedCapabilitySemanticContract"))
+        #expect(tla.root.tla.contains("MODULE CompiledProjection"))
+        #expect(plusCal.root.tla.contains("--algorithm CompiledProjection"))
         if case let .compiled(identity, _, _) = tla.provenance {
             #expect(identity == compilation.identity)
         } else {

@@ -120,24 +120,14 @@ provide the difference explanation.
 See [Finite graph comparison](FiniteGraphComparison.md) and
 [Upstream parity](UpstreamParity.md).
 
-## Inspect language capabilities
+## Language support
 
-`LanguageCapabilityLedger` records one capability for every
-`DeclaredLanguageConstruct`. Each record states whether source decoding,
-result-builder construction, compilation, TLA+ rendering, PlusCal rendering,
-execution, and bounded conformance are supported.
-
-```swift
-let capability = LanguageCapabilityLedger.capability(for: .procedure)
-let capabilities = LanguageCapabilityLedger.all
-```
-
-The parser and result builders use this ledger before compilation publishes a
-compiled specification. `LanguageCapabilityDiagnostic` identifies the
-construct, operation, source path, expected boundary, actual use, and next
-action. Capability validation also visits declarations inside processes and
-procedures. If the required capability is unsupported, compilation returns no
-compiled specification.
+Compilation is the language-support check. A successful compilation supplies
+the runtime, generated machine, TLA+ bundle, and PlusCal bundle with one
+compiled meaning. Source diagnostics identify syntax that the parser cannot
+construct. Compilation diagnostics identify invalid declaration placement and
+unsupported compiled operations. A failed compilation publishes no compiled
+specification.
 
 Refinement checking evaluates a typed concrete model, typed abstract model,
 and typed state mapping. It checks mapped initial states and concrete edges,

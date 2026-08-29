@@ -450,7 +450,7 @@ struct CompiledLowerer {
                     let nested = try collect(process.components, path: "\(componentPath).components")
                     properties += nested.properties
                     translatorOwnedNames.formUnion(nested.translatorOwnedNames)
-                case .shared, .procedure, .formalOperator, .stateConstraint, .unsupported, .local, .step:
+                case .shared, .procedure, .formalOperator, .stateConstraint, .invalidPlacement, .local, .step:
                     continue
                 }
             }

@@ -126,7 +126,7 @@ extension TLASpec {
         nextSafeAction: "Combine the declarations into one Algorithm."
       )
     }
-    try validateCapabilityAdmission()
+    try validateAlgorithmPlacements()
     var variables = variables
     var actions = actions
     var invariants = invariants
@@ -205,38 +205,10 @@ extension TLASpec {
     return lowered
   }
 
-  private func validateCapabilityAdmission() throws {
+  private func validateAlgorithmPlacements() throws {
     for algorithm in sourceAlgorithms {
-      try AlgorithmCapabilityValidator.validate(algorithm.model)
+      try AlgorithmPlacementValidator.validate(algorithm.model)
     }
-    for refinement in refinements {
-      switch refinement.operator {
-      case .spec:
-        continue
-      case .liveSpec:
-        throw refinementCapabilityDiagnostic(.temporalRefinementLiveSpec, refinement: refinement)
-      case .liveSpecEquals:
-        throw refinementCapabilityDiagnostic(.temporalRefinementLiveSpecEquals, refinement: refinement)
-      }
-    }
-  }
-
-  private func refinementCapabilityDiagnostic(
-    _ construct: DeclaredLanguageConstruct,
-    refinement: RefinementDecl
-  ) -> LanguageCapabilityDiagnostic {
-    let capability = LanguageCapabilityLedger.capability(for: construct)
-    return .init(
-      code: .unsupportedConstruct,
-      construct: .declared(construct: construct, authoredName: construct.rawValue),
-      operation: .compilation,
-      source: refinement.name,
-      sourcePath: ["refinements", refinement.name, "operator"],
-      sourceSpan: .init(location: .unavailable, utf8Length: refinement.name.utf8.count),
-      expected: capability.boundary,
-      actual: "\(construct.rawValue) target",
-      nextSafeAction: capability.nextSafeAction
-    )
   }
 
   func authoredPlusCalModule(

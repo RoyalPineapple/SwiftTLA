@@ -69,7 +69,7 @@ internal struct AlgorithmModel: Sendable {
                     names.insert(temporal.name)
                 case .formalOperator(let definition):
                     names.insert(definition.name)
-                case .stateConstraint, .unsupported:
+                case .stateConstraint, .invalidPlacement:
                     continue
                 }
             }
@@ -311,7 +311,7 @@ internal struct AlgorithmModel: Sendable {
                 return .invariant(.init(name: invariant.name, body: expression(invariant.body)))
             case .temporal(let declaration):
                 return .temporal(.init(name: declaration.name, expr: temporal(declaration.expr)))
-            case .unsupported:
+            case .invalidPlacement:
                 return value
             case .formalOperator(let definition):
                 return .formalOperator(
@@ -586,7 +586,7 @@ func algorithmCompilationEncoding(_ model: AlgorithmModel) -> String {
             }
             result = "formalOperator(\(definition.name),[\(parameters.joined(separator: ","))],\(state(definition.body, definitionEnvironment)))"
         case .stateConstraint(let expression): result = "constraint(\(state(expression, environment)))"
-        case .unsupported(let construct): result = "unsupported(\(construct.rawValue))"
+        case .invalidPlacement(let component): result = "invalidPlacement(\(component.rawValue))"
         }
         return record(path, result)
     }
@@ -614,9 +614,37 @@ internal indirect enum AlgorithmComponentModel: Sendable {
     case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound whose excluded states are omitted from exploration.
     case stateConstraint(StateExpr)
-    case unsupported(DeclaredLanguageConstruct)
+    case invalidPlacement(InvalidAlgorithmComponent)
     case local(AlgorithmStateModel)
     case step(AlgorithmStepModel)
+}
+
+internal enum InvalidAlgorithmComponent: String, Sendable {
+    case genericFairness
+    case assumption
+
+    var expectedPlacement: String {
+        switch self {
+        case .genericFairness:
+            "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness"
+        case .assumption:
+            "an assumption declared in the formal specification"
+        }
+    }
+
+    var actualPlacement: String {
+        switch self {
+        case .genericFairness: "generic fairness declaration inside Algorithm"
+        case .assumption: "Assume declaration inside Algorithm"
+        }
+    }
+
+    var nextSafeAction: String {
+        switch self {
+        case .genericFairness: "Move the fairness requirement to Algorithm or Each."
+        case .assumption: "Move the assumption outside Algorithm."
+        }
+    }
 }
 
 /// One formal PlusCal procedure.

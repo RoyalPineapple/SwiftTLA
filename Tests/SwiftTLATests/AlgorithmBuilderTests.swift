@@ -138,16 +138,15 @@ struct AlgorithmBuilderTests {
         do {
             _ = try TLASpec("UnsupportedFairness") { algorithm }.compile()
             Issue.record("Expected unsupported Algorithm fairness to prevent compilation.")
-        } catch let diagnostic as LanguageCapabilityDiagnostic {
-            #expect(diagnostic.code == .unsupportedConstruct)
-            #expect(diagnostic.construct.construct == .genericFairness)
-            #expect(diagnostic.operation == .compilation)
-            #expect(diagnostic.sourcePath == ["algorithm", "components[1]"])
-            #expect(diagnostic.expected == "Generic TLA fairness is not admitted inside Algorithm.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAlgorithmFairnessPlacement)
+            #expect(diagnostic.stage == .validation)
+            #expect(diagnostic.path == "algorithm.components[1]")
+            #expect(diagnostic.expected == "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness")
             #expect(diagnostic.actual == "generic fairness declaration inside Algorithm")
-            #expect(diagnostic.nextSafeAction == "Use Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness.")
+            #expect(diagnostic.nextSafeAction == "Move the fairness requirement to Algorithm or Each.")
         } catch {
-            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+            Issue.record("Expected CompilationDiagnostic, received \(error).")
         }
     }
 
@@ -163,16 +162,15 @@ struct AlgorithmBuilderTests {
         do {
             _ = try TLASpec("UnsupportedProcedureFairness") { algorithm }.compile()
             Issue.record("Expected unsupported procedure fairness to prevent compilation.")
-        } catch let diagnostic as LanguageCapabilityDiagnostic {
-            #expect(diagnostic.code == .unsupportedConstruct)
-            #expect(diagnostic.construct.construct == .genericFairness)
-            #expect(diagnostic.operation == .compilation)
-            #expect(diagnostic.sourcePath == ["algorithm", "components[0]", "procedure", "components[1]"])
-            #expect(diagnostic.expected == "Generic TLA fairness is not admitted inside Algorithm.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAlgorithmFairnessPlacement)
+            #expect(diagnostic.stage == .validation)
+            #expect(diagnostic.path == "algorithm.components[0].procedure.components[1]")
+            #expect(diagnostic.expected == "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness")
             #expect(diagnostic.actual == "generic fairness declaration inside Algorithm")
-            #expect(diagnostic.nextSafeAction == "Use Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness.")
+            #expect(diagnostic.nextSafeAction == "Move the fairness requirement to Algorithm or Each.")
         } catch {
-            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+            Issue.record("Expected CompilationDiagnostic, received \(error).")
         }
     }
 
@@ -185,13 +183,14 @@ struct AlgorithmBuilderTests {
         do {
             _ = try TLASpec("AssumeGate") { algorithm }.compile()
             Issue.record("Expected the Algorithm assumption to prevent compilation.")
-        } catch let diagnostic as LanguageCapabilityDiagnostic {
-            #expect(diagnostic.construct.construct == .algorithmAssume)
-            #expect(diagnostic.operation == .compilation)
-            #expect(diagnostic.expected == LanguageCapabilityLedger.capability(for: .algorithmAssume).boundary)
-            #expect(diagnostic.nextSafeAction == LanguageCapabilityLedger.capability(for: .algorithmAssume).nextSafeAction)
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAlgorithmAssumptionPlacement)
+            #expect(diagnostic.stage == .validation)
+            #expect(diagnostic.path == "algorithm.components[0]")
+            #expect(diagnostic.expected == "an assumption declared in the formal specification")
+            #expect(diagnostic.nextSafeAction == "Move the assumption outside Algorithm.")
         } catch {
-            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+            Issue.record("Expected CompilationDiagnostic, received \(error).")
         }
     }
 
@@ -201,21 +200,24 @@ struct AlgorithmBuilderTests {
             FormalDefinition("Spec", parameters: [], body: true)
         }
         let instance = Instance("Abstract", of: abstract)
-        let concrete = TLASpec("UnsupportedTarget") {
-            instance
-            Refinement(name: "Refines", instance: instance, operator: .liveSpec, mappings: [])
-        }
+        for operation in [RefinementDecl.Operator.liveSpec, .liveSpecEquals] {
+            let concrete = TLASpec("UnsupportedTarget") {
+                instance
+                Refinement(name: "Refines", instance: instance, operator: operation, mappings: [])
+            }
 
-        do {
-            _ = try concrete.compile()
-            Issue.record("Expected .liveSpec to prevent compilation.")
-        } catch let diagnostic as LanguageCapabilityDiagnostic {
-            #expect(diagnostic.construct.construct == .temporalRefinementLiveSpec)
-            #expect(diagnostic.operation == .compilation)
-            #expect(diagnostic.sourcePath == ["refinements", "Refines", "operator"])
-            #expect(diagnostic.expected == "Temporal refinement targets that are live specifications are not supported in Algorithm.")
-        } catch {
-            Issue.record("Expected LanguageCapabilityDiagnostic, received \(error).")
+            do {
+                _ = try concrete.compile()
+                Issue.record("Expected \(operation) to prevent compilation.")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .unsupportedRefinementTarget)
+                #expect(diagnostic.stage == .validation)
+                #expect(diagnostic.path == "refinements.Refines.target")
+                #expect(diagnostic.expected == "a locally checked refinement target")
+                #expect(diagnostic.actual == "\(operation) requires temporal refinement checking")
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, received \(error).")
+            }
         }
     }
 
