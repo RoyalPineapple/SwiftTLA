@@ -156,9 +156,9 @@ public struct CompiledSpecification: Sendable {
         renderedActionPlan
     }
 
-    package func generatedActionInput(
+    func generatedActionInput(
         for request: CompiledActionRequest
-    ) throws -> (surfaceOrdinal: Int, formalArguments: [TLAValue])? {
+    ) throws -> (surfaceOrdinal: Int, arguments: [CompiledValue])? {
         guard let compiledAction = layout.actions.first(where: { $0.id == request.action }) else {
             throw CompilationDiagnostic(
                 code: .compilationIdentityMismatch,
@@ -186,7 +186,7 @@ public struct CompiledSpecification: Sendable {
         }
         return (
             surfaceOrdinal: surfaceOrdinal,
-            formalArguments: try request.arguments.map { try $0.rendered(using: layout) }
+            arguments: request.arguments
         )
     }
 

@@ -15,7 +15,7 @@ struct BinderID: Hashable, Sendable {
     let ordinal: Int
 }
 
-package struct ActionID: Hashable, Sendable {
+struct ActionID: Hashable, Sendable {
     let ordinal: Int
 }
 

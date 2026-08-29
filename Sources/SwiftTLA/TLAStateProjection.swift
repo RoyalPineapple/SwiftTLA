@@ -122,7 +122,7 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
     }
 }
 
-package struct CompiledActionRequest: Sendable {
+struct CompiledActionRequest: Sendable {
     let action: ActionID
     let arguments: [CompiledValue]
 

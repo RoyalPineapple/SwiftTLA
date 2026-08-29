@@ -4,11 +4,11 @@ import Foundation
 package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Variable: Sendable, Equatable {
         package let formalName: String
-        package let storageOrdinal: Int
+        let storageOrdinal: Int
         package let swiftType: String
         package let symmetricCollection: SymmetricCollection?
 
-        package init(
+        init(
             formalName: String,
             storageOrdinal: Int,
             swiftType: String,
@@ -24,10 +24,10 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Binding: Sendable, Equatable {
         package let formalName: String
         package let swiftType: String
-        package let domain: [TLAValue]
+        let domain: [TLAValue]
         package var isPublic: Bool { domain.count > 1 }
 
-        package init(formalName: String, swiftType: String, domain: [TLAValue]) {
+        init(formalName: String, swiftType: String, domain: [TLAValue]) {
             self.formalName = formalName
             self.swiftType = swiftType
             self.domain = domain
@@ -35,12 +35,12 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     }
 
     package struct Action: Sendable, Equatable {
-        package let compiledAction: ActionID
+        let compiledAction: ActionID
         package let swiftIdentifier: String
         package let bindings: [Binding]
         package let symmetricCollection: SymmetricCollection?
 
-        package init(
+        init(
             compiledAction: ActionID,
             swiftIdentifier: String,
             bindings: [Binding],
@@ -59,7 +59,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let elementType: String
         package let valueType: String
 
-        package init(
+        init(
             formalName: String,
             members: [TLAValue],
             elementType: String,
