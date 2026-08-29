@@ -260,14 +260,6 @@ The generated machine compiles the same source and compares its compilation
 identity with the identity from macro expansion. Explicit compilations drive
 bounded exploration and formal rendering.
 
-## Macro support boundary
-
-Swift type-checks an attached macro's expansion in the consuming module.
-`@TLAModel` therefore uses the public underscored `_GeneratedMachineStorage`
-compiler-support ABI. Each generated struct holds that storage in a private
-property and exposes the typed `State`, `Action`, `Transition`, machine, and
-actor surface above.
-
 ## API reference
 
 | Name | Role |
