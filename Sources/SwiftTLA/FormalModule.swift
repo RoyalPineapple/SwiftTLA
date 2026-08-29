@@ -246,9 +246,8 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 
 /// A validated, source-owned formal module graph for one compiled root.
 ///
-/// Entries are dependency-first and include the root exactly once. Every
-/// retained edge records its declared relationship instead of flattening
-/// imports and named instances into a name-only module list.
+/// Entries are dependency-first and include the root exactly once. Edges
+/// preserve declared imports and named instances.
 package struct FormalModuleClosure: Sendable {
   struct ModuleID: Hashable, Sendable {
     let ordinal: Int

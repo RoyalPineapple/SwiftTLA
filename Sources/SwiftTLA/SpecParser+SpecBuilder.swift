@@ -138,8 +138,6 @@ extension ParserSession {
                     result.algorithmBindings[sourceName] = algorithm
                 }
             } else if typedFacadeType(call.calledExpression)?.name == "SymmetricCollectionVar" {
-                // `SymmetricCollection` owns the declaration; this handle only
-                // gives that declaration its authored source name and types.
                 continue
             } else if resolveVarCall(call, in: declarationScope) != nil {
                 containsVariableConstructor = true
