@@ -111,7 +111,7 @@ extension TLASpec {
         )
       }
 
-      if let overlap = TLAValue.sorted(symmetry.values).first(where: domainOwner.keys.contains),
+      if let overlap = symmetry.values.sorted().first(where: domainOwner.keys.contains),
          let owner = domainOwner[overlap] {
         throw symmetryDiagnostic(
           path: "\(path).values",

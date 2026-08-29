@@ -2,12 +2,12 @@ import Foundation
 import SwiftSyntax
 
 /// The source range attached to a compiler diagnostic.
-public struct CompilerSourceSpan: Sendable, Hashable, CustomStringConvertible {
-    public enum Location: Sendable, Hashable, CustomStringConvertible {
+package struct CompilerSourceSpan: Sendable, Hashable, CustomStringConvertible {
+    package enum Location: Sendable, Hashable, CustomStringConvertible {
         case utf8Offset(Int)
         case unavailable
 
-        public var description: String {
+        package var description: String {
             switch self {
             case .utf8Offset(let offset): return "UTF-8 offset \(offset)"
             case .unavailable: return "source offset unavailable"
@@ -15,15 +15,15 @@ public struct CompilerSourceSpan: Sendable, Hashable, CustomStringConvertible {
         }
     }
 
-    public let location: Location
-    public let utf8Length: Int
+    package let location: Location
+    package let utf8Length: Int
 
-    public init(location: Location, utf8Length: Int) {
+    package init(location: Location, utf8Length: Int) {
         self.location = location
         self.utf8Length = utf8Length
     }
 
-    public var description: String {
+    package var description: String {
         "\(location), length \(utf8Length)"
     }
 }

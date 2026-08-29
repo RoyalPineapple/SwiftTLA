@@ -2,7 +2,7 @@
 ///
 /// Runtime element identity remains outside the verification AST. The modeled
 /// collection is a function keyed by opaque constants derived from its scope.
-public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>: Sendable {
+public struct SymmetricCollectionVar<Element: Identifiable & Sendable, Value: TLAValueType>: Sendable {
   public let name: String
 
   public init(_ name: String) {
@@ -44,7 +44,7 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
   }
 }
 
-public struct SymmetricMember<Element: Identifiable> {
+public struct SymmetricMember<Element: Identifiable & Sendable>: Sendable {
   fileprivate let owner: String
   fileprivate let binding: StateExpr
 
@@ -134,7 +134,7 @@ struct SymmetryPlan: Sendable {
     }
 
     let domains = compilation.semantics.symmetricCollections.map(\.members)
-      + compilation.semantics.symmetrySets.map { TLAValue.sorted($0.values) }
+      + compilation.semantics.symmetrySets.map { $0.values.sorted() }
     guard domains.isEmpty == false else {
       throw FiniteExplorationConfigurationError.symmetryReductionWithoutDeclarations
     }
@@ -276,7 +276,7 @@ extension TLASpec {
 }
 
 @discardableResult
-public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
+public func SymmetricCollection<Element: Identifiable & Sendable, Value: TLAValueType>(
   _ collection: SymmetricCollectionVar<Element, Value>,
   verificationScope: Int,
   initial: Value
@@ -291,7 +291,7 @@ public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
 }
 
 @discardableResult
-public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
+public func CollectionAction<Element: Identifiable & Sendable, Value: TLAValueType>(
   _ name: String,
   on collection: SymmetricCollectionVar<Element, Value>,
   @ActionBuilder _ body: (SymmetricMember<Element>) -> ActionExpr

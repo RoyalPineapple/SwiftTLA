@@ -38,11 +38,8 @@ guard result.after.phases == expectedPhases, contract.state.phases == expectedPh
     throw FixtureError.invalidTransition
 }
 
-let generatedSpec = DeviceContract.spec
-guard generatedSpec.invariants.count == 1 else {
-    throw FixtureError.invalidInvariant
-}
-guard case .forAll = generatedSpec.invariants[0].body else {
+let compilation = try DeviceContract.spec.compile()
+guard compilation.description.invariants == ["validPhase"] else {
     throw FixtureError.invalidInvariant
 }
 

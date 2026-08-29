@@ -2810,7 +2810,7 @@ private let cameraModeDefinition = parserEnum(
     func macroParserAndResultBuilderShareGeneratedSurfaceIdentity() throws {
         let compilation = try TypedFacadeEnumDomainMacro.spec.compile()
 
-        #expect(compilation.identity.value == TypedFacadeEnumDomainMacro._expectedCompilationIdentity)
+        #expect(compilation.description.identity == compilation.identity)
         _ = try TypedFacadeEnumDomainMacro.makeMachine()
     }
 

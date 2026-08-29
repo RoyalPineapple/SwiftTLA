@@ -60,8 +60,8 @@ public enum GeneratedDemoTestSuite {
     private static func ringTestResults() -> [GeneratedDemoTestResult] {
         [
             result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Formal surface", action: { () throws -> Void in
-                let spec = ChangRoberts.spec
-                guard !spec.variables.isEmpty, !spec.actions.isEmpty else {
+                let description = try ChangRoberts.spec.compile().description
+                guard description.variables.isEmpty == false, description.actions.isEmpty == false else {
                     throw GeneratedDemoSuiteError.unexpectedFormalSurface
                 }
             }),

@@ -183,10 +183,10 @@ struct SymmetryReductionTests {
     let functionOne = TLAValue.function([.int(0): .int(1)])
     let functionTwo = TLAValue.function([.int(0): .int(2)])
 
-    #expect(TLAValue.sorted([tupleTwo, tupleOne]) == [tupleOne, tupleTwo])
-    #expect(TLAValue.sorted([setTwo, setOne]) == [setOne, setTwo])
-    #expect(TLAValue.sorted([recordTwo, recordOne]) == [recordOne, recordTwo])
-    #expect(TLAValue.sorted([functionTwo, functionOne]) == [functionOne, functionTwo])
+    #expect(Set([tupleTwo, tupleOne]).sorted() == [tupleOne, tupleTwo])
+    #expect(Set([setTwo, setOne]).sorted() == [setOne, setTwo])
+    #expect(Set([recordTwo, recordOne]).sorted() == [recordOne, recordTwo])
+    #expect(Set([functionTwo, functionOne]).sorted() == [functionOne, functionTwo])
 
     let rendered = try TLASpec("CompositeSymmetry") {
       Symmetry("value", Set([tupleTwo, tupleOne]))

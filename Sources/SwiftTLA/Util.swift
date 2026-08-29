@@ -2,9 +2,9 @@
 ///
 /// Its module closure preserves the upstream `Util -> Functions -> Folds`
 /// dependency relationship.
-public enum KeyValueStoreUtil {
+package enum KeyValueStoreUtil {
     /// The `Util.tla` source module.
-    public static let module = TLASpec("Util") {
+    package static let module = TLASpec("Util") {
         Extends(.naturals, .tlc)
         Import(FunctionsModule.module)
 

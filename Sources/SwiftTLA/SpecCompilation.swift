@@ -236,76 +236,6 @@ public struct CompiledSpecification: Sendable {
         }
     }
 
-    /// Materializes the validated bundle as a new sibling directory.
-    ///
-    /// Files are written into an isolated staging directory and become visible
-    /// at `directory` through one atomic rename.
-    public func materializeModuleBundle(to directory: URL) throws {
-        let bundle = renderedTLAModuleBundle()
-        let fileManager = FileManager.default
-        let parent = directory.deletingLastPathComponent()
-        var parentIsDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: parent.path, isDirectory: &parentIsDirectory),
-              parentIsDirectory.boolValue else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-
-        let staging = parent.appendingPathComponent(
-            ".\(directory.lastPathComponent).swifttla-staging-\(UUID().uuidString)",
-            isDirectory: true
-        )
-        try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
-        do {
-            for file in bundle.files {
-                try file.tla.write(
-                    to: staging.appendingPathComponent("\(file.name).tla"),
-                    atomically: true,
-                    encoding: .utf8
-                )
-                if let cfg = file.cfg {
-                    try cfg.write(
-                        to: staging.appendingPathComponent("\(file.name).cfg"),
-                        atomically: true,
-                        encoding: .utf8
-                    )
-                }
-            }
-            try Self.writeBundleManifest(bundle, to: staging)
-            try fileManager.moveItem(at: staging, to: directory)
-        } catch {
-            try? fileManager.removeItem(at: staging)
-            throw error
-        }
-    }
-
-    private static func writeBundleManifest(_ bundle: TLAModuleBundle, to directory: URL) throws {
-        struct Manifest: Encodable {
-            let compilationIdentity: String
-            let ownership: [TLAModuleBundle.OwnershipEntry]
-            let dependencies: [TLAModuleBundle.ModuleDependency]
-        }
-        guard case let .compiled(identity, ownership, dependencies) = bundle.provenance else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "bundle.compilationIdentity",
-                expected: "a compiler-produced bundle identity",
-                actual: "no identity",
-                nextSafeAction: "Render through a compiled specification."
-            )
-        }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(
-            Manifest(
-                compilationIdentity: identity.value,
-                ownership: ownership,
-                dependencies: dependencies
-            )
-        )
-        try data.write(to: directory.appendingPathComponent("bundle-manifest.json"), options: .atomic)
-    }
-
     /// Returns the source-faithful PlusCal bundle produced by compilation.
     public func renderedPlusCalBundle() throws -> TLAModuleBundle {
         guard let renderedPlusCalModuleBundle else {
@@ -344,6 +274,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFiniteDomain
         case invalidFiniteDomainValue
         case invalidActionBinding
+        case invalidAlgorithm
         case invalidAlgorithmFairnessPlacement
         case invalidAlgorithmAssumptionPlacement
         case invalidFormalDeclaration

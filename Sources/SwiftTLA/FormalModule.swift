@@ -20,14 +20,14 @@ public struct TLAModuleFile: Sendable, Equatable {
 ///
 /// Reports a mismatch between emitted files and the linked module closure
 /// staged for TLC.
-public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStringConvertible {
+package enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStringConvertible {
   case duplicateModule(String)
   case missingModule(module: String, importedBy: String, line: Int)
   case undeclaredModule(module: String, root: String)
   case unreachableModule(module: String, root: String)
   case cyclicModule(module: String, path: [String])
 
-  public var description: String {
+  package var description: String {
     switch self {
     case .duplicateModule(let name):
       return "The module bundle contains more than one \(name).tla source file."
@@ -46,12 +46,12 @@ public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStr
 /// The complete source input required to run TLC for one SwiftTLA model.
 public struct TLAModuleBundle: Sendable, Equatable {
   /// One linked module's provenance in a module bundle.
-  public struct OwnershipEntry: Sendable, Equatable, Codable {
-    public let moduleName: String
-    public let owningRoot: String
-    public let structuralPath: [String]
+  package struct OwnershipEntry: Sendable, Equatable, Codable {
+    package let moduleName: String
+    package let owningRoot: String
+    package let structuralPath: [String]
 
-    public init(moduleName: String, owningRoot: String, structuralPath: [String]) {
+    package init(moduleName: String, owningRoot: String, structuralPath: [String]) {
       self.moduleName = moduleName
       self.owningRoot = owningRoot
       self.structuralPath = structuralPath
@@ -59,12 +59,12 @@ public struct TLAModuleBundle: Sendable, Equatable {
   }
 
   /// One source-level module relationship retained by compilation.
-  public struct ModuleDependency: Sendable, Equatable, Codable {
-    public let importingModule: String
-    public let importedModule: String
-    public let structuralPath: [String]
+  package struct ModuleDependency: Sendable, Equatable, Codable {
+    package let importingModule: String
+    package let importedModule: String
+    package let structuralPath: [String]
 
-    public init(
+    package init(
       importingModule: String,
       importedModule: String,
       structuralPath: [String]
@@ -76,7 +76,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
   }
 
   /// Provenance identifies compiler-linked output and external formal-source input.
-  public enum Provenance: Sendable, Equatable {
+  package enum Provenance: Sendable, Equatable {
     case compiled(
       identity: CompilationIdentity,
       ownership: [OwnershipEntry],
@@ -87,7 +87,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
 
   public let root: TLAModuleFile
   public let imports: [TLAModuleFile]
-  public let provenance: Provenance
+  package let provenance: Provenance
 
   init(
     root: TLAModuleFile,
@@ -118,7 +118,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public var files: [TLAModuleFile] { imports + [root] }
 
   /// Checks that the bundle materializes its declared module closure.
-  public func validateDeclaredClosure() throws {
+  package func validateDeclaredClosure() throws {
     var sources: [String: TLAModuleFile] = [:]
     for file in files {
       guard sources[file.name] == nil else {
@@ -788,7 +788,7 @@ public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
       && lhs.plusCalPhase == rhs.plusCalPhase && lhs.plusCalDependencies == rhs.plusCalDependencies
   }
 
-  public var reference: FormalModuleInstanceReference {
+  package var reference: FormalModuleInstanceReference {
     .init(instance: self)
   }
 
@@ -802,7 +802,7 @@ public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
 }
 
 /// A source-model reference to one declared module instance.
-public struct FormalModuleInstanceReference: Sendable, Equatable {
+package struct FormalModuleInstanceReference: Sendable, Equatable {
   let namespace: String
 
   init(instance: FormalModuleInstance) {

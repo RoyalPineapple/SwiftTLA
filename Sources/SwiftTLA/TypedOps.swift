@@ -1,34 +1,3 @@
-// MARK: - Declarative operator set
-
-public enum TypedOp: String, CaseIterable, Sendable {
-    case add, subtract, multiply, divide, modulo, negate
-    case not, and, or
-    case lessThan, greaterThan, lessOrEqual, greaterOrEqual, equal, notEqual
-}
-
-/// Types that support typed operators declare their supported set.
-/// The code generator reads `ops` and produces the operator overloads below.
-protocol GenerableOps {
-    static var ops: Set<TypedOp> { get }
-}
-extension GenerableOps {
-    static var ops: Set<TypedOp> { [] }
-}
-
-extension Int: GenerableOps {
-    static let ops: Set<TypedOp> = [.add, .subtract, .multiply, .divide, .modulo, .negate,
-                                     .lessThan, .greaterThan, .lessOrEqual, .greaterOrEqual,
-                                     .equal, .notEqual]
-}
-extension Bool: GenerableOps {
-    static let ops: Set<TypedOp> = [.not, .and, .or, .equal, .notEqual]
-}
-extension String: GenerableOps {
-    static let ops: Set<TypedOp> = [.add, .equal, .notEqual]
-}
-
-// MARK: - Generated operators
-
 extension Var where T == Int {
     public static func +(_ lhs: Var, _ rhs: Int) -> Expr<Int> { Expr(.add(lhs.stateExpr, .int(rhs))) }
     public static func +(_ lhs: Var, _ rhs: Var) -> Expr<Int> { Expr(.add(lhs.stateExpr, rhs.stateExpr)) }

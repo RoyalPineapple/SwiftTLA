@@ -1,4 +1,4 @@
-public enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
+package enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case reservedName
     case invalidName
     case emptyDomain
@@ -20,31 +20,47 @@ public enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case statementMacroAssignmentTarget
 }
 
-public enum AlgorithmDiagnosticAnchor: Sendable, Hashable {
+package enum AlgorithmDiagnosticAnchor: Sendable, Hashable {
     case algorithm
     case process(Int)
     case step(process: Int, label: String)
 }
 
-public struct AlgorithmDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
-    public let code: AlgorithmDiagnosticCode
-    public let anchor: AlgorithmDiagnosticAnchor
+package struct AlgorithmDiagnostic: Sendable, Hashable, CustomStringConvertible {
+    package let code: AlgorithmDiagnosticCode
+    package let anchor: AlgorithmDiagnosticAnchor
 
     init(_ code: AlgorithmDiagnosticCode, at anchor: AlgorithmDiagnosticAnchor) {
         self.code = code
         self.anchor = anchor
     }
 
-    public var description: String {
+    package var description: String {
         "\(code.rawValue) at \(anchor)"
+    }
+
+    func compilationDiagnostic(algorithmName: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .invalidAlgorithm,
+            stage: .validation,
+            path: "algorithms[\(algorithmName)]" + anchor.pathSuffix,
+            expected: "a valid authored Algorithm declaration",
+            actual: code.rawValue,
+            nextSafeAction: "Correct the Algorithm declaration at the reported path."
+        )
     }
 }
 
-public struct AlgorithmValidationError: Error, Sendable, Hashable {
-    public let diagnostics: [AlgorithmDiagnostic]
-
-    init(_ diagnostics: [AlgorithmDiagnostic]) {
-        self.diagnostics = diagnostics
+private extension AlgorithmDiagnosticAnchor {
+    var pathSuffix: String {
+        switch self {
+        case .algorithm:
+            ""
+        case .process(let index):
+            ".processes[\(index)]"
+        case .step(let process, let label):
+            ".processes[\(process)].steps[\(label)]"
+        }
     }
 }
 
