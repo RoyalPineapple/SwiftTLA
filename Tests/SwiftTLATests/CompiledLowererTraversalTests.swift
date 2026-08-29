@@ -58,10 +58,10 @@ struct CompiledLowererTraversalTests {
         #expect(assigned == value)
         #expect(referenced == previousBinder)
 
-        var renderedBody = "value' = b127"
+        var renderedBody = "value' = bound127"
         for level in (0..<128).reversed() {
-            let value = level == 0 ? "value" : "b\(level - 1)"
-            renderedBody = "LET b\(level) == \(value) IN \(renderedBody)"
+            let value = level == 0 ? "value" : "bound\(level - 1)"
+            renderedBody = "LET bound\(level) == \(value) IN \(renderedBody)"
         }
         #expect(compilation.renderedTLAModuleBundle().tla.contains("deep == \(renderedBody)"))
     }

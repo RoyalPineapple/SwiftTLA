@@ -3,6 +3,13 @@ import Testing
 
 @Suite("Procedure Lowering")
 struct ProcedureLoweringTests {
+    private func loweredSpecification(_ model: AlgorithmModel) throws -> TLASpec {
+        try AlgorithmLowerer.lower(
+            model,
+            processNames: AuthoredPlusCalAlgorithmPlan(model).processNames
+        )
+    }
+
     @Test("compiled Algorithm identity alpha-normalizes local statement binders")
     func compiledAlgorithmIdentityAlphaNormalizesScopedBinders() {
         func model(letName: String, withName: String, chooseName: String) -> AlgorithmModel {
@@ -67,7 +74,7 @@ struct ProcedureLoweringTests {
         )
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
-        let spec = try AlgorithmLowerer.lower(model)
+        let spec = try loweredSpecification(model)
         let (compilation, initial) = try initialState(of: spec)
         let afterCall = try apply("start", in: compilation, to: initial)
         #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("enter"))
@@ -77,6 +84,7 @@ struct ProcedureLoweringTests {
         let rendered = compilation.renderedTLAModuleBundle().tla
         #expect(rendered.contains("pc' = \"enter\""))
         #expect(rendered.contains("pc' = \"procedure.work.enter\"") == false)
+        #expect(rendered.contains("[procedure |-> \"work\", pc |->"))
 
         let afterReturn = try apply("procedure.work.enter", in: compilation, to: afterCall)
         #expect(try value(named: "output", in: afterReturn, compilation: compilation) == .int(8))
@@ -116,7 +124,7 @@ struct ProcedureLoweringTests {
         )
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
-        let spec = try AlgorithmLowerer.lower(model)
+        let spec = try loweredSpecification(model)
         let (compilation, initial) = try initialState(of: spec)
         let inOuter = try apply("start", in: compilation, to: initial)
         let inInner = try apply("procedure.outer.enter", in: compilation, to: inOuter)
@@ -174,7 +182,7 @@ struct ProcedureLoweringTests {
         )
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
-        let spec = try AlgorithmLowerer.lower(model)
+        let spec = try loweredSpecification(model)
         let procedureAction = try #require(spec.actions.first { $0.name == "procedure.outer.enter" })
         #expect(procedureAction.bindings.map(\.generatedSwiftType) == ["Worker"])
         let (compilation, initial) = try initialState(of: spec)

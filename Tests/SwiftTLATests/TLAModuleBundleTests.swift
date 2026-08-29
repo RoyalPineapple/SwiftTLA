@@ -289,7 +289,7 @@ struct TLAModuleBundleTests {
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports.map(\.name) == ["InstanceArithmetic"])
     let importedModule = try #require(bundle.imports.first)
-    #expect(importedModule.tla.contains("Twice(b0) =="))
+    #expect(importedModule.tla.contains("Twice(value) =="))
 
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -331,7 +331,7 @@ struct TLAModuleBundleTests {
     let resolved = try FormalModuleClosure.resolve(root: consumer)
       .linkedOperators.recursiveFunctions
     #expect(resolved.map(\.name) == ["Math!CountDown"])
-    #expect(resolved[0].body.description.contains("Math!CountDown"))
+    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math\u{21}CountDown"))
     let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
     guard case .ok = result else {
       Issue.record("The checker did not resolve recursive instance calls.")

@@ -795,7 +795,7 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "ScopedFormalLambda")
         #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
-        #expect(specification.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
+        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("LAMBDA"))
         let rendered = try specification.compile().renderedPlusCalBundle().root.tla
         #expect(rendered.contains("counters[self] + 1"))
         #expect(rendered.contains("LAMBDA") == false)
@@ -853,8 +853,8 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ThreeWith")
-        #expect(specification.actions.first?.body.description.contains("__pcal_with_0") == true)
-        #expect(specification.actions.first?.body.description.contains("__pcal_with_2") == true)
+        let rendered = try specification.compile().renderedTLAModuleBundle().tla
+        #expect(rendered.components(separatedBy: "\\E ").count == 4)
     }
 
     @Test("parser preserves a bounded statement macro through compilation")
@@ -882,7 +882,7 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "MacroLock")
         #expect(specification.actions.map(\.name) == ["acquire", "Terminating"])
-        #expect(specification.actions.first?.body.description.contains("lock") == true)
+        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("lock"))
     }
 
     @Test("parser expands every statement macro parameter in caller scope")
@@ -904,8 +904,9 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "CopyValue")
-        #expect(specification.actions.first?.body.description.contains("destination' = source") == true)
-        #expect(specification.actions.first?.body.description.contains("__pcal_macro_parameter") == false)
+        let rendered = try specification.compile().renderedTLAModuleBundle().tla
+        #expect(rendered.contains("destination' = source"))
+        #expect(rendered.contains("__pcal_macro_parameter") == false)
     }
 
     @Test("parser retains formal expression macro arguments")
@@ -927,7 +928,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "OffsetValue")
-        #expect(specification.actions.first?.body.description.contains("destination' = (source + 1)") == true)
+        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("destination' = (source + 1)"))
     }
 
     @Test("parser retains typed pair projections and formal calls in a statement macro")
@@ -953,9 +954,9 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "PairVote")
-        #expect(specification.actions.first?.body.description.contains(
+        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains(
             "SafeAt(<<1, 2>>[1], <<1, 2>>[2])"
-        ) == true)
+        ))
     }
 
     @Test("parser rejects an expression used for a macro assignment target")
@@ -1048,7 +1049,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "ParameterlessMacro")
-        #expect(specification.actions.first?.body.description.contains("count' = (count + 1)") == true)
+        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("count' = (count + 1)"))
     }
 
     @Test("parser retains a filtered formal function initial domain")
@@ -1081,11 +1082,11 @@ private func parserEnum(
         let successors = try #require(try loweredSource(parsed, named: "FunctionDomain").variables.first { $0.name == "successors" })
         let surface = try #require(compilation.machineSurfacePlan.variables.first { $0.formalName == successors.name })
         #expect(surface.swiftType == "Function<Node, SetExpr<Node>>")
-        guard case .memberOf(let initialDomain) = successors.initialization else {
+        guard case .memberOf = successors.initialization else {
             Issue.record("Expected successors to retain its initial domain")
             return
         }
-        #expect(initialDomain.description.contains("Cardinality"))
+        #expect(compilation.renderedTLAModuleBundle().tla.contains("Cardinality"))
     }
 
     @Test("Algorithm parser decodes scoped function-set invariants")
@@ -1216,8 +1217,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "FiniteFunction")
-        #expect(specification.actions.first?.body.description.contains("CASE") == true)
-        #expect(specification.actions.first?.body.description.contains("_typedFunctionEntry") == true)
+        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("CASE"))
     }
 
     @Test("source model compiles a static formal selection")
@@ -1268,9 +1268,8 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "MacroProcess")
-        let body = try? #require(specification.actions.first?.body)
-        #expect(body?.description.contains("process") == true)
-        #expect(body?.description.contains("__pcal_macro_parameter") == false)
+        let action = try #require(try specification.compile().semantics.actions.first)
+        #expect(action.bindings.map(\.sourceName).contains("process"))
     }
 
     @Test("Do, While, and Goto use their declared label raw values")
@@ -1887,8 +1886,14 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         #expect(operators.map(\.name) == ["SA"])
         #expect(operators[0].parameters == ["current"])
-        #expect(operators[0].body.description.contains("SA["))
-        #expect(result.description == "SA[value0]")
+        #expect(result == .recursiveCall("SA", [.variable("value0")]))
+        #expect(try TLASpec(
+            name: "TypedFormalRendering",
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [definition]
+        ).compile().renderedTLAModuleBundle().tla.contains("SA["))
     }
 
     @Test func typedFormalDefinitionParsesPairLiterals() throws {
@@ -2213,9 +2218,19 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.isSubset(of: s)")) == StateExpr.subset(x, s))
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.applying(s)")) == StateExpr.functionApply(x, s))
         let filterResult = SpecParser.decodeStateExpr(try parseExpression("x.filtering(s)"))
-        #expect(filterResult?.description.contains("\\in") == true)
+        guard case .setFilter(let filterDomain, _, let filterBody) = filterResult else {
+            Issue.record("Expected a structural set filter")
+            return
+        }
+        #expect(filterDomain == x)
+        #expect(filterBody == s)
         let mapResult = SpecParser.decodeStateExpr(try parseExpression("x.mapping(s)"))
-        #expect(mapResult?.description.contains(":") == true)
+        guard case .setMap(let mapBody, _, let mapDomain) = mapResult else {
+            Issue.record("Expected a structural set map")
+            return
+        }
+        #expect(mapBody == s)
+        #expect(mapDomain == x)
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.appending(s)")) == StateExpr.tupleAppend(x, s))
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.concatenating(s)")) == StateExpr.tupleConcatenate(x, s))
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.integerDivided(by: 2)")) == StateExpr.integerDivide(x, .value(.int(2))))

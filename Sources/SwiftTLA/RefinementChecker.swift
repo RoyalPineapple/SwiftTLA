@@ -120,7 +120,7 @@ extension TLASpec {
             case .memberOf(let set): return .memberOf(state(set))
             }
         }
-        return TLASpec(
+        var specialized = TLASpec(
             name: name,
             variables: variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) },
             actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, controlOwner: $0.controlOwner) },
@@ -133,5 +133,8 @@ extension TLASpec {
             symmetrySets: symmetrySets, symmetricCollections: symmetricCollections,
             sourceAlgorithms: sourceAlgorithms
         )
+        specialized.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
+        specialized.algorithmPhase = algorithmPhase
+        return specialized
     }
 }

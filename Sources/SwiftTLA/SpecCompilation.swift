@@ -309,8 +309,9 @@ public struct CompiledSpecification: Sendable {
     /// Returns the source-faithful PlusCal bundle produced by compilation.
     public func renderedPlusCalBundle() throws -> TLAModuleBundle {
         guard let renderedPlusCalModuleBundle else {
-            throw AlgorithmPlusCalRenderDiagnostic(
-                failedConcept: "authored PlusCal module root",
+            throw CompilationDiagnostic(
+                code: .invalidAuthoredPlusCalPlan,
+                stage: .rendering,
                 path: "TLASpec.sourceAlgorithms",
                 expected: "exactly one authored Algorithm",
                 actual: "no authored PlusCal module in this compilation",
@@ -355,6 +356,8 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateVariable
         case duplicateAction
         case duplicateInvariant
+        case duplicateAlgorithm
+        case invalidAuthoredPlusCalPlan
         case invalidSymmetricCollection
         case invalidSymmetryDeclaration
         case duplicateRecordField
@@ -565,15 +568,20 @@ public extension TLASpec {
             try entry.module.validateSourceDeclarationNames()
         }
         let layout = CompiledLayout(spec: self, closure: closure)
-        var validator = BindingValidator(spec: self, layout: layout, closure: closure)
-        let bindings = try validator.validate(spec: self)
-        let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
+        var lowerer = CompiledLowerer(spec: self, closure: closure, layout: layout)
+        let semantics = try lowerer.lower(spec: self)
+        let compiledAuthoredPlusCalPlan: CompiledAuthoredPlusCalAlgorithmPlan?
+        if let authoredPlusCalAlgorithmPlan {
+            compiledAuthoredPlusCalPlan = try lowerer.authoredPlusCalPlan(authoredPlusCalAlgorithmPlan)
+        } else {
+            compiledAuthoredPlusCalPlan = nil
+        }
         let compiledRefinements = try compiledRefinements(
-            bindings: bindings,
-            closure: closure,
+            lowerer: &lowerer,
             layout: layout,
             semantics: semantics
         )
+        let bindings = lowerer.bindings
         let identity = compilationIdentity
         let machineSurfacePlan = try MachineSurfacePlan(layout: layout, semantics: semantics)
         let directModuleSections = try directModuleSectionPlan(
@@ -595,9 +603,9 @@ public extension TLASpec {
         let formalRenderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
         let authoredPlusCalModule = try authoredPlusCalModule(
+            algorithm: compiledAuthoredPlusCalPlan,
             semantics: semantics,
             layout: layout,
-            bindings: bindings,
             formalRenderer: formalRenderer,
             renderedRefinements: renderedRefinements
         )
@@ -664,7 +672,7 @@ public extension TLASpec {
             let bundle = TLAModuleBundle(
                 root: .init(
                     name: renderedRoot.name,
-                    tla: try AlgorithmPlusCalRenderer(module: module).render(),
+                    tla: try AlgorithmPlusCalRenderer(module: module, formalRenderer: formalRenderer).render(),
                     cfg: renderedRoot.cfg
                 ),
                 imports: renderedBundle.imports,
@@ -881,24 +889,19 @@ public extension TLASpec {
         try source.validateSymmetryDeclarations()
         try source.validateRefinements()
         let layout = CompiledLayout(spec: source, closure: context.closure)
-        var validator = BindingValidator(
+        var lowerer = CompiledLowerer(
             spec: source,
-            layout: layout,
             closure: context.closure,
+            layout: layout,
             incomingModuleParameters: context.incomingModuleParameters
         )
-        let bindings = try validator.validate(spec: source)
-        let semantics = try CompiledLowerer(
-            bindings: bindings,
-            closure: context.closure,
-            layout: layout
-        ).lower(spec: source)
+        let semantics = try lowerer.lower(spec: source)
         let refinements = try source.compiledRefinements(
-            bindings: bindings,
-            closure: context.closure,
+            lowerer: &lowerer,
             layout: layout,
             semantics: semantics
         )
+        let bindings = lowerer.bindings
         return try source.directModuleSectionPlan(
             layout: layout,
             bindings: bindings,
@@ -1006,12 +1009,8 @@ public extension TLASpec {
             lines.append(rendered.body)
             lines.append("")
         }
-        for instance in moduleInstances {
-            let arguments = instanceArguments(for: instance).map { argument in
-                "\(argument.parameter) <- \(argument.value)"
-            }.joined(separator: ", ")
-            let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-            lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
+        for instance in semantics.moduleInstances {
+            lines.append(try renderer.moduleInstance(instance))
             lines.append("")
         }
         for definition in definitionsAfterInstances {
@@ -1325,12 +1324,10 @@ public extension TLASpec {
     }
 
     private func compiledRefinements(
-        bindings: CompiledBindingTable,
-        closure: FormalModuleClosure,
+        lowerer: inout CompiledLowerer,
         layout: CompiledLayout,
         semantics: CompiledSemantics
     ) throws -> [CompiledRefinement] {
-        let lowerer = CompiledLowerer(bindings: bindings, closure: closure, layout: layout)
         return try refinements.map { refinement in
             guard let instanceOffset = moduleInstances.firstIndex(where: refinement.instance.resolves) else {
                 throw CompilationDiagnostic(

@@ -1,18 +1,10 @@
-public enum ActionTarget: Hashable, Sendable, CustomStringConvertible {
+public enum ActionTarget: Hashable, Sendable {
     case named(String)
     case programCounter
     case procedureStack
-
-    public var description: String {
-        switch self {
-        case .named(let name): return name
-        case .programCounter: return CompilerControlSymbol.programCounter.rawValue
-        case .procedureStack: return CompilerControlSymbol.stack.rawValue
-        }
-    }
 }
 
-public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
+public indirect enum ActionExpr: Hashable, Sendable {
     case assign(ActionTarget, StateExpr)
     case unchanged(ActionTarget)
     case guard_(StateExpr)
@@ -23,28 +15,6 @@ public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
     case and(ActionExpr, ActionExpr)
     case or(ActionExpr, ActionExpr)
 
-    public var description: String {
-        switch self {
-        case .assign(let target, let e):
-            return "\(target)' = \(e)"
-        case .unchanged(let target):
-            return "UNCHANGED \(target)"
-        case .guard_(let e):
-            return "\(e)"
-        case .chooseAction(let target, let s):
-            return "\(target)' \\in \(s)"
-        case .existsAction(let v, let s, let b):
-            return "\\E \(v) \\in \(s): \(b)"
-        case .define(let v, let e, let b):
-            return "LET \(v) == \(e) IN \(b)"
-        case .ifElse(let c, let t, let e):
-            return "IF \(c) THEN (\(t)) ELSE (\(e))"
-        case .and(let a, let b):
-            return "(\(a) /\\ \(b))"
-        case .or(let a, let b):
-            return "(\(a) \\/ \(b))"
-        }
-    }
 }
 
 extension ActionExpr {

@@ -4,6 +4,47 @@ import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    @Test("compilation rejects multiple Algorithms")
+    func rejectsMultipleAlgorithms() {
+        let specification = TLASpec("MultipleAlgorithms") {
+            Algorithm("First") {
+                Do(TestControlLabel.done) { Stop() }
+            }
+            Algorithm("Second") {
+                Do(TestControlLabel.done) { Stop() }
+            }
+        }
+
+        do {
+            _ = try specification.compile()
+            Issue.record("Expected multiple Algorithm declarations to fail compilation.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .duplicateAlgorithm)
+            #expect(diagnostic.path == "algorithms")
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, received \(error).")
+        }
+    }
+
+    @Test("specializing a lowered Algorithm preserves its authored PlusCal plan")
+    func specializationPreservesAuthoredPlusCalPlan() throws {
+        let source = TLASpec("SpecializedAlgorithm", scoped: { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Algorithm("SpecializedAlgorithm") {
+                Do(TestControlLabel.advance) {
+                    Assign(value, to: value + 1)
+                }
+            }
+        })
+        let lowered = try source.loweredSourceModel()
+        let specialized = lowered.specializing(parameters: [:])
+
+        #expect(specialized.algorithmPhase == .lowered)
+        #expect(specialized.authoredPlusCalAlgorithmPlan?.name == "SpecializedAlgorithm")
+        let rendered = try specialized.compile().renderedPlusCalBundle().root.tla
+        #expect(rendered.components(separatedBy: "(*--algorithm SpecializedAlgorithm").count == 2)
+    }
+
     private enum ProcedureName: String, CaseIterable {
         case work
     }
@@ -207,7 +248,7 @@ struct AlgorithmBuilderTests {
             .compile()
             .renderedTLAModuleBundle()
             .tla
-        #expect(module.contains("advance(b1) =="))
+        #expect(module.contains("advance(_process) =="))
         #expect(module.contains("__swift_tla_binder_") == false)
     }
 
@@ -998,9 +1039,11 @@ struct AlgorithmBuilderTests {
         let projected = source.plusCalProjection()
         let step = try #require(projected.sequentialSteps.first)
         guard case .with(let binder, _, let body) = step.statements.first,
-              body.count == 2,
-              case .set(_, .variable(let selectedValue)) = body[0],
-              case .set(_, .variable(let copiedValue)) = body[1]
+              body.count == 1,
+              case .parallel(let assignments) = body[0],
+              assignments.count == 2,
+              case .variable(let selectedValue) = assignments[0].value,
+              case .variable(let copiedValue) = assignments[1].value
         else {
             Issue.record("Expected one capture-free scheduled scope.")
             return
@@ -1008,6 +1051,36 @@ struct AlgorithmBuilderTests {
         #expect((binder == "value") == false)
         #expect(selectedValue == binder)
         #expect(copiedValue == "value")
+    }
+
+    @Test("PlusCal projection owns choice, parallel updates, and stopping control")
+    func plusCalProjectionOwnsStatementLowering() throws {
+        let source = AlgorithmModel(
+            name: "ProjectedStatements",
+            components: [
+                .step(.init(label: .init(name: "advance"), statements: [
+                    .choose(variable: "selected", domain: [.int(1), .int(2)], [
+                        .set(target: .root("value"), value: .variable("selected"))
+                    ]),
+                    .stop
+                ]))
+            ]
+        )
+
+        let step = try #require(source.plusCalProjection().sequentialSteps.first)
+        guard case .with(let binder, let source, let body) = step.statements.first,
+              binder == "selected",
+              source == .setLiteral([.value(.int(1)), .value(.int(2))]),
+              body.count == 2,
+              case .parallel(let assignments) = body[0],
+              assignments.count == 1,
+              assignments[0].target.root == "value",
+              case .goto(let destination) = body[1]
+        else {
+            Issue.record("Expected one projected choice path.")
+            return
+        }
+        #expect(destination.name == CompilerControlSymbol.done.rawValue)
     }
 
     @Test("moving an independent update under a choice preserves successor multiplicity")

@@ -113,6 +113,8 @@ internal enum AlgorithmProcedureValidator {
             case .rejected(let code): diagnostics.append(.init(code, at: anchor))
             case .await, .assert, .skip: break
             case .set(let target, _): validateName(target.root, at: anchor, diagnostics: &diagnostics)
+            case .parallel(let assignments):
+                assignments.forEach { validateName($0.target.root, at: anchor, diagnostics: &diagnostics) }
             case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
                 validateStatements(body, at: anchor, labels: labels, procedures: procedures, arities: arities, inProcedure: inProcedure, diagnostics: &diagnostics)
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
@@ -185,6 +187,8 @@ internal enum AlgorithmProcedureValidator {
                 }
             case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
                 validateProcedureControl(body, at: anchor, names: names, arities: arities, inProcedure: inProcedure, allowCalls: allowCalls, diagnostics: &diagnostics)
+            case .parallel:
+                break
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
                 validateProcedureControl(then, at: anchor, names: names, arities: arities, inProcedure: inProcedure, allowCalls: allowCalls, diagnostics: &diagnostics)
                 validateProcedureControl(otherwise, at: anchor, names: names, arities: arities, inProcedure: inProcedure, allowCalls: allowCalls, diagnostics: &diagnostics)
@@ -201,6 +205,7 @@ internal enum AlgorithmProcedureValidator {
             switch statement {
             case .rejected: statementPaths = [[]]
             case .set(let target, _): statementPaths = [[target.root]]
+            case .parallel(let assignments): statementPaths = [assignments.map(\.target.root)]
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise): statementPaths = writePaths(then) + writePaths(otherwise)
             case .choose(_, _, let body), .letBinding(_, _, let body), .with(_, _, let body): statementPaths = writePaths(body)
             case .await, .assert, .goto, .call, .return, .stop, .skip: statementPaths = [[]]

@@ -68,8 +68,8 @@ throwing:
 let bundle = try compilation.renderedPlusCalBundle()
 ```
 
-`AlgorithmPlusCalRenderDiagnostic` identifies the Algorithm node that needs a
-source-faithful PlusCal spelling. Change that typed model construct.
+`CompilationDiagnostic` identifies the declaration and compiler phase that
+prevented authored PlusCal export.
 
 ## Compiler and evidence limits
 

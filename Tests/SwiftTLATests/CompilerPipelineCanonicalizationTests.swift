@@ -240,35 +240,35 @@ struct CompilerPipelineCanonicalizationTests {
         }
         let module = compilation.renderedTLAModuleBundle().root.tla
 
-        #expect(first != second)
-        #expect(module.contains("\\A b0 \\in"))
-        #expect(module.contains("\\A b1 \\in"))
+        #expect(Set([first, second]).count == 2)
+        #expect(module.contains("\\A value \\in"))
+        #expect(module.contains("\\A value_1 \\in"))
     }
 
-    @Test("compiled binder names do not shadow declarations")
-    func compiledBinderNamesDoNotShadowDeclarations() throws {
+    @Test("compiled binder rendered names remain distinct from declarations")
+    func compiledBinderRenderedNamesRemainDistinctFromDeclarations() throws {
         let spec = TLASpec("BinderCollision") {
-            Var("b0", 1)
+            Var("value", 1)
             Invariant("Safe") {
                 .forAll(
-                    .setLiteral([.value(.int(1))]),
+                    .variable("value"),
                     "value",
-                    .equal(.variable("value"), .variable("b0"))
+                    .equal(.variable("value"), .variable("value"))
                 )
             }
         }
 
         let module = try spec.compile().renderedTLAModuleBundle().root.tla
 
-        #expect(module.contains("VARIABLES b0"))
-        #expect(module.contains("\\A _b0 \\in"))
-        #expect(module.contains("(_b0 = b0)"))
+        #expect(module.contains("VARIABLES value"))
+        #expect(module.contains("\\A value_1 \\in value"))
+        #expect(module.contains("(value_1 = value_1)"))
     }
 
-    @Test("compiled binder names do not shadow temporal property names")
-    func compiledBinderNamesDoNotShadowTemporalPropertyNames() throws {
+    @Test("compiled binder rendered names remain distinct from temporal properties")
+    func compiledBinderRenderedNamesRemainDistinctFromTemporalProperties() throws {
         let spec = TLASpec("BinderPropertyCollision") {
-            Always("b0", .value(.bool(true)))
+            Always("value", .value(.bool(true)))
             Invariant("Safe") {
                 .forAll(
                     .setLiteral([.value(.int(1))]),
@@ -280,8 +280,45 @@ struct CompilerPipelineCanonicalizationTests {
 
         let module = try spec.compile().renderedTLAModuleBundle().root.tla
 
-        #expect(spec.temporalProperties.map(\.name) == ["b0"])
-        #expect(module.contains("\\A _b0 \\in"))
+        #expect(spec.temporalProperties.map(\.name) == ["value"])
+        #expect(module.contains("\\A value_1 \\in"))
+    }
+
+    @Test("compiled binder rendered names resolve reserved-name collisions")
+    func compiledBinderRenderedNamesResolveReservedNameCollisions() throws {
+        let spec = TLASpec("ReservedBinderCollision") {
+            Var("_process", 0)
+            Action("stay", parameters: [ActionParameter("process", values: [0])]) {
+                ActionExpr.unchanged(.named("_process"))
+            }
+        }
+
+        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+
+        #expect(module.contains("stay(_process_1) =="))
+    }
+
+    @Test("nested same-spelling binders retain distinct compiler identities")
+    func nestedSameSpellingBindersRetainDistinctCompilerIdentities() throws {
+        let expression = StateExpr.letValue(
+            "value",
+            .int(1),
+            .letValue("value", .variable("value"), .variable("value"))
+        )
+        let compilation = try TLASpec("NestedBinderIdentity") {
+            FormalDefinition("Value", parameters: [], body: expression)
+        }.compile()
+        let definition = try #require(compilation.semantics.formalOperatorDefinitions.first)
+        guard case .letValue(let outer, _, .letValue(let inner, .boundValue(let outerReference), .boundValue(let innerReference))) = definition.body else {
+            Issue.record("Expected nested compiled value binders")
+            return
+        }
+        let module = compilation.renderedTLAModuleBundle().root.tla
+
+        #expect(Set([outer, inner]).count == 2)
+        #expect(outerReference == outer)
+        #expect(innerReference == inner)
+        #expect(module.contains("LET value == 1 IN LET value_1 == value IN value_1"))
     }
 
     @Test("macro compilation uses the explicit formal module name")
@@ -1282,7 +1319,8 @@ struct CompilerPipelineCanonicalizationTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .invalidFormalDeclaration)
             #expect(diagnostic.stage == .binding)
-            #expect(diagnostic.path.contains("binder.1item"))
+            #expect(diagnostic.path == "actions.step.body.left.guard.binder")
+            #expect(diagnostic.actual.contains("1item"))
         } catch {
             Issue.record("Expected CompilationDiagnostic, got \(error)")
         }
@@ -2339,7 +2377,7 @@ struct CompilerPipelineCanonicalizationTests {
             _ = try specification.compile()
             Issue.record("Expected invalid action parameters to fail compilation")
         } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.code == .invalidFormalDeclaration)
+            #expect(diagnostic.code == .invalidActionBinding)
             #expect(diagnostic.stage == .binding)
         } catch {
             Issue.record("Expected CompilationDiagnostic, got \(error)")

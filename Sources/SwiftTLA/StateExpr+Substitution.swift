@@ -128,7 +128,7 @@ extension StateExpr {
         case .tupleTail(let t): return .tupleTail(sub(t))
         case .tupleConcatenate(let a, let b): return .tupleConcatenate(sub(a), sub(b))
         case .recordLiteral(let record):
-            return .recordLiteral(.init(record.fields.map { .init(name: $0.name, value: sub($0.value)) }))
+            return .recordLiteral(.init(orderedFields: record.fields.map { .init(name: $0.name, value: sub($0.value)) }))
         case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
         case .domain(let f): return .domain(sub(f))
         case .functionLiteral(let domain, let binder, let body):
@@ -268,7 +268,7 @@ extension StateExpr {
             case .tupleTail(let value): return .tupleTail(visit(value))
             case .tupleConcatenate(let a, let b): return .tupleConcatenate(visit(a), visit(b))
             case .recordLiteral(let record):
-                return .recordLiteral(.init(record.fields.map { .init(name: $0.name, value: visit($0.value)) }))
+                return .recordLiteral(.init(orderedFields: record.fields.map { .init(name: $0.name, value: visit($0.value)) }))
             case .recordAccess(let value, let field): return .recordAccess(visit(value), field)
             case .domain(let value): return .domain(visit(value))
             case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visitUnderBindings([name], body))

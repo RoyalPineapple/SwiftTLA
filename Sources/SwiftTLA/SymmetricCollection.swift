@@ -28,13 +28,13 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
   }
 
   public func allSatisfy(_ predicate: (Expr<Value>) -> StateExpr) -> StateExpr {
-    let member = generatedBinderName()
+    let member = "member"
     let value = Expr<Value>(.functionApply(.variable(name), .variable(member)))
     return .forAll(memberDomain, member, predicate(value))
   }
 
   public func contains(where predicate: (Expr<Value>) -> StateExpr) -> StateExpr {
-    let member = generatedBinderName()
+    let member = "member"
     let value = Expr<Value>(.functionApply(.variable(name), .variable(member)))
     return .exists(memberDomain, member, predicate(value))
   }
@@ -296,7 +296,7 @@ public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
   on collection: SymmetricCollectionVar<Element, Value>,
   @ActionBuilder _ body: (SymmetricMember<Element>) -> ActionExpr
 ) -> ActionDecl {
-  let member = generatedBinderName()
+  let member = "member"
   let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member))
   return ActionDecl(
     name,

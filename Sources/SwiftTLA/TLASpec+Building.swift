@@ -109,12 +109,23 @@ extension TLASpec {
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.sourceAlgorithms = sourceAlgorithms
+    self.authoredPlusCalAlgorithmPlan = nil
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }
 }
 
 extension TLASpec {
   func loweredSourceModel() throws -> TLASpec {
+    guard sourceAlgorithms.count <= 1 else {
+      throw CompilationDiagnostic(
+        code: .duplicateAlgorithm,
+        stage: .validation,
+        path: "algorithms",
+        expected: "one canonical Algorithm declaration",
+        actual: "\(sourceAlgorithms.count) Algorithm declarations",
+        nextSafeAction: "Combine the declarations into one Algorithm."
+      )
+    }
     try validateCapabilityAdmission()
     var variables = variables
     var actions = actions
@@ -123,14 +134,18 @@ extension TLASpec {
     var fairness = fairness
     var constraint = constraint
     var formalOperatorDefinitions = formalOperatorDefinitions
+    var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
 
     if algorithmPhase == .source {
       for algorithm in sourceAlgorithms {
         try algorithm.requireValid()
+        let authoredPlusCalPlan = AuthoredPlusCalAlgorithmPlan(algorithm.model)
         let lowered = try AlgorithmLowerer.lower(
           algorithm.model,
+          processNames: authoredPlusCalPlan.processNames,
           formalOperatorDefinitions: formalOperatorDefinitions
         )
+        authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
         actions += lowered.actions
         invariants += lowered.invariants
@@ -185,6 +200,7 @@ extension TLASpec {
       symmetricCollections: symmetricCollections,
       sourceAlgorithms: sourceAlgorithms
     )
+    lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
     lowered.algorithmPhase = .lowered
     return lowered
   }
@@ -224,21 +240,23 @@ extension TLASpec {
   }
 
   func authoredPlusCalModule(
+    algorithm plusCalAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?,
     semantics: CompiledSemantics,
     layout: CompiledLayout,
-    bindings: CompiledBindingTable,
     formalRenderer: CompiledTLARenderer,
     renderedRefinements: [String]
   ) throws -> AuthoredPlusCalModule? {
-    guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
+    guard sourceAlgorithms.count == 1,
+          let algorithm = sourceAlgorithms.first,
+          let plusCalAlgorithm
+    else {
       return nil
     }
-    let plusCalAlgorithm = algorithm.model.plusCalProjection()
     let declarationSections = try authoredPlusCalDeclarationSections(
       semantics: semantics,
       formalRenderer: formalRenderer
     )
-    let propertyPlan = try authoredPlusCalProperties(in: plusCalAlgorithm)
+    let propertyPlan = try authoredPlusCalProperties(in: algorithm.model)
     let sourceProperties = propertyPlan.properties
     let invariantsByID = Dictionary(uniqueKeysWithValues: semantics.invariants.map { ($0.id, $0) })
     let temporalPropertiesByID = Dictionary(uniqueKeysWithValues: semantics.temporalProperties.map { ($0.id, $0) })
@@ -246,9 +264,20 @@ extension TLASpec {
       .init(code: .compilationIdentityMismatch, stage: .rendering, path: "authoredPlusCal.properties", expected: "a compiled property for identity \(id.ordinal)", actual: "no compiled property", nextSafeAction: "Compile the model again from its current source.")
     }
     func propertyID(_ property: AuthoredPlusCalProperty) throws -> PropertyID {
-      let path = property.bindingPath
-      guard case .property(let id) = bindings.references[path] else {
-        throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering, path: path, expected: "a bound property identity", actual: "no property identity", nextSafeAction: "Compile the model again from its current source.")
+      let kind: CompiledDeclaration.Kind
+      switch property {
+      case .invariant: kind = .invariant
+      case .temporal: kind = .temporalProperty
+      }
+      guard let id = layout.propertyID(kind: kind, named: property.name) else {
+        throw CompilationDiagnostic(
+          code: .compilationIdentityMismatch,
+          stage: .lowering,
+          path: "authoredPlusCal.properties.\(property.name)",
+          expected: "a compiled property identity",
+          actual: "no compiled property named '\(property.name)'",
+          nextSafeAction: "Compile the model from its current source."
+        )
       }
       return id
     }
@@ -279,8 +308,9 @@ extension TLASpec {
           Set(sourcePropertyNames + topLevelPropertyNames)
             .union(propertyPlan.translatorOwnedNames) == Set(loweredPropertyNames)
     else {
-        throw AlgorithmPlusCalRenderDiagnostic(
-          failedConcept: "authored PlusCal property export",
+        throw CompilationDiagnostic(
+          code: .invalidAuthoredPlusCalPlan,
+          stage: .lowering,
           path: "TLASpec.properties",
           expected: "one rendered typed property for every lowered property",
           actual: "Algorithm properties \(sourcePropertyNames); top-level typed properties \(topLevelPropertyNames); lowered properties \(loweredPropertyNames)",
@@ -408,14 +438,23 @@ extension TLASpec {
         dependencies: definition.plusCalDependencies
       )
     }
-    let instances = moduleInstances.map { instance in
-      let arguments = instanceArguments(for: instance).map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
-      let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+    guard moduleInstances.count == semantics.moduleInstances.count else {
+      throw CompilationDiagnostic(
+        code: .compilationIdentityMismatch,
+        stage: .rendering,
+        path: "authoredPlusCal.instances",
+        expected: "compiled module instances aligned with this source model",
+        actual: "\(semantics.moduleInstances.count) compiled instances for \(moduleInstances.count) declared instances",
+        nextSafeAction: "Compile the model again from its current source."
+      )
+    }
+    let instances = try zip(moduleInstances, semantics.moduleInstances).map { pair in
+      let (source, compiled) = pair
       return AuthoredPlusCalDeclaration(
-        name: instance.name,
-        text: "\(instance.name) == INSTANCE \(instance.module.name)\(withClause)",
-        phase: instance.plusCalPhase,
-        dependencies: instance.plusCalDependencies
+        name: source.name,
+        text: try formalRenderer.moduleInstance(compiled),
+        phase: source.plusCalPhase,
+        dependencies: source.plusCalDependencies
       )
     }
     return try AuthoredPlusCalDeclarationSections(definitions + instances)
@@ -440,13 +479,6 @@ private enum AuthoredPlusCalProperty {
     case .invariant(let name), .temporal(let name): name
     }
   }
-
-  var bindingPath: String {
-    switch self {
-    case .invariant(let name): "invariants.\(name).declaration"
-    case .temporal(let name): "temporalProperties.\(name).declaration"
-    }
-  }
 }
 
 struct AuthoredPlusCalDeclarationSections {
@@ -460,8 +492,15 @@ struct AuthoredPlusCalDeclarationSections {
       var pending = declarations.filter { $0.phase == phase }
       var result: [String] = []
       let declared = Set(declarations.compactMap(\.name))
-      if let unresolved = pending.first(where: { $0.dependencies.contains(where: { !declared.contains($0) }) }) {
-        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: unresolved.name ?? "unnamed", expected: "a declared dependency", actual: unresolved.dependencies.joined(separator: ", "), nextSafeAction: "Declare the dependency or remove its placement edge.")
+      if let unresolved = pending.first(where: { $0.dependencies.contains(where: { declared.contains($0) == false }) }) {
+        throw CompilationDiagnostic(
+          code: .invalidAuthoredPlusCalPlan,
+          stage: .lowering,
+          path: unresolved.name ?? "unnamed",
+          expected: "a declared dependency",
+          actual: unresolved.dependencies.joined(separator: ", "),
+          nextSafeAction: "Declare the dependency or remove its placement edge."
+        )
       }
       while let index = pending.firstIndex(where: { declaration in
         declaration.dependencies.allSatisfy(emitted.contains)
@@ -470,8 +509,15 @@ struct AuthoredPlusCalDeclarationSections {
         result.append(declaration.text)
         if let name = declaration.name { emitted.insert(name) }
       }
-      if !pending.isEmpty {
-        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: pending.compactMap(\.name).joined(separator: ","), expected: "an acyclic declaration dependency graph", actual: "cyclic dependencies", nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase.")
+      if pending.isEmpty == false {
+        throw CompilationDiagnostic(
+          code: .invalidAuthoredPlusCalPlan,
+          stage: .lowering,
+          path: pending.compactMap(\.name).joined(separator: ","),
+          expected: "an acyclic declaration dependency graph",
+          actual: "cyclic dependencies",
+          nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase."
+        )
       }
       return result
     }

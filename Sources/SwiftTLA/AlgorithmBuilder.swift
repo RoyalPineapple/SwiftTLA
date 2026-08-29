@@ -2153,6 +2153,8 @@ internal enum AlgorithmValidator {
                 validateStatements(body, at: anchor, labels: labels, diagnostics: &diagnostics)
             case .set(let target, _):
                 validateName(target.root, at: anchor, diagnostics: &diagnostics)
+            case .parallel(let assignments):
+                assignments.forEach { validateName($0.target.root, at: anchor, diagnostics: &diagnostics) }
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
                 validateStatements(then, at: anchor, labels: labels, diagnostics: &diagnostics)
                 validateStatements(otherwise, at: anchor, labels: labels, diagnostics: &diagnostics)
@@ -2178,6 +2180,8 @@ internal enum AlgorithmValidator {
             case .rejected: statementPaths = [[]]
             case .set(let target, _):
                 statementPaths = [[target.root]]
+            case .parallel(let assignments):
+                statementPaths = [assignments.map(\.target.root)]
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
                 statementPaths = writePaths(then) + writePaths(otherwise)
             case .choose(_, _, let body):
@@ -2208,6 +2212,8 @@ internal enum AlgorithmValidator {
                     statementPaths = [1]
                 case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
                     statementPaths = controlTransferCounts(body)
+                case .parallel:
+                    statementPaths = [0]
                 case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
                     statementPaths = controlTransferCounts(then) + controlTransferCounts(otherwise)
                 case .rejected, .await, .assert, .set, .skip:

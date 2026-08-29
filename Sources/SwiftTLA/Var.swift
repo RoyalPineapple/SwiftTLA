@@ -281,26 +281,22 @@ extension StateExpr {
   public static func forAll(
     _ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr
   ) -> StateExpr {
-    let qv = generatedBinderName()
-    return .forAll(set, qv, renameVar(variable.name, to: qv, in: body))
+    .forAll(set, variable.name, body)
   }
   public static func exists(
     _ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr
   ) -> StateExpr {
-    let qv = generatedBinderName()
-    return .exists(set, qv, renameVar(variable.name, to: qv, in: body))
+    .exists(set, variable.name, body)
   }
   public static func choose(
     _ variable: Var<some TLAValueType>, from set: StateExpr, matching predicate: StateExpr
   ) -> StateExpr {
-    let qv = generatedBinderName()
-    return .choose(set, qv, renameVar(variable.name, to: qv, in: predicate))
+    .choose(set, variable.name, predicate)
   }
   public static func functionLiteral(
     _ variable: Var<some TLAValueType>, in domain: StateExpr, _ body: StateExpr
   ) -> StateExpr {
-    let qv = generatedBinderName()
-    return .functionLiteral(domain, qv, renameVar(variable.name, to: qv, in: body))
+    .functionLiteral(domain, variable.name, body)
   }
 
   // MARK: - Closure-based with InvariantBuilder context

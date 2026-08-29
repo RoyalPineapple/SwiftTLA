@@ -70,9 +70,14 @@ final class ParserSession {
 
     /// The lexical bindings visible while decoding one typed facade expression.
     struct TypedFacadeScope: Sendable {
+        private enum Meaning: Sendable {
+            case value(StateExpr)
+            case recursiveOperator(String)
+        }
+
         private struct Binding: Sendable {
             let sourceName: String
-            let value: StateExpr
+            let meaning: Meaning
             let shape: TypedFacadeValueShape?
         }
 
@@ -87,7 +92,17 @@ final class ParserSession {
         }
 
         func value(for reference: DeclReferenceExprSyntax) -> StateExpr? {
-            bindings.last(where: { $0.sourceName == reference.baseName.text })?.value
+            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.text }),
+                  case .value(let value) = binding.meaning
+            else { return nil }
+            return value
+        }
+
+        func recursiveOperator(for reference: DeclReferenceExprSyntax) -> String? {
+            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.text }),
+                  case .recursiveOperator(let name) = binding.meaning
+            else { return nil }
+            return name
         }
 
         func shape(for reference: DeclReferenceExprSyntax) -> TypedFacadeValueShape? {
@@ -98,7 +113,7 @@ final class ParserSession {
             _ bindings: [(sourceName: String, value: StateExpr)]
         ) -> Self {
             Self(bindings: self.bindings + bindings.map {
-                Binding(sourceName: $0.sourceName, value: $0.value, shape: nil)
+                Binding(sourceName: $0.sourceName, meaning: .value($0.value), shape: nil)
             })
         }
 
@@ -107,7 +122,15 @@ final class ParserSession {
             value: StateExpr,
             shape: TypedFacadeValueShape?
         ) -> Self {
-            Self(bindings: bindings + [Binding(sourceName: sourceName, value: value, shape: shape)])
+            Self(bindings: bindings + [Binding(sourceName: sourceName, meaning: .value(value), shape: shape)])
+        }
+
+        func extending(recursiveOperator sourceName: String, named name: String) -> Self {
+            Self(bindings: bindings + [Binding(
+                sourceName: sourceName,
+                meaning: .recursiveOperator(name),
+                shape: nil
+            )])
         }
 
     }
@@ -119,6 +142,14 @@ final class ParserSession {
         shape: TypedFacadeValueShape? = nil
     ) -> TypedFacadeScope {
         scope.extending(sourceName: sourceName, value: value, shape: shape)
+    }
+
+    func typedFacadeScope(
+        _ scope: TypedFacadeScope,
+        recursiveOperator sourceName: String,
+        named name: String
+    ) -> TypedFacadeScope {
+        scope.extending(recursiveOperator: sourceName, named: name)
     }
 
     func typedFacadeScope(
@@ -178,19 +209,19 @@ final class ParserSession {
         guard definitionParameters.count == 2, bodyParameters.count == 1 else { return nil }
 
         let inputName = definitionParameters[1]
-        // Keep the closure parameter as an ordinary scoped binding while the
-        // typed façade is decoded.  It is lowered to the local operator below
-        // using this lexical mapping; no synthetic identifier can leak into
-        // the formal tree or collide with author input.
-        let recursiveReference = StateExpr.variable(name)
-        let definitionScope = typedFacadeScope(scope, bindings: [
-            (sourceName: definitionParameters[0], value: recursiveReference),
-            (sourceName: inputName, value: .variable(inputName))
-        ])
+        let definitionScope = typedFacadeScope(
+            typedFacadeScope(
+                scope,
+                recursiveOperator: definitionParameters[0],
+                named: name
+            ),
+            binding: inputName,
+            to: .variable(inputName)
+        )
         let bodyScope = typedFacadeScope(
             scope,
-            binding: bodyParameters[0],
-            to: recursiveReference
+            recursiveOperator: bodyParameters[0],
+            named: name
         )
         guard let decodedDefinition = decodeTypedFacadeValue(
             definitionExpression, scope: definitionScope
@@ -686,6 +717,15 @@ final class ParserSession {
            tuple.elements.count == 1,
            let value = tuple.elements.first?.expression {
             return decodeTypedFacadeValue(value, scope: scope, expectedEnumType: expectedEnumType)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
+           let operation = scope.recursiveOperator(for: reference) {
+            let arguments = call.arguments.compactMap {
+                decodeTypedFacadeValue($0.expression, scope: scope)
+            }
+            guard arguments.count == call.arguments.count else { return nil }
+            return .recursiveCall(operation, arguments)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
@@ -2290,12 +2330,7 @@ extension ParserSession {
                   collectionNames.contains(formalName)
             else { return nil }
         }
-        let parameter = sourceParameter == "$0"
-            ? generatedBinderName(
-                line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset),
-                column: 0
-            )
-            : sourceParameter
+        let parameter = "member"
         let selectedValue = StateExpr.functionApply(collection, .variable(parameter))
         guard let body = decodeBody(
             bodySyntax,

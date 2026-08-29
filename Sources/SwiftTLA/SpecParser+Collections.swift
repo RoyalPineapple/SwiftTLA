@@ -97,7 +97,7 @@ extension ParserSession {
             ))
             return
         }
-        let member = memberName
+        let member = "member"
         let diagnosticCount = result.diagnostics.count
         validateMemberUses(
             memberName,
@@ -125,7 +125,11 @@ extension ParserSession {
             body: .existsAction(
                 member,
                 .domain(.variable(collection.formalName)),
-                renameVar(collectionReference, to: collection.formalName, in: actionBody)
+                renameVar(
+                    memberName,
+                    to: member,
+                    in: renameVar(collectionReference, to: collection.formalName, in: actionBody)
+                )
             ),
             controlOwner: nil
         ))
