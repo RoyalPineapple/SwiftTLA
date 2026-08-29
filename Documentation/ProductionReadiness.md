@@ -19,8 +19,10 @@ its compiled meaning. Executable declarations are typed. One private runtime
 executes them. Applications use generated typed state and actions. Formal text
 exists at rendering and external-tool boundaries.
 
-The public execution API contains one generated-machine route. A successful
-compilation supplies every executable model fact to that route.
+The supported application execution API contains one generated-machine route.
+A successful compilation supplies every executable model fact to that route.
+The `@TLAModel` expansion uses an underscored compiler-support ABI whose state
+is private inside each generated model.
 
 ## Qualify a release commit
 

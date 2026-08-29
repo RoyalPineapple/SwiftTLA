@@ -120,6 +120,16 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.output.contains("requires a literal module name"))
     }
 
+    @Test("Model macro requires a value-semantic struct host")
+    func modelMacroRejectsReferenceAndActorHosts() throws {
+        for fixture in ["InvalidModelClassHost", "InvalidModelActorHost"] {
+            let result = try buildExternalConsumer(fixture)
+
+            #expect(result.status != 0)
+            #expect(result.output.contains("@TLAModel requires a struct"))
+        }
+    }
+
     @Test("Model macro rejects observer-backed instance state")
     func modelWithObservedInstanceStateDoesNotTypeCheck() throws {
         let result = try buildExternalConsumer("InvalidObservedModelState")
