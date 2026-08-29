@@ -1,80 +1,62 @@
 # ``SwiftTLA``
 
-Define a finite behavioral model once. Then inspect, execute, and verify the
-same model from Swift.
+Define a typed state-transition model in Swift. Compile it once, then execute
+the generated machine or render a formal bundle.
 
 ## Overview
 
-`SwiftTLA` contains the formal value model, parser support, compiler, runtime,
-and guarded application boundary. The `SwiftTLAMacros` module contains the
-macros that generate typed machines from a `TLASpec` declaration.
+`SwiftTLA` contains the source language, compiler, private runtime, and formal
+renderers. `SwiftTLAMacros` contains `@TLAModel`, which generates typed Swift
+machines from `TLASpec` declarations.
 
-Application code reads generated `State`, `Action`, and `Transition` values.
+Application code uses generated `State`, `Action`, `Transition`, machine, and
+`Actor` types.
 
-## Compile the source model
+## Compile a source model
 
-`TLASpec` is the typed source model. `compile()` validates, binds, links,
-lowers, and returns one immutable `CompiledSpecification`. Generated machines,
-bounded exploration, and rendered bundles use this compiled meaning.
+`TLASpec` is the typed source model. `compile()` validates declarations, binds
+names, links modules, lowers algorithms, and returns one
+`CompiledSpecification`.
 
 ```swift
 let compilation = try Counter.spec.compile()
 var machine = try Counter.makeMachine()
-try machine.send(.advance)
+let transition = try machine.send(.advance)
 ```
 
-`CompiledSpecification` contains the compiled layout and semantics, the
-compiler-produced module bundle, and a stable `CompilationIdentity`. Its
-`description` exposes declared imports and their structural paths without
-exposing private compiler identities or linker storage.
+`CompiledSpecification.description` exposes declarations and imports in
+canonical order. `CompiledSpecification.identity` identifies the compiled
+meaning used by generated code and formal outputs.
 
-Compilation can throw `CompilationDiagnostic`. The diagnostic identifies the
-stage, code, source path, expected value, actual value, and next safe action.
-Fix that source relationship before you compile again.
+Compilation errors use `CompilationDiagnostic`. Each diagnostic identifies
+the compiler stage, source path, expected fact, and actual fact.
 
-## Language support
+## Render a linked bundle
 
-`compile()` is the language-support check. Successful compilation provides one
-compiled meaning to execution, generated Swift, TLA+ rendering, and PlusCal
-rendering. Source and compilation diagnostics identify the exact rejected
-declaration and its compiler phase.
-
-## Materialize a linked bundle
-
-Compile first. Then materialize the validated bundle from that compilation.
+The compiler resolves the module closure before it renders text.
 
 ```swift
 let compilation = try Counter.spec.compile()
-try compilation.materializeModuleBundle(to: outputDirectory)
+let bundle = compilation.renderedTLAModuleBundle()
+let rootModule = bundle.root
+let importedModules = bundle.imports
 ```
 
-The materialized files come from the compiler-produced, tool-ready
-`TLAModuleBundle`. The compiler links imports and instances before rendering,
-validates the rendered closure, writes it to an isolated sibling staging
-directory, and publishes it with one rename.
-Diagnostics identify the named source relationship or destination to correct.
-
-If a model has `Algorithm` source, its authored PlusCal export is also
-throwing:
+The rendered bundle contains the root module, imports, configuration,
+ownership, and provenance. A compilation with one authored `Algorithm` also
+provides a PlusCal bundle.
 
 ```swift
-let bundle = try compilation.renderedPlusCalBundle()
+let plusCal = try compilation.renderedPlusCalBundle()
 ```
 
-`CompilationDiagnostic` identifies the declaration and compiler phase that
-prevented authored PlusCal export.
+## Execute generated Swift
 
-## Compiler and evidence limits
+The generated machine is a Swift value. SwiftUI stores it directly in
+`@State`. The generated `Actor` serializes access to the same value machine.
 
-Compilation produces an executable formal model. It does not prove every
-possible TLA+ module or every behavior outside the configured finite bounds.
-For a declared finite case, finite graph comparison compares the complete SwiftTLA
-and TLC graphs directly. It retains `swift-graph.jsonl`, `tlc-graph.jsonl`, and
-one `comparison.json`. Each graph stream declares its outcome and record
-counts; incomplete streams cannot match.
-Read <doc:GeneratedMachineSurface> for the generated-machine
-contract, `Documentation/FiniteGraphComparison.md` for the comparison record,
-and `Documentation/PublicAPIValidation.md` for direct generated-API checks.
+Read <doc:GeneratedMachineSurface> for the generated API. Read
+`Documentation/FiniteGraphComparison.md` for exact bounded TLC comparison.
 
 ## Topics
 
@@ -84,12 +66,8 @@ and `Documentation/PublicAPIValidation.md` for direct generated-API checks.
 - ``CompilationIdentity``
 - ``CompilationDiagnostic``
 - ``TLAModuleBundle``
-- ``TLAModuleBundleIntegrityError``
 
-### Generated-machine errors
+### Generated machine
 
 - ``GeneratedMachineError``
-
-### Generated-machine reference
-
 - <doc:GeneratedMachineSurface>

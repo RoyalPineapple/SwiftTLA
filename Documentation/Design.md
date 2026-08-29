@@ -1,150 +1,86 @@
-# SwiftTLA language design
+# Compiler design
 
-SwiftTLA is a compiler hosted in Swift. Typed Swift declarations create one
-source model. Compilation creates one immutable compiled specification.
+SwiftTLA is a compiler hosted in Swift. One source model becomes one immutable
+compiled specification.
 
 ```text
-typed Swift source → source model → compile → compiled specification
-                                            ├→ generated Swift machine
-                                            ├→ private runtime and exploration
-                                            ├→ rendered TLA+ bundle
-                                            └→ authored PlusCal bundle when the source has one Algorithm
+typed Swift source
+  → parse
+  → source model
+  → compile
+  → CompiledSpecification
+       ├→ private runtime and bounded exploration
+       ├→ generated machine and Actor
+       ├→ rendered TLA+ bundle
+       └→ rendered PlusCal bundle for one authored Algorithm
 ```
 
-The compiled specification carries the model meaning through every local
-output. It owns the layout, declaration identities, module closure, generated
-machine plan, diagnostics, and rendered-bundle plans.
+## Source model
 
-## Author a model
+`#spec` and result builders create typed declarations. The source model holds
+variables, actions, algorithms, procedures, properties, imports, instances,
+and refinements.
 
-Application models use `#spec` and PlusCal-shaped builders. A builder creates
-an authored declaration. It does not allocate a runtime slot or render text.
+An `Algorithm` uses scoped declarations. `scope.sharedVar` creates shared
+state. `scope.localVar` creates process or procedure state. `Each`, `Do`,
+`When`, `Assign`, `With`, `Choose`, `Goto`, and `Stop` create authored control
+flow.
 
-```swift
-@TLAModel
-struct Counter {
-    enum Step: String, CaseIterable {
-        case advance
-    }
+## Compilation
 
-    static var spec: TLASpec {
-        #spec("Counter") {
-            Algorithm("Counter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
-                Do(Step.advance) {
-                    When(count < 1)
-                    Assign(count, to: count + 1)
-                }
-                Invariant("Bounds") {
-                    count >= 0 && count <= 1
-                }
-            })
-        }
-    }
-}
-```
+Compilation validates declarations, binds lexical names to private identities,
+links imports and instances, and lowers algorithms into compiler-owned control
+state and actions.
 
-`Algorithm`, `Each`, `Procedure`, `Do`, `When`, `Assign`, `With`, `Choose`,
-`Goto`, and `Stop` create the source model. `FormalDefinition`, `Invariant`,
-`Import`, `Instance`, and `Refinement` create typed formal
-declarations in the same model.
+`CompiledLayout` assigns private IDs and state slots in canonical declaration
+order. `CompiledLowerer` creates compiled expressions and semantics. A
+successful `compile()` returns a complete `CompiledSpecification`.
 
-Direct TLA+ builders serve imported formal modules and parity fixtures. They
-also compile into a `CompiledSpecification`.
+`CompilationDescription` exposes source declarations in canonical order. It
+includes variables, actions, procedures, control locations, properties,
+refinements, imports, and compilation identity.
 
-## Compile a model
+## Execution
 
-Compilation validates declarations, binds lexical names, links modules,
-lowers algorithms, and assigns private IDs and slots in canonical declaration
-order.
+The private runtime executes compiled action identities against slot-backed
+state. `CompiledEvaluator` evaluates compiled expressions and values.
+`ModelChecker` performs bounded reachable-state exploration.
 
-```swift
-let compilation = try Counter.spec.compile()
-let description = compilation.description
-```
+`@TLAModel` derives generated `State`, `Action`, and `Transition` types from
+the compiled specification. The generated value machine stores one complete
+state and applies one typed action atomically. The generated `Actor` serializes
+access to that value machine.
 
-`CompilationDescription` exposes the stable author-facing declaration order:
-variables, actions, procedures, control locations, imports, and compilation
-identity. Private runtime IDs and slots do not cross this API boundary.
+## Rendering and linking
 
-Compilation throws `CompilationDiagnostic` when the source model has an
-invalid declaration, scope, import, instance, or required capability. A
-successful `CompiledSpecification` is complete for its declared model.
+Compilation owns module order, rendered names, configuration, ownership, and
+provenance. `CompiledTLARenderer` prints the compiled declaration plan.
+`AlgorithmPlusCalRenderer` prints the authored algorithm from its compiled
+render plan.
 
-## Execute generated Swift
+`renderedTLAModuleBundle()` returns the linked TLA+ bundle.
+`renderedPlusCalBundle()` returns PlusCal for a compilation with one authored
+algorithm.
 
-`@TLAModel` generates the application-facing API. Application code uses
-typed state and typed actions.
+## Exact finite comparison
 
-```swift
-var machine = try Counter.makeMachine()
-let transition = try machine.send(.advance)
-let state = transition.after
-```
+SwiftTLA exploration and TLC graph events produce the same canonical graph
+model. `GraphComparison` compares complete initial states, states, labeled
+edges with multiplicity, and outcomes.
 
-The generated machine converts an `Action` to a private compiled action
-request. The private runtime executes compiled action identities and
-slot-backed state. Application code does not use action names, runtime IDs,
-slots, or formal state maps.
-
-The generated `Actor` API uses the same typed state and actions.
-See [Generated Machines](GeneratedMachines.md) and
-[Actor Machines](ActorMachines.md).
-
-## Render formal bundles
-
-Every compiled specification renders direct TLA+. A compilation with exactly
-one authored `Algorithm` also renders that algorithm as PlusCal.
-
-```swift
-let tla = compilation.renderedTLAModuleBundle()
-let plusCal = try compilation.renderedPlusCalBundle()
-```
-
-Compilation resolves the module closure before rendering. A rendered bundle
-contains the root module, transitive imports, configuration, and provenance.
-The renderer prints the compiled declaration plan.
-
-## Explore and compare finite behavior
-
-The conformance harness explores the compiled specification with a declared
-finite exploration configuration. The runtime evaluates compiled expressions,
-values, state slots, and action identities.
-
-Finite graph comparison explores the compiled Swift source model and runs TLC
-against the pinned reference fixture declared for the case. Both sides produce
-a canonical graph. Exact graph comparison decides the declared finite case.
-Deterministic graph records retain the complete states and labeled edges and
-provide the difference explanation.
-
-See [Finite graph comparison](FiniteGraphComparison.md) and
-[Upstream parity](UpstreamParity.md).
-
-## Language support
-
-Compilation is the language-support check. A successful compilation supplies
-the runtime, generated machine, TLA+ bundle, and PlusCal bundle with one
-compiled meaning. Source diagnostics identify syntax that the parser cannot
-construct. Compilation diagnostics identify invalid declaration placement and
-unsupported compiled operations. A failed compilation publishes no compiled
-specification.
-
-Refinement checking evaluates a typed concrete model, typed abstract model,
-and typed state mapping. It checks mapped initial states and concrete edges,
-including abstract stuttering.
+TLC is an independent bounded oracle for each declared case. GitHub Actions
+runs the exact comparison against the requested SwiftTLA commit.
 
 ## Ownership
 
-| Concern | Owner |
+| Fact | Owner |
 | --- | --- |
-| Authored structure | `#spec` and result builders |
-| Name binding and module linking | compilation |
-| IDs and slots | `CompiledLayout` |
-| Runtime evaluation | private compiled runtime and evaluator |
-| Generated Swift surface | compilation and macros |
-| TLA+ and PlusCal text | renderers |
-| TLC staging and event parsing | TLC adapter |
-| Graph comparison and evidence | canonical graph and conformance components |
-
-Each owner carries structured data to the next phase. Text appears at source,
-rendering, TLC, diagnostics, and serialized-evidence boundaries.
+| Authored declarations and scope | source model |
+| Lexical identities | binding |
+| Module closure | linking |
+| IDs and state slots | compiled layout |
+| Formal meaning | compiled specification |
+| Application state and actions | generated machine |
+| Text output | renderer |
+| External behavior | TLC adapter |
+| Finite equality | exact graph comparison |

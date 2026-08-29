@@ -20,7 +20,7 @@ struct CounterView: View {
                     diagnostic = String(describing: error)
                 }
             }
-            if !diagnostic.isEmpty {
+            if diagnostic.isEmpty == false {
                 Text(diagnostic)
             }
         }

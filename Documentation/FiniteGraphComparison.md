@@ -1,75 +1,61 @@
 # Finite graph comparison
 
-Finite graph comparison is a bounded, executable comparison between one
-SwiftTLA BFS run and one TLC run. For each declared case, it compares the
-canonical initial-state set, canonical state bindings, and complete labeled
-transition multiset. It is stronger than matching a state count.
-
-The typed Swift source model owns the meaning that SwiftTLA accepts. Each TLC
-fixture is an independently maintained executable reference for one declared
-finite case. Exact graph comparison checks whether those two implementations
-agree within that case's bounds. GitHub Actions runs the comparison and owns
-the admission decision.
-
-Local use provides diagnostic evidence through the approved narrow validation
-wrapper. Hosted GitHub Actions provides admission evidence.
-
-## What is pinned
-
-`Verification/FiniteGraph/toolchain.json` locks TLC v1.8.0, its source
-commit and JAR digest, an architecture-specific Temurin 17 archive digest,
-and the bridge class/source/binary digests. `cases.json` locks every case's
-module, configuration, and Swift exploration policy. Setup
-fails closed when a required digest does not match.
-
-The setup script first checks `Tools/TLCGraphBridge/.tool-cache`, then downloads
-missing files from the URLs in the toolchain lock. Every cached or downloaded
-file must match its declared digest.
-
-## Evidence and diagnosis
-
-The command writes fresh evidence under `.build/finite-graph-evidence`.
-Each case retains the TLC invocation and raw output, one complete canonical
-graph stream from each explorer, and one exact comparison record.
+Finite graph comparison compares one bounded SwiftTLA exploration with one
+pinned TLC run. Each case resolves one source model and declares its TLC bundle
+and maximum state count. Each completed graph supplies its observable states
+and labeled actions.
 
 ```text
-swift-graph.jsonl ─┐
-                   ├→ exact canonical comparison → comparison.json
-tlc-graph.jsonl ───┘
+CompiledSpecification → SwiftGraphExporter → CompletedGraphRun ─┐
+                                                                ├→ GraphComparison
+pinned TLC bundle → TLCGraphReader → CompletedGraphRun ─────────┘
 ```
 
-Each graph stream contains a header, sorted initial states, sorted states,
-sorted labeled edges with multiplicity, an optional counterexample trace, and
-a final completion record. The completion record declares the outcome and
-exact record counts. A missing, truncated, failed, or bounded completion cannot
-represent an exact result. Process and comparison failures use the sibling
-`diagnostic.json` file.
+## Exact relation
 
-`comparison.json` records whether the two complete graphs match and includes
-the first structured differences when they do not. Exact equality is decided
-directly from the in-memory completed graph runs; the retained graph streams explain
-that decision.
+`GraphComparison` compares these records:
 
-When a run fails, inspect `comparison.json`, then `swift-graph.jsonl`,
-`tlc-graph.jsonl`, and `logs/` in that case's evidence directory. A graph
-mismatch is classified by relation, such as observable names, initial state,
-state binding, edge, or outcome.
+- observable variable and action names.
+- initial states.
+- complete states.
+- labeled edges with multiplicity.
+- exploration outcome.
 
-Counterexample traces explain an invariant or other checker failure. Complete
-graph evidence comes from a successful, exhaustive declared run and its bridge
-stream.
+Both graph runs must report complete exploration. A different record produces
+one structured `GraphDifference`.
 
-## Controls and limits
+## TLC boundary
 
-Each case declares one `exploration` value with `maximumStateLimit` and an
-explicit disabled symmetry mode. A run that requires more states than its limit
-is bounded and cannot produce an exact comparison. The retained TLC process
-record contains the same exploration value.
+[`Verification/FiniteGraph/cases.json`](../Verification/FiniteGraph/cases.json)
+declares each finite case. The toolchain lock declares the TLC source commit,
+JAR digest, Java archive, and graph bridge digests.
 
-Finite graph comparison has three shell outcomes. Exit `0` means every declared case
-completed and its exact graphs matched. Exit `1` means the complete graphs
-differ. Exit `2` means setup, execution, or evidence validation failed.
+`TLCProcessAdapter` validates and stages the declared bundle. `TLCGraphReader`
+decodes TLC graph events into `CompletedGraphRun`. TLC is the independent
+bounded oracle for the declared case.
 
-The claim covers the finite cases named in `cases.json`, their declared bounds,
-and the compared safety graph relation. Temporal, fairness, and symmetry claims
-have their own declared conformance cases.
+## Run the hosted comparison
+
+The hosted workflow runs the complete declared case set for a requested
+SwiftTLA commit.
+
+```sh
+gh workflow run finite-graph.yml \
+  --ref main \
+  -f swift_tla_sha="$swift_tla_sha"
+```
+
+The workflow artifact contains both graph streams, the TLC process output, and
+`comparison.json`. Read the first `GraphDifference` when a case differs.
+
+## Hosted result
+
+The `finite-graph.yml` workflow accepts `swift_tla_sha`. It uses that exact
+commit and names the artifact with the resolved commit, run ID, and run
+attempt.
+
+| Exit | Result |
+| ---: | --- |
+| `0` | Every declared graph matches exactly. |
+| `1` | At least one complete graph differs. |
+| `2` | At least one case cannot produce a complete comparison. |

@@ -16,7 +16,7 @@ Treat string-keyed and otherwise untyped data as a guarded boundary.
 - At a public boundary, use a typed model API or a dedicated projection type that owns the raw map.
 - A projection must validate keys and values before it returns typed data.
 - Do not index a raw state map at an application call site.
-- Use generated `State`, `Variables`, and `ActionLabel` types for application code.
+- Use generated `State`, `Action`, and `Transition` types for application code.
 - Name any unavoidable raw-TLA conversion explicitly. Do not present it as normal application state.
 
 ## Concurrency
