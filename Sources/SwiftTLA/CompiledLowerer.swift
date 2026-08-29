@@ -331,7 +331,16 @@ struct CompiledLowerer {
             procedures: try zip(plan.procedures, layout.procedures).enumerated().map { index, value in
                 let procedure = value.0
                 let path = "authoredPlusCal.procedures[\(index)]"
-                let scope = try bind(procedure.parameters.map(\.root), at: "\(path).parameters", scope: rootScope)
+                try requireDistinct(procedure.parameters.map(\.root), at: "\(path).parameters")
+                var scope = rootScope
+                for parameter in procedure.parameters {
+                    scope.values[parameter.root] = try allocateBinder(
+                        parameter.root,
+                        exactRenderedName: parameter.root,
+                        in: scope,
+                        at: "\(path).parameters"
+                    )
+                }
                 return .init(
                     id: value.1.id,
                     parameters: try procedure.parameters.map {
@@ -355,7 +364,7 @@ struct CompiledLowerer {
                 var scope = rootScope
                 scope.values["self"] = try allocateBinder(
                     "self",
-                    renderedName: "self",
+                    exactRenderedName: "self",
                     in: scope,
                     at: "\(path).binders"
                 )
@@ -1811,7 +1820,7 @@ struct CompiledLowerer {
 
     private mutating func allocateBinder(
         _ name: String,
-        renderedName explicitRenderedName: String? = nil,
+        exactRenderedName: String? = nil,
         in scope: BindingScope,
         at path: String
     ) throws -> BinderID {
@@ -1828,14 +1837,16 @@ struct CompiledLowerer {
         let binder = BinderID(ordinal: nextBinderOrdinal)
         nextBinderOrdinal += 1
         knownBinderNames.insert(name)
-        var preferredRenderedName = explicitRenderedName ?? name
+        var preferredRenderedName = exactRenderedName ?? name
         while isPlusCalDeclarationName(preferredRenderedName) == false {
             preferredRenderedName = "_\(preferredRenderedName)"
         }
         var unavailableNames = reservedRenderedNames
         unavailableNames.formUnion(scope.values.values.compactMap { binderNames[$0] })
         unavailableNames.formUnion(scope.operators.values.compactMap { operatorNames[$0] })
-        let renderedName = StateExpr.freshBoundName(preferredRenderedName, avoiding: unavailableNames)
+        let renderedName = exactRenderedName == nil
+            ? StateExpr.freshBoundName(preferredRenderedName, avoiding: unavailableNames)
+            : preferredRenderedName
         binderNames[binder] = renderedName
         return binder
     }

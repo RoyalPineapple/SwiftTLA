@@ -348,8 +348,8 @@ struct AlgorithmPlusCalRendererTests {
         }
     }
 
-    @Test("renders a sequential body and procedures")
-    func rendersSequentialProcedureAlgorithm() throws {
+    @Test("renders procedure parameters with compiled state names")
+    func rendersProcedureParametersWithCompiledStateNames() throws {
         let algorithm = Algorithm("Procedures", scoped: { scope in
             let output = scope.sharedVar("output", initial: 0)
             Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
@@ -363,13 +363,16 @@ struct AlgorithmPlusCalRendererTests {
             Do(ProcedureStep.finished) { Stop() }
         })
 
-        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
+        let compilation = try TLASpec("Procedures") { algorithm }.compile()
+        let rendered = try compilation.renderedPlusCalBundle().root.tla
+        let compiledMachine = compilation.renderedTLAModuleBundle().root.tla
 
-        #expect(rendered.contains("procedure work(parameter0_1)"))
+        #expect(rendered.contains("procedure work(parameter0)"))
         #expect(rendered.contains("enter:"))
-        #expect(rendered.contains("output := (parameter0_1 + offset);"))
+        #expect(rendered.contains("output := (parameter0 + offset);"))
         #expect(rendered.contains("call work(7);"))
         #expect(rendered.contains("{\n  start:"))
+        #expect(compiledMachine.contains("VARIABLES pc, output, stack, parameter0, offset"))
     }
 
     @Test("procedure call capture avoids authored binders and retains tail return")
