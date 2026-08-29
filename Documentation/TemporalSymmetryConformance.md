@@ -15,8 +15,10 @@ The comparison requires these facts:
 - both complete graphs have the same initial states.
 - both complete graphs have the same states.
 - both complete graphs have the same labeled edge multiplicities.
-- each TLC lasso transition belongs to the TLC graph.
-- each SwiftTLA lasso state belongs to the SwiftTLA graph.
+- each TLC lasso starts from a TLC initial state and follows ordered labeled
+  edges in the TLC graph.
+- each SwiftTLA lasso starts from a SwiftTLA initial state and follows ordered
+  labeled edges in the SwiftTLA graph.
 
 Each case uses one TLC run for the complete graph and one TLC run for the
 property. A property violation also captures its trace.

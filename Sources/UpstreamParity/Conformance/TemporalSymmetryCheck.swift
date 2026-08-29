@@ -140,7 +140,11 @@ package struct TemporalSymmetryCheck: Sendable {
   ) throws -> TemporalComparison {
     let swiftRun = try SwiftGraphExporter().export(exploration)
     let swiftResult = try temporalResult(
-      compilation: compilation, temporalCase: temporalCase, exploration: exploration)
+      compilation: compilation,
+      temporalCase: temporalCase,
+      exploration: exploration,
+      swiftRun: swiftRun
+    )
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
@@ -360,7 +364,8 @@ extension TemporalSymmetryCheck {
   private func temporalResult(
     compilation: CompiledSpecification,
     temporalCase: TemporalCase,
-    exploration: FiniteExploration
+    exploration: FiniteExploration,
+    swiftRun: CompletedGraphRun
   ) throws -> TemporalPropertyResult {
     let analyses = try exploration.analyzeTemporalProperties(in: compilation)
     guard let analysis = analyses.first else {
@@ -373,20 +378,54 @@ extension TemporalSymmetryCheck {
       guard let witness = analysis.witness else {
         throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso")
       }
-      let keys = try SwiftGraphExporter().canonicalStates(exploration).mapValues {
-        $0.key.canonicalEncoding
-      }
-      func identity(of state: StateGraph.StateID) throws -> String {
-        guard let identity = keys[state] else {
+      let canonicalStates = try SwiftGraphExporter().canonicalStates(exploration)
+      func canonicalState(_ state: StateGraph.StateID) throws -> CanonicalState {
+        guard let canonical = canonicalStates[state] else {
           throw EvidenceFormatError.invalidField(
             record: temporalCase.id,
             field: "Swift lasso state"
           )
         }
-        return identity
+        return canonical
       }
-      let prefix = try witness.prefix.map(identity)
-      let cycle = try witness.cycle.map(identity)
+      func pathEdges(states: [CanonicalState], actions: [String]) throws -> [CanonicalEdge] {
+        if states.isEmpty {
+          guard actions.isEmpty else {
+            throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso actions")
+          }
+          return []
+        }
+        guard states.count == actions.count + 1 else {
+          throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso actions")
+        }
+        return actions.indices.map { index in
+          CanonicalEdge(
+            source: states[index].key,
+            action: actions[index],
+            target: states[index + 1].key
+          )
+        }
+      }
+      let prefixStates = try witness.prefix.map(canonicalState)
+      let cycleStates = try witness.cycle.map(canonicalState)
+      guard let cycleStart = cycleStates.first,
+            prefixStates.last == nil || prefixStates.last == cycleStart else {
+        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso cycle")
+      }
+      let edges = try pathEdges(states: prefixStates, actions: witness.prefixActions)
+        + pathEdges(states: cycleStates, actions: witness.cycleActions)
+      let states = prefixStates.isEmpty
+        ? cycleStates
+        : prefixStates + Array(cycleStates.dropFirst())
+      guard swiftRun.containsTemporalTrace(
+        states: states,
+        edges: edges,
+        implicitStutterActions: ["[stutter]"]
+      ) else {
+        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso transition")
+      }
+      let prefix = prefixStates.map { $0.key.canonicalEncoding }
+      let cycle = cycleStates.map { $0.key.canonicalEncoding }
       guard let first = cycle.first else {
         throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso cycle")
       }

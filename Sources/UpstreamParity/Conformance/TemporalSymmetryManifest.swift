@@ -228,6 +228,32 @@ package struct TemporalLassoWitness: Equatable, Codable, Sendable {
   }
 }
 
+package extension CompletedGraphRun {
+  func containsTemporalTrace(
+    states: [CanonicalState],
+    edges: [CanonicalEdge],
+    implicitStutterActions: Set<String> = [],
+    allowsImplicitStuttering: Bool = false
+  ) -> Bool {
+    guard let first = states.first,
+          states.count == edges.count + 1,
+          graph.initialStateKeys.contains(first.key),
+          states.allSatisfy({ graph.states[$0.key] == $0 }) else {
+      return false
+    }
+    for (index, edge) in edges.enumerated() {
+      guard edge.source == states[index].key,
+            edge.target == states[index + 1].key,
+            graph.edgeOccurrences[edge] != nil
+              || (edge.source == edge.target
+                && (allowsImplicitStuttering || implicitStutterActions.contains(edge.action))) else {
+        return false
+      }
+    }
+    return true
+  }
+}
+
 package enum TemporalPropertyResult: Equatable, Codable, Sendable {
   case satisfied
   case violated(TemporalLassoWitness)

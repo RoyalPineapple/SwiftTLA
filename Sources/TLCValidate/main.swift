@@ -69,7 +69,6 @@ enum FiniteGraphCLIError: Error, CustomStringConvertible {
     case invalidManifest(String)
     case unknownCase(String)
     case outputExists(String)
-    case unsupportedSwiftSpec(String)
     case invalidRunID(String)
     var description: String {
         switch self {
@@ -85,8 +84,6 @@ enum FiniteGraphCLIError: Error, CustomStringConvertible {
             return "unknown finite-graph case: \(id)"
         case .outputExists(let path):
             return "output directory already exists: \(path)"
-        case .unsupportedSwiftSpec(let id):
-            return "unsupported Swift finite-graph spec: \(id)"
         case .invalidRunID(let value):
             return "invalid finite-graph run ID: \(value)"
         }
@@ -113,7 +110,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             throw FiniteGraphCLIError.unknownCase(options.caseID)
         }
         let preparedCases = try selected.map { declaration in
-            let compilation = try sourceSpecification(declaration.id).compile()
+            let compilation = try declaration.sourceModel.spec.compile()
             return (declaration, compilation, compilation.renderedActions())
         }
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)

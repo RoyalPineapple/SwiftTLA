@@ -5,6 +5,25 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCTemporalAdapterTests {
+  @Test("temporal trace membership requires the ordered labeled path")
+  func temporalTraceMembershipRequiresOrderedLabeledPath() throws {
+    let zero = CanonicalState(bindings: ["value": .integer(0)])
+    let one = CanonicalState(bindings: ["value": .integer(1)])
+    let advance = CanonicalEdge(source: zero.key, action: "Advance", target: one.key)
+    let run = try CompletedGraphRun(
+      graph: CanonicalGraph(initialStates: [zero], states: [zero, one], edges: [advance]),
+      observableActions: ["Advance"],
+      outcome: .exhaustiveSuccess
+    )
+
+    #expect(run.containsTemporalTrace(states: [zero, one], edges: [advance]))
+    #expect(run.containsTemporalTrace(
+      states: [zero, one],
+      edges: [CanonicalEdge(source: zero.key, action: "Other", target: one.key)]
+    ) == false)
+    #expect(run.containsTemporalTrace(states: [one, zero], edges: [advance]) == false)
+  }
+
   @Test("Temporal property results encode only valid states")
   func temporalPropertyResultIsClosed() throws {
     let lasso = try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ["s", "s"])

@@ -17,6 +17,33 @@ struct FiniteGraphCheckTests {
     }
   }
 
+  @Test("finite graph manifests reject unknown source models")
+  func rejectsUnknownSourceModels() {
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(
+        FiniteGraphManifest.self,
+        from: manifest(sourceModel: "unknown", exploration: """
+          {
+            "maximumStateLimit": 10,
+            "symmetryReduction": "disabled"
+          }
+          """)
+      )
+    }
+  }
+
+  @Test("declared finite graph cases resolve every source model exactly once")
+  func resolvesDeclaredSourceModelsExactlyOnce() throws {
+    let data = try Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json"))
+    let manifest = try JSONDecoder().decode(FiniteGraphManifest.self, from: data)
+    let sources = manifest.cases.map(\.sourceModel)
+    #expect(sources.count == FiniteGraphSourceModel.allCases.count)
+    #expect(Set(sources) == Set(FiniteGraphSourceModel.allCases))
+    for source in sources {
+      _ = source.spec
+    }
+  }
+
   @Test("finite graph manifests reject unknown dependency fields")
   func rejectsUnknownDependencyFields() {
     #expect(throws: EvidenceFormatError.invalidField(
@@ -54,12 +81,16 @@ struct FiniteGraphCheckTests {
     }
   }
 
-  private func manifest(dependencies: String = "[]", exploration: String) -> Data {
+  private func manifest(
+    sourceModel: String = "hour-clock",
+    dependencies: String = "[]",
+    exploration: String
+  ) -> Data {
     Data("""
       {
         "schema": "FiniteGraphCases",
         "cases": [{
-          "id": "fixture",
+          "sourceModel": "\(sourceModel)",
           "module": "Fixture.tla",
           "configuration": "Fixture.cfg",
           "imports": [],

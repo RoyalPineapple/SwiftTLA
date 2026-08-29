@@ -205,16 +205,21 @@ extension TLCTemporalAdapter {
     to graph: CompletedGraphRun,
     allowsImplicitStuttering: Bool
   ) -> Bool {
-    guard let first = trace.states.first,
-          graph.graph.initialStateKeys.contains(first.key),
-          trace.states.allSatisfy({ graph.graph.states[$0.key] == $0 }) else {
-      return false
+    var states = trace.states
+    var edges = trace.transitions.map(\.edge)
+    if edges.isEmpty, allowsImplicitStuttering, let state = states.first {
+      states.append(state)
+      edges.append(CanonicalEdge(source: state.key, action: "UnnamedAction", target: state.key))
+    } else if let target = edges.last?.target,
+              let finalState = graph.graph.states[target] {
+      states.append(finalState)
     }
-    return trace.transitions.allSatisfy { transition in
-      graph.graph.edgeOccurrences[transition.edge] != nil
-        || (transition.source == transition.target
-          && (transition.name == "UnnamedAction" || allowsImplicitStuttering))
-    }
+    return graph.containsTemporalTrace(
+      states: states,
+      edges: edges,
+      implicitStutterActions: ["UnnamedAction"],
+      allowsImplicitStuttering: allowsImplicitStuttering
+    )
   }
 
   private func clearTraceOutput(for request: TLCProcessRequest) throws {
