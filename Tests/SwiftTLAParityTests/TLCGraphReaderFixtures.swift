@@ -291,7 +291,7 @@ func launchRequest(
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
     workingDirectory: module.deletingLastPathComponent(),
-    finiteGraphCase: finiteGraphCase, runID: UUID()
+    finiteGraphCase: finiteGraphCase, runID: UUID(), invocation: .finiteGraph
   )
 }
 func requestWithReferenceArtifacts(
@@ -306,7 +306,7 @@ func requestWithReferenceArtifacts(
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
     workingDirectory: URL(fileURLWithPath: "/tmp"),
     finiteGraphCase: try fixtureCase(try testReferencePin(), arguments: ["-workers", "1", "-fp", "1"]),
-    runID: UUID(), referenceArtifacts: artifacts
+    runID: UUID(), invocation: .finiteGraph, referenceArtifacts: artifacts
   )
 }
 func header(_ finiteGraphCase: FiniteGraphCase) throws -> String {

@@ -8,12 +8,10 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
   func parsesFrozenGraphIntoCompletedGraphRun() throws {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
-    let result = TLCProcessResult(
-      status: 0,
-      stdout: "Model checking completed. No error has been found.",
-      stderr: ""
-    )
-    let run = try reader.readCompletedGraph(try completeGraphStream(finiteGraphCase), result: result)
+    let run = try completedGraph(
+      try completeGraphStream(finiteGraphCase),
+      with: reader,
+      outcome: .completed)
     #expect(run.isPassEligible)
     #expect(run.graph.initialStateKeys.count == 1)
     #expect(run.graph.edgeOccurrences.values.sorted() == [1])
@@ -40,7 +38,8 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       traceOutput: directory.appendingPathComponent("trace.json"),
       workingDirectory: directory.appendingPathComponent("work"),
       finiteGraphCase: try fixtureCase(try toolchainPin()),
-      runID: UUID()
+      runID: UUID(),
+      invocation: .finiteGraph
     )
 
     let staged = try request.stageDeclaredBundle()
@@ -116,7 +115,8 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       traceOutput: directory.appendingPathComponent("trace.json"),
       workingDirectory: directory.appendingPathComponent("work"),
       finiteGraphCase: try fixtureCase(try toolchainPin()),
-      runID: UUID()
+      runID: UUID(),
+      invocation: .finiteGraph
     )
 
     #expect(throws: TLCProcessError.invalidModuleBundle(.invalidDeclaredClosure(
@@ -141,30 +141,24 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
   @Test("TLC violations remain non-passing canonical outcomes")
   func preservesViolationOutcome() throws {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
-    let run = try TLCGraphReader(finiteGraphCase: finiteGraphCase).readCompletedGraph(
+    let run = try completedGraph(
       try completeGraphStream(finiteGraphCase),
-      result: TLCProcessResult(
-        status: 12,
-        stdout: "Error: Invariant broken is violated.",
-        stderr: ""
-      )
+      with: TLCGraphReader(finiteGraphCase: finiteGraphCase),
+      outcome: .safetyViolation
     )
     #expect(!run.isPassEligible)
-    #expect(run.outcome == .invariantViolation("Error: Invariant broken is violated."))
+    #expect(run.outcome == .invariantViolation("TLC safety property violation"))
   }
 
-  @Test("a violation path cannot replace TLC's invariant diagnostic")
-  func ignoresViolationInInputPath() throws {
+  @Test("TLC exit status and closed event stream define graph outcomes")
+  func graphOutcomeUsesTypedExecutionOutcome() throws {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
-    let run = try TLCGraphReader(finiteGraphCase: finiteGraphCase).readCompletedGraph(
+    let run = try completedGraph(
       try completeGraphStream(finiteGraphCase),
-      result: TLCProcessResult(
-        status: 12,
-        stdout: "Parsing file /tmp/invariant-violation/DieHard.tla\nError: Invariant NotSolved is violated.",
-        stderr: ""
-      )
+      with: TLCGraphReader(finiteGraphCase: finiteGraphCase),
+      outcome: .completed
     )
-    #expect(run.outcome == .invariantViolation("Error: Invariant NotSolved is violated."))
+    #expect(run.outcome == .exhaustiveSuccess)
   }
 
   @Test("toolchain pin rejects malformed lock fields")
@@ -256,7 +250,8 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       workingDirectory: URL(fileURLWithPath: "/tmp"),
       finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1"]),
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
-      traceMode: .dumpJSON
+      traceMode: .dumpJSON,
+      invocation: .finiteGraph
     )
     let command = request.launchArguments
     #expect(command.contains("-Dswifttla.tlc.graph.path=/tmp/events.jsonl"))
@@ -501,9 +496,10 @@ extension TLCGraphReaderTests {
     let expected = try fixtureCase(try toolchainPin(), renderedActions: [call])
     let reader = TLCGraphReader(finiteGraphCase: expected)
     let stream = try functionRecordNormalizationStream(expected, actionLocation: "<Step(0) line 1, col 1 to line 1, col 2 of module Fixture>")
-    let run = try reader.readCompletedGraph(
+    let run = try completedGraph(
       stream,
-      result: TLCProcessResult(status: 0, stdout: "Model checking completed. No error has been found.", stderr: ""))
+      with: reader,
+      outcome: .completed)
     #expect(run.observableActions == ["Step__0"])
     #expect(run.graph.initialStateKeys.first?.canonicalEncoding.contains("63617273=record") == true)
     let undeclared = try refreshedFooterDigest(Data(String(decoding: stream, as: UTF8.self)
@@ -589,13 +585,59 @@ extension TLCGraphReaderTests {
       request,
       retainingIn: directory.appendingPathComponent("evidence")
     )
-    #expect(capture.run.primary.isViolation)
+    #expect(capture.run.outcome == .safetyViolation)
     #expect(executor.requests.count == 2)
     #expect(executor.requests[0].traceMode == .none)
     #expect(executor.requests[1].traceMode == .dumpJSON)
     #expect(executor.requests[0].graphEvents == request.graphEvents)
     #expect(executor.requests[1].graphEvents.lastPathComponent == "events.trace.jsonl")
     #expect(capture.run.trace == .init(status: 12, stdout: "Error: Invariant broken", stderr: ""))
+  }
+
+  @Test("TLC exit status defines the process outcome")
+  func executionOutcomeUsesExitStatusAndClosedStream() throws {
+    let directory = try helperProcessDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let request = try retainedCaptureRequest(in: directory)
+    try completeGraphStream(request.finiteGraphCase).write(to: request.graphEvents, options: .atomic)
+    let executor = RecordingTLCExecutor(results: [
+      .init(status: 0, stdout: "Error: violation text from a module path", stderr: "")
+    ])
+
+    let capture = try TLCProcessAdapter(executor: executor).capture(
+      request,
+      retainingIn: directory.appendingPathComponent("evidence")
+    )
+
+    #expect(capture.run.outcome == .completed)
+    #expect(capture.graph.isPassEligible)
+    #expect(executor.requests.count == 1)
+  }
+
+  @Test("TLC completion requires a closed graph stream")
+  func executionOutcomeRequiresClosedStream() throws {
+    let directory = try helperProcessDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let request = try retainedCaptureRequest(in: directory)
+    let lines = String(
+      decoding: try completeGraphStream(request.finiteGraphCase),
+      as: UTF8.self
+    ).split(separator: "\n")
+    try Data((lines.dropLast().joined(separator: "\n") + "\n").utf8)
+      .write(to: request.graphEvents, options: .atomic)
+    let executor = RecordingTLCExecutor(results: [
+      .init(status: 0, stdout: "Model checking completed. No error has been found.", stderr: "")
+    ])
+
+    #expect(throws: TLCGraphEventError.missingFooter) {
+      try TLCProcessAdapter(executor: executor).capture(
+        request,
+        retainingIn: directory.appendingPathComponent("evidence")
+      )
+    }
+    #expect(FileManager.default.fileExists(
+      atPath: directory.appendingPathComponent("evidence/logs/tlc.stdout.log").path
+    ))
   }
 
   @Test("graph event reader rejects booleans for integers and numbers for booleans")
@@ -643,7 +685,7 @@ extension TLCGraphReaderTests {
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongModule, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-module"),
-      finiteGraphCase: finiteGraphCase, runID: UUID()
+      finiteGraphCase: finiteGraphCase, runID: UUID(), invocation: .finiteGraph
     )
     #expect(throws: FiniteGraphCaseError.moduleDigestMismatch) {
       let wrongStaged = try wrongModuleRequest.stageDeclaredBundle()
@@ -656,13 +698,21 @@ extension TLCGraphReaderTests {
       javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
       bundle: wrongConfiguration, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-configuration"),
-      finiteGraphCase: finiteGraphCase, runID: UUID()
+      finiteGraphCase: finiteGraphCase, runID: UUID(), invocation: .finiteGraph
     )
     #expect(throws: FiniteGraphCaseError.cfgDigestMismatch) {
       let wrongStaged = try wrongConfigurationRequest.stageDeclaredBundle()
       try wrongConfigurationRequest.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
   }
+}
+
+private func completedGraph(
+  _ data: Data,
+  with reader: TLCGraphReader,
+  outcome: TLCExecutionOutcome
+) throws -> CompletedGraphRun {
+  try reader.makeCompletedGraphRun(reader.parse(data), outcome: outcome)
 }
 
 private func toolchainPin() throws -> TLCReferencePin {
@@ -698,7 +748,8 @@ private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessReque
     traceOutput: directory.appendingPathComponent("counterexample.json"),
     workingDirectory: directory.appendingPathComponent("work"),
     finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1", "-fp", "1"]),
-    runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001"))
+    runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
+    invocation: .finiteGraph
   )
 }
 

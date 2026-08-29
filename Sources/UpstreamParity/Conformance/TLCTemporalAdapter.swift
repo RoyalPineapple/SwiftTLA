@@ -92,7 +92,8 @@ package struct TLCTemporalAdapter: Sendable {
     guard input.swiftRun.isPassEligible else {
       throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
-    guard input.request.caseID == input.temporalCase.id else {
+    guard input.request.caseID == input.temporalCase.id,
+          input.request.invocation == .temporalProperty else {
       throw TLCTemporalAdapterError.requestMismatch
     }
     let request = input.request.finiteGraphCase
@@ -113,7 +114,8 @@ package struct TLCTemporalAdapter: Sendable {
           graphRequest.finiteGraphCase.cfgSHA256 == SHA256.hex(Data(graphConfiguration.utf8)) else {
       throw TLCTemporalAdapterError.configurationMismatch
     }
-    guard graphRequest.runID != input.request.runID,
+    guard graphRequest.invocation == .finiteGraph,
+          (graphRequest.runID == input.request.runID) == false,
           graphRequest.caseID == input.request.caseID,
           graphRequest.bundle.root.name == input.request.bundle.root.name,
           graphRequest.bundle.root.tla == input.request.bundle.root.tla,
@@ -152,7 +154,7 @@ package struct TLCTemporalAdapter: Sendable {
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
     try RetainedFiles.createDirectory(directory, beneath: input.outputDirectory)
     let capture = try processAdapter.capture(request, retainingIn: directory)
-    guard capture.run.primary.reportedExhaustiveCompletion, capture.graph.isPassEligible else {
+    guard capture.run.outcome == .completed, capture.graph.isPassEligible else {
       throw TLCTemporalAdapterError.incompleteGraph
     }
     return capture.graph
@@ -167,10 +169,10 @@ extension TLCTemporalAdapter {
     outputDirectory: URL,
     allowsImplicitStuttering: Bool
   ) throws -> TemporalPropertyResult {
-    if run.primary.reportedExhaustiveCompletion {
+    if run.outcome == .completed {
       return .satisfied
     }
-    guard isTemporalViolation(run.primary),
+    guard run.outcome == .livenessViolation,
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path),
           let counterexample = try? TLCTraceParser().parseCounterexample(
             Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json"))),
@@ -189,7 +191,8 @@ extension TLCTemporalAdapter {
       return try? TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state])
     }
     guard evidence.transitions.count == stateIDs.count,
-          let loopStart = stateIDs.firstIndex(of: evidence.transitions.last?.target.key.canonicalEncoding ?? "") else {
+          let finalTarget = evidence.transitions.last?.target.key.canonicalEncoding,
+          let loopStart = stateIDs.firstIndex(of: finalTarget) else {
       return nil
     }
     return try? TemporalLassoWitness(
@@ -253,14 +256,6 @@ extension TLCTemporalAdapter {
     return suffix.reduce(existingAncestor.resolvingSymlinksInPath().standardizedFileURL) {
       $0.appendingPathComponent($1)
     }
-  }
-
-  private func isTemporalViolation(_ result: TLCProcessResult) -> Bool {
-    let output = result.stdout + "\n" + result.stderr
-    return result.isViolation && (
-      output.localizedCaseInsensitiveContains("temporal")
-        || output.localizedCaseInsensitiveContains("liveness")
-    )
   }
 
 }

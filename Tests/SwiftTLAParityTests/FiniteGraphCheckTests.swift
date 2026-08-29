@@ -357,7 +357,8 @@ extension FiniteGraphCheckTests {
       traceOutput: root.appendingPathComponent("trace.json"),
       workingDirectory: root,
       finiteGraphCase: finiteGraphCase,
-      runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000005"))
+      runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000005")),
+      invocation: .finiteGraph
     )
   }
 }

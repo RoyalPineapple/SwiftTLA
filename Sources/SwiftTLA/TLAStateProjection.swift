@@ -5,7 +5,6 @@ package enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStr
     case invalidConstant(path: String)
     case missingValue(path: String)
     case invalidValue(path: String)
-    case projectionUnavailable(path: String, reason: String)
     /// A generated typed state field was absent.
     case missingRequiredValue(path: String, expected: String)
     /// A generated typed state field had a formal value of the wrong kind.
@@ -21,8 +20,6 @@ package enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStr
             return "Missing TLA state value at \(path)"
         case .invalidValue(let path):
             return "Invalid TLA state value at \(path)"
-        case .projectionUnavailable(let path, let reason):
-            return "Cannot project formal state at \(path): \(reason). Inspect the reported boundary before retrying."
         case .missingRequiredValue(let path, let expected):
             return "Cannot decode \(path): expected \(expected), but the formal state has no value. Supply \(expected) for \(path) before retrying."
         case .typeMismatch(let path, let expected, let actual):
@@ -121,31 +118,6 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
                 try validate(key, at: "\(path).key")
                 try validate(value, at: "\(path).value")
             }
-        }
-    }
-}
-
-/// Contains a valid projection or the typed reason why one is unavailable.
-package enum TLAStateProjectionResult: Sendable, Equatable {
-    case projected(TLAStateProjection)
-    case unavailable(TLAStateProjectionDiagnostic)
-
-    public var projection: TLAStateProjection? {
-        guard case .projected(let projection) = self else { return nil }
-        return projection
-    }
-
-    public var diagnostic: TLAStateProjectionDiagnostic? {
-        guard case .unavailable(let diagnostic) = self else { return nil }
-        return diagnostic
-    }
-
-    public func requireProjection() throws -> TLAStateProjection {
-        switch self {
-        case .projected(let projection):
-            return projection
-        case .unavailable(let diagnostic):
-            throw diagnostic
         }
     }
 }
