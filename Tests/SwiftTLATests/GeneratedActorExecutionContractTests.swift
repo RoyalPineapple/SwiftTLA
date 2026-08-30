@@ -30,7 +30,7 @@ struct ParameterizedActorModel {
 }
 
 struct GeneratedActorExecutionContractTests {
-    @Test("actor matches the value machine for a typed schedule")
+    @Test("actor matches the generated machine for a typed schedule")
     func actorMatchesValueMachineForTypedSchedule() async throws {
         var machine = try ParameterizedActorModel.makeMachine()
         let actor = try ParameterizedActorModel.Actor()
@@ -76,14 +76,14 @@ struct GeneratedActorExecutionContractTests {
 
         var machine = try ParameterizedActorModel.makeMachine()
         let expected = try machine.send(action)
-        let successful = submissions.compactMap(\.evidence)
+        let committedTransitions = submissions.compactMap(\.transition)
         let rejected = submissions.filter(\.isUnexpected)
 
-        #expect(successful.count == 1)
+        #expect(committedTransitions.count == 1)
         #expect(rejected.count == 1)
-        #expect(successful[0].action == expected.action)
-        #expect(successful[0].before == expected.before)
-        #expect(successful[0].after == expected.after)
+        #expect(committedTransitions[0].action == expected.action)
+        #expect(committedTransitions[0].before == expected.before)
+        #expect(committedTransitions[0].after == expected.after)
         #expect(await actor.state == expected.after)
     }
 
@@ -92,36 +92,25 @@ struct GeneratedActorExecutionContractTests {
         action: ParameterizedActorModel.Action
     ) async -> Submission {
         do {
-            let evidence = try await actor.send(action)
-            return .applied(.init(
-                action: evidence.action,
-                before: evidence.before,
-                after: evidence.after
-            ))
+            let transition = try await actor.send(action)
+            return .applied(transition)
         } catch {
             return .unexpected
         }
     }
 
     private enum Submission: Sendable {
-        case applied(Evidence)
+        case applied(ParameterizedActorModel.Transition)
         case unexpected
 
-        var evidence: Evidence? {
-            guard case .applied(let evidence) = self else { return nil }
-            return evidence
+        var transition: ParameterizedActorModel.Transition? {
+            guard case .applied(let transition) = self else { return nil }
+            return transition
         }
 
         var isUnexpected: Bool {
             if case .unexpected = self { return true }
             return false
         }
-
-    }
-
-    private struct Evidence: Sendable {
-        let action: ParameterizedActorModel.Action
-        let before: ParameterizedActorModel.State
-        let after: ParameterizedActorModel.State
     }
 }

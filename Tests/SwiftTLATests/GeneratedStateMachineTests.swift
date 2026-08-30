@@ -181,7 +181,7 @@ struct GeneratedRestrictedProcessDomain {
 
 struct GeneratedRestrictedProcessDomainTests {
     @Test("a process declaration keeps its explicit member subset")
-    func generatedModelUsesOnlyDeclaredProcessMembers() throws {
+    func compiledProcessUsesOnlyDeclaredMembers() throws {
         let compilation = try GeneratedRestrictedProcessDomain.spec.compile()
         let binding = try #require(compilation.semantics.actions.first?.bindings.first)
         #expect(binding.sourceName == "process")
@@ -395,7 +395,7 @@ struct GeneratedIntegerChoiceAlgorithm {
 
 struct GeneratedIntegerChoiceAlgorithmTests {
     @Test("#spec retains a bounded integer choice")
-    func generatedModelRetainsIntegerChoice() throws {
+    func compiledSpecificationRetainsIntegerChoice() throws {
         let spec = GeneratedIntegerChoiceAlgorithm.spec
         let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("selected", in: $0) }) == [.int(0), .int(1), .int(2), .int(3)])
@@ -421,7 +421,7 @@ struct GeneratedAlgorithmStateConstraint {
 
 struct GeneratedAlgorithmStateConstraintTests {
     @Test("compiled exploration enforces an algorithm state constraint")
-    func generatedModelPreservesStateConstraint() throws {
+    func compiledExplorationPreservesStateConstraint() throws {
         let compilation = try GeneratedAlgorithmStateConstraint.spec.compile()
         #expect(compilation.semantics.constraint != nil)
         let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
@@ -464,7 +464,7 @@ struct GeneratedProcessLocalInvariant {
 
 struct GeneratedProcessLocalInvariantTests {
     @Test("compilation preserves process-local invariants")
-    func generatedModelPreservesProcessLocalInvariant() throws {
+    func compilationPreservesProcessLocalInvariant() throws {
         let compilation = try GeneratedProcessLocalInvariant.spec.compile()
         #expect(compilation.semantics.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
     }
@@ -512,7 +512,7 @@ struct GeneratedDependentInitialAlgorithm {
 
 struct GeneratedDependentInitialAlgorithmTests {
     @Test("#spec preserves a dependent typed function initializer")
-    func generatedModelPreservesDependentInitialStates() throws {
+    func compiledSpecificationPreservesDependentInitialStates() throws {
         let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
         let mirrors = try #require(compilation.layout.testVariableID(named: "mirrors"))
         let states = try CompiledRuntime(compilation: compilation).initialStates().map {
@@ -527,7 +527,7 @@ struct GeneratedDependentInitialAlgorithmTests {
 }
 
 struct NestedActorConcurrencyTests {
-    @Test("Nested actor matches value-machine execution")
+    @Test("Nested actor matches generated-machine execution")
     func nestedActorMatchesValueMachineExecution() async throws {
         let actorLabel: NestedComposedCounter.Action = .advance
         var machine = try NestedComposedCounter.makeMachine()
@@ -853,7 +853,7 @@ struct GeneratedStateMachineTests {
         #expect(after.value == 222)
     }
 
-    @Test("Actor returns the value machine's three-argument transition")
+    @Test("Actor returns the generated machine's three-argument transition")
     func actorMatchesValueMachineThreeArgumentTransition() async throws {
         var machine = try ThreeParameterActionMachine.makeMachine()
         let expected = try machine.send(.transfer(source: 2, destination: 20, amount: 200))

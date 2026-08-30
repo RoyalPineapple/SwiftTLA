@@ -124,14 +124,14 @@ struct TypedFacadeContractTests {
     )
     #expect(update.raw == expected)
 
-    let result = try compiledValue(update.raw, values: [
+    let value = try compiledValue(update.raw, values: [
       ("cars", .function([
         .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
         .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
       ]))
     ])
     #expect(
-      result
+      value
         == .function([
           .string("carA"): .record(["floor": .int(2), "doorsOpen": .bool(false)]),
           .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
@@ -183,29 +183,29 @@ struct TypedFacadeContractTests {
 
   @Test("typed facade compile-negative fixtures reject escape hatches")
   func invalidTypedFacadeUsesDoNotTypeCheck() throws {
-    let result = try buildExternalConsumer("InvalidTypedFacade")
+    let build = try buildExternalConsumer("InvalidTypedFacade")
 
-    #expect(result.status != 0)
-    #expect(result.output.contains("TLAField"))
-    #expect(result.output.contains("InvalidTypedFacade.swift:32:"))
-    #expect(result.output.contains("member 'person'"))
-    #expect(result.output.contains("no exact matches in call to instance method 'becomes'"))
-    #expect(result.output.contains("candidate expects value of type 'TLAValue'"))
-    #expect(result.output.contains("value of type 'Expr<TLAValue>' has no member 'becomes'"))
+    #expect(build.status != 0)
+    #expect(build.output.contains("TLAField"))
+    #expect(build.output.contains("InvalidTypedFacade.swift:32:"))
+    #expect(build.output.contains("member 'person'"))
+    #expect(build.output.contains("no exact matches in call to instance method 'becomes'"))
+    #expect(build.output.contains("candidate expects value of type 'TLAValue'"))
+    #expect(build.output.contains("value of type 'Expr<TLAValue>' has no member 'becomes'"))
     for member in [
       "floor", "updated", "applying", "union", "intersection", "subtracting", "isSubset", "isIn",
       "cardinality", "isEmpty", "flattened", "subsets", "domain", "count", "head", "tail", "filtering",
       "mapping", "appending", "concatenating", "at", "integerDivided"
     ] {
-      #expect(result.output.contains("'\(member)'"))
+      #expect(build.output.contains("'\(member)'"))
     }
   }
 
   @Test("typed DSL invalid fixture reports each source-local diagnostic")
   func invalidTypedDSLReportsSourceLocalDiagnostics() throws {
-    let result = try buildExternalConsumer("InvalidTypedDSL")
+    let build = try buildExternalConsumer("InvalidTypedDSL")
 
-    #expect(result.status != 0)
+    #expect(build.status != 0)
     for expected in [
       "InvalidTypedDSL.swift:41:",
       "parameter 'person' requires an explicitly written finite values array",
@@ -216,7 +216,7 @@ struct TypedFacadeContractTests {
       "InvalidTypedDSL.swift:96:",
       "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
     ] {
-      #expect(result.output.contains(expected))
+      #expect(build.output.contains(expected))
     }
 
     let unknownField = try buildExternalConsumer("InvalidTypedDSLUnknownField")

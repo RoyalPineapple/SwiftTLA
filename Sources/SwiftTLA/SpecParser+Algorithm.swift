@@ -196,14 +196,14 @@ extension ParserSession {
     /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents
+        into components: inout ParsedSpecComponents
     ) -> Algorithm? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
         guard let name = extractStringArg(call, index: 0),
               let closure = algorithmBuilderClosure(in: call)
         else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Algorithm requires a string literal name and a builder body.",
                 source: call
             ))
@@ -212,7 +212,7 @@ extension ParserSession {
         let fairness: SequentialAlgorithmFairness
         if let expression = call.arguments.first(where: { $0.label?.text == "fairness" })?.expression {
             guard let access = expression.as(MemberAccessExprSyntax.self) else {
-                result.diagnostics.append(.init(
+                components.diagnostics.append(.init(
                     message: "Algorithm fairness must be .none or .weak.",
                     source: expression
                 ))
@@ -222,7 +222,7 @@ extension ParserSession {
             case "none": fairness = .none
             case "weak": fairness = .weak
             default:
-                result.diagnostics.append(.init(
+                components.diagnostics.append(.init(
                     message: "Algorithm fairness must be .none or .weak.",
                     source: expression
                 ))
@@ -232,7 +232,7 @@ extension ParserSession {
             fairness = .none
         }
 
-        var components: [AlgorithmComponentModel] = []
+        var algorithmComponents: [AlgorithmComponentModel] = []
         var macros: [String: AlgorithmMacroDefinition] = [:]
         let outerConstants = constants
         let outerTupleVariables = algorithmTupleVariables
@@ -251,7 +251,7 @@ extension ParserSession {
                let macro = parseAlgorithmMacroDeclaration(variable, scope: sourceScope) {
                 let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text ?? ""
                 guard macros[name] == nil else {
-                    result.diagnostics.append(.init(message: "Algorithm macro '\(name)' is declared more than once.", source: statement))
+                    components.diagnostics.append(.init(message: "Algorithm macro '\(name)' is declared more than once.", source: statement))
                     return nil
                 }
                 macros[name] = macro
@@ -266,7 +266,7 @@ extension ParserSession {
                     declarationScope: declarationScope
                ) {
                 let component = parsedVariable.component
-                components.append(component)
+                algorithmComponents.append(component)
                 if case .shared(let state) = component,
                    state.isTuple {
                     algorithmTupleVariables.insert(state.root)
@@ -295,12 +295,12 @@ extension ParserSession {
                 continue
             }
             if let diagnostic = algorithmSourceDiagnostic {
-                result.diagnostics.append(diagnostic)
+                components.diagnostics.append(diagnostic)
                 return nil
             }
             guard case .expr(let expression) = statement.item else {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
-                result.diagnostics.append(.init(
+                components.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: statement
@@ -309,11 +309,11 @@ extension ParserSession {
             }
             guard let call = expression.as(FunctionCallExprSyntax.self) else {
                 if let diagnostic = unsupportedAlgorithmSourceDiagnostic(in: expression, source: expression) {
-                    result.diagnostics.append(diagnostic)
+                    components.diagnostics.append(diagnostic)
                     return nil
                 }
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
-                result.diagnostics.append(.init(
+                components.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: expression
@@ -324,11 +324,11 @@ extension ParserSession {
                 if let diagnostic = unsupportedAlgorithmSourceDiagnostic(
                     in: call.calledExpression, source: call
                 ) {
-                    result.diagnostics.append(diagnostic)
+                    components.diagnostics.append(diagnostic)
                     return nil
                 }
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
-                result.diagnostics.append(.init(
+                components.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: expression
@@ -340,14 +340,14 @@ extension ParserSession {
                     algorithmParseFailure = algorithmParseFailure
                         ?? "FormalDefinition could not decode its typed parameters or formal body."
                     let detail = algorithmParseFailure.map { " \($0)" } ?? ""
-                    result.diagnostics.append(.init(
+                    components.diagnostics.append(.init(
                         message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
                             + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                         source: expression
                     ))
                     return nil
                 }
-                components.append(.formalOperator(definition))
+                algorithmComponents.append(.formalOperator(definition))
                 continue
             }
             guard let component = parseAlgorithmComponent(
@@ -357,24 +357,24 @@ extension ParserSession {
                 scope: sourceScope
             ) else {
                 if let diagnostic = algorithmSourceDiagnostic {
-                    result.diagnostics.append(diagnostic)
+                    components.diagnostics.append(diagnostic)
                     return nil
                 }
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
-                result.diagnostics.append(.init(
+                components.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
                         + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: expression
                 ))
                 return nil
             }
-            components.append(component)
+            algorithmComponents.append(component)
         }
 
-        let model = AlgorithmModel(name: name, sequentialFairness: fairness, components: components)
+        let model = AlgorithmModel(name: name, sequentialFairness: fairness, components: algorithmComponents)
         let diagnostics = AlgorithmValidator.validate(model)
         guard diagnostics.isEmpty else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Invalid Algorithm '\(name)': \(diagnostics.map(\.description).joined(separator: "; "))",
                 source: call
             ))
@@ -944,7 +944,7 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> [AlgorithmStatementModel]? {
-        var result: [AlgorithmStatementModel] = []
+        var parsedStatements: [AlgorithmStatementModel] = []
         for (index, statement) in statements.enumerated() {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self) {
@@ -963,7 +963,7 @@ extension ParserSession {
                     macros: macros,
                     scope: bodyScope
                 ) else { return nil }
-                return result + body
+                return parsedStatements + body
             }
             guard case .expr(let expression) = statement.item
             else {
@@ -988,7 +988,7 @@ extension ParserSession {
                     macros: macros,
                     scope: scope
                 ) else { return nil }
-                result += expanded
+                parsedStatements += expanded
                 continue
             }
             guard let construct = AlgorithmSourceConstruct(call.calledExpression) else {
@@ -1019,9 +1019,9 @@ extension ParserSession {
                 }
                 return nil
             }
-            result.append(parsed)
+            parsedStatements.append(parsed)
         }
-        return result
+        return parsedStatements
     }
 
     /// Parses a Swift `let` inside a formal block as a lexical formal alias

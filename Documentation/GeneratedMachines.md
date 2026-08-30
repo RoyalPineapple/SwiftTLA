@@ -1,6 +1,7 @@
 # Generated machines
 
-`@TLAModel` generates a typed Swift state machine from a compiled `TLASpec`.
+`@TLAModel` generates a typed Swift state machine from one compiled
+specification.
 The machine holds one complete `State` and accepts typed `Action` values. Each
 successful action returns a `Transition` with the state before and after it.
 
@@ -10,8 +11,8 @@ let transition = try machine.send(.advance)
 let state = transition.after
 ```
 
-Application code uses the generated machine. Formal tools use the compiled
-specification and rendered bundles.
+Application code uses the generated machine. TLC and PlusCal tools use the
+rendered bundles published by the compiled specification.
 
 ## Generate a machine
 
@@ -56,7 +57,7 @@ struct BoundedCounter {
 
 ## State, actions, and transitions
 
-Each generated model exposes these value types:
+Each generated machine exposes these value types:
 
 - `State` is an immutable value with the declared variables and their Swift types.
 - `Action` contains declared actions and their typed parameters.
@@ -77,12 +78,12 @@ import SwiftTLA
 func runDirectAction() throws {
     var machine = try BoundedCounter.makeMachine()
     let actions = try machine.enabledActions()
-    let result = try machine.send(.advance)
+    let transition = try machine.send(.advance)
 
     assert(actions == [.advance])
-    assert(result.action == .advance)
-    assert(result.before.value == 0)
-    assert(result.after.value == 1)
+    assert(transition.action == .advance)
+    assert(transition.before.value == 0)
+    assert(transition.after.value == 1)
     assert(machine.state.value == 1)
 }
 ```
@@ -92,7 +93,7 @@ Use `isEnabled(_:)` to control user actions. Handle each error from
 
 ## SwiftUI
 
-The generated machine value is SwiftUI state. Keep it directly in `@State`,
+The generated machine is SwiftUI state. Keep it directly in `@State`,
 read its typed state, and send typed actions. A successful action replaces the
 complete state in one transition.
 
@@ -162,7 +163,7 @@ to the same machine.
 
 ## Actor
 
-`Actor` is a thin asynchronous adapter over one generated value machine. It
+`Actor` is a thin asynchronous adapter over one generated machine. It
 serializes `send(_:)` and exposes the same generated `State` and `Action`
 values. Its initializer accepts the same typed initial state as
 `makeMachine(_:)`.
@@ -230,13 +231,13 @@ import SwiftTLA
 
 func runGeneratedMachineTesting() throws {
     var machine = try BoundedCounter.makeMachine()
-    let result = try machine.send(.advance)
+    let transition = try machine.send(.advance)
     let beforeFailure = machine.state
 
-    assert(result.before.value == 0)
+    assert(transition.before.value == 0)
     let isEnabled = try machine.isEnabled(.advance)
     assert(isEnabled == false)
-    assert(result.after.value == 1)
+    assert(transition.after.value == 1)
 
     do {
         _ = try machine.send(.advance)
@@ -249,22 +250,26 @@ func runGeneratedMachineTesting() throws {
 
 ## Compile and render
 
-Compile the source model before inspection, rendering, or exploration:
+Compile the source model before inspection or exploration:
 
 ```swift
 let compilation = try BoundedCounter.spec.compile()
 let bundle = compilation.renderedTLAModuleBundle()
 ```
 
-The generated machine compiles the same source and compares its compilation
-identity with the identity from macro expansion. Explicit compilations drive
-bounded exploration and formal rendering.
+Compilation validates declarations, binds names, links modules, lowers
+behavior, allocates private identities, renders TLA+/PlusCal text, and
+assembles the formal bundles before it publishes the compiled specification.
+Rendering is the text conversion within that pipeline. The generated machine
+compiles the same source and compares its compilation identity with the
+identity from macro expansion. Explicit compiled specifications drive bounded
+exploration and expose the rendered bundles.
 
 ## API reference
 
 | Name | Role |
 | --- | --- |
-| `@TLAModel` | Generates the typed machine surface for a `TLASpec`. |
+| `@TLAModel` | Generates the typed machine surface for a source model. |
 | `GeneratedMachineError` | Reports a rejected or invalid generated-machine operation. |
 | Generated `State` | Holds declared model variables as Swift values. |
 | Generated `Action` | Represents declared actions and their typed parameters. |
@@ -272,5 +277,5 @@ bounded exploration and formal rendering.
 | Generated `state` | Reads the complete current generated state. |
 | Generated `send(_:)` | Applies one typed action or throws. |
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |
-| Generated `Actor` | Serializes access to one generated machine value. |
+| Generated `Actor` | Serializes access to one generated machine. |
 | Generated `enabledActions()` | Lists the typed actions enabled by the current state. |

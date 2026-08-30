@@ -223,9 +223,9 @@ extension StateExpr {
         func visitUnderBindings(_ names: Set<String>, _ expression: StateExpr) -> StateExpr {
             let outerApplications = activeLocalFunctionApplications
             activeLocalFunctionApplications = outerApplications.filter { !names.contains($0.key) }
-            let result = visit(expression)
+            let transformed = visit(expression)
             activeLocalFunctionApplications = outerApplications
-            return result
+            return transformed
         }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {

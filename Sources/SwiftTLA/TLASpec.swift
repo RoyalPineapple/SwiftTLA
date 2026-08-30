@@ -236,8 +236,8 @@ public enum StandardModule: String, Sendable, Hashable, CaseIterable {
 }
 
 func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
-  modules.reduce(into: []) { result, module in
-    if !result.contains(module) { result.append(module) }
+  modules.reduce(into: []) { orderedModules, module in
+    if orderedModules.contains(module) == false { orderedModules.append(module) }
   }
 }
 

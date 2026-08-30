@@ -38,11 +38,7 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
-      name: "InvalidGeneratedActorRawSurface",
-      dependencies: generatedMachineDependencies
-    ),
-    .executableTarget(
-      name: "InvalidGeneratedRawSurface",
+      name: "InvalidGeneratedStorageAccess",
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(

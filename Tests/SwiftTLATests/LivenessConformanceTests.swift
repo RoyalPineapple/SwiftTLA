@@ -127,7 +127,7 @@ struct LivenessConformanceTests {
             NamedAction(name: "done", body: .guard_(true))
         ]
 
-        let result = try analyze(
+        let outcome = try analyze(
             graph,
             property: .alwaysEventually(property),
             fairness: [],
@@ -135,9 +135,9 @@ struct LivenessConformanceTests {
             initialStateIDs: [initial]
         )
 
-        #expect(result.status == .violated)
-        #expect(result.witness?.prefix == [initial, left])
-        #expect(result.witness?.cycle == [left, left])
+        #expect(outcome.status == .violated)
+        #expect(outcome.witness?.prefix == [initial, left])
+        #expect(outcome.witness?.cycle == [left, left])
     }
 
     @Test("the temporal form matrix returns fair-lasso violations")
@@ -154,9 +154,9 @@ struct LivenessConformanceTests {
         ]
 
         for (name, property) in cases {
-            let result = try analyze(graph, property: property, initialStateIDs: [initial])
-            #expect(result.status == .violated, "Expected \(name) to have a stuttering counterexample")
-            #expect(result.witness?.cycle == [initial, initial])
+            let outcome = try analyze(graph, property: property, initialStateIDs: [initial])
+            #expect(outcome.status == .violated, "Expected \(name) to have a stuttering counterexample")
+            #expect(outcome.witness?.cycle == [initial, initial])
         }
     }
 
@@ -176,7 +176,7 @@ struct LivenessConformanceTests {
             ],
             values: [initial: 0, qState: 2, trigger: 1, safe: 0, cycle: 0]
         )
-        let result = try analyze(
+        let outcome = try analyze(
             graph,
             property: .leadsTo(predicate(1), predicate(2)),
             fairness: [.weakFairness("A")],
@@ -184,8 +184,8 @@ struct LivenessConformanceTests {
             initialStateIDs: [initial]
         )
 
-        #expect(result.status == .violated)
-        guard let witness = result.witness else {
+        #expect(outcome.status == .violated)
+        guard let witness = outcome.witness else {
             Issue.record("Expected a fair-lasso witness")
             return
         }
@@ -215,7 +215,7 @@ struct LivenessConformanceTests {
             ],
             values: [initial: 1, far: 0, near: 0, bridge: 1]
         )
-        let result = try analyze(
+        let outcome = try analyze(
             graph,
             property: .alwaysEventually(predicate(1)),
             fairness: [],
@@ -223,8 +223,8 @@ struct LivenessConformanceTests {
             initialStateIDs: [initial]
         )
 
-        #expect(result.status == .violated)
-        #expect(result.witness?.prefix == [initial, near])
+        #expect(outcome.status == .violated)
+        #expect(outcome.witness?.prefix == [initial, near])
     }
 
     @Test("eventually is satisfied when P holds in the initial state")
@@ -235,7 +235,7 @@ struct LivenessConformanceTests {
             values: [initial: 1, avoiding: 0]
         )
 
-        let result = try analyze(
+        let outcome = try analyze(
             graph,
             property: .eventually(predicate(1)),
             fairness: [],
@@ -243,8 +243,8 @@ struct LivenessConformanceTests {
             initialStateIDs: [initial]
         )
 
-        #expect(result.status == .satisfied)
-        #expect(result.witness == nil)
+        #expect(outcome.status == .satisfied)
+        #expect(outcome.witness == nil)
     }
 
     @Test("canonical witness chooses the shortest cycle after an equal prefix")
@@ -266,7 +266,7 @@ struct LivenessConformanceTests {
             values: [initial: 1, longA: 0, longB: 0, longC: 0, shortA: 0, shortB: 0]
         )
 
-        let result = try analyze(
+        let outcome = try analyze(
             graph,
             property: .alwaysEventually(predicate(1)),
             fairness: [.weakFairness("A")],
@@ -274,9 +274,9 @@ struct LivenessConformanceTests {
             initialStateIDs: [initial]
         )
 
-        #expect(result.status == .violated)
-        #expect(result.witness?.prefix == [initial, shortA])
-        #expect(result.witness?.cycle == [shortA, shortB, shortA])
+        #expect(outcome.status == .violated)
+        #expect(outcome.witness?.prefix == [initial, shortA])
+        #expect(outcome.witness?.cycle == [shortA, shortB, shortA])
     }
 
     @Test("same-SCC fair-cycle search prefers the shorter valid action loop")
@@ -296,7 +296,7 @@ struct LivenessConformanceTests {
             values: [initial: 0, longA: 0, longB: 0, longC: 0, short: 0]
         )
 
-        let result = try analyze(
+        let outcome = try analyze(
             graph,
             property: .alwaysEventually(predicate(1)),
             fairness: [.weakFairness("A")],
@@ -304,9 +304,9 @@ struct LivenessConformanceTests {
             initialStateIDs: [initial]
         )
 
-        #expect(result.status == .violated)
-        #expect(result.witness?.prefix == [initial])
-        #expect(result.witness?.cycle == [initial, short, initial])
+        #expect(outcome.status == .violated)
+        #expect(outcome.witness?.prefix == [initial])
+        #expect(outcome.witness?.cycle == [initial, short, initial])
     }
 
     @Test("disabled fairness alternative wins inside an SCC that also contains A")
@@ -322,7 +322,7 @@ struct LivenessConformanceTests {
         let actions = [action("A"), action("B")]
 
         for fairness in [[FairnessCondition.weakFairness("A")], [.strongFairness("A")]] {
-            let result = try analyze(
+            let outcome = try analyze(
                 graph,
                 property: .alwaysEventually(predicate(1)),
                 fairness: fairness,
@@ -330,9 +330,9 @@ struct LivenessConformanceTests {
                 initialStateIDs: [initial]
             )
 
-            #expect(result.status == .violated)
-            #expect(result.witness?.prefix == [initial])
-            #expect(result.witness?.cycle == [initial, initial])
+            #expect(outcome.status == .violated)
+            #expect(outcome.witness?.prefix == [initial])
+            #expect(outcome.witness?.cycle == [initial, initial])
         }
     }
 
@@ -356,7 +356,7 @@ struct LivenessConformanceTests {
         ]
 
         for (_, fairness) in cases {
-            let result = try analyze(
+            let outcome = try analyze(
                 graph,
                 property: property,
                 fairness: fairness,
@@ -364,10 +364,10 @@ struct LivenessConformanceTests {
                 initialStateIDs: [initial]
             )
             if fairness.isEmpty == false {
-                #expect(result.enabledActions["A"]?[initial] == true)
-                #expect(result.enabledActions["A"]?[disabled] == false)
+                #expect(outcome.enabledActions["A"]?[initial] == true)
+                #expect(outcome.enabledActions["A"]?[disabled] == false)
             }
-            #expect(result.status == .violated)
+            #expect(outcome.status == .violated)
         }
 
         let weak = try analyze(
@@ -407,9 +407,9 @@ struct LivenessConformanceTests {
             )
         ]
 
-        for (name, result, reason) in unavailable {
-            #expect(result.status == .unavailable, "Expected \(name) to be unavailable")
-            #expect(result.reason == reason)
+        for (name, outcome, reason) in unavailable {
+            #expect(outcome.status == .unavailable, "Expected \(name) to be unavailable")
+            #expect(outcome.reason == reason)
         }
     }
 
@@ -465,7 +465,7 @@ struct LivenessConformanceTests {
             temporalProperties: [NamedTemporal(name: "property", expr: .eventually(predicate(1)))]
         )
         let compilation = try specification.compile()
-        let result = try #require(
+        let outcome = try #require(
             LivenessChecker(
                 compilation: compilation,
                 graph: sourceGraph,
@@ -475,8 +475,8 @@ struct LivenessConformanceTests {
                 .first
         )
 
-        #expect(result.status == .unavailable)
-        #expect(result.reason == .unknownAction)
+        #expect(outcome.status == .unavailable)
+        #expect(outcome.reason == .unknownAction)
     }
 
     @Test("liveness graph states require matching compiled states")
@@ -569,7 +569,7 @@ struct LivenessConformanceTests {
         let incomplete = try ModelChecker(compilation: try completeSpec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).checkLiveness()
         if case .depthExceeded = incomplete {
         } else {
-            Issue.record("Expected depth-exceeded result, got \(incomplete)")
+            Issue.record("Expected depth-exceeded outcome, got \(incomplete)")
         }
     }
 }

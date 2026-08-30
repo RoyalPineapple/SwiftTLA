@@ -100,17 +100,17 @@ struct SymmetricCollectionPredicateTests {
     }
 
     #expect(parsed.diagnostics.isEmpty)
-    let parsedResult = try ModelChecker(
+    let parsedOutcome = try ModelChecker(
       compilation: parsedCompilation,
       configuration: symmetricExplorationConfiguration()
     ).check()
-    let directResult = try ModelChecker(
+    let directOutcome = try ModelChecker(
       compilation: try direct.compile(),
       configuration: symmetricExplorationConfiguration()
     ).check()
-    #expect(parsedResult.description == directResult.description)
-    guard case .invariantViolated(let name, _, _) = parsedResult else {
-      Issue.record("Expected an invariant violation, got: \(parsedResult)")
+    #expect(parsedOutcome.description == directOutcome.description)
+    guard case .invariantViolated(let name, _, _) = parsedOutcome else {
+      Issue.record("Expected an invariant violation, got: \(parsedOutcome)")
       return
     }
     #expect(name == "validPhase")
@@ -131,9 +131,9 @@ struct SymmetricCollectionPredicateTests {
 
   @Test("Macro diagnostics anchor unsupported predicates at the authored expression")
   func macroDiagnosticAnchorsUnsupportedPredicate() throws {
-    let result = try buildExternalConsumer("InvalidCollectionPredicateMacro")
+    let build = try buildExternalConsumer("InvalidCollectionPredicateMacro")
 
-    #expect(result.status != 0)
+    #expect(build.status != 0)
   }
 
   private func predicateClosure() throws -> ClosureExprSyntax {

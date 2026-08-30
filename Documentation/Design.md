@@ -9,7 +9,7 @@ typed Swift source
   → source model
   → compile
   → CompiledSpecification
-       ├→ private runtime and bounded exploration
+       ├→ compiled runtime and bounded exploration
        ├→ generated machine and Actor
        ├→ rendered TLA+ bundle
        └→ rendered PlusCal bundle for one authored Algorithm
@@ -42,14 +42,14 @@ refinements, imports, and compilation identity.
 
 ## Execution
 
-The private runtime executes compiled action identities against slot-backed
+The compiled runtime executes compiled action identities against slot-backed
 state. `CompiledEvaluator` evaluates compiled expressions and values.
 `ModelChecker` performs bounded reachable-state exploration.
 
 `@TLAModel` derives generated `State`, `Action`, and `Transition` types from
-the compiled specification. The generated value machine stores one complete
-state and applies one typed action atomically. The generated `Actor` serializes
-access to that value machine.
+the compiled specification. The generated machine stores one complete state
+and applies one typed action atomically. The generated `Actor` serializes
+access to that machine.
 
 ## Rendering and linking
 

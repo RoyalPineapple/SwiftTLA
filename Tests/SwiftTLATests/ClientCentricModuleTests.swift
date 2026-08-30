@@ -39,12 +39,12 @@ struct ClientCentricModuleTests {
       .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("f"))])
     )
     let expression = StateExpr.tupleConcatenate(.tupleLiteral([]), selected)
-    let result = try compiledValue(
+    let value = try compiledValue(
       expression,
       formalOperators: try FormalModuleClosure.resolve(root: FunctionsModule.module)
         .linkedOperators.formalOperatorDefinitions
     )
-    guard case .tuple(let values) = result else {
+    guard case .tuple(let values) = value else {
       Issue.record("An injective function choice must be consumable as a formal sequence.")
       return
     }

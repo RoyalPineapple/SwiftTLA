@@ -86,12 +86,12 @@ package struct TemporalSymmetryCheck: Sendable {
       let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
       do {
         let compilation = try symmetryConformanceSpec(scope: symmetryCase.scope).compile()
-        let result = try captureSymmetry(
+        let outcome = try captureSymmetry(
           compilation: compilation, symmetryCase: symmetryCase,
           toolRoot: input.toolRoot, referencePin: input.referencePin,
           projectRoot: root, evidenceRoot: output,
           outputDirectory: output.appendingPathComponent(symmetryCase.id, isDirectory: true))
-        observed = (result, result == .exact ? "exact" : "symmetry-comparison-difference")
+        observed = (outcome, outcome == .exact ? "exact" : "symmetry-comparison-difference")
       } catch {
         observed = (
           .unavailable,

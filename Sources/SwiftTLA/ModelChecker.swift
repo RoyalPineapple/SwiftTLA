@@ -124,10 +124,10 @@ package struct ModelChecker {
 
     func check() throws -> ModelCheckOutcome {
         let exploration = try explore()
-        if let result = try RefinementChecker(compilation: compilation).check(exploration) {
-            return result
+        if let refinementOutcome = try RefinementChecker(compilation: compilation).check(exploration) {
+            return refinementOutcome
         }
-        return exploration.result
+        return exploration.outcome
     }
     func exploreGraph() throws -> StateGraph { try explore().graph }
 
@@ -135,16 +135,16 @@ package struct ModelChecker {
 
     func checkLiveness() throws -> ModelCheckOutcome {
         let exploration = try explore()
-        guard case .ok = exploration.result else { return exploration.result }
-        guard compilation.semantics.temporalProperties.isEmpty == false else { return exploration.result }
+        guard case .ok = exploration.outcome else { return exploration.outcome }
+        guard compilation.semantics.temporalProperties.isEmpty == false else { return exploration.outcome }
 
         let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-        for (property, result) in zip(compilation.semantics.temporalProperties, analyses) {
-            switch result.status {
+        for (property, analysis) in zip(compilation.semantics.temporalProperties, analyses) {
+            switch analysis.status {
             case .satisfied:
                 continue
             case .violated:
-                guard let witness = result.witness else {
+                guard let witness = analysis.witness else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .checking,
@@ -156,11 +156,11 @@ package struct ModelChecker {
                 }
                 return .livenessViolated(
                     property: property.name,
-                    reason: result.reason,
+                    reason: analysis.reason,
                     witness: witness
                 )
             case .unavailable:
-                return .livenessUnavailable(property: property.name, reason: result.reason)
+                return .livenessUnavailable(property: property.name, reason: analysis.reason)
             }
         }
         return .ok(statesCount: exploration.graph.states.count)
@@ -175,13 +175,13 @@ package struct ModelChecker {
         let initialStates = try runtime.initialStates()
         guard !initialStates.isEmpty else {
             return emptyExploration(
-                result: .noInitialStates
+                outcome: .noInitialStates
             )
         }
 
         guard try runtime.assumeHolds(in: initialStates[0]) else {
             return emptyExploration(
-                result: .assumptionViolated
+                outcome: .assumptionViolated
             )
         }
 
@@ -197,7 +197,7 @@ package struct ModelChecker {
         return FiniteExploration(
             graph: exploration.graph,
             initialStateIDs: exploration.initialStateIDs,
-            result: exploration.result,
+            outcome: exploration.outcome,
             compilationIdentity: compilation.identity,
             configuration: configuration,
             compiledStates: exploration.compiledStates
@@ -206,7 +206,7 @@ package struct ModelChecker {
 
 
     private func emptyExploration(
-        result: ModelCheckOutcome
+        outcome: ModelCheckOutcome
     ) -> FiniteExploration {
         FiniteExploration(
             graph: StateGraph(
@@ -216,7 +216,7 @@ package struct ModelChecker {
                 states: [:]
             ),
             initialStateIDs: [],
-            result: result,
+            outcome: outcome,
             compilationIdentity: compilation.identity,
             configuration: configuration
         )
@@ -258,11 +258,11 @@ private func compiledBFS(
         )
     }
 
-    func boundedResult() throws -> FiniteExploration {
+    func boundedExploration() throws -> FiniteExploration {
         .init(
             graph: try graph(),
             initialStateIDs: initialStateIDs,
-            result: .depthExceeded(
+            outcome: .depthExceeded(
                 statesCount: stateToID.count,
                 limit: configuration.maximumStateLimit
             ),
@@ -291,7 +291,7 @@ private func compiledBFS(
         let key = try representative(seed)
         guard stateToID[key] == nil else { continue }
         guard stateToID.count < configuration.maximumStateLimit else {
-            return try boundedResult()
+            return try boundedExploration()
         }
         let id = StateGraph.StateID(nextID)
         stateToID[key] = id
@@ -313,7 +313,7 @@ private func compiledBFS(
                 return .init(
                     graph: try graph(),
                     initialStateIDs: initialStateIDs,
-                    result: .invariantViolated(
+                    outcome: .invariantViolated(
                         invariant: invariant.name,
                         state: try current.projection(using: layout),
                         trace: try trace(to: current, initial: queue[0])
@@ -330,7 +330,7 @@ private func compiledBFS(
             return .init(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
-                result: .deadlocked(state: try current.projection(using: layout)),
+                outcome: .deadlocked(state: try current.projection(using: layout)),
                 compilationIdentity: runtime.compilation.identity,
                 configuration: configuration,
                 compiledStates: idToState
@@ -345,7 +345,7 @@ private func compiledBFS(
                 targetID = existing
             } else {
                 guard stateToID.count < configuration.maximumStateLimit else {
-                    return try boundedResult()
+                    return try boundedExploration()
                 }
                 targetID = StateGraph.StateID(nextID)
                 stateToID[successorKey] = targetID
@@ -376,7 +376,7 @@ private func compiledBFS(
     return .init(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
-        result: .ok(statesCount: stateToID.count),
+        outcome: .ok(statesCount: stateToID.count),
         compilationIdentity: runtime.compilation.identity,
         configuration: configuration,
         compiledStates: idToState

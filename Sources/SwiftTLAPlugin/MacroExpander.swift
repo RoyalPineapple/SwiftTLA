@@ -134,7 +134,7 @@ enum MacroExpander {
                     path: \"spec\",
                     expected: _expectedCompilationIdentity,
                     actual: compilation.identity.value,
-                    nextSafeAction: \"Update the authored #spec declaration so every consumer compiles the same formal model.\"
+                    nextSafeAction: \"Update the authored #spec declaration so every consumer compiles the same source model.\"
                 )
             }
             return compilation

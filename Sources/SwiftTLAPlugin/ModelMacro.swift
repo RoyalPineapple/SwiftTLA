@@ -116,7 +116,7 @@ enum TLASpecVerifier {
     }
 
     static func collectEnumVariables(from members: MemberBlockItemListSyntax) throws -> [ParsedEnum] {
-        var result: [ParsedEnum] = []
+        var enums: [ParsedEnum] = []
         for member in members {
             guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
             guard let inheritance = enumDecl.inheritanceClause else { continue }
@@ -162,13 +162,13 @@ enum TLASpecVerifier {
                 }
             }
 
-            result.append(ParsedEnum(
+            enums.append(ParsedEnum(
                 typeName: enumDecl.name.text,
                 cases: cases,
                 formalDomainValues: finiteValues(in: enumDecl, cases: cases)
             ))
         }
-        return result
+        return enums
     }
 
     private static func finiteValues(

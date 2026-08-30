@@ -2,14 +2,14 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-struct GeneratedActorSurface {
+struct GeneratedStorageAccess {
   enum Step: String, CaseIterable {
     case advance
   }
 
   static var spec: TLASpec {
-    #spec("GeneratedActorSurface") {
-      Algorithm("GeneratedActorSurface", scoped: { scope in
+    #spec("GeneratedStorageAccess") {
+      Algorithm("GeneratedStorageAccess", scoped: { scope in
         let value = scope.sharedVar("value", initial: 0)
         Do(Step.advance) {
           When(value < 1)
@@ -20,7 +20,9 @@ struct GeneratedActorSurface {
   }
 }
 
-func rejectRawState(_ machine: GeneratedActorSurface.Actor) async {
-  _ = await machine.tlaSnapshot()
-  _ = GeneratedActorSurface.Actor.TransitionEvidence.self
+let generatedMachine = try GeneratedStorageAccess.makeMachine()
+_ = generatedMachine._storage
+
+func inspect(_ actor: GeneratedStorageAccess.Actor) async {
+  _ = await actor.machine
 }

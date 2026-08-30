@@ -211,9 +211,9 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    let result = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .refinementViolated(let refinement, .transition) = result else {
-      Issue.record("Expected a refinement transition violation, got \(result).")
+    let outcome = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .refinementViolated(let refinement, .transition) = outcome else {
+      Issue.record("Expected a refinement transition violation, got \(outcome).")
       return
     }
     #expect(refinement == "Refines")
@@ -239,12 +239,12 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    let result = try ModelChecker(
+    let outcome = try ModelChecker(
       compilation: try concrete.compile(),
       configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)
     ).check()
-    guard case .refinementUnproven(let refinement, .depthExceeded) = result else {
-      Issue.record("Expected an unproven refinement result, got \(result).")
+    guard case .refinementUnproven(let refinement, .depthExceeded) = outcome else {
+      Issue.record("Expected an unproven refinement outcome, got \(outcome).")
       return
     }
     #expect(refinement == "Refines")

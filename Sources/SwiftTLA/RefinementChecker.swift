@@ -19,17 +19,17 @@ struct RefinementChecker {
     func check(_ exploration: FiniteExploration) throws -> ModelCheckOutcome? {
         guard exploration.isComplete else {
             return compilation.refinements.first.map {
-                .refinementUnproven(refinement: $0.name, exploration: exploration.result)
+                .refinementUnproven(refinement: $0.name, exploration: exploration.outcome)
             }
         }
         for refinement in compilation.refinements {
-            if let result = try check(
+            if let violation = try check(
                 refinement,
                 states: exploration.compiledStates,
                 initialStateIDs: exploration.initialStateIDs,
                 graph: exploration.graph
             ) {
-                return result
+                return violation
             }
         }
         return nil
@@ -104,13 +104,13 @@ struct RefinementChecker {
 extension TLASpec {
     func specializing(parameters: [String: StateExpr]) -> TLASpec {
         func state(_ expression: StateExpr) -> StateExpr {
-            parameters.reduce(expression) { result, binding in
-                StateExpr.substituteVariable(binding.key, with: binding.value, in: result)
+            parameters.reduce(expression) { substitutedExpression, binding in
+                StateExpr.substituteVariable(binding.key, with: binding.value, in: substitutedExpression)
             }
         }
         func action(_ expression: ActionExpr) -> ActionExpr {
-            parameters.reduce(expression) { result, binding in
-                result.substitutingVariable(binding.key, with: binding.value)
+            parameters.reduce(expression) { substitutedExpression, binding in
+                substitutedExpression.substitutingVariable(binding.key, with: binding.value)
             }
         }
         func initialization(_ value: VariableInitialization) -> VariableInitialization {

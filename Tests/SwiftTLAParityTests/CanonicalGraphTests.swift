@@ -105,7 +105,7 @@ struct CanonicalGraphTests {
                 ]
             ),
             initialStateIDs: [first],
-            result: .ok(statesCount: 2),
+            outcome: .ok(statesCount: 2),
             compilationIdentity: compilationIdentity,
             configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
         )

@@ -69,7 +69,7 @@ package struct TLCTemporalAdapter: Sendable {
       completeGraph,
       to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")
     )
-    let result = try temporalResult(
+    let tlcOutcome = try temporalResult(
       run: run,
       graph: completeGraph,
       outputDirectory: input.outputDirectory,
@@ -81,7 +81,7 @@ package struct TLCTemporalAdapter: Sendable {
       swiftRun: input.swiftRun,
       tlcRun: completeGraph,
       swiftResult: input.swiftResult,
-      tlcResult: result)
+      tlcResult: tlcOutcome)
     try RetainedFiles.writeCanonical(
       comparison, to: input.outputDirectory.appendingPathComponent("temporal-comparison.json"))
     return comparison

@@ -1,16 +1,13 @@
 import SwiftTLA
 
 /// The generated-machine checks used by the demonstrations and their test target.
-///
-/// Each result comes from generated model APIs. The suite does not recreate the
-/// transition relation or invariants in application code.
-public struct GeneratedDemoTestResult: Identifiable, Sendable {
-    public let model: String
+public struct GeneratedDemoCheck: Identifiable, Sendable {
+    public let target: String
     public let check: String
     public let detail: String
     public let passed: Bool
 
-    public var id: String { "\(model).\(check)" }
+    public var id: String { "\(target).\(check)" }
 }
 
 public enum GeneratedDemoTestTarget: String, CaseIterable, Identifiable, Sendable {
@@ -30,48 +27,48 @@ public enum GeneratedDemoTestTarget: String, CaseIterable, Identifiable, Sendabl
 }
 
 public enum GeneratedDemoTestSuite {
-    public static func run(_ target: GeneratedDemoTestTarget) -> [GeneratedDemoTestResult] {
+    public static func run(_ target: GeneratedDemoTestTarget) -> [GeneratedDemoCheck] {
         switch target {
         case .twoBuckets:
-            machineResults(for: target.title, makeMachine: TwoBuckets.makeMachine)
+            machineChecks(for: target.title, makeMachine: TwoBuckets.makeMachine)
         case .duckDuckLeader:
-            ringTestResults()
+            ringChecks()
         case .elevatorBank:
-            machineResults(for: target.title, makeMachine: ElevatorBank.makeMachine)
+            machineChecks(for: target.title, makeMachine: ElevatorBank.makeMachine)
         }
     }
 
-    public static func runAll() -> [GeneratedDemoTestResult] {
+    public static func runAll() -> [GeneratedDemoCheck] {
         GeneratedDemoTestTarget.allCases.flatMap(run)
     }
 
-    private static func machineResults<Machine>(
-        for model: String,
+    private static func machineChecks<Machine>(
+        for target: String,
         makeMachine: () throws -> Machine
-    ) -> [GeneratedDemoTestResult] {
+    ) -> [GeneratedDemoCheck] {
         [
-            result(model: model, check: "Typed machine") { _ = try makeMachine() }
+            check(target: target, name: "Typed machine") { _ = try makeMachine() }
         ]
     }
 
     /// The twelve-node ring has a deliberately large asynchronous state space.
     /// The release pipeline exhaustively checks it; the app runs these immediate,
     /// generated-surface checks so its button remains responsive.
-    private static func ringTestResults() -> [GeneratedDemoTestResult] {
+    private static func ringChecks() -> [GeneratedDemoCheck] {
         [
-            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Formal surface", action: { () throws -> Void in
+            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Formal surface", action: { () throws -> Void in
                 let description = try ChangRoberts.spec.compile().description
                 guard description.variables.isEmpty == false, description.actions.isEmpty == false else {
                     throw GeneratedDemoSuiteError.unexpectedFormalSurface
                 }
             }),
-            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Generated state", action: { () throws -> Void in
+            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Generated state", action: { () throws -> Void in
                 let machine = try ChangRoberts.makeMachine()
                 guard machine.state.leader == 0, machine.state.messages.elements.count == 12 else {
                     throw GeneratedDemoSuiteError.unexpectedInitialState
                 }
             }),
-            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Typed delivery", action: { () throws -> Void in
+            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Typed delivery", action: { () throws -> Void in
                 var machine = try ChangRoberts.makeMachine()
                 _ = try machine.send(.deliver(process: .six))
                 guard machine.state.messages.elements.contains(where: {
@@ -82,7 +79,7 @@ public enum GeneratedDemoTestSuite {
                     throw GeneratedDemoSuiteError.deliveryWasNotForwarded
                 }
             }),
-            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Enabled actions", action: { () throws -> Void in
+            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Enabled actions", action: { () throws -> Void in
                 let machine = try ChangRoberts.makeMachine()
                 guard try machine.isEnabled(.deliver(process: .six)) else {
                     throw GeneratedDemoSuiteError.expectedActionUnavailable
@@ -91,28 +88,28 @@ public enum GeneratedDemoTestSuite {
         ]
     }
 
-    private static func result(
-        model: String,
-        check: String,
+    private static func check(
+        target: String,
+        name: String,
         action: () throws -> Void
-    ) -> GeneratedDemoTestResult {
+    ) -> GeneratedDemoCheck {
         do {
             try action()
-            return .init(model: model, check: check, detail: "Passed", passed: true)
+            return .init(target: target, check: name, detail: "Passed", passed: true)
         } catch {
-            return .init(model: model, check: check, detail: String(describing: error), passed: false)
+            return .init(target: target, check: name, detail: String(describing: error), passed: false)
         }
     }
 
-    private static func result(
-        model: String,
-        check: String,
+    private static func check(
+        target: String,
+        name: String,
         action: () throws -> String
-    ) -> GeneratedDemoTestResult {
+    ) -> GeneratedDemoCheck {
         do {
-            return .init(model: model, check: check, detail: try action(), passed: true)
+            return .init(target: target, check: name, detail: try action(), passed: true)
         } catch {
-            return .init(model: model, check: check, detail: String(describing: error), passed: false)
+            return .init(target: target, check: name, detail: String(describing: error), passed: false)
         }
     }
 }

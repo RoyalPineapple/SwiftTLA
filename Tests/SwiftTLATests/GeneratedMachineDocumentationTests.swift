@@ -101,10 +101,10 @@ struct GeneratedMachineDocumentationTests {
     @Test("Generated machine documentation fixture compiles and exercises its stated macOS behavior")
     func fixtureCompilesAndExercisesDocumentedBehavior() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/GeneratedMachineDocumentation")
-        let result = try runXcodebuild(in: fixture)
+        let build = try runXcodebuild(in: fixture)
         #expect(
-            result.status == 0,
-            "Generated-machine fixture failed its macOS behavior tests:\n\(outputTail(result.output))"
+            build.status == 0,
+            "Generated-machine fixture failed its macOS behavior tests:\n\(outputTail(build.output))"
         )
     }
 

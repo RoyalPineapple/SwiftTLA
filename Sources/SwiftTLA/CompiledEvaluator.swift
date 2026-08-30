@@ -175,7 +175,7 @@ private enum EvaluatorTask {
     case exceptKey(function: CompiledValue)
     case foldSequence(CompiledFormalLambda, initial: CompiledStateExpr, scope: EvaluatorScope)
     case foldInitial(CompiledFormalLambda, members: [CompiledValue], scope: EvaluatorScope)
-    case foldStep(CompiledFormalLambda, members: [CompiledValue], index: Int, result: CompiledValue, scope: EvaluatorScope)
+    case foldStep(CompiledFormalLambda, members: [CompiledValue], index: Int, accumulator: CompiledValue, scope: EvaluatorScope)
     case foldResult(CompiledFormalLambda, members: [CompiledValue], index: Int, scope: EvaluatorScope)
     case formalCall(
         EvaluatorOperatorBinding,
@@ -383,11 +383,11 @@ struct CompiledEvaluator: Sendable {
                     guard case .set(let members) = value else {
                         throw EvalError.expected(.set, actual: [value])
                     }
-                    values.append(.set(try members.reduce(into: Set<CompiledValue>()) { result, member in
+                    values.append(.set(try members.reduce(into: Set<CompiledValue>()) { unionMembers, member in
                         guard case .set(let nested) = member else {
                             throw EvalError.expected(.setOfSets, actual: [member])
                         }
-                        result.formUnion(nested)
+                        unionMembers.formUnion(nested)
                     }))
                 case .integerRange:
                     let upper = try integer(popValue(from: &values))
@@ -489,7 +489,7 @@ struct CompiledEvaluator: Sendable {
                         throw EvalError.expected(.functionAndSet, actual: [functionValue, membersValue])
                     }
                     values.append(.integer(try members.reduce(0) { total, member in
-                        guard let result = function[member], case .integer(let value) = result else {
+                        guard let mapped = function[member], case .integer(let value) = mapped else {
                             throw EvalError.expected(
                                 .integerFunctionValues,
                                 actual: function[member].map { [$0] } ?? []
@@ -655,9 +655,9 @@ struct CompiledEvaluator: Sendable {
 
             case .foldInitial(let operation, let members, let scope):
                 let initial = try popValue(from: &values)
-                tasks.append(.foldStep(operation, members: members, index: 0, result: initial, scope: scope))
+                tasks.append(.foldStep(operation, members: members, index: 0, accumulator: initial, scope: scope))
 
-            case .foldStep(let operation, let members, let index, let result, let scope):
+            case .foldStep(let operation, let members, let index, let accumulator, let scope):
                 guard operation.parameters.count == 2 else {
                     throw EvalError.invalidArity(
                         .foldFunction,
@@ -666,19 +666,19 @@ struct CompiledEvaluator: Sendable {
                     )
                 }
                 guard index < members.count else {
-                    values.append(result)
+                    values.append(accumulator)
                     continue
                 }
                 var bodyScope = scope
                 bodyScope.bindings = bodyScope.bindings
                     .binding(members[index], to: operation.parameters[0])
-                    .binding(result, to: operation.parameters[1])
+                    .binding(accumulator, to: operation.parameters[1])
                 tasks.append(.foldResult(operation, members: members, index: index, scope: scope))
                 tasks.append(.expression(operation.body, bodyScope))
 
             case .foldResult(let operation, let members, let index, let scope):
-                let result = try popValue(from: &values)
-                tasks.append(.foldStep(operation, members: members, index: index + 1, result: result, scope: scope))
+                let accumulator = try popValue(from: &values)
+                tasks.append(.foldStep(operation, members: members, index: index + 1, accumulator: accumulator, scope: scope))
 
             case .formalCall(let boundOperation, let arguments, let argumentScope):
                 switch boundOperation.operation {
@@ -1104,9 +1104,9 @@ private extension CompiledEvaluator {
             throw EvalError.invalidContinuation(availableValues: values.count)
         }
         let start = values.count - count
-        let result = Array(values[start...])
+        let popped = Array(values[start...])
         values.removeSubrange(start...)
-        return result
+        return popped
     }
 
     func sequenceElements(from value: CompiledValue) throws -> [CompiledValue] {

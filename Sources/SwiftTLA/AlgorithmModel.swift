@@ -75,9 +75,9 @@ internal struct AlgorithmModel: Sendable {
             }
         }
 
-        var result: Set<String> = ["self"]
-        collect(components, into: &result)
-        return result
+        var names: Set<String> = ["self"]
+        collect(components, into: &names)
+        return names
     }
 
     func plusCalProjection() -> AlgorithmModel {
@@ -109,8 +109,8 @@ internal struct AlgorithmModel: Sendable {
         }
 
         func expression(_ value: StateExpr) -> StateExpr {
-            let family = localRoots.reduce(value) { result, root in
-                result.replacingProcessLocalFamily(named: root, with: .variable(root))
+            let family = localRoots.reduce(value) { projectedExpression, root in
+                projectedExpression.replacingProcessLocalFamily(named: root, with: .variable(root))
             }
             return lowerAnonymousLambdas(family.replacingCurrentProcess(with: .variable("self")))
         }
@@ -146,8 +146,8 @@ internal struct AlgorithmModel: Sendable {
             let projected = values.map { statement in
                 statement.replacingCurrentProcess(with: .variable("self"))
             }.map { statement in
-                localRoots.reduce(statement) { result, root in
-                    result.replacingProcessLocalFamily(named: root, with: .variable(root))
+                localRoots.reduce(statement) { projectedStatement, root in
+                    projectedStatement.replacingProcessLocalFamily(named: root, with: .variable(root))
                 }
             }.map { statement in
                 statement.mappingExpressions(lowerAnonymousLambdas)

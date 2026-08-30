@@ -39,7 +39,7 @@ extension ParserSession {
 
     func parseSymmetricCollectionDecl(
         _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents,
+        into components: inout ParsedSpecComponents,
         collectionTypes: [String: SymmetricCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
@@ -53,7 +53,7 @@ extension ParserSession {
               let elementType = Self.sourceTypeSpelling(types.element),
               let valueType = Self.sourceTypeSpelling(types.value)
         else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Symmetric collections require SymmetricCollectionVar<Element, Value>, "
                     + "a positive integer literal scope, and a literal uniform initial value.",
                 source: call
@@ -68,13 +68,13 @@ extension ParserSession {
             generatedElementType: elementType,
             generatedValueType: valueType
         )
-        result.symmetricCollections.append(declaration)
-        result.variables.append(declaration.variable)
+        components.symmetricCollections.append(declaration)
+        components.variables.append(declaration.variable)
     }
 
     func parseCollectionAction(
         _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents,
+        into components: inout ParsedSpecComponents,
         collectionTypes: [String: SymmetricCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
@@ -84,7 +84,7 @@ extension ParserSession {
               let collection = collectionTypes[collectionReference],
               let closure = call.trailingClosure
         else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "CollectionAction requires a literal name, a declared collection binding, and a builder body.",
                 source: call,
                 expected: "CollectionAction(\"update\", on: collection) { member in ... }"
@@ -93,20 +93,20 @@ extension ParserSession {
         }
 
         guard let memberName = collectionActionMemberName(in: closure) else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Collection action '\(actionName)' requires one named opaque member parameter.",
                 source: closure
             ))
             return
         }
         let member = "member"
-        let diagnosticCount = result.diagnostics.count
+        let diagnosticCount = components.diagnostics.count
         validateMemberUses(
             memberName,
             in: closure,
             owning: collectionReference,
             action: actionName,
-            into: &result
+            into: &components
         )
         guard let actionBody = parseCollectionActionBody(
             closure,
@@ -114,15 +114,15 @@ extension ParserSession {
             member: memberName,
             binding: member
         ) else {
-            if result.diagnostics.count == diagnosticCount {
-                result.diagnostics.append(.init(
+            if components.diagnostics.count == diagnosticCount {
+                components.diagnostics.append(.init(
                     message: "Collection action '\(actionName)' contains an unsupported action expression.",
                     source: closure
                 ))
             }
             return
         }
-        result.actions.append(.init(
+        components.actions.append(.init(
             name: actionName,
             body: .existsAction(
                 member,
@@ -153,12 +153,12 @@ extension ParserSession {
         in closure: ClosureExprSyntax,
         owning collection: String,
         action: String,
-        into result: inout ParsedSpecComponents
+        into components: inout ParsedSpecComponents
     ) {
         let validator = CollectionMemberUseValidator(member: member, collection: collection)
         validator.walk(Syntax(closure))
         for violation in validator.violations {
-            result.diagnostics.append(identityDiagnostic(
+            components.diagnostics.append(identityDiagnostic(
                 collection: collection, action: action, source: violation.source,
                 detail: violation.detail
             ))
@@ -407,10 +407,10 @@ extension ParserSession {
         guard index < args.count else { return nil }
         guard let stringLit = args[index].expression.as(StringLiteralExprSyntax.self) else { return nil }
         guard let loopVar, let loopValue else { return stringLit.representedLiteralValue }
-        var result = ""
+        var value = ""
         for segment in stringLit.segments {
             if let text = segment.as(StringSegmentSyntax.self)?.content.text {
-                result += text
+                value += text
                 continue
             }
             guard let expression = segment.as(ExpressionSegmentSyntax.self),
@@ -418,18 +418,18 @@ extension ParserSession {
                   let reference = expression.expressions.first?.expression.as(DeclReferenceExprSyntax.self),
                   reference.baseName.text == loopVar
             else { return nil }
-            result += "\(loopValue)"
+            value += "\(loopValue)"
         }
-        return result
+        return value
     }
 
-    func parseVariableDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+    func parseVariableDecl(_ call: FunctionCallExprSyntax, into components: inout ParsedSpecComponents) {
         let args = Array(call.arguments)
         if args.first?.label?.text == "from",
            args.count >= 2,
            let name = parsedVariableName(args[0].expression),
            let range = decodeStateExpr(args[1].expression) {
-            result.variables.append(.init(name: name, initialization: .memberOf(range), origin: .source))
+            components.variables.append(.init(name: name, initialization: .memberOf(range), origin: .source))
             return
         }
         if args.first?.label?.text == "computed",
@@ -439,13 +439,13 @@ extension ParserSession {
                return expression
            }),
            let initial = decodeStateExpr(expression) {
-            result.variables.append(.init(name: name, initialization: .expression(initial), origin: .source))
+            components.variables.append(.init(name: name, initialization: .expression(initial), origin: .source))
             return
         }
         guard let firstName = args.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
             ?? args.first?.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
         else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Variable requires a declared variable binding.",
                 source: call,
                 expected: "Variable(variable) or Variable(variable, initialValue)"
@@ -458,7 +458,7 @@ extension ParserSession {
             let label = args[1].label?.text
             if label == "in" {
                 if let setExpr = decodeStateExpr(args[1].expression) {
-                    result.variables.append(.init(
+                    components.variables.append(.init(
                         name: firstName,
                         initialization: .memberOf(setExpr),
                         origin: .source
@@ -473,16 +473,16 @@ extension ParserSession {
             let valExpr = args[1].expression
             if let intVal = valExpr.as(IntegerLiteralExprSyntax.self),
                let value = Self.integerLiteralValue(intVal) {
-                result.variables.append(.init(name: firstName, initial: .int(value)))
+                components.variables.append(.init(name: firstName, initial: .int(value)))
                 return
             }
             if let boolVal = valExpr.as(BooleanLiteralExprSyntax.self) {
-                result.variables.append(.init(name: firstName, initial: .bool(boolVal.literal.text == "true")))
+                components.variables.append(.init(name: firstName, initial: .bool(boolVal.literal.text == "true")))
                 return
             }
             if let stringVal = valExpr.as(StringLiteralExprSyntax.self) {
                 guard let value = stringVal.representedLiteralValue else { return }
-                result.variables.append(.init(name: firstName, initial: .string(value)))
+                components.variables.append(.init(name: firstName, initial: .string(value)))
                 return
             }
             // TLAValue.set([]), TLAValue.tuple([]), etc.
@@ -492,18 +492,18 @@ extension ParserSession {
                base.baseName.text == "TLAValue" {
                 let name = memberAccess.declName.baseName.text
                 if let parsed = parseTLAValueConstructor(name: name, call: fc) {
-                    result.variables.append(.init(name: firstName, initial: parsed))
+                    components.variables.append(.init(name: firstName, initial: parsed))
                     return
                 }
             }
             if let initial = decodeTypedFacadeValue(valExpr, scope: sourceScope) {
-                result.variables.append(.init(name: firstName, initialization: .expression(initial), origin: .source))
+                components.variables.append(.init(name: firstName, initialization: .expression(initial), origin: .source))
                 return
             }
         }
 
         if args.count >= 2 {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Variable '\(firstName)' requires a supported initial formal value.",
                 source: call,
                 expected: "an integer, boolean, string, supported TLAValue constructor, or finite initial-state expression"
@@ -536,12 +536,12 @@ extension ParserSession {
         }
     }
 
-    func parseConstantDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+    func parseConstantDecl(_ call: FunctionCallExprSyntax, into components: inout ParsedSpecComponents) {
         let args = Array(call.arguments)
         guard args.count >= 2,
               let name = extractStringArg(call, index: 0)
         else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Constant requires a literal name and a static TLA+ value.",
                 source: call,
                 expected: "Constant(\"Name\", value)",
@@ -552,7 +552,7 @@ extension ParserSession {
         guard let expression = decodeTypedFacadeValue(args[1].expression, scope: .empty),
               let value = staticConstantValue(expression)
         else {
-            result.diagnostics.append(.init(
+            components.diagnostics.append(.init(
                 message: "Constant '\(name)' must be static; dynamic formal expressions are not constant values.",
                 source: args[1].expression,
                 expected: "a literal value or SetExpr<Element>(...) with static members",
@@ -560,7 +560,7 @@ extension ParserSession {
             ))
             return
         }
-        result.constants.append(ConstantDecl(name, value))
+        components.constants.append(ConstantDecl(name, value))
     }
 
     private func staticConstantValue(_ expression: StateExpr) -> TLAValue? {

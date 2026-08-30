@@ -329,18 +329,18 @@ package struct FormalModuleClosure: Sendable {
       replacements: [FormalModuleReplacement]
     ) -> [RecursiveFunc] {
       guard let module = modules[name] else { return [] }
-      var result: [RecursiveFunc] = []
+      var functions: [RecursiveFunc] = []
       for edge in edges where edge.fromModule == name {
         switch edge.kind {
         case .importModule(let configuration):
-          result += recursiveFunctions(
+          functions += recursiveFunctions(
             named: edge.toModule,
             replacements: configuration?.replacements ?? []
           )
         case .namedInstance(let namespace, let arguments):
-          let functions = recursiveFunctions(named: edge.toModule, replacements: [])
-          let localNames = Set(functions.map(\.name))
-          result += functions.map { function in
+          let imported = recursiveFunctions(named: edge.toModule, replacements: [])
+          let localNames = Set(imported.map(\.name))
+          functions += imported.map { function in
             let body = arguments.reduce(function.body) {
               StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
             }
@@ -353,7 +353,7 @@ package struct FormalModuleClosure: Sendable {
           }
         }
       }
-      result += module.recursiveFuncs.map { function in
+      functions += module.recursiveFuncs.map { function in
         RecursiveFunc(
           name: function.name, params: function.params,
           body: replacements.reduce(function.body) {
@@ -361,7 +361,7 @@ package struct FormalModuleClosure: Sendable {
           }
         )
       }
-      return result
+      return functions
     }
 
     func formalOperatorDefinitions(
@@ -369,18 +369,18 @@ package struct FormalModuleClosure: Sendable {
       replacements: [FormalModuleReplacement]
     ) -> [FormalOperatorDefinition] {
       guard let module = modules[name] else { return [] }
-      var result: [FormalOperatorDefinition] = []
+      var definitions: [FormalOperatorDefinition] = []
       for edge in edges where edge.fromModule == name {
         switch edge.kind {
         case .importModule(let configuration):
-          result += formalOperatorDefinitions(
+          definitions += formalOperatorDefinitions(
             edge.toModule,
             replacements: configuration?.replacements ?? []
           )
         case .namedInstance(let namespace, let arguments):
-          let definitions = formalOperatorDefinitions(edge.toModule, replacements: [])
-          let localNames = Set(definitions.map(\.name))
-          result += definitions.map { definition in
+          let imported = formalOperatorDefinitions(edge.toModule, replacements: [])
+          let localNames = Set(imported.map(\.name))
+          definitions += imported.map { definition in
             let body = arguments.reduce(definition.body) {
               StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
             }
@@ -393,7 +393,7 @@ package struct FormalModuleClosure: Sendable {
           }
         }
       }
-      result += module.formalOperatorDefinitions.map { definition in
+      definitions += module.formalOperatorDefinitions.map { definition in
         FormalOperatorDefinition(
           name: definition.name,
           parameters: definition.parameters,
@@ -402,7 +402,7 @@ package struct FormalModuleClosure: Sendable {
           }
         )
       }
-      return result
+      return definitions
     }
 
     return .init(

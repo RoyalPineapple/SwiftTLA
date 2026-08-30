@@ -1265,10 +1265,10 @@ struct CompiledLowerer {
                 lowered.append(try build(children))
             }
         }
-        guard lowered.count == 1, let result = lowered.first else {
+        guard lowered.count == 1, let root = lowered.first else {
             throw Self.invalidTraversal(at: path)
         }
-        return (result.expression, result.operatorReferences)
+        return (root.expression, root.operatorReferences)
     }
 
     private func schedule(

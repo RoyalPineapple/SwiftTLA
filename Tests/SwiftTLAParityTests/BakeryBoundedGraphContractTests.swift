@@ -11,7 +11,7 @@ struct BakeryBoundedGraphContractTests {
         ).explore()
         #expect(exploration.graph.states.count == Example.bakeryN2.expectedDistinct)
 
-        guard case .ok = exploration.result else {
+        guard case .ok = exploration.outcome else {
             Issue.record("Bakery PlusCal-shaped model did not verify")
             return
         }

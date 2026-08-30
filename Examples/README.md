@@ -22,12 +22,12 @@ device identifier or other formal state; the adapter maps that identifier to
 the concrete `CBPeripheral`, AVFoundation object, or UI effect.
 
 Tests belong beside the example models. They run the generated transition and
-state checks. The app exists to demonstrate the same generated models in use,
+state checks. The app exists to demonstrate the same generated machines in use,
 not to reimplement their verification.
 
 ## Packages
 
-- `SwiftTLADemos` contains the formal models and their tests for the bespoke
+- `SwiftTLADemos` contains the source models and their tests for the bespoke
   demonstrations.
 - `SwiftTLADemoApp` is the SwiftUI application that imports `SwiftTLADemos`.
 - `ApplePlatformExamples` contains separate Apple-framework consumers of the

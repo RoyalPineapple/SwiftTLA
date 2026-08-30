@@ -69,8 +69,8 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
                 return .init(name, try field.value.rendered(using: layout))
             }))
         case .function(let values):
-            return .function(try values.reduce(into: [TLAValue: TLAValue]()) { result, entry in
-                result[try entry.key.rendered(using: layout)] = try entry.value.rendered(using: layout)
+            return .function(try values.reduce(into: [TLAValue: TLAValue]()) { renderedMapping, entry in
+                renderedMapping[try entry.key.rendered(using: layout)] = try entry.value.rendered(using: layout)
             })
         case .constant(let value):
             return .constant(value)

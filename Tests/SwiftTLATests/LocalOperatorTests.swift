@@ -213,8 +213,8 @@ struct LocalOperatorTests {
     #expect(try compiledValue(expression.stateExpr, values: [("limit", .int(4))]) == .int(0))
   }
 
-  @Test("#spec preserves typed local recursion through generated model parsing")
-  func generatedModelRetainsTypedLocalRecursion() throws {
+  @Test("#spec parsing preserves typed local recursion")
+  func sourceSpecificationRetainsTypedLocalRecursion() throws {
     let body = try #require(GeneratedTypedLocalRecursionModel.spec.formalOperatorDefinitions.first?.body)
     guard case .letIn(let operators, let call) = body else {
       Issue.record("Expected a compiled local operator")
@@ -233,8 +233,8 @@ struct LocalOperatorTests {
     #expect(rendered.contains("LET Count["))
     #expect(!rendered.contains("LET RECURSIVE Count"))
 
-    var model = try GeneratedTypedLocalRecursionModel.makeMachine()
-    #expect(try model.send(.advance).after.counter == 1)
+    var machine = try GeneratedTypedLocalRecursionModel.makeMachine()
+    #expect(try machine.send(.advance).after.counter == 1)
   }
 
   @Test("typed formal closures retain local recursion through #spec and Algorithm")
@@ -251,8 +251,8 @@ struct LocalOperatorTests {
     }
     #expect(operators.first?.isRecursive == true)
 
-    var model = try GeneratedTypedFormalDefinitionAlgorithm.makeMachine()
-    #expect(try model.send(.advance).after.counter == 1)
+    var machine = try GeneratedTypedFormalDefinitionAlgorithm.makeMachine()
+    #expect(try machine.send(.advance).after.counter == 1)
   }
 
   @Test("captured formal definitions survive compilation, rendering, and generated execution")
@@ -265,8 +265,8 @@ struct LocalOperatorTests {
     #expect(rendered.contains("0..bound"))
     #expect(rendered.contains("SA[value0]"))
 
-    var model = try GeneratedTopLevelTypedFormalDefinitionModel.makeMachine()
-    #expect(try model.send(.advance).after.counter == 1)
+    var machine = try GeneratedTopLevelTypedFormalDefinitionModel.makeMachine()
+    #expect(try machine.send(.advance).after.counter == 1)
   }
 
   @Test("typed local recursion preserves quantified bindings")

@@ -4,8 +4,8 @@ Generate typed Swift machines from a `TLASpec` declaration.
 
 ## Overview
 
-Apply ``TLAModel()`` to a model declaration. The generated model includes an
-`Actor` type for serialized access.
+Apply ``TLAModel()`` to a source model declaration. The generated machine
+includes an `Actor` type for serialized access.
 
 During expansion, `@TLAModel` parses the supported builder syntax into typed
 source declarations, compiles them, and derives the public machine surface from

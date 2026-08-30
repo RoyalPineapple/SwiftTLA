@@ -28,11 +28,11 @@ requireSendable(GeneratedTypedSurface.Transition.self)
 
 var machine = try GeneratedTypedSurface.makeMachine()
 let action: GeneratedTypedSurface.Action = .advance
-let result = try machine.send(action)
+let transition = try machine.send(action)
 
-guard result.action == action,
-      result.before.value == 0,
-      result.after.value == 1 else {
+guard transition.action == action,
+      transition.before.value == 0,
+      transition.after.value == 1 else {
   throw FixtureError.invalidTransition
 }
 

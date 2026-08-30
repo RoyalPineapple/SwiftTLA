@@ -31,10 +31,10 @@ var contract = try DeviceContract.makeMachine(phases: ids)
 guard contract.state.phases == initialPhases else {
     throw FixtureError.invalidState
 }
-let result = try contract.send(.beginConnect(member: ids[0]))
+let transition = try contract.send(.beginConnect(member: ids[0]))
 var expectedPhases = initialPhases
 expectedPhases[ids[0]] = 1
-guard result.after.phases == expectedPhases, contract.state.phases == expectedPhases else {
+guard transition.after.phases == expectedPhases, contract.state.phases == expectedPhases else {
     throw FixtureError.invalidTransition
 }
 

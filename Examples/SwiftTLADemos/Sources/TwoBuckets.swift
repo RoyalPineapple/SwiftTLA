@@ -1,9 +1,9 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The Die Hard water-jug puzzle, expressed as a generated formal machine.
+/// The Die Hard water-jug puzzle, expressed as a generated machine.
 ///
-/// Each operation has one singleton process. This preserves the formal model's
+/// Each operation has one singleton process. This preserves the source model's
 /// independent scheduling while exposing a clean Swift action surface such as
 /// `try machine.send(.fillThree)`.
 @TLAModel

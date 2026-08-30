@@ -50,9 +50,9 @@ private struct TypedFiniteInitialAlgorithm {
 @Suite(.serialized)
 struct TypedFormalCollectionTests {
   @Test func typedSetLowersAndChecksThroughBothPaths() throws {
-    let result = try ModelChecker(compilation: try TypedSetAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok(let count) = result else {
-      Issue.record("Expected successful set proof, got \(result)")
+    let outcome = try ModelChecker(compilation: try TypedSetAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .ok(let count) = outcome else {
+      Issue.record("Expected successful set proof, got \(outcome)")
       return
     }
     #expect(count == 2)
@@ -60,9 +60,9 @@ struct TypedFormalCollectionTests {
   }
 
   @Test func typedTupleLowersAndChecksThroughBothPaths() throws {
-    let result = try ModelChecker(compilation: try TypedTupleAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok(let count) = result else {
-      Issue.record("Expected successful tuple proof, got \(result)")
+    let outcome = try ModelChecker(compilation: try TypedTupleAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .ok(let count) = outcome else {
+      Issue.record("Expected successful tuple proof, got \(outcome)")
       return
     }
     #expect(count == 3)
@@ -80,9 +80,9 @@ struct TypedFormalCollectionTests {
   }
 
   @Test func typedFiniteInitialDomainChecksThroughBothPaths() throws {
-    let result = try ModelChecker(compilation: try TypedFiniteInitialAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok(let count) = result else {
-      Issue.record("Expected successful finite-domain proof, got \(result)")
+    let outcome = try ModelChecker(compilation: try TypedFiniteInitialAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .ok(let count) = outcome else {
+      Issue.record("Expected successful finite-domain proof, got \(outcome)")
       return
     }
     #expect(count == 2)

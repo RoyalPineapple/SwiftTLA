@@ -334,10 +334,10 @@ extension TLCGraphReaderTests {
     try "#!/bin/sh\nprintf 'TLC2 Version 2026.07.31.184830 (rev: deadbee)\\n'\n"
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-    let result = try executeProcess(
+    let processOutput = try executeProcess(
       executable: executable, arguments: [], directory: directory, timeout: 1, environment: [:])
     #expect(throws: FiniteGraphCaseError.pinMismatch("TLC banner")) {
-      try toolchainPin().validateReportedTLCBanner(result.stdout + "\n" + result.stderr)
+      try toolchainPin().validateReportedTLCBanner(processOutput.stdout + "\n" + processOutput.stderr)
     }
   }
 
@@ -351,14 +351,14 @@ extension TLCGraphReaderTests {
       .appending("printf 'home=%s allowed=%s\\n' \"${HOME-unset}\" \"${FINITE_GRAPH_ALLOWED_VALUE-unset}\"\n")
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-    let result = try executeProcess(
+    let processOutput = try executeProcess(
       executable: executable,
       arguments: [],
       directory: directory,
       timeout: 1,
       environment: ["FINITE_GRAPH_ALLOWED_VALUE": "declared"]
     )
-    #expect(result.stdout.contains("home=unset allowed=declared"))
+    #expect(processOutput.stdout.contains("home=unset allowed=declared"))
   }
 
   @Test("graph event reader rejects malformed footer and unsupported callbacks")

@@ -537,7 +537,7 @@ extension LivenessChecker {
 
     private func stronglyConnectedComponents(in allowed: Set<StateGraph.StateID>) -> [Set<StateGraph.StateID>] {
         var index = 0; var indices: [StateGraph.StateID: Int] = [:]
-        var stack: [StateGraph.StateID] = []; var onStack: Set<StateGraph.StateID> = []; var result: [Set<StateGraph.StateID>] = []
+        var stack: [StateGraph.StateID] = []; var onStack: Set<StateGraph.StateID> = []; var components: [Set<StateGraph.StateID>] = []
         func visit(_ state: StateGraph.StateID) -> Int {
             let stateIndex = index
             var lowlink = stateIndex
@@ -552,12 +552,12 @@ extension LivenessChecker {
             if lowlink == stateIndex {
                 var component: Set<StateGraph.StateID> = []
                 while let node = stack.popLast() { onStack.remove(node); component.insert(node); if node == state { break } }
-                result.append(component)
+                components.append(component)
             }
             return lowlink
         }
         for state in allowed.sorted(by: stateOrder) where indices[state] == nil { _ = visit(state) }
-        return result
+        return components
     }
 
     private func explicitEdges(from state: StateGraph.StateID) -> [GraphEdge] {

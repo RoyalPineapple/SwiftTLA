@@ -209,9 +209,9 @@ private struct DuckDuckLeaderView: View {
         defer { isDelivering = false }
         do {
             var nextMachine = machine
-            let result = try nextMachine.send(action)
+            let transition = try nextMachine.send(action)
             guard runID == simulationID else { return false }
-            let forwarded = result.after.messages.elements.first {
+            let forwarded = transition.after.messages.elements.first {
                 $0.value(for: ChangRoberts.MessageSchema.candidate) == candidate &&
                     $0.value(for: ChangRoberts.MessageSchema.from) == node
             }
@@ -469,7 +469,7 @@ private struct ElevatorBankControls: View {
 }
 
 private struct GeneratedSurfaceView: View {
-    @State private var results: [GeneratedDemoTestTarget: [GeneratedDemoTestResult]] = [:]
+    @State private var checks: [GeneratedDemoTestTarget: [GeneratedDemoCheck]] = [:]
     @State private var running: GeneratedDemoTestTarget?
 
     var body: some View {
@@ -483,7 +483,7 @@ private struct GeneratedSurfaceView: View {
                     ForEach(GeneratedDemoTestTarget.allCases) { target in
                         GeneratedTestCard(
                             target: target,
-                            results: results[target] ?? [],
+                            checks: checks[target] ?? [],
                             isRunning: running == target,
                             run: { run(target) }
                         )
@@ -501,7 +501,7 @@ private struct GeneratedSurfaceView: View {
             let output = await Task.detached(priority: .userInitiated) {
                 GeneratedDemoTestSuite.run(target)
             }.value
-            results[target] = output
+            checks[target] = output
             running = nil
         }
     }
@@ -515,7 +515,7 @@ private struct GeneratedSurfaceSummary: View {
             HStack(alignment: .top, spacing: 18) {
                 GeneratedSurfaceItem(
                     title: "Typed machine",
-                    detail: "Each model exposes State, Action, and Transition."
+                    detail: "Each generated machine exposes State, Action, and Transition."
                 )
                 GeneratedSurfaceItem(
                     title: "Native adapters",
@@ -523,7 +523,7 @@ private struct GeneratedSurfaceSummary: View {
                 )
                 GeneratedSurfaceItem(
                     title: "Verification suite",
-                    detail: "Small models run full generated verification. The ring runs fast generated-surface checks; its full graph belongs in the release pipeline."
+                    detail: "Small generated machines run full verification. The ring runs fast generated-surface checks; its full graph belongs in the release pipeline."
                 )
             }
         }
@@ -551,7 +551,7 @@ private struct GeneratedSurfaceItem: View {
 
 private struct GeneratedTestCard: View {
     let target: GeneratedDemoTestTarget
-    let results: [GeneratedDemoTestResult]
+    let checks: [GeneratedDemoCheck]
     let isRunning: Bool
     let run: () -> Void
 
@@ -572,18 +572,18 @@ private struct GeneratedTestCard: View {
                 .disabled(isRunning)
             }
 
-            if results.isEmpty {
-                Text("Run the generated suite for this finite model.")
+            if checks.isEmpty {
+                Text("Run the generated suite for this bounded machine.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(results) { result in
+                ForEach(checks) { check in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: result.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(result.passed ? .green : .red)
-                        Text(result.check).font(.subheadline.weight(.medium))
+                        Image(systemName: check.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(check.passed ? .green : .red)
+                        Text(check.check).font(.subheadline.weight(.medium))
                         Spacer()
-                        Text(result.detail)
+                        Text(check.detail)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

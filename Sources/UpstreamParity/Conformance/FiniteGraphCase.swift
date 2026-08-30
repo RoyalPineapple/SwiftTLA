@@ -179,12 +179,12 @@ func tlaInvocationLocationIdentity(action: String, arguments: [String]) -> Strin
 }
 
 func tlaLocationArgumentIdentity(_ argument: String) -> String {
-    var result = String()
+    var identity = String()
     var quoted = false
     var escaped = false
     for character in argument.trimmingCharacters(in: .whitespacesAndNewlines) {
         if quoted {
-            result.append(character)
+            identity.append(character)
             if escaped {
                 escaped = false
             } else if character == "\\" {
@@ -194,12 +194,12 @@ func tlaLocationArgumentIdentity(_ argument: String) -> String {
             }
         } else if character == "\"" {
             quoted = true
-            result.append(character)
+            identity.append(character)
         } else if !character.isWhitespace {
-            result.append(character)
+            identity.append(character)
         }
     }
-    return result
+    return identity
 }
 
 /// The source-controlled declaration for a finite conformance case.

@@ -73,12 +73,12 @@ struct TypedFiniteConstantTests {
         #expect(parsed.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
     }
 
-    @Test func generatedModelRetainsTheTypedFiniteSet() throws {
+    @Test func macroExpansionRetainsTheTypedFiniteSet() throws {
         #expect(TypedFiniteConstantGeneratedModel.spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
         #expect(try TypedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
-    @Test func generatedModelRetainsNestedFiniteEnumConstants() throws {
+    @Test func macroExpansionRetainsNestedFiniteEnumConstants() throws {
         #expect(NestedFiniteConstantGeneratedModel.spec.constants == [
             ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
             ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),

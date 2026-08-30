@@ -372,7 +372,7 @@ struct AuthoredPlusCalDeclarationSections {
     var emitted: Set<String> = []
     func order(_ phase: AuthoredPlusCalDeclarationPhase) throws -> [String] {
       var pending = declarations.filter { $0.phase == phase }
-      var result: [String] = []
+      var ordered: [String] = []
       let declared = Set(declarations.compactMap(\.name))
       if let unresolved = pending.first(where: { $0.dependencies.contains(where: { declared.contains($0) == false }) }) {
         throw CompilationDiagnostic(
@@ -388,7 +388,7 @@ struct AuthoredPlusCalDeclarationSections {
         declaration.dependencies.allSatisfy(emitted.contains)
       }) {
         let declaration = pending.remove(at: index)
-        result.append(declaration.text)
+        ordered.append(declaration.text)
         if let name = declaration.name { emitted.insert(name) }
       }
       if pending.isEmpty == false {
@@ -401,7 +401,7 @@ struct AuthoredPlusCalDeclarationSections {
           nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase."
         )
       }
-      return result
+      return ordered
     }
     prelude = try order(.prelude)
     define = try order(.define)

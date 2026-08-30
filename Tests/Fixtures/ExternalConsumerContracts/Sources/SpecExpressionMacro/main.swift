@@ -73,9 +73,9 @@ struct Counter {
 }
 
 var counter = try Counter.makeMachine()
-let result = try counter.send(.advance)
-guard result.after.value == 1,
-      result.after.cars[.one]?.tlaValue == .record([
+let transition = try counter.send(.advance)
+guard transition.after.value == 1,
+      transition.after.cars[.one]?.tlaValue == .record([
         "floor": .int(2),
         "doorsOpen": .bool(false)
       ]) else {

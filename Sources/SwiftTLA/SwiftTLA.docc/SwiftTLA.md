@@ -5,7 +5,7 @@ meaning used by the generated machine and rendered formal bundles.
 
 ## Overview
 
-`SwiftTLA` contains the source language, compiler, private runtime, and formal
+`SwiftTLA` contains the source language, compiler, compiled runtime, and formal
 renderers. `SwiftTLAMacros` contains `@TLAModel`, which generates typed Swift
 machines from `TLASpec` declarations.
 
@@ -53,7 +53,7 @@ let plusCal = try compilation.renderedPlusCalBundle()
 ## Execute generated Swift
 
 The generated machine is a Swift value. SwiftUI stores it directly in
-`@State`. The generated `Actor` serializes access to the same value machine.
+`@State`. The generated `Actor` serializes access to the same machine.
 
 Read <doc:GeneratedMachineSurface> for the generated API. Read
 `Documentation/FiniteGraphComparison.md` for exact bounded TLC comparison.

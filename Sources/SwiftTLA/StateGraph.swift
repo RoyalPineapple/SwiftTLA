@@ -69,26 +69,26 @@ package struct StateGraph: Sendable {
 package struct FiniteExploration {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
-    public let result: ModelCheckOutcome
+    public let outcome: ModelCheckOutcome
     package let compilationIdentity: CompilationIdentity
     package let configuration: FiniteExplorationConfiguration
     let compiledStates: [StateGraph.StateID: CompiledState]
 
     public var isComplete: Bool {
-        if case .ok = result { return true }
+        if case .ok = outcome { return true }
         return false
     }
 
     public init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
-        result: ModelCheckOutcome,
+        outcome: ModelCheckOutcome,
         compilationIdentity: CompilationIdentity,
         configuration: FiniteExplorationConfiguration
     ) {
         self.graph = graph
         self.initialStateIDs = initialStateIDs
-        self.result = result
+        self.outcome = outcome
         self.compilationIdentity = compilationIdentity
         self.configuration = configuration
         compiledStates = [:]
@@ -97,14 +97,14 @@ package struct FiniteExploration {
     init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
-        result: ModelCheckOutcome,
+        outcome: ModelCheckOutcome,
         compilationIdentity: CompilationIdentity,
         configuration: FiniteExplorationConfiguration,
         compiledStates: [StateGraph.StateID: CompiledState]
     ) {
         self.graph = graph
         self.initialStateIDs = initialStateIDs
-        self.result = result
+        self.outcome = outcome
         self.compilationIdentity = compilationIdentity
         self.configuration = configuration
         self.compiledStates = compiledStates

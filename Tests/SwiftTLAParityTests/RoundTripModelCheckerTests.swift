@@ -207,8 +207,8 @@ struct ModelCheckOutcomeTests {
       Invariant("ResourceCount") { a + b == 3 }
     }
     #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count == 4)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = result { true } else { false } }())
+    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
+    #expect({ if case .ok = checkOutcome { true } else { false } }())
   }
 
   @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
@@ -270,8 +270,8 @@ struct ModelCheckOutcomeTests {
     }
     let count = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count
     #expect(count >= 1)
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = result { true } else { false } }())
+    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
+    #expect({ if case .ok = checkOutcome { true } else { false } }())
   }
 
   @Test("Multi-choose is Cartesian product")
@@ -574,9 +574,9 @@ struct ModelCheckOutcomeTests {
       Action("a") { x.becomes(2).when(x == 1) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
+    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     var dead = false
-    if case .deadlocked = result { dead = true } else { dead = false }
+    if case .deadlocked = checkOutcome { dead = true } else { dead = false }
     #expect(dead)
   }
 
@@ -588,10 +588,10 @@ struct ModelCheckOutcomeTests {
       Action("a") { x.becomes(x + 1).when(x < 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
+    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
     var val: TLAValue = .int(-1)
-    if case .deadlocked(let state) = result { val = state.value(for: xToken) ?? .int(-1) }
+    if case .deadlocked(let state) = checkOutcome { val = state.value(for: xToken) ?? .int(-1) }
     #expect(val == .int(2))
   }
 
@@ -603,9 +603,9 @@ struct ModelCheckOutcomeTests {
       Action("a") { x.becomes((x + 1) % 2) }
       DeadlockCheck()
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
+    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     var ok = false
-    if case .ok = result { ok = true }
+    if case .ok = checkOutcome { ok = true }
     #expect(ok)
   }
 
@@ -655,8 +655,8 @@ struct ModelCheckOutcomeTests {
 
   @Test("sequence-from-set evaluates correctly")
   func recursiveBuiltins() throws {
-    let result = try compiledValue(.sequenceFromSet(.value(.set([.int(3), .int(1), .int(2)]))))
-    #expect(result == .tuple([.int(1), .int(2), .int(3)]))
+    let sequenceValue = try compiledValue(.sequenceFromSet(.value(.set([.int(3), .int(1), .int(2)]))))
+    #expect(sequenceValue == .tuple([.int(1), .int(2), .int(3)]))
   }
 
   @Test("DefineRecursive DSL body evaluates with depth tracking")
@@ -677,15 +677,15 @@ struct ModelCheckOutcomeTests {
       )
     )
     let fn = RecursiveFunc(name: "SfS", params: ["S"], body: body)
-    let result = try compiledValue(
+    let recursiveValue = try compiledValue(
       .recursiveCall("SfS", [.value(.set([.int(3), .int(1), .int(2)]))]),
       recursiveFunctions: [fn]
     )
-    guard case .tuple(let tv) = result else {
+    guard case .tuple(let values) = recursiveValue else {
       #expect(Bool(false))
       return
     }
-    #expect(Set(tv) == Set([.int(1), .int(2), .int(3)]))
+    #expect(Set(values) == Set([.int(1), .int(2), .int(3)]))
   }
 
   @Test("nonterminating recursive operators stop at the recursion-depth limit")

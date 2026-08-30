@@ -121,23 +121,23 @@ struct UpstreamParityTests {
 
     @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
     func nQueensMatchesTLC() throws {
-        let result = try explore(Example.nQueensFour.spec, maximumStateLimit: 5_000)
-        #expect(result.graph.states.count == Example.nQueensFour.expectedDistinct)
-        #expect(isSuccessful(result))
+        let exploration = try explore(Example.nQueensFour.spec, maximumStateLimit: 5_000)
+        #expect(exploration.graph.states.count == Example.nQueensFour.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("two-process Lock PlusCal port matches TLC")
     func lockMatchesTLC() throws {
-        let result = try explore(Example.lockTwoProcess.spec, maximumStateLimit: 100)
-        #expect(result.graph.states.count == Example.lockTwoProcess.expectedDistinct)
-        #expect(isSuccessful(result))
+        let exploration = try explore(Example.lockTwoProcess.spec, maximumStateLimit: 100)
+        #expect(exploration.graph.states.count == Example.lockTwoProcess.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("two-process Peterson PlusCal port matches TLC")
     func petersonMatchesTLC() throws {
-        let result = try explore(Example.petersonTwoProcess.spec, maximumStateLimit: 1_000)
-        #expect(result.graph.states.count == Example.petersonTwoProcess.expectedDistinct)
-        #expect(isSuccessful(result))
+        let exploration = try explore(Example.petersonTwoProcess.spec, maximumStateLimit: 1_000)
+        #expect(exploration.graph.states.count == Example.petersonTwoProcess.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("HourClock TLA+ module is TLC-shaped")
@@ -159,16 +159,16 @@ struct UpstreamParityTests {
 
     @Test("Channel typed record model matches its validated state count")
     func channelTypedRecordParity() throws {
-        let result = try explore(ChannelModel.spec, maximumStateLimit: 50_000)
-        #expect(result.graph.states.count == Example.channel.expectedDistinct)
-        #expect(isSuccessful(result))
+        let exploration = try explore(ChannelModel.spec, maximumStateLimit: 50_000)
+        #expect(exploration.graph.states.count == Example.channel.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("AsynchInterface typed record model matches its validated state count")
     func asynchInterfaceTypedRecordParity() throws {
-        let result = try explore(AsynchInterfaceModel.spec, maximumStateLimit: 50_000)
-        #expect(result.graph.states.count == Example.asynchInterface.expectedDistinct)
-        #expect(isSuccessful(result))
+        let exploration = try explore(AsynchInterfaceModel.spec, maximumStateLimit: 50_000)
+        #expect(exploration.graph.states.count == Example.asynchInterface.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("TeachingConcurrency Simple models use typed phase state")
@@ -181,83 +181,83 @@ struct UpstreamParityTests {
 
     @Test("TeachingConcurrency SimpleRegular uses bounded regular-register state")
     func teachingSimpleRegularParity() throws {
-        let result = try explore(TeachingSimpleRegularN8Model.spec, maximumStateLimit: Example.teachingSimpleRegularN8.maximumStateLimit)
-        #expect(result.graph.states.count == Example.teachingSimpleRegularN8.expectedDistinct)
+        let exploration = try explore(TeachingSimpleRegularN8Model.spec, maximumStateLimit: Example.teachingSimpleRegularN8.maximumStateLimit)
+        #expect(exploration.graph.states.count == Example.teachingSimpleRegularN8.expectedDistinct)
     }
 
     @Test("FindHighest PlusCal port matches its bounded TLC configuration")
     func findHighestParity() throws {
-        let result = try explore(FindHighestModel.spec, maximumStateLimit: 100_000)
-        #expect(result.graph.states.count == Example.findHighest.expectedDistinct)
+        let exploration = try explore(FindHighestModel.spec, maximumStateLimit: 100_000)
+        #expect(exploration.graph.states.count == Example.findHighest.expectedDistinct)
     }
 
     @Test("Dijkstra mutex preserves its bounded PlusCal model")
     func dijkstraMutexParity() throws {
-        let result = try explore(DijkstraMutexModel.spec, maximumStateLimit: Example.dijkstraMutex.maximumStateLimit)
-        #expect(result.graph.states.count == Example.dijkstraMutex.expectedDistinct)
+        let exploration = try explore(DijkstraMutexModel.spec, maximumStateLimit: Example.dijkstraMutex.maximumStateLimit)
+        #expect(exploration.graph.states.count == Example.dijkstraMutex.expectedDistinct)
     }
 
     @Test("BinarySearch PlusCal port matches its bounded TLC configuration")
     func binarySearchParity() throws {
-        let result = try explore(BinarySearchModel.spec, maximumStateLimit: 100_000)
-        #expect(result.graph.states.count == Example.binarySearch.expectedDistinct)
+        let exploration = try explore(BinarySearchModel.spec, maximumStateLimit: 100_000)
+        #expect(exploration.graph.states.count == Example.binarySearch.expectedDistinct)
         let tla = try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla
         #expect(tla.contains("WF_<<pc, seq, val, low, high, result>>(Next)"))
     }
 
     @Test("Consensus PlusCal port matches its bounded TLC configuration")
     func consensusParity() throws {
-        let result = try explore(ConsensusModel.spec, maximumStateLimit: 100_000)
-        #expect(result.graph.states.count == Example.consensus.expectedDistinct)
+        let exploration = try explore(ConsensusModel.spec, maximumStateLimit: 100_000)
+        #expect(exploration.graph.states.count == Example.consensus.expectedDistinct)
     }
 
     @Test("Paxos typed state preserves its bounded TLC graph")
     func paxosTypedStateParity() throws {
-        let result = try explore(
+        let exploration = try explore(
             PaxosModel.spec,
             maximumStateLimit: Example.paxosSmall.maximumStateLimit
         )
 
-        #expect(result.graph.states.count == Example.paxosSmall.expectedDistinct)
-        #expect(isSuccessful(result))
+        #expect(exploration.graph.states.count == Example.paxosSmall.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("SumSequence bounded source port verifies")
     func sumSequenceBoundedPort() throws {
-        let result = try explore(SumSequenceModel.spec, maximumStateLimit: 100_000)
-        #expect(result.graph.states.count == Example.sumSequence.expectedDistinct)
+        let exploration = try explore(SumSequenceModel.spec, maximumStateLimit: 100_000)
+        #expect(exploration.graph.states.count == Example.sumSequence.expectedDistinct)
     }
 
     @Test("Reachable bounded source port compiles its formal graph choice")
     func reachableBoundedPort() throws {
-        let result = try explore(ReachableModel.spec, maximumStateLimit: 100_000)
-        #expect(result.graph.states.count == Example.reachable.expectedDistinct)
+        let exploration = try explore(ReachableModel.spec, maximumStateLimit: 100_000)
+        #expect(exploration.graph.states.count == Example.reachable.expectedDistinct)
     }
 
     @Test("Parallel Reachable bounded source port verifies")
     func parallelReachableBoundedPort() throws {
-        let result = try explore(ParallelReachableModel.spec, maximumStateLimit: 100_000)
-        #expect(result.graph.states.count == Example.parallelReachable.expectedDistinct)
+        let exploration = try explore(ParallelReachableModel.spec, maximumStateLimit: 100_000)
+        #expect(exploration.graph.states.count == Example.parallelReachable.expectedDistinct)
     }
 
     @Test("Echo PlusCal port matches its three-node TLC configuration")
     func echoParity() throws {
-        let result = try explore(EchoModel.spec, maximumStateLimit: 100_000)
-        #expect(result.graph.states.count == Example.echo.expectedDistinct)
+        let exploration = try explore(EchoModel.spec, maximumStateLimit: 100_000)
+        #expect(exploration.graph.states.count == Example.echo.expectedDistinct)
     }
 
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
-        let result = try explore(EWD840Model.spec, maximumStateLimit: 50_000)
-        #expect(result.graph.states.count == Example.ewd840.expectedDistinct)
-        #expect(isSuccessful(result))
+        let exploration = try explore(EWD840Model.spec, maximumStateLimit: 50_000)
+        #expect(exploration.graph.states.count == Example.ewd840.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("EWD998 uses typed finite functions and parameterized actions")
     func ewd998TypedFunctionParity() throws {
-        let result = try explore(EWD998TerminationModel.spec, maximumStateLimit: 50_000)
-        #expect(result.graph.states.count == Example.ewd998.expectedDistinct)
-        #expect(isSuccessful(result))
+        let exploration = try explore(EWD998TerminationModel.spec, maximumStateLimit: 50_000)
+        #expect(exploration.graph.states.count == Example.ewd998.expectedDistinct)
+        #expect(isSuccessful(exploration))
     }
 
     @Test("Moving Cat models use typed direction state")
@@ -270,8 +270,8 @@ struct UpstreamParityTests {
 
     @Test("Sync termination detector uses typed finite function state")
     func syncTerminationTypedFunctionParity() throws {
-        let result = try explore(SyncTerminationDetectionModel.spec, maximumStateLimit: 50_000)
-        #expect(result.graph.states.count == Example.syncTD.expectedDistinct)
+        let exploration = try explore(SyncTerminationDetectionModel.spec, maximumStateLimit: 50_000)
+        #expect(exploration.graph.states.count == Example.syncTD.expectedDistinct)
     }
 }
 
@@ -284,6 +284,6 @@ private func explore(_ spec: TLASpec, maximumStateLimit: Int) throws -> FiniteEx
 }
 
 private func isSuccessful(_ exploration: FiniteExploration) -> Bool {
-    if case .ok = exploration.result { return true }
+    if case .ok = exploration.outcome { return true }
     return false
 }

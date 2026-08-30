@@ -3,12 +3,14 @@
 **SwiftTLA turns typed state rules into a typed Swift machine.**
 
 Write one Swift source model for state, actions, and invariants. `compile()`
-binds names, links modules, and creates one immutable compiled specification.
+validates declarations, binds names, links modules, lowers behavior, allocates
+private identities, renders TLA+/PlusCal text, assembles the formal bundles,
+and publishes one immutable compiled specification.
 `@TLAModel` generates typed `State`, `Action`, and `Transition` values from that
-meaning. SwiftUI stores the generated value machine directly. The generated
-`Actor` serializes access to the same value machine.
+meaning. SwiftUI stores the generated machine directly. The generated `Actor`
+serializes access to that machine.
 
-**One model. Typed application state. Bounded formal evidence.**
+**One source model. Typed application state. Bounded formal evidence.**
 
 ```text
 Swift source model
@@ -16,7 +18,7 @@ Swift source model
         ▼
 CompiledSpecification
  ├── generated State, Action, Transition, and machine
- ├── private runtime and bounded exploration
+ ├── compiled runtime and bounded exploration
  └── rendered TLA+ bundle and, for one authored Algorithm, PlusCal bundle
 
 Generated machine
@@ -98,8 +100,8 @@ The generated API gives your application typed state and action cases.
 var clock = try ClockModel.makeMachine(
     .init(hour: 16, minute: 19, second: 59)
 )
-let result = try clock.send(.tick)
-print(result.after)
+let transition = try clock.send(.tick)
+print(transition.after)
 // State(hour: 16, minute: 20, second: 0)
 ```
 
@@ -153,10 +155,10 @@ struct ClockView: View {
 }
 ```
 
-`machine` is the generated value stored by the view. A failed action throws and
+`machine` is the generated machine stored by the view. A failed action throws and
 leaves the machine state unchanged. This view stores the diagnostic for display.
 Use the generated actor for shared asynchronous state. It stores the same
-generated machine value behind actor isolation.
+generated machine behind actor isolation.
 
 ## Add bounded assurance
 
