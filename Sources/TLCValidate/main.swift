@@ -242,12 +242,6 @@ private func failFiniteGraphCheck(_ error: Error) -> Never {
     fputs("finite-graph: \(error)\n", stderr)
     exit(FiniteGraphExitCode.failure.rawValue)
 }
-private func governanceURL(_ configuredPath: String?, projectRoot: URL, defaultPath: String) -> URL {
-    if let configuredPath, !configuredPath.isEmpty {
-        return URL(fileURLWithPath: configuredPath).standardizedFileURL
-    }
-    return projectRoot.appendingPathComponent(defaultPath)
-}
 private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
     case usage
     case missingToolRoot
@@ -281,9 +275,9 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
         let projectRoot = try RetainedFiles.projectRoot(
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         let environment = ProcessInfo.processInfo.environment
-        let casesURL = governanceURL(
-            environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
-            defaultPath: "Verification/TemporalSymmetryConformance/cases.json")
+        let casesURL = environment["TEMPORAL_SYMMETRY_CASES"].flatMap { path in
+            path.isEmpty ? nil : URL(fileURLWithPath: path).standardizedFileURL
+        } ?? projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")
         guard let toolRoot = environment["FINITE_GRAPH_TOOL_ROOT"].map(URL.init(fileURLWithPath:)) else {
             throw TemporalSymmetryCLIError.missingToolRoot
         }

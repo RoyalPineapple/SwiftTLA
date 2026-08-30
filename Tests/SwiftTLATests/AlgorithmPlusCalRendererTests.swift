@@ -127,10 +127,10 @@ struct AlgorithmPlusCalRendererTests {
 
         let compilation = try TLASpec("QuantifiedBinder") { algorithm }.compile()
         let rendered = try compilation.renderedPlusCalBundle().root.tla
-        let compiledMachine = compilation.renderedTLAModuleBundle().root.tla
+        let renderedTLA = compilation.renderedTLAModuleBundle().root.tla
 
         #expect(rendered.contains("await \\A item_1 \\in {0, 1} : (item_1 >= count);"))
-        #expect(compiledMachine.contains("\\A item_1 \\in {0, 1}"))
+        #expect(renderedTLA.contains("\\A item_1 \\in {0, 1}"))
     }
 
     @Test("keeps prelude helpers outside and state helpers inside define")
@@ -365,14 +365,14 @@ struct AlgorithmPlusCalRendererTests {
 
         let compilation = try TLASpec("Procedures") { algorithm }.compile()
         let rendered = try compilation.renderedPlusCalBundle().root.tla
-        let compiledMachine = compilation.renderedTLAModuleBundle().root.tla
+        let renderedTLA = compilation.renderedTLAModuleBundle().root.tla
 
         #expect(rendered.contains("procedure work(parameter0)"))
         #expect(rendered.contains("enter:"))
         #expect(rendered.contains("output := (parameter0 + offset);"))
         #expect(rendered.contains("call work(7);"))
         #expect(rendered.contains("{\n  start:"))
-        #expect(compiledMachine.contains("VARIABLES pc, output, stack, parameter0, offset"))
+        #expect(renderedTLA.contains("VARIABLES pc, output, stack, parameter0, offset"))
     }
 
     @Test("procedure call capture avoids authored binders and retains tail return")

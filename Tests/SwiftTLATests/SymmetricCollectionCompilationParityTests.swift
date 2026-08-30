@@ -12,7 +12,7 @@ struct SymmetricCollectionCompilationParityTests {
   @Test("Symmetric scopes two through four retain model-value orbit counts")
   func scopesRetainModelValueOrbitCounts() throws {
     for scope in 2...4 {
-      let spec = oracleSpec(scope: scope)
+      let spec = symmetricSpec(scope: scope)
       let compilation = try spec.compile()
       let reducedConfiguration = try FiniteExplorationConfiguration(
         maximumStateLimit: 100_000,
@@ -73,9 +73,9 @@ struct SymmetricCollectionCompilationParityTests {
       == ModelChecker(compilation: builtCompilation, configuration: configuration).check().description)
   }
 
-  private func oracleSpec(scope: Int) -> TLASpec {
+  private func symmetricSpec(scope: Int) -> TLASpec {
     let devices = SymmetricCollectionVar<Device, Int>("devices")
-    return TLASpec("SymmetricOracle\(scope)") {
+    return TLASpec("SymmetricScope\(scope)") {
       SymmetricCollection(devices, verificationScope: scope, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)

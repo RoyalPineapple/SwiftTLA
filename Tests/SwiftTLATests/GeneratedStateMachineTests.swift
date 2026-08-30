@@ -116,9 +116,9 @@ struct GeneratedAlgorithmMachineTests {
         var machine = try GeneratedAlgorithmCounter.makeMachine()
         #expect(machine.state.count == 0)
         let action = GeneratedAlgorithmCounter.Action.increment(process: .left)
-        let result = try machine.send(action)
-        #expect(result.before.count == 0)
-        #expect(result.after.count == 1)
+        let transition = try machine.send(action)
+        #expect(transition.before.count == 0)
+        #expect(transition.after.count == 1)
         #expect(machine.state.count == 1)
     }
 
@@ -217,9 +217,9 @@ struct GeneratedSequentialMachineTests {
     @Test("a sequential Algorithm advances its typed state")
     func generatedSequentialAlgorithmAdvancesTypedState() throws {
 
-        var model = try GeneratedSequentialCounter.makeMachine()
-        let result = try model.send(.increment)
-        #expect(result.after.count == 1)
+        var machine = try GeneratedSequentialCounter.makeMachine()
+        let transition = try machine.send(.increment)
+        #expect(transition.after.count == 1)
     }
 }
 
@@ -244,15 +244,15 @@ struct GeneratedSimultaneousSwap {
 struct GeneratedSimultaneousSwapTests {
     @Test("generated updates read one old state and commit together")
     func generatedMachineSwapsValues() throws {
-        var model = try GeneratedSimultaneousSwap.makeMachine()
+        var machine = try GeneratedSimultaneousSwap.makeMachine()
 
-        let result = try model.send(.swap)
+        let transition = try machine.send(.swap)
 
-        #expect(result.before.left == 1)
-        #expect(result.before.right == 2)
-        #expect(result.after.left == 2)
-        #expect(result.after.right == 1)
-        #expect(model.state == result.after)
+        #expect(transition.before.left == 1)
+        #expect(transition.before.right == 2)
+        #expect(transition.after.left == 2)
+        #expect(transition.after.right == 1)
+        #expect(machine.state == transition.after)
     }
 
 }
@@ -282,15 +282,46 @@ struct GeneratedPairPattern {
 struct GeneratedPairPatternTests {
     @Test("a generated machine rejects an action with multiple valid successors")
     func generatedMachineRejectsAmbiguousPairSelection() throws {
-        var model = try GeneratedPairPattern.makeMachine()
+        var machine = try GeneratedPairPattern.makeMachine()
         do {
-            _ = try model.send(.choose)
+            _ = try machine.send(.choose)
             Issue.record("Expected ambiguous action")
         } catch GeneratedMachineError.ambiguousAction {
         } catch {
             Issue.record("Expected ambiguous action, received \(error)")
         }
-        #expect(model.state.selected == 0)
+        #expect(machine.state.selected == 0)
+    }
+}
+
+@TLAModel
+struct GeneratedDuplicateSuccessor {
+    enum Step: String, CaseIterable { case choose }
+
+    static var spec: TLASpec {
+        #spec("GeneratedDuplicateSuccessor") {
+            Algorithm("GeneratedDuplicateSuccessor", scoped: { scope in
+                let selected = scope.sharedVar("selected", initial: 0)
+                Do(Step.choose) {
+                    With(SetExpr<Int>.literal(1, 2)) { _ in
+                        Assign(selected, to: 1)
+                    }
+                }
+            })
+        }
+    }
+}
+
+struct GeneratedDuplicateSuccessorTests {
+    @Test("a generated machine coalesces identical successors for one action")
+    func generatedMachineSendsOneSemanticTransition() throws {
+        var machine = try GeneratedDuplicateSuccessor.makeMachine()
+
+        let transition = try machine.send(.choose)
+
+        #expect(transition.before.selected == 0)
+        #expect(transition.after.selected == 1)
+        #expect(machine.state == transition.after)
     }
 }
 
@@ -495,18 +526,18 @@ struct GeneratedDependentInitialAlgorithmTests {
     }
 }
 
-struct NestedAdapterConcurrencyTests {
-    @Test("Nested actor executes through its canonical model")
-    func nestedActorSharesCanonicalExecution() async throws {
+struct NestedActorConcurrencyTests {
+    @Test("Nested actor matches value-machine execution")
+    func nestedActorMatchesValueMachineExecution() async throws {
         let actorLabel: NestedComposedCounter.Action = .advance
-        var model = try NestedComposedCounter.makeMachine()
+        var machine = try NestedComposedCounter.makeMachine()
         let actor = try NestedComposedCounter.Actor()
 
-        let expectedBefore = model.state
+        let expectedBefore = machine.state
         #expect(actorLabel == .advance)
         #expect(expectedBefore.count == 0)
 
-        let expected = try model.send(.advance)
+        let expected = try machine.send(.advance)
         let acted = try await actor.send(.advance)
 
         #expect(acted.before == expected.before)
@@ -659,14 +690,14 @@ struct NestedComposedCounter {
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
-    @Test("#spec preserves the constrained TLASpec builder for model generation")
+    @Test("#spec compiles in an external consumer")
     func specExpressionMacroCompilesExternally() throws {
-        let result = try buildExternalConsumer("SpecExpressionMacro")
+        let build = try buildExternalConsumer("SpecExpressionMacro")
 
-        #expect(result.status == 0, Comment(rawValue: result.output))
+        #expect(build.status == 0, Comment(rawValue: build.output))
     }
 
-    @Test("Model macro generates a parameterized action")
+    @Test("@TLAModel generates a parameterized action")
     func modelParameterizedAction() throws {
         var machine = try SingleParameterActionMachine.makeMachine()
         _ = try machine.send(.select(choice: 1))
@@ -710,7 +741,7 @@ struct GeneratedStateMachineTests {
         let source = Expr<Int>(.variable("source"))
         let destination = Expr<Int>(.variable("destination"))
         let amount = Expr<Int>(.variable("amount"))
-        let builder = TLASpec("EndToEndThreeParameterActionMachine") {
+        let sourceSpecification = TLASpec("EndToEndThreeParameterActionMachine") {
             Variable(value, 0)
             Action("transfer", parameters: [
                 ActionParameter("source", values: [1, 2]),
@@ -723,10 +754,10 @@ struct GeneratedStateMachineTests {
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.actions.count == 1)
-        #expect(parsed.actions[0].name == builder.actions[0].name)
-        #expect(parsed.actions[0].body == builder.actions[0].body)
-        #expect(parsed.actions[0].bindings == builder.actions[0].bindings)
-        #expect(EndToEndThreeParameterActionMachine.spec.actions == builder.actions)
+        #expect(parsed.actions[0].name == sourceSpecification.actions[0].name)
+        #expect(parsed.actions[0].body == sourceSpecification.actions[0].body)
+        #expect(parsed.actions[0].bindings == sourceSpecification.actions[0].bindings)
+        #expect(EndToEndThreeParameterActionMachine.spec.actions == sourceSpecification.actions)
 
         let expectedArguments: [[TLAValue]] = [
             [.int(1), .int(10), .int(100)], [.int(1), .int(10), .int(200)],
@@ -734,7 +765,7 @@ struct GeneratedStateMachineTests {
             [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
             [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
         ]
-        let compilation = try builder.compile()
+        let compilation = try sourceSpecification.compile()
         let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
         #expect(
             try graph.transitions[.init(0)]?.map {
@@ -754,7 +785,7 @@ struct GeneratedStateMachineTests {
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 20, amount: 200)))
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 30, amount: 200)) == false)
 
-        let renderedCalls = try builder.compile().renderedActions()
+        let renderedCalls = try sourceSpecification.compile().renderedActions()
         #expect(renderedCalls.map(\.sourceName) == Array(repeating: "transfer", count: 8))
         #expect(renderedCalls.map(\.arguments) == expectedArguments)
         #expect(renderedCalls.map(\.renderedName) == [
@@ -780,9 +811,9 @@ struct GeneratedStateMachineTests {
 
         var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = generatedMachine.state
-        let evidence = try generatedMachine.send(.transfer(source: 2, destination: 20, amount: 200))
-        #expect(evidence.action == .transfer(source: 2, destination: 20, amount: 200))
-        #expect(evidence.after.value == 222)
+        let transition = try generatedMachine.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(transition.action == .transfer(source: 2, destination: 20, amount: 200))
+        #expect(transition.after.value == 222)
         #expect(throws: GeneratedMachineError.self) {
             try generatedMachine.send(.transfer(source: 2, destination: 30, amount: 200))
         }
@@ -790,15 +821,15 @@ struct GeneratedStateMachineTests {
         #expect(before.value == 0)
     }
 
-    @Test("Generated machine preserves typed actions, transitions, and failed snapshots")
+    @Test("Generated machine preserves typed actions, transitions, and state after rejection")
     func generatedMachineUsesCheckedThreeArgumentActions() throws {
         var machine = try ThreeParameterActionMachine.makeMachine()
         let action = ThreeParameterActionMachine.Action.transfer(source: 2, destination: 20, amount: 200)
-        let evidence = try machine.send(action)
+        let transition = try machine.send(action)
 
-        #expect(evidence.action == action)
-        #expect(evidence.before.value == 0)
-        #expect(evidence.after.value == 1)
+        #expect(transition.action == action)
+        #expect(transition.before.value == 0)
+        #expect(transition.after.value == 1)
 
         let before = machine.state
         #expect(throws: GeneratedMachineError.self) {
@@ -812,20 +843,20 @@ struct GeneratedStateMachineTests {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = machine.state
 
-        let evidence = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        let transition = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
         let after = machine.state
 
-        #expect(evidence.action == .transfer(source: 2, destination: 20, amount: 200))
-        #expect(evidence.before.value == 0)
-        #expect(evidence.after.value == 222)
+        #expect(transition.action == .transfer(source: 2, destination: 20, amount: 200))
+        #expect(transition.before.value == 0)
+        #expect(transition.after.value == 222)
         #expect(before.value == 0)
         #expect(after.value == 222)
     }
 
     @Test("Actor returns the value machine's three-argument transition")
     func actorMatchesValueMachineThreeArgumentTransition() async throws {
-        var model = try ThreeParameterActionMachine.makeMachine()
-        let expected = try model.send(.transfer(source: 2, destination: 20, amount: 200))
+        var machine = try ThreeParameterActionMachine.makeMachine()
+        let expected = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
 
         let actor = try ThreeParameterActionMachine.Actor()
         let acted = try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
@@ -835,17 +866,17 @@ struct GeneratedStateMachineTests {
         #expect(acted.after.value == expected.after.value)
     }
 
-    @Test("Rejected generated labels preserve model and actor state")
+    @Test("Rejected generated actions preserve machine and actor state")
     func rejectedActionsDoNotMutate() async throws {
-        var model = try ThreeParameterActionMachine.makeMachine()
-        let modelBefore = model.state
+        var machine = try ThreeParameterActionMachine.makeMachine()
+        let machineBefore = machine.state
         do {
-            _ = try model.send(.transfer(source: 2, destination: 30, amount: 200))
-            Issue.record("Expected rejected model action")
+            _ = try machine.send(.transfer(source: 2, destination: 30, amount: 200))
+            Issue.record("Expected rejected machine action")
         } catch {
             #expect(error is GeneratedMachineError)
         }
-        #expect(model.state == modelBefore)
+        #expect(machine.state == machineBefore)
 
         let actor = try ThreeParameterActionMachine.Actor()
         let actorBefore = await actor.state
@@ -857,29 +888,29 @@ struct GeneratedStateMachineTests {
 
     @Test("Fixed-arity action syntax does not type check")
     func fixedArityActionSyntaxDoesNotCompile() throws {
-        let result = try buildExternalConsumer("InvalidActionParameterAPI")
+        let build = try buildExternalConsumer("InvalidActionParameterAPI")
 
-        #expect(result.status != 0)
-        #expect(result.output.contains("Parameterized action 'singleParameter' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'multipleParameters' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'idParameter' requires a parameters list"))
-        #expect(result.output.contains("Parameterized action 'namedParameters' requires a parameters list"))
-        #expect(result.output.contains("value of type 'NamedAction' has no member 'binding'"))
-        #expect(result.output.contains("value of type 'ActionDecl' has no member 'binding'"))
-        #expect(result.output.contains("incorrect argument label in call (have 'name:body:binding:', expected 'name:body:bindings:')"))
+        #expect(build.status != 0)
+        #expect(build.output.contains("Parameterized action 'singleParameter' requires a parameters list"))
+        #expect(build.output.contains("Parameterized action 'multipleParameters' requires a parameters list"))
+        #expect(build.output.contains("Parameterized action 'idParameter' requires a parameters list"))
+        #expect(build.output.contains("Parameterized action 'namedParameters' requires a parameters list"))
+        #expect(build.output.contains("value of type 'NamedAction' has no member 'binding'"))
+        #expect(build.output.contains("value of type 'ActionDecl' has no member 'binding'"))
+        #expect(build.output.contains("incorrect argument label in call (have 'name:body:binding:', expected 'name:body:bindings:')"))
     }
 
-    @Test("Algorithm builder preserves initialized generated state")
+    @Test("Algorithm initialization produces the expected generated and explored states")
     func generatedAlgorithmInitialState() throws {
         let compilation = try GeneratedAlgorithmMachine.spec.compile()
         var machine = try GeneratedAlgorithmMachine.makeMachine()
         #expect(machine.state.count == 1)
         #expect(try machine.send(.tick).after.count == 2)
-        let result = try ModelChecker(
+        let check = try ModelChecker(
             compilation: compilation,
             configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)
         ).check()
-        if case .ok(let count) = result { #expect(count == 2) } else {
+        if case .ok(let count) = check { #expect(count == 2) } else {
             #expect(Bool(false), "Expected the initial state and one successor")
         }
     }

@@ -113,11 +113,11 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
-    @Test("Parser and builder produce the same compilation identity")
-    func parserAndBuilderShareCompilationIdentity() throws {
+    @Test("Parser and result builder produce the same compilation identity")
+    func parserAndResultBuilderShareCompilationIdentity() throws {
         let source = """
         {
-            Algorithm("CanonicalAlgorithm", scoped: { scope in
+            Algorithm("IdentityAlgorithm", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
@@ -134,9 +134,9 @@ struct CompilerBoundaryDiagnosticTests {
                 cases: ["increment": .string("increment")]
             )]
         )
-        let parsedCompilation = try parsed.compile(specificationName: "CanonicalAlgorithm")
-        let builderCompilation = try TLASpec("CanonicalAlgorithm") {
-            Algorithm("CanonicalAlgorithm", scoped: { scope in
+        let parsedCompilation = try parsed.compile(specificationName: "IdentityAlgorithm")
+        let resultBuilderCompilation = try TLASpec("IdentityAlgorithm") {
+            Algorithm("IdentityAlgorithm", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
@@ -146,6 +146,6 @@ struct CompilerBoundaryDiagnosticTests {
         }.compile()
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsedCompilation.identity == builderCompilation.identity)
+        #expect(parsedCompilation.identity == resultBuilderCompilation.identity)
     }
 }

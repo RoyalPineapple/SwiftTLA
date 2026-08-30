@@ -1722,7 +1722,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(try parserTree.compile().identity == builderTree.compile().identity)
     }
 
-    @Test func formalDefinitionIsParsedIntoTheCanonicalFormalModel() throws {
+    @Test func formalDefinitionIsParsedIntoTheSourceModel() throws {
         let source = """
         {
             FormalDefinition(
@@ -1775,7 +1775,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         ])
     }
 
-    @Test func higherOrderFormalDefinitionRoundTripsThroughTheCanonicalParser() throws {
+    @Test func parsesHigherOrderOperatorArgumentsIntoTheSourceModel() throws {
         let source = """
         {
             FormalDefinition(

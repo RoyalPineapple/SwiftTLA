@@ -1,6 +1,6 @@
 import Foundation
 
-package enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
+package enum SymmetryOrbitError: Error, Equatable, Sendable {
   case emptyPermutationGroup
   case incompatiblePermutationDomains
   case permutationDoesNotPreserveStateSpace
@@ -40,7 +40,7 @@ package struct SymmetryPermutation: Equatable, Sendable {
     try Self(constantMapping: Dictionary(uniqueKeysWithValues: try constantMapping.keys.map { key in
       guard let intermediate = other.constantMapping[key],
             let result = constantMapping[intermediate] else {
-        throw SymmetryOrbitAdapterError.incompatiblePermutationDomains
+        throw SymmetryOrbitError.incompatiblePermutationDomains
       }
       return (key, result)
     }))
@@ -57,11 +57,11 @@ package struct SymmetryPermutation: Equatable, Sendable {
     maximumPermutationCount: Int
   ) throws -> [Self] {
     guard let first = generators.first else {
-      throw SymmetryOrbitAdapterError.emptyPermutationGroup
+      throw SymmetryOrbitError.emptyPermutationGroup
     }
     let domain = Set(first.constantMapping.keys)
     guard generators.allSatisfy({ Set($0.constantMapping.keys) == domain }) else {
-      throw SymmetryOrbitAdapterError.incompatiblePermutationDomains
+      throw SymmetryOrbitError.incompatiblePermutationDomains
     }
     let identity = try Self.identity(on: domain)
     var known = [identity.key: identity]
@@ -72,7 +72,7 @@ package struct SymmetryPermutation: Equatable, Sendable {
         if known[next.key] == nil {
           let (required, overflow) = known.count.addingReportingOverflow(1)
           guard overflow == false, required <= maximumPermutationCount else {
-            throw SymmetryOrbitAdapterError.permutationLimitExceeded(
+            throw SymmetryOrbitError.permutationLimitExceeded(
               required: overflow ? .max : required,
               limit: maximumPermutationCount
             )
@@ -113,16 +113,17 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
     permutations: [SymmetryPermutation],
     maximumPermutationCount: Int
   ) throws {
-    guard !permutations.isEmpty else { throw SymmetryOrbitAdapterError.emptyPermutationGroup }
+    guard !permutations.isEmpty else { throw SymmetryOrbitError.emptyPermutationGroup }
     guard maximumPermutationCount > 0 else {
-      throw SymmetryOrbitAdapterError.permutationLimitExceeded(
+      throw SymmetryOrbitError.permutationLimitExceeded(
         required: 1,
         limit: maximumPermutationCount
       )
     }
     let closure = try SymmetryPermutation.closedGroup(
       generatedBy: permutations,
-      maximumPermutationCount: maximumPermutationCount)
+      maximumPermutationCount: maximumPermutationCount
+    )
     let stateTable = try canonicalStateTable(states)
     var unseen = Set(stateTable.keys)
     var derived: [[CanonicalStateKey]] = []
@@ -132,7 +133,7 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
       guard let state = stateTable[first] else { continue }
       let members = Set(try closure.map { try $0.apply(state).key })
       guard members.allSatisfy({ stateTable[$0] != nil }) else {
-        throw SymmetryOrbitAdapterError.permutationDoesNotPreserveStateSpace
+        throw SymmetryOrbitError.permutationDoesNotPreserveStateSpace
       }
       let ordered = members.sorted()
       let representative = ordered[0]

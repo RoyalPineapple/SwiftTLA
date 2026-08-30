@@ -1,7 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// A bounded elevator bank whose complete behaviour lives in one formal model.
+/// A bounded elevator bank whose complete behaviour lives in one typed source model.
 ///
 /// There are three floors, two cars, and two riders. Cars move exactly one
 /// floor at a time. Doors make boarding and exiting explicit transitions.
@@ -204,24 +204,18 @@ public struct ElevatorBank {
                                 vehicle.updating(CarSchema.door, to: .open)
                             })
                                         } or: {
-                                            Either {
                             When(cars[car][CarSchema.door] == .open)
                             When(cars[car][CarSchema.rider] != .none)
                             When(riders[cars[car][CarSchema.rider]][RiderSchema.phase] == .onboard)
                             When(cars[car][CarSchema.floor] == riders[cars[car][CarSchema.rider]][RiderSchema.destination])
                             Assign(cars, to: cars.updating(car) { vehicle in
-                                vehicle.updating(CarSchema.rider, to: .none)
+                                vehicle
+                                    .updating(CarSchema.rider, to: .none)
+                                    .updating(CarSchema.door, to: .closed)
                             })
                             Assign(riders, to: riders.updating(cars[car][CarSchema.rider]) { passenger in
                                 passenger.updating(RiderSchema.phase, to: .arrived)
                             })
-                                            } or: {
-                            When(cars[car][CarSchema.door] == .open)
-                            When(cars[car][CarSchema.rider] == .none)
-                            Assign(cars, to: cars.updating(car) { vehicle in
-                                vehicle.updating(CarSchema.door, to: .closed)
-                            })
-                                            }
                                         }
                                     }
                                 }

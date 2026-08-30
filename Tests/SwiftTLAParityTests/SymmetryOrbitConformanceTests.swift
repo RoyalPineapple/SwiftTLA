@@ -6,7 +6,7 @@ struct SymmetryOrbitConformanceTests {
   @Test("A reduced representative outside its declared orbit is rejected")
   func reducedRepresentativeOutsideOrbitIsRejected() throws {
     let input = try fixture(reducedStates: [state("C")])
-    #expect(throws: SymmetryOrbitAdapterError.reducedStateOutsideOrbit(
+    #expect(throws: SymmetryOrbitError.reducedStateOutsideOrbit(
       source: .swift,
       stateID: state("C").key.canonicalEncoding
     )) {
@@ -145,7 +145,7 @@ struct SymmetryOrbitConformanceTests {
 
   @Test("Orbit derivation stops at the declared permutation limit")
   func orbitDerivationEnforcesPermutationLimit() throws {
-    #expect(throws: SymmetryOrbitAdapterError.permutationLimitExceeded(required: 3, limit: 2)) {
+    #expect(throws: SymmetryOrbitError.permutationLimitExceeded(required: 3, limit: 2)) {
       _ = try SymmetryOrbitDerivation(
         states: [state("A"), state("B"), state("C")],
         permutations: [try SymmetryPermutation(
@@ -257,7 +257,7 @@ struct SymmetryOrbitConformanceTests {
       tlcReduced: reduced,
       renderedActions: [nestedChooseActions()[0]]
     )
-    #expect(throws: SymmetryOrbitAdapterError.actionPlanNotClosed(action: "Choose__0")) {
+    #expect(throws: SymmetryOrbitError.actionPlanNotClosed(action: "Choose__0")) {
       _ = try compareSymmetryOrbits(input)
     }
   }

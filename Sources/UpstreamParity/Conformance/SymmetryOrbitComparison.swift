@@ -223,7 +223,7 @@ package func compareSymmetryOrbits(
     let semantic = members[0].canonicalEncoding
     guard let swiftRepresentative = swiftRepresentatives[semantic],
           let tlcRepresentative = tlcRepresentatives[semantic] else {
-      throw SymmetryOrbitAdapterError.incompleteOrbit(semantic)
+      throw SymmetryOrbitError.incompleteOrbit(semantic)
     }
     return try SymmetryOrbit(
       members: members.map(\.canonicalEncoding),
@@ -247,14 +247,14 @@ private func reducedRepresentatives(
   var representatives: [String: String] = [:]
   for state in run.graph.states.keys {
     guard let orbit = derivation.representativeForState[state] else {
-      throw SymmetryOrbitAdapterError.reducedStateOutsideOrbit(
+      throw SymmetryOrbitError.reducedStateOutsideOrbit(
         source: source,
         stateID: state.canonicalEncoding
       )
     }
     let orbitID = orbit.canonicalEncoding
     guard representatives[orbitID] == nil else {
-      throw SymmetryOrbitAdapterError.multipleReducedRepresentatives(
+      throw SymmetryOrbitError.multipleReducedRepresentatives(
         source: source,
         representative: orbitID
       )
@@ -264,7 +264,7 @@ private func reducedRepresentatives(
   for orbit in derivation.orbits {
     let orbitID = orbit[0].canonicalEncoding
     guard representatives[orbitID] != nil else {
-      throw SymmetryOrbitAdapterError.missingReducedRepresentative(
+      throw SymmetryOrbitError.missingReducedRepresentative(
         source: source,
         representative: orbitID
       )
@@ -279,7 +279,7 @@ private func initialRepresentatives(
 ) throws -> Set<CanonicalStateKey> {
   try Set(run.graph.initialStateKeys.map { state in
     guard let representative = derivation.representativeForState[state] else {
-      throw SymmetryOrbitAdapterError.incompleteOrbit(state.canonicalEncoding)
+      throw SymmetryOrbitError.incompleteOrbit(state.canonicalEncoding)
     }
     return representative
   })
@@ -294,7 +294,7 @@ private func quotientTransitions(
     guard let source = derivation.representativeForState[edge.source],
           let target = derivation.representativeForState[edge.target],
           let sourceState = run.graph.states[edge.source] else {
-      throw SymmetryOrbitAdapterError.incompleteOrbit(edge.source.canonicalEncoding)
+      throw SymmetryOrbitError.incompleteOrbit(edge.source.canonicalEncoding)
     }
     return try SymmetryQuotientTransition(
       sourceRepresentative: source.canonicalEncoding,
@@ -327,10 +327,10 @@ private struct SymmetryActionPlan {
         arguments: try action.arguments.map(CanonicalValue.init)
       )
       guard calls.updateValue(call, forKey: action.renderedName) == nil else {
-        throw SymmetryOrbitAdapterError.duplicateRenderedAction(action.renderedName)
+        throw SymmetryOrbitError.duplicateRenderedAction(action.renderedName)
       }
       guard renderedNames.updateValue(action.renderedName, forKey: call) == nil else {
-        throw SymmetryOrbitAdapterError.duplicateActionCall
+        throw SymmetryOrbitError.duplicateActionCall
       }
     }
     self.calls = calls
@@ -344,7 +344,7 @@ private struct SymmetryActionPlan {
     group: [SymmetryPermutation]
   ) throws -> String {
     guard let call = calls[action] else {
-      throw SymmetryOrbitAdapterError.undeclaredAction(action)
+      throw SymmetryOrbitError.undeclaredAction(action)
     }
     var candidates: [String] = []
     for permutation in group where try permutation.apply(source).key == sourceRepresentative {
@@ -353,12 +353,12 @@ private struct SymmetryActionPlan {
         arguments: try call.arguments.map(permutation.apply)
       )
       guard let renderedName = renderedNames[transformed] else {
-        throw SymmetryOrbitAdapterError.actionPlanNotClosed(action: action)
+        throw SymmetryOrbitError.actionPlanNotClosed(action: action)
       }
       candidates.append(renderedName)
     }
     guard let representative = candidates.min(by: canonicalBytes) else {
-      throw SymmetryOrbitAdapterError.incompleteOrbit(source.key.canonicalEncoding)
+      throw SymmetryOrbitError.incompleteOrbit(source.key.canonicalEncoding)
     }
     return representative
   }

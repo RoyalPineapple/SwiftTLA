@@ -47,22 +47,22 @@ struct NestedComposableMacroConformanceTests {
         }
     }
 
-    @Test("Nested model and actor expose matching typed execution")
-    func nestedModelAndActorShareCanonicalExecution() async throws {
-        var model = try NestedComposedCounter.makeMachine()
+    @Test("Nested machine and actor expose matching typed execution")
+    func nestedMachineAndActorShareExecution() async throws {
+        var machine = try NestedComposedCounter.makeMachine()
         let actor = try NestedComposedCounter.Actor()
 
-        let modelBefore = model.state
-        _ = try model.send(.advance)
-        let modelAfter = model.state
+        let machineBefore = machine.state
+        _ = try machine.send(.advance)
+        let machineAfter = machine.state
         _ = try await actor.send(.advance)
-        #expect(modelBefore.count == 0)
-        #expect(modelAfter.count == 1)
-        #expect(try model.enabledActions() == [.advance])
+        #expect(machineBefore.count == 0)
+        #expect(machineAfter.count == 1)
+        #expect(try machine.enabledActions() == [.advance])
         #expect((await actor.state).count == 1)
     }
 
-    @Test("Three-parameter invocation identity survives value and actor execution")
+    @Test("Three-parameter action identity survives value and actor execution")
     func threeParameterIdentityRemainsDistinctAcrossExecutionSurfaces() async throws {
         let first = EndToEndThreeParameterActionMachine.Action.transfer(source: 1, destination: 10, amount: 100)
         let selected = EndToEndThreeParameterActionMachine.Action.transfer(source: 2, destination: 20, amount: 200)
@@ -74,15 +74,15 @@ struct NestedComposableMacroConformanceTests {
         #expect(available.contains(first))
         #expect(available.contains(selected))
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let result = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
-        #expect(result.after.value == 222)
+        let transition = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(transition.after.value == 222)
         let acted = try await actor.send(.transfer(source: 2, destination: 20, amount: 200))
         #expect(acted.action == .transfer(source: 2, destination: 20, amount: 200))
     }
 
-    @Test("Generated macro surfaces are structurally Sendable without unchecked conformance")
+    @Test("Generated application surfaces are structurally Sendable without unchecked conformance")
     @MainActor
-    func generatedMacroSurfacesAreSendable() throws {
+    func generatedApplicationSurfacesAreSendable() throws {
         requireSendable(NestedComposedCounter.self)
         requireSendable(NestedComposedCounter.Actor.self)
         requireSendable(NestedComposedCounter.Action.self)
@@ -104,56 +104,56 @@ struct NestedComposableMacroConformanceTests {
         }
     }
 
-    @Test("Model macro rejects arbitrary instance state")
+    @Test("@TLAModel rejects arbitrary instance state")
     func modelWithInstanceStoredStateDoesNotTypeCheck() throws {
-        let result = try buildExternalConsumer("InvalidModelStoredState")
+        let build = try buildExternalConsumer("InvalidModelStoredState")
 
-        #expect(result.status != 0)
-        #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
+        #expect(build.status != 0)
+        #expect(build.output.contains("@TLAModel models cannot declare instance stored properties"))
     }
 
-    @Test("Model macro rejects dynamic formal module names")
+    @Test("@TLAModel rejects dynamic formal module names")
     func modelWithDynamicFormalModuleNameDoesNotTypeCheck() throws {
-        let result = try buildExternalConsumer("InvalidDynamicModelName")
+        let build = try buildExternalConsumer("InvalidDynamicModelName")
 
-        #expect(result.status != 0)
-        #expect(result.output.contains("requires a literal module name"))
+        #expect(build.status != 0)
+        #expect(build.output.contains("requires a literal module name"))
     }
 
-    @Test("Model macro requires a value-semantic struct host")
+    @Test("@TLAModel requires a value-semantic struct host")
     func modelMacroRejectsReferenceAndActorHosts() throws {
         for fixture in ["InvalidModelClassHost", "InvalidModelActorHost"] {
-            let result = try buildExternalConsumer(fixture)
+            let build = try buildExternalConsumer(fixture)
 
-            #expect(result.status != 0)
-            #expect(result.output.contains("@TLAModel requires a struct"))
+            #expect(build.status != 0)
+            #expect(build.output.contains("@TLAModel requires a struct"))
         }
     }
 
-    @Test("Model macro rejects observer-backed instance state")
+    @Test("@TLAModel rejects observer-backed instance state")
     func modelWithObservedInstanceStateDoesNotTypeCheck() throws {
-        let result = try buildExternalConsumer("InvalidObservedModelState")
+        let build = try buildExternalConsumer("InvalidObservedModelState")
 
-        #expect(result.status != 0)
-        #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
+        #expect(build.status != 0)
+        #expect(build.output.contains("@TLAModel models cannot declare instance stored properties"))
     }
 
     @Test("External clients compile against generated typed application surfaces")
     func generatedTypedSurfaceCompilesExternally() throws {
-        let result = try runExternalConsumer("GeneratedTypedSurface")
+        let execution = try runExternalConsumer("GeneratedTypedSurface")
 
-        #expect(result.status == 0)
+        #expect(execution.status == 0)
     }
 
-    @Test("External clients cannot use raw state maps or transition evidence")
-    func generatedRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
-        let result = try buildExternalConsumer("InvalidGeneratedRawSurface")
+    @Test("External clients cannot use generated runtime internals")
+    func generatedRuntimeInternalsDoNotCompileExternally() throws {
+        let build = try buildExternalConsumer("InvalidGeneratedRawSurface")
 
-        #expect(result.status != 0)
-        #expect(result.output.contains("has no member 'tlaSnapshot'"))
-        #expect(result.output.contains("TransitionEvidence"))
-        #expect(result.output.contains("ActionArguments"))
-        #expect(result.output.contains("successors"))
+        #expect(build.status != 0)
+        #expect(build.output.contains("has no member 'tlaSnapshot'"))
+        #expect(build.output.contains("TransitionEvidence"))
+        #expect(build.output.contains("ActionArguments"))
+        #expect(build.output.contains("successors"))
     }
 
     @Test("Generated actor cannot expose raw state")
@@ -173,12 +173,12 @@ struct NestedComposableMacroConformanceTests {
         stateDiagnostic: String,
         requiresGeneratedSurfaceRejection: Bool = true
     ) throws {
-        let result = try buildExternalConsumer(fixture)
+        let build = try buildExternalConsumer(fixture)
 
-        #expect(result.status != 0)
-        #expect(result.output.contains(stateDiagnostic))
+        #expect(build.status != 0)
+        #expect(build.output.contains(stateDiagnostic))
         if requiresGeneratedSurfaceRejection {
-            #expect(result.output.contains("\(typeName).TransitionEvidence"))
+            #expect(build.output.contains("\(typeName).TransitionEvidence"))
         }
     }
 
