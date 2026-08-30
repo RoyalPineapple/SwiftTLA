@@ -1,4 +1,14 @@
 enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
+    enum IntegerOperation: String, Equatable, Sendable {
+        case addition
+        case subtraction
+        case multiplication
+        case division
+        case remainder
+        case negation
+        case summation
+    }
+
     enum ValueShape: String, Equatable, Sendable {
         case integer
         case boolean
@@ -38,6 +48,7 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case collectionState
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
     case divisionByZero
+    case integerOverflow(IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
 
@@ -65,6 +76,8 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .powerSetTooLarge(let actualCount, let maximumCount):
             return "Power-set input has \(actualCount) members; the maximum is \(maximumCount)"
         case .divisionByZero: return "Division by zero"
+        case .integerOverflow(let operation, let operands):
+            return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
         case .recursionDepthExceeded(let limit): return "Evaluation exceeded recursive depth \(limit)"
         }
@@ -288,27 +301,50 @@ struct CompiledEvaluator: Sendable {
                 case .add:
                     let rhs = try integer(popValue(from: &values))
                     let lhs = try integer(popValue(from: &values))
-                    values.append(.integer(lhs + rhs))
+                    values.append(.integer(try checkedInteger(
+                        lhs.addingReportingOverflow(rhs),
+                        operation: .addition,
+                        operands: [lhs, rhs]
+                    )))
                 case .subtract:
                     let rhs = try integer(popValue(from: &values))
                     let lhs = try integer(popValue(from: &values))
-                    values.append(.integer(lhs - rhs))
+                    values.append(.integer(try checkedInteger(
+                        lhs.subtractingReportingOverflow(rhs),
+                        operation: .subtraction,
+                        operands: [lhs, rhs]
+                    )))
                 case .multiply:
                     let rhs = try integer(popValue(from: &values))
                     let lhs = try integer(popValue(from: &values))
-                    values.append(.integer(lhs * rhs))
+                    values.append(.integer(try checkedInteger(
+                        lhs.multipliedReportingOverflow(by: rhs),
+                        operation: .multiplication,
+                        operands: [lhs, rhs]
+                    )))
                 case .divide, .integerDivide:
                     let dividend = try integer(popValue(from: &values))
                     let divisor = try integer(popValue(from: &values))
-                    guard divisor != 0 else { throw EvalError.divisionByZero }
+                    if divisor == 0 { throw EvalError.divisionByZero }
+                    if dividend == .min && divisor == -1 {
+                        throw EvalError.integerOverflow(.division, operands: [dividend, divisor])
+                    }
                     values.append(.integer(dividend / divisor))
                 case .modulo:
                     let dividend = try integer(popValue(from: &values))
                     let divisor = try integer(popValue(from: &values))
-                    guard divisor != 0 else { throw EvalError.divisionByZero }
+                    if divisor == 0 { throw EvalError.divisionByZero }
+                    if dividend == .min && divisor == -1 {
+                        throw EvalError.integerOverflow(.remainder, operands: [dividend, divisor])
+                    }
                     values.append(.integer(dividend % divisor))
                 case .negate:
-                    values.append(.integer(-(try integer(popValue(from: &values)))))
+                    let operand = try integer(popValue(from: &values))
+                    values.append(.integer(try checkedInteger(
+                        0.subtractingReportingOverflow(operand),
+                        operation: .negation,
+                        operands: [operand]
+                    )))
                 case .equal:
                     let rhs = try popValue(from: &values)
                     values.append(.boolean(try popValue(from: &values) == rhs))
@@ -488,15 +524,16 @@ struct CompiledEvaluator: Sendable {
                     else {
                         throw EvalError.expected(.functionAndSet, actual: [functionValue, membersValue])
                     }
-                    values.append(.integer(try members.reduce(0) { total, member in
+                    let integers = try CompiledValue.sorted(members).map { member in
                         guard let mapped = function[member], case .integer(let value) = mapped else {
                             throw EvalError.expected(
                                 .integerFunctionValues,
                                 actual: function[member].map { [$0] } ?? []
                             )
                         }
-                        return total + value
-                    }))
+                        return value
+                    }
+                    values.append(.integer(try integerSum(integers)))
                 case .functionSet:
                     let range = try popValue(from: &values)
                     let domain = try popValue(from: &values)
@@ -1092,6 +1129,46 @@ struct CompiledEvaluator: Sendable {
 }
 
 private extension CompiledEvaluator {
+    func checkedInteger(
+        _ result: (partialValue: Int, overflow: Bool),
+        operation: EvalError.IntegerOperation,
+        operands: [Int]
+    ) throws -> Int {
+        if result.overflow {
+            throw EvalError.integerOverflow(operation, operands: operands)
+        }
+        return result.partialValue
+    }
+
+    func integerSum(_ values: [Int]) throws -> Int {
+        let operands = values.sorted()
+        var negative = operands.filter { $0 < 0 }
+        var nonnegative = operands.filter { $0 >= 0 }
+
+        while negative.isEmpty == false && nonnegative.isEmpty == false {
+            let lhs = negative.removeLast()
+            let rhs = nonnegative.removeLast()
+            let combined = try checkedInteger(
+                lhs.addingReportingOverflow(rhs),
+                operation: .summation,
+                operands: operands
+            )
+            if combined < 0 {
+                negative.append(combined)
+            } else {
+                nonnegative.append(combined)
+            }
+        }
+
+        return try (negative + nonnegative).reduce(0) { total, value in
+            try checkedInteger(
+                total.addingReportingOverflow(value),
+                operation: .summation,
+                operands: operands
+            )
+        }
+    }
+
     func popValue(from values: inout [CompiledValue]) throws -> CompiledValue {
         guard let value = values.popLast() else {
             throw EvalError.invalidContinuation(availableValues: 0)
