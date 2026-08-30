@@ -32,7 +32,7 @@ configuration. It is not a place to invent a friendlier algorithm.
 
 | Upstream form | SwiftTLA form |
 |---|---|
-| `variables` | `SharedVar` declarations inside `Algorithm` |
+| `variables` | `scope.sharedVar` declarations inside scoped `Algorithm` |
 | `process (p \in S)` | `Each(S) { p in ... }` |
 | labeled atomic code | `Do(Label.foo) { ... }` |
 | `await P` | `When(P)` |

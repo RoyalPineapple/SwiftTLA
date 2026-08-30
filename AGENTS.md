@@ -27,7 +27,7 @@ Treat string-keyed and otherwise untyped data as a guarded boundary.
 
 ## Model Authoring
 
-- New application models, examples, and documentation use `#spec` with `Algorithm`, `SharedVar`, `LocalVar`, `Each`, and `Do`.
+- New application models, examples, and documentation use `#spec` with scoped `Algorithm`, `scope.sharedVar`, `scope.localVar`, `Each`, and `Do`.
 - Keep `Var`, `Variable`, and `Action` in the formal core for generated code, imported TLA+ modules, and parity fixtures. Do not introduce them as a second public authoring style.
 - Remove compatibility spellings instead of preserving them. Migrate repository callers in the same change.
 
