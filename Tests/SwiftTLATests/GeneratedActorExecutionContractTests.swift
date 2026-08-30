@@ -31,7 +31,7 @@ struct ParameterizedActorModel {
 
 struct GeneratedActorExecutionContractTests {
     @Test("actor matches the generated machine for a typed schedule")
-    func actorMatchesValueMachineForTypedSchedule() async throws {
+    func actorMatchesGeneratedMachineForTypedSchedule() async throws {
         var machine = try ParameterizedActorModel.makeMachine()
         let actor = try ParameterizedActorModel.Actor()
         let schedule: [ParameterizedActorModel.Action] = [
