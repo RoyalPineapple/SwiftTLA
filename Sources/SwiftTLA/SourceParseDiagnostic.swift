@@ -28,7 +28,6 @@ package struct CompilerSourceSpan: Sendable, Hashable, CustomStringConvertible {
     }
 }
 
-/// Parser facts used to emit a source compiler diagnostic.
 package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
     package enum Code: String, Sendable, Hashable {
         case unsupportedLanguageConstruct = "unsupported-language-construct"

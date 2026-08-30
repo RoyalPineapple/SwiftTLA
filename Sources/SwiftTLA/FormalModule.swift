@@ -3,7 +3,7 @@ import Foundation
 /// One source file in a TLA+ module bundle.
 ///
 /// The root file may own a TLC configuration. Imported files are source
-/// dependencies without root configuration.
+/// dependencies while root configuration remains separate.
 public struct TLAModuleFile: Sendable, Equatable {
   public let name: String
   public let tla: String

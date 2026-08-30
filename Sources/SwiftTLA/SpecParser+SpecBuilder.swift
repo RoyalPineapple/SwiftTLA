@@ -398,8 +398,8 @@ extension ParserSession {
         return type.argument(at: 0).flatMap(Self.sourceTypeSpelling)
     }
 
-    /// Extracts the value type from a variable declaration annotation without
-    /// rendering or reparsing its syntax. `SharedVariable<Mode>` contributes
+    /// Extracts the value type structurally from a variable declaration
+    /// annotation. `SharedVariable<Mode>` contributes
     /// `Mode`; an explicit value annotation contributes itself.
     func swiftValueType(from annotation: TypeAnnotationSyntax?) -> String? {
         guard let type = annotation?.type else { return nil }

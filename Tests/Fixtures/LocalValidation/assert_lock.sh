@@ -6,7 +6,7 @@ runner="$root/scripts/local-validation.sh"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-lock-test.XXXXXX")"
 repo="$tmp/repo"
 lock_file=""
-legacy_lock_dir=""
+unrelated_lock_dir=""
 holder_ready_file="$tmp/holder-ready"
 
 cleanup() {
@@ -25,10 +25,10 @@ printf 'trailing whitespace \n' > "$repo/source.txt"
 common_git_dir="$(git -C "$repo" rev-parse --git-common-dir)"
 if [[ "$common_git_dir" = /* ]]; then
     lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
-    legacy_lock_dir="$common_git_dir/swifttla-local-validation.lock"
+    unrelated_lock_dir="$common_git_dir/swifttla-local-validation.lock"
 else
     lock_file="$repo/$common_git_dir/swifttla-local-validation.advisory.lock"
-    legacy_lock_dir="$repo/$common_git_dir/swifttla-local-validation.lock"
+    unrelated_lock_dir="$repo/$common_git_dir/swifttla-local-validation.lock"
 fi
 
 run_static() {
@@ -101,8 +101,8 @@ printf '%s\n' "$stale_pid" > "$lock_file"
 assert_wait_timeout "lock owner is likely stale (pid $stale_pid"
 wait "$holder_pid"
 
-mkdir "$legacy_lock_dir"
+mkdir "$unrelated_lock_dir"
 assert_static_started
-[[ -d "$legacy_lock_dir" ]] || { echo "validation removed legacy lock directory" >&2; exit 1; }
+[[ -d "$unrelated_lock_dir" ]] || { echo "validation changed unrelated lock directory" >&2; exit 1; }
 
 echo "local validation lock contract passed"

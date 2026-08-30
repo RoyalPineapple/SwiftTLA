@@ -32,8 +32,8 @@ extension FiniteDomain {
     /// The declared members before the current process member.
     ///
     /// The declaration order is the formal order. This gives an ordered
-    /// process algorithm an explicit, finite set without treating a Swift
-    /// enum's raw value as application data.
+    /// process algorithm an explicit, finite set whose elements retain typed
+    /// formal values.
     public func members(before current: ProcessIdentifier<Value>) -> Expr<SetExpr<Value>> {
         members(before: current.stateExpr)
     }
@@ -170,7 +170,8 @@ extension Function where Domain: FiniteTLAValueDomain {
     /// Builds a total finite formal function from an expression over each key.
     ///
     /// This is useful for dependent initial state: the body may read an
-    /// earlier shared variable, but it cannot execute ordinary Swift logic.
+    /// earlier shared variable. Its executable meaning is the returned typed
+    /// expression.
     public static func mapping(
         _ body: (WithValue<Domain>) -> Expr<Range>
     ) -> Expr<Self> {
@@ -627,7 +628,6 @@ extension SharedVariable {
         .in(element.stateExpr, stateExpr)
     }
 
-    /// Returns this shared formal set without `element`.
     public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
     where Value == SetExpr<Element> {
         Expr(.setDifference(stateExpr, .setLiteral([element.raw])))
@@ -920,13 +920,11 @@ extension LocalVariable where Value: FormalSetValue {
         .equal(.cardinality(stateExpr), .value(.int(0)))
     }
 
-    /// Returns this process-local set without a value selected by `With`.
     public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
     where Value == SetExpr<Element> {
         Expr(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
     }
 
-    /// Returns this process-local set without another local formal value.
     public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
     where Value == SetExpr<Element> {
         Expr(.setDifference(stateExpr, .setLiteral([element.raw])))

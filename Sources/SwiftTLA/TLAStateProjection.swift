@@ -1,5 +1,4 @@
 
-/// Describes why a formal state cannot cross the guarded application boundary.
 package enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidKey(path: String)
     case invalidConstant(path: String)

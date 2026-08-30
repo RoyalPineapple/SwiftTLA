@@ -165,8 +165,8 @@ final class ParserSession {
     var constants: [ConstantDecl] = []
     let enumDefinitions: [ParserEnumDefinition]
     /// Tuple-shaped algorithm state currently in scope. This lets the parser
-    /// distinguish `sequence[index]` from a finite-function lookup without
-    /// exposing raw type maps to authors.
+    /// distinguish `sequence[index]` from a finite-function lookup through
+    /// structural type syntax.
     var algorithmTupleVariables: Set<String> = []
     /// Source bindings visible to the source expression currently being parsed.
     var sourceScope = TypedFacadeScope.empty
