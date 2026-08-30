@@ -6,8 +6,8 @@ import SwiftTLAMacros
 ///
 /// `temporary` begins as the upstream model's opaque `defaultInitValue`.
 /// It then holds either the current owner or the set of peers still to
-/// inspect. `OneOf` keeps that source-level TLA+ union explicit in Swift
-/// without changing its formal representation.
+/// inspect. `OneOf` keeps that source-level TLA+ union explicit in Swift and
+/// preserves its formal representation.
 @TLAModel
 package struct DijkstraMutexModel: Sendable {
     package enum Process: String, CaseIterable, FiniteTLAValueDomain {

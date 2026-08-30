@@ -2,8 +2,8 @@ import CoreBluetooth
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The formal central-manager lifecycle. CoreBluetooth objects do not enter
-/// this model; the `Bluetooth` actor below is the framework-facing shim.
+/// The formal central-manager lifecycle stores typed peripheral identifiers;
+/// the `Bluetooth` actor below owns the CoreBluetooth objects.
 @TLAModel
 public struct BluetoothModel {
     public enum Phase: String, CaseIterable, FiniteTLAValueDomain {

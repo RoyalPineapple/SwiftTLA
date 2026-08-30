@@ -271,7 +271,7 @@ public struct TLASpec: Sendable {
   package let refinements: [RefinementDecl]
   package let symmetrySets: [SymmetrySet]
   package let symmetricCollections: [SymmetricCollectionDecl]
-  /// The authored Algorithm declaration used to create the compiled PlusCal plan.
+  /// The authored Algorithm declaration that supplies the compiled PlusCal plan.
   let sourceAlgorithms: [Algorithm]
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
   var algorithmPhase: AlgorithmPhase
@@ -484,7 +484,7 @@ public func FormalDefinition<Body: StateExprConvertible>(
   FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body.stateExpr, plusCalPhase: plusCalPhase, plusCalDependencies: dependsOn))
 }
 
-/// Declares a unary executable formal operator without exposing raw AST values.
+/// Declares a unary executable formal operator and keeps raw AST values internal.
 public func FormalDefinition<Input: TLAValueType>(
   _ name: String,
   taking: Input.Type,
@@ -502,7 +502,7 @@ public func FormalDefinition<Input: TLAValueType>(
   ))
 }
 
-/// Declares a binary executable formal operator without exposing raw AST values.
+/// Declares a binary executable formal operator and keeps raw AST values internal.
 public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
   _ name: String,
   taking: First.Type,

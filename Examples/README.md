@@ -1,7 +1,7 @@
 # SwiftTLA examples
 
-The examples are consumers of SwiftTLA. They do not contain a second state
-machine, scheduler, or rules engine.
+The examples consume one generated SwiftTLA machine as their state-transition
+authority.
 
 Each example has three layers:
 
@@ -13,17 +13,17 @@ Each example has three layers:
    actions, and renders generated state.
 
 For example, a CoreBluetooth delegate maps discovery and connection callbacks
-to generated actions. It does not keep a parallel connection-phase variable.
-A SwiftUI view stores a generated machine in `@State`. It does not decide
-which formal transition is legal.
+to generated actions, with connection phase owned by generated state. A
+SwiftUI view stores a generated machine in `@State` and delegates transition
+legality to that machine.
 
 Keep platform values at the edge. A record in the model can hold a formal
 device identifier or other formal state; the adapter maps that identifier to
 the concrete `CBPeripheral`, AVFoundation object, or UI effect.
 
 Tests belong beside the example models. They run the generated transition and
-state checks. The app exists to demonstrate the same generated machines in use,
-not to reimplement their verification.
+state checks through generated machine APIs. The app demonstrates those same
+generated machines in use.
 
 ## Packages
 
@@ -33,6 +33,6 @@ not to reimplement their verification.
 - `ApplePlatformExamples` contains separate Apple-framework consumers of the
   SwiftTLA library.
 
-When an example needs behavior the current DSL cannot state, add the smallest
-typed formal capability required by the source model. Do not patch the app
-with imperative fallback logic.
+When an example needs a new behavior, add the smallest typed formal capability
+required by the source model. The source model declares that behavior, and the
+generated machine executes it.
