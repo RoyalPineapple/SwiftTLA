@@ -303,8 +303,8 @@ public func Where<Value: TLAValueType>(
 
 /// Selects one value from a finite formal domain.
 ///
-/// The compiled evaluator selects a fixed formal value while the specification
-/// is compiled, such as a graph supplied by a TLC configuration.
+/// The source builder evaluates the closed choice through compiled execution
+/// and records the selected formal value.
 public func Select<Value: TLAValueType>(
   from candidates: Expr<SetExpr<Value>>,
   matching predicate: (WithValue<Value>) -> StateExpr

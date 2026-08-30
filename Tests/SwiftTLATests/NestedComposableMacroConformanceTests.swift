@@ -145,6 +145,15 @@ struct NestedComposableMacroConformanceTests {
         #expect(execution.status == 0)
     }
 
+    @Test("generated storage is private to generated declarations")
+    func generatedStorageIsPrivate() throws {
+        let build = try buildExternalConsumer("InvalidGeneratedStorageAccess")
+
+        #expect(build.status != 0)
+        #expect(build.output.contains("'_storage' is inaccessible due to 'private' protection level"))
+        #expect(build.output.contains("'machine' is inaccessible due to 'private' protection level"))
+    }
+
     private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
     private func multiset(

@@ -38,6 +38,10 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
+      name: "InvalidGeneratedStorageAccess",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
       name: "InvalidModelStoredState",
       dependencies: generatedMachineDependencies
     ),
