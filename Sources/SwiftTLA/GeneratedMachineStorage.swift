@@ -175,7 +175,10 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
 
     public mutating func send(_ action: Action) throws -> (before: State, after: State) {
         try actionValidator(action)
-        let matches = try candidates().filter { $0.action == action }
+        var seen = Set<CompiledState>()
+        let matches = try candidates().filter {
+            $0.action == action && seen.insert($0.compiledState).inserted
+        }
         guard matches.count == 1 else {
             if matches.isEmpty {
                 throw GeneratedMachineError.noMatchingSuccessor

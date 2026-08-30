@@ -3,10 +3,8 @@ import SwiftTLA
 @testable import SwiftTLADemos
 
 struct ChangRobertsDemoTests {
-    @Test("Chang–Roberts exposes typed actor deliveries and typed message records")
+    @Test("Chang–Roberts exposes typed machine deliveries and typed message records")
     func exposesTypedMessages() throws {
-        let builderSpec = ChangRoberts.spec
-        #expect(try builderSpec.compile().renderedTLAModuleBundle().tla == try ChangRoberts.spec.compile().renderedTLAModuleBundle().tla)
         var machine = try ChangRoberts.makeMachine()
 
         #expect(machine.state.leader == 0)
@@ -23,7 +21,7 @@ struct ChangRobertsDemoTests {
         #expect(machine.state.leader == 0)
     }
 
-    @Test("Chang–Roberts actor serializes a formal delivery")
+    @Test("Chang–Roberts actor serializes a typed delivery")
     func actorExecutesTypedDelivery() async throws {
         let actor = try ChangRoberts.Actor()
         _ = try await actor.send(.deliver(process: .six))

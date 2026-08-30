@@ -180,7 +180,7 @@ struct SymmetricCollectionGeneratedMachineTests {
   }
 
   @Test("The declared collection name is independent of its Swift local name")
-  func parserAndBuilderShareTheDeclaredCollectionName() throws {
+  func parserAndResultBuilderShareTheDeclaredCollectionName() throws {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>("phases")
@@ -370,22 +370,22 @@ struct SymmetricCollectionGeneratedMachineTests {
   }
 
   @Test("Generated state binds the exact collection population to application IDs")
-  func macroBindsExactApplicationIDs() throws {
+  func bindsExactApplicationIDs() throws {
     let deviceID = 42
-    var model = try GeneratedSymmetricMachine.makeMachine(
+    var machine = try GeneratedSymmetricMachine.makeMachine(
       .init(devices: [deviceID: 0]),
       devices: [deviceID]
     )
 
-    #expect(model.state.devices == [deviceID: 0])
-    let result = try model.send(.begin(member: deviceID))
+    #expect(machine.state.devices == [deviceID: 0])
+    let transition = try machine.send(.begin(member: deviceID))
 
-    #expect(model.state.devices == [deviceID: 1])
-    #expect(result.before.devices == [deviceID: 0])
-    #expect(result.after.devices == [deviceID: 1])
-    #expect(result.action == .begin(member: deviceID))
+    #expect(machine.state.devices == [deviceID: 1])
+    #expect(transition.before.devices == [deviceID: 0])
+    #expect(transition.after.devices == [deviceID: 1])
+    #expect(transition.action == .begin(member: deviceID))
     #expect(throws: GeneratedMachineStateDiagnostic.self) {
-      try model.send(.begin(member: 99))
+      try machine.send(.begin(member: 99))
     }
   }
 
@@ -402,7 +402,7 @@ struct SymmetricCollectionGeneratedMachineTests {
   }
 
   @Test("Generated machines require one unique application ID per compiled member")
-  func macroRequiresTheExactPopulation() {
+  func requiresTheExactPopulation() {
     #expect(throws: GeneratedMachineStateDiagnostic.self) {
       _ = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["only-one"])
     }
@@ -412,48 +412,48 @@ struct SymmetricCollectionGeneratedMachineTests {
   }
 
   @Test("Generated collection actions evaluate expression-backed updates")
-  func macroEvaluatesExpressionBackedUpdates() throws {
+  func evaluatesExpressionBackedUpdates() throws {
     let deviceID = 42
-    var model = try GeneratedExpressionSymmetricMachine.makeMachine(devices: [deviceID])
+    var machine = try GeneratedExpressionSymmetricMachine.makeMachine(devices: [deviceID])
 
     for expected in 1...5 {
-      _ = try model.send(.advance(member: deviceID))
-      #expect(model.state.devices == [deviceID: expected])
+      _ = try machine.send(.advance(member: deviceID))
+      #expect(machine.state.devices == [deviceID: expected])
     }
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.send(.advance(member: deviceID))
+      try machine.send(.advance(member: deviceID))
     }
   }
 
-  @Test("Generated routing rejects a wrong-phase selected entry and preserves peers")
-  func macroRoutesGuardToTheSelectedEntry() throws {
+  @Test("Generated routing rejects a wrong-phase selected member and preserves peers")
+  func routesGuardToTheSelectedMember() throws {
     let eligible = "eligible"
     let wrongPhase = "wrong-phase"
     let ids = [eligible, wrongPhase]
-    var model = try GeneratedScopedSymmetricMachine.makeMachine(devices: ids)
+    var machine = try GeneratedScopedSymmetricMachine.makeMachine(devices: ids)
 
-    _ = try model.send(.begin(member: wrongPhase))
+    _ = try machine.send(.begin(member: wrongPhase))
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.send(.begin(member: wrongPhase))
+      try machine.send(.begin(member: wrongPhase))
     }
-    #expect(model.state.devices == [eligible: 0, wrongPhase: 1])
+    #expect(machine.state.devices == [eligible: 0, wrongPhase: 1])
 
-    _ = try model.send(.begin(member: eligible))
-    #expect(model.state.devices == [eligible: 1, wrongPhase: 1])
+    _ = try machine.send(.begin(member: eligible))
+    #expect(machine.state.devices == [eligible: 1, wrongPhase: 1])
   }
 
   @Test("Generated routing evaluates shared authored guards before its update")
-  func macroEvaluatesTheCompleteAuthoredGuard() throws {
+  func evaluatesTheCompleteAuthoredGuard() throws {
     let deviceID = "shared-guard"
-    var model = try GeneratedSharedGuardSymmetricMachine.makeMachine(devices: [deviceID])
+    var machine = try GeneratedSharedGuardSymmetricMachine.makeMachine(devices: [deviceID])
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.send(.begin(member: deviceID))
+      try machine.send(.begin(member: deviceID))
     }
-    #expect(model.state.phase == 4)
-    #expect(model.state.devices == [deviceID: 0])
+    #expect(machine.state.phase == 4)
+    #expect(machine.state.devices == [deviceID: 0])
   }
 
   @Test("Compiled collection actions preserve ActionBuilder statement precedence")
@@ -485,28 +485,28 @@ struct SymmetricCollectionGeneratedMachineTests {
 
     let selected = "selected"
     let rejected = "rejected"
-    var model = try GeneratedDisjunctiveSymmetricMachine.makeMachine(
+    var machine = try GeneratedDisjunctiveSymmetricMachine.makeMachine(
       devices: [selected, rejected]
     )
 
-    _ = try model.send(.advance(member: selected))
-    #expect(model.state.devices == [selected: 1, rejected: 0])
+    _ = try machine.send(.advance(member: selected))
+    #expect(machine.state.devices == [selected: 1, rejected: 0])
 
     #expect(throws: GeneratedMachineError.self) {
-      try model.send(.advance(member: selected))
+      try machine.send(.advance(member: selected))
     }
-    #expect(model.state.devices == [selected: 1, rejected: 0])
+    #expect(machine.state.devices == [selected: 1, rejected: 0])
   }
 
   @Test("Ordinary allSatisfy actions use every declared collection value")
-  func macroEvaluatesAllSatisfyAcrossTheDeclaredPopulation() throws {
+  func evaluatesAllSatisfyAcrossTheDeclaredPopulation() throws {
     let ids = ["one", "two"]
     var allowed = try GeneratedAllSatisfyPredicateMachine.makeMachine(devices: ids)
 
-    let allowedEvidence = try allowed.send(.advance)
+    let transition = try allowed.send(.advance)
     #expect(allowed.state.phase == 1)
-    #expect(allowedEvidence.before.phase == 0)
-    #expect(allowedEvidence.after.phase == 1)
+    #expect(transition.before.phase == 0)
+    #expect(transition.after.phase == 1)
 
     let compilation = try GeneratedAllSatisfyPredicateMachine.spec.compile()
     let formalDevices = try collectionValue([0, 1], in: GeneratedAllSatisfyPredicateMachine.spec)
@@ -517,15 +517,15 @@ struct SymmetricCollectionGeneratedMachineTests {
   }
 
   @Test("Ordinary contains actions use every declared collection value")
-  func macroEvaluatesContainsAcrossTheDeclaredPopulation() throws {
+  func evaluatesContainsAcrossTheDeclaredPopulation() throws {
     let ids = ["one", "two"]
     var rejected = try GeneratedContainsPredicateMachine.makeMachine(devices: ids)
 
-    let rejectedSnapshot = rejected.state
+    let rejectedState = rejected.state
     #expect(throws: GeneratedMachineError.self) {
       try rejected.send(.advance)
     }
-    #expect(rejected.state == rejectedSnapshot)
+    #expect(rejected.state == rejectedState)
 
     let compilation = try GeneratedContainsPredicateMachine.spec.compile()
     let formalDevices = try collectionValue([0, 1], in: GeneratedContainsPredicateMachine.spec)

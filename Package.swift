@@ -71,7 +71,7 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax")
         ], swiftSettings: settings),
-        // Corpus, oracle, and governance tests.
+        // Corpus and conformance tests.
         .testTarget(name: "SwiftTLAParityTests", dependencies: [
             "SwiftTLA",
             "SwiftTLAMacros",

@@ -27,7 +27,7 @@ private enum CoffeeCanSchema: TLARecordSchema {
 
 private typealias CoffeeCan = Record<CoffeeCanSchema>
 
-private func coffeeCans(maximumBeanCount: Int) -> Expr<SetExpr<CoffeeCan>> {
+private func coffeeCanDomain(maximumBeanCount: Int) -> Expr<SetExpr<CoffeeCan>> {
     let cans = (0...maximumBeanCount).flatMap { black in
         (0...maximumBeanCount).compactMap { white -> StateExpr? in
             guard (1...maximumBeanCount).contains(black + white) else { return nil }
@@ -47,7 +47,7 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
 
     return #spec("CoffeeCan") {
         Extends(.naturals)
-        Variable(can, in: coffeeCans(maximumBeanCount: maxBeanCount))
+        Variable(can, in: coffeeCanDomain(maximumBeanCount: maxBeanCount))
         SwiftTLA.Action("PickSameColorBlack") {
             black + white > 1
                 && black >= 2

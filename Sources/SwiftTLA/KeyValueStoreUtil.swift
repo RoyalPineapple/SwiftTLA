@@ -1,4 +1,4 @@
-/// A source-faithful port of the KeyValueStore example's `Util` module.
+/// The typed source for the KeyValueStore example's `Util` module.
 ///
 /// Its module closure preserves the upstream `Util -> Functions -> Folds`
 /// dependency relationship.

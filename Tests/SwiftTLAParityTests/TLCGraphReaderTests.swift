@@ -563,7 +563,7 @@ extension TLCGraphReaderTests {
       try TLCGraphReader(finiteGraphCase: reducedCase).parse(try fingerprintAliasGraphStream(
         reducedCase, aliasSeen: true, aliasValue: "C"))
     }
-    #expect(throws: SymmetryOrbitAdapterError.emptyPermutationGroup) {
+    #expect(throws: SymmetryOrbitError.emptyPermutationGroup) {
       try fixtureCase(
         try toolchainPin(),
         symmetryReduction: .enabled(maximumPermutationCount: 2))
