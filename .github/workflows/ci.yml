@@ -44,6 +44,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - id: corpus-source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build canonical corpus exporter
         run: swift build --product canonical-corpus-export -j 1
@@ -52,12 +57,12 @@ jobs:
         run: |
           swift run --skip-build canonical-corpus-export \
             --output .build/canonical-corpus-export \
-            --swift-tla-sha "$GITHUB_SHA"
+            --swift-tla-sha "${{ steps.corpus-source.outputs.sha }}"
 
       - name: Upload canonical corpus input
         uses: actions/upload-artifact@v6
         with:
-          name: canonical-corpus-${{ github.sha }}
+          name: canonical-corpus-${{ steps.corpus-source.outputs.sha }}
           path: .build/canonical-corpus-export
           if-no-files-found: error
           retention-days: 14
