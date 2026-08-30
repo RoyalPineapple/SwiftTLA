@@ -1,18 +1,19 @@
 # Generated machine surface
 
-`@TLAModel` generates a typed Swift state machine from one compiled model.
+`@TLAModel` generates a typed Swift state machine from one compiled
+specification.
 Apply it to a struct with a static `TLASpec` declaration.
 
 ## Generated types
 
-Each generated model exposes these `Sendable` value types:
+Each generated machine exposes these `Sendable` value types:
 
 - `State`: immutable typed values for declared variables.
 - `Action`: a typed action identity and typed parameters.
 - `Transition`: the typed action and state before and after one successful transition.
 
 
-## Direct value-model execution
+## Direct generated-machine execution
 
 `send(_:)` applies one typed action. `isEnabled(_:)` reports whether one action
 is permitted in the current state. Both methods can throw. `state` contains
@@ -23,7 +24,7 @@ SwiftUI stores the generated machine directly in `@State`. A successful
 
 ## Generated actor
 
-`Actor` is a thin asynchronous adapter over one generated machine value. It
+`Actor` is a thin asynchronous adapter over one generated machine. It
 serializes `send(_:)` and exposes the same typed state and actions.
 
 ```swift
@@ -37,5 +38,5 @@ let seededState = await seeded.state
 assert(seededState.count == 0)
 ```
 
-The typed initializer selects one unique state from the model's declared
+The typed initializer selects one unique state from the source model's declared
 initial states.

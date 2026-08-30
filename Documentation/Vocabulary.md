@@ -9,15 +9,15 @@ SwiftTLA uses one term for each compiler concept.
 | parse | Convert accepted SwiftSyntax into source declarations. |
 | bind | Resolve a lexical name to a declaration identity. |
 | link | Resolve imports, instances, substitutions, and the module closure. |
-| compile | Validate, bind, link, lower, allocate IDs, and create a compiled specification. |
-| compiled specification | The immutable result of `compile()`. |
+| compile | Validate, bind, link, lower, allocate private identities, render TLA+/PlusCal text, assemble formal bundles, and publish a compiled specification. |
+| compiled specification | The immutable product of `compile()`. |
 | compilation description | The public declaration view of a compiled specification. |
-| layout | The canonical allocation of private IDs and state slots. |
+| layout | The deterministic ordered allocation of private IDs and state slots. |
 | compilation identity | The stable digest of one compiled specification. |
-| slot | A private runtime position for one compiled variable. |
-| compiled value | A private recursive value used by the runtime. |
+| slot | A private compiled-runtime position for one compiled variable. |
+| compiled value | A private recursive value used by the compiled runtime. |
 | formal value | A value in TLA+ or PlusCal. |
-| runtime | Private execution over compiled IDs, slots, expressions, states, and values. |
+| compiled runtime | Private execution over compiled IDs, slots, expressions, states, and values. |
 | machine | The generated typed Swift state machine. |
 | state | One complete assignment of model variables. |
 | projection | A validated boundary view of formal state data. |
@@ -40,7 +40,7 @@ SwiftTLA uses one term for each compiler concept.
 
 ```text
 source model → compile → compiled specification
-                          ├→ private runtime
+                          ├→ compiled runtime
                           ├→ generated machine
                           └→ rendered bundle
 ```

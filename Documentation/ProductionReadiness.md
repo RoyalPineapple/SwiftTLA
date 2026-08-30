@@ -10,19 +10,19 @@ source model
   → compile
   → CompiledSpecification
        ├→ generated machine
-       ├→ private runtime
+       ├→ compiled runtime
        └→ rendered bundles
 ```
 
 Compilation accepts a declaration only when every supported output preserves
-its compiled meaning. Executable declarations are typed. One private runtime
+its compiled meaning. Executable declarations are typed. One compiled runtime
 executes them. Applications use generated typed state and actions. Formal text
 exists at rendering and external-tool boundaries.
 
 The supported application execution API contains one generated-machine route.
 A successful compilation supplies every executable model fact to that route.
 The `@TLAModel` expansion uses an underscored compiler-support ABI whose state
-is private inside each generated model.
+is private inside each generated machine.
 
 ## Qualify a release commit
 
