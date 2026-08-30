@@ -12,10 +12,12 @@ func runGeneratedMachineTesting() throws {
     assert(isEnabled == false)
     assert(transition.after.value == 1)
 
+    var rejected = false
     do {
         _ = try machine.send(.advance)
-        assertionFailure("Expected an unavailable action")
     } catch is GeneratedMachineError {
-        assert(machine.state == beforeFailure)
+        rejected = true
     }
+    assert(rejected)
+    assert(machine.state == beforeFailure)
 }
