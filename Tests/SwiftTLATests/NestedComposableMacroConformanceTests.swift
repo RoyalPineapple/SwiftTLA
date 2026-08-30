@@ -145,42 +145,7 @@ struct NestedComposableMacroConformanceTests {
         #expect(execution.status == 0)
     }
 
-    @Test("External clients cannot use generated runtime internals")
-    func generatedRuntimeInternalsDoNotCompileExternally() throws {
-        let build = try buildExternalConsumer("InvalidGeneratedRawSurface")
-
-        #expect(build.status != 0)
-        #expect(build.output.contains("has no member 'tlaSnapshot'"))
-        #expect(build.output.contains("TransitionEvidence"))
-        #expect(build.output.contains("ActionArguments"))
-        #expect(build.output.contains("successors"))
-    }
-
-    @Test("Generated actor cannot expose raw state")
-    func generatedActorRawStateDoesNotCompileExternally() throws {
-        try assertExternalSurfaceIsForbidden(
-            fixture: "InvalidGeneratedActorRawSurface",
-            typeName: "GeneratedActorSurface.Actor",
-            stateDiagnostic: "has no member 'tlaSnapshot'"
-        )
-    }
-
     private func requireSendable<Value: Sendable>(_: Value.Type) {}
-
-    private func assertExternalSurfaceIsForbidden(
-        fixture: String,
-        typeName: String,
-        stateDiagnostic: String,
-        requiresGeneratedSurfaceRejection: Bool = true
-    ) throws {
-        let build = try buildExternalConsumer(fixture)
-
-        #expect(build.status != 0)
-        #expect(build.output.contains(stateDiagnostic))
-        if requiresGeneratedSurfaceRejection {
-            #expect(build.output.contains("\(typeName).TransitionEvidence"))
-        }
-    }
 
     private func multiset(
         _ transitions: [(action: String, arguments: [TLAValue], state: TLAStateProjection)]

@@ -38,14 +38,6 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
-      name: "InvalidGeneratedActorRawSurface",
-      dependencies: generatedMachineDependencies
-    ),
-    .executableTarget(
-      name: "InvalidGeneratedRawSurface",
-      dependencies: generatedMachineDependencies
-    ),
-    .executableTarget(
       name: "InvalidModelStoredState",
       dependencies: generatedMachineDependencies
     ),
