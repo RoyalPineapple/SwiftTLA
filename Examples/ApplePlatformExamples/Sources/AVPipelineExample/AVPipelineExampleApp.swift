@@ -409,7 +409,9 @@ final class CameraEffects {
         currentPlayer = player
         player.play()
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
-            self?.playbackDidFinish?()
+            Task { @MainActor [weak self] in
+                self?.playbackDidFinish?()
+            }
         }
     }
 
