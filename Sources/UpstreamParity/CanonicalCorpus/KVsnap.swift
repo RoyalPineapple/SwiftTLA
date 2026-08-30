@@ -117,9 +117,8 @@ package struct KVsnapModel: Sendable {
             Extends(.integers, .sequences, .finiteSets)
             Import(KeyValueStoreUtil.module)
 
-            // These are the upstream model values. Declaring them explicitly
-            // preserves their TLA+ identity and lets TLC bind them through the
-            // emitted configuration rather than turning them into strings.
+            // These upstream model values retain their TLA+ identities and
+            // bind through the emitted configuration.
             Constant("k1", Key.k1)
             Constant("k2", Key.k2)
             Constant("t1", Transaction.t1)

@@ -4,8 +4,8 @@ import SwiftTLAMacros
 /// The bounded `FindHighest` PlusCal algorithm from the LearnProofs corpus.
 ///
 /// The published model replaces `Nat` with `0...4` and `Seq(Nat)` with
-/// sequences of length at most three. `Sequences(of:lengths:)` states those
-/// bounds directly in SwiftTLA instead of hiding them in host-language data.
+/// sequences of length at most three. `Sequences(of:lengths:)` declares that
+/// finite configuration in the source model.
 @TLAModel
 package struct FindHighestModel: Sendable {
     private enum Step: String, CaseIterable {
