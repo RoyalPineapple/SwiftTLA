@@ -16,10 +16,10 @@ struct CompilerBoundaryDiagnosticTests {
             }
         }
         """)
-        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
 
         do {
-            _ = try TLASpecVerifier.collectEnumVariables(from: model.memberBlock.members)
+            _ = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
             Issue.record("Expected an explicit unsupported enum raw value to fail.")
         } catch let error as ModelMacroError {
             #expect(error == .invalidEnumRawValue(caseName: "waiting"))

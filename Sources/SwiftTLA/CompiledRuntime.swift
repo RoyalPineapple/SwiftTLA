@@ -111,13 +111,13 @@ struct CompiledRuntime {
     }
 
     private func enabledActions(in state: CompiledState) throws -> Set<ActionID> {
-        var result = Set<ActionID>()
+        var enabled = Set<ActionID>()
         for action in semantics.actions {
             if try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout).enumerate(action).isEmpty == false {
-                result.insert(action.id)
+                enabled.insert(action.id)
             }
         }
-        return result
+        return enabled
     }
 
     private func boolean(
@@ -131,10 +131,10 @@ struct CompiledRuntime {
             layout: layout,
             enabledActions: enabledActions
         ).evaluate(expression)
-        guard case .boolean(let result) = value else {
+        guard case .boolean(let boolean) = value else {
             throw EvalError.expected(.boolean, actual: [value])
         }
-        return result
+        return boolean
     }
 }
 

@@ -611,16 +611,16 @@ enum AlgorithmLowerer {
         owner: AlgorithmProcedureModel?,
         control: ControlFlow
     ) -> ActionExpr {
-        var result = ActionExpr.guard_(.value(.bool(true)))
+        var action = ActionExpr.guard_(.value(.bool(true)))
         var index = 0
         while index < statements.count {
             if case .call(let target, let arguments) = statements[index],
                index + 1 < statements.count,
                case .return = statements[index + 1] {
-                result = .and(result, tailCallAction(target: target, arguments: arguments, procedures: procedures, control: control))
+                action = .and(action, tailCallAction(target: target, arguments: arguments, procedures: procedures, control: control))
                 index += 2
             } else {
-                result = .and(result, lowerSequential(
+                action = .and(action, lowerSequential(
                     statements[index],
                     nextLabel: nextLabel,
                     procedures: procedures,
@@ -630,7 +630,7 @@ enum AlgorithmLowerer {
                 index += 1
             }
         }
-        return result
+        return action
     }
 
     private static func lowerSequential(
@@ -926,13 +926,13 @@ enum AlgorithmLowerer {
         nextLabel: StateExpr,
         control: ControlFlow
     ) -> ActionExpr {
-        var result = ActionExpr.guard_(.value(.bool(true)))
+        var action = ActionExpr.guard_(.value(.bool(true)))
         var index = 0
         while index < statements.count {
             if case .call(let target, let arguments) = statements[index],
                index + 1 < statements.count,
                case .return = statements[index + 1] {
-                result = .and(result, processTailCallAction(
+                action = .and(action, processTailCallAction(
                     target: target,
                     arguments: arguments.map { rewrite($0, localRoots: localRoots) },
                     procedures: procedures,
@@ -940,7 +940,7 @@ enum AlgorithmLowerer {
                 ))
                 index += 2
             } else {
-                result = .and(result, lower(
+                action = .and(action, lower(
                     statements[index],
                     localRoots: localRoots,
                     processDomain: processDomain,
@@ -952,7 +952,7 @@ enum AlgorithmLowerer {
                 index += 1
             }
         }
-        return result
+        return action
     }
 
     private static func transfer(to location: StateExpr) -> ActionExpr {

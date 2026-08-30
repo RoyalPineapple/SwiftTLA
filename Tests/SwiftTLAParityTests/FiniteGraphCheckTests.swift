@@ -128,13 +128,13 @@ struct FiniteGraphCheckTests {
       stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
     let check = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: executor))
     let output = root.appendingPathComponent("evidence")
-    let result = check.run(
+    let checkOutput = check.run(
       compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
-    #expect(result.exitCode == .semanticDifference)
-    #expect(result.comparison?.differences.contains { if case .edges = $0 { true } else { false } } == true)
+    #expect(checkOutput.exitCode == .semanticDifference)
+    #expect(checkOutput.comparison?.differences.contains { if case .edges = $0 { true } else { false } } == true)
     let swiftCompletion = try graphCompletion(
       at: output.appendingPathComponent("swift-graph.jsonl"))
     let tlcCompletion = try graphCompletion(
@@ -156,7 +156,7 @@ struct FiniteGraphCheckTests {
     #expect(arguments.contains(where: { $0.hasSuffix("/Fixture.tla") }))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
-    let comparison = try #require(result.comparison)
+    let comparison = try #require(checkOutput.comparison)
     let report = try #require(comparison.failureReports.first {
       $0.whatFailed == "The labeled transition multisets differ."
     })
@@ -175,13 +175,13 @@ struct FiniteGraphCheckTests {
     let check = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: FailingTLCExecutor()))
     let output = root.appendingPathComponent("failed-evidence")
-    let result = check.run(
+    let checkOutput = check.run(
       compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
-    #expect(result.exitCode == .failure)
-    #expect(result.evidenceDirectory == output)
+    #expect(checkOutput.exitCode == .failure)
+    #expect(checkOutput.evidenceDirectory == output)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-graph.jsonl").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("diagnostic.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
@@ -219,13 +219,13 @@ struct FiniteGraphCheckTests {
         executor: FixtureTLCExecutor(
           stream: try graphStream(for: request.finiteGraphCase, runID: otherRun))))
     let output = root.appendingPathComponent("wrong-tlc-run")
-    let result = check.run(
+    let checkOutput = check.run(
       compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
-    #expect(result.exitCode == .failure)
-    #expect(result.evidenceDirectory == output)
+    #expect(checkOutput.exitCode == .failure)
+    #expect(checkOutput.evidenceDirectory == output)
     let diagnostic = try json(at: output.appendingPathComponent("diagnostic.json"))
     #expect(diagnostic["phase"] as? String == "tlc-parsing")
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
@@ -240,14 +240,14 @@ struct FiniteGraphCheckTests {
     try Data("stale graph stream".utf8).write(to: request.graphEvents)
     let stream = try graphStream(for: request.finiteGraphCase, runID: request.runID)
     let output = root.appendingPathComponent("exact-evidence")
-    let result = FiniteGraphCheck(
+    let checkOutput = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: FixtureTLCExecutor(stream: stream))
     ).run(
       compilation: try fixtureCompilation(action: "Next"),
       tlcRequest: request,
       outputDirectory: output
     )
-    #expect(result.exitCode == .exact)
+    #expect(checkOutput.exitCode == .exact)
     #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == stream)
     let tlcGraph = output.appendingPathComponent("tlc-graph.jsonl")
     #expect(try graphCompletion(at: tlcGraph)["eligible"] as? Bool == true)
@@ -264,7 +264,7 @@ struct FiniteGraphCheckTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("matching-evidence")
-    let result = FiniteGraphCheck(
+    let checkOutput = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
         executor: FixtureTLCExecutor(stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
     )).run(
@@ -273,7 +273,7 @@ struct FiniteGraphCheckTests {
       outputDirectory: output
     )
 
-    #expect(result.exitCode == .exact)
+    #expect(checkOutput.exitCode == .exact)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
     let swiftCompletion = try graphCompletion(
@@ -303,12 +303,12 @@ extension FiniteGraphCheckTests {
         )
       )
     )
-    let result = check.run(
+    let checkOutput = check.run(
       compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
-    #expect(result.exitCode == .failure)
+    #expect(checkOutput.exitCode == .failure)
     let primaryLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))
     let traceLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))
     #expect(primaryLog.contains("primary stdout"))
@@ -329,7 +329,7 @@ extension FiniteGraphCheckTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
     let output = root.appendingPathComponent("arbitrary-trace-execution-failure")
-    let result = FiniteGraphCheck(
+    let checkOutput = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
         executor: ArbitraryFollowupFailureTLCExecutor(
           stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
@@ -341,7 +341,7 @@ extension FiniteGraphCheckTests {
       tlcRequest: request,
       outputDirectory: output
     )
-    #expect(result.exitCode == .failure)
+    #expect(checkOutput.exitCode == .failure)
     #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.trace.failure.log").path))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.failure.log").path))
@@ -359,14 +359,14 @@ extension FiniteGraphCheckTests {
     let output = root.appendingPathComponent("existing-evidence")
     try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
     try Data("keep".utf8).write(to: output.appendingPathComponent("existing.txt"))
-    let result = FiniteGraphCheck().run(
+    let checkOutput = FiniteGraphCheck().run(
       compilation: try fixtureCompilation(),
       tlcRequest: request,
       outputDirectory: output
     )
-    #expect(result.exitCode == .failure)
-    #expect(result.evidenceDirectory == nil)
-    #expect(result.diagnostic?.code == "output-exists")
+    #expect(checkOutput.exitCode == .failure)
+    #expect(checkOutput.evidenceDirectory == nil)
+    #expect(checkOutput.diagnostic?.code == "output-exists")
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("existing.txt").path))
   }
 }

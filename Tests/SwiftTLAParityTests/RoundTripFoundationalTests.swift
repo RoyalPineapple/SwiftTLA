@@ -396,8 +396,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
   func functionApplyLookup() throws {
     let v: TLAValue = .function([.int(1): .string("one")])
     let state: [(String, TLAValue)] = [("f", v), ("k", .int(1))]
-    let result = try compiledValue(StateExpr.functionApply(.variable("f"), .variable("k")), values: state)
-    #expect(result == .string("one"))
+    let appliedValue = try compiledValue(StateExpr.functionApply(.variable("f"), .variable("k")), values: state)
+    #expect(appliedValue == .string("one"))
   }
 }
 
@@ -528,7 +528,7 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
 
     let exploration = try checker.explore()
     let graph = try checker.exploreGraph()
-    let result = try checker.check()
+    let outcome = try checker.check()
 
     #expect(exploration.initialStateIDs.map(\.id) == [0, 1])
     #expect(exploration.initialStateIDs.allSatisfy { exploration.graph.states[$0] != nil })
@@ -537,7 +537,7 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       exploration.graph.transitions.mapValues { $0.map { "\($0.action):\($0.target.id)" } }
         == graph.transitions.mapValues { $0.map { "\($0.action):\($0.target.id)" } }
     )
-    #expect(exploration.result.description == result.description)
+    #expect(exploration.outcome.description == outcome.description)
     #expect(exploration.isComplete)
 
     let incomplete = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).explore()
@@ -601,8 +601,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       Invariant("mustStayZero") { x == 0 }
     }
 
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
-    let diagnostic = try #require(result.diagnostic)
+    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
+    let diagnostic = try #require(checkOutcome.diagnostic)
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
 
     #expect(diagnostic.kind == .invariantViolated)
@@ -676,8 +676,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     let p = Var<Int>("p")
     let domain = StateExpr.set([1, 2, 3])
     let fun = StateExpr.functionLiteral(p, in: domain, (p * 2).raw)
-    let result = try compiledValue(fun)
-    guard case .function(let mapping) = result else {
+    let functionValue = try compiledValue(fun)
+    guard case .function(let mapping) = functionValue else {
       #expect(Bool(false))
       return
     }
@@ -692,8 +692,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     let domain = StateExpr.set([1, 2])
     let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
     let apply = StateExpr.functionApply(fun, .value(.int(2)))
-    let result = try compiledValue(apply)
-    #expect(result == .int(20))
+    let appliedValue = try compiledValue(apply)
+    #expect(appliedValue == .int(20))
   }
 
   @Test("Function EXCEPT updates a key")
@@ -702,8 +702,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     let domain = StateExpr.set([1, 2])
     let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
     let updated = StateExpr.except(fun, .value(.int(1)), .value(.int(99)))
-    let result = try compiledValue(updated)
-    guard case .function(let mapping) = result else {
+    let updatedFunction = try compiledValue(updated)
+    guard case .function(let mapping) = updatedFunction else {
       #expect(Bool(false))
       return
     }
@@ -720,8 +720,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       StateExpr.except(fun, .value(.int(1)), .value(.int(10))),
       .value(.int(2)), .value(.int(20))
     )
-    let result = try compiledValue(expr)
-    guard case .function(let mapping) = result else {
+    let nestedFunction = try compiledValue(expr)
+    guard case .function(let mapping) = nestedFunction else {
       #expect(Bool(false))
       return
     }
@@ -826,8 +826,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     let source = "choose(picked, from: q)"
     let statement = try #require(Parser.parse(source: source).statements.first)
     let expr = try #require(statement.item.as(ExprSyntax.self))
-    let result = SpecParser.decodeActionExpr(expr)
-    #expect(result == ActionExpr.chooseAction(.named("picked"), .variable("q")))
+    let decodedAction = SpecParser.decodeActionExpr(expr)
+    #expect(decodedAction == ActionExpr.chooseAction(.named("picked"), .variable("q")))
   }
 
   @Test("SpecParser parses singleton()")
@@ -835,8 +835,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     let source = "StateExpr.singleton(x)"
     let statement = try #require(Parser.parse(source: source).statements.first)
     let expr = try #require(statement.item.as(ExprSyntax.self))
-    let result = SpecParser.decodeStateExpr(expr)
-    #expect(result == StateExpr.setLiteral([.variable("x")]))
+    let decodedState = SpecParser.decodeStateExpr(expr)
+    #expect(decodedState == StateExpr.setLiteral([.variable("x")]))
   }
 
   @Test("SpecParser parses functionLiteral(p, in: domain, body)")
@@ -844,8 +844,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     let source = "StateExpr.functionLiteral(StateExpr.set([1]), \"value\", value + 3)"
     let statement = try #require(Parser.parse(source: source).statements.first)
     let expr = try #require(statement.item.as(ExprSyntax.self))
-    let result = SpecParser.decodeStateExpr(expr)
-    #expect(result == .functionLiteral(
+    let decodedFunction = SpecParser.decodeStateExpr(expr)
+    #expect(decodedFunction == .functionLiteral(
       .setLiteral([.int(1)]),
       "value",
       .add(.variable("value"), .int(3))

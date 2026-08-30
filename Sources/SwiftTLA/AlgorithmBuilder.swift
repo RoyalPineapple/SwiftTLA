@@ -49,18 +49,18 @@ extension FiniteDomain {
     }
 
     private func members(before current: StateExpr) -> Expr<SetExpr<Value>> {
-        var result = Expr<SetExpr<Value>>(.setLiteral([]))
+        var preceding = Expr<SetExpr<Value>>(.setLiteral([]))
         for (index, candidate) in values.enumerated().reversed() {
             let earlier = Expr<SetExpr<Value>>(
                 .setLiteral(values.prefix(index).map { .value($0.tlaValue) })
             )
-            result = If(
+            preceding = If(
                 StateExpr.equal(current, .value(candidate.tlaValue)),
                 then: earlier,
-                else: result
+                else: preceding
             )
         }
-        return result
+        return preceding
     }
 }
 

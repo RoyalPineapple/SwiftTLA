@@ -582,20 +582,20 @@ struct AlgorithmBuilderTests {
         }
     }
 
-    @Test("generated models retain typed filtered function domains")
-    func generatedModelRetainsFilteredFunctionDomain() throws {
+    @Test("#spec compilation retains typed filtered function domains")
+    func compiledSpecRetainsFilteredFunctionDomain() throws {
         let compilation = try FunctionDomainGeneratedModel.spec.compile()
         #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 4)
     }
 
-    @Test("generated models retain static formal selections")
-    func generatedModelRetainsStaticFormalSelection() throws {
+    @Test("#spec compilation retains static formal selections")
+    func compiledSpecRetainsStaticFormalSelection() throws {
         let (compilation, state) = try initialState(of: StaticFormalSelectionModel.spec)
         #expect(try value(named: "current", in: state, compilation: compilation) == .int(2))
     }
 
-    @Test("generated models retain static filtered function selections")
-    func generatedModelRetainsStaticFilteredFunctionSelection() throws {
+    @Test("#spec compilation retains static filtered function selections")
+    func compiledSpecRetainsStaticFilteredFunctionSelection() throws {
         let compilation = try StaticFilteredFunctionSelectionModel.spec.compile()
         #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 1)
     }
@@ -625,8 +625,8 @@ struct AlgorithmBuilderTests {
             == .function([.string("first"): .bool(true), .string("second"): .bool(false)]))
     }
 
-    @Test("generated models compare macro process identifiers through both construction paths")
-    func generatedMacroProcessModelKeepsParserFidelity() {
+    @Test("macro process identifiers compile through both construction paths")
+    func macroProcessIdentifiersCompileThroughBothConstructionPaths() {
     }
 
     @Test("process control initialization joins typed process domains")
@@ -1483,9 +1483,9 @@ struct AlgorithmBuilderTests {
             }
         })
 
-        let result = try ModelChecker(compilation: try loweredSourceSpecification(algorithm).compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-        guard case .invariantViolated(let name, _, _) = result else {
-            Issue.record("Expected Assert to produce an invariant violation, got \(result)")
+        let outcome = try ModelChecker(compilation: try loweredSourceSpecification(algorithm).compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+        guard case .invariantViolated(let name, _, _) = outcome else {
+            Issue.record("Expected Assert to produce an invariant violation, got \(outcome)")
             return
         }
         #expect(name == "__pcal_assert_0")

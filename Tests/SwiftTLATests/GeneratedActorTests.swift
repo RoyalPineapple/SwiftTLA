@@ -35,7 +35,7 @@ private struct ActorCounter {
 
 @Suite("Generated actor")
 struct GeneratedActorTests {
-    @Test("A model creates and executes its typed actor")
+    @Test("A generated machine creates and executes its typed actor")
     func typedActionCommitsTypedState() async throws {
         let actor = try ActorCounter.Actor()
         let transition = try await actor.send(.advance)

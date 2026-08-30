@@ -39,10 +39,10 @@ package struct SymmetryPermutation: Equatable, Sendable {
   fileprivate func composing(after other: Self) throws -> Self {
     try Self(constantMapping: Dictionary(uniqueKeysWithValues: try constantMapping.keys.map { key in
       guard let intermediate = other.constantMapping[key],
-            let result = constantMapping[intermediate] else {
+            let composed = constantMapping[intermediate] else {
         throw SymmetryOrbitError.incompatiblePermutationDomains
       }
-      return (key, result)
+      return (key, composed)
     }))
   }
 

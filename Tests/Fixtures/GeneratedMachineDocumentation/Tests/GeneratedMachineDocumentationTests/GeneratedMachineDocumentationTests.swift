@@ -20,16 +20,16 @@ struct GeneratedMachineDocumentationTests {
         #expect(machine.state == transition.after)
     }
 
-    @Test("bounded model preserves state when a disabled action is rejected")
+    @Test("bounded machine preserves state when a disabled action is rejected")
     func disabledActionRetainsSnapshot() throws {
         var machine = try BoundedCounter.makeMachine()
-        let result = try machine.send(.advance)
+        let transition = try machine.send(.advance)
         let beforeFailure = machine.state
 
-        #expect(result.before.value == 0)
+        #expect(transition.before.value == 0)
         let isEnabled = try machine.isEnabled(.advance)
         #expect(isEnabled == false)
-        #expect(result.after.value == 1)
+        #expect(transition.after.value == 1)
         #expect(throws: GeneratedMachineError.self) {
             try machine.send(.advance)
         }

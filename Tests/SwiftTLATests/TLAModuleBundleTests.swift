@@ -91,8 +91,8 @@ struct TLAModuleBundleTests {
     }
   }
 
-  @Test("a generated model preserves its imported module")
-  func generatedModelRetainsImportedModule() throws {
+  @Test("#spec compilation preserves its imported module")
+  func compiledSpecRetainsImportedModule() throws {
     let bundle = try ImportedFormalModuleGeneratedModel.spec.compile().renderedTLAModuleBundle()
 
     #expect(bundle.imports.map(\.name) == ["ZSequences"])
@@ -138,8 +138,8 @@ struct TLAModuleBundleTests {
     #expect(try parserTree.compile().identity == builtTree.compile().identity)
   }
 
-  @Test("a generated model preserves a named module instance")
-  func generatedModelRetainsNamedModuleInstance() throws {
+  @Test("#spec compilation preserves a named module instance")
+  func compiledSpecRetainsNamedModuleInstance() throws {
     let bundle = try InstancedFormalModuleGeneratedModel.spec.compile().renderedTLAModuleBundle()
 
     #expect(bundle.imports.map(\.name) == ["Folds"])
@@ -219,7 +219,7 @@ struct TLAModuleBundleTests {
         .linkedOperators.recursiveFunctions
     )
     guard case .set(let values) = sequences else {
-      Issue.record("The bounded ZSeq result was not a set.")
+      Issue.record("The bounded ZSeq value was not a set.")
       return
     }
     #expect(values.count == 7)
@@ -285,8 +285,8 @@ struct TLAModuleBundleTests {
     let importedModule = try #require(bundle.imports.first)
     #expect(importedModule.tla.contains("Twice(value) =="))
 
-    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok = result else {
+    let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .ok = outcome else {
       Issue.record("The checker did not resolve the qualified module operator.")
       return
     }
@@ -317,8 +317,8 @@ struct TLAModuleBundleTests {
       .linkedOperators.recursiveFunctions
     #expect(resolved.map(\.name) == ["Math!CountDown"])
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math\u{21}CountDown"))
-    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok = result else {
+    let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .ok = outcome else {
       Issue.record("The checker did not resolve recursive instance calls.")
       return
     }
@@ -346,8 +346,8 @@ struct TLAModuleBundleTests {
     let importedModule = try #require(bundle.imports.first)
     #expect(importedModule.tla.contains("CONSTANTS Base"))
     #expect(importedModule.tla.contains("ASSUME Base") == false)
-    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok = result else {
+    let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .ok = outcome else {
       Issue.record("The checker did not apply the module argument.")
       return
     }
@@ -375,8 +375,8 @@ struct TLAModuleBundleTests {
 
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math == INSTANCE VariableParameterizedArithmetic WITH Base <- value"))
     #expect(try consumer.compile().renderedTLAModuleBundle().imports[0].tla.contains("VARIABLES Base"))
-    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok = result else {
+    let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
+    guard case .ok = outcome else {
       Issue.record("The checker did not substitute the state parameter.")
       return
     }

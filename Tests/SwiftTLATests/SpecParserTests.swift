@@ -1876,13 +1876,13 @@ private enum ParserNode: String, FiniteTLAValueDomain {
             return
         }
         #expect(definition.parameters == [.value("value0"), .value("value1")])
-        guard case .letIn(let operators, let result) = definition.body else {
+        guard case .letIn(let operators, let body) = definition.body else {
             Issue.record("Expected the typed formal body to retain its local recursive LET.")
             return
         }
         #expect(operators.map(\.name) == ["SA"])
         #expect(operators[0].parameters == ["current"])
-        #expect(result == .recursiveCall("SA", [.variable("value0")]))
+        #expect(body == .recursiveCall("SA", [.variable("value0")]))
         #expect(try TLASpec(
             name: "TypedFormalRendering",
             variables: [],
@@ -2231,15 +2231,15 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.subtracting(s)")) == StateExpr.setDifference(x, s))
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.isSubset(of: s)")) == StateExpr.subset(x, s))
         #expect(SpecParser.decodeStateExpr(try parseExpression("x.applying(s)")) == StateExpr.functionApply(x, s))
-        let filterResult = SpecParser.decodeStateExpr(try parseExpression("x.filtering(s)"))
-        guard case .setFilter(let filterDomain, _, let filterBody) = filterResult else {
+        let decodedFilterExpression = SpecParser.decodeStateExpr(try parseExpression("x.filtering(s)"))
+        guard case .setFilter(let filterDomain, _, let filterBody) = decodedFilterExpression else {
             Issue.record("Expected a structural set filter")
             return
         }
         #expect(filterDomain == x)
         #expect(filterBody == s)
-        let mapResult = SpecParser.decodeStateExpr(try parseExpression("x.mapping(s)"))
-        guard case .setMap(let mapBody, _, let mapDomain) = mapResult else {
+        let decodedMapExpression = SpecParser.decodeStateExpr(try parseExpression("x.mapping(s)"))
+        guard case .setMap(let mapBody, _, let mapDomain) = decodedMapExpression else {
             Issue.record("Expected a structural set map")
             return
         }
@@ -2289,8 +2289,8 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 
     @Test func parseStaticIf() throws {
-        let result = SpecParser.decodeStateExpr(try parseExpression("StateExpr.if(x == 0, then: 1, else: 2)"))
-        #expect(result == StateExpr.ifThenElse(
+        let decodedExpression = SpecParser.decodeStateExpr(try parseExpression("StateExpr.if(x == 0, then: 1, else: 2)"))
+        #expect(decodedExpression == StateExpr.ifThenElse(
             StateExpr.equal(.variable("x"), .value(.int(0))),
             .value(.int(1)),
             .value(.int(2))
@@ -2351,10 +2351,10 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 
     @Test func parseStaticFirstMatchWithFallback() throws {
-        let result = SpecParser.decodeStateExpr(
+        let decodedExpression = SpecParser.decodeStateExpr(
             try parseExpression("StateExpr.firstMatch((when: x == 0, then: 10), (when: x == 1, then: 20), fallback: 99)")
         )
-        #expect(result == StateExpr.caseExpr(
+        #expect(decodedExpression == StateExpr.caseExpr(
             [
                 StateExpr.equal(.variable("x"), .value(.int(0))), .value(.int(10)),
                 StateExpr.equal(.variable("x"), .value(.int(1))), .value(.int(20))
@@ -2364,10 +2364,10 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 
     @Test func parseStaticFirstMatchNoFallback() throws {
-        let result = SpecParser.decodeStateExpr(
+        let decodedExpression = SpecParser.decodeStateExpr(
             try parseExpression("StateExpr.firstMatch((when: x < 0, then: -1))")
         )
-        #expect(result == StateExpr.caseExpr(
+        #expect(decodedExpression == StateExpr.caseExpr(
             [StateExpr.lessThan(.variable("x"), .value(.int(0))), StateExpr.value(.int(-1))],
             nil
         ))
@@ -2397,8 +2397,8 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 
     @Test func parseDoubleWhen() throws {
-        let result = SpecParser.decodeActionExpr(try parseExpression("x.becomes(1).when(x > 0).when(x < 5)"))
-        #expect(result == ActionExpr.and(
+        let decodedAction = SpecParser.decodeActionExpr(try parseExpression("x.becomes(1).when(x > 0).when(x < 5)"))
+        #expect(decodedAction == ActionExpr.and(
             ActionExpr.guard_(StateExpr.and(
                 StateExpr.lessThan(.variable("x"), .value(.int(5))),
                 StateExpr.greaterThan(.variable("x"), .value(.int(0)))
@@ -2408,11 +2408,11 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 
     @Test func parseNondeterministicAssign() throws {
-        let result = SpecParser.decodeActionExpr(
+        let decodedAction = SpecParser.decodeActionExpr(
             try parseExpression("x.becomes(StateExpr.any(from: StateExpr.set([1, 2, 3])))")
         )
         let expectedSet = StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))])
-        #expect(result == ActionExpr.chooseAction(.named("x"), expectedSet))
+        #expect(decodedAction == ActionExpr.chooseAction(.named("x"), expectedSet))
     }
 }
 
@@ -2455,7 +2455,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
     }
 
     @Test func parsesNestedGuardedDisjunction() throws {
-        let result = SpecParser.decodeActionExpr(
+        let decodedAction = SpecParser.decodeActionExpr(
             try parseExpression("(x != 12) && x.becomes(x + 1) || (x == 12) && x.becomes(1)")
         )
         let left = ActionExpr.and(
@@ -2466,7 +2466,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(12)))),
             ActionExpr.assign(.named("x"), .value(.int(1)))
         )
-        #expect(result == ActionExpr.or(left, right))
+        #expect(decodedAction == ActionExpr.or(left, right))
     }
 }
 
@@ -2507,8 +2507,8 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         let call = try #require(
             try parseExpression("(x > 0).leadsTo(y == 0)").as(FunctionCallExprSyntax.self)
         )
-        let result = SpecParser.decodeTemporal(call)
-        #expect(result == TemporalExpr.leadsTo(
+        let decodedProperty = SpecParser.decodeTemporal(call)
+        #expect(decodedProperty == TemporalExpr.leadsTo(
             StateExpr.greaterThan(.variable("x"), .value(.int(0))),
             StateExpr.equal(.variable("y"), .value(.int(0)))
         ))
@@ -2893,7 +2893,7 @@ private struct DefinePhaseGeneratedModel {
 }
 
 @Suite(.serialized) struct DefinePhaseGeneratedModelTests {
-    @Test("generated models retain definitions in the authored PlusCal define section")
+    @Test("#spec retains definitions in the authored PlusCal define section")
     func keepsDefinePhaseDeclaration() throws {
         let plusCal = try DefinePhaseGeneratedModel.spec.compile().renderedPlusCalBundle().root.tla
         let define = try #require(plusCal.range(of: "define {"))
@@ -2915,7 +2915,7 @@ private struct FormalDefinitionFidelityMacro {
 }
 
 @Suite(.serialized) struct FormalDefinitionFidelityMacroTests {
-    @Test func generatedModelRetainsFormalDefinition() throws {
+    @Test func macroExpansionRetainsFormalDefinition() throws {
         #expect(FormalDefinitionFidelityMacro.spec.formalOperatorDefinitions.map(\.name) == ["Refines"])
         _ = try FormalDefinitionFidelityMacro.spec.compile()
     }

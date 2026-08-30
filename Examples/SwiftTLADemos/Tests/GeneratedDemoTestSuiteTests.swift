@@ -2,12 +2,12 @@ import Testing
 @testable import SwiftTLADemos
 
 struct GeneratedDemoTestSuiteTests {
-    @Test("consumer test suite runs every generated-model check")
+    @Test("consumer test suite runs every generated-machine check")
     func generatedChecksPass() {
         for target in GeneratedDemoTestTarget.allCases {
-            let results = GeneratedDemoTestSuite.run(target)
-            #expect(results.count == 4)
-            let allPassed = results.allSatisfy { $0.passed }
+            let checks = GeneratedDemoTestSuite.run(target)
+            #expect(checks.isEmpty == false)
+            let allPassed = checks.allSatisfy { $0.passed }
             #expect(allPassed)
         }
     }

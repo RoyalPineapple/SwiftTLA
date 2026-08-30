@@ -380,7 +380,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let bounded = try exploration(guarded: false)
         #expect(bounded.graph.states.count == 3)
-        guard case .depthExceeded(statesCount: 3, limit: 3) = bounded.result else {
+        guard case .depthExceeded(statesCount: 3, limit: 3) = bounded.outcome else {
             Issue.record("Expected the fourth distinct state to stop exploration at the declared limit.")
             return
         }
@@ -937,14 +937,14 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected a compiled action binder")
             return
         }
-        let result = try CompiledEvaluator(
+        let value = try CompiledEvaluator(
             state: state,
             semantics: compilation.semantics,
             layout: compilation.layout,
             bindings: .init().binding(.integer(1), to: binder)
         ).evaluate(expression)
 
-        #expect(result == .boolean(true))
+        #expect(value == .boolean(true))
     }
 
     @Test("compiled record expressions have canonical field order")
@@ -1045,12 +1045,12 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected a compiled guard")
             return
         }
-        let result = try CompiledEvaluator(
+        let value = try CompiledEvaluator(
             state: state,
             semantics: compilation.semantics,
             layout: compilation.layout
         ).evaluate(compiled)
-        #expect(result == .boolean(true))
+        #expect(value == .boolean(true))
     }
 
     @Test("compiled actions update formal state by variable identity")

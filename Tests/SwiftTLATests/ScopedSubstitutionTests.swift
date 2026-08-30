@@ -11,9 +11,9 @@ struct ScopedSubstitutionTests {
       .guard_(.equal(.variable("id"), .variable("outer")))
     )
 
-    let result = action.substitutingVariable("id", with: .value(.int(99)))
+    let substitutedAction = action.substitutingVariable("id", with: .value(.int(99)))
 
-    #expect(result == action)
+    #expect(substitutedAction == action)
   }
 
   @Test("State substitution does not enter a shadowing quantifier")
@@ -24,9 +24,9 @@ struct ScopedSubstitutionTests {
       .equal(.variable("id"), .variable("outer"))
     )
 
-    let result = StateExpr.substituteVariable("id", .int(99), in: expression)
+    let substitutedExpression = StateExpr.substituteVariable("id", .int(99), in: expression)
 
-    #expect(result == expression)
+    #expect(substitutedExpression == expression)
   }
 
   @Test("Substitution still reaches free references beside a binder")
@@ -52,9 +52,9 @@ struct ScopedSubstitutionTests {
       .equal(.variable("target"), .variable("member"))
     )
 
-    let result = StateExpr.substituteVariable("target", with: .variable("member"), in: expression)
+    let substitutedExpression = StateExpr.substituteVariable("target", with: .variable("member"), in: expression)
 
-    #expect(result == .forAll(
+    #expect(substitutedExpression == .forAll(
       .setLiteral([.value(.int(1))]),
       "member_1",
       .equal(.variable("member"), .variable("member_1"))
@@ -69,9 +69,9 @@ struct ScopedSubstitutionTests {
       .setLiteral([.value(.int(1))])
     )
 
-    let result = StateExpr.substituteVariable("item", with: .int(99), in: expression)
+    let substitutedExpression = StateExpr.substituteVariable("item", with: .int(99), in: expression)
 
-    #expect(result == expression)
+    #expect(substitutedExpression == expression)
   }
 
   @Test("Formal lambda parameters are renamed before substitution")
@@ -85,7 +85,7 @@ struct ScopedSubstitutionTests {
       sequence: .tupleLiteral([.int(1)])
     )
 
-    let result = StateExpr.substituteVariable("target", with: .variable("element"), in: expression)
+    let substitutedExpression = StateExpr.substituteVariable("target", with: .variable("element"), in: expression)
 
     let expected: StateExpr = .foldFunction(
       FormalLambda(
@@ -95,7 +95,7 @@ struct ScopedSubstitutionTests {
       initial: .int(0),
       sequence: .tupleLiteral([.int(1)])
     )
-    #expect(result == expected)
+    #expect(substitutedExpression == expected)
   }
 
   @Test("Local operator parameters are scoped independently")
@@ -105,9 +105,9 @@ struct ScopedSubstitutionTests {
       .recursiveCall("keep", [.value(.int(0))])
     )
 
-    let result = StateExpr.substituteVariable("target", with: .variable("item"), in: expression)
+    let substitutedExpression = StateExpr.substituteVariable("target", with: .variable("item"), in: expression)
 
-    #expect(result == .letIn(
+    #expect(substitutedExpression == .letIn(
       [LocalOperator("keep", parameters: ["item_1"], body: .variable("item"))],
       .recursiveCall("keep", [.value(.int(0))])
     ))

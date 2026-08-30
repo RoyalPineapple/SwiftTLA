@@ -100,8 +100,8 @@ struct SymmetryReductionTests {
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
     let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
-    let result = try mc.check()
-    guard case .ok(let count) = result else {
+    let checkOutcome = try mc.check()
+    guard case .ok(let count) = checkOutcome else {
       #expect(Bool(false))
       return
     }
@@ -344,8 +344,8 @@ enum Status: String, TLAValueType, StateExprConvertible {
       }
       Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
     }
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    if case .ok(let count) = result {
+    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
+    if case .ok(let count) = checkOutcome {
       #expect(count == 2)
     } else {
       #expect(Bool(false), "Invariant should hold")

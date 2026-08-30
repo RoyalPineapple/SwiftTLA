@@ -52,9 +52,9 @@ struct FormalOperatorTests {
   @Test("a #spec higher-order formal definition preserves parser and builder trees")
   func generatedHigherOrderFormalDefinitionPreservesParserFidelity() throws {
 
-    var model = try GeneratedHigherOrderFormalModel.makeMachine()
-    let result = try model.send(.advance)
-    #expect(result.after.counter == 1)
+    var machine = try GeneratedHigherOrderFormalModel.makeMachine()
+    let transition = try machine.send(.advance)
+    #expect(transition.after.counter == 1)
   }
 
   @Test("a formal lambda is applied by the evaluator, not by Swift")
@@ -219,7 +219,7 @@ struct FormalOperatorTests {
     #expect(try compiledValue(expression, formalOperators: [first]) == .int(42))
   }
 
-  @Test("model checking and runtime apply a spec-owned formal operator")
+  @Test("exploration and compiled execution apply a specification-owned formal operator")
   func appliesFormalOperatorAtTheTransitionBoundary() throws {
     let applyTwice = FormalOperatorDefinition(
       name: "applyTwice",
@@ -261,8 +261,8 @@ struct FormalOperatorTests {
     let initial = try firstCompiledState(in: compilation)
     let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
     #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
-    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = result { true } else { false } }())
+    let outcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
+    #expect({ if case .ok = outcome { true } else { false } }())
   }
 
   @Test("an imported module exports executable formal operators")
@@ -310,8 +310,8 @@ struct FormalOperatorTests {
     let initial = try firstCompiledState(in: compilation)
     let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
     #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
-    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = result { true } else { false } }())
+    let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
+    #expect({ if case .ok = outcome { true } else { false } }())
   }
 
   @Test("Folds is executable after import, not only emitted source")

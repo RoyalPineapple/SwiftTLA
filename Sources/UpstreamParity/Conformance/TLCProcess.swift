@@ -331,15 +331,15 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
         artifacts: artifacts, javaExecutable: request.javaExecutable,
         directory: request.workingDirectory
       ))
-    let result = try executeProcess(
+    let process = try executeProcess(
       executable: request.javaExecutable,
       arguments: request.launchArguments,
       directory: request.workingDirectory,
       timeout: request.timeout,
       environment: request.effectiveEnvironment
     )
-    try request.finiteGraphCase.pin.validateReportedTLCBanner(result.stdout + "\n" + result.stderr)
-    return result
+    try request.finiteGraphCase.pin.validateReportedTLCBanner(process.stdout + "\n" + process.stderr)
+    return process
   }
 }
 
@@ -453,8 +453,8 @@ package struct TLCProcessAdapter: Sendable {
     )
     let logs = try RetainedFiles.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
-    for (phase, result) in results {
-      try retain(result, phase: phase, in: logs)
+    for (phase, processResult) in results {
+      try retain(processResult, phase: phase, in: logs)
     }
     try retainRawFiles(from: request, in: directory)
   }
@@ -545,25 +545,25 @@ package struct TLCProcessAdapter: Sendable {
       "toolPin": pinJSON(request.finiteGraphCase.pin),
       TLCInvocationPhase.primary.rawValue: invocationJSON(
         request: request,
-        result: results[.primary],
+        process: results[.primary],
         failure: failures[.primary])
     ]
     if results[.trace] != nil || failures[.trace] != nil {
       record[TLCInvocationPhase.trace.rawValue] = invocationJSON(
         request: traceRequest(request),
-        result: results[.trace],
+        process: results[.trace],
         failure: failures[.trace])
     }
     try RetainedFiles.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
   }
 
-  private func retain(_ result: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
+  private func retain(_ process: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
     try RetainedFiles.writeText(
-      redactingSecrets(in: result.stdout),
+      redactingSecrets(in: process.stdout),
       to: directory.appendingPathComponent(phase.stdoutLog)
     )
     try RetainedFiles.writeText(
-      redactingSecrets(in: result.stderr),
+      redactingSecrets(in: process.stderr),
       to: directory.appendingPathComponent(phase.stderrLog)
     )
   }
@@ -597,13 +597,13 @@ package struct TLCProcessAdapter: Sendable {
 
 private func invocationJSON(
   request: TLCProcessRequest,
-  result: TLCProcessResult?,
+  process: TLCProcessResult?,
   failure: TLCProcessExecutionFailure?
 ) -> [String: Any] {
   var record: [String: Any] = [
     "arguments": request.launchArguments.map { redactingSecrets(in: $0) }
   ]
-  if let result { record["exitStatus"] = result.status }
+  if let process { record["exitStatus"] = process.status }
   if let failure { record["executionError"] = redactingSecrets(in: failure.message) }
   return record
 }

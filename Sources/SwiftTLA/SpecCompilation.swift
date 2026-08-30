@@ -139,7 +139,7 @@ struct CompiledRefinement: Sendable {
     let variableMappings: [CompiledStateExpr]
 }
 
-/// The immutable semantic model and validated outputs produced by compilation.
+/// The immutable compiled specification and validated outputs produced by compilation.
 public struct CompiledSpecification: Sendable {
     public let description: CompilationDescription
     public var identity: CompilationIdentity { description.identity }
@@ -245,7 +245,7 @@ public struct CompiledSpecification: Sendable {
                 path: "TLASpec.sourceAlgorithms",
                 expected: "exactly one authored Algorithm",
                 actual: "no authored PlusCal module in this compilation",
-                nextSafeAction: "Compile one canonical Algorithm model per exported module."
+                nextSafeAction: "Compile one source model with one canonical Algorithm per exported module."
             )
         }
         return renderedPlusCalModuleBundle
@@ -679,7 +679,7 @@ public extension TLASpec {
                 path: "directModuleSectionPlan",
                 expected: "compiled declarations aligned with this source model",
                 actual: "actions \(semantics.actions.count)/\(actions.count), definitions \(semantics.formalOperatorDefinitions.count)/\(formalOperatorDefinitions.count), recursive functions \(semantics.recursiveFunctions.count)/\(recursiveFuncs.count)",
-                nextSafeAction: "Compile the model again from its current source."
+                nextSafeAction: "Compile the source model again."
             )
         }
         let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
@@ -766,7 +766,7 @@ public extension TLASpec {
                     path: "actions[\(compiled.id.ordinal)]",
                     expected: "a rendered action name",
                     actual: "the compiled action identity is outside the compiled layout",
-                    nextSafeAction: "Compile the model again from its current source."
+                    nextSafeAction: "Compile the source model again."
                 )
             }
             return DirectModuleAction(
@@ -981,7 +981,7 @@ public extension TLASpec {
                     path: "variables.\(name).initialization",
                     expected: "a compiled initializer for this declared variable",
                     actual: "the compiled layout has no matching initializer",
-                    nextSafeAction: "Compile the model again from its current source."
+                    nextSafeAction: "Compile the source model again."
                 )
             }
             if let collection = semantics.symmetricCollections.first(where: { $0.variable == variable.id }) {
@@ -1360,7 +1360,7 @@ private func directActionCalls(
                 path: "actions[\(action.id.ordinal)]",
                 expected: "a rendered action name",
                 actual: "no rendered name",
-                nextSafeAction: "Compile the model again from its current source."
+                nextSafeAction: "Compile the source model again."
             )
         }
         func addCalls(_ position: Int, arguments: [CompiledValue], indices: [Int]) {

@@ -384,7 +384,7 @@ final class ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) {
-            if let result = decodeCollectionPredicate(call) { return result }
+            if let predicate = decodeCollectionPredicate(call) { return predicate }
             return decodeMethodCall(memberAccess, call)
         }
         if let tuple = expression.as(TupleExprSyntax.self),
@@ -428,15 +428,15 @@ final class ParserSession {
               let current = decodeTypedFacadeValue(currentSyntax, scope: scope)
         else { return nil }
 
-        var result = StateExpr.setLiteral([])
+        var preceding = StateExpr.setLiteral([])
         for (index, candidate) in domain.values.enumerated().reversed() {
-            result = .ifThenElse(
+            preceding = .ifThenElse(
                 .equal(current, .value(candidate)),
                 .setLiteral(domain.values.prefix(index).map(StateExpr.value)),
-                result
+                preceding
             )
         }
-        return result
+        return preceding
     }
 
     /// Parses `At(Label.name, process)`, keeping the lowered `pc` variable

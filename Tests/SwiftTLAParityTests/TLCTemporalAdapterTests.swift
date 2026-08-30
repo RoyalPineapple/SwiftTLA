@@ -370,8 +370,8 @@ struct TLCTemporalAdapterTests {
     #expect(FileManager.default.fileExists(atPath: traceAlias.path))
   }
 
-  private func lasso(in result: TemporalPropertyResult) -> TemporalLassoWitness? {
-    if case .violated(let lasso) = result { return lasso }
+  private func lasso(in propertyResult: TemporalPropertyResult) -> TemporalLassoWitness? {
+    if case .violated(let lasso) = propertyResult { return lasso }
     return nil
   }
 
@@ -385,16 +385,16 @@ struct TLCTemporalAdapterTests {
 
   private final class FixtureExecutor: TLCProcessExecuting, Sendable {
     private let stream: Data?
-    private let result: TLCProcessResult
+    private let processResult: TLCProcessResult
 
-    init(stream: Data? = nil, result: TLCProcessResult = Fixture.success) {
+    init(stream: Data? = nil, processResult: TLCProcessResult = Fixture.success) {
       self.stream = stream
-      self.result = result
+      self.processResult = processResult
     }
 
     func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
       if let stream { try stream.write(to: request.graphEvents, options: .atomic) }
-      return result
+      return processResult
     }
   }
 
@@ -611,9 +611,9 @@ private func graphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) thr
     common.merging(["type": "header", "callback": "writer.header", "seq": 0]) { $1 },
     common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": state]) { $1 }
   ]
-  let body = try records.reduce(into: Data()) { result, record in
-    result.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-    result.append(10)
+  let body = try records.reduce(into: Data()) { payload, record in
+    payload.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
+    payload.append(10)
   }
   let footer = common.merging([
     "type": "footer", "callback": "writer.footer", "seq": 2, "status": "closed",
@@ -642,9 +642,9 @@ private func temporalGraphStream(case finiteGraphCase: FiniteGraphCase, runID: U
     graphTransition(common: common, sequence: 2, source: first, target: second, action: "A"),
     graphTransition(common: common, sequence: 3, source: second, target: first, action: "B")
   ]
-  let body = try records.reduce(into: Data()) { result, record in
-    result.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-    result.append(10)
+  let body = try records.reduce(into: Data()) { payload, record in
+    payload.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
+    payload.append(10)
   }
   let footer = common.merging([
     "type": "footer", "callback": "writer.footer", "seq": 4, "status": "closed",

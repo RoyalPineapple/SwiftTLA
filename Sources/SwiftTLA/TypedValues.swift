@@ -248,7 +248,7 @@ public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
 ///
 /// This is the standard TLA+ `CHOOSE f \in [1..Cardinality(S) -> S] :
 /// IsInjective(f)` expression. The choice remains symbolic in the formal
-/// specification and is evaluated by the formal runtime.
+/// specification and is evaluated by the compiled runtime.
 public func InjectiveSequence<Element: TLAValueType>(
   from values: Expr<SetExpr<Element>>
 ) -> Expr<TupleExpr<Element>> {
@@ -303,8 +303,8 @@ public func Where<Value: TLAValueType>(
 
 /// Selects one value from a finite formal domain.
 ///
-/// The formal evaluator selects a fixed model value while the specification is
-/// built, such as a graph supplied by a TLC configuration.
+/// The compiled evaluator selects a fixed formal value while the specification
+/// is compiled, such as a graph supplied by a TLC configuration.
 public func Select<Value: TLAValueType>(
   from candidates: Expr<SetExpr<Value>>,
   matching predicate: (WithValue<Value>) -> StateExpr
@@ -616,7 +616,7 @@ func formalSequenceExpressions(
 ) -> [StateExpr] {
   guard lengths.lowerBound >= 0 else { return [] }
 
-  var result: [StateExpr] = []
+  var sequences: [StateExpr] = []
   for length in lengths {
     var prefixes: [[StateExpr]] = [[]]
     for _ in 0..<length {
@@ -624,9 +624,9 @@ func formalSequenceExpressions(
         members.map { prefix + [$0] }
       }
     }
-    result += prefixes.map(StateExpr.tupleLiteral)
+    sequences += prefixes.map(StateExpr.tupleLiteral)
   }
-  return result
+  return sequences
 }
 
 func formalZeroBasedSequenceExpressions(

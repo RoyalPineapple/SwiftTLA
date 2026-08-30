@@ -63,9 +63,9 @@ package struct SwiftGraphExporter: Sendable {
       graph: graph,
       observableActions: Set(edges.map(\.action)),
       outcome: try canonicalOutcome(
-        exploration.result, states: states),
+        exploration.outcome, states: states),
       trace: try canonicalTrace(
-        exploration.result, states: states)
+        exploration.outcome, states: states)
     )
   }
 
@@ -91,10 +91,10 @@ package struct SwiftGraphExporter: Sendable {
   }
 
   private func canonicalOutcome(
-    _ result: ModelCheckOutcome,
+    _ outcome: ModelCheckOutcome,
     states: [StateGraph.StateID: CanonicalState]
   ) throws -> GraphRunOutcome {
-    switch result {
+    switch outcome {
     case .ok:
       return .exhaustiveSuccess
     case .invariantViolated(let invariant, _, _):
@@ -106,7 +106,7 @@ package struct SwiftGraphExporter: Sendable {
       }
       return .deadlock(canonical.key)
     case .depthExceeded:
-      return .incomplete(reason: result.description)
+      return .incomplete(reason: outcome.description)
     case .noInitialStates:
       return .executionError("the compiled initial-state relation is empty")
     case .assumptionViolated:
@@ -114,19 +114,19 @@ package struct SwiftGraphExporter: Sendable {
     case .livenessViolated(let property, let reason, _):
       return .invariantViolation("\(property): \(reason.rawValue)")
     case .livenessUnavailable:
-      return .incomplete(reason: result.description)
+      return .incomplete(reason: outcome.description)
     case .refinementViolated(let refinement, _):
       return .invariantViolation(refinement)
     case .refinementUnproven:
-      return .incomplete(reason: result.description)
+      return .incomplete(reason: outcome.description)
     }
   }
 
   private func canonicalTrace(
-    _ result: ModelCheckOutcome,
+    _ outcome: ModelCheckOutcome,
     states: [StateGraph.StateID: CanonicalState]
   ) throws -> GraphTrace? {
-    guard case .invariantViolated(_, _, let trace) = result else { return nil }
+    guard case .invariantViolated(_, _, let trace) = outcome else { return nil }
     return GraphTrace(
       id: "swift-invariant-trace",
       steps: try trace.map { step in

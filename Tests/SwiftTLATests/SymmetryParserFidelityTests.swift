@@ -32,7 +32,7 @@ struct SymmetryParserFidelityTests {
     }
 
     @Test("Symmetry participates in generated parser-builder fidelity")
-    func generatedModelPreservesSymmetry() throws {
+    func macroExpansionPreservesSymmetry() throws {
         #expect(GeneratedSymmetryModel.spec.symmetrySets == [
             SymmetrySet(variableName: "TxId", values: [.string("t1"), .string("t2")])
         ])

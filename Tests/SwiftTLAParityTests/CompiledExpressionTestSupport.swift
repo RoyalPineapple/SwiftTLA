@@ -39,8 +39,8 @@ func compiledValue(
   )
   let compilation = try specification.compile()
   let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-  let result = try #require(compilation.layout.testVariableID(named: resultName))
-  return try initial.value(for: result).rendered(using: compilation.layout)
+  let resultVariableID = try #require(compilation.layout.testVariableID(named: resultName))
+  return try initial.value(for: resultVariableID).rendered(using: compilation.layout)
 }
 
 func projection(_ values: [(String, TLAValue)]) throws -> TLAStateProjection {
