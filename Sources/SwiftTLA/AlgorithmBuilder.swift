@@ -1375,7 +1375,7 @@ public func When(_ condition: some StateExprConvertible) -> StepStatement {
     Await(condition)
 }
 
-/// A PlusCal assertion. A false assertion creates a generated formal safety
+/// A PlusCal assertion. A false assertion creates a compiled safety
 /// check at this atomic program-counter location.
 public func Assert(_ condition: some StateExprConvertible) -> StepStatement {
     StepStatement(model: .assert(condition.stateExpr))
