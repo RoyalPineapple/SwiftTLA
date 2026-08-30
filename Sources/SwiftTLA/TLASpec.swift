@@ -793,8 +793,8 @@ public func Variable<T>(_ ref: Var<T>, in values: Expr<SetExpr<T>>) -> VarDecl {
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
-/// Expression-backed nondeterministic init. The range is evaluated when initial
-/// states are computed instead of being materialized while building the spec.
+/// Expression-backed nondeterministic init evaluated during initial-state
+/// computation.
 @discardableResult
 public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
   VarDecl(name, memberOf: range)

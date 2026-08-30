@@ -764,10 +764,9 @@ final class ParserSession {
             guard arguments.count == argumentArray.elements.count else { return nil }
             return .operatorApplication(operation, arguments)
         }
-        // `Expr<T>` is a phantom type wrapper. Its one value argument is
-        // already a formal expression, including the canonical formal
-        // operator application spelling, so preserve that parser path rather
-        // than attempting to infer it as a typed collection operation.
+        // `Expr<T>` is a phantom type wrapper. Its one value argument follows
+        // the formal-expression parser path, including canonical formal
+        // operator application spelling.
         if let call = expression.as(FunctionCallExprSyntax.self),
            let type = typedFacadeType(call.calledExpression),
            type.name == "Expr",
@@ -1923,8 +1922,7 @@ final class ParserSession {
         return LocalOperator(name, parameters: parameters, domain: domain, body: body)
     }
 
-    /// Decodes formal operators as syntax, rather than Swift closures. This is
-    /// the source-side half of higher-order operator fidelity.
+    /// Decodes higher-order formal operators from their syntax nodes.
     private func decodeFormalOperator(_ expression: ExprSyntax) -> FormalOperator? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self)

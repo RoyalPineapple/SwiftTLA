@@ -302,8 +302,8 @@ public struct StatementMacro: Sendable {
         expand([.variable(first.name), .variable(second.name)])
     }
 
-    /// Expands a macro with formal expression arguments. This preserves the
-    /// expressions in the algorithm IR instead of evaluating Swift values.
+    /// Expands a macro while retaining formal expression arguments in the
+    /// algorithm IR.
     public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
         _ first: Expr<First>, _ second: Expr<Second>
     ) -> [StepStatement] {
@@ -505,9 +505,8 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
     public var stays: ActionExpr { .unchanged(.named(name)) }
 }
 
-// `SharedVariable` is an authoring handle, but it must read like the typed
-// variable it represents. Keep these operators on the handle rather than
-// forcing authors to escape into `.stateExpr` or `Expr`.
+// These operators give `SharedVariable` the expression syntax of its typed
+// variable.
 extension SharedVariable where Value == Int {
     public static func + (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
         Expr(.add(lhs.stateExpr, .int(rhs)))

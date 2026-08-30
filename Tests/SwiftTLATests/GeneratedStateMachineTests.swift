@@ -528,7 +528,7 @@ struct GeneratedDependentInitialAlgorithmTests {
 
 struct NestedActorConcurrencyTests {
     @Test("Nested actor matches generated-machine execution")
-    func nestedActorMatchesValueMachineExecution() async throws {
+    func nestedActorMatchesGeneratedMachineExecution() async throws {
         let actorLabel: NestedComposedCounter.Action = .advance
         var machine = try NestedComposedCounter.makeMachine()
         let actor = try NestedComposedCounter.Actor()
@@ -854,7 +854,7 @@ struct GeneratedStateMachineTests {
     }
 
     @Test("Actor returns the generated machine's three-argument transition")
-    func actorMatchesValueMachineThreeArgumentTransition() async throws {
+    func actorMatchesGeneratedMachineThreeArgumentTransition() async throws {
         var machine = try ThreeParameterActionMachine.makeMachine()
         let expected = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
 

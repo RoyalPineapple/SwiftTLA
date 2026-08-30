@@ -102,8 +102,6 @@ package struct TeachingSimpleN3Model: Sendable {
                     }
                 }
 
-                // See the N=2 instance for why this is one predicate per
-                // builder line rather than a host-language boolean loop.
                 Invariant("TypeOK") {
                     x[.p0] == 0 || x[.p0] == 1
                     x[.p1] == 0 || x[.p1] == 1
