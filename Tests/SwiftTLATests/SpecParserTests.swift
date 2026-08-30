@@ -1538,7 +1538,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(parsed.variables.count == 1)
         guard parsed.variables.count == 1 else { return }
         #expect(parsed.variables[0].name == "counter")
-        #expect(parsed.variables[0].initialization == .memberOf(.setLiteral([.value(.int(0)), .value(.int(1))])))
+        #expect(parsed.variables[0].initialization == .memberOf(.integerRange(.int(0), .int(1))))
         #expect(parsed.variables[0].generatedSwiftType == "Int")
     }
 
@@ -2104,6 +2104,16 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         #expect(SpecParser.decodeStateExpr(try parseExpression("-1")) == StateExpr.value(.int(-1)))
     }
 
+    @Test("minimum integer negation remains structural")
+    func minimumIntegerNegationRemainsStructural() throws {
+        let parser = ParserSession()
+        parser.constants = [Constant("Minimum", Int.min)]
+        #expect(
+            parser.decodeStateExpr(try parseExpression("-Minimum"))
+                == StateExpr.negate(.value(.int(.min)))
+        )
+    }
+
     @Test func preservesSwiftInfixPrecedence() throws {
         let index: StateExpr = .variable("index")
         let count: StateExpr = .variable("count")
@@ -2121,9 +2131,10 @@ private enum ParserNode: String, FiniteTLAValueDomain {
 // MARK: - StateExpr: range operator
 
 @Suite(.serialized) struct StateExprRangeTests {
-    @Test func parseRangeOperator() throws {
-        #expect(SpecParser.decodeStateExpr(try parseExpression("1...3")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
-        #expect(SpecParser.decodeStateExpr(try parseExpression("0...2")) == StateExpr.setLiteral([.value(.int(0)), .value(.int(1)), .value(.int(2))]))
+    @Test("integer ranges preserve bounds without expansion")
+    func integerRangesPreserveBoundsWithoutExpansion() throws {
+        #expect(SpecParser.decodeStateExpr(try parseExpression("1...3")) == StateExpr.integerRange(.int(1), .int(3)))
+        #expect(SpecParser.decodeStateExpr(try parseExpression("3...1")) == StateExpr.integerRange(.int(3), .int(1)))
     }
 }
 

@@ -32,6 +32,53 @@ struct EvaluatorCoverage {
     #expect(try evaluate(.integerDivide(.int(7), .int(3))) == .int(2))
   }
 
+  @Test("integer overflow throws its operation and operands")
+  func integerOverflow() throws {
+    #expect(throws: EvalError.integerOverflow(.addition, operands: [.max, 1])) {
+      try evaluate(.add(.int(.max), .int(1)))
+    }
+    #expect(throws: EvalError.integerOverflow(.subtraction, operands: [.min, 1])) {
+      try evaluate(.subtract(.int(.min), .int(1)))
+    }
+    #expect(throws: EvalError.integerOverflow(.multiplication, operands: [.max, 2])) {
+      try evaluate(.multiply(.int(.max), .int(2)))
+    }
+    #expect(throws: EvalError.integerOverflow(.division, operands: [.min, -1])) {
+      try evaluate(.divide(.int(.min), .int(-1)))
+    }
+    #expect(throws: EvalError.integerOverflow(.division, operands: [.min, -1])) {
+      try evaluate(.integerDivide(.int(.min), .int(-1)))
+    }
+    #expect(throws: EvalError.integerOverflow(.remainder, operands: [.min, -1])) {
+      try evaluate(.modulo(.int(.min), .int(-1)))
+    }
+    #expect(throws: EvalError.integerOverflow(.negation, operands: [.min])) {
+      try evaluate(.negate(.int(.min)))
+    }
+    #expect(throws: EvalError.integerOverflow(.summation, operands: [1, .max])) {
+      try evaluate(.setSum(
+        .functionLiteral(
+          .setLiteral([.int(1), .int(2)]),
+          "member",
+          .ifThenElse(.equal(.variable("member"), .int(1)), .int(.max), .int(1))
+        ),
+        .setLiteral([.int(1), .int(2)])
+      ))
+    }
+    #expect(try evaluate(.setSum(
+      .functionLiteral(
+        .setLiteral([.int(1), .int(2), .int(3)]),
+        "member",
+        .ifThenElse(
+          .equal(.variable("member"), .int(1)),
+          .int(.max),
+          .ifThenElse(.equal(.variable("member"), .int(2)), .int(1), .int(-1))
+        )
+      ),
+      .setLiteral([.int(1), .int(2), .int(3)])
+    )) == .int(.max))
+  }
+
   @Test("comparisons")
   func comparison() throws {
     #expect(try evaluate(.equal(.int(5), .int(5))) == .bool(true))

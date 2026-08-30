@@ -256,6 +256,12 @@ final class ParserSession {
         Int(literal.literal.text.filter { $0 != "_" })
     }
 
+    private func negated(_ operand: StateExpr) -> StateExpr {
+        guard case .value(.int(let value)) = operand else { return .negate(operand) }
+        let result = 0.subtractingReportingOverflow(value)
+        return result.overflow ? .negate(operand) : .value(.int(result.partialValue))
+    }
+
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let precedingMembers = decodePrecedingFormalMembers(expression) {
             return precedingMembers
@@ -404,11 +410,7 @@ final class ParserSession {
             let operand = decodeStateExpr(prefix.expression)
             if prefix.operator.text == "!", let operand { return .not(operand) }
             if prefix.operator.text == "-", let operand {
-                // Preserve a spelled negative literal as one integer value.
-                if case .value(.int(let value)) = operand {
-                    return .value(.int(-value))
-                }
-                return .negate(operand)
+                return negated(operand)
             }
         }
         return nil
@@ -983,13 +985,7 @@ final class ParserSession {
            let operand = decodeTypedFacadeValue(prefix.expression, scope: scope) {
             switch prefix.operator.text {
             case "!": return .not(operand)
-            case "-":
-                // Preserve `-1` as one integer value before a bounded collection
-                // expands it into formal values.
-                if case .value(.int(let value)) = operand {
-                    return .value(.int(-value))
-                }
-                return .negate(operand)
+            case "-": return negated(operand)
             default: return nil
             }
         }
@@ -2080,8 +2076,8 @@ final class ParserSession {
         case "&&": return .and(lhs, rhs)
         case "||": return .or(lhs, rhs)
         case "...":
-            guard case .value(.int(let f)) = lhs, case .value(.int(let l)) = rhs else { return nil }
-            return .setLiteral((f...l).map { .value(.int($0)) })
+            guard case .value(.int) = lhs, case .value(.int) = rhs else { return nil }
+            return .integerRange(lhs, rhs)
         default: return nil
         }
     }
