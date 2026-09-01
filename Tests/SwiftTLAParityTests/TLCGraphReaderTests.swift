@@ -207,7 +207,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       bridgeBinary: toolRoot.appendingPathComponent(
         "bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"),
       jarManifest:
-        "Implementation-Title: TLA+ Tools\\nX-Git-Revision: 9787e65714c37d94eebab40774bff401bd9f616d\\n",
+        "Implementation-Title: TLA+ Tools\\nX-Git-Revision: 95b800c676b3312ce97d7478d1081cd468ece75c\\n",
       runtime: TLCJavaRuntimeIdentity(
         version: "17.0.19+10", vendor: "Eclipse Adoptium", architecture: "arm64",
         properties: ["java.runtime.version": "17.0.19+10", "java.vendor": "Eclipse Adoptium"]
