@@ -2,7 +2,7 @@
   "schema": "TLCReferencePin",
   "tlc": {
     "tag": "v1.8.0",
-    "commit": "9787e65714c37d94eebab40774bff401bd9f616d",
+    "commit": "95b800c676b3312ce97d7478d1081cd468ece75c",
     "standardModules": [
       "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
       "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
@@ -11,7 +11,7 @@
     ],
     "jar": {
       "url": "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar",
-      "sha256": "eabd140a70f49eb9305a3bd3f3df944eddf87e5a90d329789085f8953a80533a"
+      "sha256": "dbcc75552f21978a4846688b8e23be1a6b6c0b3fcee35d78fec2df167958ec94"
     }
   },
   "java": {
