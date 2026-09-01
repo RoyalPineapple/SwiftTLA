@@ -174,10 +174,20 @@ run_guarded() {
             swift test --filter "$selector" -j 1 --scratch-path "$scratch_dir/.build" &
             ;;
         xcode-test)
-            xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS' \
-                "-only-testing:$selector" -parallel-testing-enabled NO \
-                -parallel-testing-worker-count 1 -jobs 1 \
-                -derivedDataPath "$scratch_dir/DerivedData" &
+            package_dir="$PWD"
+            while [[ ! -f "$package_dir/Package.swift" ]]; do
+                parent_dir="$(dirname "$package_dir")"
+                [[ "$parent_dir" != "$package_dir" ]] || fail "xcode-test requires a Swift package directory"
+                package_dir="$parent_dir"
+            done
+            package_scheme="$(basename "$package_dir")-Package"
+            (
+                cd "$package_dir"
+                xcodebuild test -scheme "$package_scheme" -destination 'platform=macOS' \
+                    "-only-testing:$selector" -parallel-testing-enabled NO \
+                    -parallel-testing-worker-count 1 -jobs 1 \
+                    -derivedDataPath "$scratch_dir/DerivedData"
+            ) &
             ;;
     esac
     command_pid=$!
