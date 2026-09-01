@@ -141,6 +141,7 @@ public actor Bluetooth {
     private let central: CBCentralManager
     private var readyContinuation: CheckedContinuation<Void, Error>?
     private var scanContinuation: AsyncStream<Device>.Continuation?
+    private var stateContinuation: AsyncStream<BluetoothModel.State>.Continuation?
     public private(set) var diagnostic: String?
 
     public init() throws {
@@ -153,6 +154,23 @@ public actor Bluetooth {
 
     public var state: BluetoothModel.State { machine.state }
 
+    /// Emits the generated machine state at subscription and after each
+    /// accepted action.
+    public func stateUpdates() -> AsyncStream<BluetoothModel.State> {
+        stateContinuation?.finish()
+        let stream = AsyncStream<BluetoothModel.State>.makeStream()
+        stateContinuation = stream.continuation
+        stream.continuation.yield(machine.state)
+        return stream.stream
+    }
+
+    /// Returns the scan action enabled by the generated machine.
+    public func scanAction() throws -> BluetoothModel.Action? {
+        if try machine.isEnabled(.stopScan) { return .stopScan }
+        if try machine.isEnabled(.startScan) { return .startScan }
+        return nil
+    }
+
     public func ready() async throws {
         if let diagnostic { throw BleError.transitionFailed(diagnostic) }
         if machine.state.phase == .poweredOn { return }
@@ -163,6 +181,7 @@ public actor Bluetooth {
         if let diagnostic { throw BleError.transitionFailed(diagnostic) }
         guard try machine.isEnabled(.startScan) else { throw BleError.notReady }
         _ = try machine.send(.startScan)
+        publishState()
         let stream = AsyncStream<Device>.makeStream()
         scanContinuation = stream.continuation
         central.scanForPeripherals(withServices: nil)
@@ -172,6 +191,7 @@ public actor Bluetooth {
     public func stopScanning() async throws {
         if try machine.isEnabled(.stopScan) {
             _ = try machine.send(.stopScan)
+            publishState()
         }
         central.stopScan()
         scanContinuation?.finish()
@@ -181,7 +201,10 @@ public actor Bluetooth {
     func updateState(_ state: CBManagerState) async {
         if let action = BluetoothModel.Action(managerState: state) {
             do {
-                _ = try machine.send(action)
+                if try machine.isEnabled(action) {
+                    _ = try machine.send(action)
+                    publishState()
+                }
                 diagnostic = nil
             } catch {
                 record(error)
@@ -196,10 +219,15 @@ public actor Bluetooth {
 
     func record(_ error: Error) {
         diagnostic = String(describing: error)
+        publishState()
         readyContinuation?.resume(throwing: error)
         readyContinuation = nil
         scanContinuation?.finish()
         scanContinuation = nil
+    }
+
+    private func publishState() {
+        stateContinuation?.yield(machine.state)
     }
 }
 
