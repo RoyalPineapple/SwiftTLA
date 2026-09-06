@@ -63,4 +63,12 @@ final class GeneratedAppleModelTests: XCTestCase {
         XCTAssertEqual(machine.state.phase, .live)
     }
 
+    func testCameraRecordingCancellationRestoresLiveState() throws {
+        var machine = try CameraWorkflow.makeMachine()
+        _ = try machine.send(.ready)
+        _ = try machine.send(.record)
+        _ = try machine.send(.recordingCancelled)
+        XCTAssertEqual(machine.state.phase, .live)
+    }
+
 }
