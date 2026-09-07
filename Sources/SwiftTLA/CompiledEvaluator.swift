@@ -24,6 +24,11 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case recordField = "record field"
     }
 
+    enum CollectionOperation: String, Equatable, Sendable {
+        case integerRange
+        case functionSet
+    }
+
     enum Callable: String, Equatable, Sendable {
         case foldFunction = "FoldFunction"
         case formalOperator = "formal operator"
@@ -47,6 +52,7 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case invalidContinuation(availableValues: Int)
     case collectionState
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
+    case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
     case divisionByZero
     case integerOverflow(IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
@@ -75,6 +81,8 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .collectionState: return "Collection evaluation reached an invalid state"
         case .powerSetTooLarge(let actualCount, let maximumCount):
             return "Power-set input has \(actualCount) members; the maximum is \(maximumCount)"
+        case .collectionCardinalityOverflow(let operation, let operands):
+            return "Collection \(operation.rawValue) cardinality exceeds Int for \(operands.map(String.init).joined(separator: ", "))"
         case .divisionByZero: return "Division by zero"
         case .integerOverflow(let operation, let operands):
             return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
@@ -428,6 +436,12 @@ struct CompiledEvaluator: Sendable {
                 case .integerRange:
                     let upper = try integer(popValue(from: &values))
                     let lower = try integer(popValue(from: &values))
+                    if lower <= upper {
+                        let distance = upper.subtractingReportingOverflow(lower)
+                        guard !distance.overflow, !distance.partialValue.addingReportingOverflow(1).overflow else {
+                            throw EvalError.collectionCardinalityOverflow(.integerRange, operands: [lower, upper])
+                        }
+                    }
                     values.append(lower <= upper ? .set(Set((lower...upper).map(CompiledValue.integer))) : .set([]))
                 case .tupleLiteral(let expressions):
                     values.append(.tuple(try popValues(expressions.count, from: &values)))
@@ -1203,10 +1217,10 @@ private extension CompiledEvaluator {
     }
 
     func powerSet(of values: Set<CompiledValue>) throws -> CompiledValue {
-        guard values.count < Int.bitWidth else {
+        guard values.count < Int.bitWidth - 1 else {
             throw EvalError.powerSetTooLarge(
                 actualCount: values.count,
-                maximumCount: Int.bitWidth - 1
+                maximumCount: Int.bitWidth - 2
             )
         }
         let members = Array(values)
@@ -1225,6 +1239,17 @@ private extension CompiledEvaluator {
         }
         let orderedDomain = CompiledValue.sorted(domainValues)
         let orderedRange = CompiledValue.sorted(rangeValues)
+        // Check the complete product before any intermediate expansion.
+        var cardinality = 1
+        for _ in orderedDomain {
+            let product = cardinality.multipliedReportingOverflow(by: orderedRange.count)
+            guard !product.overflow else {
+                throw EvalError.collectionCardinalityOverflow(
+                    .functionSet, operands: [orderedDomain.count, orderedRange.count]
+                )
+            }
+            cardinality = product.partialValue
+        }
         var functions: [[CompiledValue: CompiledValue]] = [[:]]
         for key in orderedDomain {
             functions = functions.flatMap { partial in
