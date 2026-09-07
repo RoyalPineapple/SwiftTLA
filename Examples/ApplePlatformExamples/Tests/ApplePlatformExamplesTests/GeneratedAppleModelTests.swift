@@ -48,75 +48,62 @@ final class GeneratedAppleModelTests: XCTestCase {
         XCTAssertEqual(failedDiscovery.state.phase, .connected)
     }
 
-    func testRecordingAttemptClassifiesCompletionFailureAndCancellation() {
-        let id = UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407")!
+    func testRecordingCallbacksClassifyCompletionFailureAndCancellation() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407"))
 
-        var completed = RecordingAttempt(id: id)
-        XCTAssertEqual(completed.consumeCallback(error: nil, wasCancelled: false), .recordingSucceeded)
+        var completed = RecordingCallbackCorrelation()
+        XCTAssertEqual(completed.begin(id: id), id)
+        XCTAssertEqual(completed.consumeCallback(for: id, error: nil), .recordingSucceeded)
 
-        var failed = RecordingAttempt(id: id)
-        XCTAssertEqual(failed.consumeCallback(error: RecordingFailure(), wasCancelled: false), .recordingFailed)
+        var failed = RecordingCallbackCorrelation()
+        XCTAssertEqual(failed.begin(id: id), id)
+        XCTAssertEqual(failed.consumeCallback(for: id, error: RecordingFailure()), .recordingFailed)
 
-        var cancelled = RecordingAttempt(id: id)
-        cancelled.requestCancellation()
-        XCTAssertEqual(cancelled.consumeCallback(error: nil, wasCancelled: false), .recordingCancelled)
+        var cancelled = RecordingCallbackCorrelation()
+        XCTAssertEqual(cancelled.begin(id: id), id)
+        XCTAssertTrue(cancelled.requestCancellation(for: id))
+        XCTAssertEqual(cancelled.consumeCallback(for: id, error: nil), .recordingCancelled)
     }
 
-    func testRecordingAttemptIgnoresDuplicateAndLateCallbacks() {
-        var attempt = RecordingAttempt(id: UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407")!)
+    func testRecordingCallbacksIgnoreDuplicateCallbacks() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407"))
+        var callbacks = RecordingCallbackCorrelation()
 
-        XCTAssertEqual(attempt.consumeCallback(error: nil, wasCancelled: false), .recordingSucceeded)
-        XCTAssertNil(attempt.consumeCallback(error: RecordingFailure(), wasCancelled: false))
+        XCTAssertEqual(callbacks.begin(id: id), id)
+        XCTAssertEqual(callbacks.consumeCallback(for: id, error: nil), .recordingSucceeded)
+        XCTAssertNil(callbacks.consumeCallback(for: id, error: RecordingFailure()))
     }
 
     func testLateAndDuplicateCallbacksPreserveTheCurrentGeneratedState() throws {
-        let firstID = UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407")!
-        let secondID = UUID(uuidString: "D4E4A2B5-C85B-49BD-B8D7-6B28E959CD42")!
+        let firstID = try XCTUnwrap(UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407"))
+        let secondID = try XCTUnwrap(UUID(uuidString: "D4E4A2B5-C85B-49BD-B8D7-6B28E959CD42"))
         var correlation = RecordingCallbackCorrelation()
         var machine = try CameraWorkflow.makeMachine()
 
         _ = try machine.send(.ready)
 
-        correlation.begin(RecordingAttempt(id: firstID))
+        XCTAssertEqual(correlation.begin(id: firstID), firstID)
         _ = try machine.send(.record)
         _ = try machine.send(.stopRecording)
-        let firstOutcome = correlation.consumeCallback(for: firstID, error: nil, wasCancelled: false)
-        guard case .submitted(let completedID, let completedAction) = firstOutcome else {
-            return XCTFail("Expected A's completed callback to submit an outcome.")
-        }
-        XCTAssertEqual(completedID, firstID)
+        let completedAction = try XCTUnwrap(correlation.consumeCallback(for: firstID, error: nil))
         _ = try machine.send(completedAction)
         XCTAssertEqual(machine.state.phase, .live)
 
-        correlation.begin(RecordingAttempt(id: secondID))
+        XCTAssertEqual(correlation.begin(id: secondID), secondID)
         _ = try machine.send(.record)
         let stateBeforeLateCallback = machine.state
         XCTAssertEqual(correlation.pendingAttemptID, secondID)
-        let lateFirstOutcome = correlation.consumeCallback(for: firstID, error: nil, wasCancelled: false)
-        guard case .ignored(let callbackID, let activeID) = lateFirstOutcome else {
-            return XCTFail("Expected A's late callback to be ignored while B is pending.")
-        }
-        XCTAssertEqual(callbackID, firstID)
-        XCTAssertEqual(activeID, secondID)
+        XCTAssertNil(correlation.consumeCallback(for: firstID, error: nil))
         XCTAssertEqual(correlation.pendingAttemptID, secondID)
         XCTAssertEqual(machine.state, stateBeforeLateCallback)
 
-        let secondOutcome = correlation.consumeCallback(for: secondID, error: RecordingFailure(), wasCancelled: false)
-        guard case .submitted(let submittedID, let submittedAction) = secondOutcome else {
-            return XCTFail("Expected B's callback to submit its own outcome.")
-        }
-        XCTAssertEqual(submittedID, secondID)
+        let submittedAction = try XCTUnwrap(correlation.consumeCallback(for: secondID, error: RecordingFailure()))
         let secondTransition = try machine.send(submittedAction)
         XCTAssertEqual(secondTransition.before.phase, .recording)
         XCTAssertEqual(secondTransition.after.phase, .live)
 
         let stateBeforeDuplicateCallback = machine.state
-        let duplicateSecondOutcome = correlation.consumeCallback(for: secondID, error: nil, wasCancelled: false)
-        guard case .ignored(let duplicateCallbackID, let duplicateActiveID) = duplicateSecondOutcome else {
-            return XCTFail("Expected B's duplicate callback to be ignored after its outcome.")
-        }
-        XCTAssertEqual(duplicateCallbackID, secondID)
-        XCTAssertNil(duplicateActiveID)
+        XCTAssertNil(correlation.consumeCallback(for: secondID, error: nil))
         XCTAssertEqual(machine.state, stateBeforeDuplicateCallback)
     }
 

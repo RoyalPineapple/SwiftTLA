@@ -18,12 +18,12 @@ the bounded symmetric verification population, and the generated-machine ID rout
 
 `av-pipeline-example` is the external generated-machine proof. `CameraWorkflow`
 owns the typed formal `State`, `Action`, and `Transition` values; the SwiftUI
-app uses the generated machine for every state change and the generated actor
-for the concurrent-record demonstration. The app never reads or exposes a raw
+app uses the generated machine for every state change. The focused adoption
+tests exercise the generated actor under concurrent sends. The app never reads or exposes a raw
 TLA state map, compiled storage, or compiler-internal API.
 
-AVFoundation stays at the application edge. Each recording request owns an
-immutable attempt ID and one callback delegate. The app classifies its
+AVFoundation stays at the application edge. Each recording request has an
+immutable attempt ID and one callback delegate. One correlation value classifies its
 completion, failure, or cancellation before submitting exactly one matching
 typed outcome action. A late or duplicate callback is logged and ignored, so it
 cannot change a later request's generated state.
@@ -39,8 +39,9 @@ Run the focused package contracts serially through the repository wrapper:
 
 The hosted `apple-platform-examples` job runs
 `xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build`,
-runs those two suites serially, and uploads SHA-named logs and `.xcresult`
-bundles. GitHub Actions is the admission authority. After push, release
+runs both focused suites in one serial test invocation, verifies that each suite
+passed exactly six tests, and uploads one SHA-named log and `.xcresult` bundle.
+GitHub Actions is the admission authority. After push, release
 reviewers verify that the hosted run and its artifact belong to the submitted
 SHA before making an admission decision.
 
@@ -49,8 +50,7 @@ SHA before making an admission decision.
 On a macOS host with an available camera and the required permission:
 
 1. Build and launch `av-pipeline-example`, then confirm the displayed generated
-   state reaches `live` and the actor proof reports one record transition and
-   one typed rejection.
+   state reaches `live`.
 2. Start and stop a recording; confirm the state returns to `live` after the
    resulting media is retained at the application edge.
 3. Start a second recording and cancel it; confirm its typed cancellation

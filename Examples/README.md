@@ -31,36 +31,7 @@ generated machines in use.
   demonstrations.
 - `SwiftTLADemoApp` is the SwiftUI application that imports `SwiftTLADemos`.
 - `ApplePlatformExamples` contains separate Apple-framework consumers of the
-  SwiftTLA library. Its `av-pipeline-example` is the single external adoption
-  proof: it imports only the public `SwiftTLA` and `SwiftTLAMacros` products
-  through its path dependency, rather than compiler internals or raw formal
-  state.
-
-## External adoption proof
-
-The camera example keeps the generated `CameraWorkflow` machine as the sole
-state-transition authority. The SwiftUI adapter renders its typed `State`,
-submits typed `Action` values, and replaces its local machine only with a
-returned typed `Transition`. Concurrent callers use the generated actor; the
-AVFoundation adapter owns platform objects and request correlation, then maps
-each completion, failure, or cancellation back to a typed outcome action.
-
-Run the focused external contracts from the example package. These are local
-diagnostics only; the hosted Apple-platform job remains the admission
-authority. It runs
-`xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build`,
-then retains SHA-named build logs and test result bundles.
-
-```sh
-cd Examples/ApplePlatformExamples
-../../scripts/local-validation.sh xcode-test ApplePlatformExamplesTests/GeneratedAppleModelTests
-../../scripts/local-validation.sh xcode-test ApplePlatformExamplesTests/CameraAdoptionProofTests
-```
-
-See [Apple Platform Examples](ApplePlatformExamples/README.md) for the manual
-camera checks and the ownership boundary. The physical-camera walkthrough is
-pending until it is performed on permitted hardware; a post-push release
-review verifies the hosted run and retained artifact against the submitted SHA.
+  SwiftTLA library. See its [adoption proof and camera checks](ApplePlatformExamples/README.md).
 
 When an example needs a new behavior, add the smallest typed formal capability
 required by the source model. The source model declares that behavior, and the
