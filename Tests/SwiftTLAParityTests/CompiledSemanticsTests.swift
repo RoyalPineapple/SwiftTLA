@@ -54,6 +54,13 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
   ).compile().renderedTLAModuleBundle().tla
 }
 
+private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
+  case one = 1
+
+  static let finiteValues: [Self] = [.one]
+  static var defaultValue: Self { .one }
+}
+
 // MARK: - Var<T> operators: full matrix
 
 @Suite(.serialized) struct VarOperatorMatrix {
@@ -757,6 +764,25 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
 
     #expect(rendered.contains("DOMAIN"))
     #expect(rendered.contains("IF"))
+  }
+
+  @Test("Partial function override avoids free names")
+  func partialFunctionOverrideAvoidsCapture() {
+    let function = Expr<PartialFunction<PartialFunctionKey, Int>>(.variable("entries"))
+    let probe = function.overriding(.one, with: 0)
+    guard case .functionLiteral(_, let preferred, _) = probe.raw else {
+      #expect(Bool(false))
+      return
+    }
+    let key = Expr<PartialFunctionKey>(.variable(preferred))
+    let value = Expr<Int>(.variable(preferred))
+    let override = function.overriding(key, with: value)
+
+    guard case .functionLiteral(_, let binder, _) = override.raw else {
+      #expect(Bool(false))
+      return
+    }
+    #expect(binder == "\(preferred)_1")
   }
 
   @Test("Nested EXCEPT chains correctly")

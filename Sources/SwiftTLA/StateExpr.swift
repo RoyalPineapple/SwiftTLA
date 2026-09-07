@@ -351,7 +351,12 @@ extension StateExpr {
         key: StateExpr,
         value: StateExpr
     ) -> StateExpr {
-        let binder = generatedBinderName()
+        let binder = Self.freshBoundName(
+            generatedBinderName(),
+            avoiding: function.freeVariableNames
+                .union(key.freeVariableNames)
+                .union(value.freeVariableNames)
+        )
         return .functionLiteral(
             .union(.domain(function), .setLiteral([key])),
             binder,
