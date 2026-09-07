@@ -678,7 +678,7 @@ struct CompiledEvaluator: Sendable {
             case .exceptFunction(let key, let scope):
                 let function = try popValue(from: &values)
                 switch function {
-                case .function, .record:
+                case .function, .record, .tuple:
                     tasks.append(.exceptKey(function: function))
                     tasks.append(.expression(key, scope))
                 default:
@@ -690,8 +690,18 @@ struct CompiledEvaluator: Sendable {
                 let replacement = try popValue(from: &values)
                 switch function {
                 case .function(var function):
-                    function[key] = replacement
+                    if function[key] != nil {
+                        function[key] = replacement
+                    }
                     values.append(.function(function))
+                case .tuple(var tuple):
+                    guard case .integer(let index) = key else {
+                        throw EvalError.expected(.integer, actual: [key])
+                    }
+                    if index >= 1, index <= tuple.count {
+                        tuple[index - 1] = replacement
+                    }
+                    values.append(.tuple(tuple))
                 case .record(let record):
                     guard case .string = key else {
                         throw EvalError.expected(.recordField, actual: [key])

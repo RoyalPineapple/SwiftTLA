@@ -19,13 +19,10 @@ struct CompiledRecord: Hashable, Sendable {
     }
 
     func replacing(_ value: CompiledValue, for key: CompiledValue) -> CompiledRecord {
-        var replaced = false
-        let updated = fields.map { current -> Field in
+        CompiledRecord(fields.map { current -> Field in
             guard current.key == key else { return current }
-            replaced = true
             return .init(key: key, value: value)
-        }
-        return CompiledRecord(replaced ? updated : updated + [.init(key: key, value: value)])
+        })
     }
 }
 
