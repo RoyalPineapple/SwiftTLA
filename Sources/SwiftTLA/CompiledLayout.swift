@@ -73,7 +73,7 @@ struct CompiledVariableLayout: Hashable, Sendable {
     let id: VariableID
     let declaration: CompiledDeclaration
     let generatedSwiftType: String?
-    let symmetricCollection: CompiledSymmetricCollectionLayout?
+    let collection: CompiledSymmetricCollectionLayout?
 }
 
 struct CompiledSymmetricCollectionLayout: Hashable, Sendable {
@@ -205,7 +205,7 @@ struct CompiledLayout: Hashable, Sendable {
                     origin: variable.origin
                 ),
                 generatedSwiftType: variable.generatedSwiftType,
-                symmetricCollection: collection.map {
+                collection: collection.map {
                     .init(
                         members: $0.metadata.members.map(CompiledValue.init(formal:)),
                         elementType: $0.generatedElementType,

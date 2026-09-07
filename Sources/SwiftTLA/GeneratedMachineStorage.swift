@@ -215,13 +215,13 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
             }
             let planAction = plan.actions[input.surfaceOrdinal]
             let generatedValues: [_GeneratedMachineValue]
-            if case .some = planAction.symmetricCollection {
+            if case .some = planAction.collection {
                 guard input.arguments.count == 1,
                       let action = compilation.semantics.actions.first(where: { $0.id == request.action }),
-                      let collectionVariable = action.symmetricCollection,
+                      let collectionVariable = action.collection,
                       compilation.layout.variables.indices.contains(collectionVariable.ordinal),
                       let compiledMembers = compilation.layout.variables[collectionVariable.ordinal]
-                        .symmetricCollection?.members,
+                        .collection?.members,
                       let memberIndex = compiledMembers.firstIndex(of: input.arguments[0]) else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
@@ -279,11 +279,11 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
             }
             let layout = compilation.layout.variables[variable.storageOrdinal]
             let compiled = try state.value(for: layout.id)
-            guard case .some = variable.symmetricCollection else {
+            guard case .some = variable.collection else {
                 return _GeneratedMachineValue.value(compiled, path: variable.formalName)
             }
             guard case .function(let entries) = compiled,
-                  let compiledMembers = layout.symmetricCollection?.members else {
+                  let compiledMembers = layout.collection?.members else {
                 let actual = switch compiled {
                 case .integer: "integer"
                 case .boolean: "boolean"

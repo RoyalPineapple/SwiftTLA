@@ -67,7 +67,7 @@ enum MacroExpander {
 
     static func generateActionDecoders(actions: [MachineSurfacePlan.Action]) -> String {
         actions.map { action in
-            if let collection = action.symmetricCollection {
+            if let collection = action.collection {
                 return """
                 { values in
                     let member = try values.decodeMember(
@@ -97,7 +97,7 @@ enum MacroExpander {
 
     static func generateActionValidator(actions: [MachineSurfacePlan.Action]) -> String {
         let cases = actions.map { action in
-            if let collection = action.symmetricCollection {
+            if let collection = action.collection {
                 return """
                 case .\(action.swiftIdentifier)(member: let member):
                     guard \(collection.formalName).contains(member) else {
@@ -150,7 +150,7 @@ enum MacroExpander {
             ]
         }
         let cases = actions.map { action in
-            if let collection = action.symmetricCollection {
+            if let collection = action.collection {
                 return "case \(action.swiftIdentifier)(member: \(collection.elementType).ID)"
             }
             let bindings = action.bindings.filter(\.isPublic)
@@ -221,7 +221,7 @@ extension MacroExpander {
                                 firstName: "values",
                                 type: TypeSyntax(stringLiteral: "inout _GeneratedMachineStorage<State, Action>.Decoder")
                             )
-                            for collection in variables.compactMap(\.symmetricCollection) {
+                            for collection in variables.compactMap(\.collection) {
                                 FunctionParameterSyntax(
                                     firstName: .identifier(collection.formalName),
                                     type: TypeSyntax(stringLiteral: "[\(collection.elementType).ID]")
@@ -250,7 +250,7 @@ extension MacroExpander {
         variables.map { variable in
             let key = String(reflecting: variable.formalName)
             let typeName = variable.swiftType
-            if let collection = variable.symmetricCollection {
+            if let collection = variable.collection {
                 return """
                 self.\(collection.formalName) = try values.decodeCollection(
                     applicationMembers: \(collection.formalName),

@@ -501,7 +501,7 @@ struct CompiledAction: Sendable {
     let id: ActionID
     let bindings: [CompiledActionBinding]
     let body: CompiledActionExpr
-    let symmetricCollection: VariableID?
+    let collection: VariableID?
 }
 
 struct CompiledActionBinding: Sendable {
