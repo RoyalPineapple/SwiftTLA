@@ -350,9 +350,10 @@ public func NonEmptySubsets<Element: TLAValueType>(
 /// Narrows a finite formal set with a typed TLA+ predicate.
 public func Where<Value: TLAValueType>(
   _ candidates: Expr<SetExpr<Value>>,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
   matching predicate: (WithValue<Value>) -> StateExpr
 ) -> Expr<SetExpr<Value>> {
-  let binding = "__pcal_filtered_value"
+  let binding = generatedBinderName(file: file, line: line, column: column)
   return Expr(.setFilter(
     candidates.raw,
     binding,
@@ -366,9 +367,10 @@ public func Where<Value: TLAValueType>(
 /// and records the selected formal value.
 public func Select<Value: TLAValueType>(
   from candidates: Expr<SetExpr<Value>>,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
   matching predicate: (WithValue<Value>) -> StateExpr
 ) -> Expr<Value> {
-  let binding = "__tla_static_choice"
+  let binding = generatedBinderName(file: file, line: line, column: column)
   let choice = StateExpr.choose(
     candidates.raw,
     binding,
@@ -986,18 +988,20 @@ public func IntRange(
 extension Expr {
   /// Selects formal set members that satisfy `predicate`.
   public func filtering<Element: TLAValueType>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
     _ predicate: (WithValue<Element>) -> StateExpr
   ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    let binding = generatedBinderName()
+    let binding = generatedBinderName(file: file, line: line, column: column)
     let element = WithValue<Element>(expression: .variable(binding))
     return Expr<SetExpr<Element>>(.setFilter(raw, binding, predicate(element)))
   }
 
   /// Maps every formal set member through a typed formal expression.
   public func mapping<Element: TLAValueType, Result: TLAValueType>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
     _ transform: (WithValue<Element>) -> Expr<Result>
   ) -> Expr<SetExpr<Result>> where T == SetExpr<Element> {
-    let binding = generatedBinderName()
+    let binding = generatedBinderName(file: file, line: line, column: column)
     let element = WithValue<Element>(expression: .variable(binding))
     return Expr<SetExpr<Result>>(.setMap(transform(element).raw, binding, raw))
   }
@@ -1035,10 +1039,11 @@ extension Expr {
 public func Fold<Element: TLAValueType, Result: TLAValueType>(
   _ sequence: Expr<TupleExpr<Element>>,
   startingWith initial: Expr<Result>,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
   _ combine: (Expr<Element>, Expr<Result>) -> Expr<Result>
 ) -> Expr<Result> {
-  let elementName = generatedBinderName()
-  let resultName = generatedBinderName()
+  let elementName = generatedBinderName(file: file, line: line, column: column &* 2)
+  let resultName = generatedBinderName(file: file, line: line, column: (column &* 2) &+ 1)
   let element = Expr<Element>(.variable(elementName))
   let accumulated = Expr<Result>(.variable(resultName))
   return Expr<Result>(
@@ -1057,9 +1062,10 @@ public func Fold<Element: TLAValueType, Result: TLAValueType>(
 public func Fold<Element: TLAValueType, Result: TLAValueType>(
   _ sequence: Expr<TupleExpr<Element>>,
   startingWith initial: Result,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
   _ combine: (Expr<Element>, Expr<Result>) -> Expr<Result>
 ) -> Expr<Result> {
-  Fold(sequence, startingWith: Expr<Result>(.value(initial.tlaValue)), combine)
+  Fold(sequence, startingWith: Expr<Result>(.value(initial.tlaValue)), file: file, line: line, column: column, combine)
 }
 
 extension Expr where T: FormalZeroBasedSequenceValue {

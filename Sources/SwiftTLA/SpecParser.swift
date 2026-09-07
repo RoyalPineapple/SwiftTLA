@@ -579,7 +579,7 @@ final class ParserSession {
     }
 
     private func decodeStaticFormalChoice(_ expression: ExprSyntax) -> StateExpr? {
-        let canonicalBinding = "__tla_static_choice"
+        let canonicalBinding = generatedBinderName(line: UInt(expression.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Select",
               let candidatesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
@@ -602,13 +602,15 @@ final class ParserSession {
         )
     }
 
-    private func decodeBoundedFilteredDomain(_ expression: ExprSyntax) -> StateExpr? {
-        let canonicalBinding = "__pcal_filtered_value"
+    private func decodeBoundedFilteredDomain(
+        _ expression: ExprSyntax, scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
+        let canonicalBinding = generatedBinderName(line: UInt(expression.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where"
         else { return nil }
         guard let candidatesSyntax = call.arguments.first?.expression,
-              let candidates = decodeStateExpr(candidatesSyntax)
+              let candidates = decodeTypedFacadeValue(candidatesSyntax, scope: scope)
         else {
             algorithmParseFailure = algorithmParseFailure ?? "Where could not decode its candidate domain."
             return nil
@@ -620,7 +622,7 @@ final class ParserSession {
               case .expr(let predicateSyntax) = closure.statements.first?.item,
               let predicate = decodeTypedFacadeValue(
                 predicateSyntax,
-                scope: typedFacadeScope(.empty, binding: parameter, to: .variable(canonicalBinding))
+                scope: typedFacadeScope(scope, binding: parameter, to: .variable(canonicalBinding))
               )
         else {
             algorithmParseFailure = "Where requires one parameter and one decodable predicate expression."
@@ -688,6 +690,9 @@ final class ParserSession {
            let family = decodeProcessLocalFamily(call) {
             return family
         }
+        if let filtered = decodeBoundedFilteredDomain(expression, scope: scope) { return filtered }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let predicate = decodeCollectionPredicate(call, scope: scope) { return predicate }
         if let quantifier = decodeAlgorithmDomainQuantifier(expression, scope: scope) {
             return quantifier
         }
@@ -1126,10 +1131,13 @@ final class ParserSession {
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
            case .expr(let bodySyntax) = closure.statements.first?.item {
+            let key = generatedBinderName(
+                line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0
+            )
             let functionScope = typedFacadeScope(
                 scope,
                 binding: parameter,
-                to: .variable("__pcal_function_key"),
+                to: .variable(key),
                 shape: .enumeration(domainType)
             )
             let body = decodeTypedFacadeValue(
@@ -1141,7 +1149,7 @@ final class ParserSession {
             guard let body else { return nil }
             return .functionLiteral(
                 .setLiteral(domain.map(StateExpr.value)),
-                "__pcal_function_key",
+                key,
                 body
             )
         }
@@ -2366,8 +2374,10 @@ extension ParserSession {
         return (name, value)
     }
 
-    func decodeCollectionPredicate(_ call: FunctionCallExprSyntax) -> StateExpr? {
-        decodeCollectionPredicate(call) { expression, scope in
+    func decodeCollectionPredicate(
+        _ call: FunctionCallExprSyntax, scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
+        decodeCollectionPredicate(call, scope: scope) { expression, scope in
             decodeTypedFacadeValue(expression, scope: scope)
         }
     }
@@ -2377,6 +2387,7 @@ extension ParserSession {
     func decodeCollectionPredicate(
         _ call: FunctionCallExprSyntax,
         requiringCollectionIn collectionNames: Set<String>? = nil,
+        scope: TypedFacadeScope = .empty,
         decodeBody: (ExprSyntax, TypedFacadeScope) -> StateExpr?
     ) -> StateExpr? {
         guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
@@ -2396,11 +2407,13 @@ extension ParserSession {
                   collectionNames.contains(formalName)
             else { return nil }
         }
-        let parameter = "member"
+        let parameter = generatedBinderName(
+            line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0
+        )
         let selectedValue = StateExpr.functionApply(collection, .variable(parameter))
         guard let body = decodeBody(
             bodySyntax,
-            typedFacadeScope(.empty, binding: sourceParameter, to: selectedValue)
+            typedFacadeScope(scope, binding: sourceParameter, to: selectedValue)
         ) else { return nil }
 
         let domain = StateExpr.domain(collection)

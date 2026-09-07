@@ -301,9 +301,13 @@ extension StateExpr {
 
   // MARK: - Closure-based with InvariantBuilder context
 
-  public static func forAll(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr)
+  public static func forAll(
+    _ set: StateExpr,
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    @InvariantBuilder _ body: (StateExpr) -> StateExpr
+  )
     -> StateExpr {
-    let qv = generatedBinderName()
+    let qv = generatedBinderName(file: file, line: line, column: column)
     return .forAll(set, qv, body(.variable(qv)))
   }
 }

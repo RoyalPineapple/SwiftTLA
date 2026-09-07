@@ -162,9 +162,10 @@ extension Expr {
 extension Function where Domain: FiniteTLAValueDomain {
     /// Builds a total finite formal function from a concrete typed value.
     public static func mapping(
+        file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
         _ body: (WithValue<Domain>) -> Range
     ) -> Expr<Self> {
-        mapping { key in Expr(body(key)) }
+        mapping(file: file, line: line, column: column) { key in Expr(body(key)) }
     }
 
     /// Builds a total finite formal function from an expression over each key.
@@ -173,9 +174,10 @@ extension Function where Domain: FiniteTLAValueDomain {
     /// earlier shared variable. Its executable meaning is the returned typed
     /// expression.
     public static func mapping(
+        file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
         _ body: (WithValue<Domain>) -> Expr<Range>
     ) -> Expr<Self> {
-        let binding = "__pcal_function_key"
+        let binding = generatedBinderName(file: file, line: line, column: column)
         let key = WithValue<Domain>(expression: .variable(binding))
         return Expr<Self>(.functionLiteral(
             .setLiteral(Domain.tlaValues.map(StateExpr.value)),
