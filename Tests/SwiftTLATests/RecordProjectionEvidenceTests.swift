@@ -56,6 +56,32 @@ import Testing
         }
     }
 
+    @Test("finite record fields project only when every member has the requested representation")
+    func finiteFieldRepresentationProof() throws {
+        for mixed in [false, true] {
+            let sourceTypes = NativeSourceTypeMetadata(records: ["Payload": [
+                .init(sourceName: "value", name: "value", swiftType: "OneOf<First,Second>")
+            ]], enums: ["First": [.constant("first")], "Second": mixed ? [.int(2)] : [.constant("second")]])
+            let plan = NativeMachinePlan(compilation: try TLASpec(name: "FiniteProjection", variables: [
+                .init(name: "record", initialization: .recordLiteral(.init(["value": .value(.constant("first"))])), generatedSwiftType: "Record<Payload>", origin: .compiler)
+            ], actions: [], invariants: [], formalOperatorDefinitions: [
+                .init(name: "Read", parameters: [], body: .recordAccess(.variable("record"), "value"))
+            ]).compile())
+            let inference = try NativeTypeInference(plan: plan, sourceTypes: sourceTypes)
+            let body = plan.formalOperatorDefinitions[0].body
+            let stored = try inference.type(of: body)
+            guard case .finite = stored else { Issue.record("Expected finite field"); return }
+            if mixed {
+                #expect(throws: CompilationDiagnostic.self) { try inference.type(of: body, expected: .atom) }
+            } else {
+                #expect(try inference.type(of: body, expected: .atom) == .atom)
+            }
+            #expect(try inference.type(of: body) == stored)
+            #expect(!inference.canProjectRead(.atom, to: stored))
+            #expect(!inference.canProjectRead(stored, to: .string))
+        }
+    }
+
     private var metadata: NativeSourceTypeMetadata {
         .init(enums: ["Key": [.constant("first")]])
     }

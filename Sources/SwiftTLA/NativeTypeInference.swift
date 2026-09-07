@@ -307,11 +307,25 @@ package struct NativeTypeInference: Sendable {
         return try inferSequence(value, element: expected)
     }
 
-    private func canProjectRead(_ source: NativeType, to expected: NativeType) -> Bool {
-        guard case .named(let name) = source else { return false }
-        if expected != .unknown, namedRepresentations[name] == expected { return true }
-        if case .finite(let members) = expected, let domain = namedDomains[name] {
-            return domain.isSubset(of: Set(members))
+    package func canProjectRead(_ source: NativeType, to expected: NativeType) -> Bool {
+        switch source {
+        case .named(let name):
+            if expected != .unknown, namedRepresentations[name] == expected { return true }
+            if case .finite(let members) = expected, let domain = namedDomains[name] {
+                return domain.isSubset(of: Set(members))
+            }
+        case .finite(let members):
+            if case .finite(let destination) = expected {
+                return Set(members).isSubset(of: Set(destination))
+            }
+            guard !members.isEmpty else { return false }
+            return members.allSatisfy { member in
+                switch (member, expected) {
+                case (.integer, .int), (.boolean, .bool), (.string, .string), (.constant, .atom): true
+                default: false
+                }
+            }
+        default: break
         }
         return false
     }
@@ -766,21 +780,13 @@ package struct NativeTypeInference: Sendable {
         case .value(let value): return try literal(value, expected: expected)
         case .stateVariable(let id):
             let existing = variables[id] ?? .unknown
-            if case .named(let name) = existing, case .finite(let values) = expected,
-               let domain = namedDomains[name], domain.isSubset(of: Set(values)) {
-                result = expected
-            } else if case .named(let name) = existing, expected != .unknown, namedRepresentations[name] == expected {
-                result = expected
-            } else { result = try Self.merge(existing, expected); variables[id] = result }
+            if canProjectRead(existing, to: expected) { result = expected }
+            else { result = try Self.merge(existing, expected); variables[id] = result }
         case .boundValue(let id):
             let existing = bindings[id] ?? .unknown
             // A use-site projection does not replace the binder's chosen native
             // representation. Later raw scalar reads must not erase enum identity.
-            if case .named(let name) = existing, case .finite(let values) = expected,
-               let domain = namedDomains[name], domain.isSubset(of: Set(values)) { return expected }
-            if case .named(let name) = existing, expected != .unknown, namedRepresentations[name] == expected {
-                return expected
-            }
+            if canProjectRead(existing, to: expected) { return expected }
             if expected != .unknown, existing != expected, let domain = bindingSources[id],
                activeBindingRefinements.insert(id).inserted {
                 defer { activeBindingRefinements.remove(id) }

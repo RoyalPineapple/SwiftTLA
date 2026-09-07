@@ -154,19 +154,22 @@ struct NativeSwiftEmitter {
 
     mutating func projected(_ value: String, from source: NativeType, to destination: NativeType?) throws -> String {
         guard let destination, source != destination else { return value }
-        guard case .named(let name) = source, let info = model.enumInfos.first(where: { $0.typeName == name }) else {
+        guard types.canProjectRead(source, to: destination) else {
             throw unsupported("native projection from \(source) to \(destination)")
         }
-        if case .finite(let members) = destination {
-            guard let domain = types.namedDomains[name], domain.isSubset(of: Set(members)) else {
-                throw unsupported("source enum is outside finite union")
-            }
-        } else if types.namedRepresentations[name] != destination {
-            throw unsupported("native projection from \(source) to \(destination)")
+        let cases: String
+        switch source {
+        case .named(let name):
+            guard let info = model.enumInfos.first(where: { $0.typeName == name }) else { throw unsupported("enum declaration for \(name)") }
+            cases = try info.cases.map { item in
+                "case .\(item.name): return \(try literal(.init(formal: item.value), as: destination))"
+            }.joined(separator: "\n")
+        case .finite(let members):
+            cases = try members.indices.map { index in
+                "case .\(finiteCaseName(members, index: index)): return \(try literal(members[index], as: destination))"
+            }.joined(separator: "\n")
+        default: throw unsupported("native projection from \(source) to \(destination)")
         }
-        let cases = try info.cases.map { item in
-            "case .\(item.name): return \(try literal(.init(formal: item.value), as: destination))"
-        }.joined(separator: "\n")
         return "({ (value: \(try swiftType(source))) -> \(try swiftType(destination)) in switch value { \(cases) } })(\(value))"
     }
 
