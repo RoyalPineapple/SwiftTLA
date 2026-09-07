@@ -42,7 +42,8 @@ extension FiniteExploration {
     package func analyzeTemporalProperties(
         in compilation: CompiledSpecification
     ) throws -> [TemporalAnalysis] {
-        try LivenessChecker(
+        try requireValidEvidence(in: compilation)
+        return try LivenessChecker(
             compilation: compilation,
             graph: graph,
             states: compiledStates

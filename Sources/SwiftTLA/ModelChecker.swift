@@ -218,7 +218,8 @@ package struct ModelChecker {
             initialStateIDs: [],
             outcome: outcome,
             compilationIdentity: compilation.identity,
-            configuration: configuration
+            configuration: configuration,
+            compiledStates: [:]
         )
     }
 
