@@ -58,6 +58,10 @@ struct RefinementChecker {
         }
         let abstractRuntime = CompiledRuntime(compilation: refinement.abstract)
         let abstractInitialStates = try abstractRuntime.initialStates()
+        if let initial = abstractInitialStates.first,
+           try !abstractRuntime.assumeHolds(in: initial) {
+            return .assumptionViolated
+        }
         for stateID in initialStateIDs {
             let source = try requiredState(stateID, in: states)
             let mapped = try mappedState(refinement, source: source)
