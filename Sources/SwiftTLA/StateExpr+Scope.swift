@@ -44,6 +44,8 @@ extension StateExpr {
                 .union(value.freeVariableNames)
         case .tupleAccess(let value, _):
             value.freeVariableNames
+        case .sequenceSelect(let sequence, let name, let predicate):
+            sequence.freeVariableNames.union(predicate.freeVariableNames.subtracting([name]))
         case .recordLiteral(let fields):
             fields.fields.reduce(into: Set<String>()) { $0.formUnion($1.value.freeVariableNames) }
         case .recordAccess(let value, _):

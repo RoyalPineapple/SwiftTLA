@@ -245,6 +245,7 @@ private enum StateKeyTask {
 private enum StateKeyBinding {
     case filter
     case map
+    case sequenceSelect
     case function
     case forall
     case exists
@@ -300,6 +301,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
                 switch binding {
                 case .filter: "filter(\(values[0]),\(canonical),\(values[1]))"
                 case .map: "map(\(values[1]),\(canonical),\(values[0]))"
+                case .sequenceSelect: "sequenceSelect(\(values[0]),\(canonical),\(values[1]))"
                 case .function: "function(\(values[0]),\(canonical),\(values[1]))"
                 case .forall: "forall(\(values[0]),\(canonical),\(values[1]))"
                 case .exists: "exists(\(values[0]),\(canonical),\(values[1]))"
@@ -378,6 +380,9 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .tupleDynamicAccess(let lhs, let rhs): schedule("tupleDynamicAccess", [lhs, rhs], environment: environment)
             case .tupleAppend(let lhs, let rhs): schedule("tupleAppend", [lhs, rhs], environment: environment)
             case .tupleConcatenate(let lhs, let rhs): schedule("tupleConcat", [lhs, rhs], environment: environment)
+            case .sequenceSelect(let sequence, let binder, let predicate):
+                tasks.append(.bind(.sequenceSelect, variable: binder, body: predicate, environment: environment))
+                tasks.append(.expression(sequence, environment: environment))
             case .functionApply(let lhs, let rhs): schedule("apply", [lhs, rhs], environment: environment)
             case .setSum(let lhs, let rhs): schedule("sum", [lhs, rhs], environment: environment)
             case .functionSet(let lhs, let rhs): schedule("functionSet", [lhs, rhs], environment: environment)

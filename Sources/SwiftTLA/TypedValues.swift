@@ -904,6 +904,17 @@ extension Expr where T: FormalTupleValue {
   }
 }
 
+extension Expr {
+  /// Selects formal sequence members that satisfy `predicate`.
+  public func selecting<Element: TLAValueType>(
+    where predicate: (WithValue<Element>) -> StateExpr
+  ) -> Expr<TupleExpr<Element>> where T == TupleExpr<Element> {
+    let binding = generatedBinderName()
+    let element = WithValue<Element>(expression: .variable(binding))
+    return Expr<TupleExpr<Element>>(.sequenceSelect(raw, binding, predicate(element)))
+  }
+}
+
 /// Combines a formal function with the upstream `Functions.FoldFunction` operator.
 ///
 /// The closure builds a `LAMBDA` in the specification. The upstream operator

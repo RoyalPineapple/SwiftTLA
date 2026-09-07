@@ -199,6 +199,9 @@ private enum EvaluatorTask {
     case foldInitial(CompiledFormalLambda, members: [CompiledValue], scope: EvaluatorScope)
     case foldStep(CompiledFormalLambda, members: [CompiledValue], index: Int, accumulator: CompiledValue, scope: EvaluatorScope)
     case foldResult(CompiledFormalLambda, members: [CompiledValue], index: Int, scope: EvaluatorScope)
+    case sequenceSelectSequence(BinderID, predicate: CompiledStateExpr, scope: EvaluatorScope)
+    case sequenceSelectStep(BinderID, predicate: CompiledStateExpr, members: [CompiledValue], index: Int, selected: [CompiledValue], scope: EvaluatorScope)
+    case sequenceSelectResult(BinderID, predicate: CompiledStateExpr, members: [CompiledValue], index: Int, selected: [CompiledValue], scope: EvaluatorScope)
     case formalCall(
         EvaluatorOperatorBinding,
         arguments: [CompiledFormalCallArgument],
@@ -743,6 +746,31 @@ struct CompiledEvaluator: Sendable {
                 let accumulator = try popValue(from: &values)
                 tasks.append(.foldStep(operation, members: members, index: index + 1, accumulator: accumulator, scope: scope))
 
+            case .sequenceSelectSequence(let binder, let predicate, let scope):
+                let members = try sequenceElements(from: popValue(from: &values))
+                tasks.append(.sequenceSelectStep(binder, predicate: predicate, members: members, index: 0, selected: [], scope: scope))
+
+            case .sequenceSelectStep(let binder, let predicate, let members, let index, let selected, let scope):
+                guard index < members.count else {
+                    values.append(.tuple(selected))
+                    continue
+                }
+                var predicateScope = scope
+                predicateScope.bindings = predicateScope.bindings.binding(members[index], to: binder)
+                tasks.append(.sequenceSelectResult(binder, predicate: predicate, members: members, index: index, selected: selected, scope: scope))
+                tasks.append(.expression(predicate, predicateScope))
+
+            case .sequenceSelectResult(let binder, let predicate, let members, let index, let selected, let scope):
+                let accepted = try boolean(popValue(from: &values))
+                tasks.append(.sequenceSelectStep(
+                    binder,
+                    predicate: predicate,
+                    members: members,
+                    index: index + 1,
+                    selected: accepted ? selected + [members[index]] : selected,
+                    scope: scope
+                ))
+
             case .formalCall(let boundOperation, let arguments, let argumentScope):
                 switch boundOperation.operation {
                 case .lambda(let lambda):
@@ -1116,6 +1144,9 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.expression(domain, scope))
                 case .foldFunction(let operation, let initial, let sequence):
                     tasks.append(.foldSequence(operation, initial: initial, scope: scope))
+                    tasks.append(.expression(sequence, scope))
+                case .sequenceSelect(let sequence, let binder, let predicate):
+                    tasks.append(.sequenceSelectSequence(binder, predicate: predicate, scope: scope))
                     tasks.append(.expression(sequence, scope))
                 case .lambdaApplication(let operation, let arguments):
                     tasks.append(.formalCall(

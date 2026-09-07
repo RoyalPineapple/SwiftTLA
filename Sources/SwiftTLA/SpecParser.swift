@@ -966,6 +966,23 @@ final class ParserSession {
                 sequence: sequence
             )
         }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "selecting",
+           let sequenceSyntax = member.base,
+           let sequence = decodeTypedFacadeValue(sequenceSyntax, scope: scope),
+           let closure = call.trailingClosure
+               ?? call.arguments.first(where: { $0.label?.text == "where" })?.expression.as(ClosureExprSyntax.self),
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           closureParameterNames(in: closure).count == 1 {
+            let binder = closureParameterNames(in: closure)[0]
+            guard let predicate = decodeTypedFacadeValue(
+                bodySyntax,
+                scope: typedFacadeScope(scope, bindings: [(sourceName: binder, value: .variable(binder))])
+            ) else { return nil }
+            return .sequenceSelect(sequence, binder, predicate)
+        }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
            let lhs = decodeTypedFacadeValue(

@@ -63,6 +63,7 @@ indirect enum CompiledStateExpr: Sendable {
     case tupleHead(CompiledStateExpr)
     case tupleTail(CompiledStateExpr)
     case tupleConcatenate(CompiledStateExpr, CompiledStateExpr)
+    case sequenceSelect(CompiledStateExpr, BinderID, CompiledStateExpr)
 
     case recordLiteral(CompiledRecordExpression)
     case recordAccess(CompiledStateExpr, FieldID, CompiledValue)
@@ -408,6 +409,9 @@ extension CompiledStateExpr {
             case .setMap(let value, _, let set):
                 visit(value, scope: scope)
                 visit(set, scope: scope)
+            case .sequenceSelect(let sequence, _, let predicate):
+                visit(sequence, scope: scope)
+                visit(predicate, scope: scope)
             case .recordLiteral(let fields):
                 fields.fields.forEach { visit($0.value, scope: scope) }
             case .except(let function, let key, let value):

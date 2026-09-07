@@ -127,6 +127,9 @@ extension StateExpr {
         case .tupleHead(let t): return .tupleHead(sub(t))
         case .tupleTail(let t): return .tupleTail(sub(t))
         case .tupleConcatenate(let a, let b): return .tupleConcatenate(sub(a), sub(b))
+        case .sequenceSelect(let sequence, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .sequenceSelect(sub(sequence), scoped.name, scoped.body)
         case .recordLiteral(let record):
             return .recordLiteral(.init(orderedFields: record.fields.map { .init(name: $0.name, value: sub($0.value)) }))
         case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
@@ -267,6 +270,8 @@ extension StateExpr {
             case .tupleHead(let value): return .tupleHead(visit(value))
             case .tupleTail(let value): return .tupleTail(visit(value))
             case .tupleConcatenate(let a, let b): return .tupleConcatenate(visit(a), visit(b))
+            case .sequenceSelect(let sequence, let binder, let predicate):
+                return .sequenceSelect(visit(sequence), binder, visitUnderBindings([binder], predicate))
             case .recordLiteral(let record):
                 return .recordLiteral(.init(orderedFields: record.fields.map { .init(name: $0.name, value: visit($0.value)) }))
             case .recordAccess(let value, let field): return .recordAccess(visit(value), field)

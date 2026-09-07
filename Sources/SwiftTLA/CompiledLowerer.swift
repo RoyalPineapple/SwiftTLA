@@ -925,6 +925,9 @@ struct CompiledLowerer {
                 case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleDynamicAccess, on: &tasks)
                 case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleAppend, on: &tasks)
                 case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleConcatenate, on: &tasks)
+                case .sequenceSelect(let sequence, let name, let predicate):
+                    let nested = try bind([name], at: "\(path).binder", scope: scope)
+                    scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.sequenceSelect, on: &tasks)
                 case .functionApply(.variable(let name), let argument)
                     where scope.values[name] == nil && scope.operators.keys.contains(name):
                     let operation = try operatorID(named: name, arity: 1, scope: scope, at: path)

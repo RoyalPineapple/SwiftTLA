@@ -437,6 +437,9 @@ struct CompiledLayout: Hashable, Sendable {
                     case .setMap(let body, _, let domain):
                         pending.append(.expression(domain))
                         pending.append(.expression(body))
+                    case .sequenceSelect(let sequence, _, let predicate):
+                        pending.append(.expression(predicate))
+                        pending.append(.expression(sequence))
                     case .foldFunction(let lambda, let initial, let sequence):
                         pending.append(.expression(sequence))
                         pending.append(.expression(initial))
