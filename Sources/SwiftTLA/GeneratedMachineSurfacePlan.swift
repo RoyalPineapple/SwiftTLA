@@ -1,4 +1,6 @@
 import Foundation
+import SwiftParser
+import SwiftSyntax
 
 /// The emitted-machine view of one compiled specification.
 package struct MachineSurfacePlan: Sendable, Equatable {
@@ -266,6 +268,10 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 suffix += 1
             }
             used.insert(identifier)
+            if let token = Parser.parse(source: identifier).firstToken(viewMode: .sourceAccurate),
+               case .keyword = token.tokenKind {
+                return "`\(identifier)`"
+            }
             return identifier
         }
     }
