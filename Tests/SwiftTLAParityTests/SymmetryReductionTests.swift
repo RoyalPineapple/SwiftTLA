@@ -188,10 +188,19 @@ struct SymmetryReductionTests {
     #expect(Set([recordTwo, recordOne]).sorted() == [recordOne, recordTwo])
     #expect(Set([functionTwo, functionOne]).sorted() == [functionOne, functionTwo])
 
-    let rendered = try TLASpec("CompositeSymmetry") {
-      Symmetry("value", Set([tupleTwo, tupleOne]))
-    }.compile().renderedTLAModuleBundle().tla
-    #expect(rendered.contains("Symmvalue == Permutations({<<1>>, <<2>>})"))
+    let compilation = try TLASpec(
+      name: "AtomicSymmetryCompositePayload",
+      variables: [.init(name: "payload", initialization: .value(.tuple([tupleTwo, tupleOne])), origin: .compiler)],
+      actions: [], invariants: [],
+      symmetrySets: [.init(variableName: "value", values: [.int(2), .int(1)])]
+    ).compile()
+    let rendered = compilation.renderedTLAModuleBundle().tla
+    #expect(rendered.contains("Symmvalue == Permutations({1, 2})"))
+    let plan = try SymmetryPlan(compilation: compilation, reduction: .enabled(maximumPermutationCount: 2))
+    let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+    let canonical = try plan.canonicalState(initial)
+    #expect(try canonical.value(for: compilation.layout.variables[0].id)
+      == .tuple([.init(formal: tupleOne), .init(formal: tupleTwo)]))
   }
 
   private func assertInvalidSymmetry(_ spec: TLASpec, path: String) {
