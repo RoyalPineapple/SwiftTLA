@@ -711,6 +711,54 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     #expect(mapping[.int(2)] == .int(20))
   }
 
+  @Test("Function EXCEPT preserves its domain")
+  func functionExceptPreservesDomain() throws {
+    let p = Var<Int>("p")
+    let function = StateExpr.functionLiteral(p, in: StateExpr.set([1]), (p * 10).raw)
+    let updated = StateExpr.except(function, .int(2), .int(99))
+
+    guard case .function(let mapping) = try compiledValue(updated) else {
+      #expect(Bool(false))
+      return
+    }
+    #expect(mapping == [.int(1): .int(10)])
+  }
+
+  @Test("Partial function override does not read its missing entry")
+  func partialFunctionOverrideDoesNotReadMissingEntry() throws {
+    let empty = StateExpr.value(.function([:]))
+    let first = StateExpr.partialFunctionOverriding(empty, key: .int(1), value: .int(0))
+
+    guard case .function(let mapping) = try compiledValue(first) else {
+      #expect(Bool(false))
+      return
+    }
+    #expect(mapping == [.int(1): .int(0)])
+  }
+
+  @Test("Partial function override preserves entries")
+  func partialFunctionOverridePreservesEntries() throws {
+    let empty = StateExpr.value(.function([:]))
+    let first = StateExpr.partialFunctionOverriding(empty, key: .int(1), value: .int(0))
+    let second = StateExpr.partialFunctionOverriding(first, key: .int(2), value: .int(1))
+
+    guard case .function(let mapping) = try compiledValue(second) else {
+      #expect(Bool(false))
+      return
+    }
+    #expect(mapping == [.int(1): .int(0), .int(2): .int(1)])
+  }
+
+  @Test("Partial function override renders a domain-preserving conditional")
+  func partialFunctionOverrideRendersConditional() throws {
+    let expression = StateExpr.partialFunctionOverriding(
+      .value(.function([:])), key: .int(1), value: .int(0))
+    let rendered = try renderedStateExpression(expression)
+
+    #expect(rendered.contains("DOMAIN"))
+    #expect(rendered.contains("IF"))
+  }
+
   @Test("Nested EXCEPT chains correctly")
   func nestedExcept() throws {
     let p = Var<Int>("p")

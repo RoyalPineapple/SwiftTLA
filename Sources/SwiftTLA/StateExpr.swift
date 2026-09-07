@@ -345,6 +345,23 @@ public indirect enum StateExpr: Hashable, Sendable {
 extension StateExpr {
     public static func int(_ value: Int) -> StateExpr { .value(.int(value)) }
     public static func bool(_ value: Bool) -> StateExpr { .value(.bool(value)) }
+
+    static func partialFunctionOverriding(
+        _ function: StateExpr,
+        key: StateExpr,
+        value: StateExpr
+    ) -> StateExpr {
+        let binder = generatedBinderName()
+        return .functionLiteral(
+            .union(.domain(function), .setLiteral([key])),
+            binder,
+            .ifThenElse(
+                .equal(.variable(binder), key),
+                value,
+                .functionApply(function, .variable(binder))
+            )
+        )
+    }
 }
 
 extension StateExpr: ExpressibleByIntegerLiteral {

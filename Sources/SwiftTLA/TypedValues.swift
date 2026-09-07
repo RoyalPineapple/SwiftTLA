@@ -937,16 +937,22 @@ extension Expr {
       .except(raw, index.raw, update(Expr<Range>(.functionApply(raw, index.raw))).raw))
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, to value: Expr<Range>
+  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, with value: Expr<Range>
   ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.except(raw, finiteDomainIndex(index), value.raw))
+    Expr(.partialFunctionOverriding(raw, key: finiteDomainIndex(index), value: value.raw))
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, to value: Expr<Range>
+  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, with value: Range
   ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.except(raw, index.raw, value.raw))
+    overriding(index, with: Expr<Range>(.value(value.tlaValue)))
+  }
+
+  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Expr<Domain>, with value: Expr<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
+    Expr(.partialFunctionOverriding(raw, key: index.raw, value: value.raw))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
@@ -1152,16 +1158,22 @@ extension Var {
     Expr<Function<Domain, Range>>(.except(stateExpr, finiteDomainIndex(index), value.raw))
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, to value: Expr<Range>
+  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, with value: Expr<Range>
   ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.except(stateExpr, finiteDomainIndex(index), value.raw))
+    Expr(.partialFunctionOverriding(stateExpr, key: finiteDomainIndex(index), value: value.raw))
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, to value: Expr<Range>
+  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, with value: Range
   ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.except(stateExpr, index.raw, value.raw))
+    overriding(index, with: Expr<Range>(.value(value.tlaValue)))
+  }
+
+  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Expr<Domain>, with value: Expr<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
+    Expr(.partialFunctionOverriding(stateExpr, key: index.raw, value: value.raw))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(

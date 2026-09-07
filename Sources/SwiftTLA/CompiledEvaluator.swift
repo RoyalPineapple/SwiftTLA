@@ -701,7 +701,7 @@ struct CompiledEvaluator: Sendable {
                 let replacement = try popValue(from: &values)
                 switch function {
                 case .function(var function):
-                    if function[key] != nil {
+                    if let _ = function[key] {
                         function[key] = replacement
                     }
                     values.append(.function(function))

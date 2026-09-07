@@ -72,7 +72,7 @@ package struct TLCMCModel: Sendable {
                     let initial = frontier.expr.at(initialIndex.expr)
                     Assign(currentState, to: SearchNode.first(initial))
                     Assign(closed, to: closed.inserting(initial))
-                    Assign(levels, to: levels.updating(initial, to: 0))
+                    Assign(levels, to: levels.overriding(initial, with: 0))
                     Assign(initialIndex, to: initialIndex + 1)
                     If(violations.contains(initial)) {
                         Assign(counterexample, to: TupleExpr<Node>.literal(initial))
@@ -115,7 +115,7 @@ package struct TLCMCModel: Sendable {
                                 predecessorEdges,
                                 to: predecessorEdges.expr.appending(Pair<Node, Node>.literal(current, successor.expr))
                             )
-                            Assign(levels, to: levels.updating(successor.expr, to: levels[current] + 1))
+                            Assign(levels, to: levels.overriding(successor.expr, with: levels[current] + 1))
                             If(violations.contains(successor)) {
                                 Assign(counterexample, to: TupleExpr<Node>.literal(current, successor.expr))
                                 Goto(Step.trace)

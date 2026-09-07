@@ -815,18 +815,18 @@ extension SharedVariable {
         updating(index, to: Expr<Range>(.value(value.tlaValue)))
     }
 
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
+    public func overriding<Domain: FiniteTLAValueDomain, Range>(
         _ index: Expr<Domain>,
-        to value: Expr<Range>
+        with value: Expr<Range>
     ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        Expr(.except(stateExpr, index.raw, value.raw))
+        Expr(.partialFunctionOverriding(stateExpr, key: index.raw, value: value.raw))
     }
 
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
+    public func overriding<Domain: FiniteTLAValueDomain, Range>(
         _ index: Expr<Domain>,
-        to value: Range
+        with value: Range
     ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
+        overriding(index, with: Expr<Range>(.value(value.tlaValue)))
     }
 
     public func updating<Domain: FiniteTLAValueDomain, Range>(

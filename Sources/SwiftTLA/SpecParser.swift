@@ -1229,6 +1229,13 @@ final class ParserSession {
                 : .setDifference(base, singleton)
         case "updating":
             break
+        case "overriding":
+            guard let selectorSyntax = call.arguments.first?.expression,
+                  let selector = typedUpdateSelector(selectorSyntax, scope: scope),
+                  let valueSyntax = call.arguments.first(where: { $0.label?.text == "with" })?.expression,
+                  let value = decodeTypedFacadeValue(valueSyntax, scope: scope)
+            else { return nil }
+            return .partialFunctionOverriding(base, key: selector, value: value)
         case "filtering":
             guard let closure = call.trailingClosure,
                   closure.statements.count == 1,
