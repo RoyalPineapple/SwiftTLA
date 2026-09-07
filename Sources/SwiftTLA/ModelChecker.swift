@@ -3,6 +3,7 @@ package enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
     case nonPositivePermutationLimit(Int)
     case symmetryReductionWithoutDeclarations
     case permutationLimitExceeded(required: Int, limit: Int)
+    case symmetryReductionRequiresSafetyOnly
 }
 
 package enum SymmetryReduction: Sendable, Equatable {
@@ -107,6 +108,13 @@ package struct FiniteExplorationConfiguration: Sendable, Equatable, Codable {
             try container.encode(maximumPermutationCount, forKey: .maximumPermutationCount)
         }
     }
+
+    func validatePropertySupport(in compilation: CompiledSpecification) throws {
+        if case .enabled = symmetryReduction,
+           !compilation.semantics.temporalProperties.isEmpty || !compilation.refinements.isEmpty {
+            throw FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly
+        }
+    }
 }
 
 /// Explores reachable compiled states with bounded breadth-first search.
@@ -167,6 +175,7 @@ package struct ModelChecker {
     }
 
     private func runExploration() throws -> FiniteExploration {
+        try configuration.validatePropertySupport(in: compilation)
         let symmetry = try SymmetryPlan(
             compilation: compilation,
             reduction: configuration.symmetryReduction

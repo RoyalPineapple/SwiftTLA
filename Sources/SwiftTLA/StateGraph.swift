@@ -101,6 +101,7 @@ package struct FiniteExploration {
                 expected: compilation.identity, actual: compilationIdentity
             )
         }
+        try configuration.validatePropertySupport(in: compilation)
         guard (!isComplete || !initialStateIDs.isEmpty),
               initialStateIDs.allSatisfy({ compiledStates[$0] != nil }),
               Set(graph.states.keys) == Set(compiledStates.keys) else {
