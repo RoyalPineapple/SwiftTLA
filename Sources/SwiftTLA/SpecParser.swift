@@ -2253,12 +2253,12 @@ extension ParserSession {
             if opText == "||" {
                 let l = leftAction ?? leftState.map(ActionExpr.guard_)
                 let r = rightAction ?? rightState.map(ActionExpr.guard_)
-                if let l, let r { return .or(l, r) }
+                if let l, let r { return combineActionOperands(l, r, disjunction: true) }
             }
             if opText == "&&" {
                 let l = leftAction ?? leftState.map(ActionExpr.guard_)
                 let r = rightAction ?? rightState.map(ActionExpr.guard_)
-                if let l, let r { return .and(l, r) }
+                if let l, let r { return combineActionOperands(l, r, disjunction: false) }
             }
         }
         if let tuple = expression.as(TupleExprSyntax.self),
@@ -2283,7 +2283,7 @@ extension ParserSession {
             guard let left = decodeActionSequence(Array(elements[0..<orIdx]), scope: scope),
                   let right = decodeActionSequence(Array(elements[(orIdx + 1)..<elements.count]), scope: scope)
             else { return nil }
-            return .or(left, right)
+            return combineActionOperands(left, right, disjunction: true)
         }
         if let andIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
             elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
@@ -2291,18 +2291,32 @@ extension ParserSession {
             guard let left = decodeActionSequence(Array(elements[0..<andIdx]), scope: scope),
                   let right = decodeActionSequence(Array(elements[(andIdx + 1)..<elements.count]), scope: scope)
             else { return nil }
-            return .and(left, right)
+            return combineActionOperands(left, right, disjunction: false)
         }
         if elements.count >= 3 {
             guard let opText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text else { return nil }
             if opText == "||" || opText == "&&" {
                 guard let left = decodeActionExpr(elements[0], scope: scope),
                       let right = decodeActionExpr(elements[2], scope: scope) else { return nil }
-                return opText == "||" ? .or(left, right) : .and(left, right)
+                return combineActionOperands(left, right, disjunction: opText == "||")
             }
             if let state = decodeInfixExpr(elements) { return .guard_(state) }
         }
         return nil
+    }
+
+    /// Guard nodes carry state-expression evidence from operand decoding.
+    /// Combining two predicates must retain boolean short-circuit semantics;
+    /// an operand containing a transition still composes as an action.
+    private func combineActionOperands(
+        _ left: ActionExpr,
+        _ right: ActionExpr,
+        disjunction: Bool
+    ) -> ActionExpr {
+        if case .guard_(let lhs) = left, case .guard_(let rhs) = right {
+            return .guard_(disjunction ? .or(lhs, rhs) : .and(lhs, rhs))
+        }
+        return disjunction ? .or(left, right) : .and(left, right)
     }
 
     func unwrapSingleElementTuple(_ expression: ExprSyntax) -> ExprSyntax {
