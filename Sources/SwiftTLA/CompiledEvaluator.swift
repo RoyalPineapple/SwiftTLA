@@ -617,7 +617,7 @@ struct CompiledEvaluator: Sendable {
                 var next = accumulated
                 switch (mode, accumulated) {
                 case (.filter, .values(var selected)):
-                    if bodyValue == .boolean(true) {
+                    if try boolean(bodyValue) {
                         selected.append(members[index])
                     }
                     next = .values(selected)
@@ -628,17 +628,17 @@ struct CompiledEvaluator: Sendable {
                     function[members[index]] = bodyValue
                     next = .function(function)
                 case (.forall, _):
-                    if bodyValue != .boolean(true) {
+                    if try !boolean(bodyValue) {
                         values.append(.boolean(false))
                         continue
                     }
                 case (.exists, _):
-                    if bodyValue == .boolean(true) {
+                    if try boolean(bodyValue) {
                         values.append(.boolean(true))
                         continue
                     }
                 case (.choose, _):
-                    if bodyValue == .boolean(true) {
+                    if try boolean(bodyValue) {
                         values.append(members[index])
                         continue
                     }

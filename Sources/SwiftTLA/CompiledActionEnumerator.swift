@@ -55,8 +55,11 @@ struct CompiledActionEnumerator {
         case .unchanged:
             return [.init()]
         case .guard_(let expression):
-            guard try evaluator.evaluate(expression) == .boolean(true) else { return [] }
-            return [.init()]
+            let value = try evaluator.evaluate(expression)
+            guard case .boolean(let enabled) = value else {
+                throw EvalError.expected(.boolean, actual: [value])
+            }
+            return enabled ? [.init()] : []
         case .chooseAction(let variable, let set):
             _ = variable
             _ = set
@@ -76,8 +79,12 @@ struct CompiledActionEnumerator {
                 bindings: bindings.binding(try evaluator.evaluate(value), to: binder)
             )
         case .ifElse(let condition, let then, let otherwise):
+            let value = try evaluator.evaluate(condition)
+            guard case .boolean(let conditionHolds) = value else {
+                throw EvalError.expected(.boolean, actual: [value])
+            }
             return try execute(
-                try evaluator.evaluate(condition) == .boolean(true) ? then : otherwise,
+                conditionHolds ? then : otherwise,
                 state: state,
                 bindings: bindings
             )
