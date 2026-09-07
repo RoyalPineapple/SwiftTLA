@@ -248,7 +248,7 @@ private func compiledBFS(
     var idToState: [StateGraph.StateID: CompiledState] = [:]
     var initialStateIDs: [StateGraph.StateID] = []
     var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
-    var predecessors: [CompiledState: (CompiledState, String)] = [:]
+    var predecessors: [CompiledState: (CompiledState, ActionID)] = [:]
     var nextID = 0
 
     func stateProjection(_ state: CompiledState) throws -> TLAStateProjection {
@@ -282,15 +282,43 @@ private func compiledBFS(
         )
     }
 
-    func trace(to final: CompiledState) throws -> [TraceStep] {
-        var steps: [(CompiledState, String)] = []
+    func replayFailure(_ actual: String) -> CompilationDiagnostic {
+        .init(
+            code: .compilationIdentityMismatch, stage: .checking, path: "counterexample.replay",
+            expected: "a concrete initial state and enabled transitions witnessing the invariant failure",
+            actual: actual,
+            nextSafeAction: "Disable symmetry reduction and check that the declared symmetries preserve the model and invariant."
+        )
+    }
+
+    func trace(to final: CompiledState) throws -> (state: CompiledState, steps: [TraceStep]) {
+        var path: [(CompiledState, ActionID)] = []
         var current = final
         while let predecessor = predecessors[current] {
-            steps.append((current, predecessor.1))
+            path.append((current, predecessor.1))
             current = predecessor.0
         }
-        return try [TraceStep(state: current.projection(using: layout), action: "init")]
-            + steps.reversed().map { try TraceStep(state: $0.0.projection(using: layout), action: $0.1) }
+        guard var concrete = try seeds.first(where: { try symmetry.canonicalState($0) == current }) else {
+            throw replayFailure("the recorded root has no concrete initial state")
+        }
+        var steps = [try TraceStep(state: concrete.projection(using: layout), action: "init")]
+        // Canonical nodes can rename members. Replay only when producing a
+        // counterexample, retaining the actual action arguments and target.
+        for (target, action) in path.reversed() {
+            let candidates = try runtime.successors(from: concrete).filter {
+                try symmetry.canonicalState($0.state) == target
+            }
+            guard let successor = candidates.first(where: { $0.action == action }) ?? candidates.first else {
+                throw replayFailure("no enabled concrete transition reaches the recorded successor orbit")
+            }
+            concrete = successor.state
+            let arguments = try successor.arguments.map { try $0.rendered(using: layout) }
+            steps.append(try TraceStep(
+                state: concrete.projection(using: layout),
+                action: formalActionCall(named: layout.actions[successor.action.ordinal].declaration.name, arguments: arguments)
+            ))
+        }
+        return (concrete, steps)
     }
 
     func representative(_ state: CompiledState) throws -> CompiledState {
@@ -320,13 +348,17 @@ private func compiledBFS(
 
         for invariant in runtime.compilation.semantics.invariants {
             guard try runtime.invariantHolds(invariant, in: current) else {
+                let counterexample = try trace(to: current)
+                guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
+                    throw replayFailure("the concrete replay does not violate invariant '\(invariant.name)'")
+                }
                 return .init(
                     graph: try graph(),
                     initialStateIDs: initialStateIDs,
                     outcome: .invariantViolated(
                         invariant: invariant.name,
-                        state: try current.projection(using: layout),
-                        trace: try trace(to: current)
+                        state: try counterexample.state.projection(using: layout),
+                        trace: counterexample.steps
                     ),
                     compilationIdentity: runtime.compilation.identity,
                     configuration: configuration,
@@ -360,10 +392,9 @@ private func compiledBFS(
                 targetID = StateGraph.StateID(nextID)
                 stateToID[successorKey] = targetID
                 idToState[targetID] = successorKey
-                let actionName = layout.actions[successor.action.ordinal].declaration.name
                 predecessors[successorKey] = (
                     current,
-                    formalActionCall(named: actionName, arguments: formalArguments)
+                    successor.action
                 )
                 queue.append(successorKey)
                 nextID += 1
