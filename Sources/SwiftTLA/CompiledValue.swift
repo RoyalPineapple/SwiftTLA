@@ -88,7 +88,7 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
             return .tuple(values.map { $0.applying(mapping) })
         case .record(let values):
             return .record(CompiledRecord(values.fields.map {
-                .init(key: $0.key.applying(mapping), value: $0.value.applying(mapping))
+                .init(key: $0.key, value: $0.value.applying(mapping))
             }))
         case .function(let values):
             return .function(Dictionary(uniqueKeysWithValues: values.map {
