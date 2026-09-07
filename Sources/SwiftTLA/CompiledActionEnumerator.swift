@@ -54,8 +54,14 @@ struct CompiledActionEnumerator {
             var assigned = plan
             assigned.assignments[variable] = value
             return [assigned]
-        case .unchanged:
-            return [plan]
+        case .unchanged(let variable):
+            let value = try state.value(for: variable)
+            if let previous = plan.assignments[variable], previous != value {
+                throw CompiledEvaluationError.conflictingAssignment(variable)
+            }
+            var unchanged = plan
+            unchanged.assignments[variable] = value
+            return [unchanged]
         case .guard_(let expression):
             let value = try evaluator.evaluate(expression)
             guard case .boolean(let enabled) = value else {
