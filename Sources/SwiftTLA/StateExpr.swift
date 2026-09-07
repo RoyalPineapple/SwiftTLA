@@ -352,7 +352,7 @@ extension StateExpr {
         value: StateExpr
     ) -> StateExpr {
         let binder = Self.freshBoundName(
-            generatedBinderName(),
+            "__typedPartialFunctionOverrideEntry",
             avoiding: function.freeVariableNames
                 .union(key.freeVariableNames)
                 .union(value.freeVariableNames)

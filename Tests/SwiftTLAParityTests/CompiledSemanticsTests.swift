@@ -762,6 +762,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
       .value(.function([:])), key: .int(1), value: .int(0))
     let rendered = try renderedStateExpression(expression)
 
+    #expect(rendered.contains("__typedPartialFunctionOverrideEntry"))
     #expect(rendered.contains("DOMAIN"))
     #expect(rendered.contains("IF"))
   }
