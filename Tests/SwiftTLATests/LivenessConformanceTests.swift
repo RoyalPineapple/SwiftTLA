@@ -472,6 +472,25 @@ struct LivenessConformanceTests {
         }
     }
 
+    @Test("liveness rejects dangling graph edges before computing fairness")
+    func rejectsMissingTransitionEndpoints() throws {
+        let transitions: [[StateGraph.StateID: [StateGraph.Transition]]] = [
+            [initial: [.init(label: .init(.init(name: "advance")), target: middle)]],
+            [middle: [.init(label: .init(.init(name: "advance")), target: initial)]]
+        ]
+        for edges in transitions {
+            let malformed = try graph(transitions: edges, values: [initial: 0])
+            let analysis = try analyze(
+                malformed, property: .eventually(predicate(1)),
+                fairness: [.weakFairness("advance")], actions: [action("advance")],
+                initialStateIDs: [initial]
+            )
+            #expect(analysis.status == .unavailable)
+            #expect(analysis.reason == .invalidGraphTopology)
+            #expect(analysis.witness == nil)
+        }
+    }
+
     @Test("liveness requires compiled action identities")
     func livenessRequiresCompiledActionIdentity() throws {
         let sourceGraph = try graph(

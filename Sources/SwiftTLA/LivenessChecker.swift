@@ -10,6 +10,7 @@ package enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case satisfied
     case violatingFairLasso = "violating-fair-lasso"
     case missingInitialStateIdentity = "missing-initial-state-identity"
+    case invalidGraphTopology = "invalid-graph-topology"
     case incompleteExploration = "incomplete-exploration"
     case unknownAction = "unknown-action"
 }
@@ -195,6 +196,12 @@ package struct LivenessChecker {
         }
         guard !initialStateIDs.isEmpty, initialStateIDs.allSatisfy({ graph.states[$0] != nil }) else {
             return .init(status: .unavailable, reason: .missingInitialStateIdentity)
+        }
+
+        guard graph.transitions.allSatisfy({ source, transitions in
+            graph.states[source] != nil && transitions.allSatisfy { graph.states[$0.target] != nil }
+        }) else {
+            return .init(status: .unavailable, reason: .invalidGraphTopology)
         }
 
         guard graphHasOnlyCompiledActions() else {
@@ -402,8 +409,8 @@ extension LivenessChecker {
                     enabled: enabled
                 ) else { continue }
                 for initial in initialStates.sorted(by: stateOrder) {
-                if prefixStates == nil {
-                    if let prefix = shortestPath(from: initial, to: cycleStart, in: prefixContinuationStates) {
+                    if prefixStates == nil {
+                        if let prefix = shortestPath(from: initial, to: cycleStart, in: prefixContinuationStates) {
                             witnesses.append(.init(
                                 prefix: prefix.0,
                                 cycle: cycle.0,
