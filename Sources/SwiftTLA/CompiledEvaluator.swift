@@ -205,7 +205,7 @@ private enum EvaluatorTask {
         argumentScope: EvaluatorScope
     )
     case recursiveCall(OperatorID, arguments: [CompiledStateExpr], scope: EvaluatorScope)
-    case recursiveReturn
+    case callReturn
     case localDomain(CompiledStateExpr, scope: EvaluatorScope)
     case store(EvaluatorThunk)
 }
@@ -753,6 +753,7 @@ struct CompiledEvaluator: Sendable {
                             actual: arguments.count
                         )
                     }
+                    try beginCall(tasks: &tasks, depth: &recursiveDepth)
                     var callScope = boundOperation.scope
                     for (parameter, argument) in zip(lambda.parameters, arguments) {
                         guard case .value(let expression) = argument else {
@@ -800,6 +801,7 @@ struct CompiledEvaluator: Sendable {
                             actual: arguments.count
                         )
                     }
+                    try beginCall(tasks: &tasks, depth: &recursiveDepth)
                     var callScope = boundOperation.scope
                     for (parameter, argument) in zip(definition.parameters, arguments) {
                         switch (parameter, argument) {
@@ -836,11 +838,7 @@ struct CompiledEvaluator: Sendable {
                 }
 
             case .recursiveCall(let id, let arguments, let scope):
-                guard recursiveDepth < Self.maximumRecursiveDepth else {
-                    throw EvalError.recursionDepthExceeded(Self.maximumRecursiveDepth)
-                }
-                recursiveDepth += 1
-                tasks.append(.recursiveReturn)
+                try beginCall(tasks: &tasks, depth: &recursiveDepth)
                 if let operation = scope.localOperators[id] {
                     guard operation.parameters.count == arguments.count else {
                         throw EvalError.invalidArity(
@@ -884,7 +882,7 @@ struct CompiledEvaluator: Sendable {
                 }
                 tasks.append(.expression(function.body, callScope))
 
-            case .recursiveReturn:
+            case .callReturn:
                 recursiveDepth -= 1
 
             case .localDomain(let body, let scope):
@@ -1155,6 +1153,14 @@ struct CompiledEvaluator: Sendable {
 }
 
 private extension CompiledEvaluator {
+    func beginCall(tasks: inout [EvaluatorTask], depth: inout Int) throws {
+        guard depth < Self.maximumRecursiveDepth else {
+            throw EvalError.recursionDepthExceeded(Self.maximumRecursiveDepth)
+        }
+        depth += 1
+        tasks.append(.callReturn)
+    }
+
     func checkedInteger(
         _ result: (partialValue: Int, overflow: Bool),
         operation: EvalError.IntegerOperation,
