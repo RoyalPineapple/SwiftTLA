@@ -272,14 +272,14 @@ private func compiledBFS(
         )
     }
 
-    func trace(to final: CompiledState, initial: CompiledState) throws -> [TraceStep] {
+    func trace(to final: CompiledState) throws -> [TraceStep] {
         var steps: [(CompiledState, String)] = []
         var current = final
         while let predecessor = predecessors[current] {
             steps.append((current, predecessor.1))
             current = predecessor.0
         }
-        return try [TraceStep(state: initial.projection(using: layout), action: "init")]
+        return try [TraceStep(state: current.projection(using: layout), action: "init")]
             + steps.reversed().map { try TraceStep(state: $0.0.projection(using: layout), action: $0.1) }
     }
 
@@ -316,7 +316,7 @@ private func compiledBFS(
                     outcome: .invariantViolated(
                         invariant: invariant.name,
                         state: try current.projection(using: layout),
-                        trace: try trace(to: current, initial: queue[0])
+                        trace: try trace(to: current)
                     ),
                     compilationIdentity: runtime.compilation.identity,
                     configuration: configuration,
