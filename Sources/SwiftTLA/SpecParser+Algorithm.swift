@@ -1140,8 +1140,9 @@ extension ParserSession {
                     ?? parseIntegerClosedRange(syntax).map { $0.map(TLAValue.int) }
             }
             guard domains.count == choices.count else { return nil }
+            let replacements = choices.indices.map { generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: UInt($0)) }
             let choiceBindings = choices.indices.map { index in
-                (sourceName: choices[index], value: StateExpr.variable("__pcal_choice_\(index)"))
+                (sourceName: choices[index], value: StateExpr.variable(replacements[index]))
             }
             guard var nestedBody = parseAlgorithmStatements(
                 closure.statements,
@@ -1150,7 +1151,7 @@ extension ParserSession {
                 scope: typedFacadeScope(scope, bindings: choiceBindings)
             ) else { return nil }
             for index in choices.indices.reversed() {
-                let replacement = "__pcal_choice_\(index)"
+                let replacement = replacements[index]
                 nestedBody = [.choose(variable: replacement, domain: domains[index], nestedBody)]
             }
             return nestedBody[0]
@@ -1165,7 +1166,7 @@ extension ParserSession {
             let bindings = closureParameterNames(in: closure)
             switch (sources.count, bindings.count) {
             case (1, 1):
-                let replacement = "__pcal_with"
+                let replacement = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
                 guard let body = parseAlgorithmStatements(
                     closure.statements,
                     processParameter: processParameter,
@@ -1187,9 +1188,9 @@ extension ParserSession {
                 // PlusCal's `with <<first, second>> \in Pairs`. Keep one
                 // formal selection, then bind both tuple positions inside its
                 // scope so every source path retains the same tuple binding.
-                let tupleBinding = generatedBinderName()
-                let firstBinding = generatedBinderName()
-                let secondBinding = generatedBinderName()
+                let tupleBinding = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
+                let firstBinding = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 1)
+                let secondBinding = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 2)
                 let pairScope = typedFacadeScope(
                     scope,
                     bindings: [
@@ -1228,12 +1229,13 @@ extension ParserSession {
                         + "Next safe action: use independent With sources or a Pair."
                     return nil
                 }
+                let replacements = bindings.indices.map { generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: UInt($0)) }
                 var boundScope = scope
                 for (index, binding) in bindings.enumerated() {
                     boundScope = typedFacadeScope(
                         boundScope,
                         binding: binding,
-                        to: .variable("__pcal_with_\(index)"),
+                        to: .variable(replacements[index]),
                         shape: selectedShapes[index]
                     )
                 }
@@ -1245,7 +1247,7 @@ extension ParserSession {
                 ) else { return nil }
                 var selections: [(variable: String, source: StateExpr)] = []
                 for (index, _) in bindings.enumerated() {
-                    let variable = "__pcal_with_\(index)"
+                    let variable = replacements[index]
                     selections.append((variable, sources[index]))
                 }
                 for selection in selections.reversed() {
@@ -1259,7 +1261,7 @@ extension ParserSession {
                   let closure = call.trailingClosure,
                   let bound = closureParameterNames(in: closure).first
             else { return nil }
-            let replacement = generatedBinderName()
+            let replacement = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
             let shape = typedFacadeValueShape(valueSyntax, scope: scope)
             guard let body = parseAlgorithmStatements(
                 closure.statements,
