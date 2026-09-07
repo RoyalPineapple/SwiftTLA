@@ -423,7 +423,7 @@ final class CameraEffects {
     }
 
     func prepareRecordingAttempt() -> UUID? {
-        guard movieOutput != nil else {
+        guard case .some = movieOutput else {
             diagnostic = "The camera output is not ready."
             return nil
         }
