@@ -105,6 +105,31 @@ PY
             xcrun xctrace export --input "$destination/allocations.trace" --toc \
                 --output "$destination/allocations-toc.xml" \
                 > "$destination/allocations-export.log" 2>&1 || true
+            python3 - "$destination" <<'PY'
+import json, pathlib, subprocess, sys, xml.etree.ElementTree as ET
+root = pathlib.Path(sys.argv[1])
+toc = root / 'allocations-toc.xml'
+results = []
+try:
+    document = ET.parse(toc).getroot()
+    for run_index, run in enumerate(document.findall('run'), start=1):
+        for table_index, table in enumerate(run.findall('./data/table'), start=1):
+            schema = table.get('schema', '')
+            if 'alloc' not in schema.lower():
+                continue
+            output = f'allocations-run-{run_index}-table-{table_index}.xml'
+            # Positional selectors avoid interpreting schema names as XPath syntax.
+            xpath = f'/trace-toc/run[{run_index}]/data/table[{table_index}]'
+            command = ['xcrun', 'xctrace', 'export', '--input', str(root / 'allocations.trace'),
+                       '--xpath', xpath, '--output', str(root / output)]
+            result = subprocess.run(command, capture_output=True, text=True)
+            results.append({'schema': schema, 'file': output, 'exitCode': result.returncode,
+                            'diagnostic': result.stdout + result.stderr})
+    status = 'exported' if results and all(r['exitCode'] == 0 for r in results) else 'unavailable or incomplete'
+except (OSError, ET.ParseError) as error:
+    status = f'unavailable: {error}'
+(root / 'allocations-tables.json').write_text(json.dumps({'status': status, 'tables': results}, indent=2))
+PY
         else
             echo 'Allocation recording unavailable; inspect allocations-record.log. No allocation totals reported.' > "$destination/allocations-status.txt"
         fi
