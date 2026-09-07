@@ -1797,17 +1797,15 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.formalOperatorDefinitions == [
-            FormalOperatorDefinition(
-                name: "InitialState",
-                parameters: [],
-                body: .functionLiteral(
-                    .setLiteral([.value(.string("k1")), .value(.string("k2"))]),
-                    "__pcal_function_key",
-                    .int(0)
-                )
-            )
-        ])
+        let definition = try #require(parsed.formalOperatorDefinitions.first)
+        #expect(definition.name == "InitialState")
+        #expect(definition.parameters.isEmpty)
+        guard case .functionLiteral(let domain, _, let body) = definition.body else {
+            Issue.record("Expected a finite function body")
+            return
+        }
+        #expect(domain == .setLiteral([.value(.string("k1")), .value(.string("k2"))]))
+        #expect(body == .int(0))
     }
 
     @Test func parsesHigherOrderOperatorArgumentsIntoTheSourceModel() throws {

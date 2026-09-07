@@ -1,23 +1,23 @@
-struct CompiledRecordExpression: Sendable {
-    struct Field: Sendable {
-        let id: FieldID
-        let key: CompiledValue
-        let value: CompiledStateExpr
+package struct CompiledRecordExpression: Hashable, Sendable {
+    package struct Field: Hashable, Sendable {
+        package let id: FieldID
+        package let key: CompiledValue
+        package let value: CompiledStateExpr
     }
 
-    let fields: [Field]
+    package let fields: [Field]
 
     init(_ fields: [Field]) {
         self.fields = fields
     }
 }
 
-struct CompiledCaseBranch: Sendable {
-    let condition: CompiledStateExpr
-    let value: CompiledStateExpr
+package struct CompiledCaseBranch: Hashable, Sendable {
+    package let condition: CompiledStateExpr
+    package let value: CompiledStateExpr
 }
 
-indirect enum CompiledStateExpr: Sendable {
+package indirect enum CompiledStateExpr: Hashable, Sendable {
     case value(CompiledValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
@@ -461,16 +461,16 @@ extension CompiledStateExpr {
     }
 }
 
-struct CompiledFormalLambda: Sendable {
-    let parameters: [BinderID]
-    let body: CompiledStateExpr
+package struct CompiledFormalLambda: Hashable, Sendable {
+    package let parameters: [BinderID]
+    package let body: CompiledStateExpr
 }
 
-enum CompiledFormalOperator: Sendable {
+package enum CompiledFormalOperator: Hashable, Sendable {
     case lambda(CompiledFormalLambda)
     case reference(OperatorID, arity: Int)
 
-    var arity: Int {
+    package var arity: Int {
         switch self {
         case .lambda(let lambda): return lambda.parameters.count
         case .reference(_, let arity): return arity
@@ -478,20 +478,20 @@ enum CompiledFormalOperator: Sendable {
     }
 }
 
-indirect enum CompiledFormalCallArgument: Sendable {
+package indirect enum CompiledFormalCallArgument: Hashable, Sendable {
     case value(CompiledStateExpr)
     case `operator`(CompiledFormalOperator)
 }
 
-struct CompiledLocalOperator: Sendable {
-    let id: OperatorID
-    let parameters: [BinderID]
-    let domain: CompiledStateExpr?
-    let body: CompiledStateExpr
-    let isRecursive: Bool
+package struct CompiledLocalOperator: Hashable, Sendable {
+    package let id: OperatorID
+    package let parameters: [BinderID]
+    package let domain: CompiledStateExpr?
+    package let body: CompiledStateExpr
+    package let isRecursive: Bool
 }
 
-indirect enum CompiledActionExpr: Sendable {
+package indirect enum CompiledActionExpr: Sendable {
     case assign(VariableID, CompiledStateExpr)
     case unchanged(VariableID)
     case guard_(CompiledStateExpr)
@@ -502,24 +502,24 @@ indirect enum CompiledActionExpr: Sendable {
     case or(CompiledActionExpr, CompiledActionExpr)
 }
 
-struct CompiledAction: Sendable {
-    let id: ActionID
-    let bindings: [CompiledActionBinding]
-    let body: CompiledActionExpr
-    let collection: VariableID?
+package struct CompiledAction: Sendable {
+    package let id: ActionID
+    package let bindings: [CompiledActionBinding]
+    package let body: CompiledActionExpr
+    package let collection: VariableID?
 }
 
-struct CompiledActionBinding: Sendable {
-    let binder: BinderID
-    let sourceName: String
-    let values: [CompiledValue]
-    let generatedSwiftType: String?
+package struct CompiledActionBinding: Sendable {
+    package let binder: BinderID
+    package let sourceName: String
+    package let values: [CompiledValue]
+    package let generatedSwiftType: String?
 }
 
-struct CompiledInvariant: Sendable {
-    let id: PropertyID
-    let name: String
-    let body: CompiledStateExpr
+package struct CompiledInvariant: Sendable {
+    package let id: PropertyID
+    package let name: String
+    package let body: CompiledStateExpr
 }
 
 indirect enum CompiledTemporalExpr: Sendable {
@@ -552,24 +552,24 @@ struct CompiledFairnessCondition: Sendable {
     let isStrong: Bool
 }
 
-struct CompiledFormalOperatorDefinition: Sendable {
-    let id: OperatorID
-    let parameters: [CompiledFormalParameter]
-    let body: CompiledStateExpr
+package struct CompiledFormalOperatorDefinition: Sendable {
+    package let id: OperatorID
+    package let parameters: [CompiledFormalParameter]
+    package let body: CompiledStateExpr
 }
 
-enum CompiledFormalParameter: Sendable {
+package enum CompiledFormalParameter: Sendable {
     case value(BinderID)
     case `operator`(OperatorID, arity: Int)
 }
 
-struct CompiledRecursiveFunction: Sendable {
-    let id: OperatorID
-    let parameters: [BinderID]
-    let body: CompiledStateExpr
+package struct CompiledRecursiveFunction: Sendable {
+    package let id: OperatorID
+    package let parameters: [BinderID]
+    package let body: CompiledStateExpr
 }
 
-enum CompiledVariableInitialization: Sendable {
+package enum CompiledVariableInitialization: Sendable {
     case value(CompiledValue)
     case expression(CompiledStateExpr)
     case memberOf(CompiledStateExpr)

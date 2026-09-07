@@ -164,6 +164,7 @@ final class ParserSession {
     /// Facts scoped to one syntax tree and macro expansion.
     var constants: [ConstantDecl] = []
     let enumDefinitions: [ParserEnumDefinition]
+    let recordSchemas: [String: [NativeSourceRecordField]]
     /// Tuple-shaped algorithm state currently in scope. This lets the parser
     /// distinguish `sequence[index]` from a finite-function lookup through
     /// structural type syntax.
@@ -175,9 +176,11 @@ final class ParserSession {
     var algorithmSourceDiagnostic: SourceParseDiagnostic?
 
     init(
-        enumDefinitions: [ParserEnumDefinition] = []
+        enumDefinitions: [ParserEnumDefinition] = [],
+        recordSchemas: [String: [NativeSourceRecordField]] = [:]
     ) {
         self.enumDefinitions = enumDefinitions
+        self.recordSchemas = recordSchemas
     }
 
     func enumDefinition(named typeName: String) -> ParserEnumDefinition? {
@@ -1407,13 +1410,9 @@ final class ParserSession {
 
     func typedFieldName(_ expression: ExprSyntax) -> String? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              member.base != nil,
-              member.declName.baseName.text != "finiteValues"
-        else { return nil }
-        if let typeName = terminalTypeName(in: member.base), enumDefinition(named: typeName) != nil {
-            return nil
-        }
-        return member.declName.baseName.text
+              let schema = terminalTypeName(in: member.base),
+              let fields = recordSchemas[schema] else { return nil }
+        return fields.first { $0.sourceName == member.declName.baseName.text }?.name
     }
 
     /// A record field may be qualified by its enclosing model type, while an
@@ -2141,9 +2140,10 @@ final class ParserSession {
 package enum SpecParser {
     package static func parseSpecClosure(
         _ closure: ClosureExprSyntax,
-        enumDefinitions: [ParserEnumDefinition] = []
+        enumDefinitions: [ParserEnumDefinition] = [],
+        recordSchemas: [String: [NativeSourceRecordField]] = [:]
     ) -> ParsedSpecComponents {
-        ParserSession(enumDefinitions: enumDefinitions).parseSpecClosure(closure)
+        ParserSession(enumDefinitions: enumDefinitions, recordSchemas: recordSchemas).parseSpecClosure(closure)
     }
 
     static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {

@@ -322,8 +322,8 @@ private struct FoldGeneratedModel {
         var machine = try TypedCollectionGeneratedModel.makeMachine()
         let transition = try machine.send(.keepEvenSquares)
 
-        #expect(Set(transition.before.values.elements) == Set([1, 2, 3, 4]))
-        #expect(Set(transition.after.values.elements) == Set([4, 16]))
+        #expect(transition.before.values == [1, 2, 3, 4])
+        #expect(transition.after.values == [4, 16])
         #expect(try TypedCollectionGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("keepEvenSquares"))
     }
 

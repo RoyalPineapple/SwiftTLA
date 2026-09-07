@@ -5,7 +5,7 @@ public enum CollectionVarType: Sendable, Equatable {
   case dictionary(Int)
 }
 
-enum VariableOrigin: Sendable, Equatable {
+package enum VariableOrigin: Sendable, Equatable {
   case source
   case compiler
   case programCounter

@@ -75,10 +75,8 @@ struct Counter {
 var counter = try Counter.makeMachine()
 let transition = try counter.send(.advance)
 guard transition.after.value == 1,
-      transition.after.cars[.one]?.tlaValue == .record([
-        "floor": .int(2),
-        "doorsOpen": .bool(false)
-      ]) else {
+      transition.after.cars[.one]?.floor == 2,
+      transition.after.cars[.one]?.doorsOpen == false else {
     throw FixtureError.invalidTransition
 }
 

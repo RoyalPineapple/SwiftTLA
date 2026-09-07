@@ -4,7 +4,7 @@ import Foundation
 package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Variable: Sendable, Equatable {
         package let formalName: String
-        let storageOrdinal: Int
+        package let storageOrdinal: Int
         package let swiftType: String
         package let collection: SymmetricCollection?
 
@@ -24,7 +24,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Binding: Sendable, Equatable {
         package let formalName: String
         package let swiftType: String
-        let domain: [TLAValue]
+        package let domain: [TLAValue]
         package var isPublic: Bool { domain.count > 1 }
 
         init(formalName: String, swiftType: String, domain: [TLAValue]) {
@@ -35,7 +35,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     }
 
     package struct Action: Sendable, Equatable {
-        let compiledAction: ActionID
+        package let compiledAction: ActionID
         package let swiftIdentifier: String
         package let bindings: [Binding]
         package let collection: SymmetricCollection?

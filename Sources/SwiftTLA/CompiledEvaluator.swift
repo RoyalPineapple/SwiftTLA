@@ -1,13 +1,4 @@
 enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
-    enum IntegerOperation: String, Equatable, Sendable {
-        case addition
-        case subtraction
-        case multiplication
-        case division
-        case negation
-        case summation
-    }
-
     enum ValueShape: String, Equatable, Sendable {
         case integer
         case boolean
@@ -21,11 +12,6 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case integerFunctionValues = "integer function values"
         case functionSetDomains = "function-set domains"
         case recordField = "record field"
-    }
-
-    enum CollectionOperation: String, Equatable, Sendable {
-        case integerRange
-        case functionSet
     }
 
     enum Callable: String, Equatable, Sendable {
@@ -51,10 +37,10 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case invalidContinuation(availableValues: Int)
     case collectionState
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
-    case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
+    case collectionCardinalityOverflow(NativeMachineEvaluationError.CollectionOperation, operands: [Int])
     case divisionByZero
     case negativeModuloDivisor(Int)
-    case integerOverflow(IntegerOperation, operands: [Int])
+    case integerOverflow(NativeMachineEvaluationError.IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
 
@@ -220,7 +206,6 @@ struct CompiledEvaluator: Sendable {
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
     let localOperators: [OperatorID: CompiledLocalOperator]
-    private static let maximumRecursiveDepth = 4_096
 
     init(
         state: CompiledState,
@@ -313,51 +298,26 @@ struct CompiledEvaluator: Sendable {
                 case .add:
                     let rhs = try integer(popValue(from: &values))
                     let lhs = try integer(popValue(from: &values))
-                    values.append(.integer(try checkedInteger(
-                        lhs.addingReportingOverflow(rhs),
-                        operation: .addition,
-                        operands: [lhs, rhs]
-                    )))
+                    values.append(.integer(try nativeOperation { try _NativeMachineOperations.add(lhs, rhs) }))
                 case .subtract:
                     let rhs = try integer(popValue(from: &values))
                     let lhs = try integer(popValue(from: &values))
-                    values.append(.integer(try checkedInteger(
-                        lhs.subtractingReportingOverflow(rhs),
-                        operation: .subtraction,
-                        operands: [lhs, rhs]
-                    )))
+                    values.append(.integer(try nativeOperation { try _NativeMachineOperations.subtract(lhs, rhs) }))
                 case .multiply:
                     let rhs = try integer(popValue(from: &values))
                     let lhs = try integer(popValue(from: &values))
-                    values.append(.integer(try checkedInteger(
-                        lhs.multipliedReportingOverflow(by: rhs),
-                        operation: .multiplication,
-                        operands: [lhs, rhs]
-                    )))
+                    values.append(.integer(try nativeOperation { try _NativeMachineOperations.multiply(lhs, rhs) }))
                 case .divide, .integerDivide:
                     let dividend = try integer(popValue(from: &values))
                     let divisor = try integer(popValue(from: &values))
-                    if divisor == 0 { throw EvalError.divisionByZero }
-                    if dividend == .min && divisor == -1 {
-                        throw EvalError.integerOverflow(.division, operands: [dividend, divisor])
-                    }
-                    let quotient = dividend / divisor
-                    let roundsDown = (dividend < 0) != (divisor < 0) && dividend % divisor != 0
-                    values.append(.integer(roundsDown ? quotient - 1 : quotient))
+                    values.append(.integer(try nativeOperation { try _NativeMachineOperations.divide(dividend, divisor) }))
                 case .modulo:
                     let dividend = try integer(popValue(from: &values))
                     let divisor = try integer(popValue(from: &values))
-                    if divisor == 0 { throw EvalError.divisionByZero }
-                    guard divisor > 0 else { throw EvalError.negativeModuloDivisor(divisor) }
-                    let remainder = dividend % divisor
-                    values.append(.integer(remainder < 0 ? remainder + divisor : remainder))
+                    values.append(.integer(try nativeOperation { try _NativeMachineOperations.modulo(dividend, divisor) }))
                 case .negate:
                     let operand = try integer(popValue(from: &values))
-                    values.append(.integer(try checkedInteger(
-                        0.subtractingReportingOverflow(operand),
-                        operation: .negation,
-                        operands: [operand]
-                    )))
+                    values.append(.integer(try nativeOperation { try _NativeMachineOperations.negate(operand) }))
                 case .equal:
                     let rhs = try popValue(from: &values)
                     values.append(.boolean(try popValue(from: &values) == rhs))
@@ -441,28 +401,17 @@ struct CompiledEvaluator: Sendable {
                 case .integerRange:
                     let upper = try integer(popValue(from: &values))
                     let lower = try integer(popValue(from: &values))
-                    if lower <= upper {
-                        let distance = upper.subtractingReportingOverflow(lower)
-                        guard !distance.overflow, !distance.partialValue.addingReportingOverflow(1).overflow else {
-                            throw EvalError.collectionCardinalityOverflow(.integerRange, operands: [lower, upper])
-                        }
-                    }
-                    values.append(lower <= upper ? .set(Set((lower...upper).map(CompiledValue.integer))) : .set([]))
+                    let integers = try nativeOperation { try _NativeMachineOperations.integerRange(lower, upper) }
+                    values.append(.set(Set(integers.map(CompiledValue.integer))))
                 case .tupleLiteral(let expressions):
                     values.append(.tuple(try popValues(expressions.count, from: &values)))
                 case .tupleAccess(_, let index):
                     let tuple = try sequenceElements(from: popValue(from: &values))
-                    guard index >= 1, index <= tuple.count else {
-                        throw EvalError.indexOutOfBounds(index, tuple.count)
-                    }
-                    values.append(tuple[index - 1])
+                    values.append(try nativeOperation { try _NativeMachineOperations.sequenceElement(tuple, at: index) })
                 case .tupleDynamicAccess:
                     let index = try integer(popValue(from: &values))
                     let tuple = try sequenceElements(from: popValue(from: &values))
-                    guard index >= 1, index <= tuple.count else {
-                        throw EvalError.indexOutOfBounds(index, tuple.count)
-                    }
-                    values.append(tuple[index - 1])
+                    values.append(try nativeOperation { try _NativeMachineOperations.sequenceElement(tuple, at: index) })
                 case .tupleLength:
                     values.append(.integer(try sequenceElements(from: popValue(from: &values)).count))
                 case .tupleAppend:
@@ -472,16 +421,10 @@ struct CompiledEvaluator: Sendable {
                     values.append(.tuple(tuple))
                 case .tupleHead:
                     let sequence = try sequenceElements(from: popValue(from: &values))
-                    guard let first = sequence.first else {
-                        throw EvalError.expected(.nonemptySequence, actual: [.tuple(sequence)])
-                    }
-                    values.append(first)
+                    values.append(try nativeOperation { try _NativeMachineOperations.sequenceHead(sequence) })
                 case .tupleTail:
                     let tuple = try sequenceElements(from: popValue(from: &values))
-                    guard tuple.isEmpty == false else {
-                        throw EvalError.expected(.nonemptySequence, actual: [.tuple(tuple)])
-                    }
-                    values.append(.tuple(Array(tuple.dropFirst())))
+                    values.append(.tuple(try nativeOperation { try _NativeMachineOperations.sequenceTail(tuple) }))
                 case .tupleConcatenate:
                     let rhs = try sequenceElements(from: popValue(from: &values))
                     let lhs = try sequenceElements(from: popValue(from: &values))
@@ -510,9 +453,9 @@ struct CompiledEvaluator: Sendable {
                 case .domain:
                     let value = try popValue(from: &values)
                     switch value {
-                    case .function(let function): values.append(.set(Set(function.keys)))
+                    case .function(let function): values.append(.set(_NativeMachineOperations.functionDomain(function)))
                     case .record(let record): values.append(.set(Set(record.fields.map(\.key))))
-                    case .tuple(let tuple): values.append(.set(Set(tuple.indices.map { .integer($0 + 1) })))
+                    case .tuple(let tuple): values.append(.set(Set(_NativeMachineOperations.sequenceDomain(tuple).map(CompiledValue.integer))))
                     default: throw EvalError.expected(.function, actual: [value])
                     }
                 case .functionApply:
@@ -525,10 +468,12 @@ struct CompiledEvaluator: Sendable {
                         }
                         values.append(value)
                     case .tuple(let tuple):
-                        guard case .integer(let index) = key, index >= 1, index <= tuple.count else {
+                        guard case .integer(let index) = key else {
                             throw EvalError.tupleIndexOutsideDomain(key)
                         }
-                        values.append(tuple[index - 1])
+                        values.append(try nativeOperation {
+                            try _NativeMachineOperations.sequenceFunctionValue(tuple, at: index)
+                        })
                     case .record(let record):
                         guard case .string = key, let value = record.value(for: key) else {
                             throw EvalError.recordFieldUnavailable(key)
@@ -560,7 +505,7 @@ struct CompiledEvaluator: Sendable {
                         }
                         return value
                     }
-                    values.append(.integer(try integerSum(integers)))
+                    values.append(.integer(try nativeOperation { try _NativeMachineOperations.sum(integers) }))
                 case .functionSet:
                     let range = try popValue(from: &values)
                     let domain = try popValue(from: &values)
@@ -700,19 +645,13 @@ struct CompiledEvaluator: Sendable {
                 let key = try popValue(from: &values)
                 let replacement = try popValue(from: &values)
                 switch function {
-                case .function(var function):
-                    if let _ = function[key] {
-                        function[key] = replacement
-                    }
-                    values.append(.function(function))
-                case .tuple(var tuple):
+                case .function(let function):
+                    values.append(.function(_NativeMachineOperations.functionUpdated(function, at: key, to: replacement)))
+                case .tuple(let tuple):
                     guard case .integer(let index) = key else {
                         throw EvalError.expected(.integer, actual: [key])
                     }
-                    if index >= 1, index <= tuple.count {
-                        tuple[index - 1] = replacement
-                    }
-                    values.append(.tuple(tuple))
+                    values.append(.tuple(_NativeMachineOperations.sequenceUpdated(tuple, at: index, to: replacement)))
                 case .record(let record):
                     guard case .string = key else {
                         throw EvalError.expected(.recordField, actual: [key])
@@ -1197,50 +1136,32 @@ struct CompiledEvaluator: Sendable {
 
 private extension CompiledEvaluator {
     func beginCall(tasks: inout [EvaluatorTask], depth: inout Int) throws {
-        guard depth < Self.maximumRecursiveDepth else {
-            throw EvalError.recursionDepthExceeded(Self.maximumRecursiveDepth)
+        guard depth < _NativeMachineOperations.maximumRecursiveDepth else {
+            throw EvalError.recursionDepthExceeded(_NativeMachineOperations.maximumRecursiveDepth)
         }
         depth += 1
         tasks.append(.callReturn)
     }
 
-    func checkedInteger(
-        _ result: (partialValue: Int, overflow: Bool),
-        operation: EvalError.IntegerOperation,
-        operands: [Int]
-    ) throws -> Int {
-        if result.overflow {
+    func nativeOperation<Value>(_ operation: () throws -> Value) throws -> Value {
+        do {
+            return try operation()
+        } catch NativeMachineEvaluationError.integerOverflow(let operation, let operands) {
             throw EvalError.integerOverflow(operation, operands: operands)
-        }
-        return result.partialValue
-    }
-
-    func integerSum(_ values: [Int]) throws -> Int {
-        let operands = values.sorted()
-        var negative = operands.filter { $0 < 0 }
-        var nonnegative = operands.filter { $0 >= 0 }
-
-        while negative.isEmpty == false && nonnegative.isEmpty == false {
-            let lhs = negative.removeLast()
-            let rhs = nonnegative.removeLast()
-            let combined = try checkedInteger(
-                lhs.addingReportingOverflow(rhs),
-                operation: .summation,
-                operands: operands
-            )
-            if combined < 0 {
-                negative.append(combined)
-            } else {
-                nonnegative.append(combined)
-            }
-        }
-
-        return try (negative + nonnegative).reduce(0) { total, value in
-            try checkedInteger(
-                total.addingReportingOverflow(value),
-                operation: .summation,
-                operands: operands
-            )
+        } catch NativeMachineEvaluationError.divisionByZero {
+            throw EvalError.divisionByZero
+        } catch NativeMachineEvaluationError.negativeModuloDivisor(let divisor) {
+            throw EvalError.negativeModuloDivisor(divisor)
+        } catch NativeMachineEvaluationError.collectionCardinalityOverflow(let operation, let operands) {
+            throw EvalError.collectionCardinalityOverflow(operation, operands: operands)
+        } catch NativeMachineEvaluationError.powerSetTooLarge(let actualCount, let maximumCount) {
+            throw EvalError.powerSetTooLarge(actualCount: actualCount, maximumCount: maximumCount)
+        } catch NativeMachineEvaluationError.indexOutOfBounds(let index, let count) {
+            throw EvalError.indexOutOfBounds(index, count)
+        } catch NativeMachineEvaluationError.tupleIndexOutsideDomain(let index) {
+            throw EvalError.tupleIndexOutsideDomain(.integer(index))
+        } catch NativeMachineEvaluationError.emptySequence {
+            throw EvalError.expected(.nonemptySequence, actual: [.tuple([])])
         }
     }
 
@@ -1266,11 +1187,15 @@ private extension CompiledEvaluator {
         case .tuple(let values):
             return values
         case .function(let values):
-            return try (0..<values.count).map { offset in
-                guard let element = values[.integer(offset + 1)] else {
-                    throw EvalError.expected(.sequence, actual: [.function(values)])
+            let indexed = try values.reduce(into: [Int: CompiledValue]()) { result, entry in
+                guard case .integer(let index) = entry.key else {
+                    throw EvalError.expected(.sequence, actual: [value])
                 }
-                return element
+                result[index] = entry.value
+            }
+            do { return try _NativeMachineOperations.sequenceElements(indexed) }
+            catch NativeMachineEvaluationError.invalidSequenceDomain {
+                throw EvalError.expected(.sequence, actual: [value])
             }
         default:
             throw EvalError.expected(.sequence, actual: [value])
@@ -1278,18 +1203,8 @@ private extension CompiledEvaluator {
     }
 
     func powerSet(of values: Set<CompiledValue>) throws -> CompiledValue {
-        guard values.count < Int.bitWidth - 1 else {
-            throw EvalError.powerSetTooLarge(
-                actualCount: values.count,
-                maximumCount: Int.bitWidth - 2
-            )
-        }
-        let members = Array(values)
-        return .set(Set((0..<(1 << members.count)).map { mask in
-            .set(Set(members.enumerated().compactMap { index, member in
-                mask & (1 << index) == 0 ? nil : member
-            }))
-        }))
+        let subsets = try nativeOperation { try _NativeMachineOperations.powerSet(values) }
+        return .set(Set(subsets.map(CompiledValue.set)))
     }
 
     func functionSet(domain: CompiledValue, range: CompiledValue) throws -> CompiledValue {
@@ -1298,31 +1213,10 @@ private extension CompiledEvaluator {
         else {
             throw EvalError.expected(.functionSetDomains, actual: [domain, range])
         }
-        let orderedDomain = CompiledValue.sorted(domainValues)
-        let orderedRange = CompiledValue.sorted(rangeValues)
-        // Check the complete product before any intermediate expansion.
-        var cardinality = 1
-        for _ in orderedDomain {
-            let product = cardinality.multipliedReportingOverflow(by: orderedRange.count)
-            guard !product.overflow else {
-                throw EvalError.collectionCardinalityOverflow(
-                    .functionSet, operands: [orderedDomain.count, orderedRange.count]
-                )
-            }
-            cardinality = product.partialValue
-        }
-        var functions: [[CompiledValue: CompiledValue]] = [[:]]
-        for key in orderedDomain {
-            functions = functions.flatMap { partial in
-                orderedRange.map { value in
-                    var next = partial
-                    next[key] = value
-                    return next
-                }
-            }
-        }
+        let functions = try nativeOperation { try _NativeMachineOperations.functionSet(domainValues, rangeValues) }
         return .set(Set(functions.map(CompiledValue.function)))
     }
+
 }
 
 package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {

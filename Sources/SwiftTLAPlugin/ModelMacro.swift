@@ -19,6 +19,7 @@ struct MacroCompilation {
     let typeName: String
     let compilation: CompiledSpecification
     let enumInfos: [ParsedEnum]
+    let nativeSourceTypes: NativeSourceTypeMetadata
 }
 
 enum TLASpecVerifier {
@@ -41,9 +42,11 @@ enum TLASpecVerifier {
                 finiteValues: $0.formalDomainValues
             )
         }
+        let sourceMetadata = try sourceTypes(in: memberList, enums: enumInfos)
         let parsed = SpecParser.parseSpecClosure(
             source.closure,
-            enumDefinitions: enumDefinitions
+            enumDefinitions: enumDefinitions,
+            recordSchemas: sourceMetadata.records
         )
         let compilation = try parsed.compile(specificationName: source.name)
         if parsed.hasStateDeclarations == false {
@@ -53,66 +56,93 @@ enum TLASpecVerifier {
         return MacroCompilation(
             typeName: typeName,
             compilation: compilation,
-            enumInfos: enumInfos
+            enumInfos: enumInfos,
+            nativeSourceTypes: sourceMetadata
         )
     }
 
     // MARK: - Helpers
 
     static func findSpec(in members: MemberBlockItemListSyntax) throws -> (name: String, closure: ClosureExprSyntax)? {
-        for member in members {
-            guard let varDecl = member.decl.as(VariableDeclSyntax.self),
-                  let binding = varDecl.bindings.first,
-                  binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec"
-            else { continue }
-
-            if let closure = binding.accessorBlock?.accessors.as(CodeBlockItemListSyntax.self) {
-                for stmt in closure {
-                    let expr: ExprSyntax? = {
-                        if case .expr(let e) = stmt.item { return e }
-                        if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
-                        return nil
-                    }()
-                    if let source = try specBuilderSource(from: expr) { return source }
-                }
-            }
-            if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
-                for acc in accessors where acc.accessorSpecifier.tokenKind == .keyword(.get) {
-                    for stmt in acc.body?.statements ?? [] {
-                        let expr: ExprSyntax? = {
-                            if case .expr(let e) = stmt.item { return e }
-                            if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
-                            return nil
-                        }()
-                        if let source = try specBuilderSource(from: expr) { return source }
-                    }
-                }
-            }
+        let declarations = members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
+            $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec" }
         }
-        return nil
+        guard let declaration = declarations.first else { return nil }
+        guard declarations.count == 1,
+              declaration.modifiers.contains(where: { $0.name.text == "static" }),
+              declaration.bindings.count == 1,
+              let binding = declaration.bindings.first,
+              binding.initializer == nil,
+              let accessors = binding.accessorBlock?.accessors
+        else { throw ModelMacroError.nonLiteralSpecification }
+
+        let statements: CodeBlockItemListSyntax
+        if let body = accessors.as(CodeBlockItemListSyntax.self) {
+            statements = body
+        } else if let getters = accessors.as(AccessorDeclListSyntax.self),
+                  getters.count == 1,
+                  let getter = getters.first,
+                  getter.accessorSpecifier.tokenKind == .keyword(.get),
+                  getter.effectSpecifiers == nil,
+                  let body = getter.body {
+            statements = body.statements
+        } else {
+            throw ModelMacroError.nonLiteralSpecification
+        }
+        guard statements.count == 1, let statement = statements.first else {
+            throw ModelMacroError.nonLiteralSpecification
+        }
+        let expression: ExprSyntax?
+        if case .expr(let value) = statement.item {
+            expression = value
+        } else {
+            expression = statement.item.as(ReturnStmtSyntax.self)?.expression
+        }
+        guard let source = try specBuilderSource(from: expression) else {
+            throw ModelMacroError.nonLiteralSpecification
+        }
+        return source
     }
 
     private static func specBuilderSource(from expression: ExprSyntax?) throws -> (name: String, closure: ClosureExprSyntax)? {
         guard let expression else { return nil }
+        let arguments: LabeledExprListSyntax
+        let trailingClosure: ClosureExprSyntax?
+        let source: ModelMacroError.Source
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-            guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
-                throw ModelMacroError.dynamicModuleName(.builder)
+            guard call.additionalTrailingClosures.isEmpty else {
+                throw ModelMacroError.nonLiteralSpecification
             }
-            guard let closure = call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self) else {
-                return nil
+            arguments = call.arguments
+            trailingClosure = call.trailingClosure
+            source = .builder
+        } else if let macro = expression.as(MacroExpansionExprSyntax.self),
+                  macro.macroName.text == "spec" {
+            guard macro.additionalTrailingClosures.isEmpty else {
+                throw ModelMacroError.nonLiteralSpecification
             }
+            arguments = macro.arguments
+            trailingClosure = macro.trailingClosure
+            source = .specMacro
+        } else {
+            return nil
+        }
+        guard let first = arguments.first,
+              first.label == nil,
+              let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+            throw ModelMacroError.dynamicModuleName(source)
+        }
+        if arguments.count == 1, let trailingClosure {
+            return (name, trailingClosure)
+        }
+        if arguments.count == 2, trailingClosure == nil,
+           let last = arguments.last,
+           last.label == nil || last.label?.text == "scoped",
+           let closure = last.expression.as(ClosureExprSyntax.self) {
             return (name, closure)
         }
-        if let macro = expression.as(MacroExpansionExprSyntax.self),
-           macro.macroName.text == "spec" {
-            guard let name = macro.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
-                throw ModelMacroError.dynamicModuleName(.specMacro)
-            }
-            guard let closure = macro.trailingClosure else { return nil }
-            return (name, closure)
-        }
-        return nil
+        throw ModelMacroError.nonLiteralSpecification
     }
 
     static func collectEnumVariables(from members: MemberBlockItemListSyntax) throws -> [ParsedEnum] {
@@ -133,6 +163,7 @@ enum TLASpecVerifier {
                 continue
             }
 
+            let encoding = try enumEncoding(in: enumDecl, intBacked: intBacked)
             var cases: [(name: String, value: TLAValue)] = []
             var idx = 0
             for caseMember in enumDecl.memberBlock.members {
@@ -158,49 +189,110 @@ enum TLASpecVerifier {
                     } else {
                         value = .string(element.name.text)
                     }
-                    cases.append((element.name.text, value))
+                    let encoded: TLAValue
+                    if encoding == "constant", case .string(let raw) = value {
+                        encoded = .constant(raw)
+                    } else {
+                        encoded = value
+                    }
+                    cases.append((element.name.text, encoded))
                 }
             }
 
             enums.append(ParsedEnum(
                 typeName: enumDecl.name.text,
                 cases: cases,
-                formalDomainValues: finiteValues(in: enumDecl, cases: cases)
+                formalDomainValues: try finiteValues(in: enumDecl, cases: cases)
             ))
         }
         return enums
     }
 
+    private static func enumEncoding(in declaration: EnumDeclSyntax, intBacked: Bool) throws -> String {
+        let encodings = declaration.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
+            $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "tlaValue" }
+        }
+        guard let encoding = encodings.first else { return intBacked ? "int" : "string" }
+        let failure = ModelMacroError.unsupportedEnumEncoding(typeName: declaration.name.text)
+        guard encodings.count == 1, encoding.bindings.count == 1,
+              !encoding.modifiers.contains(where: { $0.name.text == "static" }),
+              let binding = encoding.bindings.first, binding.initializer == nil,
+              let accessors = binding.accessorBlock?.accessors else { throw failure }
+        let statements: CodeBlockItemListSyntax
+        if let body = accessors.as(CodeBlockItemListSyntax.self) {
+            statements = body
+        } else if let getters = accessors.as(AccessorDeclListSyntax.self), getters.count == 1,
+                  let getter = getters.first, getter.accessorSpecifier.tokenKind == .keyword(.get),
+                  getter.effectSpecifiers == nil, let body = getter.body {
+            statements = body.statements
+        } else { throw failure }
+        guard statements.count == 1, let statement = statements.first else { throw failure }
+        let expression: ExprSyntax?
+        if case .expr(let value) = statement.item { expression = value }
+        else { expression = statement.item.as(ReturnStmtSyntax.self)?.expression }
+        guard let call = expression?.as(FunctionCallExprSyntax.self),
+              call.arguments.count == 1, call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+              let constructor = call.calledExpression.as(MemberAccessExprSyntax.self),
+              constructor.base == nil || constructor.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLAValue",
+              let argument = call.arguments.first, argument.label == nil else { throw failure }
+        let isRawValue = argument.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "rawValue"
+            || argument.expression.as(MemberAccessExprSyntax.self).map {
+                $0.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "self"
+                    && $0.declName.baseName.text == "rawValue"
+            } == true
+        let name = constructor.declName.baseName.text
+        guard isRawValue, (intBacked ? ["int"] : ["string", "constant"]).contains(name) else { throw failure }
+        return name
+    }
+
     private static func finiteValues(
         in enumDecl: EnumDeclSyntax,
         cases: [(name: String, value: TLAValue)]
-    ) -> [TLAValue] {
-        guard let binding = enumDecl.memberBlock.members.lazy.compactMap({ member -> PatternBindingSyntax? in
-            guard let declaration = member.decl.as(VariableDeclSyntax.self),
-                  declaration.modifiers.contains(where: { $0.name.text == "static" })
-            else { return nil }
-            return declaration.bindings.first { binding in
-                binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "finiteValues"
+    ) throws -> [TLAValue] {
+        let declarations = enumDecl.memberBlock.members.compactMap {
+            $0.decl.as(VariableDeclSyntax.self)
+        }
+        let bindings = declarations.filter {
+            $0.modifiers.contains(where: { $0.name.text == "static" })
+        }.flatMap { Array($0.bindings) }
+        let domains = bindings.filter {
+            $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "finiteValues"
+        }
+        guard let binding = domains.first else { return cases.map(\.value) }
+        let failure = ModelMacroError.dynamicFiniteDomain(typeName: enumDecl.name.text)
+        guard domains.count == 1,
+              declarations.contains(where: {
+                  $0.bindingSpecifier.tokenKind == .keyword(.let) && $0.bindings.contains(binding)
+              }),
+              binding.accessorBlock == nil,
+              let initializer = binding.initializer?.value else { throw failure }
+
+        func localName(_ expression: ExprSyntax) -> String? {
+            if let reference = expression.as(DeclReferenceExprSyntax.self) {
+                return reference.baseName.text
             }
-        }).first,
-        let initializer = binding.initializer?.value
-        else { return cases.map(\.value) }
-
-        if initializer.as(DeclReferenceExprSyntax.self)?.baseName.text == "allCases"
-            || initializer.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "allCases" {
-            return cases.map(\.value)
+            guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
+            if let base = member.base {
+                guard let reference = base.as(DeclReferenceExprSyntax.self),
+                      ["Self", enumDecl.name.text].contains(reference.baseName.text) else { return nil }
+            }
+            return member.declName.baseName.text
         }
 
-        guard let array = initializer.as(ArrayExprSyntax.self) else {
+        if localName(initializer) == "allCases" {
+            guard !bindings.contains(where: {
+                $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "allCases"
+            }) else { throw failure }
             return cases.map(\.value)
         }
-        let values = array.elements.compactMap { element -> TLAValue? in
-            let name = element.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
-                ?? element.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-            return cases.first { $0.name == name }?.value
+        guard let array = initializer.as(ArrayExprSyntax.self) else { throw failure }
+        return try array.elements.map { element in
+            guard let name = localName(element.expression),
+                  let value = cases.first(where: { $0.name == name })?.value else { throw failure }
+            return value
         }
-        return values.isEmpty ? cases.map(\.value) : values
     }
+
 }
 
 enum ModelMacroError: Error, CustomStringConvertible, Equatable {
@@ -213,7 +305,11 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
     case missingSpecification(typeName: String)
     case emptyState
     case dynamicModuleName(Source)
+    case nonLiteralSpecification
+    case dynamicFiniteDomain(typeName: String)
     case invalidEnumRawValue(caseName: String)
+    case unsupportedEnumEncoding(typeName: String)
+    case unsupportedRecordSchema(typeName: String)
     case emptyFiniteEnum
     case emptyValueEnum
 
@@ -222,7 +318,11 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
         case .invalidHost: "@TLAModel requires a struct"
         case .missingSpecification(let typeName): "\(typeName) must declare a static spec"
         case .emptyState: "The specification must declare at least one state variable"
+        case .dynamicFiniteDomain(let typeName): "Enum \(typeName).finiteValues must be an array of its declared cases or synthesized allCases; dynamic or computed domains are not supported"
+        case .nonLiteralSpecification: "The static spec getter must contain only a direct #spec or TLASpec declaration, optionally preceded by return, with a literal module name and an inline builder closure"
         case .dynamicModuleName(let source): "\(source.rawValue) requires a literal module name"
+        case .unsupportedRecordSchema(let typeName): "Native type \(typeName) requires a literal alias or a record schema whose fieldName directly maps every declared key path to a unique string literal"
+        case .unsupportedEnumEncoding(let typeName): "Enum \(typeName).tlaValue must directly encode rawValue as .string, .constant, or .int matching its raw type; dynamic encodings are not supported"
         case .invalidEnumRawValue(let caseName): "Enum case '\(caseName)' requires an integer or string literal raw value"
         case .emptyFiniteEnum: "A SwiftTLA finite enum must declare at least one case"
         case .emptyValueEnum: "A SwiftTLA value enum must declare at least one case"
@@ -271,6 +371,7 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         let parsed: MacroCompilation
         do {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
+            return try MacroExpander.generateStateMachineMembers(model: parsed)
         } catch let diagnostic as SourceParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []
@@ -283,7 +384,6 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         } catch {
             throw error
         }
-        return MacroExpander.generateStateMachineMembers(model: parsed)
     }
 }
 

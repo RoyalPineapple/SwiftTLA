@@ -6,13 +6,13 @@ extension MacroExpander {
         let typeName = model.typeName
         let collections = model.compilation.machineSurfacePlan.symmetricCollections
         let collectionParameters = collections.map {
-            "\($0.formalName): [\($0.elementType).ID]"
+            "\($0.formalName) \(nativeCollectionBinding($0, in: model)): [\($0.elementType).ID]"
         }.joined(separator: ", ")
         let appendedCollectionParameters = collectionParameters.isEmpty
             ? ""
             : ", \(collectionParameters)"
         let collectionArguments = collections.map {
-            "\($0.formalName): \($0.formalName)"
+            "\($0.formalName): \(nativeCollectionBinding($0, in: model))"
         }.joined(separator: ", ")
         let actionMembers = model.compilation.machineSurfacePlan.actions.isEmpty ? "" : """
 

@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-struct GeneratedTypedSurface {
+public struct GeneratedTypedSurface {
   enum Step: String, CaseIterable {
     case advance
   }
@@ -22,6 +22,7 @@ struct GeneratedTypedSurface {
 
 private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
+requireSendable(GeneratedTypedSurface.self)
 requireSendable(GeneratedTypedSurface.State.self)
 requireSendable(GeneratedTypedSurface.Action.self)
 requireSendable(GeneratedTypedSurface.Transition.self)

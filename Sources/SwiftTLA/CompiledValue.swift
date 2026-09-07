@@ -1,14 +1,14 @@
-struct CompiledRecord: Hashable, Sendable {
-    struct Field: Hashable, Sendable, Comparable {
-        let key: CompiledValue
-        let value: CompiledValue
+package struct CompiledRecord: Hashable, Sendable {
+    package struct Field: Hashable, Sendable, Comparable {
+        package let key: CompiledValue
+        package let value: CompiledValue
 
-        static func < (lhs: Field, rhs: Field) -> Bool {
+        package static func < (lhs: Field, rhs: Field) -> Bool {
             lhs.key == rhs.key ? lhs.value < rhs.value : lhs.key < rhs.key
         }
     }
 
-    let fields: [Field]
+    package let fields: [Field]
 
     init(_ fields: [Field]) {
         self.fields = fields.sorted()
@@ -26,7 +26,7 @@ struct CompiledRecord: Hashable, Sendable {
     }
 }
 
-indirect enum CompiledValue: Hashable, Sendable, Comparable {
+package indirect enum CompiledValue: Hashable, Sendable, Comparable {
     case integer(Int)
     case boolean(Bool)
     case string(String)
@@ -37,7 +37,7 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
     case function([CompiledValue: CompiledValue])
     case constant(String)
 
-    init(formal value: TLAValue) {
+    package init(formal value: TLAValue) {
         self = Self.formalValue(value)
     }
 
@@ -133,7 +133,7 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
         values.sorted()
     }
 
-    static func < (lhs: CompiledValue, rhs: CompiledValue) -> Bool {
+    package static func < (lhs: CompiledValue, rhs: CompiledValue) -> Bool {
         let lhsKind = lhs.orderingKind
         let rhsKind = rhs.orderingKind
         guard lhsKind == rhsKind else { return lhsKind < rhsKind }
