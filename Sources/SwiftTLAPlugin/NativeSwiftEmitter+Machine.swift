@@ -7,8 +7,8 @@ extension NativeSwiftEmitter {
     mutating func machineMembers() throws -> [DeclSyntax] {
         let surface = model.compilation.machineSurfacePlan
         let collections = surface.symmetricCollections
-        let collectionParameters = collections.map { "\($0.formalName) \(nativeCollectionBinding($0, in: model)): [\($0.elementType).ID]" }.joined(separator: ", ")
-        let collectionArguments = collections.map { "\($0.formalName): \(nativeCollectionBinding($0, in: model))" }.joined(separator: ", ")
+        let collectionParameters = collections.map { "\($0.swiftIdentifier) \(nativeCollectionBinding($0, in: model)): [\($0.elementType).ID]" }.joined(separator: ", ")
+        let collectionArguments = collections.map { "\($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined(separator: ", ")
         let appendedParameters = collectionParameters.isEmpty ? "" : ", \(collectionParameters)"
         let appendedArguments = collectionArguments.isEmpty ? "" : ", \(collectionArguments)"
         var declarations: [DeclSyntax] = []
@@ -31,13 +31,13 @@ extension NativeSwiftEmitter {
         }
         """)
         let stateFields = try surface.variables.map { variable in
-            "public let \(variable.formalName): \(try swiftType(types.variables[plan.variables[variable.storageOrdinal].id]!))"
+            "public let \(variable.swiftIdentifier): \(try swiftType(types.variables[plan.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: "\n")
         let stateParameters = try surface.variables.map { variable in
-            "\(variable.formalName): \(try swiftType(types.variables[plan.variables[variable.storageOrdinal].id]!))"
+            "\(variable.swiftIdentifier): \(try swiftType(types.variables[plan.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: ", ")
-        let stateAssignments = surface.variables.map { "self.\($0.formalName) = \($0.formalName)" }.joined(separator: "\n")
-        let stateArguments = surface.variables.map { "\($0.formalName): execution.\(variable(plan.variables[$0.storageOrdinal].id))" }.joined(separator: ", ")
+        let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = \($0.swiftIdentifier)" }.joined(separator: "\n")
+        let stateArguments = surface.variables.map { "\($0.swiftIdentifier): execution.\(variable(plan.variables[$0.storageOrdinal].id))" }.joined(separator: ", ")
         declarations += try nativeDeclarations("""
         public struct State: Equatable, Sendable {
             \(stateFields)
@@ -129,7 +129,7 @@ extension NativeSwiftEmitter {
                 return "case \(surface.swiftIdentifier)(member: \(collection.elementType).ID)"
             }
             let parameters = try zip(action.bindings, surface.bindings).filter { $0.1.isPublic }.map { binding, surfaceBinding in
-                "\(surfaceBinding.formalName): \(try swiftType(types.bindings[binding.binder]!))"
+                "\(surfaceBinding.swiftIdentifier): \(try swiftType(types.bindings[binding.binder]!))"
             }.joined(separator: ", ")
             return "case \(surface.swiftIdentifier)" + (parameters.isEmpty ? "" : "(\(parameters))")
         }.joined(separator: "\n")
@@ -371,8 +371,8 @@ extension NativeSwiftEmitter {
                 } else {
                     domain = "[\(try binding.values.map { try literal($0, as: type) }.joined(separator: ", "))]"
                     if surfaceBinding.isPublic {
-                        pattern.append("\(surfaceBinding.formalName): let \(name)")
-                        actionArguments.append("\(surfaceBinding.formalName): \(name)")
+                        pattern.append("\(surfaceBinding.swiftIdentifier): let \(name)")
+                        actionArguments.append("\(surfaceBinding.swiftIdentifier): \(name)")
                     }
                 }
                 if surfaceBinding.isPublic || surface.collection != nil {
@@ -432,7 +432,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func propertyDeclarations(collectionParameters: String) throws -> [DeclSyntax] {
-        let arguments = model.compilation.machineSurfacePlan.symmetricCollections.map { ", \($0.formalName): \(nativeCollectionBinding($0, in: model))" }.joined()
+        let arguments = model.compilation.machineSurfacePlan.symmetricCollections.map { ", \($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined()
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         for invariant in plan.invariants {

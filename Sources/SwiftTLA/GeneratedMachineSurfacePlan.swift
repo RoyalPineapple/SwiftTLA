@@ -6,6 +6,7 @@ import SwiftSyntax
 package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Variable: Sendable, Equatable {
         package let formalName: String
+        package let swiftIdentifier: String
         package let storageOrdinal: Int
         package let swiftType: String
         package let collection: SymmetricCollection?
@@ -15,8 +16,9 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             storageOrdinal: Int,
             swiftType: String,
             collection: SymmetricCollection?
-        ) {
+        ) throws {
             self.formalName = formalName
+            self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
             self.storageOrdinal = storageOrdinal
             self.swiftType = swiftType
             self.collection = collection
@@ -25,12 +27,14 @@ package struct MachineSurfacePlan: Sendable, Equatable {
 
     package struct Binding: Sendable, Equatable {
         package let formalName: String
+        package let swiftIdentifier: String
         package let swiftType: String
         package let domain: [TLAValue]
         package var isPublic: Bool { domain.count > 1 }
 
-        init(formalName: String, swiftType: String, domain: [TLAValue]) {
+        init(formalName: String, swiftType: String, domain: [TLAValue]) throws {
             self.formalName = formalName
+            self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
             self.swiftType = swiftType
             self.domain = domain
         }
@@ -57,6 +61,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
 
     package struct SymmetricCollection: Sendable, Equatable {
         package let formalName: String
+        package let swiftIdentifier: String
         package let members: [TLAValue]
         package let elementType: String
         package let valueType: String
@@ -66,8 +71,9 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             members: [TLAValue],
             elementType: String,
             valueType: String
-        ) {
+        ) throws {
             self.formalName = formalName
+            self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
             self.members = members
             self.elementType = elementType
             self.valueType = valueType
@@ -98,7 +104,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 }
                 return (
                     variable.id,
-                    SymmetricCollection(
+                    try SymmetricCollection(
                         formalName: variable.declaration.name,
                         members: try declaration.members.map { try $0.rendered(using: layout) },
                         elementType: elementType,
@@ -132,7 +138,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                     path: "variables.\(variable.declaration.name)"
                 )
             }
-            return Variable(
+            return try Variable(
                 formalName: variable.declaration.name,
                 storageOrdinal: variable.id.ordinal,
                 swiftType: swiftType,
@@ -183,7 +189,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 compiledAction: layoutAction.id,
                 swiftIdentifier: identifier,
                 bindings: try action.bindings.map { binding in
-                    Binding(
+                    try Binding(
                         formalName: collection == nil ? binding.sourceName : "member",
                         swiftType: try Self.generatedSwiftType(
                             explicit: binding.generatedSwiftType,
@@ -246,8 +252,33 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         }
     }
 
+    private static func sourceIdentifier(_ name: String) throws -> String {
+        let tokens = Parser.parse(source: name).tokens(viewMode: .sourceAccurate).filter {
+            $0.tokenKind != .endOfFile
+        }
+        guard tokens.count == 1, let token = tokens.first, token.text == name, name != "_" else {
+            throw invalidSourceIdentifier(name)
+        }
+        switch token.tokenKind {
+        case .identifier: return name
+        case .keyword: return "`\(name)`"
+        default: throw invalidSourceIdentifier(name)
+        }
+    }
+
+    private static func invalidSourceIdentifier(_ name: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape,
+            stage: .validation,
+            path: "machineSurfacePlan.identifiers.\(name)",
+            expected: "one named Swift identifier for a generated state field or action parameter",
+            actual: name,
+            nextSafeAction: "Choose a named Swift identifier; formal action labels may use arbitrary names."
+        )
+    }
+
     private static func generatedActionIdentifiers(_ names: [String]) -> [String] {
-        let reserved: Set<String> = ["init", "deinit", "subscript", "rawValue"]
+        let reserved: Set<String> = ["_", "init", "deinit", "subscript", "rawValue"]
         var used: Set<String> = []
         return names.map { name in
             let scalars = name.unicodeScalars.map { scalar -> Character in

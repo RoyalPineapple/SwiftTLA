@@ -44,3 +44,56 @@ struct ActionIdentifierSpellingTests {
             == ["`class`", "`default`", "`switch`", "`repeat`", "repeat_"])
     }
 }
+
+@TLAModel
+private struct KeywordStateExecution {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("KeywordStateExecution") {
+            Algorithm("KeywordStateExecution", scoped: { scope in
+                let value = scope.sharedVar("class", initial: 0)
+                Do(Step.advance) { Assign(value, to: value.expr + 1) }
+            })
+        }
+    }
+}
+
+// Formal boundary fixture supplies arbitrary formal action and parameter names.
+@TLAModel
+private struct WildcardActionExecution {
+    static var spec: TLASpec {
+        TLASpec("WildcardActionExecution") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            SwiftTLA.Action("_", parameters: [ActionParameter("class", values: [1, 2])]) {
+                value.becomes(1)
+            }
+        }
+    }
+}
+
+extension ActionIdentifierSpellingTests {
+    @Test("Keyword state fields and action parameters retain named Swift access")
+    func keywordFieldsAndBindingsCompile() throws {
+        var stateMachine = try KeywordStateExecution.makeMachine()
+        #expect(stateMachine.state.class == 0)
+        #expect(try stateMachine.send(.advance).after.class == 1)
+        var actionMachine = try WildcardActionExecution.makeMachine()
+        #expect(try actionMachine.send(.action__(class: 1)).after.value == 1)
+        let surface = try WildcardActionExecution.spec.compile().machineSurfacePlan
+        #expect(surface.actions.first?.bindings.first?.formalName == "class")
+        #expect(surface.actions.first?.bindings.first?.swiftIdentifier == "`class`")
+    }
+
+    @Test("Unspellable field and binding names fail at the generated surface boundary")
+    func malformedNamesAreRejected() throws {
+        for name in ["_", "two words", "total-count", "1value"] {
+            #expect(throws: CompilationDiagnostic.self) {
+                try MachineSurfacePlan.Variable(formalName: name, storageOrdinal: 0, swiftType: "Int", collection: nil)
+            }
+            #expect(throws: CompilationDiagnostic.self) {
+                try MachineSurfacePlan.Binding(formalName: name, swiftType: "Int", domain: [.int(1), .int(2)])
+            }
+        }
+    }
+}
