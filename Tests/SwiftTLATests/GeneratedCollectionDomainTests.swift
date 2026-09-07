@@ -24,7 +24,7 @@ import Testing
         }
         var storage = try _GeneratedMachineStorage<[Int: Int], Int>(
             compilation: specification.compile(), initial: nil,
-            stateDecoder: { try $0.decodeCollection(applicationMembers: [1], as: Int.self) },
+            stateDecoder: { try $0.decodeCollection(applicationMembers: [1]) },
             actionDecoders: [{ _ in 0 }], actionValidator: { _ in }
         )
         #expect(storage.state == [1: 0])

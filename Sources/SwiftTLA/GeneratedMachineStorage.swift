@@ -15,33 +15,30 @@ fileprivate enum _GeneratedMachineValue: Sendable {
 @_documentation(visibility: internal)
 public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hashable & Sendable>: Sendable {
     public struct Decoder: Sendable {
-        private let values: [_GeneratedMachineValue]
+        private var values: ArraySlice<_GeneratedMachineValue>
         private let layout: CompiledLayout
-        private var index = 0
 
         fileprivate init(_ values: [_GeneratedMachineValue], layout: CompiledLayout) {
-            self.values = values
+            self.values = values[...]
             self.layout = layout
         }
 
         public mutating func decode<Value: TLAValueType>(
             as _: Value.Type = Value.self
         ) throws -> Value {
-            let actual = values.indices.contains(index)
-                ? values[index].diagnosticKind
-                : "no input at index \(index) among \(values.count) decoder inputs"
-            guard values.indices.contains(index),
-                  case .value(let compiled, let path) = values[index] else {
+            let actual = values.first?.diagnosticKind
+                ?? "no input at index \(values.startIndex) among \(values.endIndex) decoder inputs"
+            guard case .value(let compiled, let path)? = values.first else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .runtime,
-                    path: "generatedValueDecoder[\(index)]",
+                    path: "generatedValueDecoder[\(values.startIndex)]",
                     expected: "a compiled value decodable as \(String(reflecting: Value.self))",
                     actual: actual,
                     nextSafeAction: "Compile the generated machine from its current source declaration."
                 )
             }
-            defer { index += 1 }
+            defer { _ = values.popFirst() }
             let formal = try compiled.rendered(using: layout)
             guard let value = Value(formalValue: formal) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
@@ -56,31 +53,28 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
         public mutating func decodeMember<Member: Equatable & Sendable>(
             applicationMembers: [Member]
         ) throws -> Member {
-            let actual = values.indices.contains(index)
-                ? "\(values[index].diagnosticKind) for \(applicationMembers.count) application members"
-                : "no input at index \(index) among \(values.count) decoder inputs"
-            guard values.indices.contains(index),
-                  case .member(let memberIndex) = values[index],
+            let actual = values.first.map {
+                "\($0.diagnosticKind) for \(applicationMembers.count) application members"
+            } ?? "no input at index \(values.startIndex) among \(values.endIndex) decoder inputs"
+            guard case .member(let memberIndex)? = values.first,
                   applicationMembers.indices.contains(memberIndex) else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .runtime,
-                    path: "generatedValueDecoder[\(index)]",
+                    path: "generatedValueDecoder[\(values.startIndex)]",
                     expected: "a symmetric member index within the bound application members",
                     actual: actual,
                     nextSafeAction: "Compile the generated machine from its current source declaration."
                 )
             }
-            index += 1
+            _ = values.popFirst()
             return applicationMembers[memberIndex]
         }
 
         public mutating func decodeCollection<Member: Hashable & Sendable, Value: TLAValueType>(
-            applicationMembers: [Member],
-            as _: Value.Type = Value.self
+            applicationMembers: [Member]
         ) throws -> [Member: Value] {
-            guard values.indices.contains(index),
-                  case .collection(let compiledValues, let path) = values[index] else {
+            guard case .collection(let compiledValues, let path)? = values.first else {
                 throw GeneratedMachineStateDiagnostic.missingRequiredValue(
                     path: "generated collection",
                     expected: "one compiled collection value"
@@ -95,7 +89,7 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                     actual: "\(uniqueApplicationMemberCount) unique IDs from \(applicationMembers.count) supplied IDs"
                 )
             }
-            index += 1
+            _ = values.popFirst()
             return try Dictionary(uniqueKeysWithValues: zip(applicationMembers, compiledValues).map {
                 applicationMember, compiledValue in
                 let formalValue = try compiledValue.rendered(using: layout)
@@ -110,11 +104,11 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
         }
 
         fileprivate var isAtEnd: Bool {
-            index == values.endIndex
+            values.isEmpty
         }
 
         fileprivate var remainingCount: Int {
-            values.endIndex - index
+            values.count
         }
     }
 
@@ -137,28 +131,24 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
             var values = try Self.stateValues(compiled, compilation: compilation)
             let state = try stateDecoder(&values)
             try Self.validateStateDecoder(values)
-            return (compiled, state)
+            return (compiled: compiled, state: state)
         }
-        let matches = if let initial {
-            decoded.filter { $0.1 == initial }
-        } else {
-            decoded
-        }
-        guard matches.count == 1 else {
-            if matches.isEmpty {
-                if initial == nil {
-                    throw GeneratedMachineError.noInitialState
-                }
-                throw GeneratedMachineError.invalidInitialState
+        var matches = decoded.filter { initial == nil || initial == $0.state }[...]
+        guard let (compiled, state) = matches.popFirst() else {
+            if initial == nil {
+                throw GeneratedMachineError.noInitialState
             }
+            throw GeneratedMachineError.invalidInitialState
+        }
+        guard matches.isEmpty else {
             throw GeneratedMachineError.ambiguousInitialState
         }
         self.compilation = compilation
         self.stateDecoder = stateDecoder
         self.actionDecoders = actionDecoders
         self.actionValidator = actionValidator
-        self.compiledState = matches[0].0
-        self.state = matches[0].1
+        self.compiledState = compiled
+        self.state = state
     }
 
     public func isEnabled(_ action: Action) throws -> Bool {

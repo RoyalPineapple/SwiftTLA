@@ -253,8 +253,7 @@ extension MacroExpander {
             if let collection = variable.collection {
                 return """
                 self.\(collection.formalName) = try values.decodeCollection(
-                    applicationMembers: \(collection.formalName),
-                    as: \(collection.valueType).self
+                    applicationMembers: \(collection.formalName)
                 )
                 """
             }
