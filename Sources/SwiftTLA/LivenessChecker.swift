@@ -210,13 +210,13 @@ package struct LivenessChecker {
 
         switch form {
         case .always:
-            search = .init(cycleStates: allStates, prefixStates: negative, cycleRequiredStates: [])
+            search = .init(cycleStates: allStates, prefixStates: negative)
         case .eventually:
-            search = .init(cycleStates: negative, prefixStates: [], prefixContinuationStates: negative, cycleRequiredStates: [])
+            search = .init(cycleStates: negative, prefixContinuationStates: negative)
         case .alwaysEventually:
-            search = .init(cycleStates: negative, prefixStates: [], cycleRequiredStates: [])
+            search = .init(cycleStates: negative)
         case .eventuallyAlways:
-            search = .init(cycleStates: allStates, prefixStates: [], cycleRequiredStates: negative)
+            search = .init(cycleStates: allStates, cycleRequiredStates: negative)
         case .leadsTo:
             guard let trigger else {
                 throw CompilationDiagnostic(
@@ -231,7 +231,7 @@ package struct LivenessChecker {
             let triggers = Set(try graph.states.keys.compactMap { state in
                 try trigger(state) ? state : nil
             }).intersection(negative)
-            search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative, cycleRequiredStates: [])
+            search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative)
         }
 
         let components = fairComponents(in: search.cycleStates, fairness: fairness, enabled: enabled)
@@ -382,16 +382,16 @@ extension LivenessChecker {
     private func findWitness(
         _ components: [Set<StateGraph.StateID>],
         initialStates: [StateGraph.StateID],
-        prefixStates: Set<StateGraph.StateID>,
+        prefixStates: Set<StateGraph.StateID>?,
         prefixContinuationStates: Set<StateGraph.StateID>?,
-        cycleRequiredStates: Set<StateGraph.StateID>,
+        cycleRequiredStates: Set<StateGraph.StateID>?,
         fairness: [CompiledFairnessCondition],
         enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
     ) -> FairLassoWitness? {
         var witnesses: [FairLassoWitness] = []
         for component in components {
-            let requiredCycle = cycleRequiredStates.intersection(component)
-            if !cycleRequiredStates.isEmpty, requiredCycle.isEmpty { continue }
+            let requiredCycle = cycleRequiredStates?.intersection(component) ?? []
+            if cycleRequiredStates != nil, requiredCycle.isEmpty { continue }
             for cycleStart in component.sorted(by: stateOrder) {
                 guard let cycle = makeCycle(
                     in: component,
@@ -401,7 +401,7 @@ extension LivenessChecker {
                     enabled: enabled
                 ) else { continue }
                 for initial in initialStates.sorted(by: stateOrder) {
-                if prefixStates.isEmpty {
+                if prefixStates == nil {
                     if let prefix = shortestPath(from: initial, to: cycleStart, in: prefixContinuationStates) {
                             witnesses.append(.init(
                                 prefix: prefix.0,
@@ -410,7 +410,7 @@ extension LivenessChecker {
                                 cycleActions: cycle.1.map(\.renderedAction)
                             ))
                         }
-                    } else {
+                    } else if let prefixStates {
                         for required in prefixStates.sorted(by: stateOrder) {
                             guard let first = shortestPath(from: initial, to: required, in: nil),
                                   let second = shortestPath(from: required, to: cycleStart, in: prefixContinuationStates) else { continue }
@@ -580,15 +580,16 @@ extension LivenessChecker {
 
 private struct LassoSearch {
     let cycleStates: Set<StateGraph.StateID>
-    let prefixStates: Set<StateGraph.StateID>
+    // nil imposes no visit requirement; an empty set makes the requirement impossible.
+    let prefixStates: Set<StateGraph.StateID>?
     let prefixContinuationStates: Set<StateGraph.StateID>?
-    let cycleRequiredStates: Set<StateGraph.StateID>
+    let cycleRequiredStates: Set<StateGraph.StateID>?
 
     init(
         cycleStates: Set<StateGraph.StateID>,
-        prefixStates: Set<StateGraph.StateID>,
+        prefixStates: Set<StateGraph.StateID>? = nil,
         prefixContinuationStates: Set<StateGraph.StateID>? = nil,
-        cycleRequiredStates: Set<StateGraph.StateID>
+        cycleRequiredStates: Set<StateGraph.StateID>? = nil
     ) {
         self.cycleStates = cycleStates
         self.prefixStates = prefixStates
