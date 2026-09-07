@@ -31,7 +31,7 @@ generated machines in use.
   demonstrations.
 - `SwiftTLADemoApp` is the SwiftUI application that imports `SwiftTLADemos`.
 - `ApplePlatformExamples` contains separate Apple-framework consumers of the
-  SwiftTLA library.
+  SwiftTLA library. See its [adoption proof and camera checks](ApplePlatformExamples/README.md).
 
 When an example needs a new behavior, add the smallest typed formal capability
 required by the source model. The source model declares that behavior, and the

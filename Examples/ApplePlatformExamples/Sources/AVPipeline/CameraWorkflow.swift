@@ -36,6 +36,11 @@ public struct CameraWorkflow {
         static let finiteValues: [Self] = [.recordingFailedEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
+    private enum RecordingCancelledProcess: String, FiniteTLAValueDomain { case recordingCancelledEvent
+        static var defaultValue: Self { .recordingCancelledEvent }
+        static let finiteValues: [Self] = [.recordingCancelledEvent]
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
     private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent
         static var defaultValue: Self { .playEvent }
         static let finiteValues: [Self] = [.playEvent]
@@ -46,7 +51,7 @@ public struct CameraWorkflow {
         static let finiteValues: [Self] = [.liveEvent]
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Step: String, CaseIterable { case ready, record, stopRecording, recordingSucceeded, recordingFailed, play, live }
+    private enum Step: String, CaseIterable { case ready, record, stopRecording, recordingSucceeded, recordingFailed, recordingCancelled, play, live }
 
     public static var spec: TLASpec {
         #spec("CameraWorkflow") {
@@ -66,6 +71,9 @@ public struct CameraWorkflow {
                 }
                 Each(RecordingFailedProcess.all) { _ in
                     Do(Step.recordingFailed) { When(phase == Phase.recording || phase == Phase.stopping); Assign(phase, to: Phase.live); Goto(Step.recordingFailed) }
+                }
+                Each(RecordingCancelledProcess.all) { _ in
+                    Do(Step.recordingCancelled) { When(phase == Phase.recording || phase == Phase.stopping); Assign(phase, to: Phase.live); Goto(Step.recordingCancelled) }
                 }
                 Each(PlayProcess.all) { _ in
                     Do(Step.play) { When(phase == Phase.live); Assign(phase, to: Phase.playing); Goto(Step.play) }

@@ -31,9 +31,58 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      - name: Build and test Apple platform examples
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - id: adoption-source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Apple-platform adoption evidence
         working-directory: Examples/ApplePlatformExamples
-        run: xcodebuild test -scheme ApplePlatformExamples-Package -destination 'platform=macOS,arch=arm64' -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1
+        run: |
+          mkdir -p .build/adoption-evidence
+          git rev-parse HEAD > .build/adoption-evidence/source-sha.txt
+
+      - name: Build camera adoption executable
+        working-directory: Examples/ApplePlatformExamples
+        run: |
+          set -o pipefail
+          xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build | tee .build/adoption-evidence/camera-executable-build.log
+
+      - name: Run camera adoption contracts
+        working-directory: Examples/ApplePlatformExamples
+        run: |
+          set -o pipefail
+          xcodebuild test -scheme ApplePlatformExamples-Package -destination 'platform=macOS,arch=arm64' -only-testing:ApplePlatformExamplesTests/GeneratedAppleModelTests -only-testing:ApplePlatformExamplesTests/CameraAdoptionProofTests -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1 -resultBundlePath .build/adoption-evidence/camera-adoption-contracts.xcresult | tee .build/adoption-evidence/camera-adoption-contracts.log
+
+      - name: Verify complete Apple-platform adoption evidence
+        working-directory: Examples/ApplePlatformExamples
+        run: |
+          set -euo pipefail
+          for record in \
+            .build/adoption-evidence/source-sha.txt \
+            .build/adoption-evidence/camera-executable-build.log \
+            .build/adoption-evidence/camera-adoption-contracts.log; do
+            test -f "$record" || { echo "Missing adoption evidence file: $record"; exit 1; }
+          done
+          test -d .build/adoption-evidence/camera-adoption-contracts.xcresult || {
+            echo "Missing adoption evidence result bundle: .build/adoption-evidence/camera-adoption-contracts.xcresult"
+            exit 1
+          }
+          for suite in GeneratedAppleModelTests CameraAdoptionProofTests; do
+            grep -A1 "Test Suite '$suite' passed at" .build/adoption-evidence/camera-adoption-contracts.log \
+              | grep -q 'Executed 6 tests, with 0 failures (0 unexpected)' \
+              || { echo "$suite did not pass exactly six tests"; exit 1; }
+          done
+
+      - name: Upload Apple-platform adoption evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: apple-platform-adoption-${{ steps.adoption-source.outputs.sha }}
+          path: Examples/ApplePlatformExamples/.build/adoption-evidence
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build SwiftUI demo app
         working-directory: Examples/SwiftTLADemoApp

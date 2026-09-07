@@ -1,9 +1,12 @@
 import AVPipeline
 import Bluetooth
 import CoreBluetooth
+import Foundation
 import XCTest
 
 final class GeneratedAppleModelTests: XCTestCase {
+    private struct RecordingFailure: Error {}
+
     func testBluetoothGeneratedLifecycleExposesScanActions() async throws {
         var machine = try BluetoothModel.makeMachine()
         _ = try machine.send(.poweredOn)
@@ -45,22 +48,63 @@ final class GeneratedAppleModelTests: XCTestCase {
         XCTAssertEqual(failedDiscovery.state.phase, .connected)
     }
 
-    func testCameraRecordingOutcomesRestoreLiveState() throws {
+    func testRecordingCallbacksClassifyCompletionFailureAndCancellation() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407"))
+
+        var completed = RecordingCallbackCorrelation()
+        XCTAssertEqual(completed.begin(id: id), id)
+        XCTAssertEqual(completed.consumeCallback(for: id, error: nil), .recordingSucceeded)
+
+        var failed = RecordingCallbackCorrelation()
+        XCTAssertEqual(failed.begin(id: id), id)
+        XCTAssertEqual(failed.consumeCallback(for: id, error: RecordingFailure()), .recordingFailed)
+
+        var cancelled = RecordingCallbackCorrelation()
+        XCTAssertEqual(cancelled.begin(id: id), id)
+        XCTAssertTrue(cancelled.requestCancellation(for: id))
+        XCTAssertEqual(cancelled.consumeCallback(for: id, error: nil), .recordingCancelled)
+    }
+
+    func testRecordingCallbacksIgnoreDuplicateCallbacks() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407"))
+        var callbacks = RecordingCallbackCorrelation()
+
+        XCTAssertEqual(callbacks.begin(id: id), id)
+        XCTAssertEqual(callbacks.consumeCallback(for: id, error: nil), .recordingSucceeded)
+        XCTAssertNil(callbacks.consumeCallback(for: id, error: RecordingFailure()))
+    }
+
+    func testLateAndDuplicateCallbacksPreserveTheCurrentGeneratedState() throws {
+        let firstID = try XCTUnwrap(UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407"))
+        let secondID = try XCTUnwrap(UUID(uuidString: "D4E4A2B5-C85B-49BD-B8D7-6B28E959CD42"))
+        var correlation = RecordingCallbackCorrelation()
         var machine = try CameraWorkflow.makeMachine()
+
         _ = try machine.send(.ready)
-        _ = try machine.send(.record)
-        XCTAssertEqual(machine.state.phase, .recording)
 
-        _ = try machine.send(.stopRecording)
-        XCTAssertEqual(machine.state.phase, .stopping)
-
-        _ = try machine.send(.recordingSucceeded)
-        XCTAssertEqual(machine.state.phase, .live)
-
+        XCTAssertEqual(correlation.begin(id: firstID), firstID)
         _ = try machine.send(.record)
         _ = try machine.send(.stopRecording)
-        _ = try machine.send(.recordingFailed)
+        let completedAction = try XCTUnwrap(correlation.consumeCallback(for: firstID, error: nil))
+        _ = try machine.send(completedAction)
         XCTAssertEqual(machine.state.phase, .live)
+
+        XCTAssertEqual(correlation.begin(id: secondID), secondID)
+        _ = try machine.send(.record)
+        let stateBeforeLateCallback = machine.state
+        XCTAssertEqual(correlation.pendingAttemptID, secondID)
+        XCTAssertNil(correlation.consumeCallback(for: firstID, error: nil))
+        XCTAssertEqual(correlation.pendingAttemptID, secondID)
+        XCTAssertEqual(machine.state, stateBeforeLateCallback)
+
+        let submittedAction = try XCTUnwrap(correlation.consumeCallback(for: secondID, error: RecordingFailure()))
+        let secondTransition = try machine.send(submittedAction)
+        XCTAssertEqual(secondTransition.before.phase, .recording)
+        XCTAssertEqual(secondTransition.after.phase, .live)
+
+        let stateBeforeDuplicateCallback = machine.state
+        XCTAssertNil(correlation.consumeCallback(for: secondID, error: nil))
+        XCTAssertEqual(machine.state, stateBeforeDuplicateCallback)
     }
 
 }
