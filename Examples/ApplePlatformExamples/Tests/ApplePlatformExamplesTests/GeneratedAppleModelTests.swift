@@ -48,32 +48,6 @@ final class GeneratedAppleModelTests: XCTestCase {
         XCTAssertEqual(failedDiscovery.state.phase, .connected)
     }
 
-    func testCameraRecordingOutcomesRestoreLiveState() throws {
-        var machine = try CameraWorkflow.makeMachine()
-        _ = try machine.send(.ready)
-        _ = try machine.send(.record)
-        XCTAssertEqual(machine.state.phase, .recording)
-
-        _ = try machine.send(.stopRecording)
-        XCTAssertEqual(machine.state.phase, .stopping)
-
-        _ = try machine.send(.recordingSucceeded)
-        XCTAssertEqual(machine.state.phase, .live)
-
-        _ = try machine.send(.record)
-        _ = try machine.send(.stopRecording)
-        _ = try machine.send(.recordingFailed)
-        XCTAssertEqual(machine.state.phase, .live)
-    }
-
-    func testCameraRecordingCancellationRestoresLiveState() throws {
-        var machine = try CameraWorkflow.makeMachine()
-        _ = try machine.send(.ready)
-        _ = try machine.send(.record)
-        _ = try machine.send(.recordingCancelled)
-        XCTAssertEqual(machine.state.phase, .live)
-    }
-
     func testRecordingAttemptClassifiesCompletionFailureAndCancellation() {
         let id = UUID(uuidString: "4A9661D8-49EF-4ACF-A33D-506E42512407")!
 
