@@ -17,124 +17,101 @@ struct ChoiceScopeTests {
         })
     }
 
-    @Test("Choices execute only in the selected conditional branch")
-    func conditionalChoicesDoNotDisappearOrEvaluateInactiveDomains() throws {
-        let choice = ActionExpr.chooseAction(.named("chosen"), .setLiteral([.int(1), .int(2)]))
-        let invalid = ActionExpr.chooseAction(.named("chosen"), .int(99))
+    @Test("Only the selected conditional choice domain is evaluated")
+    func conditionalChoicesDoNotEvaluateInactiveDomains() throws {
+        let choice = ActionExpr.existsAction("selected", .setLiteral([.int(1), .int(2)]),
+            .assign(.named("chosen"), .variable("selected")))
+        let invalid = ActionExpr.existsAction("selected", .int(99),
+            .assign(.named("chosen"), .variable("selected")))
         #expect(try successors(of: .ifElse(.bool(true), choice, invalid)) == [[.int(1), .int(0)], [.int(2), .int(0)]])
         #expect(try successors(of: .ifElse(.bool(false), invalid, choice)) == [[.int(1), .int(0)], [.int(2), .int(0)]])
     }
 
-    @Test("Disjunctive choices enumerate independent branches")
-    func disjunctionsDoNotShareSelections() throws {
+    @Test("Choice branches retain independent lexical bindings")
+    func disjunctionsAndDefinitionsDoNotShareSelections() throws {
         let action = ActionExpr.or(
-            .chooseAction(.named("chosen"), .setLiteral([.int(1)])),
-            .chooseAction(.named("chosen"), .setLiteral([.int(2)]))
+            .existsAction("selected", .setLiteral([.int(1)]), .assign(.named("chosen"), .variable("selected"))),
+            .define("domain", .setLiteral([.int(2)]),
+                .existsAction("selected", .variable("domain"), .assign(.named("chosen"), .variable("selected"))))
         )
         #expect(try successors(of: action) == [[.int(1), .int(0)], [.int(2), .int(0)]])
     }
 
-    @Test("Choice domains retain existential and local definition bindings")
-    func nestedDomainsUseTheirLexicalBindings() throws {
-        let existential = ActionExpr.existsAction(
-            "member", .setLiteral([.int(3), .int(4)]),
-            .and(
-                .chooseAction(.named("chosen"), .setLiteral([.variable("member")])),
-                .assign(.named("copied"), .variable("member"))
-            )
-        )
-        #expect(try successors(of: existential) == [[.int(3), .int(3)], [.int(4), .int(4)]])
-        let definition = ActionExpr.define(
-            "domain", .setLiteral([.int(5), .int(6)]),
-            .chooseAction(.named("chosen"), .variable("domain"))
-        )
-        #expect(try successors(of: definition) == [[.int(5), .int(0)], [.int(6), .int(0)]])
-    }
-
-    @Test("Chosen values remain visible throughout a conjunction")
-    func selectionsAreVisibleToEarlierAndLaterExpressions() throws {
-        let action = ActionExpr.and(
-            .assign(.named("copied"), .variable("chosen")),
-            .and(
-                .chooseAction(.named("chosen"), .setLiteral([.int(1), .int(2)])),
-                .guard_(.equal(.variable("chosen"), .int(2)))
-            )
-        )
+    @Test("Nested choice domains use outer binders and explicit predicates constrain members")
+    func nestedDomainsUseLexicalBindings() throws {
+        let action = ActionExpr.existsAction("first", .setLiteral([.int(1), .int(2)]),
+            .existsAction("second", .setLiteral([.variable("first")]),
+                .guard_(.in(.variable("second"), .setLiteral([.int(2), .int(3)])))
+                && .assign(.named("chosen"), .variable("first"))
+                && .assign(.named("copied"), .variable("second"))))
         #expect(try successors(of: action) == [[.int(2), .int(2)]])
-        let nested = ActionExpr.and(
-            .assign(.named("copied"), .variable("chosen")),
-            .ifElse(.bool(true), .chooseAction(.named("chosen"), .setLiteral([.int(7)])), .guard_(.bool(false)))
-        )
-        #expect(try successors(of: nested) == [[.int(7), .int(0)]])
-        let subsequent = ActionExpr.and(
-            .ifElse(.bool(true), .chooseAction(.named("chosen"), .setLiteral([.int(7)])), .guard_(.bool(false))),
-            .and(
-                .guard_(.equal(.variable("chosen"), .int(7))),
-                .assign(.named("copied"), .variable("chosen"))
-            )
-        )
-        #expect(try successors(of: subsequent) == [[.int(7), .int(7)]])
     }
 
-    @Test("Repeated choices constrain the same slot by domain intersection")
-    func repeatedChoicesNeverOverwriteAnEarlierSelection() throws {
-        let first = ActionExpr.chooseAction(.named("chosen"), .setLiteral([.int(1), .int(2)]))
-        let second = ActionExpr.chooseAction(.named("chosen"), .setLiteral([.int(2), .int(3)]))
-        #expect(try successors(of: .and(first, second)) == [[.int(2), .int(0)]])
-        #expect(try successors(of: .and(second, first)) == [[.int(2), .int(0)]])
-        #expect(try successors(of: .and(first, .chooseAction(.named("chosen"), .setLiteral([.int(9)])))).isEmpty)
-        let scoped = ActionExpr.and(first, .define("domain", .setLiteral([.int(2), .int(3)]), .chooseAction(.named("chosen"), .variable("domain"))))
-        #expect(try successors(of: scoped) == [[.int(2), .int(0)]])
+    @Test("Choosing a value does not mutate the state read by other assignments")
+    func stateReadsRemainSimultaneousAndSelectionsAreExplicit() throws {
+        let action = ActionExpr.existsAction("selected", .setLiteral([.int(2)]),
+            .assign(.named("chosen"), .variable("selected"))
+                && .assign(.named("copied"), .variable("chosen")))
+        #expect(try successors(of: action) == [[.int(2), .int(0)]])
+        let copiedSelection = ActionExpr.existsAction("selected", .setLiteral([.int(2)]),
+            .assign(.named("chosen"), .variable("selected"))
+                && .assign(.named("copied"), .variable("selected")))
+        #expect(try successors(of: copiedSelection) == [[.int(2), .int(2)]])
     }
 
-    @Test("Assignments remain simultaneous while choice slots are selected")
-    func assignmentsDoNotBecomeImperativeUpdates() throws {
-        let action = ActionExpr.and(
-            .assign(.named("chosen"), .int(1)),
-            .assign(.named("copied"), .variable("chosen"))
-        )
-        #expect(try successors(of: action) == [[.int(1), .int(0)]])
+    @Test("Runtime and rendering agree on selected arguments and formal operator state reads")
+    func formalCallsDistinguishSelectedValuesFromCurrentState() throws {
+        let action = ActionExpr.existsAction("selected", .setLiteral([.int(1), .int(2)]),
+            .guard_(.equal(.variable("selected"), .int(2)))
+                && .assign(.named("chosen"), .variable("selected"))
+                && .assign(.named("copied"), .operatorApplication(.reference("Echo", arity: 1), [.value(.variable("selected"))]))
+                && .assign(.named("observed"), .operatorApplication(.reference("Read", arity: 0), [])))
+        let compilation = try canonicalTestSpec(
+            variables: [("chosen", .value(.int(0))), ("copied", .value(.int(0))), ("observed", .value(.int(-1)))],
+            actions: [("pick", action, [])],
+            formalOperatorDefinitions: [
+                .init(name: "Echo", parameters: [.value("input")], body: .variable("input")),
+                .init(name: "Read", parameters: [], body: .variable("chosen"))
+            ]
+        ).compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let next = try #require(try runtime.successors(from: initial).first)
+        let result = try compilation.layout.variables.map { try next.state.value(for: $0.id) }
+        #expect(result == [.integer(2), .integer(2), .integer(0)])
+        let rendered = compilation.renderedTLAModuleBundle().tla
+        #expect(rendered.contains("chosen' = selected"))
+        #expect(rendered.contains("copied' = Echo(selected)"))
+        #expect(rendered.contains("observed' = Read"))
+        #expect(rendered.contains("Read == chosen"))
     }
 
-    @Test("Disabled guards short circuit local definitions, branch conditions, and domains")
-    func falseGuardsDoNotEvaluateUnreachableExpressions() throws {
+    @Test("Disabled guards do not evaluate unreachable definitions, conditions, or domains")
+    func falseGuardsShortCircuitUndefinedExpressions() throws {
         let undefined = StateExpr.divide(.int(1), .int(0))
         let unreachable: [ActionExpr] = [
-            .chooseAction(.named("chosen"), undefined),
             .define("local", undefined, .assign(.named("copied"), .variable("local"))),
             .ifElse(.equal(undefined, .int(0)), .guard_(.bool(true)), .guard_(.bool(false))),
-            .existsAction("member", undefined, .chooseAction(.named("chosen"), .setLiteral([.variable("member")]))),
-            .ifElse(.bool(true), .chooseAction(.named("chosen"), undefined), .guard_(.bool(false)))
+            .existsAction("selected", undefined, .assign(.named("chosen"), .variable("selected")))
         ]
         for action in unreachable {
             #expect(try successors(of: .and(.guard_(.bool(false)), action)).isEmpty)
         }
     }
 
-    @Test("An explicit assignment cannot overwrite a conflicting choice")
-    func assignmentsRespectChosenSlotValues() throws {
-        let choice = ActionExpr.chooseAction(.named("chosen"), .setLiteral([.int(2)]))
-        #expect(try successors(of: .and(choice, .assign(.named("chosen"), .int(2)))) == [[.int(2), .int(0)]])
-        #expect(throws: CompiledEvaluationError.self) {
-            try successors(of: .and(choice, .assign(.named("chosen"), .int(3))))
-        }
-    }
-
-
     @Test("Repeated normalization preserves conditional choice scopes and frame clauses")
-    func normalizationIsIdempotentForConditionalChoices() {
+    func normalizationIsIdempotentForBoundChoices() {
         let variables = [
             NamedVar(name: "chosen", initialization: .value(.int(0)), origin: .source),
             NamedVar(name: "copied", initialization: .value(.int(0)), origin: .source)
         ]
         let action = ActionExpr.ifElse(
             .equal(.variable("copied"), .int(0)),
-            .chooseAction(.named("chosen"), .setLiteral([.int(1)])),
+            .existsAction("selected", .setLiteral([.int(1)]), .assign(.named("chosen"), .variable("selected"))),
             .and(.unchanged(.named("chosen")), .assign(.named("copied"), .int(2)))
         )
         let once = ActionNormalization.complete(action, variables: variables)
-        let twice = ActionNormalization.complete(once, variables: variables)
-        #expect(once == twice)
+        #expect(once == ActionNormalization.complete(once, variables: variables))
         let disabled = ActionExpr.guard_(.bool(false))
         #expect(ActionNormalization.complete(disabled, variables: variables) == disabled)
     }

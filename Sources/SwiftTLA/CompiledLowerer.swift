@@ -1514,11 +1514,6 @@ struct CompiledLowerer {
                     lowered.append(try .unchanged(assignmentTarget(target, scope: scope, at: "\(taskPath).unchanged")))
                 case .guard_(let condition):
                     lowered.append(try .guard_(lower(condition, at: "\(taskPath).guard", scope: scope)))
-                case .chooseAction(let target, let set):
-                    lowered.append(try .chooseAction(
-                        assignmentTarget(target, scope: scope, at: "\(taskPath).choose"),
-                        lower(set, at: "\(taskPath).set", scope: scope)
-                    ))
                 case .existsAction(let name, let set, let body):
                     let nested = try bind([name], at: "\(taskPath).binder", scope: scope)
                     let binder = try bound(name, in: nested, at: taskPath)

@@ -369,7 +369,7 @@ struct CompiledLayout: Hashable, Sendable {
                     }
                 case .action(let action):
                     switch action {
-                    case .assign(_, let value), .guard_(let value), .chooseAction(_, let value):
+                    case .assign(_, let value), .guard_(let value):
                         pending.append(.expression(value))
                     case .unchanged:
                         break

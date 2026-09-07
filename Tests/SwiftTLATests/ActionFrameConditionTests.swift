@@ -7,7 +7,7 @@ struct ActionFrameConditionTests {
         let unchanged = ActionExpr.unchanged(.named("value"))
         let updates: [ActionExpr] = [
             .assign(.named("value"), .int(1)),
-            .chooseAction(.named("value"), .setLiteral([.int(1)]))
+            .existsAction("selected", .setLiteral([.int(1)]), .assign(.named("value"), .variable("selected")))
         ]
         for update in updates {
             for body in [ActionExpr.and(update, unchanged), .and(unchanged, update)] {

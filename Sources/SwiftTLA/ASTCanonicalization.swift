@@ -171,8 +171,6 @@ private func actionKey(_ action: ActionExpr, environment: [String: String], next
                 parts.append("unchanged(\(variable))")
             case .guard_(let condition):
                 parts.append("guard(\(state(condition)))")
-            case .chooseAction(let variable, let set):
-                parts.append("chooseAction(\(variable),\(state(set)))")
             case .existsAction(let variable, let set, let body):
                 let setKey = state(set)
                 let (canonical, extended) = fresh(variable, environment: environment, next: &next)

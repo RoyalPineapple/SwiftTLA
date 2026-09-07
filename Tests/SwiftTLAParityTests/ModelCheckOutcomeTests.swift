@@ -276,10 +276,9 @@ struct ModelCheckOutcomeTests {
 
   @Test("Multi-choose is Cartesian product")
   func multiChooseProduct() throws {
-    let action: ActionExpr = .and(
-      .chooseAction(.named("x"), .setLiteral([.value(.int(1)), .value(.int(2))])),
-      .chooseAction(.named("y"), .setLiteral([.value(.int(10)), .value(.int(20))]))
-    )
+    let action = ActionExpr.existsAction("first", .setLiteral([.int(1), .int(2)]),
+      .existsAction("second", .setLiteral([.int(10), .int(20)]),
+        .and(.assign(.named("x"), .variable("first")), .assign(.named("y"), .variable("second")))))
     let (compilation, states) = try compiledSuccessors(
       for: action,
       from: [("x", .int(0)), ("y", .int(0))]

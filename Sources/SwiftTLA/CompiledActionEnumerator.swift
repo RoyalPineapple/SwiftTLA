@@ -22,77 +22,49 @@ struct CompiledActionEnumerator {
 
     func enumerateSuccessors(_ action: CompiledAction) throws -> [CompiledSuccessor] {
         try actionBindings(action.bindings).flatMap { binding in
-            try plans(for: action.body, extending: .init(), bindings: binding.values).map { plan in
-                var assignments = plan.choices
-                for (variable, value) in plan.assignments {
-                    if let previous = assignments[variable], previous != value {
-                        throw CompiledEvaluationError.conflictingAssignment(variable)
-                    }
-                    assignments[variable] = value
-                }
-                return CompiledSuccessor(
+            try execute(action.body, bindings: binding.values).map { delta in
+                CompiledSuccessor(
                     action: action.id,
                     arguments: binding.arguments,
-                    state: try state.updating(assignments)
+                    state: try state.updating(delta.assignments)
                 )
             }
         }
     }
 
-    private func plans(
-        for action: CompiledActionExpr,
-        extending plan: CompiledActionPlan,
+    private func execute(
+        _ action: CompiledActionExpr,
         bindings: CompiledBindings
-    ) throws -> [CompiledActionPlan] {
-        let evaluator = try self.evaluator(state: state.updating(plan.choices), bindings: bindings)
+    ) throws -> [CompiledActionDelta] {
+        let evaluator = CompiledEvaluator(
+            state: state,
+            semantics: semantics,
+            layout: layout,
+            bindings: bindings,
+            enabledActions: enabledActions
+        )
         switch action {
         case .assign(let variable, let expression):
-            let value = try evaluator.evaluate(expression)
-            if let previous = plan.assignments[variable], previous != value {
-                throw CompiledEvaluationError.conflictingAssignment(variable)
-            }
-            var assigned = plan
-            assigned.assignments[variable] = value
-            return [assigned]
+            return [.init(assignments: [variable: try evaluator.evaluate(expression)])]
         case .unchanged(let variable):
-            let value = try state.value(for: variable)
-            if let previous = plan.assignments[variable], previous != value {
-                throw CompiledEvaluationError.conflictingAssignment(variable)
-            }
-            var unchanged = plan
-            unchanged.assignments[variable] = value
-            return [unchanged]
+            return [.init(assignments: [variable: try state.value(for: variable)])]
         case .guard_(let expression):
             let value = try evaluator.evaluate(expression)
             guard case .boolean(let enabled) = value else {
                 throw EvalError.expected(.boolean, actual: [value])
             }
-            return enabled ? [plan] : []
-        case .chooseAction(let variable, let set):
-            let domain = try evaluator.evaluate(set)
-            guard case .set(let values) = domain else {
-                throw EvalError.expected(.set, actual: [domain])
-            }
-            if let selected = plan.choices[variable] {
-                return values.contains(selected) ? [plan] : []
-            }
-            return CompiledValue.sorted(values).map { value in
-                var selected = plan
-                selected.choices[variable] = value
-                return selected
-            }
+            return enabled ? [.init()] : []
         case .existsAction(let binder, let set, let body):
             let domain = try evaluator.evaluate(set)
             guard case .set(let values) = domain else {
                 throw EvalError.expected(.set, actual: [domain])
             }
             return try CompiledValue.sorted(values).flatMap { value in
-                try plans(for: body, extending: plan, bindings: bindings.binding(value, to: binder))
+                try execute(body, bindings: bindings.binding(value, to: binder))
             }
         case .define(let binder, let value, let body):
-            return try plans(
-                for: body,
-                extending: plan,
+            return try execute(
+                body,
                 bindings: bindings.binding(try evaluator.evaluate(value), to: binder)
             )
         case .ifElse(let condition, let then, let otherwise):
@@ -100,41 +72,17 @@ struct CompiledActionEnumerator {
             guard case .boolean(let conditionHolds) = value else {
                 throw EvalError.expected(.boolean, actual: [value])
             }
-            return try plans(
-                for: conditionHolds ? then : otherwise,
-                extending: plan,
-                bindings: bindings
-            )
-        case .and:
-            // Choice slots are visible throughout their conjunction, including
-            // in expressions that precede the choice in the source action.
-            let terms = conjuncts(in: action)
-            let choices = terms.filter { if case .chooseAction = $0 { return true }; return false }
-            let remaining = terms.filter { if case .chooseAction = $0 { return false }; return true }
-            return try (choices + remaining).reduce([plan]) { partial, term in
-                try partial.flatMap { try plans(for: term, extending: $0, bindings: bindings) }
+            return try execute(conditionHolds ? then : otherwise, bindings: bindings)
+        case .and(let lhs, let rhs):
+            let left = try execute(lhs, bindings: bindings)
+            guard !left.isEmpty else { return [] }
+            let right = try execute(rhs, bindings: bindings)
+            return try left.flatMap { first in
+                try right.map { try first.merging($0) }
             }
         case .or(let lhs, let rhs):
-            return try plans(for: lhs, extending: plan, bindings: bindings)
-                + plans(for: rhs, extending: plan, bindings: bindings)
+            return try execute(lhs, bindings: bindings) + execute(rhs, bindings: bindings)
         }
-    }
-
-    private func conjuncts(in action: CompiledActionExpr) -> [CompiledActionExpr] {
-        if case .and(let lhs, let rhs) = action {
-            return conjuncts(in: lhs) + conjuncts(in: rhs)
-        }
-        return [action]
-    }
-
-    private func evaluator(state: CompiledState, bindings: CompiledBindings) -> CompiledEvaluator {
-        CompiledEvaluator(
-            state: state,
-            semantics: semantics,
-            layout: layout,
-            bindings: bindings,
-            enabledActions: enabledActions
-        )
     }
 
     private func actionBindings(_ bindings: [CompiledActionBinding]) -> [CompiledActionBindingValues] {
@@ -156,7 +104,15 @@ private struct CompiledActionBindingValues {
     let arguments: [CompiledValue]
 }
 
-private struct CompiledActionPlan {
-    var choices: [VariableID: CompiledValue] = [:]
+private struct CompiledActionDelta {
     var assignments: [VariableID: CompiledValue] = [:]
+
+    func merging(_ other: Self) throws -> Self {
+        .init(assignments: try other.assignments.reduce(into: assignments) { merged, assignment in
+            if let previous = merged[assignment.key], previous != assignment.value {
+                throw CompiledEvaluationError.conflictingAssignment(assignment.key)
+            }
+            merged[assignment.key] = assignment.value
+        })
+    }
 }

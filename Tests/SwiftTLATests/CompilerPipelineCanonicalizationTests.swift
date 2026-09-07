@@ -636,8 +636,8 @@ struct CompilerPipelineCanonicalizationTests {
         }
     }
 
-    @Test("compiled choices are visible to their action guards and updates")
-    func compiledChoicesUseSelectedSlotValues() throws {
+    @Test("compiled choice binders are visible to their action guards and updates")
+    func compiledChoiceBindersDriveSelectedUpdates() throws {
         let spec = TLASpec(
             name: "CompiledChoice",
             variables: [
@@ -647,9 +647,10 @@ struct CompilerPipelineCanonicalizationTests {
             actions: [
                 .init(
                     name: "select",
-                    body: .chooseAction(.named("candidate"), .setLiteral([.int(1), .int(2)]))
-                        && .guard_(.equal(.variable("candidate"), .int(2)))
-                        && .assign(.named("counter"), .variable("candidate"))
+                    body: .existsAction("selected", .setLiteral([.int(1), .int(2)]),
+                        .guard_(.equal(.variable("selected"), .int(2)))
+                        && .assign(.named("candidate"), .variable("selected"))
+                        && .assign(.named("counter"), .variable("selected")))
                 )
             ],
             invariants: []

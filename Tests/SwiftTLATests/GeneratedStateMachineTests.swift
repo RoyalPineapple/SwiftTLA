@@ -667,7 +667,9 @@ struct NondeterministicConstrainedMachine {
             let value = Var<Int>("value")
             Variable(value, 0)
             SwiftTLA.Action("choose") {
-                choose(value, from: StateExpr.set([1, 2, 3]))
+                ActionExpr.exists("selected", from: StateExpr.set([1, 2, 3])) { selected in
+                    value.becomes(Expr<Int>(selected))
+                }
             }
             Constraint(value <= 2)
             Invariant("WithinBound") { value <= 3 }

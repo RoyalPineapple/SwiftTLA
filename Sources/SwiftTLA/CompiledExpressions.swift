@@ -489,7 +489,6 @@ indirect enum CompiledActionExpr: Sendable {
     case assign(VariableID, CompiledStateExpr)
     case unchanged(VariableID)
     case guard_(CompiledStateExpr)
-    case chooseAction(VariableID, CompiledStateExpr)
     case existsAction(BinderID, CompiledStateExpr, CompiledActionExpr)
     case ifElse(CompiledStateExpr, CompiledActionExpr, CompiledActionExpr)
     case define(BinderID, CompiledStateExpr, CompiledActionExpr)

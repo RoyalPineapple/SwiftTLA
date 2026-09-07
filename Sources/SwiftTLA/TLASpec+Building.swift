@@ -411,7 +411,7 @@ struct AuthoredPlusCalDeclarationSections {
 
 package func assignedVars(_ e: ActionExpr) -> Set<ActionTarget> {
   switch e {
-  case .assign(let target, _), .chooseAction(let target, _): return [target]
+  case .assign(let target, _): return [target]
   case .unchanged, .guard_: return []
   case .and(let a, let b): return assignedVars(a).union(assignedVars(b))
   case .or(let a, let b): return assignedVars(a).union(assignedVars(b))

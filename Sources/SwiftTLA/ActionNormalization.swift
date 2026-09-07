@@ -37,9 +37,8 @@ enum ActionNormalization {
             let rightBranches = normalizedBranches(of: right)
             return leftBranches.flatMap { left in rightBranches.map { right in .and(left, right) } }
         case .ifElse(let condition, let thenBranch, let elseBranch):
-            let disabled = ActionExpr.guard_(.value(.bool(false)))
-            return normalizedBranches(of: thenBranch).map { .ifElse(condition, $0, disabled) }
-                + normalizedBranches(of: elseBranch).map { .ifElse(condition, disabled, $0) }
+            return normalizedBranches(of: normalized(.and(.guard_(condition), thenBranch)))
+                + normalizedBranches(of: normalized(.and(.guard_(StateExpr.not(condition)), elseBranch)))
         case .guard_(.value(.bool(false))):
             return []
         case .define(let variable, let value, let body):
@@ -51,8 +50,8 @@ enum ActionNormalization {
         }
     }
 
-    // Each normalized branch has only one enabled conditional path. Frame
-    // clauses inside its conditional or lexical scopes apply to that path.
+    // Each normalized branch has one enabled path. Frame clauses inside its
+    // lexical scopes apply to that path.
     static func frameTargets(inNormalizedBranch branch: ActionExpr) -> Set<ActionTarget> {
         switch branch {
         case .unchanged(let target):
@@ -63,7 +62,7 @@ enum ActionNormalization {
             return frameTargets(inNormalizedBranch: thenBranch).union(frameTargets(inNormalizedBranch: elseBranch))
         case .define(_, _, let body), .existsAction(_, _, let body):
             return frameTargets(inNormalizedBranch: body)
-        case .assign, .guard_, .chooseAction:
+        case .assign, .guard_:
             return []
         }
     }
@@ -82,7 +81,7 @@ enum ActionNormalization {
             return .define(binder, value, normalized(body))
         case .ifElse(let condition, let then, let otherwise):
             return .ifElse(condition, normalized(then), normalized(otherwise))
-        case .assign, .unchanged, .guard_, .chooseAction:
+        case .assign, .unchanged, .guard_:
             return action
         }
     }

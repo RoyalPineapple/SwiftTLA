@@ -800,8 +800,8 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     #expect(found)
   }
 
-  @Test("choose action produces nondeterministic assignment")
-  func chooseAction() throws {
+  @Test("bound choice produces nondeterministic assignment")
+  func boundChoiceUpdatesSelectedMember() throws {
     let picked = Var<Int>("picked")
     let source = Var<SetExpr<Int>>("source")
     let spec = TLASpec("ChooseTest") {
@@ -809,9 +809,10 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
       Variable(source, SetExpr(1, 2, 3))
       Action("pick") {
         source.stateExpr.cardinality > 0
-          && choose(picked, from: source)
-          && source.becomes(
-            Expr(.setDifference(source.stateExpr, StateExpr.singleton(picked.stateExpr))))
+          && ActionExpr.exists("selected", from: source) { selected in
+            picked.becomes(Expr<Int>(selected))
+              && source.becomes(Expr(.setDifference(source.stateExpr, StateExpr.singleton(selected))))
+          }
       }
     }
     if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).check() {
@@ -821,13 +822,14 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     }
   }
 
-  @Test("SpecParser parses choose(variable, from:) call")
-  func specParserChooseCall() throws {
-    let source = "choose(picked, from: q)"
+  @Test("SpecParser preserves explicit choice binders")
+  func specParserBoundChoiceCall() throws {
+    let source = "ActionExpr.exists(\"selected\", from: q) { member in picked.becomes(Expr<Int>(member)) }"
     let statement = try #require(Parser.parse(source: source).statements.first)
     let expr = try #require(statement.item.as(ExprSyntax.self))
     let decodedAction = SpecParser.decodeActionExpr(expr)
-    #expect(decodedAction == ActionExpr.chooseAction(.named("picked"), .variable("q")))
+    #expect(decodedAction == ActionExpr.existsAction("selected", .variable("q"),
+      .assign(.named("picked"), .variable("selected"))))
   }
 
   @Test("SpecParser parses singleton()")
