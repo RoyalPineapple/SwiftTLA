@@ -421,14 +421,3 @@ package func assignedVars(_ e: ActionExpr) -> Set<ActionTarget> {
   }
 }
 
-package func explicitUnchanged(_ e: ActionExpr) -> Set<ActionTarget> {
-  switch e {
-  case .unchanged(let target): return [target]
-  case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))
-  case .or(let a, let b): return explicitUnchanged(a).intersection(explicitUnchanged(b))
-  case .ifElse: return []
-  case .define: return []
-  case .existsAction: return []
-  default: return []
-  }
-}

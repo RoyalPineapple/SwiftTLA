@@ -3,14 +3,14 @@ enum ActionNormalization {
         let targets = variables.map(actionTarget(for:))
         let completed = branches(of: action).map { branch in
             let assigned = assignedVars(branch)
-            let explicit = explicitUnchanged(branch)
+            let explicit = frameTargets(inNormalizedBranch: branch)
             var terms = conjunctionTerms(in: branch)
             for target in targets where !assigned.contains(target) && !explicit.contains(target) {
                 terms.append(.unchanged(target))
             }
             return combine(terms, with: ActionExpr.and) ?? branch
         }
-        return combine(completed, with: ActionExpr.or) ?? action
+        return combine(completed, with: ActionExpr.or) ?? .guard_(.value(.bool(false)))
     }
 
     private static func actionTarget(for variable: NamedVar) -> ActionTarget {
@@ -37,14 +37,34 @@ enum ActionNormalization {
             let rightBranches = normalizedBranches(of: right)
             return leftBranches.flatMap { left in rightBranches.map { right in .and(left, right) } }
         case .ifElse(let condition, let thenBranch, let elseBranch):
-            return normalizedBranches(of: normalized(.and(.guard_(condition), thenBranch)))
-                + normalizedBranches(of: normalized(.and(.guard_(StateExpr.not(condition)), elseBranch)))
+            let disabled = ActionExpr.guard_(.value(.bool(false)))
+            return normalizedBranches(of: thenBranch).map { .ifElse(condition, $0, disabled) }
+                + normalizedBranches(of: elseBranch).map { .ifElse(condition, disabled, $0) }
+        case .guard_(.value(.bool(false))):
+            return []
         case .define(let variable, let value, let body):
             return normalizedBranches(of: body).map { .define(variable, value, $0) }
         case .existsAction(let variable, let set, let body):
             return normalizedBranches(of: body).map { .existsAction(variable, set, $0) }
         default:
             return [action]
+        }
+    }
+
+    // Each normalized branch has only one enabled conditional path. Frame
+    // clauses inside its conditional or lexical scopes apply to that path.
+    static func frameTargets(inNormalizedBranch branch: ActionExpr) -> Set<ActionTarget> {
+        switch branch {
+        case .unchanged(let target):
+            return [target]
+        case .and(let left, let right), .or(let left, let right):
+            return frameTargets(inNormalizedBranch: left).union(frameTargets(inNormalizedBranch: right))
+        case .ifElse(_, let thenBranch, let elseBranch):
+            return frameTargets(inNormalizedBranch: thenBranch).union(frameTargets(inNormalizedBranch: elseBranch))
+        case .define(_, _, let body), .existsAction(_, _, let body):
+            return frameTargets(inNormalizedBranch: body)
+        case .assign, .guard_, .chooseAction:
+            return []
         }
     }
 
