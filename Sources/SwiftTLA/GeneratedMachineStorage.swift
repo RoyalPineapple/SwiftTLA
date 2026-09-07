@@ -167,30 +167,27 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
     }
 
     public func enabledActions() throws -> [Action] {
-        var seen = Set<Action>()
-        return try candidates().compactMap { candidate in
-            seen.insert(candidate.action).inserted ? candidate.action : nil
-        }
+        try candidates().map(\.action).reduce(into: (seen: Set<Action>(), actions: [Action]())) { result, action in
+            if result.seen.insert(action).inserted {
+                result.actions.append(action)
+            }
+        }.actions
     }
 
     public mutating func send(_ action: Action) throws -> (before: State, after: State) {
         try actionValidator(action)
-        var seen = Set<CompiledState>()
-        let matches = try candidates().filter {
-            $0.action == action && seen.insert($0.compiledState).inserted
-        }
-        guard matches.count == 1 else {
+        let matches = Set(try candidates().filter { $0.action == action }.map(\.compiledState))
+        guard matches.count == 1, let successor = matches.first else {
             if matches.isEmpty {
                 throw GeneratedMachineError.noMatchingSuccessor
             }
             throw GeneratedMachineError.ambiguousAction
         }
         let before = state
-        let successor = matches[0]
-        var values = try Self.stateValues(successor.compiledState, compilation: compilation)
+        var values = try Self.stateValues(successor, compilation: compilation)
         let after = try stateDecoder(&values)
         try Self.validateStateDecoder(values)
-        compiledState = successor.compiledState
+        compiledState = successor
         state = after
         return (before, after)
     }
