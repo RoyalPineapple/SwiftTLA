@@ -38,7 +38,7 @@ Run the focused package contracts serially through the repository wrapper:
 ```
 
 The hosted `apple-platform-examples` job runs
-`xcodebuild -scheme AVPipelineExample -destination 'platform=macOS' -jobs 1 build`,
+`xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build`,
 runs those two suites serially, and uploads SHA-named logs and `.xcresult`
 bundles. GitHub Actions is the admission authority. After push, release
 reviewers verify that the hosted run and its artifact belong to the submitted

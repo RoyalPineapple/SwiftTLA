@@ -47,8 +47,9 @@ each completion, failure, or cancellation back to a typed outcome action.
 
 Run the focused external contracts from the example package. These are local
 diagnostics only; the hosted Apple-platform job remains the admission
-authority. It builds the `AVPipelineExample` package scheme for macOS, then
-retains SHA-named build logs and test result bundles.
+authority. It runs
+`xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build`,
+then retains SHA-named build logs and test result bundles.
 
 ```sh
 cd Examples/ApplePlatformExamples

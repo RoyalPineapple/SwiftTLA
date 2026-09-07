@@ -47,7 +47,7 @@ jobs:
         working-directory: Examples/ApplePlatformExamples
         run: |
           set -o pipefail
-          xcodebuild -scheme AVPipelineExample -destination 'platform=macOS' -jobs 1 build | tee .build/adoption-evidence/camera-executable-build.log
+          xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build | tee .build/adoption-evidence/camera-executable-build.log
 
       - name: Run camera callback contracts
         working-directory: Examples/ApplePlatformExamples
