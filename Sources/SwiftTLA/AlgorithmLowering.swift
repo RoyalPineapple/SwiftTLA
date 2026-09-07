@@ -43,6 +43,9 @@ enum AlgorithmLowerer {
             )
         }
         let requiresProgramCounter = requiresProgramCounter(for: algorithm)
+        let procedureProcessType = Set(processes.map(\.typeName)).count == 1
+            ? processes.first?.typeName
+            : nil
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state
@@ -114,6 +117,7 @@ enum AlgorithmLowerer {
                             value: initial,
                             localRoots: localRoots
                         )),
+                        generatedSwiftType: state.swiftTypeName.map { "[\(process.typeName): \($0)]" },
                         origin: .compiler
                     ))
             }
@@ -162,6 +166,9 @@ enum AlgorithmLowerer {
                         value: slot.initial,
                         localRoots: []
                     )),
+                    generatedSwiftType: procedureProcessType.flatMap { processType in
+                        slot.swiftTypeName.map { "[\(processType): \($0)]" }
+                    },
                     origin: .compiler
                 ))
             }
@@ -253,9 +260,6 @@ enum AlgorithmLowerer {
             }
         }
 
-        let procedureProcessType = Set(processes.map(\.typeName)).count == 1
-            ? processes.first?.typeName
-            : nil
         let procedureActions = procedures.flatMap { procedure in
             procedure.steps.enumerated().map { index, atomic in
                 let control = ControlFlow(
@@ -430,6 +434,7 @@ enum AlgorithmLowerer {
                 procedureVariables.append(NamedVar(
                     name: parameter.root,
                     initialization: .expression(parameter.initial),
+                    generatedSwiftType: parameter.swiftTypeName,
                     origin: .compiler
                 ))
             }
@@ -440,6 +445,7 @@ enum AlgorithmLowerer {
                         local.initialization,
                         path: "procedures.\(procedure.name).locals.\(local.root)"
                     )),
+                    generatedSwiftType: local.swiftTypeName,
                     origin: .compiler
                 ))
             }
@@ -852,14 +858,14 @@ enum AlgorithmLowerer {
 
     private static func procedureSlots(
         _ procedures: [AlgorithmProcedureModel]
-    ) -> [(root: String, initial: StateExpr)] {
+    ) -> [(root: String, initial: StateExpr, swiftTypeName: String?)] {
         procedures.flatMap { procedure in
-            procedure.parameters.map { ($0.root, $0.initial) }
+            procedure.parameters.map { ($0.root, $0.initial, $0.swiftTypeName) }
                 + procedure.locals.map {
                     ($0.root, deterministicInitialization(
                         $0.initialization,
                         path: "procedures.\(procedure.name).locals.\($0.root)"
-                    ))
+                    ), $0.swiftTypeName)
                 }
         }
     }
