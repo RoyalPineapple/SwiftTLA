@@ -304,6 +304,13 @@ public struct _GeneratedMachineStorage<State: Equatable & Sendable, Action: Hash
                     actual: actual
                 )
             }
+            guard entries.count == compiledMembers.count else {
+                throw GeneratedMachineStateDiagnostic.typeMismatch(
+                    path: variable.formalName,
+                    expected: "exactly the declared symmetric collection domain",
+                    actual: "\(entries.count) entries for \(compiledMembers.count) declared members"
+                )
+            }
             let memberValues = try compiledMembers.map { member in
                 guard let value = entries[member] else {
                     throw GeneratedMachineStateDiagnostic.missingRequiredValue(
