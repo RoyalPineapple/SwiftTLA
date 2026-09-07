@@ -2,6 +2,37 @@ import SwiftUI
 @preconcurrency import AVPipeline
 import AVFoundation
 import Observation
+import OSLog
+import SwiftTLA
+
+private let cameraLog = Logger(subsystem: "org.swifttla.examples", category: "CameraApp")
+
+private enum ActorProofResult: Sendable {
+    case accepted(CameraWorkflow.Transition)
+    case rejected(GeneratedMachineError)
+    case failed(String)
+
+    var diagnostic: String {
+        switch self {
+        case .accepted(let transition):
+            "accepted action=\(transition.action) before=\(transition.before.phase.rawValue) after=\(transition.after.phase.rawValue)"
+        case .rejected(let error):
+            "rejected error=\(error)"
+        case .failed(let error):
+            "failed error=\(error)"
+        }
+    }
+}
+
+private func actorProofResult(_ actor: CameraWorkflow.Actor) async -> ActorProofResult {
+    do {
+        return .accepted(try await actor.send(.record))
+    } catch let error as GeneratedMachineError {
+        return .rejected(error)
+    } catch {
+        return .failed(String(describing: error))
+    }
+}
 
 @main
 struct CameraApp: App {
@@ -39,6 +70,14 @@ struct CameraApp: App {
                 .aspectRatio(4/3, contentMode: .fit)
 
                 filmstrip
+                Text("Generated state: \(phase.rawValue)")
+                    .foregroundStyle(.white)
+                    .padding(.vertical, 6)
+                if let actorProof = effects.actorProof {
+                    Text(actorProof)
+                        .foregroundStyle(.yellow)
+                        .padding(.horizontal, 8)
+                }
                 controls
                 if let diagnostic = effects.diagnostic {
                     Text(diagnostic)
@@ -52,13 +91,16 @@ struct CameraApp: App {
                 guard machine == nil else { return }
                 do {
                     machine = try CameraWorkflow.makeMachine()
-                    effects.recordingDidFinish = { url, error in
-                        recordingDidFinish(url: url, error: error)
+                    effects.recordingDidFinish = { attemptID, url, error, action in
+                        recordingDidFinish(attemptID: attemptID, url: url, error: error, action: action)
                     }
                     effects.playbackDidFinish = { Task { await live() } }
+                    cameraLog.info("initialized camera workflow")
                     await ready()
+                    await runActorProof()
                 } catch {
                     effects.diagnostic = "Camera workflow failed to initialize: \(error)"
+                    cameraLog.error("camera workflow initialization failed: \(String(describing: error), privacy: .public)")
                 }
             }
         }
@@ -139,6 +181,16 @@ struct CameraApp: App {
                 }
                 .buttonStyle(.plain)
                 .disabled(effects.canRecord == false || (isEnabled(.record) == false && isEnabled(.stopRecording) == false))
+
+                if phase == .recording {
+                    Button("Cancel", action: cancelRecording)
+                        .buttonStyle(.bordered)
+                }
+
+                if phase == .live {
+                    Button("Demonstrate Rejection", action: demonstrateUnavailableAction)
+                        .buttonStyle(.bordered)
+                }
             }
         }
         .padding(.vertical, 10)
@@ -153,18 +205,24 @@ struct CameraApp: App {
         return (try? machine.isEnabled(action)) == true
     }
 
-    private func send(_ action: CameraWorkflow.Action) -> Bool {
+    private func send(_ action: CameraWorkflow.Action, attemptID: UUID? = nil) -> Bool {
         guard var machine else {
             effects.diagnostic = "Camera workflow did not initialize."
+            cameraLog.error("rejected action=\(String(describing: action), privacy: .public) reason=machine-unavailable")
             return false
         }
+        let before = machine.state.phase
         do {
-            _ = try machine.send(action)
+            let transition = try machine.send(action)
             self.machine = machine
             effects.diagnostic = nil
+            cameraLog.info("accepted action=\(String(describing: action), privacy: .public) attempt=\(attemptID?.uuidString ?? "none", privacy: .public) before=\(String(describing: transition.before.phase), privacy: .public) after=\(String(describing: transition.after.phase), privacy: .public)")
             return true
         } catch {
-            effects.diagnostic = String(describing: error)
+            let breadcrumb = attemptID?.uuidString ?? "none"
+            let current = machine.state.phase
+            effects.diagnostic = "Action \(action) rejected: \(error). State retained from \(before) to \(current). Attempt \(breadcrumb)."
+            cameraLog.error("rejected action=\(String(describing: action), privacy: .public) attempt=\(breadcrumb, privacy: .public) error=\(String(describing: error), privacy: .public) before=\(String(describing: before), privacy: .public) current=\(String(describing: current), privacy: .public)")
             return false
         }
     }
@@ -177,22 +235,78 @@ struct CameraApp: App {
     private func toggleRecording() {
         guard effects.canRecord else { return }
         if isEnabled(.stopRecording) {
-            guard send(.stopRecording) else { return }
+            guard send(.stopRecording, attemptID: effects.activeRecordingID) else { return }
             effects.stopRecording()
         } else if isEnabled(.record) {
-            guard send(.record) else { return }
-            effects.startRecording()
+            guard let attemptID = effects.prepareRecordingAttempt() else { return }
+            guard send(.record, attemptID: attemptID) else {
+                effects.discardPreparedRecording(attemptID: attemptID)
+                return
+            }
+            effects.startRecording(attemptID: attemptID)
         }
     }
 
-    private func recordingDidFinish(url: URL, error: Error?) {
-        if let error {
-            guard send(.recordingFailed) else { return }
-            effects.diagnostic = "Recording failed: \(error)"
-            return
+    private func cancelRecording() {
+        guard isEnabled(.stopRecording), send(.stopRecording, attemptID: effects.activeRecordingID) else { return }
+        effects.cancelRecording()
+    }
+
+    private func recordingDidFinish(attemptID: UUID, url: URL, error: Error?, action: CameraWorkflow.Action) {
+        guard send(action, attemptID: attemptID) else { return }
+        if action == .recordingSucceeded {
+            effects.recordingSucceeded(at: url)
+        } else if let error {
+            effects.diagnostic = "Recording attempt \(attemptID.uuidString) failed: \(error)"
         }
-        guard send(.recordingSucceeded) else { return }
-        effects.recordingSucceeded(at: url)
+    }
+
+    private func demonstrateUnavailableAction() {
+        _ = send(.recordingSucceeded)
+    }
+
+    private func runActorProof() async {
+        do {
+            let actor = try CameraWorkflow.Actor()
+            _ = try await actor.send(.ready)
+            async let first = actorProofResult(actor)
+            async let second = actorProofResult(actor)
+            let results = await [first, second]
+            let acceptedTransitions = results.compactMap { result -> CameraWorkflow.Transition? in
+                guard case .accepted(let transition) = result else { return nil }
+                return transition
+            }
+            let matchingRejections = results.filter { result in
+                guard case .rejected(.noMatchingSuccessor) = result else { return false }
+                return true
+            }
+            let hasUnexpectedResult = results.contains { result in
+                switch result {
+                case .accepted, .rejected(.noMatchingSuccessor):
+                    false
+                case .rejected, .failed:
+                    true
+                }
+            }
+            let finalPhase = await actor.state.phase
+            let resultSummary = results.map(\.diagnostic).joined(separator: ", ")
+            guard acceptedTransitions.count == 1,
+                  acceptedTransitions[0].action == .record,
+                  acceptedTransitions[0].before.phase == .live,
+                  acceptedTransitions[0].after.phase == .recording,
+                  matchingRejections.count == 1,
+                  !hasUnexpectedResult,
+                  finalPhase == .recording else {
+                effects.actorProof = "Generated actor proof failed: \(resultSummary); final state \(finalPhase.rawValue)."
+                cameraLog.error("generated actor proof failed results=\(resultSummary, privacy: .public) final=\(finalPhase.rawValue, privacy: .public)")
+                return
+            }
+            effects.actorProof = "Generated actor proof: one concurrent record transition; one typed rejection; state recording."
+            cameraLog.info("generated actor proof accepted=\(acceptedTransitions.count) rejection=noMatchingSuccessor final=\(finalPhase.rawValue, privacy: .public)")
+        } catch {
+            effects.actorProof = "Generated actor proof failed to initialize: \(error)."
+            cameraLog.error("generated actor proof initialization failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     private func playRecording(url: URL) async {
@@ -354,18 +468,20 @@ final class CameraEffects {
     var currentPlayer: AVPlayer?
     private let photoDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/SwiftTLA/camera")
     private var movieOutput: AVCaptureMovieFileOutput?
-    private let recordDelegate = RecordingDelegate()
+    private var recordingDelegates: [UUID: RecordingDelegate] = [:]
     var diagnostic: String?
-    var recordingDidFinish: ((URL, Error?) -> Void)?
+    var actorProof: String?
+    var recordingDidFinish: ((UUID, URL, Error?, CameraWorkflow.Action) -> Void)?
     var playbackDidFinish: (() -> Void)?
 
     var canRecord: Bool { movieOutput != nil }
+    var activeRecordingID: UUID? { recordingCallbacks.pendingAttemptID }
     var session: AVCaptureSession { capture.session }
+    private var recordingCallbacks = RecordingCallbackCorrelation()
 
     init() {
         do {
             try FileManager.default.createDirectory(at: photoDirectory, withIntermediateDirectories: true)
-            recordDelegate.owner = self
         } catch {
             diagnostic = String(describing: error)
         }
@@ -385,13 +501,33 @@ final class CameraEffects {
         }
     }
 
-    func startRecording() {
-        guard let movieOutput else {
+    func prepareRecordingAttempt() -> UUID? {
+        guard movieOutput != nil else {
             diagnostic = "The camera output is not ready."
+            return nil
+        }
+        let attempt = RecordingAttempt()
+        recordingCallbacks.begin(attempt)
+        cameraLog.info("prepared recording attempt=\(attempt.id.uuidString, privacy: .public)")
+        return attempt.id
+    }
+
+    func discardPreparedRecording(attemptID: UUID) {
+        recordingCallbacks.discard(attemptID: attemptID)
+        recordingDelegates[attemptID] = nil
+        cameraLog.info("discarded recording attempt=\(attemptID.uuidString, privacy: .public) reason=request-rejected")
+    }
+
+    func startRecording(attemptID: UUID) {
+        guard let movieOutput, recordingCallbacks.pendingAttemptID == attemptID else {
+            diagnostic = "The camera recording attempt is not ready."
             return
         }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
-        movieOutput.startRecording(to: url, recordingDelegate: recordDelegate)
+        let delegate = RecordingDelegate(owner: self, attemptID: attemptID)
+        recordingDelegates[attemptID] = delegate
+        cameraLog.info("started recording attempt=\(attemptID.uuidString, privacy: .public)")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(attemptID.uuidString).mov")
+        movieOutput.startRecording(to: url, recordingDelegate: delegate)
     }
 
     func stopRecording() {
@@ -400,6 +536,16 @@ final class CameraEffects {
             return
         }
         movieOutput.stopRecording()
+    }
+
+    func cancelRecording() {
+        guard let attemptID = recordingCallbacks.pendingAttemptID else {
+            diagnostic = "There is no active recording to cancel."
+            return
+        }
+        guard recordingCallbacks.requestCancellation(for: attemptID) else { return }
+        recordingDelegates[attemptID]?.requestCancellation()
+        stopRecording()
     }
 
     func playRecording(url: URL? = nil) async {
@@ -432,8 +578,17 @@ final class CameraEffects {
         roll.removeAll { $0.id == item.id }
     }
 
-    fileprivate func finishedRecording(url: URL, error: Error?) {
-        recordingDidFinish?(url, error)
+    fileprivate func finishedRecording(attemptID: UUID, url: URL, error: Error?, wasCancelled: Bool) {
+        switch recordingCallbacks.consumeCallback(for: attemptID, error: error, wasCancelled: wasCancelled) {
+        case .submitted(_, let action):
+            recordingDelegates[attemptID] = nil
+            cameraLog.info("classified callback attempt=\(attemptID.uuidString, privacy: .public) action=\(String(describing: action), privacy: .public)")
+            recordingDidFinish?(attemptID, url, error, action)
+        case .ignored(_, let activeAttemptID):
+            let active = activeAttemptID?.uuidString ?? "none"
+            diagnostic = "Ignored recording callback for attempt \(attemptID.uuidString); active attempt \(active)."
+            cameraLog.error("ignored callback attempt=\(attemptID.uuidString, privacy: .public) active=\(active, privacy: .public) reason=unmatched-or-duplicate")
+        }
     }
 
     func recordingSucceeded(at url: URL) {
@@ -468,10 +623,23 @@ final class CameraEffects {
 
 private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
     weak var owner: CameraEffects?
+    private let attemptID: UUID
+    private var cancellationRequested = false
+
+    init(owner: CameraEffects, attemptID: UUID) {
+        self.owner = owner
+        self.attemptID = attemptID
+        super.init()
+    }
+
+    func requestCancellation() {
+        cancellationRequested = true
+    }
 
     func fileOutput(_: AVCaptureFileOutput, didFinishRecordingTo url: URL,
                     from _: [AVCaptureConnection], error: Error?) {
         guard let owner else { return }
-        Task { @MainActor in owner.finishedRecording(url: url, error: error) }
+        let cancellationRequested = cancellationRequested
+        Task { @MainActor in owner.finishedRecording(attemptID: attemptID, url: url, error: error, wasCancelled: cancellationRequested) }
     }
 }
