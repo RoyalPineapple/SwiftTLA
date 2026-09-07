@@ -4,7 +4,6 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case subtraction
         case multiplication
         case division
-        case remainder
         case negation
         case summation
     }
@@ -54,6 +53,7 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
     case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
     case divisionByZero
+    case negativeModuloDivisor(Int)
     case integerOverflow(IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
@@ -84,6 +84,7 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .collectionCardinalityOverflow(let operation, let operands):
             return "Collection \(operation.rawValue) cardinality exceeds Int for \(operands.map(String.init).joined(separator: ", "))"
         case .divisionByZero: return "Division by zero"
+        case .negativeModuloDivisor(let divisor): return "Modulo requires a positive divisor; received \(divisor)"
         case .integerOverflow(let operation, let operands):
             return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
@@ -337,15 +338,16 @@ struct CompiledEvaluator: Sendable {
                     if dividend == .min && divisor == -1 {
                         throw EvalError.integerOverflow(.division, operands: [dividend, divisor])
                     }
-                    values.append(.integer(dividend / divisor))
+                    let quotient = dividend / divisor
+                    let roundsDown = (dividend < 0) != (divisor < 0) && dividend % divisor != 0
+                    values.append(.integer(roundsDown ? quotient - 1 : quotient))
                 case .modulo:
                     let dividend = try integer(popValue(from: &values))
                     let divisor = try integer(popValue(from: &values))
                     if divisor == 0 { throw EvalError.divisionByZero }
-                    if dividend == .min && divisor == -1 {
-                        throw EvalError.integerOverflow(.remainder, operands: [dividend, divisor])
-                    }
-                    values.append(.integer(dividend % divisor))
+                    guard divisor > 0 else { throw EvalError.negativeModuloDivisor(divisor) }
+                    let remainder = dividend % divisor
+                    values.append(.integer(remainder < 0 ? remainder + divisor : remainder))
                 case .negate:
                     let operand = try integer(popValue(from: &values))
                     values.append(.integer(try checkedInteger(
