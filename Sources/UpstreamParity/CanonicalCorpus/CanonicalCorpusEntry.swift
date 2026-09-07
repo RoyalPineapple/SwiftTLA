@@ -127,6 +127,7 @@ package enum CanonicalCorpus {
     package static let entries: [CanonicalCorpusEntry] = [
         BoulangerModel.corpusEntry,
         KVsnapModel.corpusEntry,
+        TLCMCModel.corpusEntry,
         VoteProofModel.corpusEntry
     ]
 }

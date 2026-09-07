@@ -39,6 +39,23 @@
       },
       "moduleSHA256": "af971fe32f8e8fe62e39985201894929beb0e85c99504d6db56350701bcaead5",
       "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593"
+    },
+    {
+      "sourceModel": "tlcmc-graph-1",
+      "module": "tlcmc-graph-1/TLCMC.tla",
+      "configuration": "tlcmc-graph-1/TLCMC.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TLC/TLCMC.tla",
+        "sha256": "5d553b7066376e909a093c6f5c0f881d5d37c4907a19f5d5738a465ec2ab4294"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "be0c0bc993b3b977f120e9bb745d298106c2de2efbfa58394ccd43c9dc3b7bdc",
+      "cfgSHA256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87"
     }
   ]
 }

@@ -713,6 +713,11 @@ extension SharedVariable {
         Expr<Range>(.functionApply(stateExpr, index.raw))
     }
 
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
+    where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.raw))
+    }
+
     public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
@@ -807,6 +812,20 @@ extension SharedVariable {
         _ index: Expr<Domain>,
         to value: Range
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        updating(index, to: Expr<Range>(.value(value.tlaValue)))
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Expr<Domain>,
+        to value: Expr<Range>
+    ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
+        Expr(.except(stateExpr, index.raw, value.raw))
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Expr<Domain>,
+        to value: Range
+    ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
         updating(index, to: Expr<Range>(.value(value.tlaValue)))
     }
 

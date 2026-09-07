@@ -391,6 +391,41 @@ private func parserEnum(
         #expect(module.components(separatedBy: "Len(").count == 3)
     }
 
+    @Test("Algorithm parser preserves tuple-valued finite shared domains")
+    func parsesTupleValuedSharedDomain() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            Algorithm("TupleDomain", scoped: { scope in
+                let domain = SetExpr<TupleExpr<Node>>.literal(
+                    TupleExpr<Node>.literal(Node.one, Node.two),
+                    TupleExpr<Node>.literal(Node.two, Node.one)
+                )
+                let frontier = scope.sharedVar(
+                    "frontier",
+                    in: SetExpr<TupleExpr<Node>>.literal(
+                        TupleExpr<Node>.literal(Node.one, Node.two),
+                        TupleExpr<Node>.literal(Node.two, Node.one)
+                    )
+                )
+                Do(TestControlLabel.advance) {
+                    Assert(frontier.count == 2)
+                    Stop()
+                }
+            })
+        }
+        """
+        let nodes = parserEnum(
+            "Node",
+            cases: .init([.init("one", .int(1)), .init("two", .int(2))])
+        )
+        let parsed = parseAlgorithm(try parseClosure(source), enumDefinitions: [nodes])
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "TupleDomain").renderedTLAModuleBundle().tla
+        #expect(module.contains("frontier \\in {<<1, 2>>, <<2, 1>>}"))
+    }
+
     @Test("Specification parser binds a typed local algorithm component")
     func bindsTypedLocalAlgorithmComponent() throws {
         let source = """

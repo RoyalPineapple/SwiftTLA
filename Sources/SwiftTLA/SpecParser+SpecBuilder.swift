@@ -439,7 +439,8 @@ extension ParserSession {
                 elementType: "Int"
             )
         }
-        guard let decoded = decodeStateExpr(expression),
+        guard let decoded = decodeTypedFacadeValue(expression, scope: .empty)
+            ?? decodeStateExpr(expression),
               let elementType = setExpressionElementTypeName(expression)
         else { return nil }
         return (expression: decoded, elementType: elementType)

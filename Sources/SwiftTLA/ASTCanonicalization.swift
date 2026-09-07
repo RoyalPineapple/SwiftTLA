@@ -380,6 +380,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .tupleDynamicAccess(let lhs, let rhs): schedule("tupleDynamicAccess", [lhs, rhs], environment: environment)
             case .tupleAppend(let lhs, let rhs): schedule("tupleAppend", [lhs, rhs], environment: environment)
             case .tupleConcatenate(let lhs, let rhs): schedule("tupleConcat", [lhs, rhs], environment: environment)
+            case .tupleRemoving(let tuple, let index): schedule("tupleRemove", [tuple, index], environment: environment)
             case .sequenceSelect(let sequence, let binder, let predicate):
                 tasks.append(.bind(.sequenceSelect, variable: binder, body: predicate, environment: environment))
                 tasks.append(.expression(sequence, environment: environment))

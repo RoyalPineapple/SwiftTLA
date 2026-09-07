@@ -1260,6 +1260,8 @@ enum AlgorithmLowerer {
             case .tupleHead(let tuple): return .tupleHead(rewritten(tuple, localRoots: localRoots))
             case .tupleTail(let tuple): return .tupleTail(rewritten(tuple, localRoots: localRoots))
             case .tupleConcatenate(let lhs, let rhs): return .tupleConcatenate(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
+            case .tupleRemoving(let tuple, let index):
+                return .tupleRemoving(rewritten(tuple, localRoots: localRoots), rewritten(index, localRoots: localRoots))
             case .sequenceSelect(let sequence, let variable, let predicate):
                 return .sequenceSelect(
                     rewritten(sequence, localRoots: localRoots),

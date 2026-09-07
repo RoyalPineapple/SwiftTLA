@@ -199,6 +199,13 @@ struct CompiledTLARenderer {
                 case .tupleDynamicAccess(let lhs, let rhs): schedule("", [lhs, rhs], separator: "[", suffix: "]")
                 case .tupleAppend(let lhs, let rhs): schedule("Append(", [lhs, rhs], separator: ", ", suffix: ")")
                 case .tupleConcatenate(let lhs, let rhs): schedule("(", [lhs, rhs], separator: " \\o ", suffix: ")")
+                case .tupleRemoving(let tuple, let index):
+                    parts.append("(SubSeq(")
+                    schedule([
+                        .expression(tuple), .text(", 1, ("), .expression(index), .text(" - 1)) \\o SubSeq("),
+                        .expression(tuple), .text(", ("), .expression(index), .text(" + 1), Len("),
+                        .expression(tuple), .text(")))")
+                    ])
                 case .sequenceSelect(let sequence, let binder, let predicate):
                     parts.append("SelectSeq(")
                     schedule([.expression(sequence), .text(", LAMBDA \(try binderName(binder)): "), .expression(predicate), .text(")")])

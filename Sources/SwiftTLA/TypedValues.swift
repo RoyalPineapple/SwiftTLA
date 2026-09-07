@@ -236,6 +236,65 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
 }
 
+public struct PartialFunction<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Hashable, Sendable {
+  private let values: [TLAValue: TLAValue]
+
+  public init() {
+    values = [:]
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard Domain.sourceIssue == nil,
+          case .function(let values) = formalValue,
+          Set(values.keys).isSubset(of: Set(Domain.tlaValues)),
+          values.values.allSatisfy({ Range(formalValue: $0) == nil ? false : true })
+    else { return nil }
+    self.values = values
+  }
+
+  public var tlaValue: TLAValue { .function(values) }
+  public var sourceIssue: SourceModelIssue? { Domain.sourceIssue }
+  public static var defaultValue: Self { Self() }
+  public static var empty: Expr<Self> { Expr(.value(.function([:]))) }
+
+  public subscript(_ key: Domain) -> Range? {
+    values[key.tlaValue].flatMap(Range.init(formalValue:))
+  }
+
+  public static func literal(_ entries: (Domain, Expr<Range>)...) -> Expr<Self> {
+    literal(entries)
+  }
+
+  public static func literal(_ entries: (Domain, Range)...) -> Expr<Self> {
+    literal(entries.map { ($0.0, Expr<Range>(.value($0.1.tlaValue))) })
+  }
+
+  private static func literal(_ entries: [(Domain, Expr<Range>)]) -> Expr<Self> {
+    if let issue = Domain.sourceIssue {
+      return Expr(.sourceIssue(issue))
+    }
+    let keys = entries.map { $0.0.tlaValue }
+    let duplicates = Dictionary(grouping: keys, by: { $0 })
+      .compactMap { $0.value.count > 1 ? $0.key : nil }
+      .sorted()
+    guard duplicates.isEmpty else {
+      return Expr(.sourceIssue(.functionLiteral(
+        domain: String(reflecting: Domain.self),
+        duplicateValues: duplicates.map(\.description),
+        missingValues: []
+      )))
+    }
+    guard entries.isEmpty == false else {
+      return Expr(.value(.function([:])))
+    }
+    let binding = "_typedPartialFunctionEntry"
+    let pairs = entries.flatMap { entry in
+      [StateExpr.equal(.variable(binding), .value(entry.0.tlaValue)), entry.1.raw]
+    }
+    return Expr(.functionLiteral(.setLiteral(keys.map(StateExpr.value)), binding, .caseExpr(pairs, nil)))
+  }
+}
+
 /// The formal range of a finite function, using the upstream `Functions.Range`
 /// operator when that module is imported by the surrounding specification.
 public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
@@ -667,6 +726,12 @@ extension Expr {
     Expr<SetExpr<Element>>(.union(raw, other.raw))
   }
 
+  public func subtracting<Element: TLAValueType>(
+    _ other: Expr<SetExpr<Element>>
+  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
+    Expr(.setDifference(raw, other.raw))
+  }
+
   public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
   where T == SetExpr<Element> {
     Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.raw])))
@@ -749,6 +814,16 @@ extension Expr {
     Expr<TupleExpr<Element>>(.tupleConcatenate(raw, other.raw))
   }
 
+  public func removing<Element: TLAValueType>(at index: Expr<Int>) -> Expr<TupleExpr<Element>>
+  where T == TupleExpr<Element> {
+    Expr(.tupleRemoving(raw, index.raw))
+  }
+
+  public func removing<Element: TLAValueType>(at index: Int) -> Expr<TupleExpr<Element>>
+  where T == TupleExpr<Element> {
+    Expr(.tupleRemoving(raw, .int(index)))
+  }
+
   public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where T == TupleExpr<Element> {
     Expr<Element>(.tupleAccess(raw, index))
   }
@@ -783,6 +858,18 @@ extension Expr {
   public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Expr<Domain>) -> Expr<
     Range
   > where T == Function<Domain, Range> {
+    Expr<Range>(.functionApply(raw, index.raw))
+  }
+
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
+    Range
+  > where T == PartialFunction<Domain, Range> {
+    Expr<Range>(.functionApply(raw, finiteDomainIndex(index)))
+  }
+
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Expr<Domain>) -> Expr<
+    Range
+  > where T == PartialFunction<Domain, Range> {
     Expr<Range>(.functionApply(raw, index.raw))
   }
 
@@ -851,6 +938,18 @@ extension Expr {
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, to value: Expr<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
+    Expr(.except(raw, finiteDomainIndex(index), value.raw))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Expr<Domain>, to value: Expr<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
+    Expr(.except(raw, index.raw, value.raw))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: ProcessIdentifier<Domain>, to value: Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(.except(raw, index.stateExpr, value.raw))
@@ -901,6 +1000,12 @@ extension Expr {
 extension Expr where T: FormalTupleValue {
   public var count: Expr<Int> {
     Expr<Int>(.tupleLength(raw))
+  }
+}
+
+extension Expr {
+  public func head<Element: TLAValueType>() -> Expr<Element> where T == TupleExpr<Element> {
+    Expr<Element>(.tupleHead(raw))
   }
 }
 
@@ -1017,6 +1122,18 @@ extension Var {
     Expr<Range>(.functionApply(stateExpr, index.raw))
   }
 
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
+    Range
+  > where T == PartialFunction<Domain, Range> {
+    Expr<Range>(.functionApply(stateExpr, finiteDomainIndex(index)))
+  }
+
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Expr<Domain>) -> Expr<
+    Range
+  > where T == PartialFunction<Domain, Range> {
+    Expr<Range>(.functionApply(stateExpr, index.raw))
+  }
+
   public func updating<Schema: TLARecordSchema, Value>(
     _ field: TLAField<Schema, Value>, to value: Value
   ) -> Expr<Record<Schema>> where T == Record<Schema> {
@@ -1033,6 +1150,18 @@ extension Var {
     _ index: Domain, to value: Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(.except(stateExpr, finiteDomainIndex(index), value.raw))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, to value: Expr<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
+    Expr(.except(stateExpr, finiteDomainIndex(index), value.raw))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Expr<Domain>, to value: Expr<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
+    Expr(.except(stateExpr, index.raw, value.raw))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(

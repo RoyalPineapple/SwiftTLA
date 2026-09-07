@@ -17,7 +17,7 @@ struct CanonicalCorpusEntryTests {
         )
         #expect(kvsnap.swiftConfiguration.tlaText == kvsnap.plusCalConfiguration.tlaText)
         #expect(CanonicalCorpus.entries.map(\.id) == [
-            "boulanger-upstream-port", "kvsnap-upstream-port", "voteproof-upstream-port"
+            "boulanger-upstream-port", "kvsnap-upstream-port", "tlcmc-graph-1", "voteproof-upstream-port"
         ])
     }
 

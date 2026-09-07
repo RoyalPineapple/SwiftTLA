@@ -740,6 +740,7 @@ final class ParserSession {
             switch access.declName.baseName.text {
             case "first": return .tupleAccess(base, 1)
             case "second": return .tupleAccess(base, 2)
+            case "head": return .tupleHead(base)
             default: break
             }
         }
@@ -1038,6 +1039,11 @@ final class ParserSession {
             default: break
             }
         }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "empty",
+           typedFacadeType(member.base)?.name == "PartialFunction" {
+            return .value(.function([:]))
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let type = typedFacadeType(call.calledExpression),
            type.name == "SetExpr" {
@@ -1099,10 +1105,11 @@ final class ParserSession {
                       )
                 else { return nil }
                 return .tupleLiteral([first, second])
-            case "Function":
+            case "Function", "PartialFunction":
                 return decodeTypedFunctionLiteral(
                     call,
                     domainType: literalType.terminalArgumentName(at: 0),
+                    requiresTotalDomain: literalType.name == "Function",
                     scope: scope
                 )
             default:
@@ -1187,6 +1194,11 @@ final class ParserSession {
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
             else { return nil }
             return .intersection(base, other)
+        case "subtracting":
+            guard let otherSyntax = call.arguments.first?.expression,
+                  let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
+            else { return nil }
+            return .setDifference(base, other)
         case "isSubset":
             guard let otherSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
@@ -1202,6 +1214,11 @@ final class ParserSession {
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
             else { return nil }
             return .tupleConcatenate(base, other)
+        case "removing" where call.arguments.first?.label?.text == "at":
+            guard let indexSyntax = call.arguments.first?.expression,
+                  let index = decodeTypedFacadeValue(indexSyntax, scope: scope)
+            else { return nil }
+            return .tupleRemoving(base, index)
         case "inserting", "removing":
             guard let elementSyntax = call.arguments.first?.expression,
                   let element = decodeTypedFacadeValue(elementSyntax, scope: scope)
@@ -1482,7 +1499,7 @@ final class ParserSession {
 
     private func typedFacadeValueShape(_ type: TypedFacadeType) -> TypedFacadeValueShape? {
         switch type.name {
-        case "Function":
+        case "Function", "PartialFunction":
             guard let valueType = type.argument(at: 1),
                   let value = typedFacadeValueShape(valueType)
             else { return nil }
@@ -1681,12 +1698,17 @@ final class ParserSession {
     func decodeTypedFunctionLiteral(
         _ call: FunctionCallExprSyntax,
         domainType: String?,
+        requiresTotalDomain: Bool,
         scope: TypedFacadeScope
     ) -> StateExpr? {
         guard let domainType,
               let domain = enumDefinition(named: domainType)?.finiteValues,
               !domain.isEmpty
         else { return nil }
+        if call.arguments.isEmpty, requiresTotalDomain == false {
+            return .value(.function([:]))
+        }
+        var keys: [StateExpr] = []
         var pairs: [StateExpr] = []
         for argument in call.arguments {
             guard let entry = argument.expression.as(TupleExprSyntax.self),
@@ -1700,10 +1722,11 @@ final class ParserSession {
                   }),
                   let value = entry.elements.dropFirst().first.flatMap({ decodeTypedFacadeValue($0.expression, scope: scope) })
             else { return nil }
+            keys.append(key)
             pairs += [.equal(.variable("_typedFunctionEntry"), key), value]
         }
         return .functionLiteral(
-            .setLiteral(domain.map(StateExpr.value)),
+            .setLiteral(requiresTotalDomain ? domain.map(StateExpr.value) : keys),
             "_typedFunctionEntry",
             .caseExpr(pairs, nil)
         )

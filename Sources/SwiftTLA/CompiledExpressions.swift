@@ -63,6 +63,7 @@ indirect enum CompiledStateExpr: Sendable {
     case tupleHead(CompiledStateExpr)
     case tupleTail(CompiledStateExpr)
     case tupleConcatenate(CompiledStateExpr, CompiledStateExpr)
+    case tupleRemoving(CompiledStateExpr, CompiledStateExpr)
     case sequenceSelect(CompiledStateExpr, BinderID, CompiledStateExpr)
 
     case recordLiteral(CompiledRecordExpression)
@@ -387,6 +388,7 @@ extension CompiledStateExpr {
                  .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
                  .integerRange(let lhs, let rhs), .tupleDynamicAccess(let lhs, let rhs),
                  .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
+                 .tupleRemoving(let lhs, let rhs),
                  .setSum(let lhs, let rhs), .functionSet(let lhs, let rhs):
                 visit(lhs, scope: scope)
                 visit(rhs, scope: scope)

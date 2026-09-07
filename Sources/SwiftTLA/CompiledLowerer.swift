@@ -925,6 +925,7 @@ struct CompiledLowerer {
                 case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleDynamicAccess, on: &tasks)
                 case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleAppend, on: &tasks)
                 case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleConcatenate, on: &tasks)
+                case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, build: CompiledStateExpr.tupleRemoving, on: &tasks)
                 case .sequenceSelect(let sequence, let name, let predicate):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.sequenceSelect, on: &tasks)

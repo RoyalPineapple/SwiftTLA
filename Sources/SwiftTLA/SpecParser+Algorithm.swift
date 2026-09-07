@@ -834,7 +834,8 @@ extension ParserSession {
               let initializer = binding.initializer?.value
         else { return nil }
 
-        guard let expression = decodeStateExpr(initializer) else {
+        guard let expression = decodeTypedFacadeValue(initializer, scope: sourceScope)
+            ?? decodeStateExpr(initializer) else {
             algorithmParseFailure = algorithmParseFailure
                 ?? "Algorithm let '\(name)' must be a closed formal value; its expression could not be decoded."
             return nil

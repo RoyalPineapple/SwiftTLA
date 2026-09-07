@@ -216,12 +216,13 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let configuration: String
         package let imports: [String]
         package let dependencies: [Dependency]
+        package let sourceInput: SourceInputPin?
         package let moduleSHA256: String
         package let cfgSHA256: String
         package let exploration: FiniteExplorationConfiguration
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case sourceModel, module, configuration, imports, dependencies, moduleSHA256, cfgSHA256, exploration
+            case sourceModel, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -246,6 +247,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             configuration = try container.decode(String.self, forKey: .configuration)
             imports = try container.decode([String].self, forKey: .imports)
             dependencies = try container.decode([Dependency].self, forKey: .dependencies)
+            sourceInput = try container.decodeIfPresent(SourceInputPin.self, forKey: .sourceInput)
             moduleSHA256 = try container.decode(String.self, forKey: .moduleSHA256)
             cfgSHA256 = try container.decode(String.self, forKey: .cfgSHA256)
             exploration = try container.decode(
@@ -306,12 +308,14 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case hourClock = "hour-clock"
     case dieHardTypeOK = "die-hard-type-ok"
     case multiCarElevator = "multicar-elevator"
+    case tlcmcGraph1 = "tlcmc-graph-1"
 
     package var spec: TLASpec {
         switch self {
         case .hourClock: Example.hourClock.spec
         case .dieHardTypeOK: Example.dieHardTypeOK.spec
         case .multiCarElevator: MultiCarElevator.spec
+        case .tlcmcGraph1: TLCMCModel.spec
         }
     }
 }

@@ -312,6 +312,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case tupleHead(StateExpr)
     case tupleTail(StateExpr)
     case tupleConcatenate(StateExpr, StateExpr)
+    case tupleRemoving(StateExpr, StateExpr)
     case sequenceSelect(StateExpr, String, StateExpr)
 
     case recordLiteral(StateRecordExpression)

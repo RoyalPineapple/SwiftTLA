@@ -127,6 +127,7 @@ extension StateExpr {
         case .tupleHead(let t): return .tupleHead(sub(t))
         case .tupleTail(let t): return .tupleTail(sub(t))
         case .tupleConcatenate(let a, let b): return .tupleConcatenate(sub(a), sub(b))
+        case .tupleRemoving(let tuple, let index): return .tupleRemoving(sub(tuple), sub(index))
         case .sequenceSelect(let sequence, let binder, let predicate):
             let scoped = underBinder(binder, body: predicate)
             return .sequenceSelect(sub(sequence), scoped.name, scoped.body)
@@ -270,6 +271,7 @@ extension StateExpr {
             case .tupleHead(let value): return .tupleHead(visit(value))
             case .tupleTail(let value): return .tupleTail(visit(value))
             case .tupleConcatenate(let a, let b): return .tupleConcatenate(visit(a), visit(b))
+            case .tupleRemoving(let tuple, let index): return .tupleRemoving(visit(tuple), visit(index))
             case .sequenceSelect(let sequence, let binder, let predicate):
                 return .sequenceSelect(visit(sequence), binder, visitUnderBindings([binder], predicate))
             case .recordLiteral(let record):

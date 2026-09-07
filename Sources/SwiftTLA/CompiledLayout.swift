@@ -440,6 +440,9 @@ struct CompiledLayout: Hashable, Sendable {
                     case .sequenceSelect(let sequence, _, let predicate):
                         pending.append(.expression(predicate))
                         pending.append(.expression(sequence))
+                    case .tupleRemoving(let tuple, let index):
+                        pending.append(.expression(index))
+                        pending.append(.expression(tuple))
                     case .foldFunction(let lambda, let initial, let sequence):
                         pending.append(.expression(sequence))
                         pending.append(.expression(initial))

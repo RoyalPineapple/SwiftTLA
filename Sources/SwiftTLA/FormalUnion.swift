@@ -37,6 +37,8 @@ public enum OneOf<First: TLAValueType, Second: TLAValueType>: TLAValueType, Send
     }
 }
 
+extension OneOf: Equatable where First: Equatable, Second: Equatable {}
+
 extension Expr {
     /// Views a formal union as a known alternative in this control path.
     ///

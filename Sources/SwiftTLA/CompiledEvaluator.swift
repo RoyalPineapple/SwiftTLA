@@ -486,6 +486,14 @@ struct CompiledEvaluator: Sendable {
                     let rhs = try sequenceElements(from: popValue(from: &values))
                     let lhs = try sequenceElements(from: popValue(from: &values))
                     values.append(.tuple(lhs + rhs))
+                case .tupleRemoving:
+                    let index = try integer(popValue(from: &values))
+                    var tuple = try sequenceElements(from: popValue(from: &values))
+                    guard index >= 1, index <= tuple.count else {
+                        throw EvalError.indexOutOfBounds(index, tuple.count)
+                    }
+                    tuple.remove(at: index - 1)
+                    values.append(.tuple(tuple))
                 case .recordLiteral(let fields):
                     let fieldValues = try popValues(fields.fields.count, from: &values)
                     values.append(.record(CompiledRecord(zip(fields.fields, fieldValues).map {
@@ -1092,6 +1100,10 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.finish(expression))
                     tasks.append(.expression(rhs, scope))
                     tasks.append(.expression(lhs, scope))
+                case .tupleRemoving(let tuple, let index):
+                    tasks.append(.finish(expression))
+                    tasks.append(.expression(index, scope))
+                    tasks.append(.expression(tuple, scope))
                 case .recordLiteral(let fields):
                     tasks.append(.finish(expression))
                     for field in fields.fields.reversed() {
