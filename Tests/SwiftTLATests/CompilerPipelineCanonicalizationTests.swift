@@ -636,8 +636,8 @@ struct CompilerPipelineCanonicalizationTests {
         }
     }
 
-    @Test("compiled choices are visible to their action guards and updates")
-    func compiledChoicesUseSelectedSlotValues() throws {
+    @Test("compiled choice binders are visible to their action guards and updates")
+    func compiledChoiceBindersDriveSelectedUpdates() throws {
         let spec = TLASpec(
             name: "CompiledChoice",
             variables: [
@@ -647,9 +647,10 @@ struct CompilerPipelineCanonicalizationTests {
             actions: [
                 .init(
                     name: "select",
-                    body: .chooseAction(.named("candidate"), .setLiteral([.int(1), .int(2)]))
-                        && .guard_(.equal(.variable("candidate"), .int(2)))
-                        && .assign(.named("counter"), .variable("candidate"))
+                    body: .existsAction("selected", .setLiteral([.int(1), .int(2)]),
+                        .guard_(.equal(.variable("selected"), .int(2)))
+                        && .assign(.named("candidate"), .variable("selected"))
+                        && .assign(.named("counter"), .variable("selected")))
                 )
             ],
             invariants: []
@@ -2223,7 +2224,7 @@ struct CompilerPipelineCanonicalizationTests {
         let machineVariable = try #require(
             compilation.machineSurfacePlan.variables.first { $0.formalName == "devices" }
         )
-        let machineCollection = try #require(machineVariable.symmetricCollection)
+        let machineCollection = try #require(machineVariable.collection)
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let successors = try CompiledRuntime(compilation: compilation)
             .successors(for: compiledAction.id, from: initialState)
@@ -2246,7 +2247,7 @@ struct CompilerPipelineCanonicalizationTests {
             compiledAction.bindings[0].values
                 == declaration.metadata.members.map(CompiledValue.init(formal:))
         )
-        #expect(compiledAction.symmetricCollection == compilation.layout.testVariableID(named: "devices"))
+        #expect(compiledAction.collection == compilation.layout.testVariableID(named: "devices"))
         #expect(machineVariable.swiftType == "[CompilerPipelineMember.ID: Int]")
         #expect(machineCollection.formalName == "devices")
         #expect(compilation.machineSurfacePlan.symmetricCollections == [machineCollection])

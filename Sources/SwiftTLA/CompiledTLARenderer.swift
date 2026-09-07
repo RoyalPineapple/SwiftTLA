@@ -33,8 +33,6 @@ struct CompiledTLARenderer {
                     parts.append("UNCHANGED \(try variableName(variable))")
                 case .guard_(let condition):
                     parts.append(try state(condition))
-                case .chooseAction(let variable, let set):
-                    parts.append("\(try variableName(variable))' \\in \(try state(set))")
                 case .existsAction(let binder, let set, let body):
                     parts.append("\\E \(try binderName(binder)) \\in \(try state(set)): ")
                     tasks.append(.expression(body))

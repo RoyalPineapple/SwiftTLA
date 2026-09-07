@@ -160,6 +160,27 @@ struct LivenessConformanceTests {
         }
     }
 
+    @Test("temporal tautologies and untriggered leads-to have no violating lasso")
+    func temporalSatisfactionMatrix() throws {
+        let graph = try graph(transitions: [:], values: [initial: 0])
+        let falsePredicate = predicate(1)
+        let truePredicate = predicate(0)
+        let properties: [TemporalExpr] = [
+            .always(truePredicate),
+            .eventually(truePredicate),
+            .alwaysEventually(truePredicate),
+            .eventuallyAlways(truePredicate),
+            .leadsTo(falsePredicate, falsePredicate),
+            .leadsTo(truePredicate, truePredicate)
+        ]
+        for property in properties {
+            let analysis = try analyze(graph, property: property, initialStateIDs: [initial])
+            #expect(analysis.status == .satisfied)
+            #expect(analysis.reason == .satisfied)
+            #expect(analysis.witness == nil)
+        }
+    }
+
     @Test("leads-to lasso stays outside Q after its P and not-Q trigger")
     func leadsToPrefixNeverCrossesQ() throws {
         let qState = StateGraph.StateID(1)
@@ -448,6 +469,25 @@ struct LivenessConformanceTests {
                 state: initial,
                 cause: .expected(.boolean, actual: [.integer(1)])
             ))
+        }
+    }
+
+    @Test("liveness rejects dangling graph edges before computing fairness")
+    func rejectsMissingTransitionEndpoints() throws {
+        let transitions: [[StateGraph.StateID: [StateGraph.Transition]]] = [
+            [initial: [.init(label: .init(.init(name: "advance")), target: middle)]],
+            [middle: [.init(label: .init(.init(name: "advance")), target: initial)]]
+        ]
+        for edges in transitions {
+            let malformed = try graph(transitions: edges, values: [initial: 0])
+            let analysis = try analyze(
+                malformed, property: .eventually(predicate(1)),
+                fairness: [.weakFairness("advance")], actions: [action("advance")],
+                initialStateIDs: [initial]
+            )
+            #expect(analysis.status == .unavailable)
+            #expect(analysis.reason == .invalidGraphTopology)
+            #expect(analysis.witness == nil)
         }
     }
 

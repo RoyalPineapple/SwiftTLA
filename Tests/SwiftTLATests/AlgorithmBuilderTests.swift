@@ -234,7 +234,7 @@ struct AlgorithmBuilderTests {
         )
 
         #expect(assignedVars(action).contains(.programCounter))
-        #expect(!explicitUnchanged(action).contains(.programCounter))
+        #expect(!ActionNormalization.frameTargets(inNormalizedBranch: action).contains(.programCounter))
     }
 
     @Test("rendered action headers use compiled process bindings")

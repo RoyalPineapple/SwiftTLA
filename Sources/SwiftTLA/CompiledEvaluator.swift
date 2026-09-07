@@ -4,7 +4,6 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case subtraction
         case multiplication
         case division
-        case remainder
         case negation
         case summation
     }
@@ -22,6 +21,11 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case integerFunctionValues = "integer function values"
         case functionSetDomains = "function-set domains"
         case recordField = "record field"
+    }
+
+    enum CollectionOperation: String, Equatable, Sendable {
+        case integerRange
+        case functionSet
     }
 
     enum Callable: String, Equatable, Sendable {
@@ -47,7 +51,9 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case invalidContinuation(availableValues: Int)
     case collectionState
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
+    case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
     case divisionByZero
+    case negativeModuloDivisor(Int)
     case integerOverflow(IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
@@ -75,7 +81,10 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .collectionState: return "Collection evaluation reached an invalid state"
         case .powerSetTooLarge(let actualCount, let maximumCount):
             return "Power-set input has \(actualCount) members; the maximum is \(maximumCount)"
+        case .collectionCardinalityOverflow(let operation, let operands):
+            return "Collection \(operation.rawValue) cardinality exceeds Int for \(operands.map(String.init).joined(separator: ", "))"
         case .divisionByZero: return "Division by zero"
+        case .negativeModuloDivisor(let divisor): return "Modulo requires a positive divisor; received \(divisor)"
         case .integerOverflow(let operation, let operands):
             return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
@@ -196,7 +205,7 @@ private enum EvaluatorTask {
         argumentScope: EvaluatorScope
     )
     case recursiveCall(OperatorID, arguments: [CompiledStateExpr], scope: EvaluatorScope)
-    case recursiveReturn
+    case callReturn
     case localDomain(CompiledStateExpr, scope: EvaluatorScope)
     case store(EvaluatorThunk)
 }
@@ -329,15 +338,16 @@ struct CompiledEvaluator: Sendable {
                     if dividend == .min && divisor == -1 {
                         throw EvalError.integerOverflow(.division, operands: [dividend, divisor])
                     }
-                    values.append(.integer(dividend / divisor))
+                    let quotient = dividend / divisor
+                    let roundsDown = (dividend < 0) != (divisor < 0) && dividend % divisor != 0
+                    values.append(.integer(roundsDown ? quotient - 1 : quotient))
                 case .modulo:
                     let dividend = try integer(popValue(from: &values))
                     let divisor = try integer(popValue(from: &values))
                     if divisor == 0 { throw EvalError.divisionByZero }
-                    if dividend == .min && divisor == -1 {
-                        throw EvalError.integerOverflow(.remainder, operands: [dividend, divisor])
-                    }
-                    values.append(.integer(dividend % divisor))
+                    guard divisor > 0 else { throw EvalError.negativeModuloDivisor(divisor) }
+                    let remainder = dividend % divisor
+                    values.append(.integer(remainder < 0 ? remainder + divisor : remainder))
                 case .negate:
                     let operand = try integer(popValue(from: &values))
                     values.append(.integer(try checkedInteger(
@@ -428,6 +438,12 @@ struct CompiledEvaluator: Sendable {
                 case .integerRange:
                     let upper = try integer(popValue(from: &values))
                     let lower = try integer(popValue(from: &values))
+                    if lower <= upper {
+                        let distance = upper.subtractingReportingOverflow(lower)
+                        guard !distance.overflow, !distance.partialValue.addingReportingOverflow(1).overflow else {
+                            throw EvalError.collectionCardinalityOverflow(.integerRange, operands: [lower, upper])
+                        }
+                    }
                     values.append(lower <= upper ? .set(Set((lower...upper).map(CompiledValue.integer))) : .set([]))
                 case .tupleLiteral(let expressions):
                     values.append(.tuple(try popValues(expressions.count, from: &values)))
@@ -603,7 +619,7 @@ struct CompiledEvaluator: Sendable {
                 var next = accumulated
                 switch (mode, accumulated) {
                 case (.filter, .values(var selected)):
-                    if bodyValue == .boolean(true) {
+                    if try boolean(bodyValue) {
                         selected.append(members[index])
                     }
                     next = .values(selected)
@@ -614,17 +630,17 @@ struct CompiledEvaluator: Sendable {
                     function[members[index]] = bodyValue
                     next = .function(function)
                 case (.forall, _):
-                    if bodyValue != .boolean(true) {
+                    if try !boolean(bodyValue) {
                         values.append(.boolean(false))
                         continue
                     }
                 case (.exists, _):
-                    if bodyValue == .boolean(true) {
+                    if try boolean(bodyValue) {
                         values.append(.boolean(true))
                         continue
                     }
                 case (.choose, _):
-                    if bodyValue == .boolean(true) {
+                    if try boolean(bodyValue) {
                         values.append(members[index])
                         continue
                     }
@@ -662,7 +678,7 @@ struct CompiledEvaluator: Sendable {
             case .exceptFunction(let key, let scope):
                 let function = try popValue(from: &values)
                 switch function {
-                case .function, .record:
+                case .function, .record, .tuple:
                     tasks.append(.exceptKey(function: function))
                     tasks.append(.expression(key, scope))
                 default:
@@ -674,8 +690,18 @@ struct CompiledEvaluator: Sendable {
                 let replacement = try popValue(from: &values)
                 switch function {
                 case .function(var function):
-                    function[key] = replacement
+                    if function[key] != nil {
+                        function[key] = replacement
+                    }
                     values.append(.function(function))
+                case .tuple(var tuple):
+                    guard case .integer(let index) = key else {
+                        throw EvalError.expected(.integer, actual: [key])
+                    }
+                    if index >= 1, index <= tuple.count {
+                        tuple[index - 1] = replacement
+                    }
+                    values.append(.tuple(tuple))
                 case .record(let record):
                     guard case .string = key else {
                         throw EvalError.expected(.recordField, actual: [key])
@@ -727,6 +753,7 @@ struct CompiledEvaluator: Sendable {
                             actual: arguments.count
                         )
                     }
+                    try beginCall(tasks: &tasks, depth: &recursiveDepth)
                     var callScope = boundOperation.scope
                     for (parameter, argument) in zip(lambda.parameters, arguments) {
                         guard case .value(let expression) = argument else {
@@ -774,6 +801,7 @@ struct CompiledEvaluator: Sendable {
                             actual: arguments.count
                         )
                     }
+                    try beginCall(tasks: &tasks, depth: &recursiveDepth)
                     var callScope = boundOperation.scope
                     for (parameter, argument) in zip(definition.parameters, arguments) {
                         switch (parameter, argument) {
@@ -810,11 +838,7 @@ struct CompiledEvaluator: Sendable {
                 }
 
             case .recursiveCall(let id, let arguments, let scope):
-                guard recursiveDepth < Self.maximumRecursiveDepth else {
-                    throw EvalError.recursionDepthExceeded(Self.maximumRecursiveDepth)
-                }
-                recursiveDepth += 1
-                tasks.append(.recursiveReturn)
+                try beginCall(tasks: &tasks, depth: &recursiveDepth)
                 if let operation = scope.localOperators[id] {
                     guard operation.parameters.count == arguments.count else {
                         throw EvalError.invalidArity(
@@ -858,7 +882,7 @@ struct CompiledEvaluator: Sendable {
                 }
                 tasks.append(.expression(function.body, callScope))
 
-            case .recursiveReturn:
+            case .callReturn:
                 recursiveDepth -= 1
 
             case .localDomain(let body, let scope):
@@ -1129,6 +1153,14 @@ struct CompiledEvaluator: Sendable {
 }
 
 private extension CompiledEvaluator {
+    func beginCall(tasks: inout [EvaluatorTask], depth: inout Int) throws {
+        guard depth < Self.maximumRecursiveDepth else {
+            throw EvalError.recursionDepthExceeded(Self.maximumRecursiveDepth)
+        }
+        depth += 1
+        tasks.append(.callReturn)
+    }
+
     func checkedInteger(
         _ result: (partialValue: Int, overflow: Bool),
         operation: EvalError.IntegerOperation,
@@ -1203,10 +1235,10 @@ private extension CompiledEvaluator {
     }
 
     func powerSet(of values: Set<CompiledValue>) throws -> CompiledValue {
-        guard values.count < Int.bitWidth else {
+        guard values.count < Int.bitWidth - 1 else {
             throw EvalError.powerSetTooLarge(
                 actualCount: values.count,
-                maximumCount: Int.bitWidth - 1
+                maximumCount: Int.bitWidth - 2
             )
         }
         let members = Array(values)
@@ -1225,6 +1257,17 @@ private extension CompiledEvaluator {
         }
         let orderedDomain = CompiledValue.sorted(domainValues)
         let orderedRange = CompiledValue.sorted(rangeValues)
+        // Check the complete product before any intermediate expansion.
+        var cardinality = 1
+        for _ in orderedDomain {
+            let product = cardinality.multipliedReportingOverflow(by: orderedRange.count)
+            guard !product.overflow else {
+                throw EvalError.collectionCardinalityOverflow(
+                    .functionSet, operands: [orderedDomain.count, orderedRange.count]
+                )
+            }
+            cardinality = product.partialValue
+        }
         var functions: [[CompiledValue: CompiledValue]] = [[:]]
         for key in orderedDomain {
             functions = functions.flatMap { partial in

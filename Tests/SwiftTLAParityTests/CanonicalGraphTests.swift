@@ -1,4 +1,4 @@
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 import UpstreamParity
 
@@ -90,10 +90,10 @@ struct CanonicalGraphTests {
         let second = StateGraph.StateID(1)
         let firstCars: TLAValue = .function([.string("carA"): .int(0), .string("carB"): .int(1)])
         let secondCars: TLAValue = .function([.string("carA"): .int(1), .string("carB"): .int(1)])
-        let fixture = Var<Int>("fixture")
-        let compilationIdentity = try TLASpec("NormalizedFixture") {
-            Variable(fixture, 0)
-        }.compile().identity
+        let compilation = try TLASpec(
+            name: "NormalizedFixture", variables: [.init(name: "cars", initialization: .value(firstCars), origin: .compiler)],
+            actions: [], invariants: []
+        ).compile()
         let exploration = FiniteExploration(
             graph: StateGraph(
                 specName: "NormalizedFixture",
@@ -106,8 +106,12 @@ struct CanonicalGraphTests {
             ),
             initialStateIDs: [first],
             outcome: .ok(statesCount: 2),
-            compilationIdentity: compilationIdentity,
-            configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
+            compilationIdentity: compilation.identity,
+            configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
+            compiledStates: [
+                first: try CompiledState(values: [.init(formal: firstCars)], compilation: compilation),
+                second: try CompiledState(values: [.init(formal: secondCars)], compilation: compilation)
+            ]
         )
         let finiteGraphCase = try FiniteGraphCase(
             id: "normalized-fixture",

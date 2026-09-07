@@ -309,10 +309,9 @@ extension StateExpr {
 }
 
 extension ActionExpr {
-  public static func choose(_ variable: String, from set: StateExpr) -> ActionExpr {
-    .chooseAction(.named(variable), set)
-  }
-
+  /// Chooses a member for an explicit lexical binding. Pass that binding to
+  /// guards, assignments, and operator arguments; model variables still read
+  /// their current-state values throughout the action.
   public static func exists(
     _ name: String, from set: some StateExprConvertible,
     _ body: (StateExpr) -> ActionExpr
@@ -340,15 +339,6 @@ extension StateExpr {
   public static func singleton(_ element: some StateExprConvertible) -> StateExpr {
     .setLiteral([element.stateExpr])
   }
-}
-
-/// Nondeterministically picks a value from a set and binds it to the variable.
-/// `choose(s, from: q)` produces `s' ∈ q` (chooseAction). Subsequent references
-/// to `s` in the action body resolve to the chosen value.
-@discardableResult
-public func choose(_ variable: Var<some TLAValueType>, from set: some StateExprConvertible)
-  -> ActionExpr {
-  .chooseAction(.named(variable.name), set.stateExpr)
 }
 
 extension StateExpr {

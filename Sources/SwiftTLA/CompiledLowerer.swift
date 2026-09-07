@@ -70,7 +70,7 @@ struct CompiledLowerer {
         self.layout = layout
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
-        symmetricMembers = layout.variables.compactMap(\.symmetricCollection).flatMap(\.members)
+        symmetricMembers = layout.variables.compactMap(\.collection).flatMap(\.members)
         self.incomingModuleParameters = incomingModuleParameters
         authoredAlgorithm = spec.sourceAlgorithms.first?.model
         var renderedNames = spec.renderedDeclarationNames()
@@ -286,7 +286,7 @@ struct CompiledLowerer {
             symmetricCollections: try spec.symmetricCollections.map { collection in
                 let variable = try variable(named: collection.name, at: "variables.\(collection.name).declaration")
                 guard layout.variables.indices.contains(variable.ordinal),
-                      let compiledCollection = layout.variables[variable.ordinal].symmetricCollection else {
+                      let compiledCollection = layout.variables[variable.ordinal].collection else {
                     throw diagnostic(path: "variables.\(collection.name).declaration")
                 }
                 return .init(
@@ -782,7 +782,7 @@ struct CompiledLowerer {
            case .existsAction(let sourceMember, _, _) = action.body,
            case .existsAction(let member, .domain(.stateVariable(let variable)), let memberBody) = body,
            layout.variables.indices.contains(variable.ordinal),
-           let collection = layout.variables[variable.ordinal].symmetricCollection {
+           let collection = layout.variables[variable.ordinal].collection {
             return CompiledAction(
                 id: id,
                 bindings: [CompiledActionBinding(
@@ -792,14 +792,14 @@ struct CompiledLowerer {
                     generatedSwiftType: collection.elementType.map { "\($0).ID" }
                 )],
                 body: memberBody,
-                symmetricCollection: variable
+                collection: variable
             )
         }
         return CompiledAction(
             id: id,
             bindings: bindings,
             body: body,
-            symmetricCollection: nil
+            collection: nil
         )
     }
 
@@ -1514,11 +1514,6 @@ struct CompiledLowerer {
                     lowered.append(try .unchanged(assignmentTarget(target, scope: scope, at: "\(taskPath).unchanged")))
                 case .guard_(let condition):
                     lowered.append(try .guard_(lower(condition, at: "\(taskPath).guard", scope: scope)))
-                case .chooseAction(let target, let set):
-                    lowered.append(try .chooseAction(
-                        assignmentTarget(target, scope: scope, at: "\(taskPath).choose"),
-                        lower(set, at: "\(taskPath).set", scope: scope)
-                    ))
                 case .existsAction(let name, let set, let body):
                     let nested = try bind([name], at: "\(taskPath).binder", scope: scope)
                     let binder = try bound(name, in: nested, at: taskPath)

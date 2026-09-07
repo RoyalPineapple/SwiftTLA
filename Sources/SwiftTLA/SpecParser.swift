@@ -2152,9 +2152,6 @@ extension ParserSession {
             let varName = baseRef.baseName.text
             if let arg = call.arguments.first?.expression,
                let state = decodeActionState(arg, scope: scope) {
-                if case .choose(let chosenSet, _, _) = state {
-                    return .chooseAction(.named(varName), chosenSet)
-                }
                 return .assign(.named(varName), state)
             }
             return nil
@@ -2196,14 +2193,6 @@ extension ParserSession {
                 return .and(.guard_(.and(outer, innerCond)), innerAction)
             }
             return .and(.guard_(outer), inner)
-        }
-        if let call = expression.as(FunctionCallExprSyntax.self),
-           let ref = call.calledExpression.as(DeclReferenceExprSyntax.self),
-           ref.baseName.text == "choose",
-           let varArg = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
-           let fromArg = call.arguments.dropFirst().first?.expression,
-           let setExpr = decodeActionState(fromArg, scope: scope) {
-            return .chooseAction(.named(varArg.baseName.text), setExpr)
         }
         if let seq = expression.as(SequenceExprSyntax.self) {
             return decodeActionSequence(Array(seq.elements), scope: scope)

@@ -10,7 +10,9 @@ struct NestedComposableMacroConformanceTests {
         let spec = TLASpec("ConstrainedParameterizedChoice") {
             Variable(value, 0)
             Action("choose", parameters: [ActionParameter("branch", values: [1, 2])]) {
-                choose(value, from: StateExpr.set([1, 2, 3]))
+                ActionExpr.exists("selected", from: StateExpr.set([1, 2, 3])) { selected in
+                    value.becomes(Expr<Int>(selected))
+                }
             }
             Constraint(value <= 2)
         }

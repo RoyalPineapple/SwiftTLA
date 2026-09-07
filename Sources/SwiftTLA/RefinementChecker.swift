@@ -17,7 +17,10 @@ struct RefinementChecker {
     let compilation: CompiledSpecification
 
     func check(_ exploration: FiniteExploration) throws -> ModelCheckOutcome? {
+        guard !compilation.refinements.isEmpty else { return nil }
+        try exploration.requireValidEvidence(in: compilation)
         guard exploration.isComplete else {
+            guard case .depthExceeded = exploration.outcome else { return nil }
             return compilation.refinements.first.map {
                 .refinementUnproven(refinement: $0.name, exploration: exploration.outcome)
             }
@@ -55,8 +58,12 @@ struct RefinementChecker {
         }
         let abstractRuntime = CompiledRuntime(compilation: refinement.abstract)
         let abstractInitialStates = try abstractRuntime.initialStates()
+        if let initial = abstractInitialStates.first,
+           try !abstractRuntime.assumeHolds(in: initial) {
+            return .assumptionViolated
+        }
         for stateID in initialStateIDs {
-            guard let source = states[stateID] else { continue }
+            let source = try requiredState(stateID, in: states)
             let mapped = try mappedState(refinement, source: source)
             guard abstractInitialStates.contains(mapped) else {
                 return .refinementViolated(
@@ -69,11 +76,11 @@ struct RefinementChecker {
             }
         }
         for (sourceID, transitions) in graph.transitions {
-            guard let source = states[sourceID] else { continue }
+            let source = try requiredState(sourceID, in: states)
             let mappedSource = try mappedState(refinement, source: source)
             let abstractSuccessors = try abstractRuntime.successors(from: mappedSource).map(\.state)
             for transition in transitions {
-                guard let target = states[transition.target] else { continue }
+                let target = try requiredState(transition.target, in: states)
                 let mappedTarget = try mappedState(refinement, source: target)
                 guard mappedTarget == mappedSource || abstractSuccessors.contains(mappedTarget) else {
                     return .refinementViolated(
@@ -91,6 +98,20 @@ struct RefinementChecker {
             }
         }
         return nil
+    }
+
+    private func requiredState(
+        _ id: StateGraph.StateID, in states: [StateGraph.StateID: CompiledState]
+    ) throws -> CompiledState {
+        guard let state = states[id] else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch, stage: .checking, path: "refinement.exploration",
+                expected: "a compiled state for every initial identity and transition endpoint",
+                actual: "no compiled state for \(id)",
+                nextSafeAction: "Explore the compiled specification again before checking refinement."
+            )
+        }
+        return state
     }
 
     private func mappedState(_ refinement: CompiledRefinement, source: CompiledState) throws -> CompiledState {

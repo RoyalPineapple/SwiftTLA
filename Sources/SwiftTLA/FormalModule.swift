@@ -647,7 +647,7 @@ package struct FormalModuleClosure: Sendable {
 
     func actionFreeNames(_ action: ActionExpr) -> Set<String> {
       switch action {
-      case .assign(_, let value), .guard_(let value), .chooseAction(_, let value):
+      case .assign(_, let value), .guard_(let value):
         return value.freeVariableNames
       case .unchanged:
         return []

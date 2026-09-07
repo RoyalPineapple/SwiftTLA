@@ -2418,12 +2418,26 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         ))
     }
 
-    @Test func parseNondeterministicAssign() throws {
+    @Test func parseChoiceExpressionRetainsItsPredicate() throws {
+        let decodedAction = SpecParser.decodeActionExpr(try parseExpression(
+            "x.becomes(Expr<Int>(StateExpr.choose(StateExpr.set([1, 2, 3]), \"member\", member > 1)))"
+        ))
+        #expect(decodedAction == .assign(.named("x"), .choose(
+            .setLiteral([.int(1), .int(2), .int(3)]), "member", .greaterThan(.variable("member"), .int(1))
+        )))
+    }
+
+    @Test func parseChoiceExpressionAssignment() throws {
         let decodedAction = SpecParser.decodeActionExpr(
             try parseExpression("x.becomes(StateExpr.any(from: StateExpr.set([1, 2, 3])))")
         )
         let expectedSet = StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))])
-        #expect(decodedAction == ActionExpr.chooseAction(.named("x"), expectedSet))
+        guard case .assign(.named("x"), .choose(let domain, _, let predicate)) = decodedAction else {
+            Issue.record("Expected a deterministic CHOOSE expression assignment")
+            return
+        }
+        #expect(domain == expectedSet)
+        #expect(predicate == .bool(true))
     }
 }
 

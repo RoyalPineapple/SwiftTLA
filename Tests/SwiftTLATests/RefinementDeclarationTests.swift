@@ -250,6 +250,73 @@ struct RefinementDeclarationTests {
     #expect(refinement == "Refines")
   }
 
+  @Test("refinement preserves concrete failures instead of diagnosing a state limit")
+  func preservesConcreteExplorationFailures() throws {
+    let abstractValue = Var<Int>("abstractValue", 0)
+    let abstract = TLASpec("AbstractFailureEvidence") { Variable(abstractValue) }
+    let concreteValue = Var<Int>("concreteValue", 0)
+    let instance = Instance("C", of: abstract)
+    let declaration = TLASpec("ConcreteFailureEvidence") {
+      Variable(concreteValue)
+      instance
+      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+    }
+    let failures: [(ModelCheckingFailureKind, [NamedInvariant], StateExpr?, Bool, VariableInitialization)] = [
+      (.invariantViolated, [.init(name: "safe", body: false)], nil, false, .value(.int(0))),
+      (.deadlock, [], nil, true, .value(.int(0))),
+      (.assumption, [], false, false, .value(.int(0))),
+      (.initialState, [], nil, false, .memberOf(.value(.set([]))))
+    ]
+    let declaredVariable = try #require(declaration.variables.first)
+    for (kind, invariants, assume, checkDeadlock, initialization) in failures {
+      let spec = TLASpec(
+        name: declaration.name,
+        variables: [.init(
+          name: declaredVariable.name, initialization: initialization,
+          generatedSwiftType: declaredVariable.generatedSwiftType, origin: declaredVariable.origin
+        )],
+        actions: [], invariants: invariants, assume: assume, checkDeadlock: checkDeadlock,
+        moduleInstances: declaration.moduleInstances, refinements: declaration.refinements
+      )
+      let outcome = try ModelChecker(
+        compilation: spec.compile(), configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
+      ).check()
+      #expect(outcome.diagnostic?.kind == kind)
+      if case .refinementUnproven = outcome {
+        Issue.record("A concrete \(kind) failure must not be replaced by an unproven refinement.")
+      }
+    }
+  }
+
+  @Test("refinement requires the abstract model assumptions to hold")
+  func checksAbstractAssumptions() throws {
+    let abstractValue = Var<Int>("abstractValue", 0)
+    let concreteValue = Var<Int>("concreteValue", 0)
+    for assumption in [false, true] {
+      let abstract = TLASpec(
+        name: "AbstractAssumption", variables: [.init(name: abstractValue.name, initial: .int(0))],
+        actions: [], invariants: [], assume: .value(.bool(assumption))
+      )
+      let instance = Instance("C", of: abstract)
+      let concrete = TLASpec("ConcreteAssumption") {
+        Variable(concreteValue)
+        instance
+        Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      }
+      let outcome = try ModelChecker(
+        compilation: concrete.compile(), configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
+      ).check()
+      if assumption {
+        guard case .ok = outcome else {
+          Issue.record("Expected valid abstract assumptions to permit refinement.")
+          continue
+        }
+      } else {
+        #expect(outcome.diagnostic?.kind == .assumption)
+      }
+    }
+  }
+
   @Test("refinement owns instance substitutions")
   func rejectsDuplicateInstanceMapping() {
     let abstractValue = Var<Int>("abstractValue", 0)

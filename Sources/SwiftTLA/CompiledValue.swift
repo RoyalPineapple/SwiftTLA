@@ -19,13 +19,10 @@ struct CompiledRecord: Hashable, Sendable {
     }
 
     func replacing(_ value: CompiledValue, for key: CompiledValue) -> CompiledRecord {
-        var replaced = false
-        let updated = fields.map { current -> Field in
+        CompiledRecord(fields.map { current -> Field in
             guard current.key == key else { return current }
-            replaced = true
             return .init(key: key, value: value)
-        }
-        return CompiledRecord(replaced ? updated : updated + [.init(key: key, value: value)])
+        })
     }
 }
 
@@ -88,7 +85,7 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
             return .tuple(values.map { $0.applying(mapping) })
         case .record(let values):
             return .record(CompiledRecord(values.fields.map {
-                .init(key: $0.key.applying(mapping), value: $0.value.applying(mapping))
+                .init(key: $0.key, value: $0.value.applying(mapping))
             }))
         case .function(let values):
             return .function(Dictionary(uniqueKeysWithValues: values.map {

@@ -61,6 +61,19 @@ extension TLASpec {
         )
       }
 
+      for value in symmetry.values.sorted() {
+        switch value {
+        case .int, .bool, .string, .constant:
+          break
+        case .set, .tuple, .record, .function:
+          throw symmetryDiagnostic(
+            path: "\(path).values",
+            expected: "atomic integers, booleans, strings, or model constants",
+            actual: "a composite symmetry member: \(value)"
+          )
+        }
+      }
+
       let renderedSymbol = "Symm\(symmetry.variableName)"
       guard renderedSymbols.insert(renderedSymbol).inserted else {
         throw symmetryDiagnostic(

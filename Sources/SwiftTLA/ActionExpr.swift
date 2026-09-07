@@ -8,7 +8,6 @@ public indirect enum ActionExpr: Hashable, Sendable {
     case assign(ActionTarget, StateExpr)
     case unchanged(ActionTarget)
     case guard_(StateExpr)
-    case chooseAction(ActionTarget, StateExpr)
     case existsAction(String, StateExpr, ActionExpr)
     case ifElse(StateExpr, ActionExpr, ActionExpr)
     case define(String, StateExpr, ActionExpr)
@@ -27,7 +26,6 @@ extension ActionExpr {
             case .assign(let target, let value): return .assign(target, state(value))
             case .unchanged: return expression
             case .guard_(let condition): return .guard_(state(condition))
-            case .chooseAction(let target, let values): return .chooseAction(target, state(values))
             case .existsAction(let binder, let values, let body): return .existsAction(binder, state(values), binder == name ? body : action(body))
             case .ifElse(let condition, let then, let otherwise): return .ifElse(state(condition), action(then), action(otherwise))
             case .define(let binder, let value, let body): return .define(binder, state(value), binder == name ? body : action(body))
@@ -58,7 +56,6 @@ package func renameVar(_ from: String, to: String, in action: ActionExpr) -> Act
     case .assign(let target, let e): return .assign(rename(target), r(e))
     case .unchanged(let target): return .unchanged(rename(target))
     case .guard_(let e): return .guard_(r(e))
-    case .chooseAction(let target, let s): return .chooseAction(rename(target), r(s))
     case .existsAction(let v, let s, let b):
         return .existsAction(v, r(s), v == from ? b : ra(b))
     case .ifElse(let c, let t, let e): return .ifElse(r(c), ra(t), ra(e))

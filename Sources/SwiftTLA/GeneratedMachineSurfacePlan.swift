@@ -6,18 +6,18 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let formalName: String
         let storageOrdinal: Int
         package let swiftType: String
-        package let symmetricCollection: SymmetricCollection?
+        package let collection: SymmetricCollection?
 
         init(
             formalName: String,
             storageOrdinal: Int,
             swiftType: String,
-            symmetricCollection: SymmetricCollection?
+            collection: SymmetricCollection?
         ) {
             self.formalName = formalName
             self.storageOrdinal = storageOrdinal
             self.swiftType = swiftType
-            self.symmetricCollection = symmetricCollection
+            self.collection = collection
         }
     }
 
@@ -38,18 +38,18 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         let compiledAction: ActionID
         package let swiftIdentifier: String
         package let bindings: [Binding]
-        package let symmetricCollection: SymmetricCollection?
+        package let collection: SymmetricCollection?
 
         init(
             compiledAction: ActionID,
             swiftIdentifier: String,
             bindings: [Binding],
-            symmetricCollection: SymmetricCollection?
+            collection: SymmetricCollection?
         ) {
             self.compiledAction = compiledAction
             self.swiftIdentifier = swiftIdentifier
             self.bindings = bindings
-            self.symmetricCollection = symmetricCollection
+            self.collection = collection
         }
     }
 
@@ -75,13 +75,13 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package let variables: [Variable]
     package let actions: [Action]
     package var symmetricCollections: [SymmetricCollection] {
-        variables.compactMap(\.symmetricCollection)
+        variables.compactMap(\.collection)
     }
 
     init(layout: CompiledLayout, semantics: CompiledSemantics) throws {
         let symmetricCollectionsByVariableID: [VariableID: SymmetricCollection] = try Dictionary(
             uniqueKeysWithValues: layout.variables.compactMap { variable in
-                guard let declaration = variable.symmetricCollection else { return nil }
+                guard let declaration = variable.collection else { return nil }
                 guard let elementType = declaration.elementType,
                       let valueType = declaration.valueType
                 else {
@@ -134,7 +134,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 formalName: variable.declaration.name,
                 storageOrdinal: variable.id.ordinal,
                 swiftType: swiftType,
-                symmetricCollection: collection
+                collection: collection
             )
         }
         let executableActions = layout.actions.filter {
@@ -146,20 +146,20 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             guard let action = compiledActions[layoutAction.id] else {
                 throw Self.missingDeclaration("action", named: layoutAction.declaration.name)
             }
-            let collection = action.symmetricCollection.flatMap {
+            let collection = action.collection.flatMap {
                 symmetricCollectionsByVariableID[$0]
             }
-            if action.symmetricCollection != nil, collection == nil {
+            if action.collection != nil, collection == nil {
                 throw Self.missingDeclaration(
                     "symmetric collection",
                     named: layoutAction.declaration.name
                 )
             }
             if let collection {
-                guard let collectionVariable = action.symmetricCollection,
+                guard let collectionVariable = action.collection,
                       layout.variables.indices.contains(collectionVariable.ordinal),
                       let compiledMembers = layout.variables[collectionVariable.ordinal]
-                        .symmetricCollection?.members else {
+                        .collection?.members else {
                     throw Self.missingDeclaration(
                         "symmetric collection layout",
                         named: layoutAction.declaration.name
@@ -191,7 +191,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                         domain: try binding.values.map { try $0.rendered(using: layout) }
                     )
                 },
-                symmetricCollection: collection
+                collection: collection
             )
         }
 

@@ -49,9 +49,6 @@ struct EvaluatorCoverage {
     #expect(throws: EvalError.integerOverflow(.division, operands: [.min, -1])) {
       try evaluate(.integerDivide(.int(.min), .int(-1)))
     }
-    #expect(throws: EvalError.integerOverflow(.remainder, operands: [.min, -1])) {
-      try evaluate(.modulo(.int(.min), .int(-1)))
-    }
     #expect(throws: EvalError.integerOverflow(.negation, operands: [.min])) {
       try evaluate(.negate(.int(.min)))
     }

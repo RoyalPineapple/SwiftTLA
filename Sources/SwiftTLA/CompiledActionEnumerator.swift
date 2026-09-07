@@ -21,25 +21,19 @@ struct CompiledActionEnumerator {
     }
 
     func enumerateSuccessors(_ action: CompiledAction) throws -> [CompiledSuccessor] {
-        let choices = chooseActions(in: action.body)
-        return try actionBindings(action.bindings).flatMap { binding in
-            let selections = try selectChoices(choices, bindings: binding.values)
-            return try selections.flatMap { selection in
-                let evaluationState = try state.updating(selection)
-                return try execute(action.body, state: evaluationState, bindings: binding.values).map { delta in
-                    CompiledSuccessor(
-                        action: action.id,
-                        arguments: binding.arguments,
-                        state: try state.updating(selection).updating(delta.assignments),
-                    )
-                }
+        try actionBindings(action.bindings).flatMap { binding in
+            try execute(action.body, bindings: binding.values).map { delta in
+                CompiledSuccessor(
+                    action: action.id,
+                    arguments: binding.arguments,
+                    state: try state.updating(delta.assignments)
+                )
             }
         }
     }
 
     private func execute(
         _ action: CompiledActionExpr,
-        state: CompiledState,
         bindings: CompiledBindings
     ) throws -> [CompiledActionDelta] {
         let evaluator = CompiledEvaluator(
@@ -52,45 +46,42 @@ struct CompiledActionEnumerator {
         switch action {
         case .assign(let variable, let expression):
             return [.init(assignments: [variable: try evaluator.evaluate(expression)])]
-        case .unchanged:
-            return [.init()]
+        case .unchanged(let variable):
+            return [.init(assignments: [variable: try state.value(for: variable)])]
         case .guard_(let expression):
-            guard try evaluator.evaluate(expression) == .boolean(true) else { return [] }
-            return [.init()]
-        case .chooseAction(let variable, let set):
-            _ = variable
-            _ = set
-            return [.init()]
-        case .existsAction(let binder, let set, let body):
-            let value = try evaluator.evaluate(set)
-            guard case .set(let values) = value else {
-                throw EvalError.expected(.set, actual: [value])
+            let value = try evaluator.evaluate(expression)
+            guard case .boolean(let enabled) = value else {
+                throw EvalError.expected(.boolean, actual: [value])
             }
-            return try values.flatMap { value in
-                try execute(body, state: state, bindings: bindings.binding(value, to: binder))
+            return enabled ? [.init()] : []
+        case .existsAction(let binder, let set, let body):
+            let domain = try evaluator.evaluate(set)
+            guard case .set(let values) = domain else {
+                throw EvalError.expected(.set, actual: [domain])
+            }
+            return try CompiledValue.sorted(values).flatMap { value in
+                try execute(body, bindings: bindings.binding(value, to: binder))
             }
         case .define(let binder, let value, let body):
             return try execute(
                 body,
-                state: state,
                 bindings: bindings.binding(try evaluator.evaluate(value), to: binder)
             )
         case .ifElse(let condition, let then, let otherwise):
-            return try execute(
-                try evaluator.evaluate(condition) == .boolean(true) ? then : otherwise,
-                state: state,
-                bindings: bindings
-            )
+            let value = try evaluator.evaluate(condition)
+            guard case .boolean(let conditionHolds) = value else {
+                throw EvalError.expected(.boolean, actual: [value])
+            }
+            return try execute(conditionHolds ? then : otherwise, bindings: bindings)
         case .and(let lhs, let rhs):
-            let left = try execute(lhs, state: state, bindings: bindings)
+            let left = try execute(lhs, bindings: bindings)
             guard !left.isEmpty else { return [] }
-            let right = try execute(rhs, state: state, bindings: bindings)
+            let right = try execute(rhs, bindings: bindings)
             return try left.flatMap { first in
-                try right.map { second in try first.merging(second) }
+                try right.map { try first.merging($0) }
             }
         case .or(let lhs, let rhs):
-            return try execute(lhs, state: state, bindings: bindings)
-                + execute(rhs, state: state, bindings: bindings)
+            return try execute(lhs, bindings: bindings) + execute(rhs, bindings: bindings)
         }
     }
 
@@ -106,44 +97,6 @@ struct CompiledActionEnumerator {
             }
         }
     }
-
-    private func selectChoices(
-        _ choices: [(VariableID, CompiledStateExpr)],
-        bindings: CompiledBindings
-    ) throws -> [[VariableID: CompiledValue]] {
-        try choices.reduce([[:]]) { selections, choice in
-            try selections.flatMap { selection in
-                let selectionState = try state.updating(selection)
-                let evaluator = CompiledEvaluator(
-                    state: selectionState,
-                    semantics: semantics,
-                    layout: layout,
-                    bindings: bindings,
-                    enabledActions: enabledActions
-                )
-                let value = try evaluator.evaluate(choice.1)
-                guard case .set(let values) = value else {
-                    throw EvalError.expected(.set, actual: [value])
-                }
-                return values.map { value in
-                    var selected = selection
-                    selected[choice.0] = value
-                    return selected
-                }
-            }
-        }
-    }
-
-    private func chooseActions(in action: CompiledActionExpr) -> [(VariableID, CompiledStateExpr)] {
-        switch action {
-        case .chooseAction(let variable, let set):
-            return [(variable, set)]
-        case .and(let lhs, let rhs):
-            return chooseActions(in: lhs) + chooseActions(in: rhs)
-        case .assign, .unchanged, .guard_, .existsAction, .ifElse, .define, .or:
-            return []
-        }
-    }
 }
 
 private struct CompiledActionBindingValues {
@@ -154,14 +107,12 @@ private struct CompiledActionBindingValues {
 private struct CompiledActionDelta {
     var assignments: [VariableID: CompiledValue] = [:]
 
-    func merging(_ other: CompiledActionDelta) throws -> CompiledActionDelta {
-        var merged = self
-        for assignment in other.assignments {
-            if let value = merged.assignments[assignment.key], value != assignment.value {
+    func merging(_ other: Self) throws -> Self {
+        .init(assignments: try other.assignments.reduce(into: assignments) { merged, assignment in
+            if let previous = merged[assignment.key], previous != assignment.value {
                 throw CompiledEvaluationError.conflictingAssignment(assignment.key)
             }
-            merged.assignments[assignment.key] = assignment.value
-        }
-        return merged
+            merged[assignment.key] = assignment.value
+        })
     }
 }

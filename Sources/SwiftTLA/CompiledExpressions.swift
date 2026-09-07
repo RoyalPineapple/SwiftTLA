@@ -489,7 +489,6 @@ indirect enum CompiledActionExpr: Sendable {
     case assign(VariableID, CompiledStateExpr)
     case unchanged(VariableID)
     case guard_(CompiledStateExpr)
-    case chooseAction(VariableID, CompiledStateExpr)
     case existsAction(BinderID, CompiledStateExpr, CompiledActionExpr)
     case ifElse(CompiledStateExpr, CompiledActionExpr, CompiledActionExpr)
     case define(BinderID, CompiledStateExpr, CompiledActionExpr)
@@ -501,7 +500,7 @@ struct CompiledAction: Sendable {
     let id: ActionID
     let bindings: [CompiledActionBinding]
     let body: CompiledActionExpr
-    let symmetricCollection: VariableID?
+    let collection: VariableID?
 }
 
 struct CompiledActionBinding: Sendable {

@@ -79,21 +79,6 @@ package struct FiniteExploration {
         return false
     }
 
-    public init(
-        graph: StateGraph,
-        initialStateIDs: [StateGraph.StateID],
-        outcome: ModelCheckOutcome,
-        compilationIdentity: CompilationIdentity,
-        configuration: FiniteExplorationConfiguration
-    ) {
-        self.graph = graph
-        self.initialStateIDs = initialStateIDs
-        self.outcome = outcome
-        self.compilationIdentity = compilationIdentity
-        self.configuration = configuration
-        compiledStates = [:]
-    }
-
     init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
@@ -108,5 +93,33 @@ package struct FiniteExploration {
         self.compilationIdentity = compilationIdentity
         self.configuration = configuration
         self.compiledStates = compiledStates
+    }
+
+    func requireValidEvidence(in compilation: CompiledSpecification) throws {
+        guard compilationIdentity == compilation.identity else {
+            throw CompiledEvaluationError.invalidCompilationIdentity(
+                expected: compilation.identity, actual: compilationIdentity
+            )
+        }
+        try configuration.validatePropertySupport(in: compilation)
+        guard (!isComplete || !initialStateIDs.isEmpty),
+              initialStateIDs.allSatisfy({ compiledStates[$0] != nil }),
+              Set(graph.states.keys) == Set(compiledStates.keys) else {
+            throw invalidEvidence("initial identities and compiled states do not cover the explored graph")
+        }
+        for (id, state) in compiledStates {
+            try state.requireIdentity(compilation.identity)
+            guard try state.projection(using: compilation.layout) == graph.states[id] else {
+                throw invalidEvidence("compiled state \(id) disagrees with its graph projection")
+            }
+        }
+    }
+
+    private func invalidEvidence(_ actual: String) -> CompilationDiagnostic {
+        .init(
+            code: .compilationIdentityMismatch, stage: .checking, path: "exploration.evidence",
+            expected: "matching compiled evidence and initial identities for the explored graph",
+            actual: actual, nextSafeAction: "Explore the compiled specification again before checking properties."
+        )
     }
 }
