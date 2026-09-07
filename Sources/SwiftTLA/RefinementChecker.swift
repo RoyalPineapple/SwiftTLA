@@ -18,6 +18,7 @@ struct RefinementChecker {
 
     func check(_ exploration: FiniteExploration) throws -> ModelCheckOutcome? {
         guard exploration.isComplete else {
+            guard case .depthExceeded = exploration.outcome else { return nil }
             return compilation.refinements.first.map {
                 .refinementUnproven(refinement: $0.name, exploration: exploration.outcome)
             }
