@@ -1022,9 +1022,10 @@ extension Expr {
 extension Expr {
   /// Selects formal sequence members that satisfy `predicate`.
   public func selecting<Element: TLAValueType>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
     where predicate: (WithValue<Element>) -> StateExpr
   ) -> Expr<TupleExpr<Element>> where T == TupleExpr<Element> {
-    let binding = generatedBinderName()
+    let binding = generatedBinderName(file: file, line: line, column: column)
     let element = WithValue<Element>(expression: .variable(binding))
     return Expr<TupleExpr<Element>>(.sequenceSelect(raw, binding, predicate(element)))
   }
