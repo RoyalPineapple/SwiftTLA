@@ -124,6 +124,19 @@ struct SpecificationSourceAuthorityTests {
         #expect(try TLASpecVerifier.collectEnumVariables(from: integers.memberBlock.members).first?.cases.first?.value == .int(4))
     }
 
+    @Test("A final maximum integer enum case does not overflow macro expansion")
+    func maximumIntegerEnumCasesAreAdmitted() throws {
+        for cases in ["case maximum = 9223372036854775807", "case previous = 9223372036854775806, maximum"] {
+            let declaration = try declaration("enum Limit: Int, TLAValueType { \(cases) }")
+            let info = try #require(TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members).first)
+            #expect(info.cases.last?.value == .int(Int.max))
+        }
+        let declaration = try declaration("enum Limit: Int, TLAValueType { case maximum = 9223372036854775807, overflow }")
+        #expect(throws: ModelMacroError.invalidEnumRawValue(caseName: "overflow")) {
+            _ = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
+        }
+    }
+
     @Test("Escaped enum cases retain semantic names and default raw values")
     func escapedEnumCasesPreserveIdentity() throws {
         let declaration = try declaration("""

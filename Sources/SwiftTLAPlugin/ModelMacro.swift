@@ -165,7 +165,7 @@ enum TLASpecVerifier {
 
             let encoding = try enumEncoding(in: enumDecl, intBacked: intBacked)
             var cases: [(name: String, value: TLAValue)] = []
-            var idx = 0
+            var nextInteger: Int? = 0
             for caseMember in enumDecl.memberBlock.members {
                 guard let caseDecl = caseMember.decl.as(EnumCaseDeclSyntax.self) else { continue }
                 for element in caseDecl.elements {
@@ -175,7 +175,8 @@ enum TLASpecVerifier {
                            let raw = rawValue.as(IntegerLiteralExprSyntax.self),
                            let val = Int(raw.literal.text.filter { $0 != "_" }) {
                             value = .int(val)
-                            idx = val + 1
+                            let next = val.addingReportingOverflow(1)
+                            nextInteger = next.overflow ? nil : next.partialValue
                         } else if stringBacked,
                                   let raw = rawValue.as(StringLiteralExprSyntax.self),
                                   let val = raw.representedLiteralValue {
@@ -184,8 +185,12 @@ enum TLASpecVerifier {
                             throw ModelMacroError.invalidEnumRawValue(caseName: element.name.sourceIdentifierName)
                         }
                     } else if intBacked {
-                        value = .int(idx)
-                        idx += 1
+                        guard let integer = nextInteger else {
+                            throw ModelMacroError.invalidEnumRawValue(caseName: element.name.sourceIdentifierName)
+                        }
+                        value = .int(integer)
+                        let next = integer.addingReportingOverflow(1)
+                        nextInteger = next.overflow ? nil : next.partialValue
                     } else {
                         value = .string(element.name.sourceIdentifierName)
                     }
