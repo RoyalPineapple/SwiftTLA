@@ -23,7 +23,7 @@ package enum CanonicalValue: Hashable, Sendable {
     case orderedFunction([CanonicalFunctionEntry])
 
     package static func set(_ values: [CanonicalValue]) -> CanonicalValue {
-        .orderedSet(values.sorted { canonicalBytes($0.canonicalEncoding, $1.canonicalEncoding) })
+        .orderedSet(Set(values).sorted { canonicalBytes($0.canonicalEncoding, $1.canonicalEncoding) })
     }
 
     package static func tuple(_ values: [CanonicalValue]) -> CanonicalValue {

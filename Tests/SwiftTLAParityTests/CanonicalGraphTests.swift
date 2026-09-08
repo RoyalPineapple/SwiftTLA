@@ -69,6 +69,18 @@ struct CanonicalGraphTests {
         ]) == .tuple([.string("first"), .string("second")]))
     }
 
+    @Test("canonical sets collapse extensionally equal members")
+    func deduplicatesCanonicalSetMembers() throws {
+        let sequence = CanonicalValue.tuple([.integer(1)])
+        let sequenceFunction = try CanonicalValue.function([
+            .init(key: .integer(1), value: .integer(1))
+        ])
+        let empty = CanonicalValue.tuple([])
+
+        #expect(CanonicalValue.set([sequence, sequenceFunction]) == .set([sequence]))
+        #expect(CanonicalValue.set([empty, try .function([]), .record([:])]) == .set([empty]))
+    }
+
     @Test("other function domains retain function identity")
     func preservesNonSequenceFunctions() throws {
         let noncontiguous = try CanonicalValue.function([
