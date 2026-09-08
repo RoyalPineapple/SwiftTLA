@@ -79,6 +79,7 @@ with open(sys.argv[1], encoding="utf-8") as source:
     toolchain = json.load(source)
 toolchain["tlc"]["jar"]["sha256"] = sys.argv[3]
 toolchain["java"]["archives"][sys.argv[2]]["url"] = "-K"
+toolchain["java"]["archives"][sys.argv[2]]["sha256"] = sys.argv[3]
 with open(sys.argv[1], "w", encoding="utf-8") as destination:
     json.dump(toolchain, destination)
 PY
