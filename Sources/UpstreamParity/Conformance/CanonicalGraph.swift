@@ -31,7 +31,8 @@ package enum CanonicalValue: Hashable, Sendable {
     }
 
     package static func record(_ fields: [String: CanonicalValue]) -> CanonicalValue {
-        .orderedRecord(fields.map { CanonicalRecordField(name: $0.key, value: $0.value) }
+        guard fields.isEmpty == false else { return .tuple([]) }
+        return .orderedRecord(fields.map { CanonicalRecordField(name: $0.key, value: $0.value) }
             .sorted { canonicalBytes($0.name, $1.name) })
     }
 
@@ -42,6 +43,17 @@ package enum CanonicalValue: Hashable, Sendable {
             guard keys.insert(entry.key).inserted else {
                 throw CanonicalValueError.duplicateFunctionKey(entry.key)
             }
+        }
+        if entries.isEmpty {
+            return .tuple([])
+        }
+        let indexedValues = entries.compactMap { entry -> (index: Int, value: CanonicalValue)? in
+            guard case .integer(let index) = entry.key else { return nil }
+            return (index, entry.value)
+        }.sorted { $0.index < $1.index }
+        if indexedValues.count == entries.count,
+           indexedValues.enumerated().allSatisfy({ offset, entry in entry.index == offset + 1 }) {
+            return .tuple(indexedValues.map(\.value))
         }
         var fields: [String: CanonicalValue] = [:]
         for entry in ordered {

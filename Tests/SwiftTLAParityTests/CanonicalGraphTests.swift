@@ -58,6 +58,44 @@ struct CanonicalGraphTests {
         }
     }
 
+    @Test("sequence functions and tuples share one canonical value")
+    func canonicalizesSequenceFunctionsAsTuples() throws {
+        let empty = CanonicalValue.tuple([])
+        #expect(try CanonicalValue.function([]) == empty)
+        #expect(CanonicalValue.record([:]) == empty)
+        #expect(try CanonicalValue.function([
+            .init(key: .integer(2), value: .string("second")),
+            .init(key: .integer(1), value: .string("first"))
+        ]) == .tuple([.string("first"), .string("second")]))
+    }
+
+    @Test("other function domains retain function identity")
+    func preservesNonSequenceFunctions() throws {
+        let noncontiguous = try CanonicalValue.function([
+            .init(key: .integer(1), value: .string("first")),
+            .init(key: .integer(3), value: .string("third"))
+        ])
+        let noninteger = try CanonicalValue.function([
+            .init(key: .boolean(true), value: .string("value"))
+        ])
+        let zeroBased = try CanonicalValue.function([
+            .init(key: .integer(0), value: .string("value"))
+        ])
+
+        guard case .orderedFunction = noncontiguous else {
+            Issue.record("A noncontiguous integer domain must remain a function.")
+            return
+        }
+        guard case .orderedFunction = noninteger else {
+            Issue.record("A non-integer domain must remain a function.")
+            return
+        }
+        guard case .orderedFunction = zeroBased else {
+            Issue.record("A zero-based integer domain must remain a function.")
+            return
+        }
+    }
+
     @Test("canonical graphs reject duplicate states")
     func rejectsDuplicateStates() {
         let state = CanonicalState(bindings: ["counter": .integer(1)])

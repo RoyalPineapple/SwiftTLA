@@ -92,4 +92,29 @@ struct GraphComparisonTests {
         #expect(comparison.differences.contains { if case .outcome = $0 { true } else { false } })
     }
 
+    @Test("TLC tuples match Swift sequence functions exactly")
+    func comparesSequenceRepresentations() throws {
+        let tlcState = CanonicalState(bindings: [
+            "levels": .tuple([.integer(0), .integer(1)])
+        ])
+        let swiftState = CanonicalState(bindings: [
+            "levels": try .function([
+                .init(key: .integer(1), value: .integer(0)),
+                .init(key: .integer(2), value: .integer(1))
+            ])
+        ])
+        let tlc = try CompletedGraphRun(
+            graph: CanonicalGraph(initialStates: [tlcState], states: [tlcState], edges: []),
+            observableActions: [],
+            outcome: .exhaustiveSuccess
+        )
+        let swift = try CompletedGraphRun(
+            graph: CanonicalGraph(initialStates: [swiftState], states: [swiftState], edges: []),
+            observableActions: [],
+            outcome: .exhaustiveSuccess
+        )
+
+        #expect(compareFiniteGraphs(tlc: tlc, swift: swift).matches)
+    }
+
 }
