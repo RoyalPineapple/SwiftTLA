@@ -431,12 +431,10 @@ struct CompiledEvaluator: Sendable {
                     values.append(.tuple(lhs + rhs))
                 case .tupleRemoving:
                     let index = try integer(popValue(from: &values))
-                    var tuple = try sequenceElements(from: popValue(from: &values))
-                    guard index >= 1, index <= tuple.count else {
-                        throw EvalError.indexOutOfBounds(index, tuple.count)
-                    }
-                    tuple.remove(at: index - 1)
-                    values.append(.tuple(tuple))
+                    let tuple = try sequenceElements(from: popValue(from: &values))
+                    values.append(.tuple(try nativeOperation {
+                        try _NativeMachineOperations.sequenceRemoving(tuple, at: index)
+                    }))
                 case .recordLiteral(let fields):
                     let fieldValues = try popValues(fields.fields.count, from: &values)
                     values.append(.record(CompiledRecord(zip(fields.fields, fieldValues).map {

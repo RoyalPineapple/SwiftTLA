@@ -163,6 +163,8 @@ private final class NativeProgramResolver {
             children = [try child(source, { if case .tuple = shape { return shape }; return try scope.sequenceSourceType(source) }())]
         case .tupleHead(let source): children = [try child(source, scope.sequenceSourceType(source, element: result))]
         case .tupleTail(let source): children = [try child(source, scope.sequenceSourceType(source, element: element(result)))]
+        case .tupleRemoving(let source, let index):
+            children = [try child(source, scope.sequenceSourceType(source, element: element(result))), try child(index, .int)]
         case .tupleAppend(let source, let item): children = [try child(source, scope.sequenceSourceType(source, element: element(result))), try child(item, element(result))]
         case .tupleConcatenate(let a, let b): children = [try child(a, scope.sequenceSourceType(a, element: element(result))), try child(b, scope.sequenceSourceType(b, element: element(result)))]
         case .recordLiteral(let record):

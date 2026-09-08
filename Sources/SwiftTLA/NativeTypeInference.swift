@@ -1057,6 +1057,10 @@ struct NativeTypeInference: Sendable {
         case .tupleTail(let value):
             let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
             result = .array(try sequenceElementType(inferSequence(value, element: hint)))
+        case .tupleRemoving(let sequence, let index):
+            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
+            result = .array(try sequenceElementType(inferSequence(sequence, element: hint)))
+            _ = try infer(index, expected: .int)
         case .tupleAppend(let sequence, let value):
             let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
             let item = try sequenceElementType(inferSequence(sequence, element: hint))

@@ -469,6 +469,16 @@ struct NativeSwiftEmitter {
                 return try _NativeMachineOperations.sequenceElement(\(elements), at: _sequenceIndex)
             }())
             """
+        case .tupleRemoving(_, _):
+            let source = childType(0)
+            let elements = try nativeSequenceElements("_sequenceValue", source: source)
+            return """
+            (try { () throws -> \(try swiftType(node.computationType)) in
+                let _sequenceValue = \(try emit(0))
+                let _sequenceIndex = \(try emit(1))
+                return try _NativeMachineOperations.sequenceRemoving(\(elements), at: _sequenceIndex)
+            }())
+            """
         case .tupleLength(_):
             if case .tuple(let elements) = childType(0) {
                 return "(try { () throws -> Int in _ = \(try emit(0)); return \(elements.count) }())"
