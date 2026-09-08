@@ -1492,7 +1492,7 @@ final class ParserSession {
             return typedFacadeValueShape(type)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ["appending", "concatenating"].contains(member.declName.baseName.text),
+           ["appending", "concatenating", "selecting"].contains(member.declName.baseName.text),
            let base = member.base {
             return typedFacadeValueShape(base, scope: scope)
         }

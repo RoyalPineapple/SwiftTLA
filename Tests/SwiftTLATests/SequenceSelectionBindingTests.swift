@@ -25,4 +25,20 @@ struct SequenceSelectionBindingTests {
         }
         #expect(outer != inner)
     }
+
+    @Test("Counting a nested selection retains its sequence shape and outer binding")
+    func countsNestedSelection() throws {
+        let built = TupleExpr<Int>.literal(1, 2).selecting { outer in
+            TupleExpr<Int>.literal(1, 2).selecting { inner in outer == inner }.count == 1
+        }
+        let syntax = Parser.parse(source: """
+        TupleExpr<Int>.literal(1, 2).selecting { outer in
+            TupleExpr<Int>.literal(1, 2).selecting { inner in outer == inner }.count == 1
+        }
+        """)
+        let expression = try #require(syntax.statements.first?.item.as(ExprSyntax.self))
+        let parsed = try #require(SpecParser.decodeStateExpr(expression))
+        #expect(try evaluateClosed(built.raw) == .tuple([.int(1), .int(2)]))
+        #expect(try evaluateClosed(parsed) == .tuple([.int(1), .int(2)]))
+    }
 }
