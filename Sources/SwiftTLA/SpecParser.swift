@@ -1492,6 +1492,12 @@ final class ParserSession {
             return typedFacadeValueShape(type)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "removing",
+           call.arguments.first?.label?.text == "at",
+           let base = member.base {
+            return typedFacadeValueShape(base, scope: scope)
+        }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            ["appending", "concatenating", "selecting"].contains(member.declName.baseName.text),
            let base = member.base {
             return typedFacadeValueShape(base, scope: scope)

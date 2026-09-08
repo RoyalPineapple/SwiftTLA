@@ -41,4 +41,20 @@ struct SequenceSelectionBindingTests {
         #expect(try evaluateClosed(built.raw) == .tuple([.int(1), .int(2)]))
         #expect(try evaluateClosed(parsed) == .tuple([.int(1), .int(2)]))
     }
+    @Test("Counting sequence removal retains the bound index and sequence shape")
+    func countsRemovalInsideSelection() throws {
+        let built = TupleExpr<Int>.literal(1, 2).selecting { index in
+            TupleExpr<Int>.literal(7, 8).removing(at: index.expr).count == 1
+        }
+        let syntax = Parser.parse(source: """
+        TupleExpr<Int>.literal(1, 2).selecting { index in
+            TupleExpr<Int>.literal(7, 8).removing(at: index.expr).count == 1
+        }
+        """)
+        let expression = try #require(syntax.statements.first?.item.as(ExprSyntax.self))
+        let parsed = try #require(SpecParser.decodeStateExpr(expression))
+        #expect(try evaluateClosed(built.raw) == .tuple([.int(1), .int(2)]))
+        #expect(try evaluateClosed(parsed) == .tuple([.int(1), .int(2)]))
+    }
+
 }
