@@ -24,6 +24,7 @@ ContinuousClock measurements follow warmup, with equal semantic checksums and no
 Construction retains every result through the allocation snapshot; outer retention buffers are preallocated. Non-inlined consumers exercise retained state/control after timing.
 Malloc snapshots measure process-wide retained live blocks/bytes in the default zone, not total allocations or peaks.
 Optional Instruments traces launch the actual test executable, not swift test. Raw traces and export tables require attribution review before reporting allocation totals.
+Both release builds enable testing access for the formal-engine comparison. This can affect optimization and executable size; results describe this identical diagnostic harness.
 These measurements are hosted diagnostics, not a replacement for CI correctness admission.
 SCOPE
 
@@ -73,7 +74,7 @@ MANIFEST
         swift package resolve > "$destination/resolve.log" 2>&1
         cp Package.resolved "$destination/Package.resolved"
         /usr/bin/time -p swift build -c release --build-tests -j 1 \
-            -Xswiftc -Xfrontend -Xswiftc -dump-macro-expansions \
+            -Xswiftc -enable-testing -Xswiftc -Xfrontend -Xswiftc -dump-macro-expansions \
             > "$destination/build.stdout.log" 2> "$destination/build.stderr.log"
         swift test -c release --skip-build --no-parallel --filter NativeMachinePerformanceTests \
             > "$destination/measurements.log" 2>&1
