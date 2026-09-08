@@ -677,14 +677,9 @@ struct NativeTypeInference: Sendable {
     }
 
     func operatorCall(
-        _ id: OperatorID, arguments: [CompiledFormalCallArgument], expected: NativeType? = nil,
-        operators: [OperatorID: CompiledLocalOperator] = [:]
+        _ id: OperatorID, arguments: [CompiledFormalCallArgument], expected: NativeType? = nil
     ) throws -> NativeOperatorCall {
         var inference = self
-        for (id, definition) in operators {
-            inference.localOperators[id] = definition
-            if inference.localCaptures[id] == nil { inference.localCaptures[id] = inference.bindings }
-        }
         return try inference.specializeCall(.reference(id, arity: arguments.count), arguments: arguments, expected: expected ?? .unknown)
     }
 

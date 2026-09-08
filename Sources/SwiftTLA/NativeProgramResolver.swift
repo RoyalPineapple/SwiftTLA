@@ -178,8 +178,7 @@ private final class NativeProgramResolver {
         case .functionApply(let function, let argument):
             if case .operatorReference(let id) = function {
                 let resolved = try scope.operatorCall(id, arguments: [.value(argument)], expected: result)
-                call = try resolveCall(resolved, operation: id, values: [argument], scope: scope, callbackScope: callbackScope)
-                children = call!.arguments
+                call = try resolveCall(resolved, operation: id, values: [argument], scope: scope, callbackScope: callbackScope, arguments: &children)
             } else {
                 let shape = try scope.functionApplicationSourceType(function, argument: argument, expected: result)
                 let key: NativeType = switch shape { case .dictionary(let key, _): key; case .record: .string; default: .int }
@@ -211,13 +210,13 @@ private final class NativeProgramResolver {
         case .operatorApplication(let id, let arguments):
             let resolved = try scope.operatorCall(id, arguments: arguments, expected: result)
             let values = arguments.compactMap { if case .value(let value) = $0 { return value }; return nil }
-            call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope); children = call!.arguments
+            call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .recursiveCall(let id, let values):
             let resolved = try scope.operatorCall(id, arguments: values.map { .value($0) }, expected: result)
-            call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope); children = call!.arguments
+            call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .lambdaApplication(let lambda, let values):
             let resolved = try scope.lambdaCall(lambda, arguments: values, expected: result)
-            call = try resolveCall(resolved, operation: nil, values: values, scope: scope, callbackScope: callbackScope); children = call!.arguments
+            call = try resolveCall(resolved, operation: nil, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .letValue(let id, let rhs, let body):
             let item = try require(scope.bindings[id]); bindings[id] = item
             children = [try child(rhs, item), try child(body, result)]
@@ -235,9 +234,10 @@ private final class NativeProgramResolver {
 
     func resolveCall(
         _ call: NativeOperatorCall, operation: OperatorID?, values: [CompiledStateExpr],
-        scope: NativeTypeInference, callbackScope: [NativeCallbackUseKey: NativeCallbackID]
+        scope: NativeTypeInference, callbackScope: [NativeCallbackUseKey: NativeCallbackID],
+        arguments: inout [NativeExpressionID]
     ) throws -> NativeResolvedCall {
-        let arguments = try zip(values, call.parameters).map { value, parameter in
+        arguments = try zip(values, call.parameters).map { value, parameter in
             try expression(value, expected: require(call.inference.bindings[parameter]), scope: scope, callbackScope: callbackScope)
         }
         if let operation, scope.isOperatorParameter(operation) {
@@ -246,7 +246,7 @@ private final class NativeProgramResolver {
                     path: "native.callback", expected: "a callback with value parameters",
                     actual: "operator-valued callback parameter", nextSafeAction: "Pass operator arguments to a named formal operator specialization.")
             }
-            return .init(target: .callback(try require(callbackScope[.init(operation, call)])), arguments: arguments, callbacks: [])
+            return .init(target: .callback(try require(callbackScope[.init(operation, call)])), callbacks: [])
         }
         let id = try function(call, callbackScope: callbackScope)
         var actuals: [NativeResolvedCallbackArgument] = []
@@ -260,7 +260,7 @@ private final class NativeProgramResolver {
             }
             actuals.append(.init(parameter: parameter, target: target))
         }
-        return .init(target: .function(id), arguments: arguments, callbacks: actuals)
+        return .init(target: .function(id), callbacks: actuals)
     }
 
     func function(_ call: NativeOperatorCall, callbackScope: [NativeCallbackUseKey: NativeCallbackID]) throws -> NativeFunctionID {

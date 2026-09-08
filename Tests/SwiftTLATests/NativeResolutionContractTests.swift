@@ -27,7 +27,6 @@ import Testing
                 case .function(let id): #expect(program.functions.indices.contains(id.ordinal))
                 case .callback(let id): #expect(program.callbacks.indices.contains(id.ordinal))
                 }
-                #expect(call.arguments.allSatisfy { program.expressions.indices.contains($0.ordinal) })
             }
         }
     }

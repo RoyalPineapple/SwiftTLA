@@ -241,13 +241,13 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func resolvedCall(
-        _ call: NativeResolvedCall, state: String, substitutions: [BinderID: String],
+        _ call: NativeResolvedCall, argumentRoots: [NativeExpressionID], state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
         let ownsDepth = !hasDepthScope
         hasDepthScope = true
         defer { if ownsDepth { hasDepthScope = false } }
-        let arguments = try call.arguments.map {
+        let arguments = try argumentRoots.map {
             "{ \(try expression($0, state: state, substitutions: substitutions, activeFunctions: activeFunctions)) }"
         }
         switch call.target {
@@ -521,7 +521,7 @@ struct NativeSwiftEmitter {
             guard case .dictionary(let input, let result) = node.computationType else { throw unsupported("function literal") }
             return "Dictionary(uniqueKeysWithValues: try \(try emit(0)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(1))) })"
         case .functionApply(let function, let argument):
-            if let call = node.call { return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions) }
+            if let call = node.call { return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions) }
             let result = node.computationType
             let source = childType(0)
             let access: String
@@ -641,13 +641,13 @@ struct NativeSwiftEmitter {
         case .letIn: return try emit(0)
         case .operatorApplication:
             guard let call = node.call else { throw unsupported("resolved call") }
-            return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .recursiveCall:
             guard let call = node.call else { throw unsupported("resolved call") }
-            return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .lambdaApplication:
             guard let call = node.call else { throw unsupported("resolved lambda call") }
-            return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         default: throw unsupported(String(describing: expression))
         }
     }

@@ -27,7 +27,6 @@ package struct NativeResolvedCallbackArgument: Sendable {
 
 package struct NativeResolvedCall: Sendable {
     package let target: NativeResolvedCallTarget
-    package let arguments: [NativeExpressionID]
     package let callbacks: [NativeResolvedCallbackArgument]
 }
 
