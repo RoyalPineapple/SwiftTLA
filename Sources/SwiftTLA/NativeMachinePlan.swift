@@ -4,7 +4,6 @@
 package struct NativeMachinePlan: Sendable {
     package let variables: [CompiledVariableLayout]
     package let actionLayouts: [CompiledActionLayout]
-    package let fields: [CompiledFieldLayout]
     package let controlLocations: [CompiledControlLocation]
     package let initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
     package let actions: [CompiledAction]
@@ -17,7 +16,6 @@ package struct NativeMachinePlan: Sendable {
     package init(compilation: CompiledSpecification) {
         variables = compilation.layout.variables
         actionLayouts = compilation.layout.actions
-        fields = compilation.layout.fields
         controlLocations = compilation.layout.controlLocations
         initializations = compilation.semantics.variableInitializations
         actions = compilation.semantics.actions

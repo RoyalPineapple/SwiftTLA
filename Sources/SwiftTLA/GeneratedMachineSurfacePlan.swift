@@ -8,19 +8,16 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let formalName: String
         package let swiftIdentifier: String
         package let storageOrdinal: Int
-        package let swiftType: String
         package let collection: SymmetricCollection?
 
         init(
             formalName: String,
             storageOrdinal: Int,
-            swiftType: String,
             collection: SymmetricCollection?
         ) throws {
             self.formalName = formalName
             self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
             self.storageOrdinal = storageOrdinal
-            self.swiftType = swiftType
             self.collection = collection
         }
     }
@@ -28,14 +25,12 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Binding: Sendable, Equatable {
         package let formalName: String
         package let swiftIdentifier: String
-        package let swiftType: String
         package let domain: [TLAValue]
         package var isPublic: Bool { domain.count > 1 }
 
-        init(formalName: String, swiftType: String, domain: [TLAValue]) throws {
+        init(formalName: String, domain: [TLAValue]) throws {
             self.formalName = formalName
             self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
-            self.swiftType = swiftType
             self.domain = domain
         }
     }
@@ -113,35 +108,13 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 )
             }
         )
-        let initializations = Dictionary(
-            uniqueKeysWithValues: semantics.variableInitializations.map {
-                ($0.variable, $0.initialization)
-            }
-        )
-
         let variables = try layout.variables.filter {
             $0.declaration.origin == .source
         }.map { variable in
             let collection = symmetricCollectionsByVariableID[variable.id]
-            let fallback: TLAValue?
-            if case .value(let value) = initializations[variable.id] {
-                fallback = try value.rendered(using: layout)
-            } else {
-                fallback = nil
-            }
-            let swiftType = if let collection {
-                "[\(collection.elementType).ID: \(collection.valueType)]"
-            } else {
-                try Self.generatedSwiftType(
-                    explicit: variable.generatedSwiftType,
-                    fallback: fallback,
-                    path: "variables.\(variable.declaration.name)"
-                )
-            }
             return try Variable(
                 formalName: variable.declaration.name,
                 storageOrdinal: variable.id.ordinal,
-                swiftType: swiftType,
                 collection: collection
             )
         }
@@ -191,11 +164,6 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 bindings: try action.bindings.map { binding in
                     try Binding(
                         formalName: collection == nil ? binding.sourceName : "member",
-                        swiftType: try Self.generatedSwiftType(
-                            explicit: binding.generatedSwiftType,
-                            fallback: try binding.values[0].rendered(using: layout),
-                            path: "actions.\(layoutAction.declaration.name).bindings.\(binding.sourceName)"
-                        ),
                         domain: try binding.values.map { try $0.rendered(using: layout) }
                     )
                 },
@@ -216,40 +184,6 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             actual: "no matching declaration identity",
             nextSafeAction: "Compile the model again from its current source."
         )
-    }
-
-    private static func generatedSwiftType(
-        explicit: String?,
-        fallback: TLAValue?,
-        path: String
-    ) throws -> String {
-        if explicit == "TLAValue" {
-            throw CompilationDiagnostic(
-                code: .unsupportedGeneratedValueShape,
-                stage: .validation,
-                path: path,
-                expected: "a declared Swift value type for the generated API",
-                actual: "TLAValue",
-                nextSafeAction: "Declare a Swift value type that converts to and from this formal value, then compile again."
-            )
-        }
-        if let explicit {
-            return explicit
-        }
-        switch fallback {
-        case .int?: return "Int"
-        case .bool?: return "Bool"
-        case .string?, .constant?: return "String"
-        case .set?, .tuple?, .record?, .function?, nil:
-            throw CompilationDiagnostic(
-                code: .unsupportedGeneratedValueShape,
-                stage: .validation,
-                path: path,
-                expected: "a declared Swift value type for the generated API",
-                actual: String(describing: fallback),
-                nextSafeAction: "Declare a Swift value type that converts to and from this formal value, then compile again."
-            )
-        }
     }
 
     private static func sourceIdentifier(_ name: String) throws -> String {

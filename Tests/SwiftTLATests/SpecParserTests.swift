@@ -128,7 +128,7 @@ private func parserEnum(
         let increment = try #require(compilation.machineSurfacePlan.actions.first {
             $0.swiftIdentifier == "increment"
         })
-        #expect(increment.bindings.map(\.swiftType) == ["Node"])
+        #expect(compilation.semantics.actions.first { $0.id == increment.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])
     }
 
     @Test("parser retains unsupported procedure declarations for compiler diagnostics")
@@ -177,7 +177,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let compilation = try compile(parsed, named: "Counter")
-        #expect(compilation.machineSurfacePlan.variables.map(\.swiftType) == ["Function<Node, SetExpr<Int>>"])
+        #expect(compilation.layout.variables.filter { $0.declaration.origin == .source }.map(\.generatedSwiftType) == ["Function<Node, SetExpr<Int>>"])
     }
 
     @Test("Algorithm parser carries prior shared bindings into mapping initializers")
@@ -1112,8 +1112,8 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let compilation = try compile(parsed, named: "FunctionDomain")
         let successors = try #require(try loweredSource(parsed, named: "FunctionDomain").variables.first { $0.name == "successors" })
-        let surface = try #require(compilation.machineSurfacePlan.variables.first { $0.formalName == successors.name })
-        #expect(surface.swiftType == "Function<Node, SetExpr<Node>>")
+        let variable = try #require(compilation.layout.variables.first { $0.declaration.name == successors.name })
+        #expect(variable.generatedSwiftType == "Function<Node, SetExpr<Node>>")
         guard case .memberOf = successors.initialization else {
             Issue.record("Expected successors to retain its initial domain")
             return

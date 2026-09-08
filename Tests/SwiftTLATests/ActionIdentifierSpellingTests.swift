@@ -89,10 +89,10 @@ extension ActionIdentifierSpellingTests {
     func malformedNamesAreRejected() throws {
         for name in ["_", "two words", "total-count", "1value"] {
             #expect(throws: CompilationDiagnostic.self) {
-                try MachineSurfacePlan.Variable(formalName: name, storageOrdinal: 0, swiftType: "Int", collection: nil)
+                try MachineSurfacePlan.Variable(formalName: name, storageOrdinal: 0, collection: nil)
             }
             #expect(throws: CompilationDiagnostic.self) {
-                try MachineSurfacePlan.Binding(formalName: name, swiftType: "Int", domain: [.int(1), .int(2)])
+                try MachineSurfacePlan.Binding(formalName: name, domain: [.int(1), .int(2)])
             }
         }
     }

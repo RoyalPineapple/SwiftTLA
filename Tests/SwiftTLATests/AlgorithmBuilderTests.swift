@@ -122,10 +122,10 @@ struct AlgorithmBuilderTests {
 
         let compilation = try source.compile()
         let variable = try #require(
-            compilation.machineSurfacePlan.variables.first { $0.formalName == "values" }
+            compilation.layout.variables.first { $0.declaration.name == "values" }
         )
 
-        #expect(variable.swiftType == "Function<GeneratedSurfaceKey, Bool>")
+        #expect(variable.generatedSwiftType == "Function<GeneratedSurfaceKey, Bool>")
     }
 
     @Test("unsupported Algorithm fairness fails before lowering")
@@ -1673,7 +1673,7 @@ struct AlgorithmBuilderTests {
 
         let compilation = try loweredSourceSpecification(algorithm).compile()
         let action = try #require(compilation.machineSurfacePlan.actions.first { $0.swiftIdentifier == "mark" })
-        #expect(action.bindings.map(\.swiftType) == ["Node"])
+        #expect(compilation.semantics.actions.first { $0.id == action.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])
     }
 }
 

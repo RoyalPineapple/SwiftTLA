@@ -178,7 +178,7 @@ struct CompilerPipelineCanonicalizationTests {
         }.compile()
 
         #expect(first.renderedTLAModuleBundle().tla == second.renderedTLAModuleBundle().tla)
-        #expect(first.machineSurfacePlan.variables.map(\.swiftType) == ["FirstGeneratedSurfaceValue"])
+        #expect(first.layout.variables.filter { $0.declaration.origin == .source }.map(\.generatedSwiftType) == ["FirstGeneratedSurfaceValue"])
         #expect((first.identity == second.identity) == false)
 
         let firstAction = try TLASpec("GeneratedActionSurfaceIdentity") {
@@ -2248,7 +2248,8 @@ struct CompilerPipelineCanonicalizationTests {
                 == declaration.metadata.members.map(CompiledValue.init(formal:))
         )
         #expect(compiledAction.collection == compilation.layout.testVariableID(named: "devices"))
-        #expect(machineVariable.swiftType == "[CompilerPipelineMember.ID: Int]")
+        #expect(machineCollection.elementType == "CompilerPipelineMember")
+        #expect(machineCollection.valueType == "Int")
         #expect(machineCollection.formalName == "devices")
         #expect(compilation.machineSurfacePlan.symmetricCollections == [machineCollection])
         #expect(hasOuterExistential)
