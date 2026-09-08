@@ -423,8 +423,8 @@ extension ParserSession {
               elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "...",
               let lowerSyntax = elements[0].as(IntegerLiteralExprSyntax.self),
               let upperSyntax = elements[2].as(IntegerLiteralExprSyntax.self),
-              let lower = Self.integerLiteralValue(lowerSyntax),
-              let upper = Self.integerLiteralValue(upperSyntax),
+              let lower = SourceIntegerLiteral.value(lowerSyntax),
+              let upper = SourceIntegerLiteral.value(upperSyntax),
               lower <= upper
         else { return nil }
         return lower...upper
@@ -493,7 +493,7 @@ extension ParserSession {
             return value
         }
         if let intVal = expression.as(IntegerLiteralExprSyntax.self) {
-            return Self.integerLiteralValue(intVal).map(TLAValue.int)
+            return SourceIntegerLiteral.value(intVal).map(TLAValue.int)
         }
         if let boolVal = expression.as(BooleanLiteralExprSyntax.self) {
             return .bool(boolVal.literal.text == "true")
@@ -983,7 +983,7 @@ extension ParserSession {
             case "operator":
                 guard let arityExpression = call.arguments.first(where: { $0.label?.text == "arity" })?.expression,
                       let arityLiteral = arityExpression.as(IntegerLiteralExprSyntax.self),
-                      let arity = Self.integerLiteralValue(arityLiteral), arity >= 0
+                      let arity = SourceIntegerLiteral.value(arityLiteral), arity >= 0
                 else { return nil }
                 return .operator(name, arity: arity)
             default: return nil

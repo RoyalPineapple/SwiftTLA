@@ -255,10 +255,6 @@ final class ParserSession {
 
     // MARK: - Compact expression decoder
 
-    static func integerLiteralValue(_ literal: IntegerLiteralExprSyntax) -> Int? {
-        Int(literal.literal.text.filter { $0 != "_" })
-    }
-
     private func negated(_ operand: StateExpr) -> StateExpr {
         guard case .value(.int(let value)) = operand else { return .negate(operand) }
         let result = 0.subtractingReportingOverflow(value)
@@ -266,6 +262,7 @@ final class ParserSession {
     }
 
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let integer = SourceIntegerLiteral.value(expression) { return .value(.int(integer)) }
         if let precedingMembers = decodePrecedingFormalMembers(expression) {
             return precedingMembers
         }
@@ -352,7 +349,7 @@ final class ParserSession {
             return .functionApply(function, argument)
         }
         if let intLit = expression.as(IntegerLiteralExprSyntax.self) {
-            guard let value = Self.integerLiteralValue(intLit) else { return nil }
+            guard let value = SourceIntegerLiteral.value(intLit) else { return nil }
             return .value(.int(value))
         }
         if let boolLit = expression.as(BooleanLiteralExprSyntax.self) {
@@ -1314,6 +1311,7 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let integer = SourceIntegerLiteral.value(expression) { return .value(.int(integer)) }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let constructor = compilerGrammarName(in: call.calledExpression),
            constructor == "FormalModuleParameter" || constructor == "Parameter",
@@ -1330,7 +1328,7 @@ final class ParserSession {
             if let state = sourceScope.value(for: reference) { return state }
         }
         if let literal = expression.as(IntegerLiteralExprSyntax.self),
-           let value = Self.integerLiteralValue(literal) {
+           let value = SourceIntegerLiteral.value(literal) {
             return .value(.int(value))
         }
         if let literal = expression.as(BooleanLiteralExprSyntax.self) {
@@ -1815,7 +1813,7 @@ final class ParserSession {
             return .except(selfExpr, key, val)
         case "at":
             guard let selfExpr,
-                  let idx = args.first?.expression.as(IntegerLiteralExprSyntax.self).flatMap(Self.integerLiteralValue)
+                  let idx = args.first?.expression.as(IntegerLiteralExprSyntax.self).flatMap(SourceIntegerLiteral.value)
             else { return nil }
             return .tupleAccess(selfExpr, idx)
         case "set", "tuple", "singleton":
@@ -1988,7 +1986,7 @@ final class ParserSession {
                     .representedLiteralValue,
                   let aritySyntax = call.arguments.first(where: { $0.label?.text == "arity" })?
                     .expression.as(IntegerLiteralExprSyntax.self),
-                  let arity = Self.integerLiteralValue(aritySyntax), arity >= 0
+                  let arity = SourceIntegerLiteral.value(aritySyntax), arity >= 0
             else { return nil }
             return .reference(name, arity: arity)
         case "lambda":

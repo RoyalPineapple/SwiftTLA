@@ -47,7 +47,7 @@ extension ParserSession {
               let types = collectionTypes[collectionReference],
               let scopeArgument = arguments.first(where: { $0.label?.text == "verificationScope" })?.expression,
               let scopeLiteral = scopeArgument.as(IntegerLiteralExprSyntax.self),
-              let scope = Self.integerLiteralValue(scopeLiteral),
+              let scope = SourceIntegerLiteral.value(scopeLiteral),
               let initialExpression = arguments.first(where: { $0.label?.text == "initial" })?.expression,
               let initial = parseLiteralValue(initialExpression),
               let elementType = Self.sourceTypeSpelling(types.element),
@@ -385,8 +385,8 @@ extension ParserSession {
     }
 
     func parseLiteralValue(_ expression: ExprSyntax) -> TLAValue? {
-        if let integer = expression.as(IntegerLiteralExprSyntax.self) {
-            return Self.integerLiteralValue(integer).map(TLAValue.int)
+        if let integer = SourceIntegerLiteral.value(expression) {
+            return .int(integer)
         }
         if let boolean = expression.as(BooleanLiteralExprSyntax.self) {
             return .bool(boolean.literal.text == "true")
@@ -472,7 +472,7 @@ extension ParserSession {
         if args.count >= 2 {
             let valExpr = args[1].expression
             if let intVal = valExpr.as(IntegerLiteralExprSyntax.self),
-               let value = Self.integerLiteralValue(intVal) {
+               let value = SourceIntegerLiteral.value(intVal) {
                 components.variables.append(.init(name: firstName, initial: .int(value)))
                 return
             }

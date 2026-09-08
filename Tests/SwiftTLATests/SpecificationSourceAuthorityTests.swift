@@ -124,6 +124,19 @@ struct SpecificationSourceAuthorityTests {
         #expect(try TLASpecVerifier.collectEnumVariables(from: integers.memberBlock.members).first?.cases.first?.value == .int(4))
     }
 
+    @Test("Integer enum raw values preserve signed and radix literals")
+    func integerEnumLiteralSpellingsAreAdmitted() throws {
+        let declaration = try declaration("""
+        enum Number: Int, TLAValueType {
+            case negative = -0x10, next
+            case binary = 0b1010, octal = 0o17
+            case minimum = -9223372036854775808
+        }
+        """)
+        let info = try #require(TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members).first)
+        #expect(info.cases.map(\.value) == [.int(-16), .int(-15), .int(10), .int(15), .int(Int.min)])
+    }
+
     @Test("A final maximum integer enum case does not overflow macro expansion")
     func maximumIntegerEnumCasesAreAdmitted() throws {
         for cases in ["case maximum = 9223372036854775807", "case previous = 9223372036854775806, maximum"] {

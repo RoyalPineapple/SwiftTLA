@@ -172,8 +172,7 @@ enum TLASpecVerifier {
                     let value: TLAValue
                     if let rawValue = element.rawValue?.value {
                         if intBacked,
-                           let raw = rawValue.as(IntegerLiteralExprSyntax.self),
-                           let val = Int(raw.literal.text.filter { $0 != "_" }) {
+                           let val = SourceIntegerLiteral.value(rawValue) {
                             value = .int(val)
                             let next = val.addingReportingOverflow(1)
                             nextInteger = next.overflow ? nil : next.partialValue
