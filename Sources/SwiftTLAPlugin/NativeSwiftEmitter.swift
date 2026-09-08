@@ -124,7 +124,7 @@ struct NativeSwiftEmitter {
             return "[\(try values.map { try literal($0, as: element) }.joined(separator: ", "))]"
         case (.tuple(let values), .tuple(let elements)) where values.count == elements.count:
             let name = try swiftType(type)
-            return "\(name)(\(try values.indices.map { index in "\(fieldName(type, index: index)): \(try literal(item.0, as: item.1))" }.joined(separator: ", ")))"
+            return "\(name)(\(try values.indices.map { index in "\(fieldName(type, index: index)): \(try literal(values[index], as: elements[index]))" }.joined(separator: ", ")))"
         case (.function(let values), .dictionary(let key, let element)):
             if values.isEmpty { return "[\(try swiftType(key)): \(try swiftType(element))]()" }
             return "[\(try values.keys.sorted().map { "\(try literal($0, as: key)): \(try literal(values[$0]!, as: element))" }.joined(separator: ", "))]"
