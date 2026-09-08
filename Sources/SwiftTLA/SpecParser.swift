@@ -489,7 +489,7 @@ final class ParserSession {
     func registeredStringEnumCase(_ expression: ExprSyntax?) -> String? {
         guard let access = expression?.as(MemberAccessExprSyntax.self),
               let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.text)
+              case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.sourceIdentifierName)
         else { return nil }
         return label
     }
@@ -786,7 +786,7 @@ final class ParserSession {
                     guard let member = value.as(MemberAccessExprSyntax.self),
                           member.base == nil,
                           let formalValue = enumDefinition(named: typeName)?
-                            .value(named: member.declName.baseName.text)
+                            .value(named: member.declName.baseName.sourceIdentifierName)
                     else { return nil }
                     return .value(formalValue)
                 }
@@ -1366,16 +1366,16 @@ final class ParserSession {
         guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
         if member.base != nil {
             guard let type = terminalTypeName(in: member.base),
-                  let value = enumDefinition(named: type)?.value(named: member.declName.baseName.text)
+                  let value = enumDefinition(named: type)?.value(named: member.declName.baseName.sourceIdentifierName)
             else { return nil }
             return .value(value)
         }
         if let expectedType,
-           let value = enumDefinition(named: expectedType)?.value(named: member.declName.baseName.text) {
+           let value = enumDefinition(named: expectedType)?.value(named: member.declName.baseName.sourceIdentifierName) {
             return .value(value)
         }
         let matches = enumDefinitions.compactMap {
-            $0.value(named: member.declName.baseName.text)
+            $0.value(named: member.declName.baseName.sourceIdentifierName)
         }
         if matches.count == 1, let value = matches.first {
             return .value(value)
@@ -1412,7 +1412,7 @@ final class ParserSession {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               let schema = terminalTypeName(in: member.base),
               let fields = recordSchemas[schema] else { return nil }
-        return fields.first { $0.sourceName == member.declName.baseName.text }?.name
+        return fields.first { $0.sourceName == member.declName.baseName.sourceIdentifierName }?.name
     }
 
     /// A record field may be qualified by its enclosing model type, while an
@@ -1682,7 +1682,7 @@ final class ParserSession {
             if let member = element.expression.as(MemberAccessExprSyntax.self),
                member.base == nil,
                let elementType,
-               let value = enumDefinition(named: elementType)?.value(named: member.declName.baseName.text) {
+               let value = enumDefinition(named: elementType)?.value(named: member.declName.baseName.sourceIdentifierName) {
                 return StateExpr.value(value)
             }
             return decodeTypedFacadeValue(element.expression, scope: scope)

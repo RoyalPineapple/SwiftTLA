@@ -181,13 +181,13 @@ enum TLASpecVerifier {
                                   let val = raw.representedLiteralValue {
                             value = .string(val)
                         } else {
-                            throw ModelMacroError.invalidEnumRawValue(caseName: element.name.text)
+                            throw ModelMacroError.invalidEnumRawValue(caseName: element.name.sourceIdentifierName)
                         }
                     } else if intBacked {
                         value = .int(idx)
                         idx += 1
                     } else {
-                        value = .string(element.name.text)
+                        value = .string(element.name.sourceIdentifierName)
                     }
                     let encoded: TLAValue
                     if encoding == "constant", case .string(let raw) = value {
@@ -195,7 +195,7 @@ enum TLASpecVerifier {
                     } else {
                         encoded = value
                     }
-                    cases.append((element.name.text, encoded))
+                    cases.append((element.name.sourceIdentifierName, encoded))
                 }
             }
 
@@ -269,14 +269,14 @@ enum TLASpecVerifier {
 
         func localName(_ expression: ExprSyntax) -> String? {
             if let reference = expression.as(DeclReferenceExprSyntax.self) {
-                return reference.baseName.text
+                return reference.baseName.sourceIdentifierName
             }
             guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
             if let base = member.base {
                 guard let reference = base.as(DeclReferenceExprSyntax.self),
                       ["Self", enumDecl.name.text].contains(reference.baseName.text) else { return nil }
             }
-            return member.declName.baseName.text
+            return member.declName.baseName.sourceIdentifierName
         }
 
         if localName(initializer) == "allCases" {

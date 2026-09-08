@@ -8,6 +8,17 @@ struct RecordSelectorAuthorityTests {
         try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
     }
 
+    @Test("Escaped and unescaped enum references resolve the same semantic case")
+    func escapedEnumReferencesResolve() throws {
+        let parser = ParserSession(enumDefinitions: [
+            .init(typeName: "Step", cases: TLARecord([.init("repeat", .string("repeat"))]))
+        ])
+        for source in ["Step.repeat", "Step.`repeat`"] {
+            #expect(parser.decodeTypedFacadeValue(try expression(source), scope: .empty)
+                == .value(.string("repeat")))
+        }
+    }
+
     @Test("Registered schema selectors use their declared formal field name")
     func schemaSelectorsPreserveFormalNames() throws {
         let parser = ParserSession(recordSchemas: ["OperationSchema": [

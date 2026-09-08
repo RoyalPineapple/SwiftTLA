@@ -116,7 +116,7 @@ struct NativeSwiftEmitter {
         if case .named(let name) = type {
             if let info = model.enumInfos.first(where: { $0.typeName == name }),
                let item = info.cases.first(where: { CompiledValue(formal: $0.value) == value }) {
-                return "\(name).\(item.name)"
+                return "\(name).`\(item.name)`"
             }
             throw unsupported("literal of \(name)")
         }
@@ -162,7 +162,7 @@ struct NativeSwiftEmitter {
         case .named(let name):
             guard let info = model.enumInfos.first(where: { $0.typeName == name }) else { throw unsupported("enum declaration for \(name)") }
             cases = try info.cases.map { item in
-                "case .\(item.name): return \(try literal(.init(formal: item.value), as: destination))"
+                "case .`\(item.name)`: return \(try literal(.init(formal: item.value), as: destination))"
             }.joined(separator: "\n")
         case .finite(let members):
             cases = try members.indices.map { index in
@@ -187,7 +187,7 @@ struct NativeSwiftEmitter {
         case .named(let name):
             if let info = model.enumInfos.first(where: { $0.typeName == name }) {
                 let ordered = info.cases.sorted { CompiledValue(formal: $0.value) < CompiledValue(formal: $1.value) }
-                let cases = ordered.enumerated().map { "case .\($0.element.name): return \($0.offset)" }.joined(separator: "\n")
+                let cases = ordered.enumerated().map { "case .`\($0.element.name)`: return \($0.offset)" }.joined(separator: "\n")
                 body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
             } else { throw unsupported("ordering opaque type \(name)") }
         case .collectionMember(let variable, _):

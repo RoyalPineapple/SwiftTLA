@@ -124,6 +124,20 @@ struct SpecificationSourceAuthorityTests {
         #expect(try TLASpecVerifier.collectEnumVariables(from: integers.memberBlock.members).first?.cases.first?.value == .int(4))
     }
 
+    @Test("Escaped enum cases retain semantic names and default raw values")
+    func escapedEnumCasesPreserveIdentity() throws {
+        let declaration = try declaration("""
+        enum Step: String, CaseIterable {
+            case `repeat`, normal
+            static let finiteValues: [Self] = [Self.`repeat`]
+        }
+        """)
+        let info = try #require(TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members).first)
+        #expect(info.cases.map(\.name) == ["repeat", "normal"])
+        #expect(info.cases.map(\.value) == [.string("repeat"), .string("normal")])
+        #expect(info.formalDomainValues == [.string("repeat")])
+    }
+
     @Test("Dynamic enum encodings cannot silently change generated semantics")
     func dynamicEnumEncodingsAreRejected() throws {
         for body in [
