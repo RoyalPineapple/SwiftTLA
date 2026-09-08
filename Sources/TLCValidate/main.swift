@@ -26,12 +26,12 @@ struct PinnedTLCToolchain: Decodable {
     struct TLC: Decodable {
         let tag: String
         let commit: String
-        let jar: Artifact
+        let jar: GitHubAsset
     }
     struct Java: Decodable {
         let distribution: String
         let version: String
-        let archives: [String: Artifact]
+        let archives: [String: Download]
     }
     struct Bridge: Decodable {
         let `class`: String
@@ -39,15 +39,20 @@ struct PinnedTLCToolchain: Decodable {
         let sourceSha256: String
         let binarySha256: String
     }
-    struct Artifact: Decodable {
+    struct Download: Decodable {
         let url: String
+        let sha256: String
+    }
+    struct GitHubAsset: Decodable {
+        let repository: String
+        let assetID: Int
         let sha256: String
     }
 }
 
 private func referencePin(
     from toolchain: PinnedTLCToolchain,
-    javaArchive: PinnedTLCToolchain.Artifact
+    javaArchive: PinnedTLCToolchain.Download
 ) throws -> TLCReferencePin {
     try TLCReferencePin(
         tag: toolchain.tlc.tag,

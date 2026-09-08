@@ -53,4 +53,18 @@ PY
 expect_failure "escapes retained fixtures" \
     env FINITE_GRAPH_PROJECT_ROOT="$TMP/project" "$SETUP" --cases "$TMP/local-fixtures.json" --tool-root "$TMP/tool-root" --stage-inputs-only
 
+cp "$ROOT/Verification/FiniteGraph/toolchain.json" "$TMP/invalid-toolchain.json"
+python3 - "$TMP/invalid-toolchain.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    toolchain = json.load(source)
+toolchain["tlc"]["jar"]["assetID"] = 0
+with open(sys.argv[1], "w", encoding="utf-8") as destination:
+    json.dump(toolchain, destination)
+PY
+expect_failure "invalid value: tlc.jar.assetID" \
+    "$SETUP" --toolchain "$TMP/invalid-toolchain.json" --tool-root "$TMP/invalid-tools"
+
 echo "finite-graph command checks passed"

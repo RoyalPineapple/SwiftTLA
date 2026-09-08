@@ -16,10 +16,11 @@ are validated against the launched files before TLC runs.
 
 ## Build lock
 
-`Verification/FiniteGraph/toolchain.json` locks the TLC source tag and
-commit, JAR SHA-256, Temurin Java archive SHA-256 per architecture, and this
-bridge's class/source/binary SHA-256 values. The setup script compiles this
-source against only those verified files. A digest mismatch is an error.
+`Verification/FiniteGraph/toolchain.json` locks the TLC source tag and commit,
+the immutable GitHub release asset ID and JAR SHA-256, the Temurin Java archive
+SHA-256 per architecture, and this bridge's class/source/binary SHA-256 values.
+The setup script compiles this source against only those verified files. A
+digest mismatch is an error.
 
 `Tools/TLCGraphBridge/.tool-cache` may contain the exact locked JAR and Java
 archive for local reproducibility. It is not a distribution mechanism. If a

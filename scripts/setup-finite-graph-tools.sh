@@ -109,7 +109,7 @@ def get(path):
     return value
 
 required = [
-    "tlc.tag", "tlc.commit", "tlc.jar.url", "tlc.jar.sha256",
+    "tlc.tag", "tlc.commit", "tlc.jar.repository", "tlc.jar.sha256",
     "java.distribution", "java.version",
     "java.archives.arm64.url", "java.archives.arm64.sha256",
     "java.archives.x86_64.url", "java.archives.x86_64.sha256",
@@ -122,12 +122,16 @@ for path in required:
     if not isinstance(value, str) or not value:
         raise SystemExit("toolchain lock has an invalid value: " + path)
 
+asset_id = get("tlc.jar.assetID")
+if not isinstance(asset_id, int) or asset_id <= 0:
+    raise SystemExit("toolchain lock has an invalid value: tlc.jar.assetID")
+
 for path in sys.argv[2:]:
     print(get(path))
 PY
 }
 
-if ! LOCK_VALUES="$(read_lock tlc.jar.url tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source bridge.sourceSha256 bridge.binarySha256)"; then
+if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.assetID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source bridge.sourceSha256 bridge.binarySha256)"; then
     fail "${LOCK_VALUES:-toolchain lock does not match the accepted TLC reference pin}"
 fi
 
@@ -137,13 +141,14 @@ case "$ARCHITECTURE" in
     *) fail "unsupported architecture: $ARCHITECTURE" ;;
 esac
 
-TLC_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '1p')"
-TLC_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '2p')"
-JAVA_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '3p')"
-JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '4p')"
-BRIDGE_SOURCE_RELATIVE="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
-BRIDGE_SOURCE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
-BRIDGE_BINARY_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
+TLC_REPOSITORY="$(printf '%s\n' "$LOCK_VALUES" | sed -n '1p')"
+TLC_ASSET_ID="$(printf '%s\n' "$LOCK_VALUES" | sed -n '2p')"
+TLC_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '3p')"
+JAVA_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '4p')"
+JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
+BRIDGE_SOURCE_RELATIVE="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
+BRIDGE_SOURCE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
+BRIDGE_BINARY_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '8p')"
 BRIDGE_SOURCE="$PROJECT_ROOT/$BRIDGE_SOURCE_RELATIVE"
 [ -f "$BRIDGE_SOURCE" ] || fail "bridge source is missing: $BRIDGE_SOURCE_RELATIVE"
 
@@ -152,16 +157,16 @@ sha256() {
 }
 
 download_locked() {
-    local url="$1"
-    local digest="$2"
-    local destination="$3"
+    local digest="$1"
+    local destination="$2"
+    shift 2
     if [ -f "$destination" ] && [ "$(sha256 "$destination")" = "$digest" ]; then
         return
     fi
     rm -f "$destination"
     local temporary="$destination.partial"
     rm -f "$temporary"
-    curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error --output "$temporary" "$url"
+    curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error --output "$temporary" "$@"
     [ "$(sha256 "$temporary")" = "$digest" ] || { rm -f "$temporary"; fail "digest mismatch for $(basename "$destination")"; }
     mv "$temporary" "$destination"
 }
@@ -184,8 +189,11 @@ JAVA_ARCHIVE="$TOOL_ROOT/downloads/temurin-${ARCHITECTURE}.tar.gz"
 CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
 seed_from_cache "$CACHE_ROOT/tla2tools-1.8.0.jar" "$TLC_SHA256" "$TLC_JAR"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
-download_locked "$TLC_URL" "$TLC_SHA256" "$TLC_JAR"
-download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
+download_locked "$TLC_SHA256" "$TLC_JAR" \
+    --header 'Accept: application/octet-stream' \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
+    "https://api.github.com/repos/$TLC_REPOSITORY/releases/assets/$TLC_ASSET_ID"
+download_locked "$JAVA_SHA256" "$JAVA_ARCHIVE" "$JAVA_URL"
 [ "$(sha256 "$BRIDGE_SOURCE")" = "$BRIDGE_SOURCE_SHA256" ] || fail "bridge source digest mismatch"
 
 python3 - "$TLC_JAR" "$TOOLCHAIN" <<'PY'

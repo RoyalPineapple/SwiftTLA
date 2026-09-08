@@ -18,6 +18,18 @@ struct FiniteGraphCheckTests {
     #expect(process.terminationStatus == 0, "\(message)")
   }
 
+  @Test("TLC setup uses an immutable GitHub asset coordinate")
+  func usesImmutableTLCAsset() throws {
+    let data = try Data(contentsOf: projectURL("Verification/FiniteGraph/toolchain.json"))
+    let lock = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let tlc = try #require(lock["tlc"] as? [String: Any])
+    let jar = try #require(tlc["jar"] as? [String: Any])
+
+    #expect(jar["repository"] as? String == "tlaplus/tlaplus")
+    #expect(jar["assetID"] as? Int == 544648411)
+    #expect(jar["url"] == nil)
+  }
+
   @Test("finite graph manifests reject unknown exploration fields")
   func rejectsUnknownExplorationFields() {
     #expect(throws: DecodingError.self) {

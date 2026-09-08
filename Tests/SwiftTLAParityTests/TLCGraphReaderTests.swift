@@ -199,6 +199,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
     guard let toolRoot = ProcessInfo.processInfo.environment["FINITE_GRAPH_TOOL_ROOT"].map(URL.init(fileURLWithPath:)) else {
       return
     }
+    let pin = try toolchainPin()
     let artifacts = TLCReferenceArtifacts(
       jar: toolRoot.appendingPathComponent("downloads/tla2tools.jar"),
       javaArchive: toolRoot.appendingPathComponent("downloads/temurin-arm64.tar.gz"),
@@ -206,20 +207,19 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
         "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java"),
       bridgeBinary: toolRoot.appendingPathComponent(
         "bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"),
-      jarManifest:
-        "Implementation-Title: TLA+ Tools\\nX-Git-Revision: 95b800c676b3312ce97d7478d1081cd468ece75c\\n",
+      jarManifest: "Implementation-Title: TLA+ Tools\\nX-Git-Revision: \(pin.commit)\\n",
       runtime: TLCJavaRuntimeIdentity(
         version: "17.0.19+10", vendor: "Eclipse Adoptium", architecture: "arm64",
         properties: ["java.runtime.version": "17.0.19+10", "java.vendor": "Eclipse Adoptium"]
       )
     )
-    try toolchainPin().validate(artifacts)
+    try pin.validate(artifacts)
     let emptyManifest = TLCReferenceArtifacts(
       jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
       bridgeBinary: artifacts.bridgeBinary, jarManifest: "", runtime: artifacts.runtime
     )
     #expect(throws: FiniteGraphCaseError.pinMismatch("TLC JAR manifest")) {
-      try toolchainPin().validate(emptyManifest)
+      try pin.validate(emptyManifest)
     }
     let mismatchedRuntime = TLCReferenceArtifacts(
       jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
@@ -234,7 +234,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       )
     )
     #expect(throws: FiniteGraphCaseError.pinMismatch("Java runtime")) {
-      try toolchainPin().validate(mismatchedRuntime)
+      try pin.validate(mismatchedRuntime)
     }
   }
 
