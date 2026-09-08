@@ -1,0 +1,68 @@
+name: Native machine performance comparison
+
+on:
+  pull_request:
+    paths:
+      - 'Sources/SwiftTLA/**'
+      - 'Sources/SwiftTLAPlugin/**'
+      - 'Sources/SwiftTLAMacros/**'
+      - 'Tests/SwiftTLATests/NativeMachinePerformanceTests.swift'
+      - 'scripts/profile-native-machines.sh'
+      - '.github/workflows/native-machine-performance.yml'
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Baseline commit or branch (defaults to main)
+        default: main
+        required: true
+        type: string
+      candidate_ref:
+        description: Candidate commit or branch (defaults to dispatched ref)
+        required: false
+        type: string
+      record_allocations:
+        description: Attempt a bounded Instruments Allocations trace of the actual test executable
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-machine-performance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  comparison:
+    runs-on: macos-15
+    timeout-minutes: 50
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      RECORD_ALLOCATIONS: ${{ (github.event_name == 'pull_request' || inputs.record_allocations) && 'true' || 'false' }}
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate_ref || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Check out baseline
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha || inputs.baseline_ref || 'main' }}
+          path: baseline
+          persist-credentials: false
+      - name: Compare identical focused release harnesses
+        shell: bash
+        run: |
+          bash candidate/scripts/profile-native-machines.sh \
+            "$GITHUB_WORKSPACE/baseline" "$GITHUB_WORKSPACE/candidate" \
+            "$GITHUB_WORKSPACE/performance-artifacts"
+      - name: Upload measurements and optional traces
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-machine-performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: performance-artifacts
+          if-no-files-found: error
+          retention-days: 14
