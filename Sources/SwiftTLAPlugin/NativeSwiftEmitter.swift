@@ -541,10 +541,10 @@ struct NativeSwiftEmitter {
                 }
             case .record(let fields):
                 if case .value(.string(let name)) = argument {
-                    if fields.contains(where: { $0.name == name }) { access = "return _functionValue.\(name)" }
+                    if let index = fields.firstIndex(where: { $0.name == name }) { access = "return _functionValue.\(fieldName(source, index: index))" }
                     else { access = "throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument)" }
                 } else {
-                    let cases = fields.map { "case \(String(reflecting: $0.name)): return _functionValue.\($0.name)" }.joined(separator: "\n")
+                    let cases = fields.indices.map { "case \(String(reflecting: fields[$0].name)): return _functionValue.\(fieldName(source, index: $0))" }.joined(separator: "\n")
                     access = "switch _functionArgument { \(cases)\ndefault: throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument) }"
                 }
             default: throw unsupported("function application")
