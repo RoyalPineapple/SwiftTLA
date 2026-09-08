@@ -648,11 +648,21 @@ struct NativeSwiftEmitter {
         case .recordLiteral(let record):
             let result = try expected ?? type(expression)
             guard case .record(let fields) = result else { throw unsupported("record literal") }
-            let arguments = try fields.enumerated().map { index, field in
-                guard let value = record.fields.first(where: { $0.key == .string(field.name) })?.value else { throw unsupported("record field") }
-                return "\(fieldName(result, index: index)): \(try emit(value, field.type))"
+            let evaluated = try record.fields.enumerated().map { index, field in
+                guard case .string(let name) = field.key,
+                      let type = fields.first(where: { $0.name == name })?.type else { throw unsupported("record field") }
+                return "let _recordField\(index): \(try swiftType(type)) = \(try emit(field.value, type))"
             }
-            return "\(try swiftType(result))(\(arguments.joined(separator: ", ")))"
+            let arguments = try fields.enumerated().map { index, field in
+                guard let sourceIndex = record.fields.firstIndex(where: { $0.key == .string(field.name) }) else { throw unsupported("record field") }
+                return "\(fieldName(result, index: index)): _recordField\(sourceIndex)"
+            }
+            return """
+            (try { () throws -> \(try swiftType(result)) in
+                \(evaluated.joined(separator: "\n"))
+                return \(try swiftType(result))(\(arguments.joined(separator: ", ")))
+            }())
+            """
         case .recordAccess(let value, _, let key):
             let source = try types.recordProjectionSourceType(value, key: key, expected: expected)
             guard case .record(let fields) = source, case .string(let name) = key,
