@@ -959,6 +959,23 @@ struct NativeTypeInference: Sendable {
             _ = try infer(a, expected: context); result = try infer(b, expected: context)
         case .cardinality(let value): _ = try infer(value, expected: .set(.unknown)); result = .int
         case .integerRange(let a, let b): _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .set(.int)
+        case .sequenceSelect(let sequence, let id, let predicate):
+            let hint: NativeType = if case .array(let item) = expected { item } else { .unknown }
+            let initial = try inferSequence(sequence)
+            let item = try projectionStorageType(sequenceElementType(initial), expected: hint)
+            _ = try inferSequence(sequence, element: item)
+            bindings[id] = item
+            // Literal members can supply finite nominal evidence; an arbitrary
+            // sequence initializer never proves the domain of stored values.
+            switch sequence {
+            case .value(.tuple(let members)): bindingDomains[id] = Set(members)
+            case .tupleLiteral(let members): bindingDomains[id] = literalDomain(.setLiteral(members))
+            default: bindingDomains.removeValue(forKey: id)
+            }
+            _ = try infer(predicate, expected: .bool)
+            let selected = bindings[id] ?? item
+            _ = try inferSequence(sequence, element: selected)
+            result = .array(selected)
         case .setFilter(let domain, let id, let predicate):
             bindingSources[id] = domain
             bindingDomains[id] = literalDomain(domain)

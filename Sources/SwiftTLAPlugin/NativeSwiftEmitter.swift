@@ -446,6 +446,10 @@ struct NativeSwiftEmitter {
             let source = childType(2)
             let elements = try nativeSequenceElements(emit(2), source: source)
             return "(try \(elements).reversed().reduce(\(try emit(1))) { \(binder(operation.parameters[1])), \(binder(operation.parameters[0])) in \(body) })"
+        case .sequenceSelect(_, let binding, _):
+            let source = childType(0)
+            let elements = try nativeSequenceElements(emit(0), source: source)
+            return "(try \(elements).filter { \(binder(binding)) in \(try emit(1)) })"
         case .tupleAccess(_, let index):
             let source = childType(0)
             if case .tuple = source {

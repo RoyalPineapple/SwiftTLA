@@ -130,6 +130,11 @@ private final class NativeProgramResolver {
         case .subset(let a, let b): try pair(a, b, scope.operandType(a, b))
         case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): try pair(a, b, result)
         case .cardinality(let a): children = [try child(a)]
+        case .sequenceSelect(let sequence, let id, let predicate):
+            let item = try element(result)
+            let source = try scope.sequenceSourceType(sequence, element: item)
+            bindings[id] = item
+            children = [try child(sequence, source), try child(predicate, .bool)]
         case .setFilter(let domain, let id, let body), .choose(let domain, let id, let body):
             let item: NativeType = if case .setFilter = value { try element(result) } else { result }
             bindings[id] = item

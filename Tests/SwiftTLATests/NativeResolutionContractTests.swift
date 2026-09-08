@@ -72,6 +72,21 @@ import Testing
         #expect(throws: CompilationDiagnostic.self) { try NativeResolvedProgram(plan: plan) }
     }
 
+    @Test("sequence selection resolves function-backed input and Boolean predicate into an array")
+    func selectedSequenceAnnotations() throws {
+        let sequence = StateExpr.functionLiteral(.integerRange(.int(1), .int(3)), "index", .variable("index"))
+        let selection = StateExpr.sequenceSelect(sequence, "item", .greaterThan(.variable("item"), .int(1)))
+        let plan = NativeMachinePlan(compilation: try TLASpec(name: "SelectedSequence", variables: [
+            .init(name: "items", initialization: selection, generatedSwiftType: "[Int]", origin: .compiler)
+        ], actions: [], invariants: []).compile())
+        let program = try NativeResolvedProgram(plan: plan)
+        let root = try #require(program.initializations.values.first)
+        let node = program[root]
+        #expect(node.resultType == .array(.int))
+        #expect(program[node.children[0]].resultType == .dictionary(.int, .int))
+        #expect(program[node.children[1]].resultType == .bool)
+    }
+
     private func plan(operation: FormalOperatorDefinition, arguments: [FormalCallArgument], boolean: Bool) throws -> NativeMachinePlan {
         let call = StateExpr.operatorApplication(.reference(operation.name, arity: arguments.count), arguments)
         return .init(compilation: try TLASpec(name: "ResolvedRecursion", variables: [
