@@ -348,10 +348,7 @@ final class ParserSession {
            let argument = decodeStateExpr(argumentSyntax) {
             return .functionApply(function, argument)
         }
-        if let intLit = expression.as(IntegerLiteralExprSyntax.self) {
-            guard let value = SourceIntegerLiteral.value(intLit) else { return nil }
-            return .value(.int(value))
-        }
+        if expression.is(IntegerLiteralExprSyntax.self) { return nil }
         if let boolLit = expression.as(BooleanLiteralExprSyntax.self) {
             return .value(.bool(boolLit.literal.text == "true"))
         }
@@ -1327,10 +1324,7 @@ final class ParserSession {
             if let constant = constants.value(named: name) { return .value(constant) }
             if let state = sourceScope.value(for: reference) { return state }
         }
-        if let literal = expression.as(IntegerLiteralExprSyntax.self),
-           let value = SourceIntegerLiteral.value(literal) {
-            return .value(.int(value))
-        }
+
         if let literal = expression.as(BooleanLiteralExprSyntax.self) {
             return .value(.bool(literal.literal.text == "true"))
         }

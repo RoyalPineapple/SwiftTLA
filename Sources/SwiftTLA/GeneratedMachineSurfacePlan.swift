@@ -25,13 +25,12 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Binding: Sendable, Equatable {
         package let formalName: String
         package let swiftIdentifier: String
-        package let domain: [TLAValue]
-        package var isPublic: Bool { domain.count > 1 }
+        package let isPublic: Bool
 
-        init(formalName: String, domain: [TLAValue]) throws {
+        init(formalName: String, isPublic: Bool) throws {
             self.formalName = formalName
             self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
-            self.domain = domain
+            self.isPublic = isPublic
         }
     }
 
@@ -164,7 +163,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 bindings: try action.bindings.map { binding in
                     try Binding(
                         formalName: collection == nil ? binding.sourceName : "member",
-                        domain: try binding.values.map { try $0.rendered(using: layout) }
+                        isPublic: binding.values.count > 1
                     )
                 },
                 collection: collection
