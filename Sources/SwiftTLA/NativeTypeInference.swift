@@ -535,7 +535,7 @@ struct NativeTypeInference: Sendable {
             switch (name, parts.count) {
             case ("Set", 1), ("SetExpr", 1): return .set(parts[0])
             case ("Array", 1), ("TupleExpr", 1): return .array(parts[0])
-            case ("Dictionary", 2), ("Function", 2), ("FunctionExpr", 2): return .dictionary(parts[0], parts[1])
+            case ("Dictionary", 2), ("Function", 2), ("FunctionExpr", 2), ("PartialFunction", 2): return .dictionary(parts[0], parts[1])
             case ("Pair", 2): return .tuple(parts)
             // Record is a schema wrapper, not an opaque application value. Its
             // field evidence comes from the shared resolved record expressions.
