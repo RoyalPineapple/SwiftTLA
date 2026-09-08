@@ -124,8 +124,20 @@ private struct NativeCallbackBinding: Sendable {
     let operation: CompiledFormalOperator
     let scope: NativeTypeInference
     let forwardedFrom: OperatorID?
-    var identity: NativeCallbackIdentity {
-        .init(operation: operation, captures: scope.bindings, callbacks: scope.callbackIdentities)
+    let identity: NativeCallbackIdentity
+
+    init(operation: CompiledFormalOperator, scope: NativeTypeInference) {
+        self.operation = operation
+        self.scope = scope
+        forwardedFrom = nil
+        identity = .init(operation: operation, captures: scope.bindings, callbacks: scope.callbackIdentities)
+    }
+
+    init(forwarding binding: NativeCallbackBinding, from origin: OperatorID) {
+        operation = binding.operation
+        scope = binding.scope
+        forwardedFrom = origin
+        identity = binding.identity
     }
 }
 
@@ -714,9 +726,9 @@ struct NativeTypeInference: Sendable {
         let callbacks = arguments.map { argument -> NativeCallbackBinding? in
             guard case .operator(let operation) = argument else { return nil }
             if case .reference(let target, _) = operation, let binding = boundOperators[target] {
-                return .init(operation: binding.operation, scope: binding.scope, forwardedFrom: target)
+                return .init(forwarding: binding, from: target)
             }
-            return .init(operation: operation, scope: self, forwardedFrom: nil)
+            return .init(operation: operation, scope: self)
         }
         let callbackID: OperatorID?
         if case .reference(let id, _) = requestedOperation, boundOperators[id] != nil { callbackID = id }
