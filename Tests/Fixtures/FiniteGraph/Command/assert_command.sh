@@ -67,4 +67,35 @@ PY
 expect_failure "invalid value: tlc.jar.assetID" \
     "$SETUP" --toolchain "$TMP/invalid-toolchain.json" --tool-root "$TMP/invalid-tools"
 
+mkdir -p "$TMP/option-url-tools/downloads" "$TMP/bin"
+: >"$TMP/option-url-tools/downloads/tla2tools.jar"
+cp "$ROOT/Verification/FiniteGraph/toolchain.json" "$TMP/option-url-toolchain.json"
+python3 - "$TMP/option-url-toolchain.json" "$(uname -m)" \
+    "$(shasum -a 256 "$TMP/option-url-tools/downloads/tla2tools.jar" | awk '{print $1}')" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    toolchain = json.load(source)
+toolchain["tlc"]["jar"]["sha256"] = sys.argv[3]
+toolchain["java"]["archives"][sys.argv[2]]["url"] = "-K"
+with open(sys.argv[1], "w", encoding="utf-8") as destination:
+    json.dump(toolchain, destination)
+PY
+cat >"$TMP/bin/curl" <<'SH'
+#!/bin/bash
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--url" ] && [ "${2:-}" = "-K" ]; then
+        echo "option-shaped URL remained a URL value" >&2
+        exit 2
+    fi
+    shift
+done
+exit 3
+SH
+chmod +x "$TMP/bin/curl"
+expect_failure "option-shaped URL remained a URL value" \
+    env PATH="$TMP/bin:$PATH" "$SETUP" --toolchain "$TMP/option-url-toolchain.json" \
+        --tool-root "$TMP/option-url-tools"
+
 echo "finite-graph command checks passed"
