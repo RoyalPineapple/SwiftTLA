@@ -98,6 +98,17 @@ private struct NativeCallbackBinding: Sendable {
     }
 }
 
+private struct NativeArgumentEvidence: Sendable {
+    let expression: CompiledStateExpr
+    let scope: NativeTypeInference
+}
+
+private struct NativeArgumentRefinement: Hashable, Sendable {
+    let expression: CompiledStateExpr
+    let bindings: [BinderID: NativeType]
+    let expected: NativeType
+}
+
 package struct NativeOperatorCall: Sendable {
     package let specialization: NativeOperatorSpecialization
     package let parameters: [BinderID]
@@ -119,6 +130,8 @@ package struct NativeTypeInference: Sendable {
     package private(set) var namedRepresentations: [String: NativeType] = [:]
     private let plan: NativeMachinePlan
     private var bindingSources: [BinderID: CompiledStateExpr] = [:]
+    private var argumentEvidence: [BinderID: NativeArgumentEvidence] = [:]
+    private var activeArgumentRefinements: Set<NativeArgumentRefinement> = []
     private var activeBindingRefinements: Set<BinderID> = []
     private var bindingDomains: [BinderID: Set<CompiledValue>] = [:]
     private var localOperators: [OperatorID: CompiledLocalOperator] = [:]
@@ -623,6 +636,11 @@ package struct NativeTypeInference: Sendable {
             if case .value(let value) = argument { return literalValues(value) }
             return nil
         }
+        let evidence = arguments.map { argument -> NativeArgumentEvidence? in
+            guard case .value(let value) = argument else { return nil }
+            if case .boundValue(let id) = value, let existing = argumentEvidence[id] { return existing }
+            return .init(expression: value, scope: self)
+        }
         let callbacks = arguments.map { argument -> NativeCallbackBinding? in
             guard case .operator(let operation) = argument else { return nil }
             if case .reference(let target, _) = operation, let binding = boundOperators[target] {
@@ -638,10 +656,11 @@ package struct NativeTypeInference: Sendable {
         // Recursive activity belongs to the call stack, while value/operator
         // bindings belong to the callback's lexical declaration scope.
         scope.activeOperators = activeOperators
+        scope.activeArgumentRefinements = activeArgumentRefinements
         scope.specializationResults.merge(specializationResults) { _, current in current }
         let operation = callback?.operation ?? requestedOperation
         let resolved = try scope.specializeOperation(operation,
-            argumentTypes: argumentTypes, argumentDomains: argumentDomains,
+            argumentTypes: argumentTypes, argumentDomains: argumentDomains, evidence: evidence,
             callbacks: callbacks, expected: expected)
         specializationResults.merge(scope.specializationResults) { _, current in current }
         variables = scope.variables
@@ -684,7 +703,7 @@ package struct NativeTypeInference: Sendable {
 
     private mutating func specializeOperation(
         _ operation: CompiledFormalOperator,
-        argumentTypes: [NativeType], argumentDomains: [Set<CompiledValue>?],
+        argumentTypes: [NativeType], argumentDomains: [Set<CompiledValue>?], evidence: [NativeArgumentEvidence?],
         callbacks: [NativeCallbackBinding?], expected: NativeType
     ) throws -> NativeOperatorCall {
         let formalParameters: [CompiledFormalParameter]
@@ -737,6 +756,7 @@ package struct NativeTypeInference: Sendable {
             switch parameter {
             case .value(let binder):
                 bindings[binder] = argumentTypes[index]
+                argumentEvidence[binder] = evidence[index]
                 if let values = argumentDomains[index] {
                     bindingSources[binder] = .value(.set(values)); bindingDomains[binder] = values
                 } else {
@@ -787,6 +807,20 @@ package struct NativeTypeInference: Sendable {
             // A use-site projection does not replace the binder's chosen native
             // representation. Later raw scalar reads must not erase enum identity.
             if canProjectRead(existing, to: expected) { return expected }
+            if expected != .unknown, existing != expected, let evidence = argumentEvidence[id] {
+                let refinement = NativeArgumentRefinement(expression: evidence.expression, bindings: evidence.scope.bindings, expected: expected)
+                if activeArgumentRefinements.insert(refinement).inserted {
+                    defer { activeArgumentRefinements.remove(refinement) }
+                    var caller = evidence.scope
+                    caller.activeArgumentRefinements = activeArgumentRefinements
+                    caller.activeOperators = activeOperators
+                    caller.specializationResults.merge(specializationResults) { _, current in current }
+                    let refined = try caller.infer(evidence.expression, expected: expected)
+                    specializationResults.merge(caller.specializationResults) { _, current in current }
+                    bindings[id] = refined
+                    return refined
+                }
+            }
             if expected != .unknown, existing != expected, let domain = bindingSources[id],
                activeBindingRefinements.insert(id).inserted {
                 defer { activeBindingRefinements.remove(id) }
