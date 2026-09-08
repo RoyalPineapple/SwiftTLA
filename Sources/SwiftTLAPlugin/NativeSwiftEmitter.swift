@@ -7,28 +7,17 @@ import SwiftTLA
 struct NativeSwiftEmitter {
     let model: MacroCompilation
     let plan: NativeMachinePlan
-    var types: NativeTypeInference
+    let program: NativeResolvedProgram
     var records: [NativeType] = []
     var atoms: [String] = []
     var finiteValues: [[CompiledValue]] = []
-    var operatorSpecializations: [NativeOperatorSpecialization: Int] = [:]
-    private struct CallbackParameter: Hashable {
-        let operation: OperatorID
-        let arguments: [NativeType]
-        let result: NativeType
-        init(operation: OperatorID, call: NativeOperatorCall) {
-            self.operation = operation
-            arguments = call.parameters.map { call.inference.bindings[$0] ?? .unknown }
-            result = call.result
-        }
-    }
     private var hasDepthScope = false
-    private var callbackFunctions: [CallbackParameter: String] = [:]
+    private var callbackFunctions: [NativeCallbackID: String] = [:]
 
-    init(model: MacroCompilation) throws {
+    init(model: MacroCompilation) {
         self.model = model
         plan = NativeMachinePlan(compilation: model.compilation)
-        types = try NativeTypeInference(plan: plan, sourceTypes: model.nativeSourceTypes)
+        program = model.nativeProgram
     }
 
     func unsupported(_ operation: String) -> CompilationDiagnostic {
@@ -135,7 +124,7 @@ struct NativeSwiftEmitter {
             return "[\(try values.map { try literal($0, as: element) }.joined(separator: ", "))]"
         case (.tuple(let values), .tuple(let elements)) where values.count == elements.count:
             let name = try swiftType(type)
-            return "\(name)(\(try zip(values, elements).enumerated().map { index, item in "\(fieldName(type, index: index)): \(try literal(item.0, as: item.1))" }.joined(separator: ", ")))"
+            return "\(name)(\(try values.indices.map { index in "\(fieldName(type, index: index)): \(try literal(item.0, as: item.1))" }.joined(separator: ", ")))"
         case (.function(let values), .dictionary(let key, let element)):
             if values.isEmpty { return "[\(try swiftType(key)): \(try swiftType(element))]()" }
             return "[\(try values.keys.sorted().map { "\(try literal($0, as: key)): \(try literal(values[$0]!, as: element))" }.joined(separator: ", "))]"
@@ -154,14 +143,32 @@ struct NativeSwiftEmitter {
 
     mutating func projected(_ value: String, from source: NativeType, to destination: NativeType?) throws -> String {
         guard let destination, source != destination else { return value }
-        guard types.canProjectRead(source, to: destination) else {
-            throw unsupported("native projection from \(source) to \(destination)")
-        }
         if case .dictionary(let sourceKey, let sourceValue) = source,
            case .dictionary(let targetKey, let targetValue) = destination {
             let key = try projected("entry.key", from: sourceKey, to: targetKey)
             let item = try projected("entry.value", from: sourceValue, to: targetValue)
             return "Dictionary<\(try swiftType(targetKey)), \(try swiftType(targetValue))>(uniqueKeysWithValues: (\(value)).map { entry in (\(key), \(item)) })"
+        }
+        if case .set(let input) = source, case .set(let output) = destination {
+            return "Set<\(try swiftType(output))>((\(value)).map { element in \(try projected("element", from: input, to: output)) })"
+        }
+        if case .array(let input) = source, case .array(let output) = destination {
+            return "(\(value)).map { element in \(try projected("element", from: input, to: output)) }"
+        }
+        let sourceFields: [NativeType]?
+        let destinationFields: [NativeType]?
+        switch (source, destination) {
+        case (.tuple(let input), .tuple(let output)):
+            sourceFields = input; destinationFields = output
+        case (.record(let input), .record(let output)):
+            sourceFields = input.map(\.type); destinationFields = output.map(\.type)
+        default: sourceFields = nil; destinationFields = nil
+        }
+        if let sourceFields, let destinationFields {
+            let arguments = try zip(sourceFields, destinationFields).enumerated().map { index, pair in
+                "\(fieldName(destination, index: index)): \(try projected("source." + fieldName(source, index: index), from: pair.0, to: pair.1))"
+            }.joined(separator: ", ")
+            return "({ (source: \(try swiftType(source))) -> \(try swiftType(destination)) in \(try swiftType(destination))(\(arguments)) })(\(value))"
         }
         let cases: String
         switch source {
@@ -233,104 +240,84 @@ struct NativeSwiftEmitter {
         return "{ (lhs: \(name), rhs: \(name)) -> Bool in \(body) }"
     }
 
-    mutating func operatorCall(
-        _ id: OperatorID, arguments: [CompiledFormalCallArgument], expected: NativeType?,
-        state: String, substitutions: [BinderID: String],
-        operators: [OperatorID: CompiledLocalOperator], activeOperators: Set<NativeOperatorSpecialization>
+    private mutating func resolvedCall(
+        _ call: NativeResolvedCall, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
         let ownsDepth = !hasDepthScope
         hasDepthScope = true
         defer { if ownsDepth { hasDepthScope = false } }
-        let resolved = try types.operatorCall(id, arguments: arguments, expected: expected, operators: operators)
-        let values = arguments.compactMap { argument -> CompiledStateExpr? in
-            if case .value(let value) = argument { return value }; return nil
+        let arguments = try call.arguments.map {
+            "{ \(try expression($0, state: state, substitutions: substitutions, activeFunctions: activeFunctions)) }"
         }
-        var argumentsCode: [String] = []
-        for (parameter, argument) in zip(resolved.parameters, values) {
-            guard let parameterType = resolved.inference.bindings[parameter] else { throw unsupported("operator parameter evidence") }
-            let code = try self.expression(argument, expected: parameterType, state: state, substitutions: substitutions, operators: operators, activeOperators: activeOperators)
-            argumentsCode.append("{ \(code) }")
+        switch call.target {
+        case .callback(let id):
+            guard let function = callbackFunctions[id] else { throw unsupported("resolved callback capture") }
+            return "(try \(function)(\(arguments.joined(separator: ", "))))"
+        case .function(let id):
+            let code = try emitFunction(id, arguments: arguments, callbacks: call.callbacks,
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            return ownsDepth ? "(try { () throws -> \(try swiftType(program[id].resultType)) in var _nativeDepth = 0; return \(code) }())" : code
         }
-        if types.isOperatorParameter(id) {
-            let parameter = CallbackParameter(operation: id, call: resolved)
-            guard let function = callbackFunctions[parameter] else { throw unsupported("callback signature evidence") }
-            return "(try \(function)(\(argumentsCode.joined(separator: ", "))))"
-        }
-        let code = try emitOperator(resolved, argumentsCode: argumentsCode, state: state,
-            substitutions: substitutions, operators: operators, activeOperators: activeOperators)
-        return ownsDepth ? "(try { () throws -> \(try swiftType(resolved.result)) in var _nativeDepth = 0; return \(code) }())" : code
     }
 
-    private mutating func emitOperator(
-        _ resolved: NativeOperatorCall, argumentsCode valueArguments: [String],
-        state: String, substitutions: [BinderID: String],
-        operators: [OperatorID: CompiledLocalOperator], activeOperators: Set<NativeOperatorSpecialization>
+    private mutating func emitFunction(
+        _ id: NativeFunctionID, arguments valueArguments: [String], callbacks: [NativeResolvedCallbackArgument],
+        state: String, substitutions: [BinderID: String], activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        let key = resolved.specialization
-        let ordinal: Int
-        if let existing = operatorSpecializations[key] { ordinal = existing }
-        else { ordinal = operatorSpecializations.count; operatorSpecializations[key] = ordinal }
-        let function = "_operator\(ordinal)"
-        let resultType = try swiftType(resolved.result)
-        var argumentsCode = valueArguments
+        let resolved = program[id]
+        let function = "_operator\(id.ordinal)"
+        var arguments = valueArguments
         var declarations: [String] = []
         var nested = substitutions
         var nestedCallbacks = callbackFunctions
-        for parameter in resolved.parameters {
-            guard let parameterType = resolved.inference.bindings[parameter] else { throw unsupported("operator parameter evidence") }
-            declarations.append("_ \(binder(parameter)): @escaping () throws -> \(try swiftType(parameterType))")
+        for (parameter, type) in zip(resolved.parameters, resolved.parameterTypes) {
+            declarations.append("_ \(binder(parameter)): @escaping () throws -> \(try swiftType(type))")
             nested[parameter] = "(try \(binder(parameter))())"
         }
-        // Operator parameters are ordinary Swift closures. Each demanded shape
-        // has its own typed parameter; no callback value is erased at runtime.
-        for id in resolved.callbackUses.keys.sorted(by: { $0.ordinal < $1.ordinal }) {
-            guard let actual = resolved.callbackArguments[id] else { continue }
-            for (index, use) in (resolved.callbackUses[id] ?? []).enumerated() {
-                let name = "_callback\(id.ordinal)_\(index)"
-                let parameter = CallbackParameter(operation: id, call: use)
-                let argumentTypes = try use.parameters.map { binder -> String in
-                    guard let type = use.inference.bindings[binder] else { throw unsupported("callback parameter evidence") }
-                    return try swiftType(type)
-                }
-                let callbackResult = try swiftType(use.result)
-                let signature = "(" + argumentTypes.map { "@escaping () throws -> \($0)" }.joined(separator: ", ") + ") throws -> \(callbackResult)"
-                declarations.append("_ \(name): @escaping \(signature)")
-                nestedCallbacks[parameter] = name
-                if case .reference(let origin, _) = actual, types.isOperatorParameter(origin) {
-                    guard let forwarded = callbackFunctions[.init(operation: origin, call: use)] else { throw unsupported("forwarded callback signature evidence") }
-                    argumentsCode.append(forwarded)
-                } else {
-                    let names = argumentTypes.indices.map { "_callbackArgument\($0)" }
-                    let parameters = zip(names, argumentTypes).map { "\($0.0): @escaping () throws -> \($0.1)" }.joined(separator: ", ")
-                    let code = try emitOperator(use, argumentsCode: names, state: state,
-                        substitutions: substitutions, operators: operators, activeOperators: activeOperators.union([key]))
-                    argumentsCode.append("{ (\(parameters)) throws -> \(callbackResult) in return \(code) }")
-                }
+        for callback in resolved.callbacks {
+            let signature = program[callback]
+            let name = "_callback\(callback.ordinal)"
+            let argumentTypes = try signature.parameters.map { try swiftType($0) }
+            let result = try swiftType(signature.result)
+            declarations.append("_ \(name): @escaping (\(argumentTypes.map { "@escaping () throws -> \($0)" }.joined(separator: ", "))) throws -> \(result)")
+            nestedCallbacks[callback] = name
+            guard let target = callbacks.first(where: { $0.parameter == callback })?.target else {
+                guard let captured = callbackFunctions[callback] else { throw unsupported("resolved callback argument") }
+                arguments.append(captured)
+                continue
+            }
+            switch target {
+            case .callback(let origin):
+                guard let captured = callbackFunctions[origin] else { throw unsupported("forwarded callback") }
+                arguments.append(captured)
+            case .function(let target):
+                let names = argumentTypes.indices.map { "_callbackArgument\($0)" }
+                let parameters = zip(names, argumentTypes).map { "\($0.0): @escaping () throws -> \($0.1)" }.joined(separator: ", ")
+                let code = try emitFunction(target, arguments: names, callbacks: [], state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions.union([id]))
+                arguments.append("{ (\(parameters)) throws -> \(result) in return \(code) }")
             }
         }
-        let call = "try \(function)(\(argumentsCode.joined(separator: ", ")))"
-        if activeOperators.contains(key) { return "(\(call))" }
-        let callerTypes = types
-        let callerCallbacks = callbackFunctions
-        types = resolved.inference
+        let call = "try \(function)(\(arguments.joined(separator: ", ")))"
+        if activeFunctions.contains(id) { return "(\(call))" }
+        let outerCallbacks = callbackFunctions
         callbackFunctions = nestedCallbacks
-        defer { types = callerTypes; callbackFunctions = callerCallbacks }
-        let bodyCode = try self.expression(resolved.body, expected: resolved.result, state: state, substitutions: nested, operators: operators, activeOperators: activeOperators.union([key]))
-        let domainGuard: String
-        if let domain = resolved.domain, let parameter = resolved.parameters.first {
-            let condition = try self.expression(.in(.boundValue(parameter), domain), expected: .bool, state: state, substitutions: nested, operators: operators, activeOperators: activeOperators.union([key]))
-            domainGuard = "guard \(condition) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
-        } else { domainGuard = "" }
+        defer { callbackFunctions = outerCallbacks }
+        let body = try expression(resolved.body, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))
+        let domainGuard = try resolved.domainGuard.map {
+            "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
+        } ?? ""
         return """
-        (try { () throws -> \(resultType) in
-            func \(function)(\(declarations.joined(separator: ", "))) throws -> \(resultType) {
+        (try { () throws -> \(try swiftType(resolved.resultType)) in
+            func \(function)(\(declarations.joined(separator: ", "))) throws -> \(try swiftType(resolved.resultType)) {
                 guard _nativeDepth < _NativeMachineOperations.maximumRecursiveDepth else {
                     throw NativeMachineEvaluationError.recursionDepthExceeded(_NativeMachineOperations.maximumRecursiveDepth)
                 }
                 _nativeDepth += 1
                 defer { _nativeDepth -= 1 }
                 \(domainGuard)
-                return \(bodyCode)
+                return \(body)
             }
             return \(call)
         }())
@@ -338,241 +325,212 @@ struct NativeSwiftEmitter {
     }
 
     mutating func expression(
-        _ expression: CompiledStateExpr,
-        expected: NativeType? = nil,
-        state: String = "state.",
-        substitutions: [BinderID: String] = [:],
-        operators: [OperatorID: CompiledLocalOperator] = [:],
-        activeOperators: Set<NativeOperatorSpecialization> = []
+        _ id: NativeExpressionID, state: String = "state.", substitutions: [BinderID: String] = [:],
+        activeFunctions: Set<NativeFunctionID> = []
     ) throws -> String {
-        func type(_ expression: CompiledStateExpr, _ expected: NativeType? = nil) throws -> NativeType {
-            try types.type(of: expression, expected: expected)
+        let node = program[id]
+        let value = try expressionBody(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        return try projected(value, from: node.computationType, to: node.resultType)
+    }
+
+    private mutating func expressionBody(
+        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        let node = program[id]
+        let expression = node.expression
+        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func emit(_ index: Int) throws -> String {
+            try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
-        // Nested emission retains the resolved lexical identities; it does not resolve names again.
-        func emit(_ value: CompiledStateExpr, _ expected: NativeType? = nil) throws -> String {
-            try self.expression(value, expected: expected, state: state, substitutions: substitutions,
-                                operators: operators, activeOperators: activeOperators)
+        func binary(_ operation: String) throws -> String {
+            "(\(try emit(0)) \(operation) \(try emit(1)))"
         }
-        func binary(_ lhs: CompiledStateExpr, _ op: String, _ rhs: CompiledStateExpr, _ operand: NativeType? = nil) throws -> String {
-            let operandType = try operand ?? types.operandType(lhs, rhs)
-            return "(\(try emit(lhs, operandType)) \(op) \(try emit(rhs, operandType)))"
-        }
-        func arithmetic(_ name: String, _ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr) throws -> String {
-            "(try _NativeMachineOperations.\(name)(\(try emit(lhs, .int)), \(try emit(rhs, .int))))"
+        func arithmetic(_ name: String) throws -> String {
+            "(try _NativeMachineOperations.\(name)(\(try emit(0)), \(try emit(1))))"
         }
         switch expression {
-        case .value(let value): return try literal(value, as: expected ?? type(expression))
+        case .value(let value): return try literal(value, as: node.computationType)
         case .stateVariable(let id):
-            guard let source = types.variables[id] else { throw unsupported("state variable type") }
-            return try projected(state + variable(id), from: source, to: expected)
+            return state + variable(id)
         case .boundValue(let id):
-            guard let source = types.bindings[id] else { throw unsupported("bound value type") }
-            return try projected(substitutions[id] ?? binder(id), from: source, to: expected)
+            return substitutions[id] ?? binder(id)
         case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"
         case .enabledAction(let id): return "enabled.contains(\(id.ordinal))"
-        case .add(let a, let b): return try arithmetic("add", a, b)
-        case .subtract(let a, let b): return try arithmetic("subtract", a, b)
-        case .multiply(let a, let b): return try arithmetic("multiply", a, b)
-        case .divide(let a, let b), .integerDivide(let a, let b), .modulo(let a, let b):
+        case .add(_, _): return try arithmetic("add")
+        case .subtract(_, _): return try arithmetic("subtract")
+        case .multiply(_, _): return try arithmetic("multiply")
+        case .divide(_, _), .integerDivide(_, _), .modulo(_, _):
             let operation: String
             if case .modulo = expression { operation = "modulo" } else { operation = "divide" }
             return """
             (try { () throws -> Int in
-                let _rightOperand = \(try emit(b, .int))
-                let _leftOperand = \(try emit(a, .int))
+                let _rightOperand = \(try emit(1))
+                let _leftOperand = \(try emit(0))
                 return try _NativeMachineOperations.\(operation)(_leftOperand, _rightOperand)
             }())
             """
-        case .negate(let a): return "(try _NativeMachineOperations.negate(\(try emit(a, .int))))"
-        case .equal(let a, let b): return try binary(a, "==", b)
-        case .notEqual(let a, let b): return try binary(a, "!=", b)
-        case .lessThan(let a, let b): return try binary(a, "<", b, .int)
-        case .lessOrEqual(let a, let b): return try binary(a, "<=", b, .int)
-        case .greaterThan(let a, let b): return try binary(a, ">", b, .int)
-        case .greaterOrEqual(let a, let b): return try binary(a, ">=", b, .int)
-        case .and(let a, let b):
-            return try Self.shortCircuitBoolean(left: emit(a, .bool), right: emit(b, .bool), conjunction: true)
-        case .or(let a, let b):
-            return try Self.shortCircuitBoolean(left: emit(a, .bool), right: emit(b, .bool), conjunction: false)
-        case .not(let a): return "(!\(try emit(a, .bool)))"
-        case .ifThenElse(let condition, let then, let otherwise):
-            let result = try expected ?? type(expression)
-            return "(\(try emit(condition, .bool)) ? \(try emit(then, result)) : \(try emit(otherwise, result)))"
+        case .negate(_): return "(try _NativeMachineOperations.negate(\(try emit(0))))"
+        case .equal(_, _): return try binary("==")
+        case .notEqual(_, _): return try binary("!=")
+        case .lessThan(_, _): return try binary("<")
+        case .lessOrEqual(_, _): return try binary("<=")
+        case .greaterThan(_, _): return try binary(">")
+        case .greaterOrEqual(_, _): return try binary(">=")
+        case .and(_, _):
+            return try Self.shortCircuitBoolean(left: emit(0), right: emit(1), conjunction: true)
+        case .or(_, _):
+            return try Self.shortCircuitBoolean(left: emit(0), right: emit(1), conjunction: false)
+        case .not(_): return "(!\(try emit(0)))"
+        case .ifThenElse(_, _, _):
+            return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
         case .setLiteral(let values):
-            guard case .set(let element) = try expected ?? type(expression) else { throw unsupported("set literal") }
-            return "Set<\(try swiftType(element))>([\(try values.map { try emit($0, element) }.joined(separator: ", "))])"
+            guard case .set(let element) = node.computationType else { throw unsupported("set literal") }
+            return "Set<\(try swiftType(element))>([\(try values.indices.map { try emit($0) }.joined(separator: ", "))])"
         case .tupleLiteral(let values):
-            let result = try expected ?? type(expression)
+            let result = node.computationType
             switch result {
-            case .array(let element): return "[\(try values.map { try emit($0, element) }.joined(separator: ", "))]"
-            case .tuple(let elements):
-                return "\(try swiftType(result))(\(try zip(values, elements).enumerated().map { index, item in "\(fieldName(result, index: index)): \(try emit(item.0, item.1))" }.joined(separator: ", ")))"
+            case .array: return "[\(try values.indices.map { try emit($0) }.joined(separator: ", "))]"
+            case .tuple:
+                return "\(try swiftType(result))(\(try values.indices.map { index in "\(fieldName(result, index: index)): \(try emit(index))" }.joined(separator: ", ")))"
             default: throw unsupported("tuple literal")
             }
-        case .in(let value, let domain):
-            let element = try types.membershipElementType(value: value, domain: domain)
-            return "(\(try emit(domain, .set(element))).contains(\(try emit(value, element))))"
-        case .subset(let a, let b):
-            let context = try types.operandType(a, b)
-            return "(\(try emit(a, context)).isSubset(of: \(try emit(b, context))))"
-        case .union(let a, let b):
-            let result = try expected ?? type(expression)
-            return "(\(try emit(a, result)).union(\(try emit(b, result))))"
-        case .intersection(let a, let b):
-            let result = try expected ?? type(expression)
-            return "(\(try emit(a, result)).intersection(\(try emit(b, result))))"
-        case .setDifference(let a, let b):
-            let result = try expected ?? type(expression)
-            return "(\(try emit(a, result)).subtracting(\(try emit(b, result))))"
-        case .cardinality(let a): return "(\(try emit(a)).count)"
-        case .integerRange(let a, let b): return "(try _NativeMachineOperations.integerRange(\(try emit(a, .int)), \(try emit(b, .int))))"
-        case .setFilter(let domain, let binding, let predicate):
-            guard case .set(let element) = try types.type(of: expression, expected: expected) else { throw unsupported("set filter") }
-            return "Set<\(try swiftType(element))>(try \(try emit(domain, .set(element))).sorted(by: \(try ordering(element))).filter { \(binder(binding)) in \(try emit(predicate, .bool)) })"
-        case .setMap(let value, let binding, let domain):
-            guard case .set(let element) = try expected ?? type(expression) else { throw unsupported("set map") }
-            guard let input = types.bindings[binding] else { throw unsupported("set map binding") }
-            return "Set<\(try swiftType(element))>(try \(try emit(domain, .set(input))).sorted(by: \(try ordering(input))).map { \(binder(binding)) in \(try emit(value, element)) })"
-        case .forAll(let domain, let binding, let predicate):
-            guard let element = types.bindings[binding] else { throw unsupported("quantifier binding") }
-            return "(try \(try emit(domain, .set(element))).sorted(by: \(try ordering(element))).allSatisfy { \(binder(binding)) in \(try emit(predicate, .bool)) })"
-        case .exists(let domain, let binding, let predicate):
-            guard let element = types.bindings[binding] else { throw unsupported("quantifier binding") }
-            return "(try \(try emit(domain, .set(element))).sorted(by: \(try ordering(element))).contains { \(binder(binding)) in \(try emit(predicate, .bool)) })"
-        case .choose(let domain, let binding, let predicate):
-            let element = try types.type(of: expression, expected: expected)
+        case .in(_, _):
+            return "(\(try emit(1)).contains(\(try emit(0))))"
+        case .subset(_, _):
+            return "(\(try emit(0)).isSubset(of: \(try emit(1))))"
+        case .union(_, _):
+            return "(\(try emit(0)).union(\(try emit(1))))"
+        case .intersection(_, _):
+            return "(\(try emit(0)).intersection(\(try emit(1))))"
+        case .setDifference(_, _):
+            return "(\(try emit(0)).subtracting(\(try emit(1))))"
+        case .cardinality(_): return "(\(try emit(0)).count)"
+        case .integerRange(_, _): return "(try _NativeMachineOperations.integerRange(\(try emit(0)), \(try emit(1))))"
+        case .setFilter(_, let binding, _):
+            guard case .set(let element) = node.computationType else { throw unsupported("set filter") }
+            return "Set<\(try swiftType(element))>(try \(try emit(0)).sorted(by: \(try ordering(element))).filter { \(binder(binding)) in \(try emit(1)) })"
+        case .setMap(_, let binding, _):
+            guard case .set(let element) = node.computationType else { throw unsupported("set map") }
+            guard let input = node.bindings[binding] else { throw unsupported("set map binding") }
+            return "Set<\(try swiftType(element))>(try \(try emit(1)).sorted(by: \(try ordering(input))).map { \(binder(binding)) in \(try emit(0)) })"
+        case .forAll(_, let binding, _):
+            guard let element = node.bindings[binding] else { throw unsupported("quantifier binding") }
+            return "(try \(try emit(0)).sorted(by: \(try ordering(element))).allSatisfy { \(binder(binding)) in \(try emit(1)) })"
+        case .exists(_, let binding, _):
+            guard let element = node.bindings[binding] else { throw unsupported("quantifier binding") }
+            return "(try \(try emit(0)).sorted(by: \(try ordering(element))).contains { \(binder(binding)) in \(try emit(1)) })"
+        case .choose(_, let binding, _):
+            let element = node.computationType
             let order = try ordering(element)
-            return "(try _NativeMachineOperations.choose(\(try emit(domain, .set(element))).sorted(by: \(order))) { \(binder(binding)) in \(try emit(predicate, .bool)) })"
-        case .sequenceFromSet(let domain):
-            guard case .set(let element) = try type(domain) else { throw unsupported("sequence from set") }
-            return "(\(try emit(domain)).sorted(by: \(try ordering(element))))"
-        case .powerSet(let domain): return "(try _NativeMachineOperations.powerSet(\(try emit(domain))))"
-        case .unionAll(let domain):
-            guard case .set(let element) = try expected ?? type(expression) else { throw unsupported("UNION result") }
-            return "(\(try emit(domain)).reduce(into: Set<\(try swiftType(element))>()) { $0.formUnion($1) })"
-        case .functionSet(let domain, let range):
-            return "(try _NativeMachineOperations.functionSet(\(try emit(domain)), \(try emit(range))))"
-        case .setSum(let function, let domain):
-            guard case .set(let key) = try type(domain) else { throw unsupported("set sum") }
-            let functionCode = try emit(function, .dictionary(key, .int))
-            let domainCode = try emit(domain, .set(key))
+            return "(try _NativeMachineOperations.choose(\(try emit(0)).sorted(by: \(order))) { \(binder(binding)) in \(try emit(1)) })"
+        case .sequenceFromSet(_):
+            guard case .set(let element) = childType(0) else { throw unsupported("sequence from set") }
+            return "(\(try emit(0)).sorted(by: \(try ordering(element))))"
+        case .powerSet(_): return "(try _NativeMachineOperations.powerSet(\(try emit(0))))"
+        case .unionAll(_):
+            guard case .set(let element) = node.computationType else { throw unsupported("UNION result") }
+            return "(\(try emit(0)).reduce(into: Set<\(try swiftType(element))>()) { $0.formUnion($1) })"
+        case .functionSet(_, _):
+            return "(try _NativeMachineOperations.functionSet(\(try emit(0)), \(try emit(1))))"
+        case .setSum(_, _):
+            let functionCode = try emit(0)
+            let domainCode = try emit(1)
             return "(try { () throws -> Int in let mapping = \(functionCode); let members = \(domainCode); return try _NativeMachineOperations.sum(try members.map { try _NativeMachineOperations.functionValue(mapping, at: $0) }) }())"
-        case .foldFunction(let operation, let initial, let sequence):
+        case .foldFunction(let operation, _, _):
             guard operation.parameters.count == 2 else { throw unsupported("fold arity") }
-            let result = try expected ?? type(expression)
             var nested = substitutions
             nested[operation.parameters[0]] = binder(operation.parameters[0])
             nested[operation.parameters[1]] = binder(operation.parameters[1])
-            let body = try self.expression(operation.body, expected: result, state: state, substitutions: nested, operators: operators, activeOperators: activeOperators)
-            let source = try types.sequenceSourceType(sequence)
-            let elements = try nativeSequenceElements(emit(sequence, source), source: source)
-            return "(try \(elements).reversed().reduce(\(try emit(initial, result))) { \(binder(operation.parameters[1])), \(binder(operation.parameters[0])) in \(body) })"
-        case .tupleAccess(let value, let index):
-            let source = try types.projectionSourceType(value, index: index, expected: expected)
-            if case .tuple(let fields) = source {
-                let field = "\(try emit(value, source)).\(fieldName(source, index: index - 1))"
-                return try projected(field, from: fields[index - 1], to: expected)
+            let body = try self.expression(node.children[0], state: state, substitutions: nested, activeFunctions: activeFunctions)
+            let source = childType(2)
+            let elements = try nativeSequenceElements(emit(2), source: source)
+            return "(try \(elements).reversed().reduce(\(try emit(1))) { \(binder(operation.parameters[1])), \(binder(operation.parameters[0])) in \(body) })"
+        case .tupleAccess(_, let index):
+            let source = childType(0)
+            if case .tuple = source {
+                let field = "\(try emit(0)).\(fieldName(source, index: index - 1))"
+                return field
             }
-            let elements = try nativeSequenceElements(emit(value, source), source: source)
+            let elements = try nativeSequenceElements(emit(0), source: source)
             return "(try _NativeMachineOperations.sequenceElement(\(elements), at: \(index)))"
-        case .tupleDynamicAccess(let value, let index):
-            let source = try types.sequenceSourceType(value, element: expected ?? .unknown)
+        case .tupleDynamicAccess(_, _):
+            let source = childType(0)
             let element = try nativeSequenceElementType(source)
             let elements = try nativeSequenceElements("_sequenceValue", source: source)
             return """
             (try { () throws -> \(try swiftType(element)) in
-                let _sequenceValue = \(try emit(value, source))
-                let _sequenceIndex = \(try emit(index, .int))
+                let _sequenceValue = \(try emit(0))
+                let _sequenceIndex = \(try emit(1))
                 return try _NativeMachineOperations.sequenceElement(\(elements), at: _sequenceIndex)
             }())
             """
-        case .tupleLength(let value):
-            if case .tuple(let elements) = try type(value) {
-                return "(try { () throws -> Int in _ = \(try emit(value)); return \(elements.count) }())"
+        case .tupleLength(_):
+            if case .tuple(let elements) = childType(0) {
+                return "(try { () throws -> Int in _ = \(try emit(0)); return \(elements.count) }())"
             }
-            let source = try types.sequenceSourceType(value)
-            return "(\(try nativeSequenceElements(emit(value, source), source: source)).count)"
-        case .tupleHead(let value):
-            let source = try types.sequenceSourceType(value, element: expected ?? .unknown)
-            return "(try _NativeMachineOperations.sequenceHead(\(try nativeSequenceElements(emit(value, source), source: source))))"
-        case .tupleTail(let value):
-            let result = try expected ?? type(expression)
+            let source = childType(0)
+            return "(\(try nativeSequenceElements(emit(0), source: source)).count)"
+        case .tupleHead(_):
+            let source = childType(0)
+            return "(try _NativeMachineOperations.sequenceHead(\(try nativeSequenceElements(emit(0), source: source))))"
+        case .tupleTail(_):
+            let result = node.computationType
             guard case .array(let element) = result else { throw unsupported("sequence tail result") }
-            let source = try types.sequenceSourceType(value, element: element)
-            return "(try _NativeMachineOperations.sequenceTail(\(try nativeSequenceElements(emit(value, source), source: source))))"
-        case .tupleAppend(let a, let b):
-            let result = try expected ?? type(expression)
+            let source = childType(0)
+            return "(try _NativeMachineOperations.sequenceTail(\(try nativeSequenceElements(emit(0), source: source))))"
+        case .tupleAppend(_, _):
+            let result = node.computationType
             guard case .array(let element) = result else { throw unsupported("sequence append result") }
-            let source = try types.sequenceSourceType(a, element: element)
+            let source = childType(0)
             let elements = try nativeSequenceElements("_sequenceValue", source: source)
             return """
             (try { () throws -> \(try swiftType(result)) in
-                let _sequenceValue = \(try emit(a, source))
-                let _appendedValue = \(try emit(b, element))
+                let _sequenceValue = \(try emit(0))
+                let _appendedValue = \(try emit(1))
                 return \(elements) + [_appendedValue]
             }())
             """
-        case .tupleConcatenate(let a, let b):
-            let result = try expected ?? type(expression)
+        case .tupleConcatenate(_, _):
+            let result = node.computationType
             guard case .array(let element) = result else { throw unsupported("sequence concatenation result") }
-            let left = try types.sequenceSourceType(a, element: element)
-            let right = try types.sequenceSourceType(b, element: element)
+            let left = childType(0)
+            let right = childType(1)
             return """
             (try { () throws -> \(try swiftType(result)) in
-                let _leftValue = \(try emit(a, left))
-                let _rightValue = \(try emit(b, right))
+                let _leftValue = \(try emit(0))
+                let _rightValue = \(try emit(1))
                 let _rightElements = \(try nativeSequenceElements("_rightValue", source: right))
                 let _leftElements = \(try nativeSequenceElements("_leftValue", source: left))
                 return _leftElements + _rightElements
             }())
             """
-        case .domain(let value):
-            switch try type(value) {
-            case .dictionary: return "Set(\(try emit(value)).keys)"
-            case .array: return "_NativeMachineOperations.sequenceDomain(\(try emit(value)))"
+        case .domain(_):
+            switch childType(0) {
+            case .dictionary: return "Set(\(try emit(0)).keys)"
+            case .array: return "_NativeMachineOperations.sequenceDomain(\(try emit(0)))"
             case .tuple(let values):
                 let domain = values.isEmpty ? "Set<Int>()" : "Set(1...\(values.count))"
-                return "(try { () throws -> Set<Int> in _ = \(try emit(value)); return \(domain) }())"
+                return "(try { () throws -> Set<Int> in _ = \(try emit(0)); return \(domain) }())"
             case .record(let fields):
                 let domain = "Set<String>([\(fields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
-                return "(try { () throws -> Set<String> in _ = \(try emit(value)); return \(domain) }())"
+                return "(try { () throws -> Set<String> in _ = \(try emit(0)); return \(domain) }())"
             default: throw unsupported("DOMAIN")
             }
-        case .functionLiteral(let domain, let binding, let value):
-            guard case .dictionary(let input, let result) = try expected ?? type(expression) else { throw unsupported("function literal") }
-            return "Dictionary(uniqueKeysWithValues: try \(try emit(domain, .set(input))).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(value, result))) })"
+        case .functionLiteral(_, let binding, _):
+            guard case .dictionary(let input, let result) = node.computationType else { throw unsupported("function literal") }
+            return "Dictionary(uniqueKeysWithValues: try \(try emit(0)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(1))) })"
         case .functionApply(let function, let argument):
-            if case .operatorReference(let id) = function {
-                return try operatorCall(id, arguments: [.value(argument)], expected: expected, state: state, substitutions: substitutions, operators: operators, activeOperators: activeOperators)
-            }
-            let result = try type(expression, expected)
-            let base = try type(function)
-            let hint: NativeType
-            switch base {
-            case .array: hint = .array(result)
-            case .dictionary(let key, _): hint = .dictionary(key, result)
-            case .tuple(let elements):
-                if case .value(.integer(let index)) = argument, index >= 1, index <= elements.count {
-                    var updated = elements; updated[index - 1] = result; hint = .tuple(updated)
-                } else { hint = base }
-            case .record(let fields):
-                if case .value(.string(let name)) = argument {
-                    hint = .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) })
-                } else { hint = base }
-            default: hint = base
-            }
-            let source = try type(function, hint)
-            let key: NativeType
+            if let call = node.call { return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions) }
+            let result = node.computationType
+            let source = childType(0)
             let access: String
             switch source {
-            case .dictionary(let domain, _):
-                key = domain
+            case .dictionary:
                 access = "return try _NativeMachineOperations.functionValue(_functionValue, at: _functionArgument)"
             case .array:
-                key = .int
                 access = "return try _NativeMachineOperations.sequenceFunctionValue(_functionValue, at: _functionArgument)"
             case .tuple(let elements):
-                key = .int
                 if case .value(.integer(let index)) = argument {
                     if index >= 1, index <= elements.count {
                         access = "return _functionValue.\(fieldName(source, index: index - 1))"
@@ -582,7 +540,6 @@ struct NativeSwiftEmitter {
                     access = "switch _functionArgument { \(cases)\ndefault: throw NativeMachineEvaluationError.tupleIndexOutsideDomain(_functionArgument) }"
                 }
             case .record(let fields):
-                key = .string
                 if case .value(.string(let name)) = argument {
                     if fields.contains(where: { $0.name == name }) { access = "return _functionValue.\(name)" }
                     else { access = "throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument)" }
@@ -594,35 +551,25 @@ struct NativeSwiftEmitter {
             }
             return """
             (try { () throws -> \(try swiftType(result)) in
-                let _functionArgument = \(try emit(argument, key))
-                let _functionValue = \(try emit(function, source))
+                let _functionArgument = \(try emit(1))
+                let _functionValue = \(try emit(0))
                 \(access)
             }())
             """
         case .except(let original, let key, let value):
-            let originalType = try type(original)
-            let keyType: NativeType
-            let replacementType: NativeType
+            let originalType = childType(0)
             let update: String
             switch originalType {
-            case .dictionary(let domain, let element):
-                keyType = domain; replacementType = element
+            case .dictionary:
                 update = "return _NativeMachineOperations.functionUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
-            case .array(let element):
-                keyType = .int; replacementType = element
+            case .array:
                 update = "return _NativeMachineOperations.sequenceUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
             case .record(let fields):
-                keyType = .string
                 let selected: Int?
                 if case .value(.string(let name)) = key {
                     selected = fields.firstIndex { $0.name == name }
-                    replacementType = try selected.map { fields[$0].type } ?? type(value)
                 } else {
                     selected = nil
-                    replacementType = try fields.first?.type ?? type(value)
-                    guard fields.allSatisfy({ $0.type == replacementType }) else {
-                        throw unsupported("dynamic record keys require homogeneous field types")
-                    }
                 }
                 let nativeName = try swiftType(originalType)
                 func replacing(_ selected: Int) -> String {
@@ -645,19 +592,19 @@ struct NativeSwiftEmitter {
             // Match the formal evaluator: replacement, original, then key.
             return """
             (try { () throws -> \(try swiftType(originalType)) in
-                let _replacementValue = \(try emit(value, replacementType))
-                let _originalValue = \(try emit(original, originalType))
-                let _updatedKey = \(try emit(key, keyType))
+                let _replacementValue = \(try emit(2))
+                let _originalValue = \(try emit(0))
+                let _updatedKey = \(try emit(1))
                 \(update)
             }())
             """
         case .recordLiteral(let record):
-            let result = try expected ?? type(expression)
+            let result = node.computationType
             guard case .record(let fields) = result else { throw unsupported("record literal") }
             let evaluated = try record.fields.enumerated().map { index, field in
                 guard case .string(let name) = field.key,
                       let type = fields.first(where: { $0.name == name })?.type else { throw unsupported("record field") }
-                return "let _recordField\(index): \(try swiftType(type)) = \(try emit(field.value, type))"
+                return "let _recordField\(index): \(try swiftType(type)) = \(try emit(index))"
             }
             let arguments = try fields.enumerated().map { index, field in
                 guard let sourceIndex = record.fields.firstIndex(where: { $0.key == .string(field.name) }) else { throw unsupported("record field") }
@@ -669,52 +616,42 @@ struct NativeSwiftEmitter {
                 return \(try swiftType(result))(\(arguments.joined(separator: ", ")))
             }())
             """
-        case .recordAccess(let value, _, let key):
-            let source = try types.recordProjectionSourceType(value, key: key, expected: expected)
+        case .recordAccess(_, _, let key):
+            let source = childType(0)
             guard case .record(let fields) = source, case .string(let name) = key,
                   let index = fields.firstIndex(where: { $0.name == name }) else { throw unsupported("record access") }
-            let field = "\(try emit(value, source)).\(fieldName(source, index: index))"
-            return try projected(field, from: fields[index].type, to: expected)
-        case .caseExpr(let first, let remaining, let otherwise):
-            let result = try expected ?? type(expression)
+            let field = "\(try emit(0)).\(fieldName(source, index: index))"
+            return field
+        case .caseExpr(_, let remaining, let otherwise):
+            let result = node.computationType
             var body = ""
-            for branch in [first] + remaining {
-                body += "if \(try emit(branch.condition, .bool)) { return \(try emit(branch.value, result)) }\n"
+            for index in 0..<(remaining.count + 1) {
+                body += "if \(try emit(index * 2)) { return \(try emit(index * 2 + 1)) }\n"
             }
-            body += try otherwise.map { "return \(try emit($0, result))" } ?? "throw NativeMachineEvaluationError.noMatchingCase"
+            body += try otherwise.map { _ in "return \(try emit(node.children.count - 1))" } ?? "throw NativeMachineEvaluationError.noMatchingCase"
             return "(try { () throws -> \(try swiftType(result)) in\n\(body)\n}())"
-        case .letValue(let binding, let value, let body):
-            let result = try expected ?? type(expression)
+        case .letValue(let binding, _, _):
+            let result = node.computationType
             var nested = substitutions
             nested[binding] = "(try \(binder(binding))())"
-            let valueType = try types.bindings[binding] ?? type(value)
-            let valueCode = try emit(value, valueType)
-            let bodyCode = try self.expression(body, expected: result, state: state, substitutions: nested, operators: operators, activeOperators: activeOperators)
+            let valueType = childType(0)
+            let valueCode = try emit(0)
+            let bodyCode = try self.expression(node.children[1], state: state, substitutions: nested, activeFunctions: activeFunctions)
             return "(try { () throws -> \(try swiftType(result)) in func \(binder(binding))() throws -> \(try swiftType(valueType)) { return \(valueCode) }; return \(bodyCode) }())"
-        case .letIn(let definitions, let body):
-            var nested = operators
-            definitions.forEach { nested[$0.id] = $0 }
-            return try self.expression(body, expected: expected, state: state, substitutions: substitutions, operators: nested, activeOperators: activeOperators)
-        case .operatorApplication(let id, let arguments):
-            return try operatorCall(id, arguments: arguments, expected: expected, state: state, substitutions: substitutions, operators: operators, activeOperators: activeOperators)
-        case .recursiveCall(let id, let arguments):
-            return try operatorCall(id, arguments: arguments.map { .value($0) }, expected: expected, state: state, substitutions: substitutions, operators: operators, activeOperators: activeOperators)
-        case .lambdaApplication(let lambda, let arguments):
-            let ownsDepth = !hasDepthScope
-            hasDepthScope = true
-            defer { if ownsDepth { hasDepthScope = false } }
-            let resolved = try types.lambdaCall(lambda, arguments: arguments, expected: expected)
-            var values: [String] = []
-            for (binding, argument) in zip(resolved.parameters, arguments) {
-                guard let argumentType = resolved.inference.bindings[binding] else { throw unsupported("lambda parameter evidence") }
-                values.append("{ \(try emit(argument, argumentType)) }")
-            }
-            let code = try emitOperator(resolved, argumentsCode: values, state: state,
-                substitutions: substitutions, operators: operators, activeOperators: activeOperators)
-            return ownsDepth ? "(try { () throws -> \(try swiftType(resolved.result)) in var _nativeDepth = 0; return \(code) }())" : code
+        case .letIn: return try emit(0)
+        case .operatorApplication:
+            guard let call = node.call else { throw unsupported("resolved call") }
+            return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .recursiveCall:
+            guard let call = node.call else { throw unsupported("resolved call") }
+            return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .lambdaApplication:
+            guard let call = node.call else { throw unsupported("resolved lambda call") }
+            return try resolvedCall(call, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         default: throw unsupported(String(describing: expression))
         }
     }
+
 }
 
 private func nativeSequenceElementType(_ source: NativeType) throws -> NativeType {

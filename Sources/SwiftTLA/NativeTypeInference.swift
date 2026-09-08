@@ -102,18 +102,18 @@ package indirect enum NativeType: Hashable, Sendable {
 }
 
 /// A compile-time function instance. No specialization metadata enters a machine.
-package struct NativeOperatorSpecialization: Hashable, Sendable {
-    package let operation: CompiledFormalOperator
-    package let arguments: [NativeType]
-    package let resultContext: NativeType
-    package let captures: [BinderID: NativeType]
-    package let callbacks: [OperatorID: NativeCallbackIdentity]
+struct NativeOperatorSpecialization: Hashable, Sendable {
+    let operation: CompiledFormalOperator
+    let arguments: [NativeType]
+    let resultContext: NativeType
+    let captures: [BinderID: NativeType]
+    let callbacks: [OperatorID: NativeCallbackIdentity]
 }
 
-package struct NativeCallbackIdentity: Hashable, Sendable {
-    package let operation: CompiledFormalOperator
-    package let captures: [BinderID: NativeType]
-    package let callbacks: [OperatorID: NativeCallbackIdentity]
+struct NativeCallbackIdentity: Hashable, Sendable {
+    let operation: CompiledFormalOperator
+    let captures: [BinderID: NativeType]
+    let callbacks: [OperatorID: NativeCallbackIdentity]
     fileprivate func strictlyContains(_ other: NativeCallbackIdentity) -> Bool {
         self != other && callbacks.values.contains { $0 == other || $0.strictlyContains(other) }
     }
@@ -140,27 +140,27 @@ private struct NativeArgumentRefinement: Hashable, Sendable {
     let expected: NativeType
 }
 
-package struct NativeOperatorCall: Sendable {
-    package let specialization: NativeOperatorSpecialization
-    package let parameters: [BinderID]
-    package let body: CompiledStateExpr
-    package let domain: CompiledStateExpr?
-    package let result: NativeType
-    package let inference: NativeTypeInference
-    package let callbackUses: [OperatorID: [NativeOperatorCall]]
-    package let callbackArguments: [OperatorID: CompiledFormalOperator]
+struct NativeOperatorCall: Sendable {
+    let specialization: NativeOperatorSpecialization
+    let parameters: [BinderID]
+    let body: CompiledStateExpr
+    let domain: CompiledStateExpr?
+    let result: NativeType
+    let inference: NativeTypeInference
+    let callbackUses: [OperatorID: [NativeOperatorCall]]
+    let callbackArguments: [OperatorID: CompiledFormalOperator]
 }
 
 /// Derives native shapes once from the resolved formal program and source hints.
 /// Empty collection holes are refined by assignments before admission completes.
-package struct NativeTypeInference: Sendable {
+struct NativeTypeInference: Sendable {
     static let maximumActiveSpecializations = 256
 
-    package private(set) var variables: [VariableID: NativeType] = [:]
-    package private(set) var bindings: [BinderID: NativeType] = [:]
-    package private(set) var collectionDomains: [VariableID: Set<CompiledValue>] = [:]
-    package private(set) var namedDomains: [String: Set<CompiledValue>] = [:]
-    package private(set) var namedRepresentations: [String: NativeType] = [:]
+    private(set) var variables: [VariableID: NativeType] = [:]
+    private(set) var bindings: [BinderID: NativeType] = [:]
+    private(set) var collectionDomains: [VariableID: Set<CompiledValue>] = [:]
+    private(set) var namedDomains: [String: Set<CompiledValue>] = [:]
+    private(set) var namedRepresentations: [String: NativeType] = [:]
     private let plan: NativeMachinePlan
     private var bindingSources: [BinderID: CompiledStateExpr] = [:]
     private var argumentEvidence: [BinderID: NativeArgumentEvidence] = [:]
@@ -177,7 +177,7 @@ package struct NativeTypeInference: Sendable {
         boundOperators.mapValues(\.identity)
     }
 
-    package func isOperatorParameter(_ id: OperatorID) -> Bool { boundOperators[id] != nil }
+    func isOperatorParameter(_ id: OperatorID) -> Bool { boundOperators[id] != nil }
 
     private mutating func recordCallback(_ id: OperatorID, call: NativeOperatorCall) {
         if !(callbackUses[id] ?? []).contains(where: { existing in
@@ -187,7 +187,7 @@ package struct NativeTypeInference: Sendable {
         }
     }
 
-    package init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
+    init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
         self.plan = plan
         for (name, values) in sourceTypes.enums {
             namedDomains[name] = Set(values.map(CompiledValue.init(formal:)))
@@ -262,19 +262,48 @@ package struct NativeTypeInference: Sendable {
         }
     }
 
-    package func type(of expression: CompiledStateExpr, expected: NativeType? = nil) throws -> NativeType {
+    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (NativeTypeInference, NativeType, NativeType) {
+        var scope = self
+        let result = try scope.infer(expression, expected: expected ?? .unknown)
+        guard result.resolved else { throw Self.diagnostic("resolution", "unresolved expression shape") }
+        let intrinsic = try scope.infer(expression)
+        let computation = intrinsic.resolved && scope.canProjectRead(intrinsic, to: result) ? intrinsic : result
+        return (scope, result, computation)
+    }
+
+    func functionApplicationSourceType(_ function: CompiledStateExpr, argument: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        var scope = self
+        let base = try scope.infer(function)
+        let hint: NativeType
+        switch base {
+        case .array: hint = .array(expected)
+        case .dictionary(let key, _): hint = .dictionary(key, expected)
+        case .tuple(let elements):
+            if case .value(.integer(let index)) = argument, index >= 1, index <= elements.count {
+                var values = elements; values[index - 1] = expected; hint = .tuple(values)
+            } else { hint = base }
+        case .record(let fields):
+            if case .value(.string(let name)) = argument {
+                hint = .record(fields.map { .init(name: $0.name, type: $0.name == name ? expected : $0.type) })
+            } else { hint = base }
+        default: hint = base
+        }
+        return try scope.infer(function, expected: hint)
+    }
+
+    func type(of expression: CompiledStateExpr, expected: NativeType? = nil) throws -> NativeType {
         var inference = self
         let result = try inference.infer(expression, expected: expected ?? .unknown)
         guard result.resolved else { throw Self.diagnostic("expression", "unresolved native shape") }
         return result
     }
 
-    package func operandType(_ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr) throws -> NativeType {
+    func operandType(_ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr) throws -> NativeType {
         var inference = self
         return try inference.comparisonOperands(lhs, rhs)
     }
 
-    package func membershipElementType(value: CompiledStateExpr, domain: CompiledStateExpr) throws -> NativeType {
+    func membershipElementType(value: CompiledStateExpr, domain: CompiledStateExpr) throws -> NativeType {
         var inference = self
         return try inference.membershipElement(value: value, domain: domain)
     }
@@ -322,7 +351,7 @@ package struct NativeTypeInference: Sendable {
         }
     }
 
-    package func projectionSourceType(_ value: CompiledStateExpr, index: Int, expected: NativeType? = nil) throws -> NativeType {
+    func projectionSourceType(_ value: CompiledStateExpr, index: Int, expected: NativeType? = nil) throws -> NativeType {
         var inference = self
         let shape = try inference.inferProjectionSource(value, index: index, expected: expected ?? .unknown)
         guard shape.resolved else { throw Self.diagnostic("tupleAccess", "unresolved tuple member shape") }
@@ -353,11 +382,18 @@ package struct NativeTypeInference: Sendable {
         return try inferSequence(value, element: expected)
     }
 
-    package func canProjectRead(_ source: NativeType, to expected: NativeType) -> Bool {
+    func canProjectRead(_ source: NativeType, to expected: NativeType) -> Bool {
         if source == expected { return true }
-        if case .dictionary(let sourceKey, let sourceValue) = source,
-           case .dictionary(let targetKey, let targetValue) = expected {
-            return canProjectRead(sourceKey, to: targetKey) && canProjectRead(sourceValue, to: targetValue)
+        switch (source, expected) {
+        case (.dictionary(let a, let b), .dictionary(let c, let d)):
+            return canProjectRead(a, to: c) && canProjectRead(b, to: d)
+        case (.array(let a), .array(let b)), (.set(let a), .set(let b)):
+            return canProjectRead(a, to: b)
+        case (.tuple(let a), .tuple(let b)) where a.count == b.count:
+            return zip(a, b).allSatisfy { canProjectRead($0, to: $1) }
+        case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
+            return zip(a, b).allSatisfy { canProjectRead($0.type, to: $1.type) }
+        default: break
         }
         switch source {
         case .named(let name):
@@ -391,7 +427,7 @@ package struct NativeTypeInference: Sendable {
         return try Self.operandContext(source, expected)
     }
 
-    package func recordProjectionSourceType(
+    func recordProjectionSourceType(
         _ value: CompiledStateExpr, key: CompiledValue, expected: NativeType? = nil
     ) throws -> NativeType {
         var inference = self
@@ -416,7 +452,7 @@ package struct NativeTypeInference: Sendable {
         return try infer(value, expected: .record(fields))
     }
 
-    package func sequenceSourceType(_ expression: CompiledStateExpr, element expected: NativeType = .unknown) throws -> NativeType {
+    func sequenceSourceType(_ expression: CompiledStateExpr, element expected: NativeType = .unknown) throws -> NativeType {
         var inference = self
         return try inference.inferSequence(expression, element: expected)
     }
@@ -640,7 +676,7 @@ package struct NativeTypeInference: Sendable {
         }
     }
 
-    package func operatorCall(
+    func operatorCall(
         _ id: OperatorID, arguments: [CompiledFormalCallArgument], expected: NativeType? = nil,
         operators: [OperatorID: CompiledLocalOperator] = [:]
     ) throws -> NativeOperatorCall {
@@ -652,7 +688,7 @@ package struct NativeTypeInference: Sendable {
         return try inference.specializeCall(.reference(id, arity: arguments.count), arguments: arguments, expected: expected ?? .unknown)
     }
 
-    package func lambdaCall(
+    func lambdaCall(
         _ lambda: CompiledFormalLambda, arguments: [CompiledStateExpr], expected: NativeType? = nil
     ) throws -> NativeOperatorCall {
         var inference = self
@@ -1129,6 +1165,6 @@ package struct NativeTypeInference: Sendable {
             if let otherwise { type = try infer(otherwise, expected: type) }; result = type
         default: throw Self.diagnostic("expression", "expression is outside the native machine subset: \(expression)")
         }
-        return try Self.merge(expected, result)
+        return try projectedReadType(result, expected: expected)
     }
 }

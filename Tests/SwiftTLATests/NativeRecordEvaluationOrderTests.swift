@@ -29,12 +29,15 @@ struct NativeRecordEvaluationOrderTests {
         """)
         let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
         let model = try TLASpecVerifier.parseAndVerify(declaration)
-        var emitter = try NativeSwiftEmitter(model: model)
-        let expression = CompiledStateExpr.recordLiteral(.init([
-            .init(id: .init(ordinal: 0), key: .string("z"), value: .divide(.value(.integer(1)), .value(.integer(0)))),
-            .init(id: .init(ordinal: 1), key: .string("a"), value: .negate(.value(.integer(Int.min))))
-        ]))
-        let generated = try emitter.expression(expression)
+        let compilation = try TLASpec(name: "OrderedRecord", variables: [
+            .init(name: "record", initialization: .expression(formal), origin: .compiler)
+        ], actions: [], invariants: []).compile()
+        let program = try NativeResolvedProgram(plan: .init(compilation: compilation), sourceTypes: .init())
+        let annotatedModel = MacroCompilation(typeName: model.typeName, compilation: compilation,
+            enumInfos: model.enumInfos, nativeProgram: program)
+        var emitter = NativeSwiftEmitter(model: annotatedModel)
+        let root = try #require(program.initializations.values.first)
+        let generated = try emitter.expression(root)
         let first = try #require(generated.range(of: "let _recordField0"))
         let second = try #require(generated.range(of: "let _recordField1"))
         let division = try #require(generated.range(of: "_NativeMachineOperations.divide"))

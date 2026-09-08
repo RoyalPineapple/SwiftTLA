@@ -59,7 +59,7 @@ struct NativeCodeGenerationTests {
                 #spec("NativeUnion") {
                     Algorithm("NativeUnion", scoped: { scope in
                         let value = scope.sharedVar("value", initial: Value.first(Left.left))
-                        Do(Step.advance) { Assign(value, to: Value.second(Right.right)) }
+                        Do(Step.advance) { Assign(value, to: Value.second(Pair<Right, Int>.literal(Expr<Right>(Right.right), Expr<Int>(1) / 0).first())) }
                     })
                 }
             }
@@ -67,12 +67,10 @@ struct NativeCodeGenerationTests {
         """)
         let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
         let model = try TLASpecVerifier.parseAndVerify(declaration)
-        var emitter = try NativeSwiftEmitter(model: model)
+        var emitter = NativeSwiftEmitter(model: model)
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        let projected = try emitter.expression(.tupleAccess(.tupleLiteral([.value(.constant("right")), .divide(.value(.integer(1)), .value(.integer(0)))]), 1), expected: .finite([.constant("left"), .constant("right")]))
-        #expect(projected.contains("NativeValue0.member_right_1"))
-        #expect(projected.contains("_NativeMachineOperations.divide"))
-        #expect(projected.hasSuffix(".first"))
+        #expect(generated.contains("NativeValue0.member_right_1"))
+        #expect(generated.contains("_NativeMachineOperations.divide"))
         #expect(emitter.finiteValues == [[.constant("left"), .constant("right")]])
         #expect(generated.contains("public let value: NativeValue0"))
         #expect(generated.contains("enum NativeValue0: Hashable, Sendable"))

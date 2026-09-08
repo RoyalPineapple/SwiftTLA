@@ -13,7 +13,7 @@ extension NativeSwiftEmitter {
         let appendedArguments = collectionArguments.isEmpty ? "" : ", \(collectionArguments)"
         var declarations: [DeclSyntax] = []
         let fields = try plan.variables.map { variable in
-            "var \(self.variable(variable.id)): \(try swiftType(types.variables[variable.id]!))"
+            "var \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
         declarations += try nativeDeclarations("""
         private struct _ExecutionState: Equatable, Sendable {
@@ -31,10 +31,10 @@ extension NativeSwiftEmitter {
         }
         """)
         let stateFields = try surface.variables.map { variable in
-            "public let \(variable.swiftIdentifier): \(try swiftType(types.variables[plan.variables[variable.storageOrdinal].id]!))"
+            "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[plan.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: "\n")
         let stateParameters = try surface.variables.map { variable in
-            "\(variable.swiftIdentifier): \(try swiftType(types.variables[plan.variables[variable.storageOrdinal].id]!))"
+            "\(variable.swiftIdentifier): \(try swiftType(program.variableTypes[plan.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: ", ")
         let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = \($0.swiftIdentifier)" }.joined(separator: "\n")
         let stateArguments = surface.variables.map { "\($0.swiftIdentifier): execution.\(variable(plan.variables[$0.storageOrdinal].id))" }.joined(separator: ", ")
@@ -129,7 +129,7 @@ extension NativeSwiftEmitter {
                 return "case \(surface.swiftIdentifier)(member: \(collection.elementType).ID)"
             }
             let parameters = try zip(action.bindings, surface.bindings).filter { $0.1.isPublic }.map { binding, surfaceBinding in
-                "\(surfaceBinding.swiftIdentifier): \(try swiftType(types.bindings[binding.binder]!))"
+                "\(surfaceBinding.swiftIdentifier): \(try swiftType(program.bindingTypes[binding.binder]!))"
             }.joined(separator: ", ")
             return "case \(surface.swiftIdentifier)" + (parameters.isEmpty ? "" : "(\(parameters))")
         }.joined(separator: "\n")
@@ -161,7 +161,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func updateDeclarations() throws -> [DeclSyntax] {
-        let fields = try plan.variables.map { "var \(variable($0.id)): \(try swiftType(types.variables[$0.id]!))? = nil" }.joined(separator: "\n")
+        let fields = try plan.variables.map { "var \(variable($0.id)): \(try swiftType(program.variableTypes[$0.id]!))? = nil" }.joined(separator: "\n")
         let merges = plan.variables.map { slot in
             let name = variable(slot.id)
             return """
@@ -193,15 +193,13 @@ extension NativeSwiftEmitter {
         var code = "var result: [_ExecutionState] = []\n"
         var closing = ""
         for initialization in plan.initializations {
-            let type = types.variables[initialization.variable]!
+            let type = program.variableTypes[initialization.variable]!
             let name = variable(initialization.variable)
             switch initialization.initialization {
-            case .value(let value):
-                code += "let \(name): \(try swiftType(type)) = \(try literal(value, as: type))\n"
-            case .expression(let value):
-                code += "let \(name): \(try swiftType(type)) = \(try expression(value, expected: type, state: ""))\n"
-            case .memberOf(let domain):
-                code += "for \(name) in \(try expression(domain, expected: .set(type), state: "")).sorted(by: \(try ordering(type))) {\n"
+            case .value, .expression:
+                code += "let \(name): \(try swiftType(type)) = \(try expression(program.initializations[initialization.variable]!, state: ""))\n"
+            case .memberOf:
+                code += "for \(name) in \(try expression(program.initializations[initialization.variable]!, state: "")).sorted(by: \(try ordering(type))) {\n"
                 closing += "}\n"
             }
         }
@@ -242,48 +240,49 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    mutating func actionBody(_ action: CompiledActionExpr) throws -> String {
-        switch action {
-        case .assign(let id, let value):
-            return "return [_Updates(\(variable(id)): \(try expression(value, expected: types.variables[id]!)))]"
+    mutating func actionBody(_ id: NativeActionNodeID) throws -> String {
+        let node = program[id]
+        switch node.expression {
+        case .assign(let id, _):
+            return "return [_Updates(\(variable(id)): \(try expression(node.expressions[0])))]"
         case .unchanged(let id): return "return [_Updates(\(variable(id)): state.\(variable(id)))]"
-        case .guard_(let condition): return "guard \(try expression(condition, expected: .bool)) else { return [] }\nreturn [_Updates()]"
-        case .existsAction(let id, let domain, let body):
-            let element = types.bindings[id]!
-            let domainCode = try expression(domain, expected: .set(element))
-            let bodyCode = try actionBody(body)
+        case .guard_: return "guard \(try expression(node.expressions[0])) else { return [] }\nreturn [_Updates()]"
+        case .existsAction(let id, _, _):
+            let element = node.bindings[id]!
+            let domainCode = try expression(node.expressions[0])
+            let bodyCode = try actionBody(node.children[0])
             let effect = nativeCodeContainsTry(bodyCode) ? "try " : ""
             return """
             return \(effect)\(domainCode).sorted(by: \(try ordering(element))).flatMap { (\(binder(id)): \(try swiftType(element))) -> [_Updates] in
                 \(bodyCode)
             }
             """
-        case .define(let id, let value, let body):
-            let bodyCode = try actionBody(body)
+        case .define(let id, _, _):
+            let bodyCode = try actionBody(node.children[0])
             let name = binder(id)
             let used = Parser.parse(source: bodyCode).tokens(viewMode: .sourceAccurate).contains { $0.tokenKind == .identifier(name) }
             let binding = used ? "let \(name)" : "_"
-            return "\(binding) = \(try expression(value, expected: types.bindings[id]))\n\(bodyCode)"
-        case .ifElse(let condition, let then, let otherwise):
-            return "if \(try expression(condition, expected: .bool)) {\n\(try actionBody(then))\n} else {\n\(try actionBody(otherwise))\n}"
-        case .and(let left, let right):
+            return "\(binding) = \(try expression(node.expressions[0]))\n\(bodyCode)"
+        case .ifElse:
+            return "if \(try expression(node.expressions[0])) {\n\(try actionBody(node.children[0]))\n} else {\n\(try actionBody(node.children[1]))\n}"
+        case .and:
             return """
             let left = try { () throws -> [_Updates] in
-                \(try actionBody(left))
+                \(try actionBody(node.children[0]))
             }()
             guard !left.isEmpty else { return [] }
             let right = try { () throws -> [_Updates] in
-                \(try actionBody(right))
+                \(try actionBody(node.children[1]))
             }()
             return try left.flatMap { first -> [_Updates] in try right.map { try first.merging($0) } }
             """
-        case .or(let left, let right):
+        case .or:
             return """
             let left = try { () throws -> [_Updates] in
-                \(try actionBody(left))
+                \(try actionBody(node.children[0]))
             }()
             let right = try { () throws -> [_Updates] in
-                \(try actionBody(right))
+                \(try actionBody(node.children[1]))
             }()
             return left + right
             """
@@ -292,11 +291,11 @@ extension NativeSwiftEmitter {
 
     mutating func rawActionFunction(_ action: CompiledAction, collectionParameters: String) throws -> DeclSyntax {
         let parameters = try action.bindings.map {
-            "\(binder($0.binder)): \(try swiftType(types.bindings[$0.binder]!))"
+            "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
         private static func _updates\(action.id.ordinal)(from state: _ExecutionState\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), enabled: Set<Int>) throws -> [_Updates] {
-            \(try actionBody(action.body))
+            \(try actionBody(program.actions[action.id]!))
         }
         """)
     }
@@ -309,7 +308,7 @@ extension NativeSwiftEmitter {
             var arguments: [String] = []
             for binding in action.bindings {
                 let name = binder(binding.binder)
-                let domain = try binding.values.map { try literal($0, as: types.bindings[binding.binder]!) }.joined(separator: ", ")
+                let domain = try binding.values.map { try literal($0, as: program.bindingTypes[binding.binder]!) }.joined(separator: ", ")
                 loops += "for \(name) in [\(domain)] {\n"
                 closing += "}\n"
                 arguments.append("\(name): \(name)")
@@ -325,12 +324,12 @@ extension NativeSwiftEmitter {
 
     mutating func successorFunction(_ action: CompiledAction, surface: MachineSurfacePlan.Action, collectionParameters: String, collectionArguments: String) throws -> DeclSyntax {
         let parameters = try action.bindings.map { binding in
-            "\(binder(binding.binder)): \(try swiftType(types.bindings[binding.binder]!))"
+            "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
         let filtering: String
         if let constraint = plan.constraint {
-            let condition = try expression(constraint, expected: .bool)
+            let condition = try expression(program.constraint!)
             let enabled = plan.requiresEnabledActions(in: constraint)
                 ? "let enabled = try Self._enabledActions(in: state\(collectionArguments))\n" : ""
             let effect = nativeCodeContainsTry(condition) || !enabled.isEmpty ? "try " : ""
@@ -362,7 +361,7 @@ extension NativeSwiftEmitter {
             var closing = ""
             for (binding, surfaceBinding) in zip(action.bindings, surface.bindings) {
                 let name = binder(binding.binder)
-                let type = types.bindings[binding.binder]!
+                let type = program.bindingTypes[binding.binder]!
                 let domain: String
                 if let collection = surface.collection {
                     domain = nativeCollectionBinding(collection, in: model)
@@ -438,7 +437,7 @@ extension NativeSwiftEmitter {
         for invariant in plan.invariants {
             declarations += try nativeDeclarations("""
             private static func _invariant\(invariant.id.ordinal)(in state: _ExecutionState\(collectionParameters), enabled: Set<Int>) throws -> Bool {
-                \(try expression(invariant.body, expected: .bool))
+                \(try expression(program.invariants[invariant.id]!))
             }
             """)
             let enabled = plan.requiresEnabledActions(in: invariant.body) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
@@ -453,7 +452,7 @@ extension NativeSwiftEmitter {
             let enabled = plan.requiresEnabledActions(in: assume) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
             declarations += try nativeDeclarations("""
             private static func _assumptionsHold(in state: _ExecutionState\(collectionParameters), enabled: Set<Int>) throws -> Bool {
-                \(try expression(assume, expected: .bool))
+                \(try expression(program.assume!))
             }
             public func assumptionsHold() throws -> Bool {
                 try Self._assumptionsHold(in: _execution\(arguments), enabled: \(enabled))
