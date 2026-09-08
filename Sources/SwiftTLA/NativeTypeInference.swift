@@ -904,6 +904,12 @@ struct NativeTypeInference: Sendable {
                     bindings[id] = refined
                     return refined
                 }
+                // Recursive construction proofs share the active obligation's
+                // provisional type. Its outer invocation still validates every
+                // constructor/base branch in the original lexical scope before
+                // any successful call annotation can escape.
+                bindings[id] = expected
+                return expected
             }
             if expected != .unknown, existing != expected, let domain = bindingSources[id],
                activeBindingRefinements.insert(id).inserted {

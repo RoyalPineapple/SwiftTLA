@@ -47,6 +47,35 @@ import Testing
         #expect(!inference.canProjectRead(original, to: .dictionary(.string, .atom)))
     }
 
+    @Test("recursive composite proofs validate their original base construction")
+    func recursiveConstructionEvidence() throws {
+        for rawStorage in [false, true] {
+            let dictionary = StateExpr.functionLiteral(.setLiteral([.value(.constant("first"))]), "key", .value(.constant("NoValue")))
+            var variables: [NamedVar] = [.init(name: "number", initialization: .int(0), origin: .compiler)]
+            if rawStorage { variables.append(.init(name: "raw", initialization: dictionary, origin: .compiler)) }
+            let initial = StateExpr.recordLiteral(.init(["nextState": rawStorage ? .variable("raw") : dictionary]))
+            let operation = FormalOperatorDefinition(name: "Accumulate", parameters: [.value("n"), .value("acc")], body: .ifThenElse(
+                .equal(.variable("n"), .int(0)), .variable("acc"),
+                .operatorApplication(.reference("Accumulate", arity: 2), [
+                    .value(.subtract(.variable("n"), .int(1))),
+                    .value(.recordLiteral(.init(["nextState": .recordAccess(.variable("acc"), "nextState")])))
+                ])
+            ))
+            let plan = NativeMachinePlan(compilation: try TLASpec(name: "RecursiveEvidence", variables: variables,
+                actions: [], invariants: [], formalOperatorDefinitions: [operation,
+                    .init(name: "Construct", parameters: [], body: .operatorApplication(.reference("Accumulate", arity: 2), [.value(.int(2)), .value(initial)]))
+                ]).compile())
+            let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
+            let body = try #require(plan.formalOperatorDefinitions.last).body
+            let result = NativeType.record([.init(name: "nextState", type: expected)])
+            if rawStorage {
+                #expect(throws: CompilationDiagnostic.self) { try inference.type(of: body, expected: result) }
+            } else {
+                #expect(try inference.type(of: body, expected: result) == result)
+            }
+        }
+    }
+
     private var expected: NativeType { .dictionary(.named("Key"), .finite([.constant("NoValue")])) }
     private var metadata: NativeSourceTypeMetadata { .init(enums: ["Key": [.constant("first")]]) }
 
