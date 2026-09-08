@@ -405,7 +405,7 @@ extension NativeSwiftEmitter {
                 return try Self._successors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments), enabled: \(enabled))
             """)
             let actionValue = ".\(surface.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
-            enumeration.append(loops + "let action: Action = \(actionValue)\nif try isEnabled(action) { result.append(action) }\n" + closing)
+            enumeration.append("do {\n" + loops + "let action: Action = \(actionValue)\nif try isEnabled(action) { result.append(action) }\n" + closing + "}\n")
         }
         return try nativeDeclarations("""
         private func _successors(for action: Action) throws -> [_ExecutionState] {
