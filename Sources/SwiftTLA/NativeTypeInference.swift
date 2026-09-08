@@ -43,6 +43,33 @@ package indirect enum NativeType: Hashable, Sendable {
     case record([NativeField])
     case tuple([NativeType])
 
+    private var components: [NativeType] {
+        switch self {
+        case .set(let value), .array(let value): [value]
+        case .dictionary(let key, let value): [key, value]
+        case .record(let fields): fields.map(\.type)
+        case .tuple(let values): values
+        default: []
+        }
+    }
+
+    private func embeds(_ other: NativeType) -> Bool {
+        if self == other { return true }
+        guard other != .unknown else { return false }
+        if components.contains(where: { $0.embeds(other) }) { return true }
+        switch (self, other) {
+        case (.array(let a), .array(let b)), (.set(let a), .set(let b)): return a.embeds(b)
+        case (.dictionary(let a, let b), .dictionary(let c, let d)): return a.embeds(c) && b.embeds(d)
+        case (.tuple(let a), .tuple(let b)) where a.count == b.count:
+            return zip(a, b).allSatisfy { $0.embeds($1) }
+        case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
+            return zip(a, b).allSatisfy { $0.type.embeds($1.type) }
+        default: return false
+        }
+    }
+
+    fileprivate func strictlyContains(_ other: NativeType) -> Bool { self != other && embeds(other) }
+
     package var swiftType: String {
         switch self {
         case .unknown: "<unresolved>"
@@ -87,6 +114,10 @@ package struct NativeCallbackIdentity: Hashable, Sendable {
     package let operation: CompiledFormalOperator
     package let captures: [BinderID: NativeType]
     package let callbacks: [OperatorID: NativeCallbackIdentity]
+    fileprivate func strictlyContains(_ other: NativeCallbackIdentity) -> Bool {
+        self != other && callbacks.values.contains { $0 == other || $0.strictlyContains(other) }
+    }
+
 }
 
 private struct NativeCallbackBinding: Sendable {
@@ -123,6 +154,8 @@ package struct NativeOperatorCall: Sendable {
 /// Derives native shapes once from the resolved formal program and source hints.
 /// Empty collection holes are refined by assignments before admission completes.
 package struct NativeTypeInference: Sendable {
+    static let maximumActiveSpecializations = 256
+
     package private(set) var variables: [VariableID: NativeType] = [:]
     package private(set) var bindings: [BinderID: NativeType] = [:]
     package private(set) var collectionDomains: [VariableID: Set<CompiledValue>] = [:]
@@ -749,6 +782,21 @@ package struct NativeTypeInference: Sendable {
         }
         let key = NativeOperatorSpecialization(operation: operation, arguments: argumentTypes,
             resultContext: expected, captures: captures, callbacks: identities)
+        if activeOperators.contains(where: { active in
+            guard active.operation == key.operation, active.arguments.count == key.arguments.count else { return false }
+            let pairs = Array(zip(active.arguments, key.arguments))
+            let argumentGrowth = pairs.contains { $1.strictlyContains($0) } && pairs.allSatisfy { $0 == $1 || $1.strictlyContains($0) }
+            let callbackGrowth = active.callbacks.contains { id, previous in key.callbacks[id]?.strictlyContains(previous) == true }
+            return argumentGrowth || callbackGrowth
+        }) {
+            throw Self.diagnostic("operator", "recursive calls require a growing family of native specializations")
+        }
+        // Native specialization is compile-time work, distinct from the runtime
+        // recursion counter. Limit active expansion even when structural growth
+        // is not recognizable (for example, changing higher-order captures).
+        if !activeOperators.contains(key), activeOperators.count >= Self.maximumActiveSpecializations {
+            throw Self.diagnostic("operator", "native specialization exceeds the compiler limit of \(Self.maximumActiveSpecializations) active function shapes")
+        }
         let context = try Self.operandContext(specializationResults[key] ?? .unknown, expected)
         if activeOperators.contains(key) {
             return .init(specialization: key, parameters: parameters, body: body, domain: domain,
