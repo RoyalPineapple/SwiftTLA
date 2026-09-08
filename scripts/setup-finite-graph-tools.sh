@@ -192,9 +192,14 @@ JAVA_ARCHIVE="$TOOL_ROOT/downloads/temurin-${ARCHITECTURE}.tar.gz"
 CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
 seed_from_cache "$CACHE_ROOT/tla2tools-1.8.0.jar" "$TLC_SHA256" "$TLC_JAR"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
-download_locked "$TLC_ASSET_URL" "$TLC_SHA256" "$TLC_JAR" \
-    --header 'Accept: application/octet-stream' \
+TLC_HEADERS=(
+    --header 'Accept: application/octet-stream'
     --header 'X-GitHub-Api-Version: 2022-11-28'
+)
+if [ -n "${FINITE_GRAPH_GITHUB_TOKEN:-}" ]; then
+    TLC_HEADERS+=(--header "Authorization: Bearer $FINITE_GRAPH_GITHUB_TOKEN")
+fi
+download_locked "$TLC_ASSET_URL" "$TLC_SHA256" "$TLC_JAR" "${TLC_HEADERS[@]}"
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 [ "$(sha256 "$BRIDGE_SOURCE")" = "$BRIDGE_SOURCE_SHA256" ] || fail "bridge source digest mismatch"
 

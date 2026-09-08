@@ -41,6 +41,8 @@ jobs:
           echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
 
       - name: Run exact finite graph comparison
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence
 
       - name: Upload finite-graph evidence

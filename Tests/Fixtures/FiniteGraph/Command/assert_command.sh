@@ -68,10 +68,10 @@ expect_failure "invalid value: tlc.jar.assetID" \
     "$SETUP" --toolchain "$TMP/invalid-toolchain.json" --tool-root "$TMP/invalid-tools"
 
 mkdir -p "$TMP/option-url-tools/downloads" "$TMP/bin"
-: >"$TMP/option-url-tools/downloads/tla2tools.jar"
+: >"$TMP/empty-download"
 cp "$ROOT/Verification/FiniteGraph/toolchain.json" "$TMP/option-url-toolchain.json"
 python3 - "$TMP/option-url-toolchain.json" "$(uname -m)" \
-    "$(shasum -a 256 "$TMP/option-url-tools/downloads/tla2tools.jar" | awk '{print $1}')" <<'PY'
+    "$(shasum -a 256 "$TMP/empty-download" | awk '{print $1}')" <<'PY'
 import json
 import sys
 
@@ -85,18 +85,38 @@ with open(sys.argv[1], "w", encoding="utf-8") as destination:
 PY
 cat >"$TMP/bin/curl" <<'SH'
 #!/bin/bash
+destination=""
+url=""
+authorization=""
 while [ "$#" -gt 0 ]; do
-    if [ "$1" = "--url" ] && [ "${2:-}" = "-K" ]; then
-        echo "option-shaped URL remained a URL value" >&2
-        exit 2
-    fi
-    shift
+    case "$1" in
+        --output) destination="$2"; shift 2 ;;
+        --url) url="$2"; shift 2 ;;
+        --header)
+            case "$2" in Authorization:*) authorization="$2" ;; esac
+            shift 2
+            ;;
+        --proto) shift 2 ;;
+        *) shift ;;
+    esac
 done
-exit 3
+case "$url" in
+    https://api.github.com/*)
+        [ "$authorization" = "Authorization: Bearer fixture-token" ] || exit 3
+        : >"$destination"
+        ;;
+    -K)
+        [ -z "$authorization" ] || exit 4
+        echo "token stayed on the TLC request and option-shaped URL remained a URL value" >&2
+        exit 2
+        ;;
+    *) exit 5 ;;
+esac
 SH
 chmod +x "$TMP/bin/curl"
-expect_failure "option-shaped URL remained a URL value" \
-    env PATH="$TMP/bin:$PATH" "$SETUP" --toolchain "$TMP/option-url-toolchain.json" \
+expect_failure "token stayed on the TLC request and option-shaped URL remained a URL value" \
+    env PATH="$TMP/bin:$PATH" FINITE_GRAPH_GITHUB_TOKEN=fixture-token \
+        "$SETUP" --toolchain "$TMP/option-url-toolchain.json" \
         --tool-root "$TMP/option-url-tools"
 
 echo "finite-graph command checks passed"
