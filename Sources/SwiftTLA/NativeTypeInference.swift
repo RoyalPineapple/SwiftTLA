@@ -266,7 +266,8 @@ struct NativeTypeInference: Sendable {
         var scope = self
         let result = try scope.infer(expression, expected: expected ?? .unknown)
         guard result.resolved else { throw Self.diagnostic("resolution", "unresolved expression shape") }
-        let intrinsic = try scope.infer(expression)
+        var intrinsicScope = scope
+        let intrinsic = try intrinsicScope.infer(expression)
         let computation = intrinsic.resolved && scope.canProjectRead(intrinsic, to: result) ? intrinsic : result
         return (scope, result, computation)
     }
