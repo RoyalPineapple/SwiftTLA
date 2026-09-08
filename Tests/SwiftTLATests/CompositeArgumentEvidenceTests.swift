@@ -26,6 +26,27 @@ import Testing
         #expect(throws: CompilationDiagnostic.self) { try inference.type(of: body, expected: expected) }
     }
 
+    @Test("nominal dictionary fields project outward without changing stored key or value evidence")
+    func dictionaryReadProjection() throws {
+        let sourceTypes = NativeSourceTypeMetadata(records: ["Payload": [
+            .init(sourceName: "nextState", name: "nextState", swiftType: "Function<Key,OneOf<First,Second>>")
+        ]], enums: ["Key": [.constant("first")], "First": [.constant("NoValue")], "Second": [.constant("second")]])
+        let dictionary = StateExpr.functionLiteral(.setLiteral([.value(.constant("first"))]), "key", .value(.constant("NoValue")))
+        let plan = NativeMachinePlan(compilation: try TLASpec(name: "DictionaryProjection", variables: [
+            .init(name: "stored", initialization: .recordLiteral(.init(["nextState": dictionary])), generatedSwiftType: "Record<Payload>", origin: .compiler)
+        ], actions: [], invariants: [], formalOperatorDefinitions: [
+            .init(name: "Read", parameters: [], body: .recordAccess(.variable("stored"), "nextState"))
+        ]).compile())
+        let inference = try NativeTypeInference(plan: plan, sourceTypes: sourceTypes)
+        let body = try #require(plan.formalOperatorDefinitions.first).body
+        let original = try inference.type(of: body)
+        let raw = NativeType.dictionary(.atom, .atom)
+        #expect(try inference.type(of: body, expected: raw) == raw)
+        #expect(try inference.type(of: body) == original)
+        #expect(!inference.canProjectRead(raw, to: original))
+        #expect(!inference.canProjectRead(original, to: .dictionary(.string, .atom)))
+    }
+
     private var expected: NativeType { .dictionary(.named("Key"), .finite([.constant("NoValue")])) }
     private var metadata: NativeSourceTypeMetadata { .init(enums: ["Key": [.constant("first")]]) }
 

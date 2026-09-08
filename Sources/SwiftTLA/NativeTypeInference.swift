@@ -321,6 +321,11 @@ package struct NativeTypeInference: Sendable {
     }
 
     package func canProjectRead(_ source: NativeType, to expected: NativeType) -> Bool {
+        if source == expected { return true }
+        if case .dictionary(let sourceKey, let sourceValue) = source,
+           case .dictionary(let targetKey, let targetValue) = expected {
+            return canProjectRead(sourceKey, to: targetKey) && canProjectRead(sourceValue, to: targetValue)
+        }
         switch source {
         case .named(let name):
             if expected != .unknown, namedRepresentations[name] == expected { return true }

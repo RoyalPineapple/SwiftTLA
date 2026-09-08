@@ -157,6 +157,12 @@ struct NativeSwiftEmitter {
         guard types.canProjectRead(source, to: destination) else {
             throw unsupported("native projection from \(source) to \(destination)")
         }
+        if case .dictionary(let sourceKey, let sourceValue) = source,
+           case .dictionary(let targetKey, let targetValue) = destination {
+            let key = try projected("entry.key", from: sourceKey, to: targetKey)
+            let item = try projected("entry.value", from: sourceValue, to: targetValue)
+            return "Dictionary<\(try swiftType(targetKey)), \(try swiftType(targetValue))>(uniqueKeysWithValues: (\(value)).map { entry in (\(key), \(item)) })"
+        }
         let cases: String
         switch source {
         case .named(let name):
