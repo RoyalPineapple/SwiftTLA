@@ -40,6 +40,8 @@ jobs:
           echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
 
       - name: Run temporal-symmetry conformance
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/run_temporal_symmetry_conformance.sh --output .build/temporal-symmetry-conformance
 
       - name: Upload temporal-symmetry evidence

@@ -29,6 +29,7 @@ export TEMPORAL_SYMMETRY_CASES="$CASES_FILE"
 export FINITE_GRAPH_TOOL_ROOT="$TOOL_ROOT"
 
 "$SCRIPT_DIR/setup-finite-graph-tools.sh" --tool-root "$TOOL_ROOT" >/dev/null
+unset FINITE_GRAPH_GITHUB_TOKEN
 
 (
     cd "$PROJECT_ROOT"

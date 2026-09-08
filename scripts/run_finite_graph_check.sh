@@ -23,6 +23,7 @@ done
 [ -n "$CASE" ] && [ -n "$OUTPUT" ] || usage
 
 "$SCRIPT_DIR/setup-finite-graph-tools.sh" --tool-root "$TOOL_ROOT" --cases "$CASES_FILE" >/dev/null
+unset FINITE_GRAPH_GITHUB_TOKEN
 
 export FINITE_GRAPH_CASES="$CASES_FILE"
 export FINITE_GRAPH_TOOL_ROOT="$TOOL_ROOT"
