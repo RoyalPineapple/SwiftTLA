@@ -465,6 +465,19 @@ struct NativeTypeInference: Sendable {
         return try infer(value, expected: .record(fields))
     }
 
+    func domainSourceType(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        var scope = self
+        return try scope.inferDomainSource(expression, expected: expected)
+    }
+
+    private mutating func inferDomainSource(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let source = try infer(expression)
+        guard case .set(let element) = expected,
+              case .dictionary(let key, let value) = source else { return source }
+        let context = try projectionStorageType(key, expected: element)
+        return try infer(expression, expected: .dictionary(context, value))
+    }
+
     func sequenceSourceType(_ expression: CompiledStateExpr, element expected: NativeType = .unknown) throws -> NativeType {
         var inference = self
         return try inference.inferSequence(expression, element: expected)
@@ -1171,7 +1184,7 @@ struct NativeTypeInference: Sendable {
             default: throw Self.diagnostic("except", "unsupported update shape \(base.swiftType)")
             }
         case .domain(let function):
-            switch try infer(function) {
+            switch try inferDomainSource(function, expected: expected) {
             case .dictionary(let key, _): result = .set(key)
             case .array, .tuple: result = .set(.int)
             case .record: result = .set(.string)

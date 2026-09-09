@@ -178,7 +178,7 @@ private final class NativeProgramResolver {
             guard case .record(let fields) = shape, case .string(let name) = key else { return try require(nil as NativeExpressionID?) }
             computation = try require(fields.first { $0.name == name }?.type)
             children = [try child(source, shape)]
-        case .domain(let source): children = [try child(source)]
+        case .domain(let source): children = [try child(source, scope.domainSourceType(source, expected: result))]
         case .functionLiteral(let domain, let id, let body):
             guard case .dictionary(let key, let item) = result else { return try require(nil as NativeExpressionID?) }
             bindings[id] = key; children = [try child(domain, .set(key)), try child(body, item)]
