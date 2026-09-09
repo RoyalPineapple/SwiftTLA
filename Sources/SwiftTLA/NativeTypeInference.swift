@@ -229,18 +229,49 @@ struct NativeOperatorCall: Sendable {
     let callbackArguments: [OperatorID: CompiledFormalOperator]
 }
 
-/// Derives native shapes once from the resolved formal program and source hints.
+/// Derives native shapes from the resolved formal program and source hints.
 /// Empty collection holes are refined by assignments before admission completes.
 struct NativeTypeInference: Sendable {
+    /// Shared immutable inputs stay outside lexical scope snapshots.
+    private final class Inputs: Sendable {
+        let plan: NativeMachinePlan
+        let sourceTypes: NativeSourceTypeMetadata
+        let namedDomains: [String: Set<CompiledValue>]
+        let namedRepresentations: [String: NativeType]
+
+        init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata) throws {
+            self.plan = plan
+            self.sourceTypes = sourceTypes
+            var namedDomains: [String: Set<CompiledValue>] = [:]
+            var namedRepresentations: [String: NativeType] = [:]
+            for (name, values) in sourceTypes.enums {
+                namedDomains[name] = Set(values.map(CompiledValue.init(formal:)))
+                let represented = values.map { value -> NativeType in
+                    switch value {
+                    case .int: return .int
+                    case .bool: return .bool
+                    case .string: return .string
+                    case .constant: return .atom
+                    default: return .unknown
+                    }
+                }
+                namedRepresentations[name] = try represented.reduce(.unknown, NativeTypeInference.merge)
+            }
+            self.namedDomains = namedDomains
+            self.namedRepresentations = namedRepresentations
+        }
+    }
+
     static let maximumActiveSpecializations = 256
 
     private(set) var variables: [VariableID: NativeType] = [:]
     private(set) var bindings: [BinderID: NativeType] = [:]
     private(set) var collectionDomains: [VariableID: Set<CompiledValue>] = [:]
-    private(set) var namedDomains: [String: Set<CompiledValue>] = [:]
-    private(set) var namedRepresentations: [String: NativeType] = [:]
-    private let sourceTypes: NativeSourceTypeMetadata
-    private let plan: NativeMachinePlan
+    private let inputs: Inputs
+    var namedDomains: [String: Set<CompiledValue>] { inputs.namedDomains }
+    var namedRepresentations: [String: NativeType] { inputs.namedRepresentations }
+    private var sourceTypes: NativeSourceTypeMetadata { inputs.sourceTypes }
+    private var plan: NativeMachinePlan { inputs.plan }
     private var bindingSources: [BinderID: CompiledStateExpr] = [:]
     private var argumentSources: [BinderID: NativeArgumentSource] = [:]
     private var activeArgumentRefinements: Set<NativeArgumentRefinement> = []
@@ -267,21 +298,7 @@ struct NativeTypeInference: Sendable {
     }
 
     init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
-        self.plan = plan
-        self.sourceTypes = sourceTypes
-        for (name, values) in sourceTypes.enums {
-            namedDomains[name] = Set(values.map(CompiledValue.init(formal:)))
-            let represented = values.map { value -> NativeType in
-                switch value {
-                case .int: return .int
-                case .bool: return .bool
-                case .string: return .string
-                case .constant: return .atom
-                default: return .unknown
-                }
-            }
-            namedRepresentations[name] = try represented.reduce(.unknown, Self.merge)
-        }
+        inputs = try Inputs(plan: plan, sourceTypes: sourceTypes)
         for variable in plan.variables {
             if let collection = variable.collection,
                let element = collection.elementType, let value = collection.valueType {
