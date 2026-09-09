@@ -25,6 +25,21 @@ import Testing
         }
     }
 
+    @Test("function constructors retain the selected representation within a union")
+    func functionConstructorUnionContext() throws {
+        let plan = NativeMachinePlan(compilation: try TLASpec(
+            name: "FunctionUnion", variables: [], actions: [], invariants: []
+        ).compile())
+        let checker = try NativeTypeInference(plan: plan)
+        let function = CompiledStateExpr.functionLiteral(
+            .setLiteral([.value(.integer(1))]), .init(ordinal: 0), .value(.integer(2))
+        )
+        let expected = NativeType.union([.dictionary(.int, .int), .bool])
+        let checked = try checker.resolutionScope(function, expected: expected)
+        #expect(checked.resultType == expected)
+        #expect(checked.computationType == .dictionary(.int, .int))
+    }
+
     @Test("predicate operands retain nominal context in the resolved graph")
     func predicateOperandRepresentations() throws {
         let member = StateExpr.variable("member")

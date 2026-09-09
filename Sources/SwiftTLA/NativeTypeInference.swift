@@ -248,6 +248,9 @@ private enum NativeExpressionCheckTask {
     case reconcile(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
     case finish(expected: NativeType)
     case bind(BinderID)
+    case bindDomain(BinderID, retainElement: Bool)
+    case set
+    case dictionary
     case result(NativeType)
     case discard
 }
@@ -1107,7 +1110,7 @@ struct NativeTypeInference: Sendable {
 
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
         switch expression {
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse:
+        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .setMap, .forAll, .exists:
             return try inferStructuredExpression(expression, expected: expected).type
         default: break
         }
@@ -1127,7 +1130,7 @@ struct NativeTypeInference: Sendable {
         guard isOperatorApplication(expression) else {
             let checked: NativeCheckedType
             switch expression {
-            case .letValue, .letIn, .and, .or, .not, .ifThenElse:
+            case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .setMap, .forAll, .exists:
                 checked = try inferStructuredExpression(expression, expected: expected)
             default:
                 do { checked = try inferResolved(expression, expected: expected) }
@@ -1253,21 +1256,6 @@ struct NativeTypeInference: Sendable {
         return try checkedType(result, expected: expected)
     }
 
-    private mutating func inferFunctionLiteral(_ domain: CompiledStateExpr, binder id: BinderID, body: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        bindingSources[id] = domain
-        bindingDomains[id] = literalDomain(domain)
-        let hints: (key: NativeType, value: NativeType) = if case .dictionary(let key, let value) = expected {
-            (key, value)
-        } else {
-            (.unknown, .unknown)
-        }
-        let key = try element(infer(domain, expected: .set(hints.key)))
-        bindings[id] = key
-        result = .dictionary(key, try infer(body, expected: hints.value))
-        return try checkedType(result, expected: expected)
-    }
-
     private mutating func inferFunctionApplication(_ function: CompiledStateExpr, key: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
         let base = try infer(function)
@@ -1377,16 +1365,6 @@ struct NativeTypeInference: Sendable {
         // A predicate can prove a stronger nominal representation than an
         // earlier raw context. Its collection retains that representation.
         return .init(type: result, computationType: result)
-    }
-
-    private mutating func inferSetMap(_ body: CompiledStateExpr, binder id: BinderID, domain: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        bindingSources[id] = domain
-        bindingDomains[id] = literalDomain(domain)
-        bindings[id] = try element(infer(domain, expected: .set(.unknown)))
-        let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
-        result = .set(try infer(body, expected: hint))
-        return try checkedType(result, expected: expected)
     }
 
     private mutating func inferChoice(_ domain: CompiledStateExpr, binder id: BinderID, predicate body: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1571,6 +1549,51 @@ struct NativeTypeInference: Sendable {
                             .finish(expected: expected),
                             .check(body, expected: expected),
                         ])
+                    case .functionLiteral(let domain, let id, let body):
+                        ancestors.append(expression)
+                        if case .union = expected, let constructor = try unionResultType(expression, expected: expected) {
+                            let checked = NativeCheckedType(type: expected, computationType: constructor)
+                            results.append(checked.type)
+                            completed = checked
+                            ancestors.removeLast()
+                            continue
+                        }
+                        bindingSources[id] = domain
+                        bindingDomains[id] = literalDomain(domain)
+                        let hints: (key: NativeType, value: NativeType)
+                        if case .dictionary(let key, let value) = expected { hints = (key, value) }
+                        else { hints = (.unknown, .unknown) }
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .dictionary,
+                            .check(body, expected: hints.value),
+                            .bindDomain(id, retainElement: true),
+                            .check(domain, expected: .set(hints.key)),
+                        ])
+                    case .setMap(let body, let id, let domain):
+                        ancestors.append(expression)
+                        bindingSources[id] = domain
+                        bindingDomains[id] = literalDomain(domain)
+                        let hint: NativeType = if case .set(let item) = expected { item } else { .unknown }
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .set,
+                            .check(body, expected: hint),
+                            .bindDomain(id, retainElement: false),
+                            .check(domain, expected: .set(.unknown)),
+                        ])
+                    case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
+                        ancestors.append(expression)
+                        bindingSources[id] = domain
+                        bindingDomains[id] = literalDomain(domain)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .result(.bool),
+                            .discard,
+                            .check(body, expected: .bool),
+                            .bindDomain(id, retainElement: false),
+                            .check(domain, expected: .set(.unknown)),
+                        ])
                     default:
                         results.append(try infer(expression, expected: expected))
                     }
@@ -1579,6 +1602,23 @@ struct NativeTypeInference: Sendable {
                         throw Self.diagnostic("checking", "missing checked binding type")
                     }
                     bindings[id] = type
+                case .bindDomain(let id, let retainElement):
+                    guard let domain = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked binding domain")
+                    }
+                    let item = try element(domain)
+                    bindings[id] = item
+                    if retainElement { results.append(item) }
+                case .set:
+                    guard let item = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked set element")
+                    }
+                    results.append(.set(item))
+                case .dictionary:
+                    guard let value = results.popLast(), let key = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked function operands")
+                    }
+                    results.append(.dictionary(key, value))
                 case .reconcile(let yes, let no, let expected):
                     guard let right = results.popLast(), let left = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked branch types")
@@ -1645,15 +1685,6 @@ struct NativeTypeInference: Sendable {
         return try checkedType(result, expected: expected)
     }
 
-    private mutating func inferQuantifier(_ domain: CompiledStateExpr, binder id: BinderID, predicate body: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        bindingSources[id] = domain
-        bindingDomains[id] = literalDomain(domain)
-        bindings[id] = try element(infer(domain, expected: .set(.unknown)))
-        _ = try infer(body, expected: .bool); result = .bool
-        return try checkedType(result, expected: expected)
-    }
-
     private mutating func inferCases(_ first: CompiledCaseBranch, rest: [CompiledCaseBranch], otherwise: CompiledStateExpr?, expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
         var type = expected
@@ -1713,10 +1744,6 @@ struct NativeTypeInference: Sendable {
             return try inferSequenceSelection(sequence, binder: id, predicate: predicate, expected: expected)
         case .setFilter(let domain, let id, let predicate):
             return try inferSetFilter(domain, binder: id, predicate: predicate, expected: expected)
-        case .setMap(let body, let id, let domain):
-            return try inferSetMap(body, binder: id, domain: domain, expected: expected)
-        case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
-            return try inferQuantifier(domain, binder: id, predicate: body, expected: expected)
         case .choose(let domain, let id, let body):
             return try inferChoice(domain, binder: id, predicate: body, expected: expected)
         case .sequenceFromSet(let domain):
@@ -1747,7 +1774,6 @@ struct NativeTypeInference: Sendable {
         case .recordLiteral(let record): return try inferRecordLiteral(record, expected: expected)
         case .recordAccess(let record, _, let key):
             return try inferRecordAccess(record, key: key, expected: expected)
-        case .functionLiteral(let domain, let id, let body): return try inferFunctionLiteral(domain, binder: id, body: body, expected: expected)
         case .functionApply(let function, let key): return try inferFunctionApplication(function, key: key, expected: expected)
         case .except(let function, let key, let value): return try inferFunctionUpdate(function, key: key, value: value, expected: expected)
         case .domain(let function):

@@ -53,6 +53,29 @@ import Testing
         #expect(try checker.resolutionScope(expression, expected: .bool).resultType == .bool)
     }
 
+    @Test("nested quantifiers retain their domains inside collection constructors")
+    func nestedQuantifierDomains() throws {
+        let specification = TLASpec(name: "QuantifierNesting", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let domain = CompiledStateExpr.setLiteral([.value(.integer(1))])
+        let predicate = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
+            let binder = BinderID(ordinal: index)
+            return index.isMultiple(of: 2) ? .forAll(domain, binder, nested) : .exists(domain, binder, nested)
+        }
+        let binder = BinderID(ordinal: 1_000)
+        let cases: [(CompiledStateExpr, NativeType)] = [
+            (predicate, .bool),
+            (.setMap(predicate, binder, domain), .set(.bool)),
+            (.functionLiteral(domain, binder, predicate), .dictionary(.int, .bool))
+        ]
+        for (expression, expected) in cases {
+            let checked = try checker.resolutionScope(expression, expected: expected)
+            #expect(checked.resultType == expected)
+            #expect(checked.scope.bindings[BinderID(ordinal: 0)] == .int)
+            #expect(checked.scope.bindings[BinderID(ordinal: 999)] == .int)
+        }
+    }
+
     @Test("Boolean diagnostics retain the failing branch's ancestry and left-to-right order")
     func booleanBranchDiagnostics() throws {
         let specification = TLASpec(name: "BooleanBranches", variables: [], actions: [], invariants: [])
