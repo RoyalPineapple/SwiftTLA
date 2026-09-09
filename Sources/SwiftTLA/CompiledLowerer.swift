@@ -35,7 +35,7 @@ private struct BindingScope {
 
 private enum FormalOperatorLoweringPlan {
     case reference(OperatorID, arity: Int)
-    case lambda(LambdaID, [BinderID])
+    case lambda(LambdaID, [BinderID], enclosingBindings: Set<BinderID>)
 }
 
 private enum FormalArgumentLoweringPlan {
@@ -950,8 +950,8 @@ struct CompiledLowerer {
                         operatorReferences: [operation],
                         build: {
                             isBounded
-                                ? .functionApply(.operatorReference(operation), $0[0])
-                                : .recursiveCall(operation, [$0[0]])
+                                ? .functionApply(.operatorReference(operation), $0[0].expression)
+                                : .recursiveCall(operation, [$0[0].expression])
                         },
                         on: &tasks
                     )
@@ -959,15 +959,15 @@ struct CompiledLowerer {
                 case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.functionSet, on: &tasks)
                 case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.setSum, on: &tasks)
                 case .integerRange(let lower, let upper):
-                    schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0], $0[1]) }, on: &tasks)
+                    schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0].expression, $0[1].expression) }, on: &tasks)
                 case .ifThenElse(let condition, let then, let otherwise):
-                    schedule([(condition, "\(path).condition"), (then, "\(path).then"), (otherwise, "\(path).else")], at: path, scope: scope, build: { .ifThenElse($0[0], $0[1], $0[2]) }, on: &tasks)
+                    schedule([(condition, "\(path).condition"), (then, "\(path).then"), (otherwise, "\(path).else")], at: path, scope: scope, build: { .ifThenElse($0[0].expression, $0[1].expression, $0[2].expression) }, on: &tasks)
                 case .setLiteral(let values):
-                    schedule(indexed(values, at: path), at: path, scope: scope, build: CompiledStateExpr.setLiteral, on: &tasks)
+                    schedule(indexed(values, at: path), at: path, scope: scope, build: { .setLiteral($0.map(\.expression)) }, on: &tasks)
                 case .tupleLiteral(let values):
-                    schedule(indexed(values, at: path), at: path, scope: scope, build: CompiledStateExpr.tupleLiteral, on: &tasks)
+                    schedule(indexed(values, at: path), at: path, scope: scope, build: { .tupleLiteral($0.map(\.expression)) }, on: &tasks)
                 case .tupleAccess(let value, let index):
-                    schedule([(value, path)], at: path, scope: scope, build: { .tupleAccess($0[0], index) }, on: &tasks)
+                    schedule([(value, path)], at: path, scope: scope, build: { .tupleAccess($0[0].expression, index) }, on: &tasks)
                 case .recordLiteral(let record):
                     var seen: Set<String> = []
                     let fields = try record.fields.enumerated().map { index, item in
@@ -991,14 +991,14 @@ struct CompiledLowerer {
                     }
                     schedule(fields.map { ($0.expression, $0.path) }, at: path, scope: scope, build: { values in
                         .recordLiteral(.init(zip(fields, values).map { field, value in
-                            .init(id: field.id, key: field.key, value: value)
+                            .init(id: field.id, key: field.key, value: value.expression)
                         }))
                     }, on: &tasks)
                 case .recordAccess(let value, let name):
                     let id = try field(named: name, at: "\(path).field")
-                    schedule([(value, "\(path).value")], at: path, scope: scope, build: { .recordAccess($0[0], id, .string(name)) }, on: &tasks)
+                    schedule([(value, "\(path).value")], at: path, scope: scope, build: { .recordAccess($0[0].expression, id, .string(name)) }, on: &tasks)
                 case .except(let function, let key, let value):
-                    schedule([(function, "\(path).function"), (key, "\(path).key"), (value, "\(path).value")], at: path, scope: scope, build: { .except($0[0], $0[1], $0[2]) }, on: &tasks)
+                    schedule([(function, "\(path).function"), (key, "\(path).key"), (value, "\(path).value")], at: path, scope: scope, build: { .except($0[0].expression, $0[1].expression, $0[2].expression) }, on: &tasks)
                 case .caseExpr(let branches, let otherwise):
                     guard branches.isEmpty == false, branches.count.isMultiple(of: 2) else {
                         throw CompilationDiagnostic(
@@ -1015,13 +1015,13 @@ struct CompiledLowerer {
                     schedule(children, at: path, scope: scope, build: { values in
                         var compiledBranches: [CompiledCaseBranch] = []
                         for index in stride(from: 0, to: branches.count, by: 2) {
-                            compiledBranches.append(.init(condition: values[index], value: values[index + 1]))
+                            compiledBranches.append(.init(condition: values[index].expression, value: values[index + 1].expression))
                         }
                         guard let first = compiledBranches.first else { throw Self.invalidTraversal(at: path) }
                         return .caseExpr(
                             first,
                             Array(compiledBranches.dropFirst()),
-                            otherwise: values.count == branches.count ? nil : values.last
+                            otherwise: values.count == branches.count ? nil : values.last?.expression
                         )
                     }, on: &tasks)
                 case .setFilter(let domain, let name, let body):
@@ -1044,7 +1044,7 @@ struct CompiledLowerer {
                         at: path,
                         scope: scope,
                         childScopes: [nested, scope],
-                        build: { .setMap($0[0], binder, $0[1]) },
+                        build: { .setMap($0[0].expression, binder, $0[1].expression) },
                         on: &tasks
                     )
                 case .functionLiteral(let domain, let name, let body):
@@ -1067,7 +1067,7 @@ struct CompiledLowerer {
                     let parameters = try lambda.parameters.map { try bound($0, in: nested, at: path) }
                     let identity = allocateLambda()
                     schedule([(lambda.body, "\(path).body"), (initial, "\(path).initial"), (sequence, "\(path).sequence")], at: path, scope: scope, childScopes: [nested, scope, scope], build: {
-                        .foldFunction(.init(id: identity, parameters: parameters, body: $0[0]), initial: $0[1], sequence: $0[2])
+                        .foldFunction(Self.lambda(id: identity, parameters: parameters, body: $0[0], enclosingBindings: Set(scope.values.values)), initial: $0[1].expression, sequence: $0[2].expression)
                     }, on: &tasks)
                 case .operatorApplication(let operation, let arguments):
                     guard operation.arity == arguments.count else {
@@ -1105,8 +1105,8 @@ struct CompiledLowerer {
                             build: { values in
                                 guard let body = values.first else { throw Self.invalidTraversal(at: path) }
                                 return .lambdaApplication(
-                                    .init(id: identity, parameters: parameters, body: body),
-                                    Array(values.dropFirst())
+                                    Self.lambda(id: identity, parameters: parameters, body: body, enclosingBindings: Set(scope.values.values)),
+                                    values.dropFirst().map(\.expression)
                                 )
                             },
                             on: &tasks
@@ -1143,16 +1143,16 @@ struct CompiledLowerer {
                         operatorReferences: [id],
                         build: {
                             if isBounded, let argument = $0.first {
-                                return .functionApply(.operatorReference(id), argument)
+                                return .functionApply(.operatorReference(id), argument.expression)
                             }
-                            return .recursiveCall(id, $0)
+                            return .recursiveCall(id, $0.map(\.expression))
                         },
                         on: &tasks
                     )
                 case .letValue(let name, let value, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     let binder = try bound(name, in: nested, at: path)
-                    schedule([(value, "\(path).value"), (body, "\(path).body")], at: path, scope: scope, childScopes: [scope, nested], build: { .letValue(binder, $0[0], $0[1]) }, on: &tasks)
+                    schedule([(value, "\(path).value"), (body, "\(path).body")], at: path, scope: scope, childScopes: [scope, nested], build: { .letValue(binder, $0[0].expression, $0[1].expression) }, on: &tasks)
                 case .letIn(let operators, let body):
                     try requireDistinct(operators.map(\.name), at: "\(path).operators")
                     var nested = scope
@@ -1299,7 +1299,7 @@ struct CompiledLowerer {
         scope: BindingScope,
         childScopes: [BindingScope]? = nil,
         operatorReferences: Set<OperatorID> = [],
-        build: @escaping ([CompiledStateExpr]) throws -> CompiledStateExpr,
+        build: @escaping ([LoweredStateExpression]) throws -> CompiledStateExpr,
         on tasks: inout [StateLoweringTask]
     ) {
         tasks.append(.build(childCount: children.count, path: path) { children in
@@ -1310,7 +1310,7 @@ struct CompiledLowerer {
                 bindings.formUnion(child.bindingReferences)
             }
             return .init(
-                expression: try build(children.map(\.expression)),
+                expression: try build(children),
                 operatorReferences: references,
                 bindingReferences: bindings
             )
@@ -1331,7 +1331,7 @@ struct CompiledLowerer {
         build: @escaping (CompiledStateExpr) -> CompiledStateExpr,
         on tasks: inout [StateLoweringTask]
     ) {
-        schedule([(value, path)], at: path, scope: scope, build: { build($0[0]) }, on: &tasks)
+        schedule([(value, path)], at: path, scope: scope, build: { build($0[0].expression) }, on: &tasks)
     }
 
     private func scheduleBinary(
@@ -1346,7 +1346,7 @@ struct CompiledLowerer {
             [(lhs, "\(path).left"), (rhs, "\(path).right")],
             at: path,
             scope: scope,
-            build: { build($0[0], $0[1]) },
+            build: { build($0[0].expression, $0[1].expression) },
             on: &tasks
         )
     }
@@ -1366,7 +1366,7 @@ struct CompiledLowerer {
             at: path,
             scope: scope,
             childScopes: [scope, bodyScope],
-            build: { build($0[0], binder, $0[1]) },
+            build: { build($0[0].expression, binder, $0[1].expression) },
             on: &tasks
         )
     }
@@ -1392,7 +1392,7 @@ struct CompiledLowerer {
             }
             let nested = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
             return (
-                .lambda(allocateLambda(), try lambda.parameters.map { try bound($0, in: nested, at: path) }),
+                .lambda(allocateLambda(), try lambda.parameters.map { try bound($0, in: nested, at: path) }, enclosingBindings: Set(scope.values.values)),
                 nested
             )
         }
@@ -1444,36 +1444,45 @@ struct CompiledLowerer {
         return (children, scopes)
     }
 
+    private static func lambda(
+        id: LambdaID, parameters: [BinderID], body: LoweredStateExpression,
+        enclosingBindings: Set<BinderID>
+    ) -> CompiledFormalLambda {
+        .init(id: id, parameters: parameters, body: body.expression,
+            capturedBindings: body.bindingReferences.intersection(enclosingBindings),
+            referencedOperators: body.operatorReferences)
+    }
+
     private static func materialize(
         _ plan: FormalOperatorLoweringPlan,
-        from children: [CompiledStateExpr],
+        from children: [LoweredStateExpression],
         index: inout Int,
         at path: String
     ) throws -> CompiledFormalOperator {
         switch plan {
         case .reference(let id, let arity): return .reference(id, arity: arity)
-        case .lambda(let identity, let parameters):
-            return .lambda(.init(id: identity, parameters: parameters, body: try child(from: children, index: &index, at: path)))
+        case .lambda(let identity, let parameters, let enclosingBindings):
+            return .lambda(lambda(id: identity, parameters: parameters, body: try child(from: children, index: &index, at: path), enclosingBindings: enclosingBindings))
         }
     }
 
     private static func materialize(
         _ plan: FormalArgumentLoweringPlan,
-        from children: [CompiledStateExpr],
+        from children: [LoweredStateExpression],
         index: inout Int,
         at path: String
     ) throws -> CompiledFormalCallArgument {
         switch plan {
-        case .value: return .value(try child(from: children, index: &index, at: path))
+        case .value: return .value(try child(from: children, index: &index, at: path).expression)
         case .operator(let operation): return .operator(try materialize(operation, from: children, index: &index, at: path))
         }
     }
 
     private static func child(
-        from children: [CompiledStateExpr],
+        from children: [LoweredStateExpression],
         index: inout Int,
         at path: String
-    ) throws -> CompiledStateExpr {
+    ) throws -> LoweredStateExpression {
         guard children.indices.contains(index) else { throw invalidTraversal(at: path) }
         let expression = children[index]
         index += 1

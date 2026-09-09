@@ -190,7 +190,8 @@ private struct NativeCallbackBinding: Sendable {
         self.operation = operation
         self.scope = scope
         forwardedFrom = nil
-        identity = .init(operation: operation.identity, captures: scope.bindings, callbacks: scope.callbackIdentities)
+        let captures = scope.captures(of: operation)
+        identity = .init(operation: operation.identity, captures: captures.bindings, callbacks: captures.callbacks)
     }
 
     init(forwarding binding: NativeCallbackBinding, from origin: OperatorID) {
@@ -355,8 +356,30 @@ struct NativeTypeInference: Sendable {
     private var localCaptures: [OperatorID: [BinderID: NativeType]] = [:]
     private var boundOperators: [OperatorID: NativeCallbackBinding] = [:]
     private var callbackUses: [OperatorID: [NativeOperatorCall]] = [:]
-    fileprivate var callbackIdentities: [OperatorID: NativeCallbackIdentity] {
-        boundOperators.mapValues(\.identity)
+    fileprivate func captures(of operation: CompiledFormalOperator) -> (
+        bindings: [BinderID: NativeType], callbacks: [OperatorID: NativeCallbackIdentity]
+    ) {
+        var values: [BinderID: NativeType]
+        var pending: [OperatorID]
+        switch operation {
+        case .lambda(let lambda):
+            values = bindings.filter { lambda.capturedBindings.contains($0.key) }
+            pending = Array(lambda.referencedOperators)
+        case .reference(let id, _):
+            values = localCaptures[id] ?? [:]
+            pending = [id]
+        }
+        var callbacks: [OperatorID: NativeCallbackIdentity] = [:]
+        var visited: Set<OperatorID> = []
+        while let id = pending.popLast() {
+            guard visited.insert(id).inserted else { continue }
+            if let callback = boundOperators[id] { callbacks[id] = callback.identity }
+            if let local = localOperators[id] {
+                values.merge(localCaptures[id] ?? [:]) { current, _ in current }
+                pending.append(contentsOf: local.referencedOperators)
+            }
+        }
+        return (values, callbacks)
     }
 
     func isOperatorParameter(_ id: OperatorID) -> Bool { boundOperators[id] != nil }
@@ -970,13 +993,12 @@ struct NativeTypeInference: Sendable {
         let formalParameters: [CompiledFormalParameter]
         let body: CompiledStateExpr
         let domain: CompiledStateExpr?
-        let captures: [BinderID: NativeType]
+        let captured = captures(of: operation)
         switch operation {
         case .lambda(let lambda):
             formalParameters = lambda.parameters.map { .value($0) }
-            body = lambda.body; domain = nil; captures = bindings
+            body = lambda.body; domain = nil
         case .reference(let id, _):
-            captures = localCaptures[id] ?? [:]
             if let definition = plan.formalOperatorDefinitions.first(where: { $0.id == id }) {
                 formalParameters = definition.parameters; body = definition.body; domain = nil
             } else if let definition = localOperators[id] {
@@ -989,7 +1011,7 @@ struct NativeTypeInference: Sendable {
         }
         guard formalParameters.count == arguments.count else { throw Self.diagnostic("operator", "argument count mismatch") }
         var callbackArguments: [OperatorID: CompiledFormalOperator] = [:]
-        var identities = callbackIdentities
+        var identities = captured.callbacks
         var valueTypes: [NativeType] = []
         for (parameter, argument) in zip(formalParameters, arguments) {
             switch (parameter, argument) {
@@ -1011,7 +1033,7 @@ struct NativeTypeInference: Sendable {
             if case .value(let binder) = parameter { return binder }; return nil
         }
         let key = NativeOperatorSpecialization(operation: operation.identity, arguments: valueTypes,
-            resultContext: expected, captures: captures, callbacks: identities)
+            resultContext: expected, captures: captured.bindings, callbacks: identities)
         if activeOperators.contains(where: { active in
             guard active.operation == key.operation, active.arguments.count == key.arguments.count else { return false }
             let pairs = Array(zip(active.arguments, key.arguments))

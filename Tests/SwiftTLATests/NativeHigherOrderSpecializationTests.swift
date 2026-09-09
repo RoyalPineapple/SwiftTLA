@@ -2,18 +2,43 @@ import Testing
 @testable import SwiftTLA
 
 @Suite struct NativeHigherOrderSpecializationTests {
+    @Test("unused enclosing values do not change lambda or callback specialization", arguments: [false, true])
+    func specializationUsesOnlyFreeValues(asCallback: Bool) throws {
+        let lambda = FormalOperator.lambda(.init(parameters: ["argument"], body: .variable("used")))
+        let body = asCallback
+            ? StateExpr.operatorApplication(.reference("Invoke", arity: 1), [.operator(lambda)])
+            : StateExpr.operatorApplication(lambda, [.value(.int(0))])
+        let spec = TLASpec(name: "FreeValues", variables: [], actions: [], invariants: [], formalOperatorDefinitions: [
+            .init(name: "Prepare", parameters: [.value("used"), .value("unused")], body: body),
+            .init(name: "Invoke", parameters: [.operator("callback", arity: 1)],
+                body: .operatorApplication(.reference("callback", arity: 1), [.value(.int(0))]))
+        ])
+        let plan = NativeMachinePlan(compilation: try spec.compile())
+        let checker = try NativeTypeInference(plan: plan)
+        let prepare = try #require(plan.formalOperatorDefinitions.first)
+        func specialization(unused: CompiledValue) throws -> NativeOperatorSpecialization {
+            let expression = CompiledStateExpr.operatorApplication(prepare.id, [
+                .value(.value(.integer(7))), .value(.value(unused))
+            ])
+            let outer = try #require(try checker.resolutionScope(expression, expected: .int).call)
+            let inner = try #require(try outer.inference.resolutionScope(outer.body, expected: .int).call)
+            return inner.specialization
+        }
+        #expect(try specialization(unused: .integer(1)) == specialization(unused: .string("unrelated")))
+    }
+
     @Test("zero-argument callbacks retain distinct identities and independent results")
     func zeroArgumentCallbacks() throws {
         let plan = NativeMachinePlan(compilation: try specification().compile())
         let inference = try NativeTypeInference(plan: plan)
         let operation = try #require(plan.formalOperatorDefinitions.first)
         let integerExpression = CompiledStateExpr.operatorApplication(operation.id, [
-            .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)))))
+            .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)), capturedBindings: [], referencedOperators: [])))
         ])
         let integerResolution = try inference.resolutionScope(integerExpression, expected: .int)
         let integer = try #require(integerResolution.call)
         let stringExpression = CompiledStateExpr.operatorApplication(operation.id, [
-            .operator(.lambda(.init(id: .init(ordinal: 1), parameters: [], body: .value(.string("seven")))))
+            .operator(.lambda(.init(id: .init(ordinal: 1), parameters: [], body: .value(.string("seven")), capturedBindings: [], referencedOperators: [])))
         ])
         let stringResolution = try inference.resolutionScope(stringExpression, expected: .string)
         let string = try #require(stringResolution.call)
@@ -23,7 +48,7 @@ import Testing
         #expect(string.specialization.arguments.isEmpty)
         #expect(integer.specialization != string.specialization)
         let otherIntegerExpression = CompiledStateExpr.operatorApplication(operation.id, [
-            .operator(.lambda(.init(id: .init(ordinal: 2), parameters: [], body: .value(.integer(9)))))
+            .operator(.lambda(.init(id: .init(ordinal: 2), parameters: [], body: .value(.integer(9)), capturedBindings: [], referencedOperators: [])))
         ])
         let otherInteger = try #require(try inference.resolutionScope(otherIntegerExpression, expected: .int).call)
         #expect(integer.specialization != otherInteger.specialization)
@@ -38,9 +63,9 @@ import Testing
         let callbackOperation = try #require(plan.formalOperatorDefinitions.first)
         let valueOperation = try #require(plan.formalOperatorDefinitions.last)
         let callback = CompiledFormalOperator.lambda(.init(
-            id: .init(ordinal: 0), parameters: [], body: .value(.integer(7))))
+            id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)), capturedBindings: [], referencedOperators: []))
         let unaryCallback = CompiledFormalOperator.lambda(.init(
-            id: .init(ordinal: 1), parameters: [.init(ordinal: 0)], body: .value(.integer(7))))
+            id: .init(ordinal: 1), parameters: [.init(ordinal: 0)], body: .value(.integer(7)), capturedBindings: [], referencedOperators: []))
         for expression in [
             CompiledStateExpr.operatorApplication(callbackOperation.id, [.value(.value(.integer(7)))]),
             .operatorApplication(callbackOperation.id, [.operator(unaryCallback)]),
@@ -168,7 +193,7 @@ import Testing
         let inference = try NativeTypeInference(plan: plan)
         let operation = try #require(plan.formalOperatorDefinitions.first)
         let callExpression = CompiledStateExpr.operatorApplication(operation.id, [
-            .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)))))
+            .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)), capturedBindings: [], referencedOperators: [])))
         ])
         let callResolution = try inference.resolutionScope(callExpression, expected: .int)
         let call = try #require(callResolution.call)

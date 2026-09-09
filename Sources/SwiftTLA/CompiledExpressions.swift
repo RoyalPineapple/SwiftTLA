@@ -471,6 +471,8 @@ package struct CompiledFormalLambda: Hashable, Sendable {
     package let id: LambdaID
     package let parameters: [BinderID]
     package let body: CompiledStateExpr
+    package let capturedBindings: Set<BinderID>
+    package let referencedOperators: Set<OperatorID>
 }
 
 /// A function's identity within one compiled specification, independent of its body.
