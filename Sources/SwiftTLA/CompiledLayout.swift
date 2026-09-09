@@ -27,6 +27,10 @@ package struct ControlLocationID: Hashable, Sendable {
     package let ordinal: Int
 }
 
+package struct LambdaID: Hashable, Sendable {
+    package let ordinal: Int
+}
+
 package struct OperatorID: Hashable, Sendable {
     package let ordinal: Int
 }

@@ -2,26 +2,53 @@ import Testing
 @testable import SwiftTLA
 
 @Suite struct NativeHigherOrderSpecializationTests {
-    @Test("zero-argument callbacks retain structural identity and independent results")
+    @Test("zero-argument callbacks retain distinct identities and independent results")
     func zeroArgumentCallbacks() throws {
         let plan = NativeMachinePlan(compilation: try specification().compile())
         let inference = try NativeTypeInference(plan: plan)
         let operation = try #require(plan.formalOperatorDefinitions.first)
         let integerExpression = CompiledStateExpr.operatorApplication(operation.id, [
-            .operator(.lambda(.init(parameters: [], body: .value(.integer(7)))))
+            .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)))))
         ])
         let integerResolution = try inference.resolutionScope(integerExpression, expected: .int)
         let integer = try #require(integerResolution.call)
         let stringExpression = CompiledStateExpr.operatorApplication(operation.id, [
-            .operator(.lambda(.init(parameters: [], body: .value(.string("seven")))))
+            .operator(.lambda(.init(id: .init(ordinal: 1), parameters: [], body: .value(.string("seven")))))
         ])
         let stringResolution = try inference.resolutionScope(stringExpression, expected: .string)
         let string = try #require(stringResolution.call)
         #expect(integer.result == .int)
         #expect(string.result == .string)
         #expect(integer.specialization != string.specialization)
+        let otherIntegerExpression = CompiledStateExpr.operatorApplication(operation.id, [
+            .operator(.lambda(.init(id: .init(ordinal: 2), parameters: [], body: .value(.integer(9)))))
+        ])
+        let otherInteger = try #require(try inference.resolutionScope(otherIntegerExpression, expected: .int).call)
+        #expect(integer.specialization != otherInteger.specialization)
         #expect(integer.callbackUses.values.flatMap { $0 }.allSatisfy { $0.parameters.isEmpty })
         #expect(integer.callbackUses.values.flatMap { $0 }.count == 1)
+    }
+
+    @Test("Shared lowering assigns deterministic identities to anonymous functions")
+    func loweredFunctionIdentities() throws {
+        let spec = TLASpec(name: "AnonymousFunctions", variables: [
+            .init(name: "number", initialization: .value(.int(0)), origin: .compiler)
+        ], actions: [], invariants: [], formalOperatorDefinitions: (0..<2).map { index in
+            FormalOperatorDefinition(name: "Function\(index)", parameters: [], body:
+                .operatorApplication(.lambda(.init(parameters: ["argument"], body: .int(index))), [.value(.int(0))]))
+        })
+        func identities() throws -> [LambdaID] {
+            try NativeMachinePlan(compilation: spec.compile()).formalOperatorDefinitions.map { definition in
+                guard case .lambdaApplication(let lambda, _) = definition.body else {
+                    throw NativeIdentityTestError.expectedLambda
+                }
+                return lambda.id
+            }
+        }
+        let first = try identities()
+        #expect(first.count == 2)
+        #expect(Set(first).count == 2)
+        #expect(try identities() == first)
     }
 
     @Test("callbacks capture the value shape of each enclosing specialization")
@@ -58,7 +85,7 @@ import Testing
         let inference = try NativeTypeInference(plan: plan)
         let operation = try #require(plan.formalOperatorDefinitions.first)
         let callExpression = CompiledStateExpr.operatorApplication(operation.id, [
-            .operator(.lambda(.init(parameters: [], body: .value(.integer(7)))))
+            .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)))))
         ])
         let callResolution = try inference.resolutionScope(callExpression, expected: .int)
         let call = try #require(callResolution.call)
@@ -81,3 +108,5 @@ import Testing
         ])
     }
 }
+
+private enum NativeIdentityTestError: Error { case expectedLambda }

@@ -28,7 +28,7 @@ private struct BindingScope {
 
 private enum FormalOperatorLoweringPlan {
     case reference(OperatorID, arity: Int)
-    case lambda([BinderID])
+    case lambda(LambdaID, [BinderID])
 }
 
 private enum FormalArgumentLoweringPlan {
@@ -53,6 +53,7 @@ struct CompiledLowerer {
     private let reservedRenderedNames: Set<String>
     private let rootOperators: [String: OperatorID]
     private var operatorArities: [OperatorID: Int]
+    private var nextLambdaOrdinal = 0
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal: Int
     private var binderNames: [BinderID: String] = [:]
@@ -1054,8 +1055,9 @@ struct CompiledLowerer {
                     }
                     let nested = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
                     let parameters = try lambda.parameters.map { try bound($0, in: nested, at: path) }
+                    let identity = allocateLambda()
                     schedule([(lambda.body, "\(path).body"), (initial, "\(path).initial"), (sequence, "\(path).sequence")], at: path, scope: scope, childScopes: [nested, scope, scope], build: {
-                        .foldFunction(.init(parameters: parameters, body: $0[0]), initial: $0[1], sequence: $0[2])
+                        .foldFunction(.init(id: identity, parameters: parameters, body: $0[0]), initial: $0[1], sequence: $0[2])
                     }, on: &tasks)
                 case .operatorApplication(let operation, let arguments):
                     guard operation.arity == arguments.count else {
@@ -1072,6 +1074,7 @@ struct CompiledLowerer {
                         }
                         let nested = try bind(lambda.parameters, at: "\(path).operator.parameters", scope: scope)
                         let parameters = try lambda.parameters.map { try bound($0, in: nested, at: path) }
+                        let identity = allocateLambda()
                         let valueArguments = try arguments.enumerated().map { index, argument in
                             guard case .value(let value) = argument else {
                                 throw invalidOperatorApplication(
@@ -1092,7 +1095,7 @@ struct CompiledLowerer {
                             build: { values in
                                 guard let body = values.first else { throw Self.invalidTraversal(at: path) }
                                 return .lambdaApplication(
-                                    .init(parameters: parameters, body: body),
+                                    .init(id: identity, parameters: parameters, body: body),
                                     Array(values.dropFirst())
                                 )
                             },
@@ -1370,7 +1373,7 @@ struct CompiledLowerer {
             }
             let nested = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
             return (
-                .lambda(try lambda.parameters.map { try bound($0, in: nested, at: path) }),
+                .lambda(allocateLambda(), try lambda.parameters.map { try bound($0, in: nested, at: path) }),
                 nested
             )
         }
@@ -1430,8 +1433,8 @@ struct CompiledLowerer {
     ) throws -> CompiledFormalOperator {
         switch plan {
         case .reference(let id, let arity): return .reference(id, arity: arity)
-        case .lambda(let parameters):
-            return .lambda(.init(parameters: parameters, body: try child(from: children, index: &index, at: path)))
+        case .lambda(let identity, let parameters):
+            return .lambda(.init(id: identity, parameters: parameters, body: try child(from: children, index: &index, at: path)))
         }
     }
 
@@ -1847,6 +1850,11 @@ struct CompiledLowerer {
             : preferredRenderedName
         binderNames[binder] = renderedName
         return binder
+    }
+
+    private mutating func allocateLambda() -> LambdaID {
+        defer { nextLambdaOrdinal += 1 }
+        return LambdaID(ordinal: nextLambdaOrdinal)
     }
 
     private mutating func allocateOperator(_ name: String, arity: Int) -> OperatorID {

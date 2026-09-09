@@ -163,7 +163,7 @@ package indirect enum NativeType: Hashable, Sendable {
 
 /// A compile-time function instance. No specialization metadata enters a machine.
 struct NativeOperatorSpecialization: Hashable, Sendable {
-    let operation: CompiledFormalOperator
+    let operation: CompiledOperatorIdentity
     let arguments: [NativeType]
     let resultContext: NativeType
     let captures: [BinderID: NativeType]
@@ -171,7 +171,7 @@ struct NativeOperatorSpecialization: Hashable, Sendable {
 }
 
 struct NativeCallbackIdentity: Hashable, Sendable {
-    let operation: CompiledFormalOperator
+    let operation: CompiledOperatorIdentity
     let captures: [BinderID: NativeType]
     let callbacks: [OperatorID: NativeCallbackIdentity]
     fileprivate func strictlyContains(_ other: NativeCallbackIdentity) -> Bool {
@@ -190,7 +190,7 @@ private struct NativeCallbackBinding: Sendable {
         self.operation = operation
         self.scope = scope
         forwardedFrom = nil
-        identity = .init(operation: operation, captures: scope.bindings, callbacks: scope.callbackIdentities)
+        identity = .init(operation: operation.identity, captures: scope.bindings, callbacks: scope.callbackIdentities)
     }
 
     init(forwarding binding: NativeCallbackBinding, from origin: OperatorID) {
@@ -1030,7 +1030,7 @@ struct NativeTypeInference: Sendable {
         let parameters = formalParameters.compactMap { parameter -> BinderID? in
             if case .value(let binder) = parameter { return binder }; return nil
         }
-        let key = NativeOperatorSpecialization(operation: operation, arguments: argumentTypes,
+        let key = NativeOperatorSpecialization(operation: operation.identity, arguments: argumentTypes,
             resultContext: expected, captures: captures, callbacks: identities)
         if activeOperators.contains(where: { active in
             guard active.operation == key.operation, active.arguments.count == key.arguments.count else { return false }

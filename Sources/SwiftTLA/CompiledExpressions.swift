@@ -468,13 +468,27 @@ extension CompiledStateExpr {
 }
 
 package struct CompiledFormalLambda: Hashable, Sendable {
+    package let id: LambdaID
     package let parameters: [BinderID]
     package let body: CompiledStateExpr
+}
+
+/// A function's identity within one compiled specification, independent of its body.
+package enum CompiledOperatorIdentity: Hashable, Sendable {
+    case lambda(LambdaID)
+    case reference(OperatorID, arity: Int)
 }
 
 package enum CompiledFormalOperator: Hashable, Sendable {
     case lambda(CompiledFormalLambda)
     case reference(OperatorID, arity: Int)
+
+    package var identity: CompiledOperatorIdentity {
+        switch self {
+        case .lambda(let lambda): return .lambda(lambda.id)
+        case .reference(let id, let arity): return .reference(id, arity: arity)
+        }
+    }
 
     package var arity: Int {
         switch self {
