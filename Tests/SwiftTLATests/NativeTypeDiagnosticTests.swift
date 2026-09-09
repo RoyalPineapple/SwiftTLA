@@ -76,6 +76,23 @@ import Testing
         }
     }
 
+    @Test("deep arithmetic and comparison expressions share iterative checking")
+    func deepArithmeticAndComparisons() throws {
+        let specification = TLASpec(name: "ScalarNesting", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let arithmetic = (0..<1_000).reduce(CompiledStateExpr.value(.integer(1))) { nested, index in
+            index.isMultiple(of: 2) ? .add(nested, .value(.integer(0))) : .negate(nested)
+        }
+        let comparison = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, _ in
+            .equal(nested, .value(.boolean(true)))
+        }
+        #expect(try checker.resolutionScope(arithmetic, expected: .int).resultType == .int)
+        #expect(try checker.resolutionScope(comparison, expected: .bool).resultType == .bool)
+        #expect(throws: CompilationDiagnostic.self) {
+            try checker.type(of: .subset(.value(.integer(1)), .value(.integer(2))), expected: .bool)
+        }
+    }
+
     @Test("Boolean diagnostics retain the failing branch's ancestry and left-to-right order")
     func booleanBranchDiagnostics() throws {
         let specification = TLASpec(name: "BooleanBranches", variables: [], actions: [], invariants: [])

@@ -247,6 +247,9 @@ private enum NativeExpressionCheckTask {
     case check(CompiledStateExpr, expected: NativeType)
     case reconcile(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
     case finish(expected: NativeType)
+    case comparison(expected: NativeType)
+    case subset(expected: NativeType)
+    case setOperands(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
     case bind(BinderID)
     case bindDomain(BinderID, retainElement: Bool)
     case set
@@ -464,19 +467,6 @@ struct NativeTypeInference: Sendable {
             return try element(infer(domain, expected: .set(context)))
         }
         return domainElement
-    }
-
-    private mutating func comparisonOperands(
-        _ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr, expected: NativeType = .unknown
-    ) throws -> NativeType {
-        let left = try infer(lhs, expected: expected)
-        let right = try infer(rhs, expected: expected)
-        let context = try Self.operandContext(left, right)
-        if context != expected {
-            if left != context { _ = try infer(lhs, expected: context) }
-            if right != context { _ = try infer(rhs, expected: context) }
-        }
-        return context
     }
 
     /// Selects contextual evidence without admitting a conversion. Both
@@ -1110,7 +1100,10 @@ struct NativeTypeInference: Sendable {
 
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
         switch expression {
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .setMap, .forAll, .exists:
+        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
+             .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
+             .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
+             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference:
             return try inferStructuredExpression(expression, expected: expected).type
         default: break
         }
@@ -1130,7 +1123,10 @@ struct NativeTypeInference: Sendable {
         guard isOperatorApplication(expression) else {
             let checked: NativeCheckedType
             switch expression {
-            case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .setMap, .forAll, .exists:
+            case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
+                 .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
+                 .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
+                 .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference:
                 checked = try inferStructuredExpression(expression, expected: expected)
             default:
                 do { checked = try inferResolved(expression, expected: expected) }
@@ -1499,7 +1495,62 @@ struct NativeTypeInference: Sendable {
             while let task = pending.popLast() {
                 switch task {
                 case .check(let expression, let expected):
+                    if case .union = expected {
+                        switch expression {
+                        case .functionLiteral, .union, .intersection, .setDifference:
+                            ancestors.append(expression)
+                            if let constructor = try unionResultType(expression, expected: expected) {
+                                let checked = NativeCheckedType(type: expected, computationType: constructor)
+                                results.append(checked.type)
+                                completed = checked
+                                ancestors.removeLast()
+                                continue
+                            }
+                            ancestors.removeLast()
+                        default: break
+                        }
+                    }
                     switch expression {
+                    case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
+                         .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs), .modulo(let lhs, let rhs),
+                         .lessThan(let lhs, let rhs), .lessOrEqual(let lhs, let rhs),
+                         .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
+                         .integerRange(let lhs, let rhs):
+                        let result: NativeType = switch expression {
+                        case .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual: .bool
+                        case .integerRange: .set(.int)
+                        default: .int
+                        }
+                        ancestors.append(expression)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected), .result(result),
+                            .discard, .check(rhs, expected: .int),
+                            .discard, .check(lhs, expected: .int),
+                        ])
+                    case .negate(let operand):
+                        ancestors.append(expression)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected), .result(.int),
+                            .discard, .check(operand, expected: .int),
+                        ])
+                    case .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .subset(let lhs, let rhs):
+                        ancestors.append(expression)
+                        if case .subset = expression { pending.append(.subset(expected: expected)) }
+                        else { pending.append(.comparison(expected: expected)) }
+                        pending.append(contentsOf: [
+                            .reconcile(lhs, rhs, expected: .unknown),
+                            .check(rhs, expected: .unknown),
+                            .check(lhs, expected: .unknown),
+                        ])
+                    case .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs):
+                        ancestors.append(expression)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .setOperands(lhs, rhs, expected: expected),
+                            .reconcile(lhs, rhs, expected: .unknown),
+                            .check(rhs, expected: .unknown),
+                            .check(lhs, expected: .unknown),
+                        ])
                     case .ifThenElse(let condition, let yes, let no):
                         ancestors.append(expression)
                         pending.append(contentsOf: [
@@ -1551,13 +1602,6 @@ struct NativeTypeInference: Sendable {
                         ])
                     case .functionLiteral(let domain, let id, let body):
                         ancestors.append(expression)
-                        if case .union = expected, let constructor = try unionResultType(expression, expected: expected) {
-                            let checked = NativeCheckedType(type: expected, computationType: constructor)
-                            results.append(checked.type)
-                            completed = checked
-                            ancestors.removeLast()
-                            continue
-                        }
                         bindingSources[id] = domain
                         bindingDomains[id] = literalDomain(domain)
                         let hints: (key: NativeType, value: NativeType)
@@ -1641,6 +1685,25 @@ struct NativeTypeInference: Sendable {
                             ])
                         }
                     }
+                case .setOperands(let lhs, let rhs, let expected):
+                    guard let compared = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked set operand types")
+                    }
+                    let context = try Self.operandContext(compared, expected)
+                    _ = try element(context)
+                    pending.append(contentsOf: [
+                        .check(rhs, expected: context),
+                        .discard, .check(lhs, expected: context),
+                    ])
+                case .comparison(let expected), .subset(let expected):
+                    guard let context = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked comparison operands")
+                    }
+                    if case .subset = task { _ = try element(context) }
+                    let checked = try checkedType(.bool, expected: expected, operandTypes: [context, context])
+                    results.append(checked.type)
+                    completed = checked
+                    ancestors.removeLast()
                 case .finish(let expected):
                     guard let result = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked expression type")
@@ -1714,32 +1777,13 @@ struct NativeTypeInference: Sendable {
             return .init(type: type, computationType: bindings[id] ?? type)
         case .controlLocation: result = .control
         case .enabledAction: result = .bool
-        case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .integerDivide(let a, let b), .modulo(let a, let b):
-            _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .int
-        case .negate(let value): _ = try infer(value, expected: .int); result = .int
-        case .equal(let a, let b), .notEqual(let a, let b):
-            let operand = try comparisonOperands(a, b)
-            let checked = try checkedType(.bool, expected: expected)
-            return .init(type: checked.type, computationType: checked.computationType, operandTypes: [operand, operand])
-        case .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b):
-            _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .bool
         case .setLiteral(let expressions):
             return try inferSetLiteral(expressions, expected: expected)
         case .in(let value, let domain):
             let item = try membershipElement(value: value, domain: domain)
             let checked = try checkedType(.bool, expected: expected)
             return .init(type: checked.type, computationType: checked.computationType, operandTypes: [item, .set(item)])
-        case .subset(let a, let b):
-            let context = try comparisonOperands(a, b)
-            _ = try element(context)
-            let checked = try checkedType(.bool, expected: expected)
-            return .init(type: checked.type, computationType: checked.computationType, operandTypes: [context, context])
-        case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b):
-            let context = try Self.operandContext(comparisonOperands(a, b), expected)
-            _ = try element(context)
-            _ = try infer(a, expected: context); result = try infer(b, expected: context)
         case .cardinality(let value): _ = try infer(value, expected: .set(.unknown)); result = .int
-        case .integerRange(let a, let b): _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .set(.int)
         case .sequenceSelect(let sequence, let id, let predicate):
             return try inferSequenceSelection(sequence, binder: id, predicate: predicate, expected: expected)
         case .setFilter(let domain, let id, let predicate):
