@@ -102,7 +102,7 @@ private struct ReachableInvariantFailure {
         #expect(pairs.count == 4)
         for lhs in 1...2 {
             for rhs in 3...4 {
-                let machine = try CartesianInitialSelection.makeMachine(initial: .init(left: lhs, right: rhs))
+                let machine = try CartesianInitialSelection.makeMachine(.init(left: lhs, right: rhs))
                 #expect(pairs.contains([.integer(machine.state.left), .integer(machine.state.right)]))
             }
         }
@@ -111,7 +111,7 @@ private struct ReachableInvariantFailure {
             Issue.record("Multiple initial states require explicit selection")
         } catch GeneratedMachineError.ambiguousInitialState {}
         do {
-            _ = try CartesianInitialSelection.makeMachine(initial: .init(left: 9, right: 3))
+            _ = try CartesianInitialSelection.makeMachine(.init(left: 9, right: 3))
             Issue.record("A selection outside the formal initial domain must fail")
         } catch GeneratedMachineError.invalidInitialState {}
     }
@@ -125,7 +125,7 @@ private struct ReachableInvariantFailure {
             Issue.record("Empty initial domains cannot construct a machine")
         } catch GeneratedMachineError.noInitialState {}
         do {
-            _ = try EmptyInitialSelection.makeMachine(initial: .init(count: 1))
+            _ = try EmptyInitialSelection.makeMachine(.init(count: 1))
             Issue.record("Explicit selection cannot create a missing initial state")
         } catch GeneratedMachineError.invalidInitialState {}
     }
