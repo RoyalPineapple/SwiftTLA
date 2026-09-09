@@ -57,6 +57,7 @@ package struct NativeProjectionPair: Hashable, Sendable {
 }
 
 package struct NativeResolvedProgram: Sendable {
+    /// Implicit conversions required by this program, including their components.
     package let projections: Set<NativeProjectionPair>
     package func canProject(source: NativeType, to target: NativeType) -> Bool {
         source == target || projections.contains(.init(source: source, target: target))

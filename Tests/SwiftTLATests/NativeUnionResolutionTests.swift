@@ -13,8 +13,9 @@ import Testing
         let program = try resolve(type: "Choice", initial: .int(1))
         let type = try #require(program.variableTypes.values.first)
         #expect(type == .union([.finite([.integer(1), .integer(2), .constant("none")]), .set(.named("Node"))]))
-        #expect(program.canProject(source: .named("Node"), to: type))
-        #expect(!program.canProject(source: .int, to: type))
+        let checker = try typeChecker()
+        #expect(checker.canProjectRead(.named("Node"), to: type))
+        #expect(!checker.canProjectRead(.int, to: type))
     }
 
     @Test("union collection constructors retain validated member evidence")
@@ -72,7 +73,8 @@ import Testing
         let view = program[program[root].children[0]]
         #expect(view.computationType == .named("Node"))
         let source = program[view.children[0]].resultType
-        #expect(!program.canProject(source: source, to: .named("Node")))
+        let checker = try typeChecker()
+        #expect(!checker.canProjectRead(source, to: .named("Node")))
     }
 
     @Test("source witness structure agrees with the declared union before native normalization")
@@ -92,14 +94,20 @@ import Testing
         let root = try #require(program.invariants.values.first)
         let view = program[program[root].children[0]]
         #expect(view.computationType == .finite([.integer(1)]))
-        #expect(!program.canProject(source: .named("Node"), to: view.computationType))
-        #expect(program.canProject(source: view.computationType, to: .named("Node")))
+        let checker = try typeChecker()
+        #expect(!checker.canProjectRead(.named("Node"), to: view.computationType))
+        #expect(checker.canProjectRead(view.computationType, to: .named("Node")))
     }
 
     @Test("an enum case table does not imply an explicit finite-view witness")
     func enumWithoutWitness() throws {
         let source = NativeSourceTypeMetadata(enums: ["Plain": [.int(1)]])
         #expect(!(try source.formalShape(for: "Plain")).isSupported)
+    }
+
+    private func typeChecker() throws -> NativeTypeInference {
+        let specification = TLASpec(name: "UnionConversions", variables: [], actions: [], invariants: [])
+        return try NativeTypeInference(plan: .init(compilation: specification.compile()), sourceTypes: metadata)
     }
 
     private func resolve(type: String, initial: StateExpr, invariant: StateExpr? = nil) throws -> NativeResolvedProgram {

@@ -53,22 +53,42 @@ private final class NativeProgramResolver {
         for item in plan.invariants { invariantRoots[item.id] = try expression(item.body, expected: .bool) }
         let constraint = try plan.constraint.map { try expression($0, expected: .bool) }
         let assume = try plan.assume.map { try expression($0, expected: .bool) }
-        var types = Set<NativeType>()
-        func collect(_ type: NativeType) {
-            guard types.insert(type).inserted else { return }
-            for component in type.components { collect(component) }
-        }
-        for type in inference.variables.values { collect(type) }
-        for node in expressions { collect(node.resultType); collect(node.computationType) }
-        for callback in callbacks { callback.parameters.forEach(collect); collect(callback.result) }
-        let projections = Set(types.flatMap { source in
-            types.compactMap { target in
-                inference.canProjectRead(source, to: target) ? NativeProjectionPair(source: source, target: target) : nil
+        var checks: [NativeProjectionPair: Bool] = [:]
+        for node in expressions {
+            collectProjection(node.computationType, to: node.resultType, checks: &checks)
+            if case .assertView = node.expression, let source = node.children.first {
+                collectProjection(expressions[source.ordinal].resultType, to: node.computationType, checks: &checks)
             }
-        })
+        }
+        let projections = Set(checks.compactMap { pair, allowed in allowed ? pair : nil })
         return .init(projections: projections, variableTypes: inference.variables, bindingTypes: inference.bindings,
             expressions: expressions, actionNodes: actions, functions: try functions.map { try require($0) }, callbacks: callbacks,
             initializations: initializations, actions: actionRoots, invariants: invariantRoots, constraint: constraint, assume: assume)
+    }
+
+    /// Retain only conversions used by an expression or one of its components.
+    /// Track failed checks too, so repeated checked views do not repeat them.
+    func collectProjection(_ source: NativeType, to target: NativeType, checks: inout [NativeProjectionPair: Bool]) {
+        guard source != target else { return }
+        let pair = NativeProjectionPair(source: source, target: target)
+        guard checks[pair] == nil else { return }
+        checks[pair] = inference.canProjectRead(source, to: target)
+        switch (source, target) {
+        case (.union(let alternatives), _):
+            for alternative in alternatives { collectProjection(alternative, to: target, checks: &checks) }
+        case (_, .union(let alternatives)):
+            for alternative in alternatives { collectProjection(source, to: alternative, checks: &checks) }
+        case (.dictionary(let inputKey, let inputValue), .dictionary(let outputKey, let outputValue)):
+            collectProjection(inputKey, to: outputKey, checks: &checks)
+            collectProjection(inputValue, to: outputValue, checks: &checks)
+        case (.set(let input), .set(let output)), (.array(let input), .array(let output)):
+            collectProjection(input, to: output, checks: &checks)
+        case (.tuple(let inputs), .tuple(let outputs)) where inputs.count == outputs.count:
+            for (input, output) in zip(inputs, outputs) { collectProjection(input, to: output, checks: &checks) }
+        case (.record(let inputs), .record(let outputs)) where inputs.map(\.name) == outputs.map(\.name):
+            for (input, output) in zip(inputs, outputs) { collectProjection(input.type, to: output.type, checks: &checks) }
+        default: break
+        }
     }
 
     func require<Value>(_ value: Value?) throws -> Value {

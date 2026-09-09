@@ -2,6 +2,22 @@ import Testing
 @testable import SwiftTLA
 
 @Suite struct NativeResolutionContractTests {
+    @Test("unrelated declared types do not expand the program's conversion table")
+    func conversionsFollowExpressionUses() throws {
+        let names = (0..<12).map { "Value\($0)" }
+        let metadata = NativeSourceTypeMetadata(enums: Dictionary(uniqueKeysWithValues: names.map { ($0, [TLAValue.int(0)]) }))
+        let variables = names.enumerated().map { index, name in
+            NamedVar(name: "value\(index)", initialization: .value(.int(0)), generatedSwiftType: name, origin: .compiler)
+        }
+        let specification = TLASpec(name: "RequiredConversions", variables: variables + [
+            .init(name: "result", initialization: .value(.int(0)), generatedSwiftType: "Int", origin: .compiler)
+        ], actions: [
+            .init(name: "read", body: .assign(.named("result"), .variable("value0")))
+        ], invariants: [])
+        let program = try NativeResolvedProgram(plan: .init(compilation: specification.compile()), sourceTypes: metadata)
+        #expect(program.projections == [.init(source: .named("Value0"), target: .int)])
+    }
+
     @Test("the resolved graph freezes independent typed uses of one formal body")
     func polymorphicUsesHaveSeparateBodies() throws {
         let identity = FormalOperatorDefinition(name: "Identity", parameters: [.value("value")], body: .variable("value"))
