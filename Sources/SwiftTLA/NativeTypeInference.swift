@@ -287,6 +287,18 @@ struct NativeTypeInference: Sendable {
                 variables[variable.id] = .unknown
             }
         }
+        for action in plan.actions {
+            let collection = action.collection.flatMap { id in plan.variables.first { $0.id == id }?.collection }
+            for binding in action.bindings {
+                let hint: NativeType
+                if let variable = action.collection, let element = collection?.elementType {
+                    hint = .collectionMember(variable, swiftType: "\(element).ID")
+                } else { hint = try binding.generatedSwiftType.map { try Self.declared($0, metadata: sourceTypes) } ?? .unknown }
+                let inferred = try binding.values.reduce(hint) { try Self.merge($0, literal($1, expected: hint)) }
+                bindingDomains[binding.binder] = Set(binding.values)
+                bindings[binding.binder] = try Self.merge(bindings[binding.binder] ?? .unknown, inferred)
+            }
+        }
         // Each pass can refine an unresolved component through another variable
         // or binder; stop at the fixed point rather than imposing a pass budget.
         while true {
@@ -305,16 +317,6 @@ struct NativeTypeInference: Sendable {
                 variables[initialization.variable] = try Self.merge(expected, inferred)
             }
             for action in plan.actions {
-                for binding in action.bindings {
-                    let collection = action.collection.flatMap { id in plan.variables.first { $0.id == id }?.collection }
-                    let hint: NativeType
-                    if let variable = action.collection, let element = collection?.elementType {
-                        hint = .collectionMember(variable, swiftType: "\(element).ID")
-                    } else { hint = try binding.generatedSwiftType.map { try Self.declared($0, metadata: sourceTypes) } ?? .unknown }
-                    let inferred = try binding.values.reduce(hint) { try Self.merge($0, literal($1, expected: hint)) }
-                    bindingDomains[binding.binder] = Set(binding.values)
-                    bindings[binding.binder] = try Self.merge(bindings[binding.binder] ?? .unknown, inferred)
-                }
                 do { try actionTypes(action.body) }
                 catch let diagnostic as CompilationDiagnostic {
                     let name = plan.actionLayouts.first { $0.id == action.id }?.declaration.name ?? String(action.id.ordinal)
@@ -449,8 +451,10 @@ struct NativeTypeInference: Sendable {
         let left = try infer(lhs, expected: expected)
         let right = try infer(rhs, expected: expected)
         let context = try Self.operandContext(left, right)
-        _ = try infer(lhs, expected: context)
-        _ = try infer(rhs, expected: context)
+        if context != expected {
+            _ = try infer(lhs, expected: context)
+            _ = try infer(rhs, expected: context)
+        }
         return context
     }
 
@@ -606,9 +610,11 @@ struct NativeTypeInference: Sendable {
         let source = try infer(expression)
         switch source {
         case .array(let element):
-            return try infer(expression, expected: .array(expected == .unknown ? element : expected))
+            guard expected != .unknown, expected != element else { return source }
+            return try infer(expression, expected: .array(expected))
         case .dictionary(.int, let element):
-            return try infer(expression, expected: .dictionary(.int, expected == .unknown ? element : expected))
+            guard expected != .unknown, expected != element else { return source }
+            return try infer(expression, expected: .dictionary(.int, expected))
         case .unknown:
             return try infer(expression, expected: .array(expected))
         default: throw Self.diagnostic("sequence", "expected an array or integer-keyed function, received \(source.swiftType)")
