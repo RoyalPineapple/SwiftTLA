@@ -213,6 +213,9 @@ struct CompiledTLARenderer {
                 case .functionSet(let lhs, let rhs): schedule("[", [lhs, rhs], separator: " -> ", suffix: "]")
                 case .setSum(let lhs, let rhs): schedule("Sum(", [lhs, rhs], separator: ", ", suffix: ")")
                 case .integerRange(let lhs, let rhs): schedule("", [lhs, rhs], separator: "..", suffix: "")
+                case .assertView(let value, let shape):
+                    let rendered = try state(value)
+                    parts.append("(CASE \(shape.predicate(for: rendered)) -> \(rendered))")
                 case .negate(let value): schedule("(-", [value], separator: "", suffix: ")")
                 case .not(let value): schedule("(~", [value], separator: "", suffix: ")")
                 case .cardinality(let value): schedule("Cardinality(", [value], separator: "", suffix: ")")

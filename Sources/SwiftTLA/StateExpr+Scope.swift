@@ -23,7 +23,7 @@ extension StateExpr {
              .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
              .functionApply(let lhs, let rhs), .functionSet(let lhs, let rhs):
             lhs.freeVariableNames.union(rhs.freeVariableNames)
-        case .negate(let value), .not(let value), .cardinality(let value),
+        case .assertView(let value, _), .negate(let value), .not(let value), .cardinality(let value),
              .powerSet(let value), .unionAll(let value), .tupleLength(let value),
              .tupleHead(let value), .tupleTail(let value), .domain(let value),
              .sequenceFromSet(let value):

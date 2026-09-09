@@ -46,7 +46,7 @@ enum TLASpecVerifier {
         let parsed = SpecParser.parseSpecClosure(
             source.closure,
             enumDefinitions: enumDefinitions,
-            recordSchemas: sourceMetadata.records
+            sourceTypes: sourceMetadata
         )
         let compilation = try parsed.compile(specificationName: source.name)
         if parsed.hasStateDeclarations == false {

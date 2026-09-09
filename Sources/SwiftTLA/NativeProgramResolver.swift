@@ -53,7 +53,20 @@ private final class NativeProgramResolver {
         for item in plan.invariants { invariantRoots[item.id] = try expression(item.body, expected: .bool) }
         let constraint = try plan.constraint.map { try expression($0, expected: .bool) }
         let assume = try plan.assume.map { try expression($0, expected: .bool) }
-        return .init(variableTypes: inference.variables, bindingTypes: inference.bindings,
+        var types = Set<NativeType>()
+        func collect(_ type: NativeType) {
+            guard types.insert(type).inserted else { return }
+            for component in type.components { collect(component) }
+        }
+        for type in inference.variables.values { collect(type) }
+        for node in expressions { collect(node.resultType); collect(node.computationType) }
+        for callback in callbacks { callback.parameters.forEach(collect); collect(callback.result) }
+        let projections = Set(types.flatMap { source in
+            types.compactMap { target in
+                inference.canProjectRead(source, to: target) ? NativeProjectionPair(source: source, target: target) : nil
+            }
+        })
+        return .init(projections: projections, variableTypes: inference.variables, bindingTypes: inference.bindings,
             expressions: expressions, actionNodes: actions, functions: try functions.map { try require($0) }, callbacks: callbacks,
             initializations: initializations, actions: actionRoots, invariants: invariantRoots, constraint: constraint, assume: assume)
     }
@@ -115,6 +128,7 @@ private final class NativeProgramResolver {
         }
         switch value {
         case .value, .controlLocation, .enabledAction: break
+        case .assertView(let source, _): children = [try child(source)]
         case .stateVariable(let id): computation = try require(scope.variables[id])
         case .boundValue(let id): computation = try require(scope.bindings[id])
         case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .modulo(let a, let b), .integerDivide(let a, let b), .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b): try pair(a, b, .int)

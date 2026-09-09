@@ -30,6 +30,7 @@ package indirect enum CompiledStateExpr: Hashable, Sendable {
     case divide(CompiledStateExpr, CompiledStateExpr)
     case modulo(CompiledStateExpr, CompiledStateExpr)
     case negate(CompiledStateExpr)
+    case assertView(CompiledStateExpr, FormalValueShape)
     case integerDivide(CompiledStateExpr, CompiledStateExpr)
     case equal(CompiledStateExpr, CompiledStateExpr)
     case notEqual(CompiledStateExpr, CompiledStateExpr)
@@ -375,7 +376,7 @@ extension CompiledStateExpr {
                 variables.insert(variable)
             case .operatorReference(let id):
                 visitCall(.reference(id, arity: 0), arguments: [], scope: scope)
-            case .negate(let value), .not(let value), .cardinality(let value),
+            case .assertView(let value, _), .negate(let value), .not(let value), .cardinality(let value),
                  .powerSet(let value), .unionAll(let value), .tupleAccess(let value, _),
                  .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
                  .recordAccess(let value, _, _), .domain(let value), .sequenceFromSet(let value):

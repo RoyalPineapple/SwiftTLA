@@ -51,7 +51,17 @@ package struct NativeResolvedAction: Sendable {
     package let bindings: [BinderID: NativeType]
 }
 
+package struct NativeProjectionPair: Hashable, Sendable {
+    package let source: NativeType
+    package let target: NativeType
+}
+
 package struct NativeResolvedProgram: Sendable {
+    package let projections: Set<NativeProjectionPair>
+    package func canProject(source: NativeType, to target: NativeType) -> Bool {
+        source == target || projections.contains(.init(source: source, target: target))
+    }
+
     package let variableTypes: [VariableID: NativeType]
     package let bindingTypes: [BinderID: NativeType]
     package let expressions: [NativeResolvedExpression]

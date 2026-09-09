@@ -2,9 +2,15 @@ import SwiftSyntaxMacros
 
 public protocol TLAValueType: TLAValueConvertible, StateExprConvertible, Sendable {
   static var defaultValue: Self { get }
+  static var formalValueShape: FormalValueShape { get }
   init?(formalValue: TLAValue)
 }
+extension TLAValueType {
+  public static var formalValueShape: FormalValueShape { .unsupported(String(reflecting: Self.self)) }
+}
+
 extension Int: TLAValueType {
+  public static var formalValueShape: FormalValueShape { .integer }
   public static var defaultValue: Int { 0 }
   public init?(formalValue: TLAValue) {
     guard case .int(let value) = formalValue else { return nil }
@@ -12,6 +18,7 @@ extension Int: TLAValueType {
   }
 }
 extension Bool: TLAValueType {
+  public static var formalValueShape: FormalValueShape { .boolean }
   public static var defaultValue: Bool { false }
   public init?(formalValue: TLAValue) {
     guard case .bool(let value) = formalValue else { return nil }
@@ -19,6 +26,7 @@ extension Bool: TLAValueType {
   }
 }
 extension String: TLAValueType {
+  public static var formalValueShape: FormalValueShape { .string }
   public static var defaultValue: String { "" }
   public init?(formalValue: TLAValue) {
     guard case .string(let value) = formalValue else { return nil }

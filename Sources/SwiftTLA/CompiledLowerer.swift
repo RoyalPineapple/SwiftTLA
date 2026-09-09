@@ -59,6 +59,7 @@ struct CompiledLowerer {
     private var knownBinderNames: Set<String> = []
     private var operatorNames: [OperatorID: String]
     private var boundedLocalOperators: Set<OperatorID> = []
+    private(set) var requiredStandardModules: Set<StandardModule> = []
 
     init(
         spec: TLASpec,
@@ -893,6 +894,17 @@ struct CompiledLowerer {
                         expression: .enabledAction(try action(named: name, at: path)),
                         operatorReferences: []
                     ))
+                case .assertView(let value, let shape):
+                    guard shape.isSupported else {
+                        throw CompilationDiagnostic(
+                            code: .unsupportedGeneratedValueShape, stage: .validation, path: path,
+                            expected: "a supported explicit formal value shape",
+                            actual: "unsupported explicit view shape '\(shape)'",
+                            nextSafeAction: "Use a supported value shape for this explicit union view."
+                        )
+                    }
+                    requiredStandardModules.formUnion(shape.requiredStandardModules)
+                    scheduleUnary(value, at: path, scope: scope, build: { .assertView($0, shape) }, on: &tasks)
                 case .negate(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.negate, on: &tasks)
                 case .not(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.not, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.cardinality, on: &tasks)

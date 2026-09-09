@@ -164,7 +164,8 @@ final class ParserSession {
     /// Facts scoped to one syntax tree and macro expansion.
     var constants: [ConstantDecl] = []
     let enumDefinitions: [ParserEnumDefinition]
-    let recordSchemas: [String: [NativeSourceRecordField]]
+    let sourceTypes: NativeSourceTypeMetadata
+    var recordSchemas: [String: [NativeSourceRecordField]] { sourceTypes.records }
     /// Tuple-shaped algorithm state currently in scope. This lets the parser
     /// distinguish `sequence[index]` from a finite-function lookup through
     /// structural type syntax.
@@ -177,10 +178,10 @@ final class ParserSession {
 
     init(
         enumDefinitions: [ParserEnumDefinition] = [],
-        recordSchemas: [String: [NativeSourceRecordField]] = [:]
+        sourceTypes: NativeSourceTypeMetadata = .init()
     ) {
         self.enumDefinitions = enumDefinitions
-        self.recordSchemas = recordSchemas
+        self.sourceTypes = sourceTypes
     }
 
     func enumDefinition(named typeName: String) -> ParserEnumDefinition? {
@@ -1070,12 +1071,18 @@ final class ParserSession {
             return value
         }
 
-        // A typed union view is justified by the surrounding PlusCal label.
-        // Its formal representation remains the original value.
+        // Preserve the explicit view as checked formal evidence.
         if ["assumingFirst", "assumingSecond"].contains(access.declName.baseName.text),
            let baseSyntax = access.base,
-           let base = decodeTypedFacadeValue(baseSyntax, scope: scope) {
-            return base
+           let base = decodeTypedFacadeValue(baseSyntax, scope: scope),
+           call.arguments.count == 1,
+           let metatype = call.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+           metatype.declName.baseName.text == "self",
+           let typeSyntax = metatype.base,
+           let typeName = typedFacadeType(typeSyntax)?.renderedSourceName
+                ?? Self.sourceTypePath(typeSyntax)?.joined(separator: "."),
+           let shape = try? sourceTypes.formalShape(for: typeName), shape.isSupported {
+            return .assertView(base, shape)
         }
 
         if access.declName.baseName.text == "literal",
@@ -2139,9 +2146,9 @@ package enum SpecParser {
     package static func parseSpecClosure(
         _ closure: ClosureExprSyntax,
         enumDefinitions: [ParserEnumDefinition] = [],
-        recordSchemas: [String: [NativeSourceRecordField]] = [:]
+        sourceTypes: NativeSourceTypeMetadata = .init()
     ) -> ParsedSpecComponents {
-        ParserSession(enumDefinitions: enumDefinitions, recordSchemas: recordSchemas).parseSpecClosure(closure)
+        ParserSession(enumDefinitions: enumDefinitions, sourceTypes: sourceTypes).parseSpecClosure(closure)
     }
 
     static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {

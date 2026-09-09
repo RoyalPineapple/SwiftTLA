@@ -11,6 +11,7 @@ struct NativeSwiftEmitter {
     var records: [NativeType] = []
     var atoms: [String] = []
     var finiteValues: [[CompiledValue]] = []
+    var unions: [[NativeType]] = []
     private var hasDepthScope = false
     private var callbackFunctions: [NativeCallbackID: String] = [:]
 
@@ -42,6 +43,10 @@ struct NativeSwiftEmitter {
             if let index = finiteValues.firstIndex(of: members) { return "NativeValue\(index)" }
             finiteValues.append(members)
             return "NativeValue\(finiteValues.count - 1)"
+        case .union(let alternatives):
+            if let index = unions.firstIndex(of: alternatives) { return "NativeUnion\(index)" }
+            unions.append(alternatives)
+            return "NativeUnion\(unions.count - 1)"
         case .set(let element): return "Set<\(try swiftType(element))>"
         case .array(let element): return "[\(try swiftType(element))]"
         case .dictionary(let key, let value): return "[\(try swiftType(key)): \(try swiftType(value))]"
@@ -91,6 +96,14 @@ struct NativeSwiftEmitter {
     }
 
     mutating func literal(_ value: CompiledValue, as type: NativeType) throws -> String {
+        if case .union(let alternatives) = type {
+            for (index, alternative) in alternatives.enumerated() {
+                if let payload = try? literal(value, as: alternative) {
+                    return "\(try swiftType(type)).alternative\(index + 1)(\(payload))"
+                }
+            }
+            throw unsupported("literal outside union")
+        }
         if case .collectionMember(let variable, _) = type {
             guard let collection = model.compilation.machineSurfacePlan.variables.first(where: { $0.storageOrdinal == variable.ordinal })?.collection,
                   let index = collection.members.firstIndex(where: { CompiledValue(formal: $0) == value }) else {
@@ -143,6 +156,13 @@ struct NativeSwiftEmitter {
 
     mutating func projected(_ value: String, from source: NativeType, to destination: NativeType?) throws -> String {
         guard let destination, source != destination else { return value }
+        if case .union = source { return try unionProjection(value, from: source, to: destination, checked: false) }
+        if case .union(let alternatives) = destination {
+            guard let index = alternatives.firstIndex(where: { program.canProject(source: source, to: $0) }) else {
+                throw unsupported("union injection")
+            }
+            return "\(try swiftType(destination)).alternative\(index + 1)(\(try projected(value, from: source, to: alternatives[index])))"
+        }
         if case .dictionary(let sourceKey, let sourceValue) = source,
            case .dictionary(let targetKey, let targetValue) = destination {
             let key = try projected("entry.key", from: sourceKey, to: targetKey)
@@ -235,6 +255,7 @@ struct NativeSwiftEmitter {
             body = try elements.enumerated().map { index, element in
                 "if lhs.\(fieldName(type, index: index)) != rhs.\(fieldName(type, index: index)) { return (\(try ordering(element)))(lhs.\(fieldName(type, index: index)), rhs.\(fieldName(type, index: index))) }"
             }.joined(separator: "\n") + "\nreturn false"
+        case .union(let alternatives): body = try unionOrdering(alternatives)
         case .unknown: throw unsupported("unresolved structural order")
         }
         return "{ (lhs: \(name), rhs: \(name)) -> Bool in \(body) }"
@@ -357,6 +378,8 @@ struct NativeSwiftEmitter {
             return substitutions[id] ?? binder(id)
         case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"
         case .enabledAction(let id): return "enabled.contains(\(id.ordinal))"
+        case .assertView:
+            return try checkedView(emit(0), from: childType(0), to: node.computationType)
         case .add(_, _): return try arithmetic("add")
         case .subtract(_, _): return try arithmetic("subtract")
         case .multiply(_, _): return try arithmetic("multiply")

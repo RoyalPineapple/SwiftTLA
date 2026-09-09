@@ -276,6 +276,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case divide(StateExpr, StateExpr)
     case modulo(StateExpr, StateExpr)
     case negate(StateExpr)
+    case assertView(StateExpr, FormalValueShape)
     case integerDivide(StateExpr, StateExpr)
 
     case equal(StateExpr, StateExpr)

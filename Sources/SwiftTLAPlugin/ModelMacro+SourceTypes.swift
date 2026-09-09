@@ -85,10 +85,18 @@ extension TLASpecVerifier {
                 NativeSourceRecordField(sourceName: field.selector, name: names[field.property]!, swiftType: properties.first { $0.name == field.property }!.swiftType)
             }
         }
+        let finiteTypes = Set(members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.filter { declaration in
+            declaration.inheritanceClause?.inheritedTypes.contains {
+                $0.type.as(IdentifierTypeSyntax.self)?.name.text == "FiniteTLAValueDomain"
+            } == true
+        }.map { $0.name.text })
         return NativeSourceTypeMetadata(
             aliases: aliases,
             records: records,
-            enums: Dictionary(uniqueKeysWithValues: enums.map { ($0.typeName, $0.cases.map(\.value)) })
+            enums: Dictionary(uniqueKeysWithValues: enums.map { ($0.typeName, $0.cases.map(\.value)) }),
+            finiteViewDomains: Dictionary(uniqueKeysWithValues: enums.filter { finiteTypes.contains($0.typeName) }.map {
+                ($0.typeName, $0.formalDomainValues)
+            })
         )
     }
 }

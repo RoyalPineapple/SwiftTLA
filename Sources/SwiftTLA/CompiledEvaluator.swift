@@ -315,6 +315,10 @@ struct CompiledEvaluator: Sendable {
                     let dividend = try integer(popValue(from: &values))
                     let divisor = try integer(popValue(from: &values))
                     values.append(.integer(try nativeOperation { try _NativeMachineOperations.modulo(dividend, divisor) }))
+                case .assertView(_, let shape):
+                    let value = try popValue(from: &values)
+                    guard shape.accepts(value) else { throw EvalError.noMatchingCase }
+                    values.append(value)
                 case .negate:
                     let operand = try integer(popValue(from: &values))
                     values.append(.integer(try nativeOperation { try _NativeMachineOperations.negate(operand) }))
@@ -925,7 +929,7 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.finish(expression))
                     tasks.append(.expression(lhs, scope))
                     tasks.append(.expression(rhs, scope))
-                case .negate(let operand):
+                case .assertView(let operand, _), .negate(let operand):
                     tasks.append(.finish(expression))
                     tasks.append(.expression(operand, scope))
                 case .equal(let lhs, let rhs):

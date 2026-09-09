@@ -7,6 +7,8 @@ public enum OneOf<First: TLAValueType, Second: TLAValueType>: TLAValueType, Send
     case first(First)
     case second(Second)
 
+    public static var formalValueShape: FormalValueShape { .union(First.formalValueShape, Second.formalValueShape) }
+
     public static var defaultValue: Self { .first(First.defaultValue) }
 
     public init?(formalValue: TLAValue) {
@@ -42,18 +44,18 @@ extension OneOf: Equatable where First: Equatable, Second: Equatable {}
 extension Expr {
     /// Views a formal union as a known alternative in this control path.
     ///
-    /// The resulting expression retains the same TLA+ value. The surrounding
-    /// control region establishes the asserted formal shape.
+    /// The resulting expression retains the same TLA+ value and fails when
+    /// that value does not have the asserted formal shape.
     public func assumingFirst<Value: TLAValueType, Other: TLAValueType>(
         _ type: Value.Type
     ) -> Expr<Value> where T == OneOf<Value, Other> {
-        Expr<Value>(raw)
+        Expr<Value>(.assertView(raw, Value.formalValueShape))
     }
 
     /// Views a formal union as its second known alternative.
     public func assumingSecond<First: TLAValueType, Value: TLAValueType>(
         _ type: Value.Type
     ) -> Expr<Value> where T == OneOf<First, Value> {
-        Expr<Value>(raw)
+        Expr<Value>(.assertView(raw, Value.formalValueShape))
     }
 }

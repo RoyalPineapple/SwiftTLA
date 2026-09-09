@@ -21,9 +21,9 @@ struct RecordSelectorAuthorityTests {
 
     @Test("Registered schema selectors use their declared formal field name")
     func schemaSelectorsPreserveFormalNames() throws {
-        let parser = ParserSession(recordSchemas: ["OperationSchema": [
+        let parser = ParserSession(sourceTypes: .init(records: ["OperationSchema": [
             .init(sourceName: "operation", name: "op", swiftType: "String")
-        ]])
+        ]]))
         for source in ["record[OperationSchema.operation]", "record[Model.OperationSchema.operation]"] {
             #expect(parser.decodeTypedFacadeValue(try expression(source), scope: .empty)
                 == .recordAccess(.variable("record"), "op"))

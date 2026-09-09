@@ -164,7 +164,7 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
         }
     }
 
-    private var orderingKind: Int {
+    package var orderingKind: Int {
         switch self {
         case .integer: 0
         case .boolean: 1

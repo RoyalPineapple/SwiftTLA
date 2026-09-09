@@ -3,6 +3,9 @@ public protocol FiniteTLAValueDomain: TLAValueType, Hashable, Sendable {
 }
 
 extension FiniteTLAValueDomain {
+  public static var formalValueShape: FormalValueShape {
+    .finite(typeName: String(describing: Self.self), values: tlaValues)
+  }
   static var sourceIssue: SourceModelIssue? {
     let values = finiteValues
     let tlaValues = values.map(\.tlaValue)
@@ -29,6 +32,7 @@ public protocol TLARecordSchema: Sendable {
 public struct TLARecordFieldDeclaration<Schema: TLARecordSchema>: Sendable {
   fileprivate let name: String
   fileprivate let defaultValue: TLAValue
+  fileprivate let shape: FormalValueShape
   fileprivate let accepts: @Sendable (TLAValue) -> Bool
 
   public init<Value: TLAValueType>(
@@ -36,6 +40,7 @@ public struct TLARecordFieldDeclaration<Schema: TLARecordSchema>: Sendable {
     default defaultValue: Value
   ) {
     name = field.name
+    shape = Value.formalValueShape
     self.defaultValue = defaultValue.tlaValue
     accepts = { Value(formalValue: $0) != nil }
   }
@@ -108,6 +113,7 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
 }
 
 public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape { .record(Schema.fields.sorted { $0.name < $1.name }.map { .init(name: $0.name, shape: $0.shape) }) }
   private let values: TLARecord
 
   public init() {
@@ -172,6 +178,7 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
 }
 
 public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape { .unsupported("total Function view") }
   private let values: [TLAValue: TLAValue]
 
   public init() {
@@ -237,6 +244,7 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 }
 
 public struct PartialFunction<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape { .function(key: Domain.formalValueShape, value: Range.formalValueShape) }
   private let values: [TLAValue: TLAValue]
 
   public init() {
@@ -390,6 +398,7 @@ public func Select<Value: TLAValueType>(
 }
 
 public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape { .set(Element.formalValueShape) }
   private let values: Set<TLAValue>
 
   public init() {
@@ -451,6 +460,7 @@ extension Expr where T: FormalSetValue {
 ///
 /// Use this typed formal sequence for ordered state.
 public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape { .sequence(Element.formalValueShape) }
   private let values: [TLAValue]
 
   public init() {
@@ -488,6 +498,7 @@ extension TupleExpr: FormalTupleValue {}
 /// stored in formal state, used as a set member, and selected by a PlusCal
 /// `with` binding.
 public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape { .tuple([First.formalValueShape, Second.formalValueShape]) }
   public let first: First
   public let second: Second
 

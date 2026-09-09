@@ -87,6 +87,35 @@ extension NativeSwiftEmitter {
             }
             """)
         }
+        // Register the complete generated type graph before emitting declarations.
+        var recordCursor = 0
+        var unionCursor = 0
+        while recordCursor < records.count || unionCursor < unions.count {
+            if recordCursor < records.count {
+                let children: [NativeType]
+                switch records[recordCursor] {
+                case .record(let fields): children = fields.map(\.type)
+                case .tuple(let values): children = values
+                default: throw unsupported("record declaration")
+                }
+                for child in children { _ = try swiftType(child) }
+                recordCursor += 1
+            }
+            if unionCursor < unions.count {
+                for alternative in unions[unionCursor] { _ = try swiftType(alternative) }
+                unionCursor += 1
+            }
+        }
+        for (index, alternatives) in unions.enumerated() {
+            let cases = try alternatives.enumerated().map {
+                "case alternative\($0.offset + 1)(\(try swiftType($0.element)))"
+            }.joined(separator: "\n")
+            declarations += try nativeDeclarations("""
+            public enum NativeUnion\(index): Hashable, Sendable {
+                \(cases)
+            }
+            """)
+        }
         // Emitting a record may discover nested records, so consume until complete.
         var index = 0
         while index < records.count {

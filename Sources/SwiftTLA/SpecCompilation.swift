@@ -484,7 +484,8 @@ public extension TLASpec {
             layout: layout,
             bindings: bindings,
             semantics: semantics,
-            refinements: compiledRefinements
+            refinements: compiledRefinements,
+            requiredStandardModules: lowerer.requiredStandardModules
         )
         var moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan] = [:]
         for entry in closure.entries {
@@ -634,7 +635,8 @@ public extension TLASpec {
         layout: CompiledLayout,
         bindings: CompiledBindingTable,
         semantics: CompiledSemantics,
-        refinements: [CompiledRefinement]
+        refinements: [CompiledRefinement],
+        requiredStandardModules: Set<StandardModule>
     ) throws -> DirectModuleSectionPlan {
         guard actions.count == semantics.actions.count,
               formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count,
@@ -761,7 +763,8 @@ public extension TLASpec {
                 renderedFormalModuleReplacements: renderedFormalModuleReplacements,
                 renderer: renderer,
                 layout: layout,
-                semantics: semantics
+                semantics: semantics,
+                requiredStandardModules: requiredStandardModules
             ),
             renderedConfiguration: renderedTLCConfiguration(semantics: semantics, usesSymmetryReduction: true),
             renderedConfigurationWithoutSymmetry: renderedTLCConfiguration(
@@ -800,7 +803,8 @@ public extension TLASpec {
             layout: layout,
             bindings: bindings,
             semantics: semantics,
-            refinements: refinements
+            refinements: refinements,
+            requiredStandardModules: lowerer.requiredStandardModules
         )
     }
 
@@ -828,7 +832,8 @@ public extension TLASpec {
         renderedFormalModuleReplacements: [String],
         renderer: CompiledTLARenderer,
         layout: CompiledLayout,
-        semantics: CompiledSemantics
+        semantics: CompiledSemantics,
+        requiredStandardModules: Set<StandardModule>
     ) throws -> String {
         let varNames = variables.map(\.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
@@ -839,7 +844,7 @@ public extension TLASpec {
 
         let symmetryModule: [StandardModule] = symmetrySets.isEmpty && symmetricCollections.isEmpty ? [] : [.tlc]
         let importedNames = imports.map(\.name)
-        let modules = ((extendsModules + [.finiteSets, .sequences] + symmetryModule)
+        let modules = ((extendsModules + [.finiteSets, .sequences] + requiredStandardModules.sorted { $0.rawValue < $1.rawValue } + symmetryModule)
             .map(\.rawValue)
             + importedNames)
             .reduce(into: [String]()) { names, module in

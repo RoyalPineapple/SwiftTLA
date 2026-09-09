@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSyntax
 
 /// Swift source declarations that supply type evidence absent from formal values.
 /// This is consumed by the shared compiler inference pass, never at runtime.
@@ -15,8 +16,47 @@ package struct NativeSourceTypeMetadata: Sendable {
     package let aliases: [String: String]
     package let records: [String: [NativeSourceRecordField]]
     package let enums: [String: [TLAValue]]
-    package init(aliases: [String: String] = [:], records: [String: [NativeSourceRecordField]] = [:], enums: [String: [TLAValue]] = [:]) {
+    package let finiteViewDomains: [String: [TLAValue]]
+    package init(aliases: [String: String] = [:], records: [String: [NativeSourceRecordField]] = [:], enums: [String: [TLAValue]] = [:], finiteViewDomains: [String: [TLAValue]] = [:]) {
         self.aliases = aliases; self.records = records; self.enums = enums
+        self.finiteViewDomains = finiteViewDomains
+    }
+}
+
+extension NativeSourceTypeMetadata {
+    package func formalShape(for swiftType: String) throws -> FormalValueShape {
+        try shape(NativeTypeInference.declared(swiftType, metadata: self, forView: true))
+    }
+
+    private func shape(_ type: NativeType) throws -> FormalValueShape {
+        switch type {
+        case .int: return .integer
+        case .bool: return .boolean
+        case .string: return .string
+        case .named(let name):
+            guard let values = finiteViewDomains[name] else { return .unsupported(name) }
+            return .finite(typeName: TokenSyntax.identifier(name).sourceIdentifierName, values: values)
+        case .finite(let members):
+            let values = try members.map { member -> TLAValue in
+                switch member {
+                case .integer(let value): return .int(value)
+                case .boolean(let value): return .bool(value)
+                case .string(let value): return .string(value)
+                case .constant(let value): return .constant(value)
+                default: throw NativeTypeInference.diagnostic("view", "finite view requires scalar members")
+                }
+            }
+            return .finite(typeName: "", values: values)
+        case .set(let item): return .set(try shape(item))
+        case .array(let item): return .sequence(try shape(item))
+        case .dictionary(let key, let item): return .function(key: try shape(key), value: try shape(item))
+        case .tuple(let items): return .tuple(try items.map(shape))
+        case .record(let fields): return .record(try fields.map { .init(name: $0.name, shape: try shape($0.type)) })
+        case .union(let alternatives):
+            let shapes = try alternatives.map(shape)
+            return shapes.dropFirst().reduce(shapes[0]) { .union($0, $1) }
+        default: return .unsupported(type.swiftType)
+        }
     }
 }
 
@@ -36,6 +76,7 @@ package indirect enum NativeType: Hashable, Sendable {
     case int, bool, string, atom, control
     case named(String)
     case finite([CompiledValue])
+    case union([NativeType])
     case collectionMember(VariableID, swiftType: String)
     case set(NativeType)
     case array(NativeType)
@@ -43,12 +84,12 @@ package indirect enum NativeType: Hashable, Sendable {
     case record([NativeField])
     case tuple([NativeType])
 
-    private var components: [NativeType] {
+    var components: [NativeType] {
         switch self {
         case .set(let value), .array(let value): [value]
         case .dictionary(let key, let value): [key, value]
         case .record(let fields): fields.map(\.type)
-        case .tuple(let values): values
+        case .tuple(let values), .union(let values): values
         default: []
         }
     }
@@ -60,8 +101,8 @@ package indirect enum NativeType: Hashable, Sendable {
         switch (self, other) {
         case (.array(let a), .array(let b)), (.set(let a), .set(let b)): return a.embeds(b)
         case (.dictionary(let a, let b), .dictionary(let c, let d)): return a.embeds(c) && b.embeds(d)
-        case (.tuple(let a), .tuple(let b)) where a.count == b.count:
-            return zip(a, b).allSatisfy { $0.embeds($1) }
+        case (.tuple(let a), .tuple(let b)), (.union(let a), .union(let b)):
+            return a.count == b.count && zip(a, b).allSatisfy { $0.embeds($1) }
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return zip(a, b).allSatisfy { $0.type.embeds($1.type) }
         default: return false
@@ -80,6 +121,7 @@ package indirect enum NativeType: Hashable, Sendable {
         case .control: "_ControlLocation"
         case .named(let name): name
         case .finite: "FiniteValue"
+        case .union: "UnionValue"
         case .collectionMember(_, let name): name
         case .set(let element): "Set<\(element.swiftType)>"
         case .array(let element): "[\(element.swiftType)]"
@@ -95,7 +137,7 @@ package indirect enum NativeType: Hashable, Sendable {
         case .set(let element), .array(let element): element.resolved
         case .dictionary(let key, let value): key.resolved && value.resolved
         case .record(let fields): fields.allSatisfy { $0.type.resolved }
-        case .tuple(let elements): elements.allSatisfy(\.resolved)
+        case .tuple(let elements), .union(let elements): elements.allSatisfy(\.resolved)
         default: true
         }
     }
@@ -173,6 +215,7 @@ struct NativeTypeInference: Sendable {
     private(set) var collectionDomains: [VariableID: Set<CompiledValue>] = [:]
     private(set) var namedDomains: [String: Set<CompiledValue>] = [:]
     private(set) var namedRepresentations: [String: NativeType] = [:]
+    private let sourceTypes: NativeSourceTypeMetadata
     private let plan: NativeMachinePlan
     private var bindingSources: [BinderID: CompiledStateExpr] = [:]
     private var argumentEvidence: [BinderID: NativeArgumentEvidence] = [:]
@@ -201,6 +244,7 @@ struct NativeTypeInference: Sendable {
 
     init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
         self.plan = plan
+        self.sourceTypes = sourceTypes
         for (name, values) in sourceTypes.enums {
             namedDomains[name] = Set(values.map(CompiledValue.init(formal:)))
             let represented = values.map { value -> NativeType in
@@ -274,12 +318,56 @@ struct NativeTypeInference: Sendable {
         }
     }
 
+    private func viewType(_ shape: FormalValueShape) throws -> NativeType {
+        switch shape {
+        case .integer: return .int
+        case .boolean: return .bool
+        case .string: return .string
+        case .finite(let name, let values):
+            let members = Set(values.map(CompiledValue.init(formal:)))
+            if let key = namedDomains.keys.first(where: {
+                TokenSyntax.identifier($0).sourceIdentifierName == name && namedDomains[$0] == members
+            }) { return .named(key) }
+            return .finite(members.sorted())
+        case .set(let item): return .set(try viewType(item))
+        case .sequence(let item): return .array(try viewType(item))
+        case .tuple(let items): return .tuple(try items.map(viewType))
+        case .function(let key, let value): return .dictionary(try viewType(key), try viewType(value))
+        case .record(let fields): return .record(try fields.map { .init(name: $0.name, type: try viewType($0.shape)) }.sorted { $0.name < $1.name })
+        case .union(let first, let second): return try Self.normalizedUnion([viewType(first), viewType(second)], metadata: sourceTypes)
+        case .unsupported(let name): throw Self.diagnostic("view", "unsupported formal shape " + name)
+        }
+    }
+
+    private mutating func unionConstructor(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType? {
+        guard case .union(let alternatives) = expected else { return nil }
+        switch expression {
+        case .value, .setLiteral, .tupleLiteral, .recordLiteral, .functionLiteral: break
+        default: return nil
+        }
+        var matches: [(NativeTypeInference, NativeType)] = []
+        for alternative in alternatives {
+            var candidate = self
+            if let type = try? candidate.infer(expression, expected: alternative) {
+                matches.append((candidate, type))
+            }
+        }
+        guard matches.count == 1, let match = matches.first else {
+            throw Self.diagnostic("union", "constructor must belong to exactly one declared union alternative")
+        }
+        self = match.0
+        return match.1
+    }
+
     func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (NativeTypeInference, NativeType, NativeType) {
         var scope = self
         let result = try scope.infer(expression, expected: expected ?? .unknown)
         guard result.resolved else { throw Self.diagnostic("resolution", "unresolved expression shape") }
         var intrinsicScope = scope
-        let intrinsic = try intrinsicScope.infer(expression)
+        if let constructor = try scope.unionConstructor(expression, expected: result) {
+            return (scope, result, constructor)
+        }
+        let intrinsic = (try? intrinsicScope.infer(expression)) ?? result
         let computation = intrinsic.resolved && scope.canProjectRead(intrinsic, to: result) ? intrinsic : result
         return (scope, result, computation)
     }
@@ -397,6 +485,9 @@ struct NativeTypeInference: Sendable {
 
     func canProjectRead(_ source: NativeType, to expected: NativeType) -> Bool {
         if source == expected { return true }
+        if case .union(let sources) = source { return sources.allSatisfy { canProjectRead($0, to: expected) } }
+        if case .union(let targets) = expected { return targets.filter { canProjectRead(source, to: $0) }.count == 1 }
+
         switch (source, expected) {
         case (.dictionary(let a, let b), .dictionary(let c, let d)):
             return canProjectRead(a, to: c) && canProjectRead(b, to: d)
@@ -415,6 +506,9 @@ struct NativeTypeInference: Sendable {
                 return domain.isSubset(of: Set(members))
             }
         case .finite(let members):
+            if case .named(let name) = expected, let domain = namedDomains[name] {
+                return !members.isEmpty && Set(members).isSubset(of: domain)
+            }
             if case .finite(let destination) = expected {
                 return Set(members).isSubset(of: Set(destination))
             }
@@ -503,7 +597,7 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private static func diagnostic(_ path: String, _ actual: String) -> CompilationDiagnostic {
+    fileprivate static func diagnostic(_ path: String, _ actual: String) -> CompilationDiagnostic {
         .init(code: .unsupportedGeneratedValueShape, stage: .lowering,
               path: "nativeMachine.\(path)", expected: "a statically resolved native Swift value shape",
               actual: actual, nextSafeAction: "Use a concrete typed value and an operation supported by native machine generation.")
@@ -525,11 +619,11 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private static func declared(_ source: String, metadata: NativeSourceTypeMetadata, resolving: Set<String> = []) throws -> NativeType {
+    fileprivate static func declared(_ source: String, metadata: NativeSourceTypeMetadata, resolving: Set<String> = [], forView: Bool = false) throws -> NativeType {
         let source = source.trimmingCharacters(in: .whitespacesAndNewlines)
         if let alias = metadata.aliases[source] {
             guard !resolving.contains(source) else { throw diagnostic("aliases.\(source)", "cyclic type alias") }
-            return try declared(alias, metadata: metadata, resolving: resolving.union([source]))
+            return try declared(alias, metadata: metadata, resolving: resolving.union([source]), forView: forView)
         }
         switch source {
         case "Int": return .int
@@ -551,12 +645,13 @@ struct NativeTypeInference: Sendable {
         }
         if source.hasPrefix("["), source.hasSuffix("]") {
             let parts = split(String(source.dropFirst().dropLast()), separator: ":")
-            return parts.count == 2 ? .dictionary(try declared(parts[0], metadata: metadata, resolving: resolving), try declared(parts[1], metadata: metadata, resolving: resolving)) : .array(try declared(parts[0], metadata: metadata, resolving: resolving))
+            return parts.count == 2 ? .dictionary(try declared(parts[0], metadata: metadata, resolving: resolving, forView: forView), try declared(parts[1], metadata: metadata, resolving: resolving, forView: forView)) : .array(try declared(parts[0], metadata: metadata, resolving: resolving, forView: forView))
         }
         if let opening = source.firstIndex(of: "<"), source.hasSuffix(">") {
             let name = String(source[..<opening])
             let argumentSources = split(String(source[source.index(after: opening)..<source.index(before: source.endIndex)]), separator: ",")
-            let parts = try argumentSources.map { try declared($0, metadata: metadata, resolving: resolving) }
+            if forView && (name == "Function" || name == "ZeroBasedSequence") { return .unknown }
+            let parts = try argumentSources.map { try declared($0, metadata: metadata, resolving: resolving, forView: forView) }
             switch (name, parts.count) {
             case ("Set", 1), ("SetExpr", 1): return .set(parts[0])
             case ("Array", 1), ("TupleExpr", 1): return .array(parts[0])
@@ -570,21 +665,67 @@ struct NativeTypeInference: Sendable {
                 let identity = "record-schema:\(schema)"
                 guard !resolving.contains(identity) else { throw diagnostic("schemas.\(schema)", "recursive record schema requires a finite nonrecursive native field shape") }
                 return .record(try fields.map { field in
-                    .init(name: field.name, type: try declared(field.swiftType, metadata: metadata, resolving: resolving.union([identity])))
+                    .init(name: field.name, type: try declared(field.swiftType, metadata: metadata, resolving: resolving.union([identity]), forView: forView))
                 }.sorted { $0.name < $1.name })
             case ("OneOf", 2):
-                let domains = try parts.map { branch -> [CompiledValue] in
-                    if case .finite(let values) = branch { return values }
-                    guard case .named(let name) = branch, let values = metadata.enums[name] else {
-                        throw diagnostic("aliases.\(source)", "OneOf requires finite declared member domains")
-                    }
-                    return values.map(CompiledValue.init(formal:))
-                }
-                return .finite(Set(domains.flatMap { $0 }).sorted())
+                if forView { return .union(parts) }
+                return try normalizedUnion(parts, metadata: metadata)
             default: break
             }
         }
         return .named(source)
+    }
+
+    fileprivate static func normalizedUnion(_ branches: [NativeType], metadata: NativeSourceTypeMetadata) throws -> NativeType {
+        var scalarValues = Set<CompiledValue>()
+        var composite: [NativeType] = []
+        func append(_ branch: NativeType) throws {
+            switch branch {
+            case .union(let nested): for item in nested { try append(item) }
+            case .finite(let values): scalarValues.formUnion(values)
+            case .named(let name):
+                guard let values = metadata.enums[name] else { throw diagnostic("union", "union branch has no finite declared domain") }
+                scalarValues.formUnion(values.map(CompiledValue.init(formal:)))
+            default:
+                if !composite.contains(branch) { composite.append(branch) }
+            }
+        }
+        for branch in branches { try append(branch) }
+        func kind(_ type: NativeType) -> Int? {
+            switch type {
+            case .int: 0
+            case .bool: 1
+            case .string: 2
+            case .atom: 8
+            case .set: 4
+            case .array, .tuple: 5
+            case .record: 6
+            case .dictionary: 7
+            default: nil
+            }
+        }
+        for (index, branch) in composite.enumerated() {
+            guard let rank = kind(branch), branch.resolved else { throw diagnostic("union", "union alternatives require finite scalars or resolved collection shapes") }
+            if composite.prefix(index).contains(where: { kind($0) == rank }) {
+                throw diagnostic("union", "overlapping composite union alternatives are ambiguous")
+            }
+            if scalarValues.contains(where: { value in
+                switch (value, branch) {
+                case (.set, .set), (.tuple, .array), (.tuple, .tuple), (.record, .record), (.function, .dictionary): true
+                default: false
+                }
+            }) { throw diagnostic("union", "finite and composite union alternatives overlap") }
+        }
+        scalarValues = scalarValues.filter { member in
+            !composite.contains { type in
+                let primitive = member.orderingKind < 4 || member.orderingKind == 8
+                return primitive && kind(type) == member.orderingKind
+            }
+        }
+        if composite.isEmpty { return .finite(scalarValues.sorted()) }
+        var alternatives = composite.sorted { kind($0)! < kind($1)! }
+        if !scalarValues.isEmpty { alternatives.insert(.finite(scalarValues.sorted()), at: 0) }
+        return alternatives.count == 1 ? alternatives[0] : .union(alternatives)
     }
 
     private func element(_ type: NativeType) throws -> NativeType {
@@ -596,6 +737,11 @@ struct NativeTypeInference: Sendable {
     }
 
     private func literal(_ value: CompiledValue, expected: NativeType = .unknown) throws -> NativeType {
+        if case .union(let alternatives) = expected {
+            let matches = alternatives.filter { (try? literal(value, expected: $0)) != nil }
+            guard matches.count == 1 else { throw Self.diagnostic("union", "literal must belong to exactly one union alternative") }
+            return expected
+        }
         if case .collectionMember(let variable, _) = expected {
             guard collectionDomains[variable]?.contains(value) == true else {
                 throw Self.diagnostic("collectionMember", "literal is outside the declared collection domain")
@@ -905,8 +1051,12 @@ struct NativeTypeInference: Sendable {
     }
 
     private mutating func inferResolved(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
+        if try unionConstructor(expression, expected: expected) != nil { return expected }
         let result: NativeType
         switch expression {
+        case .assertView(let value, let shape):
+            _ = try infer(value)
+            result = try viewType(shape)
         case .value(let value): return try literal(value, expected: expected)
         case .stateVariable(let id):
             let existing = variables[id] ?? .unknown

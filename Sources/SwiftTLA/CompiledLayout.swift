@@ -391,7 +391,7 @@ struct CompiledLayout: Hashable, Sendable {
                         break
                     case .value(let value):
                         pending.append(.value(value))
-                    case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
+                    case .assertView(let value, _), .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
                          .unionAll(let value), .tupleAccess(let value, _), .tupleLength(let value),
                          .tupleHead(let value), .tupleTail(let value), .domain(let value),
                          .sequenceFromSet(let value):
