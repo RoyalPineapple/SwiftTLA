@@ -60,12 +60,12 @@ private struct IndependentActionFaults {
             invariants: [.init(name: "Enabled", body: .operatorApplication(.reference("IsEnabled", arity: 0), []))],
             formalOperatorDefinitions: [.init(name: "IsEnabled", parameters: [], body: .enabledAction("valid"))]
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
+
         let probe = try #require(compilation.layout.testActionID(named: "probe"))
-        let action = try #require(plan.actions.first { $0.id == probe })
-        let invariant = try #require(plan.invariants.first)
-        #expect(plan.requiresEnabledActions(in: action.body))
-        #expect(plan.requiresEnabledActions(in: invariant.body))
+        let action = try #require(compilation.semantics.actions.first { $0.id == probe })
+        let invariant = try #require(compilation.semantics.invariants.first)
+        #expect(compilation.requiresEnabledActions(in: action.body))
+        #expect(compilation.requiresEnabledActions(in: invariant.body))
         let runtime = CompiledRuntime(compilation: compilation)
         let initial = try #require(try runtime.initialStates().first)
         #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {

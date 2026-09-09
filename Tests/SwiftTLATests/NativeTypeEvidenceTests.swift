@@ -10,9 +10,9 @@ struct NativeTypeEvidenceTests {
             actions: [.init(name: "fill", body: .assign(.named("items"), .setLiteral([.int(1)])))],
             invariants: []
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan)
-        #expect(evidence.variables[plan.variables[0].id] == .set(.int))
+
+        let evidence = try NativeTypeInference(compilation: compilation)
+        #expect(evidence.variables[compilation.layout.variables[0].id] == .set(.int))
     }
 
     @Test("Source collection wrappers project to native Swift shapes")
@@ -22,10 +22,10 @@ struct NativeTypeEvidenceTests {
             variables: [.init(name: "items", initialization: .value(.tuple([])), generatedSwiftType: "TupleExpr<Int>", origin: .compiler)],
             actions: [], invariants: []
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan)
-        #expect(evidence.variables[plan.variables[0].id] == .array(.int))
-        #expect(evidence.variables[plan.variables[0].id]?.swiftType == "[Int]")
+
+        let evidence = try NativeTypeInference(compilation: compilation)
+        #expect(evidence.variables[compilation.layout.variables[0].id] == .array(.int))
+        #expect(evidence.variables[compilation.layout.variables[0].id]?.swiftType == "[Int]")
     }
 
     @Test("Hidden algorithm control is retained as native control evidence")
@@ -37,9 +37,9 @@ struct NativeTypeEvidenceTests {
                 Do(TestControlLabel.done) { Stop() }
             }
         }).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan)
-        let control = try #require(plan.variables.first { $0.declaration.origin == .programCounter })
+
+        let evidence = try NativeTypeInference(compilation: compilation)
+        let control = try #require(compilation.layout.variables.first { $0.declaration.origin == .programCounter })
         #expect(evidence.variables[control.id] == .control)
     }
 
@@ -52,7 +52,7 @@ struct NativeTypeEvidenceTests {
             invariants: []
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: .init(compilation: compilation))
+            try NativeTypeInference(compilation: compilation)
         }
         let invalidConstraint = try TLASpec(
             name: "ConstraintEvidence",
@@ -60,7 +60,7 @@ struct NativeTypeEvidenceTests {
             actions: [], invariants: [], constraint: .variable("value")
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: .init(compilation: invalidConstraint))
+            try NativeTypeInference(compilation: invalidConstraint)
         }
     }
 
@@ -71,7 +71,7 @@ struct NativeTypeEvidenceTests {
             variables: [.init(name: "value", initialization: .value(.constant("member")), origin: .compiler)],
             actions: [], invariants: []
         ).compile()
-        let evidence = try NativeTypeInference(plan: .init(compilation: compilation))
+        let evidence = try NativeTypeInference(compilation: compilation)
         #expect(try evidence.type(of: .value(.constant("member"))) == .atom)
         #expect(try evidence.type(of: .value(.string("member"))) == .string)
     }
@@ -83,9 +83,9 @@ struct NativeTypeEvidenceTests {
             actions: [.init(name: "append", body: .assign(.named("items"), .tupleAppend(.variable("items"), .value(.record(["count": .int(1)])))))],
             invariants: []
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan)
-        #expect(evidence.variables[plan.variables[0].id] == .array(.record([.init(name: "count", type: .int)])))
+
+        let evidence = try NativeTypeInference(compilation: compilation)
+        #expect(evidence.variables[compilation.layout.variables[0].id] == .array(.record([.init(name: "count", type: .int)])))
     }
 
     @Test("Enum literal context does not coerce enum storage into arithmetic integers")
@@ -95,9 +95,9 @@ struct NativeTypeEvidenceTests {
             variables: [.init(name: "member", initialization: .value(.string("a")), generatedSwiftType: "Member", origin: .compiler)],
             actions: [], invariants: []
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan)
-        let member = CompiledStateExpr.stateVariable(plan.variables[0].id)
+
+        let evidence = try NativeTypeInference(compilation: compilation)
+        let member = CompiledStateExpr.stateVariable(compilation.layout.variables[0].id)
         let literal = CompiledStateExpr.value(.string("a"))
         for expression in [CompiledStateExpr.equal(literal, member), .equal(member, literal)] {
             let checked = try evidence.resolutionScope(expression, expected: .bool)
@@ -120,9 +120,9 @@ struct NativeTypeEvidenceTests {
             variables: [.init(name: "operations", initialization: .value(.tuple([])), generatedSwiftType: "TupleExpr<Record<OperationSchema>>", origin: .compiler)],
             actions: [], invariants: []
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        #expect(evidence.variables[plan.variables[0].id] == .array(.record([.init(name: "value", type: .finite([.constant("NoVal"), .constant("t1")]))])))
+
+        let evidence = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+        #expect(evidence.variables[compilation.layout.variables[0].id] == .array(.record([.init(name: "value", type: .finite([.constant("NoVal"), .constant("t1")]))])))
         #expect(evidence.namedRepresentations["Transaction"] == .atom)
     }
 
@@ -134,13 +134,13 @@ struct NativeTypeEvidenceTests {
             actions: [], invariants: []
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: .init(compilation: compilation), sourceTypes: .init(aliases: ["First": "Second", "Second": "First"]))
+            try NativeTypeInference(compilation: compilation, sourceTypes: .init(aliases: ["First": "Second", "Second": "First"]))
         }
     }
 
     @Test("Tuple projection constrains only the selected unresolved member")
     func heterogeneousTupleProjectionDoesNotHomogenizeMembers() throws {
-        let evidence = try NativeTypeInference(plan: .init(compilation: canonicalTestSpec().compile()))
+        let evidence = try NativeTypeInference(compilation: canonicalTestSpec().compile())
         let first = BinderID(ordinal: 500)
         let second = BinderID(ordinal: 501)
         let pair = CompiledStateExpr.tupleLiteral([.boundValue(first), .boundValue(second)])
@@ -159,7 +159,7 @@ struct NativeTypeEvidenceTests {
             actions: [], invariants: []
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: .init(compilation: compilation))
+            try NativeTypeInference(compilation: compilation)
         }
     }
 
@@ -174,10 +174,10 @@ struct NativeTypeEvidenceTests {
             variables: [.init(name: "value", initialization: .value(.constant("left")), generatedSwiftType: "Value", origin: .compiler)],
             actions: [], invariants: []
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan, sourceTypes: metadata)
+
+        let evidence = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
         let domain = NativeType.finite([.constant("left"), .constant("right"), .constant("same")])
-        #expect(evidence.variables[plan.variables[0].id] == domain)
+        #expect(evidence.variables[compilation.layout.variables[0].id] == domain)
         #expect(try evidence.type(of: .value(.constant("right")), expected: domain) == domain)
         #expect(throws: CompilationDiagnostic.self) {
             try evidence.type(of: .value(.constant("outside")), expected: domain)
@@ -186,7 +186,7 @@ struct NativeTypeEvidenceTests {
 
     @Test("Literal choice domains provide explicit evidence for finite union lifting")
     func literalBinderLiftRequiresSubsetProof() throws {
-        let evidence = try NativeTypeInference(plan: .init(compilation: canonicalTestSpec().compile()))
+        let evidence = try NativeTypeInference(compilation: canonicalTestSpec().compile())
         let binder = BinderID(ordinal: 600)
         let admitted = NativeType.finite([.constant("left"), .constant("right")])
         let valid = CompiledStateExpr.setMap(.boundValue(binder), binder, .value(.set([.constant("left")])))
@@ -200,7 +200,7 @@ struct NativeTypeEvidenceTests {
     @Test("Function choice binders refine key and finite value domains together")
     func compoundBinderRefinesFromItsConstructedDomain() throws {
         let evidence = try NativeTypeInference(
-            plan: .init(compilation: canonicalTestSpec().compile()),
+            compilation: canonicalTestSpec().compile(),
             sourceTypes: .init(enums: ["Key": [.constant("key")]])
         )
         let binder = BinderID(ordinal: 601)
@@ -213,7 +213,7 @@ struct NativeTypeEvidenceTests {
 
     @Test("Tuple source evidence carries the selected native enum representation")
     func projectedLiteralRetainsNamedAndFiniteFieldTypes() throws {
-        let evidence = try NativeTypeInference(plan: .init(compilation: canonicalTestSpec().compile()), sourceTypes: .init(enums: ["Process": [.int(1)]]))
+        let evidence = try NativeTypeInference(compilation: canonicalTestSpec().compile(), sourceTypes: .init(enums: ["Process": [.int(1)]]))
         let namedTuple = CompiledStateExpr.tupleLiteral([.value(.integer(1)), .value(.string("other"))])
         let namedRead = try evidence.resolutionScope(.tupleAccess(namedTuple, 1), expected: .named("Process"))
         #expect(namedRead.operandTypes == [.tuple([.named("Process"), .string])])
@@ -232,7 +232,7 @@ struct NativeTypeEvidenceTests {
         ]
         for records in graphs {
             #expect(throws: CompilationDiagnostic.self) {
-                try NativeTypeInference(plan: .init(compilation: compilation), sourceTypes: .init(records: records))
+                try NativeTypeInference(compilation: compilation, sourceTypes: .init(records: records))
             }
         }
     }
@@ -249,9 +249,9 @@ struct NativeTypeEvidenceTests {
             variables: [.init(name: "values", initialization: .value(.function([.int(1): .int(0), .int(2): .int(0)])), generatedSwiftType: "Function<Process, Int>", origin: .compiler)],
             actions: [], invariants: [.init(name: "Valid", body: body)]
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Process": [.int(1), .int(2)]]))
-        guard case .forAll(_, let binder, _) = plan.invariants[0].body else {
+
+        let evidence = try NativeTypeInference(compilation: compilation, sourceTypes: .init(enums: ["Process": [.int(1), .int(2)]]))
+        guard case .forAll(_, let binder, _) = compilation.semantics.invariants[0].body else {
             Issue.record("Expected the invariant's resolved quantifier")
             return
         }

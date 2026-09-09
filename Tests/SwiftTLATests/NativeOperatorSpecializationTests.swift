@@ -17,10 +17,10 @@ import Testing
                 .init(name: "Choice", body: .equal(.cardinality(.setLiteral([choice])), .int(1))),
             ]
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Kind": [.string("read")]]))
-        guard case .equal(.cardinality(let filtered), _) = plan.invariants[0].body,
-              case .equal(.cardinality(.setLiteral(let choices)), _) = plan.invariants[1].body else {
+
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: .init(enums: ["Kind": [.string("read")]]))
+        guard case .equal(.cardinality(let filtered), _) = compilation.semantics.invariants[0].body,
+              case .equal(.cardinality(.setLiteral(let choices)), _) = compilation.semantics.invariants[1].body else {
             Issue.record("Expected selection fixture expressions")
             return
         }

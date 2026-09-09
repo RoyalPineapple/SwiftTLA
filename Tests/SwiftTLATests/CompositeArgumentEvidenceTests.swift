@@ -4,25 +4,25 @@ import Testing
 @Suite struct CompositeArgumentEvidenceTests {
     @Test("computed composite arguments retain their finite construction evidence")
     func computedDictionaryArgumentRefines() throws {
-        let plan = try makePlan()
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        let body = try #require(plan.formalOperatorDefinitions.last).body
+        let compilation = try compileSpecification()
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+        let body = try #require(compilation.semantics.formalOperatorDefinitions.last).body
         #expect(try inference.type(of: body, expected: expected) == expected)
     }
 
     @Test("composite argument refinement rejects invalid construction members")
     func invalidDictionaryMemberIsRejected() throws {
-        let plan = try makePlan(invalid: true)
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        let body = try #require(plan.formalOperatorDefinitions.last).body
+        let compilation = try compileSpecification(invalid: true)
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+        let body = try #require(compilation.semantics.formalOperatorDefinitions.last).body
         #expect(throws: CompilationDiagnostic.self) { try inference.type(of: body, expected: expected) }
     }
 
     @Test("composite argument evidence never reinterprets raw stored dictionaries")
     func rawDictionaryStorageIsRejected() throws {
-        let plan = try makePlan(rawStorage: true)
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        let body = try #require(plan.formalOperatorDefinitions.last).body
+        let compilation = try compileSpecification(rawStorage: true)
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+        let body = try #require(compilation.semantics.formalOperatorDefinitions.last).body
         #expect(throws: CompilationDiagnostic.self) { try inference.type(of: body, expected: expected) }
     }
 
@@ -40,14 +40,14 @@ import Testing
             let valid = call(member: "first")
             let invalid = call(member: "other")
             let body = StateExpr.tupleLiteral(invalidFirst ? [invalid, valid] : [valid, invalid])
-            let plan = NativeMachinePlan(compilation: try TLASpec(name: "DistinctDomains",
+            let compilation = try TLASpec(name: "DistinctDomains",
                 variables: [], actions: [], invariants: [], formalOperatorDefinitions: [
                     .init(name: "Read", parameters: [.value("acc")],
                         body: .recordAccess(.variable("acc"), "nextState")),
                     .init(name: "Construct", parameters: [], body: body)
-                ]).compile())
-            let checker = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-            let compiled = try #require(plan.formalOperatorDefinitions.last).body
+                ]).compile()
+            let checker = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+            let compiled = try #require(compilation.semantics.formalOperatorDefinitions.last).body
             #expect(throws: CompilationDiagnostic.self) {
                 try checker.type(of: compiled, expected: .array(expected))
             }
@@ -60,13 +60,13 @@ import Testing
             .init(sourceName: "nextState", name: "nextState", swiftType: "Function<Key,OneOf<First,Second>>")
         ]], enums: ["Key": [.constant("first")], "First": [.constant("NoValue")], "Second": [.constant("second")]])
         let dictionary = StateExpr.functionLiteral(.setLiteral([.value(.constant("first"))]), "key", .value(.constant("NoValue")))
-        let plan = NativeMachinePlan(compilation: try TLASpec(name: "DictionaryProjection", variables: [
+        let compilation = try TLASpec(name: "DictionaryProjection", variables: [
             .init(name: "stored", initialization: .expression(.recordLiteral(.init(["nextState": dictionary]))), generatedSwiftType: "Record<Payload>", origin: .compiler)
         ], actions: [], invariants: [], formalOperatorDefinitions: [
             .init(name: "Read", parameters: [], body: .recordAccess(.variable("stored"), "nextState"))
-        ]).compile())
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: sourceTypes)
-        let body = try #require(plan.formalOperatorDefinitions.first).body
+        ]).compile()
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: sourceTypes)
+        let body = try #require(compilation.semantics.formalOperatorDefinitions.first).body
         let original = try inference.type(of: body)
         let raw = NativeType.dictionary(.atom, .atom)
         #expect(try inference.type(of: body, expected: raw) == raw)
@@ -89,12 +89,12 @@ import Testing
                     .value(.recordLiteral(.init(["nextState": .recordAccess(.variable("acc"), "nextState")])))
                 ])
             ))
-            let plan = NativeMachinePlan(compilation: try TLASpec(name: "RecursiveEvidence", variables: variables,
+            let compilation = try TLASpec(name: "RecursiveEvidence", variables: variables,
                 actions: [], invariants: [], formalOperatorDefinitions: [operation,
                     .init(name: "Construct", parameters: [], body: .operatorApplication(.reference("Accumulate", arity: 2), [.value(.int(2)), .value(initial)]))
-                ]).compile())
-            let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-            let body = try #require(plan.formalOperatorDefinitions.last).body
+                ]).compile()
+            let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+            let body = try #require(compilation.semantics.formalOperatorDefinitions.last).body
             let result = NativeType.record([.init(name: "nextState", type: expected)])
             if rawStorage {
                 #expect(throws: CompilationDiagnostic.self) { try inference.type(of: body, expected: result) }
@@ -107,7 +107,7 @@ import Testing
     private var expected: NativeType { .dictionary(.named("Key"), .finite([.constant("NoValue")])) }
     private var metadata: NativeSourceTypeMetadata { .init(enums: ["Key": [.constant("first")]]) }
 
-    private func makePlan(invalid: Bool = false, rawStorage: Bool = false) throws -> NativeMachinePlan {
+    private func compileSpecification(invalid: Bool = false, rawStorage: Bool = false) throws -> CompiledSpecification {
         let dictionary = StateExpr.functionLiteral(
             .setLiteral([.value(.constant(invalid ? "other" : "first"))]), "key", .value(.constant("NoValue")))
         var variables: [NamedVar] = [.init(name: "number", initialization: .expression(.int(0)), origin: .compiler)]
@@ -121,6 +121,6 @@ import Testing
                 .init(name: "Read", parameters: [.value("acc")], body: .recordAccess(.variable("acc"), "nextState")),
                 .init(name: "Construct", parameters: [], body: .operatorApplication(.reference("Read", arity: 1), [.value(record)]))
             ]).compile()
-        return .init(compilation: compilation)
+        return compilation
     }
 }

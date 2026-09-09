@@ -7,7 +7,7 @@ import SwiftTLA
 /// This object exists only while expanding the macro.
 struct NativeSwiftEmitter {
     let model: MacroCompilation
-    let plan: NativeMachinePlan
+    var compilation: CompiledSpecification { model.compilation }
     let program: NativeResolvedProgram
     var records: [NativeType] = []
     var atoms: [String] = []
@@ -19,7 +19,6 @@ struct NativeSwiftEmitter {
 
     init(model: MacroCompilation) {
         self.model = model
-        plan = NativeMachinePlan(compilation: model.compilation)
         program = model.nativeProgram
     }
 
@@ -61,7 +60,7 @@ struct NativeSwiftEmitter {
     }
 
     func variable(_ id: VariableID) -> String {
-        let declaration = plan.variables.first { $0.id == id }?.declaration.name ?? "variable"
+        let declaration = compilation.layout.variables.first { $0.id == id }?.declaration.name ?? "variable"
         let name = String(declaration.unicodeScalars.map { scalar -> Character in
             switch scalar.value {
             case 65...90, 97...122, 48...57, 95: Character(String(scalar))

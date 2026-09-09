@@ -12,7 +12,7 @@ extension NativeSwiftEmitter {
         let appendedParameters = collectionParameters.isEmpty ? "" : ", \(collectionParameters)"
         let appendedArguments = collectionArguments.isEmpty ? "" : ", \(collectionArguments)"
         var declarations: [DeclSyntax] = []
-        let fields = try plan.variables.map { variable in
+        let fields = try compilation.layout.variables.map { variable in
             "var \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
         declarations += try nativeDeclarations("""
@@ -31,13 +31,13 @@ extension NativeSwiftEmitter {
         }
         """)
         let stateFields = try surface.variables.map { variable in
-            "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[plan.variables[variable.storageOrdinal].id]!))"
+            "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[compilation.layout.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: "\n")
         let stateParameters = try surface.variables.map { variable in
-            "\(variable.swiftIdentifier) _value\(variable.storageOrdinal): \(try swiftType(program.variableTypes[plan.variables[variable.storageOrdinal].id]!))"
+            "\(variable.swiftIdentifier) _value\(variable.storageOrdinal): \(try swiftType(program.variableTypes[compilation.layout.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: ", ")
         let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = _value\($0.storageOrdinal)" }.joined(separator: "\n")
-        let stateArguments = surface.variables.map { "\($0.swiftIdentifier): execution.\(variable(plan.variables[$0.storageOrdinal].id))" }.joined(separator: ", ")
+        let stateArguments = surface.variables.map { "\($0.swiftIdentifier): execution.\(variable(compilation.layout.variables[$0.storageOrdinal].id))" }.joined(separator: ", ")
         declarations += try nativeDeclarations("""
         public struct State: Equatable, Sendable {
             \(stateFields)
@@ -59,10 +59,10 @@ extension NativeSwiftEmitter {
         declarations += try updateDeclarations()
         declarations += try collectionValidationDeclarations(parameters: appendedParameters)
         declarations += try initialDeclarations(parameters: collectionParameters, arguments: collectionArguments)
-        declarations += try plan.actions.map { try rawActionFunction($0, collectionParameters: appendedParameters) }
+        declarations += try compilation.semantics.actions.map { try rawActionFunction($0, collectionParameters: appendedParameters) }
         declarations += try enabledDeclarations(collectionParameters: appendedParameters, collectionArguments: appendedArguments)
         let actionFunctions = try surface.actions.map { surfaceAction in
-            guard let action = plan.actions.first(where: { $0.id == surfaceAction.compiledAction }) else {
+            guard let action = compilation.semantics.actions.first(where: { $0.id == surfaceAction.compiledAction }) else {
                 throw unsupported("missing resolved action")
             }
             return try successorFunction(action, surface: surfaceAction, collectionParameters: appendedParameters, collectionArguments: appendedArguments)
@@ -71,11 +71,11 @@ extension NativeSwiftEmitter {
         declarations += try dispatchDeclarations(collectionArguments: appendedArguments)
         declarations += try propertyDeclarations(collectionParameters: appendedParameters)
         declarations += MacroExpander.generateActorMembers(model: model)
-        if !plan.controlLocations.isEmpty {
+        if !compilation.layout.controlLocations.isEmpty {
             declarations += try nativeDeclarations("""
             @_documentation(visibility: internal)
             public enum _ControlLocation: Int, Hashable, Sendable {
-                \(plan.controlLocations.map { "case location\($0.id.ordinal) = \($0.id.ordinal)" }.joined(separator: "\n"))
+                \(compilation.layout.controlLocations.map { "case location\($0.id.ordinal) = \($0.id.ordinal)" }.joined(separator: "\n"))
             }
             """)
         }
@@ -149,7 +149,7 @@ extension NativeSwiftEmitter {
 
     mutating func actionDeclarations() throws -> [DeclSyntax] {
         let cases = try model.compilation.machineSurfacePlan.actions.map { surface in
-            guard let action = plan.actions.first(where: { $0.id == surface.compiledAction }),
+            guard let action = compilation.semantics.actions.first(where: { $0.id == surface.compiledAction }),
                   action.bindings.count == surface.bindings.count else {
                 throw unsupported("action binding layout")
             }
@@ -173,11 +173,11 @@ extension NativeSwiftEmitter {
         let checks = model.compilation.machineSurfacePlan.variables.compactMap { variable -> String? in
             guard let collection = variable.collection else { return nil }
             return """
-            guard Set(state.\(self.variable(plan.variables[variable.storageOrdinal].id)).keys) == Set(\(nativeCollectionBinding(collection, in: model))) else {
+            guard Set(state.\(self.variable(compilation.layout.variables[variable.storageOrdinal].id)).keys) == Set(\(nativeCollectionBinding(collection, in: model))) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: \(String(reflecting: collection.formalName)),
                     expected: "exactly the application IDs bound when the machine was created",
-                    actual: String(describing: Array(state.\(self.variable(plan.variables[variable.storageOrdinal].id)).keys))
+                    actual: String(describing: Array(state.\(self.variable(compilation.layout.variables[variable.storageOrdinal].id)).keys))
                 )
             }
             """
@@ -190,8 +190,8 @@ extension NativeSwiftEmitter {
     }
 
     mutating func updateDeclarations() throws -> [DeclSyntax] {
-        let fields = try plan.variables.map { "var \(variable($0.id)): \(try swiftType(program.variableTypes[$0.id]!))? = nil" }.joined(separator: "\n")
-        let merges = plan.variables.map { slot in
+        let fields = try compilation.layout.variables.map { "var \(variable($0.id)): \(try swiftType(program.variableTypes[$0.id]!))? = nil" }.joined(separator: "\n")
+        let merges = compilation.layout.variables.map { slot in
             let name = variable(slot.id)
             return """
             if let value = other.\(name) {
@@ -202,7 +202,7 @@ extension NativeSwiftEmitter {
             }
             """
         }.joined(separator: "\n")
-        let arguments = plan.variables.map { "\(variable($0.id)): \(variable($0.id)) ?? state.\(variable($0.id))" }.joined(separator: ", ")
+        let arguments = compilation.layout.variables.map { "\(variable($0.id)): \(variable($0.id)) ?? state.\(variable($0.id))" }.joined(separator: ", ")
         return try nativeDeclarations("""
         private struct _Updates: Sendable {
             \(fields)
@@ -221,7 +221,7 @@ extension NativeSwiftEmitter {
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
         var code = "var result: [_ExecutionState] = []\n"
         var closing = ""
-        for initialization in plan.initializations {
+        for initialization in compilation.semantics.variableInitializations {
             let type = program.variableTypes[initialization.variable]!
             let name = variable(initialization.variable)
             switch initialization.initialization {
@@ -232,7 +232,7 @@ extension NativeSwiftEmitter {
                 closing += "}\n"
             }
         }
-        let stateArguments = plan.variables.map { "\(variable($0.id)): \(variable($0.id))" }.joined(separator: ", ")
+        let stateArguments = compilation.layout.variables.map { "\(variable($0.id)): \(variable($0.id))" }.joined(separator: ", ")
         code += "result.append(_ExecutionState(\(stateArguments)))\n" + closing
         let validationArguments = arguments.isEmpty ? "" : ", " + arguments
         code += "for state in result { try _validateCollections(state\(validationArguments)) }\nreturn result"
@@ -339,7 +339,7 @@ extension NativeSwiftEmitter {
 
     mutating func enabledDeclarations(collectionParameters: String, collectionArguments: String) throws -> [DeclSyntax] {
         var checks = ""
-        for action in plan.actions {
+        for action in compilation.semantics.actions {
             var loops = ""
             var closing = ""
             var arguments: [String] = []
@@ -365,9 +365,9 @@ extension NativeSwiftEmitter {
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
         let filtering: String
-        if let constraint = plan.constraint {
+        if let constraint = compilation.semantics.constraint {
             let condition = try expression(program.constraint!)
-            let enabled = plan.requiresEnabledActions(in: constraint)
+            let enabled = compilation.requiresEnabledActions(in: constraint)
                 ? "let enabled = try Self._enabledActions(in: state\(collectionArguments))\n" : ""
             let effect = nativeCodeContainsTry(condition) || !enabled.isEmpty ? "try " : ""
             filtering = "let candidates = \(effect)updates.map { $0.applying(to: state) }.filter { state in\n\(enabled)return \(condition)\n}"
@@ -389,7 +389,7 @@ extension NativeSwiftEmitter {
         var cases: [String] = []
         var enumeration: [String] = []
         for surface in model.compilation.machineSurfacePlan.actions {
-            guard let action = plan.actions.first(where: { $0.id == surface.compiledAction }) else { throw unsupported("action dispatch") }
+            guard let action = compilation.semantics.actions.first(where: { $0.id == surface.compiledAction }) else { throw unsupported("action dispatch") }
             var pattern: [String] = []
             var invocation: [String] = []
             var validations: [String] = []
@@ -433,7 +433,7 @@ extension NativeSwiftEmitter {
                 }
             }
             let label = ".\(surface.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
-            let enabled = plan.requiresEnabledActions(in: action.body)
+            let enabled = compilation.requiresEnabledActions(in: action.body)
                 ? "try Self._enabledActions(in: _execution\(collectionArguments))" : "[]"
             cases.append("""
             case \(label):
@@ -471,13 +471,13 @@ extension NativeSwiftEmitter {
         let arguments = model.compilation.machineSurfacePlan.collections.map { ", \($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined()
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
-        for invariant in plan.invariants {
+        for invariant in compilation.semantics.invariants {
             declarations += try nativeDeclarations("""
             private static func _invariant\(invariant.id.ordinal)(in state: _ExecutionState\(collectionParameters), enabled: Set<Int>) throws -> Bool {
                 \(try expression(program.invariants[invariant.id]!))
             }
             """)
-            let enabled = plan.requiresEnabledActions(in: invariant.body) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
+            let enabled = compilation.requiresEnabledActions(in: invariant.body) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
             checks.append("if try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(\(String(reflecting: invariant.name))) }")
         }
         declarations += try nativeDeclarations("""
@@ -485,8 +485,8 @@ extension NativeSwiftEmitter {
             \(checks.isEmpty ? "return []" : "var result: [String] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
         }
         """)
-        if let assume = plan.assume {
-            let enabled = plan.requiresEnabledActions(in: assume) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
+        if let assume = compilation.semantics.assume {
+            let enabled = compilation.requiresEnabledActions(in: assume) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
             declarations += try nativeDeclarations("""
             private static func _assumptionsHold(in state: _ExecutionState\(collectionParameters), enabled: Set<Int>) throws -> Bool {
                 \(try expression(program.assume!))

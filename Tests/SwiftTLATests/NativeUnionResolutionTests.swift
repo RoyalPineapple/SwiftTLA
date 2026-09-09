@@ -122,13 +122,13 @@ import Testing
 
     private func typeChecker() throws -> NativeTypeInference {
         let specification = TLASpec(name: "UnionConversions", variables: [], actions: [], invariants: [])
-        return try NativeTypeInference(plan: .init(compilation: specification.compile()), sourceTypes: metadata)
+        return try NativeTypeInference(compilation: specification.compile(), sourceTypes: metadata)
     }
 
     private func resolve(type: String, initial: StateExpr, invariant: StateExpr? = nil) throws -> NativeResolvedProgram {
         let specification = TLASpec(name: "UnionEvidence", variables: [
             .init(name: "value", initialization: .expression(initial), generatedSwiftType: type, origin: .compiler)
         ], actions: [], invariants: invariant.map { [.init(name: "View", body: $0)] } ?? [])
-        return try .init(plan: .init(compilation: specification.compile()), sourceTypes: metadata)
+        return try .init(compilation: specification.compile(), sourceTypes: metadata)
     }
 }

@@ -38,7 +38,7 @@ struct NativeMembershipContextTests {
     @Test("nested membership retains its Boolean type and rejects incompatible domains")
     func nestedMembership() throws {
         let specification = TLASpec(name: "NestedMembership", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let booleans = CompiledStateExpr.value(.set([.boolean(false), .boolean(true)]))
         let expression = (0..<12).reduce(CompiledStateExpr.value(.boolean(true))) { nested, _ in
             .in(nested, booleans)
@@ -71,10 +71,10 @@ struct NativeMembershipContextTests {
             actions: [], invariants: [],
             constraint: .in(.tupleAccess(.variable("entry"), 2), .setLiteral([.value(.string("first")), .value(.string("second"))]))
         ).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let evidence = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Value": [.string("first"), .string("second")]]))
-        #expect(evidence.variables[plan.variables[0].id] == .tuple([.int, .named("Value")]))
-        let constraint = try #require(plan.constraint)
+
+        let evidence = try NativeTypeInference(compilation: compilation, sourceTypes: .init(enums: ["Value": [.string("first"), .string("second")]]))
+        #expect(evidence.variables[compilation.layout.variables[0].id] == .tuple([.int, .named("Value")]))
+        let constraint = try #require(compilation.semantics.constraint)
         let checked = try evidence.resolutionScope(constraint, expected: .bool)
         #expect(checked.operandTypes == [.named("Value"), .set(.named("Value"))])
     }
@@ -88,7 +88,7 @@ struct NativeMembershipContextTests {
             constraint: .in(.tupleLiteral([.int(1), .value(.string("other"))]), .variable("entries"))
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: .init(compilation: compilation), sourceTypes: .init(enums: ["Value": [.string("first"), .string("second")]]))
+            try NativeTypeInference(compilation: compilation, sourceTypes: .init(enums: ["Value": [.string("first"), .string("second")]]))
         }
     }
 }

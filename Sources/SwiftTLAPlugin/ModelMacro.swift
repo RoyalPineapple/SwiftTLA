@@ -57,7 +57,7 @@ enum TLASpecVerifier {
             typeName: typeName,
             compilation: compilation,
             enumInfos: enumInfos,
-            nativeProgram: try NativeResolvedProgram(plan: NativeMachinePlan(compilation: compilation), sourceTypes: sourceMetadata)
+            nativeProgram: try NativeResolvedProgram(compilation: compilation, sourceTypes: sourceMetadata)
         )
     }
 

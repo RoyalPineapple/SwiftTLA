@@ -1,6 +1,6 @@
 extension NativeResolvedProgram {
-    package init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
-        self = try NativeProgramResolver(plan: plan, sourceTypes: sourceTypes).resolve()
+    package init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
+        self = try NativeProgramResolver(compilation: compilation, sourceTypes: sourceTypes).resolve()
     }
 }
 
@@ -23,7 +23,7 @@ private struct NativeResolvedFunctionKey: Hashable {
 /// Builds immutable occurrence annotations. All type decisions remain owned by
 /// NativeTypeInference; code generation receives only this builder's result.
 private final class NativeProgramResolver {
-    let plan: NativeMachinePlan
+    let compilation: CompiledSpecification
     let inference: NativeTypeInference
     var expressions: [NativeResolvedExpression] = []
     var actions: [NativeResolvedAction] = []
@@ -32,14 +32,14 @@ private final class NativeProgramResolver {
     var functionCallbacks: [NativeFunctionID: [(OperatorID, NativeOperatorCall, NativeCallbackID)]] = [:]
     var callbacks: [NativeResolvedCallback] = []
 
-    init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata) throws {
-        self.plan = plan
-        inference = try .init(plan: plan, sourceTypes: sourceTypes)
+    init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata) throws {
+        self.compilation = compilation
+        inference = try .init(compilation: compilation, sourceTypes: sourceTypes)
     }
 
     func resolve() throws -> NativeResolvedProgram {
         var initializations: [VariableID: NativeExpressionID] = [:]
-        for item in plan.initializations {
+        for item in compilation.semantics.variableInitializations {
             let expected = try require(inference.variables[item.variable])
             switch item.initialization {
             case .value(let value): initializations[item.variable] = try expression(.value(value), expected: expected)
@@ -48,11 +48,11 @@ private final class NativeProgramResolver {
             }
         }
         var actionRoots: [ActionID: NativeActionNodeID] = [:]
-        for item in plan.actions { actionRoots[item.id] = try action(item.body) }
+        for item in compilation.semantics.actions { actionRoots[item.id] = try action(item.body) }
         var invariantRoots: [PropertyID: NativeExpressionID] = [:]
-        for item in plan.invariants { invariantRoots[item.id] = try expression(item.body, expected: .bool) }
-        let constraint = try plan.constraint.map { try expression($0, expected: .bool) }
-        let assume = try plan.assume.map { try expression($0, expected: .bool) }
+        for item in compilation.semantics.invariants { invariantRoots[item.id] = try expression(item.body, expected: .bool) }
+        let constraint = try compilation.semantics.constraint.map { try expression($0, expected: .bool) }
+        let assume = try compilation.semantics.assume.map { try expression($0, expected: .bool) }
         var checks: [NativeProjectionPair: Bool] = [:]
         for node in expressions {
             collectProjection(node.computationType, to: node.resultType, checks: &checks)

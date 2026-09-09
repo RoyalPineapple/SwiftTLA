@@ -19,7 +19,7 @@ import Testing
                 invariants: [.init(name: "Count", body: .equal(
                     .tupleLength(.recordAccess(call, "items")), .int(1)))],
                 formalOperatorDefinitions: [operation])
-            let program = try NativeResolvedProgram(plan: .init(compilation: specification.compile()))
+            let program = try NativeResolvedProgram(compilation: specification.compile())
             let function = try #require(program.functions.first)
             #expect(function.parameterTypes == [.record([.init(name: "items", type: .array(.int))])])
         }
@@ -39,7 +39,7 @@ import Testing
             invariants: [.init(name: "Count", body: .equal(
                 .tupleLength(.recordAccess(fold, "items")), .int(2)))],
             formalOperatorDefinitions: [append], imports: [FunctionsModule.module])
-        let program = try NativeResolvedProgram(plan: .init(compilation: specification.compile()))
+        let program = try NativeResolvedProgram(compilation: specification.compile())
         let accumulator = NativeType.record([.init(name: "items", type: .array(.int))])
         #expect(program.functions.contains { $0.parameterTypes.contains(accumulator) })
     }
@@ -59,7 +59,7 @@ import Testing
             invariants: [.init(name: "Count", body: .forAll(results, "result", .equal(
                 .tupleLength(.recordAccess(.variable("result"), "items")), .int(2))))],
             formalOperatorDefinitions: [append], imports: [FunctionsModule.module])
-        let program = try NativeResolvedProgram(plan: .init(compilation: specification.compile()))
+        let program = try NativeResolvedProgram(compilation: specification.compile())
         let accumulator = NativeType.record([.init(name: "items", type: .array(.int))])
         #expect(program.functions.contains { $0.parameterTypes.contains(accumulator) })
     }

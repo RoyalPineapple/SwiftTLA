@@ -5,7 +5,7 @@ import Testing
     @Test("deep filter and choice predicates preserve their domains without recursive checking")
     func nestedSetPredicates() throws {
         let specification = TLASpec(name: "SetPredicates", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let domain = CompiledStateExpr.setLiteral([.value(.integer(1))])
         var layers: [CompiledStateExpr] = [.value(.boolean(true))]
         defer { while layers.popLast() != nil {} }
@@ -26,7 +26,7 @@ import Testing
     @Test("deep Boolean expressions retain their Boolean type")
     func longBooleanChains() throws {
         let specification = TLASpec(name: "BooleanChains", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let expression = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
             switch index % 3 {
             case 0: .not(nested)
@@ -40,7 +40,7 @@ import Testing
     @Test("deep conditionals preserve branch types without recursive checking")
     func deepConditionals() throws {
         let specification = TLASpec(name: "ConditionalChains", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let expression = (0..<1_000).reduce(CompiledStateExpr.value(.integer(1))) { nested, index in
             if index.isMultiple(of: 2) {
                 .ifThenElse(.value(.boolean(true)), nested, .value(.integer(0)))
@@ -63,7 +63,7 @@ import Testing
     @Test("mixed Boolean, conditional, and lexical nesting shares one checking worklist")
     func mixedExpressionNesting() throws {
         let specification = TLASpec(name: "MixedNesting", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let expression = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
             switch index % 3 {
             case 0: .not(nested)
@@ -77,7 +77,7 @@ import Testing
     @Test("nested quantifiers retain their domains inside collection constructors")
     func nestedQuantifierDomains() throws {
         let specification = TLASpec(name: "QuantifierNesting", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let domain = CompiledStateExpr.setLiteral([.value(.integer(1))])
         let predicate = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
             let binder = BinderID(ordinal: index)
@@ -100,7 +100,7 @@ import Testing
     @Test("deep arithmetic and comparison expressions share iterative checking")
     func deepArithmeticAndComparisons() throws {
         let specification = TLASpec(name: "ScalarNesting", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let arithmetic = (0..<1_000).reduce(CompiledStateExpr.value(.integer(1))) { nested, index in
             index.isMultiple(of: 2) ? .add(nested, .value(.integer(0))) : .negate(nested)
         }
@@ -117,7 +117,7 @@ import Testing
     @Test("Boolean diagnostics retain the failing branch's ancestry and left-to-right order")
     func booleanBranchDiagnostics() throws {
         let specification = TLASpec(name: "BooleanBranches", variables: [], actions: [], invariants: [])
-        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let checker = try NativeTypeInference(compilation: specification.compile())
         let first = CompiledStateExpr.and(.not(.value(.integer(1))), .value(.string("later")))
         let second = CompiledStateExpr.and(.or(.value(.boolean(true)), .value(.boolean(false))), .not(.value(.integer(1))))
         for expression in [first, second] {
@@ -137,7 +137,7 @@ import Testing
                 .recordLiteral(.init(["execution": .tupleLiteral([])]))), origin: .compiler)
         ], actions: [], invariants: [])
         do {
-            _ = try NativeResolvedProgram(plan: .init(compilation: specification.compile()))
+            _ = try NativeResolvedProgram(compilation: specification.compile())
             Issue.record("An unresolved element type must not reach Swift emission")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .unresolvedGeneratedValueShape)
@@ -152,7 +152,7 @@ import Testing
         let specification = TLASpec(name: "InvalidOperand", variables: [
             .init(name: "count", initialization: .value(.int(0)), origin: .compiler)
         ], actions: [], invariants: [])
-        let inference = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let inference = try NativeTypeInference(compilation: specification.compile())
         let payload = String(repeating: "private-expression-payload", count: 1_000)
         let expression = CompiledStateExpr.add(.value(.string(payload)), .value(.integer(1)))
         do {

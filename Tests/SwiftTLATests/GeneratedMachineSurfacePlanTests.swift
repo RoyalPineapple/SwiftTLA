@@ -7,16 +7,16 @@ struct GeneratedMachineSurfacePlanTests {
     func rejectsRawFormalState() throws {
         let value = Var<TLAValue>("value")
         let specification = TLASpec("RawGeneratedState") { Variable(value, TLAValue.int(0)) }
-        let plan = NativeMachinePlan(compilation: try specification.compile())
-        #expect(throws: CompilationDiagnostic.self) { try NativeResolvedProgram(plan: plan) }
+        let compilation = try specification.compile()
+        #expect(throws: CompilationDiagnostic.self) { try NativeResolvedProgram(compilation: compilation) }
     }
 
     @Test("raw structured formal values cannot enter a generated state")
     func rejectsUntypedStructuredState() throws {
         let value = Var<TLAValue>("value")
         let specification = TLASpec("StructuredGeneratedState") { Variable(value, TLAValue.tuple([.int(0)])) }
-        let plan = NativeMachinePlan(compilation: try specification.compile())
-        #expect(throws: CompilationDiagnostic.self) { try NativeResolvedProgram(plan: plan) }
+        let compilation = try specification.compile()
+        #expect(throws: CompilationDiagnostic.self) { try NativeResolvedProgram(compilation: compilation) }
     }
 
     @Test("raw formal values are rejected through qualification, aliases, and containers")
@@ -28,11 +28,11 @@ struct GeneratedMachineSurfacePlanTests {
             ("[String: TLAValue]", .function([.string("key"): .int(0)]))
         ]
         for (type, initial) in declarations {
-            let plan = NativeMachinePlan(compilation: try TLASpec(name: "RawState", variables: [
+            let compilation = try TLASpec(name: "RawState", variables: [
                 .init(name: "value", initialization: .value(initial), generatedSwiftType: type, origin: .compiler)
-            ], actions: [], invariants: []).compile())
+            ], actions: [], invariants: []).compile()
             do {
-                _ = try NativeResolvedProgram(plan: plan, sourceTypes: .init(aliases: ["Raw": "TLAValue"]))
+                _ = try NativeResolvedProgram(compilation: compilation, sourceTypes: .init(aliases: ["Raw": "TLAValue"]))
                 Issue.record("Generated state admitted raw formal type: \(type)")
             } catch let diagnostic as CompilationDiagnostic {
                 #expect(diagnostic.actual.contains("raw TLAValue"))

@@ -30,12 +30,12 @@ extension CompiledActionExpr {
     }
 }
 
-extension NativeMachinePlan {
+extension CompiledSpecification {
     package func requiresEnabledActions(in expression: CompiledStateExpr) -> Bool {
-        expression.requiresEnabledActions(formalOperators: formalOperatorDefinitions, recursiveFunctions: recursiveFunctions)
+        expression.requiresEnabledActions(formalOperators: semantics.formalOperatorDefinitions, recursiveFunctions: semantics.recursiveFunctions)
     }
 
     package func requiresEnabledActions(in action: CompiledActionExpr) -> Bool {
-        action.requiresEnabledActions(formalOperators: formalOperatorDefinitions, recursiveFunctions: recursiveFunctions)
+        action.requiresEnabledActions(formalOperators: semantics.formalOperatorDefinitions, recursiveFunctions: semantics.recursiveFunctions)
     }
 }

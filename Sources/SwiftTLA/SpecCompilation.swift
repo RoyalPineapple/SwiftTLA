@@ -144,8 +144,8 @@ public struct CompiledSpecification: Sendable {
     public let description: CompilationDescription
     public var identity: CompilationIdentity { description.identity }
     package let machineSurfacePlan: MachineSurfacePlan
-    let layout: CompiledLayout
-    let semantics: CompiledSemantics
+    package let layout: CompiledLayout
+    package let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
     private let renderedBundle: TLAModuleBundle
     private let renderedConfigurationWithoutSymmetry: String

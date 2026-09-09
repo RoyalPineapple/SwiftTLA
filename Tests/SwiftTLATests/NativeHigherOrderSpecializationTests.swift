@@ -13,9 +13,9 @@ import Testing
             .init(name: "Invoke", parameters: [.operator("callback", arity: 1)],
                 body: .operatorApplication(.reference("callback", arity: 1), [.value(.int(0))]))
         ])
-        let plan = NativeMachinePlan(compilation: try spec.compile())
-        let checker = try NativeTypeInference(plan: plan)
-        let prepare = try #require(plan.formalOperatorDefinitions.first)
+        let compilation = try spec.compile()
+        let checker = try NativeTypeInference(compilation: compilation)
+        let prepare = try #require(compilation.semantics.formalOperatorDefinitions.first)
         func specialization(unused: CompiledValue) throws -> NativeOperatorSpecialization {
             let expression = CompiledStateExpr.operatorApplication(prepare.id, [
                 .value(.value(.integer(7))), .value(.value(unused))
@@ -29,9 +29,9 @@ import Testing
 
     @Test("zero-argument callbacks retain distinct identities and independent results")
     func zeroArgumentCallbacks() throws {
-        let plan = NativeMachinePlan(compilation: try specification().compile())
-        let inference = try NativeTypeInference(plan: plan)
-        let operation = try #require(plan.formalOperatorDefinitions.first)
+        let compilation = try specification().compile()
+        let inference = try NativeTypeInference(compilation: compilation)
+        let operation = try #require(compilation.semantics.formalOperatorDefinitions.first)
         let integerExpression = CompiledStateExpr.operatorApplication(operation.id, [
             .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)), capturedBindings: [], referencedOperators: [])))
         ])
@@ -58,10 +58,10 @@ import Testing
 
     @Test("call arguments distinguish values from operators and validate callback arity")
     func argumentKinds() throws {
-        let plan = NativeMachinePlan(compilation: try specification().compile())
-        let inference = try NativeTypeInference(plan: plan)
-        let callbackOperation = try #require(plan.formalOperatorDefinitions.first)
-        let valueOperation = try #require(plan.formalOperatorDefinitions.last)
+        let compilation = try specification().compile()
+        let inference = try NativeTypeInference(compilation: compilation)
+        let callbackOperation = try #require(compilation.semantics.formalOperatorDefinitions.first)
+        let valueOperation = try #require(compilation.semantics.formalOperatorDefinitions.last)
         let callback = CompiledFormalOperator.lambda(.init(
             id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)), capturedBindings: [], referencedOperators: []))
         let unaryCallback = CompiledFormalOperator.lambda(.init(
@@ -84,9 +84,9 @@ import Testing
         ], actions: [], invariants: [], formalOperatorDefinitions: [
             .init(name: "Identity", parameters: [.value("value")], body: .variable("value"))
         ]).compile()
-        let plan = NativeMachinePlan(compilation: compilation)
-        let operation = try #require(plan.formalOperatorDefinitions.first)
-        let inference = try NativeTypeInference(plan: plan)
+
+        let operation = try #require(compilation.semantics.formalOperatorDefinitions.first)
+        let inference = try NativeTypeInference(compilation: compilation)
         let expression = (0..<24).reduce(CompiledStateExpr.value(.integer(7))) { nested, _ in
             .operatorApplication(operation.id, [.value(nested)])
         }
@@ -98,12 +98,12 @@ import Testing
 
     @Test("deep call arguments retain checked results without recursive invocation")
     func deepValueArguments() throws {
-        let plan = NativeMachinePlan(compilation: try TLASpec(name: "DeepCalls",
+        let compilation = try TLASpec(name: "DeepCalls",
             variables: [], actions: [], invariants: [], formalOperatorDefinitions: [
                 .init(name: "Identity", parameters: [.value("value")], body: .variable("value"))
-            ]).compile())
-        let operation = try #require(plan.formalOperatorDefinitions.first)
-        let checker = try NativeTypeInference(plan: plan)
+            ]).compile()
+        let operation = try #require(compilation.semantics.formalOperatorDefinitions.first)
+        let checker = try NativeTypeInference(compilation: compilation)
         // Keep each layer alive so destroying the fixture does not recursively
         // release the entire expression on the test worker's small stack.
         var layers: [CompiledStateExpr] = [.value(.integer(7))]
@@ -122,8 +122,8 @@ import Testing
 
     @Test("long lexical binding chains preserve each binding's type")
     func lexicalBindingChain() throws {
-        let plan = NativeMachinePlan(compilation: try specification().compile())
-        let inference = try NativeTypeInference(plan: plan)
+        let compilation = try specification().compile()
+        let inference = try NativeTypeInference(compilation: compilation)
         let count = 64
         let expression = (0..<count).reversed().reduce(
             CompiledStateExpr.boundValue(.init(ordinal: count - 1))
@@ -146,7 +146,7 @@ import Testing
                 .operatorApplication(.lambda(.init(parameters: ["argument"], body: .int(index))), [.value(.int(0))]))
         })
         func identities() throws -> [LambdaID] {
-            try NativeMachinePlan(compilation: spec.compile()).formalOperatorDefinitions.map { definition in
+            try spec.compile().semantics.formalOperatorDefinitions.map { definition in
                 guard case .lambdaApplication(let lambda, _) = definition.body else {
                     throw NativeIdentityTestError.expectedLambda
                 }
@@ -161,9 +161,9 @@ import Testing
 
     @Test("callbacks capture the value shape of each enclosing specialization")
     func capturedValueShapes() throws {
-        let plan = NativeMachinePlan(compilation: try specification().compile())
-        let inference = try NativeTypeInference(plan: plan)
-        let operation = try #require(plan.formalOperatorDefinitions.last)
+        let compilation = try specification().compile()
+        let inference = try NativeTypeInference(compilation: compilation)
+        let operation = try #require(compilation.semantics.formalOperatorDefinitions.last)
         let integerExpression = CompiledStateExpr.operatorApplication(operation.id,
             [.value(.value(.integer(7)))])
         let integerResolution = try inference.resolutionScope(integerExpression, expected: .int)
@@ -189,9 +189,9 @@ import Testing
                     .init("Local", parameters: [], body: .operatorApplication(.reference("callback", arity: 0), []))
                 ], .recursiveCall("Local", [])))
         ])
-        let plan = NativeMachinePlan(compilation: try spec.compile())
-        let inference = try NativeTypeInference(plan: plan)
-        let operation = try #require(plan.formalOperatorDefinitions.first)
+        let compilation = try spec.compile()
+        let inference = try NativeTypeInference(compilation: compilation)
+        let operation = try #require(compilation.semantics.formalOperatorDefinitions.first)
         let callExpression = CompiledStateExpr.operatorApplication(operation.id, [
             .operator(.lambda(.init(id: .init(ordinal: 0), parameters: [], body: .value(.integer(7)), capturedBindings: [], referencedOperators: [])))
         ])

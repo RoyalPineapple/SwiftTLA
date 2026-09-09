@@ -99,7 +99,7 @@ extension NativeCodeGenerationTests {
         ).compile()
         let model = MacroCompilation(
             typeName: "NestedPredicates", compilation: compilation, enumInfos: [],
-            nativeProgram: try NativeResolvedProgram(plan: .init(compilation: compilation))
+            nativeProgram: try NativeResolvedProgram(compilation: compilation)
         )
         let declarations = try MacroExpander.generateStateMachineMembers(model: model)
         for source in [declarations.map(\.description), declarations.map { $0.formatted().description }] {
@@ -148,7 +148,7 @@ extension NativeCodeGenerationTests {
         ).compile()
         let model = MacroCompilation(
             typeName: "NestedUpdate", compilation: compilation, enumInfos: [],
-            nativeProgram: try NativeResolvedProgram(plan: .init(compilation: compilation))
+            nativeProgram: try NativeResolvedProgram(compilation: compilation)
         )
         let members = try MacroExpander.generateStateMachineMembers(model: model)
         let generated = members.map(\.description).joined(separator: "\n")

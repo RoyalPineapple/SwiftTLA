@@ -13,7 +13,7 @@ struct NativeCompoundContextTests {
         let compilation = try TLASpec(name: "NestedComparisons", variables: [
             .init(name: "number", initialization: .value(.int(0)), origin: .compiler)
         ], actions: [], invariants: []).compile()
-        let inference = try NativeTypeInference(plan: .init(compilation: compilation))
+        let inference = try NativeTypeInference(compilation: compilation)
         let expression = (0..<12).reduce(CompiledStateExpr.value(.boolean(true))) { nested, _ in
             .equal(nested, .value(.boolean(true)))
         }
@@ -43,9 +43,9 @@ struct NativeCompoundContextTests {
                     variables: [.init(name: "stored", initialization: .value(value), generatedSwiftType: hint, origin: .compiler)],
                     actions: [], invariants: [], constraint: .and(.equal(lhs, rhs), .notEqual(lhs, rhs))
                 ).compile()
-                let plan = NativeMachinePlan(compilation: compilation)
-                let evidence = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-                #expect(evidence.variables[plan.variables[0].id] == expected)
+
+                let evidence = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+                #expect(evidence.variables[compilation.layout.variables[0].id] == expected)
             }
         }
     }
@@ -61,9 +61,9 @@ struct NativeCompoundContextTests {
                 variables: [.init(name: "stored", initialization: .value(.set([.string("red")])), generatedSwiftType: "SetExpr<Color>", origin: .compiler)],
                 actions: [], invariants: [], constraint: .and(.subset(literal, stored), .equal(operation, stored))
             ).compile()
-            let plan = NativeMachinePlan(compilation: compilation)
-            let evidence = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-            #expect(evidence.variables[plan.variables[0].id] == .set(.named("Color")))
+
+            let evidence = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+            #expect(evidence.variables[compilation.layout.variables[0].id] == .set(.named("Color")))
         }
     }
 
@@ -75,7 +75,7 @@ struct NativeCompoundContextTests {
             actions: [], invariants: [], constraint: .equal(.setLiteral([.value(.string("green"))]), .variable("stored"))
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: .init(compilation: compilation), sourceTypes: metadata)
+            try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
         }
     }
 }

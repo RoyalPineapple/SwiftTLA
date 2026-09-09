@@ -32,7 +32,7 @@ struct NativeRecordEvaluationOrderTests {
         let compilation = try TLASpec(name: "OrderedRecord", variables: [
             .init(name: "record", initialization: .expression(formal), origin: .compiler)
         ], actions: [], invariants: []).compile()
-        let program = try NativeResolvedProgram(plan: .init(compilation: compilation), sourceTypes: .init())
+        let program = try NativeResolvedProgram(compilation: compilation, sourceTypes: .init())
         let annotatedModel = MacroCompilation(typeName: model.typeName, compilation: compilation,
             enumInfos: model.enumInfos, nativeProgram: program)
         var emitter = NativeSwiftEmitter(model: annotatedModel)

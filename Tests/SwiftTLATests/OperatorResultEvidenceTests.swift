@@ -11,9 +11,9 @@ import Testing
 
     @Test("provisional operator record literals acquire validated declared field evidence")
     func cachedLiteralResultRefines() throws {
-        let plan = try makePlan(argument: .value(.string("read")), parameterized: false)
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        let operation = try #require(plan.formalOperatorDefinitions.first)
+        let compilation = try compileSpecification(argument: .value(.string("read")), parameterized: false)
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+        let operation = try #require(compilation.semantics.formalOperatorDefinitions.first)
         let expected = NativeType.record([.init(name: "op", type: .named("OperationKind"))])
         let resolution = try inference.resolutionScope(.operatorApplication(operation.id, []), expected: expected)
         #expect(resolution.resultType == expected)
@@ -22,33 +22,33 @@ import Testing
 
     @Test("operator result refinement revalidates actual literal arguments")
     func argumentsRetainFiniteDomainProof() throws {
-        let plan = try makePlan(argument: .value(.string("read")), parameterized: true)
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        let operation = try #require(plan.formalOperatorDefinitions.first)
+        let compilation = try compileSpecification(argument: .value(.string("read")), parameterized: true)
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+        let operation = try #require(compilation.semantics.formalOperatorDefinitions.first)
         let expected = NativeType.record([.init(name: "op", type: .named("OperationKind"))])
         let expression = CompiledStateExpr.operatorApplication(operation.id, [.value(.value(.string("read")))])
         let resolution = try inference.resolutionScope(expression, expected: expected)
         #expect(resolution.resultType == expected)
         #expect(try #require(resolution.call).result == expected)
-        let invalid = try makePlan(argument: .value(.string("write")), parameterized: true)
+        let invalid = try compileSpecification(argument: .value(.string("write")), parameterized: true)
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: invalid, sourceTypes: metadata)
+            try NativeTypeInference(compilation: invalid, sourceTypes: metadata)
         }
     }
 
     @Test("operator contextual results do not convert raw state storage to declared enums")
     func stateRepresentationIsPreserved() throws {
-        let plan = try makePlan(argument: .variable("raw"), parameterized: true, rawStorage: true)
+        let compilation = try compileSpecification(argument: .variable("raw"), parameterized: true, rawStorage: true)
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: plan, sourceTypes: metadata)
+            try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
         }
-        let invalidLiteral = try makePlan(argument: .value(.string("write")), parameterized: false)
+        let invalidLiteral = try compileSpecification(argument: .value(.string("write")), parameterized: false)
         #expect(throws: CompilationDiagnostic.self) {
-            try NativeTypeInference(plan: invalidLiteral, sourceTypes: metadata)
+            try NativeTypeInference(compilation: invalidLiteral, sourceTypes: metadata)
         }
     }
 
-    private func makePlan(argument: StateExpr, parameterized: Bool, rawStorage: Bool = false) throws -> NativeMachinePlan {
+    private func compileSpecification(argument: StateExpr, parameterized: Bool, rawStorage: Bool = false) throws -> CompiledSpecification {
         let call = StateExpr.operatorApplication(
             .reference("Operation", arity: parameterized ? 1 : 0),
             parameterized ? [.value(argument)] : []
@@ -70,6 +70,6 @@ import Testing
             invariants: [],
             formalOperatorDefinitions: [.init(name: "Operation", parameters: parameterized ? [.value("value")] : [], body: body)]
         ).compile()
-        return .init(compilation: compilation)
+        return compilation
     }
 }

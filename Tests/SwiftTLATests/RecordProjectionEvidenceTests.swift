@@ -4,9 +4,9 @@ import Testing
 @Suite struct RecordProjectionEvidenceTests {
     @Test("record projection validates the selected nominal field and retains siblings")
     func selectedFieldContext() throws {
-        let plan = try makePlan(key: .value(.constant("first")))
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        let checked = try inference.resolutionScope(plan.formalOperatorDefinitions[0].body, expected: .named("Key"))
+        let compilation = try compileSpecification(key: .value(.constant("first")))
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
+        let checked = try inference.resolutionScope(compilation.semantics.formalOperatorDefinitions[0].body, expected: .named("Key"))
         let source = try #require(checked.operandTypes.first)
         #expect(source == .record([
             .init(name: "key", type: .named("Key")),
@@ -16,19 +16,19 @@ import Testing
 
     @Test("record projection rejects literals outside the selected nominal domain")
     func invalidLiteralIsRejected() throws {
-        let plan = try makePlan(key: .value(.constant("other")))
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
+        let compilation = try compileSpecification(key: .value(.constant("other")))
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
         #expect(throws: CompilationDiagnostic.self) {
-            try inference.type(of: plan.formalOperatorDefinitions[0].body, expected: .named("Key"))
+            try inference.type(of: compilation.semantics.formalOperatorDefinitions[0].body, expected: .named("Key"))
         }
     }
 
     @Test("record projection cannot reinterpret raw state as a named value")
     func rawStorageIsRejected() throws {
-        let plan = try makePlan(key: .variable("raw"), rawStorage: true)
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
+        let compilation = try compileSpecification(key: .variable("raw"), rawStorage: true)
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
         #expect(throws: CompilationDiagnostic.self) {
-            try inference.type(of: plan.formalOperatorDefinitions[0].body, expected: .named("Key"))
+            try inference.type(of: compilation.semantics.formalOperatorDefinitions[0].body, expected: .named("Key"))
         }
     }
 
@@ -38,15 +38,15 @@ import Testing
             .init(sourceName: "key", name: "key", swiftType: "Key"),
             .init(sourceName: "valid", name: "valid", swiftType: "Bool")
         ]], enums: ["Key": [.constant("first")]])
-        let plan = NativeMachinePlan(compilation: try TLASpec(name: "StoredProjection", variables: [
+        let compilation = try TLASpec(name: "StoredProjection", variables: [
             .init(name: "record", initialization: .expression(.recordLiteral(.init(["key": .value(.constant("first")), "valid": .bool(true)]))), generatedSwiftType: "Record<Payload>", origin: .compiler),
             .init(name: "pair", initialization: .expression(.tupleLiteral([.value(.constant("first")), .bool(true)])), generatedSwiftType: "Pair<Key,Bool>", origin: .compiler)
         ], actions: [], invariants: [], formalOperatorDefinitions: [
             .init(name: "RecordKey", parameters: [], body: .recordAccess(.variable("record"), "key")),
             .init(name: "TupleKey", parameters: [], body: .tupleAccess(.variable("pair"), 1))
-        ]).compile())
-        let inference = try NativeTypeInference(plan: plan, sourceTypes: sourceTypes)
-        for definition in plan.formalOperatorDefinitions {
+        ]).compile()
+        let inference = try NativeTypeInference(compilation: compilation, sourceTypes: sourceTypes)
+        for definition in compilation.semantics.formalOperatorDefinitions {
             #expect(try inference.type(of: definition.body, expected: .atom) == .atom)
             #expect(try inference.type(of: definition.body, expected: .finite([.constant("first")])) == .finite([.constant("first")]))
             #expect(try inference.type(of: definition.body) == .named("Key"))
@@ -59,13 +59,13 @@ import Testing
             let sourceTypes = NativeSourceTypeMetadata(records: ["Payload": [
                 .init(sourceName: "value", name: "value", swiftType: "OneOf<First,Second>")
             ]], enums: ["First": [.constant("first")], "Second": mixed ? [.int(2)] : [.constant("second")]])
-            let plan = NativeMachinePlan(compilation: try TLASpec(name: "FiniteProjection", variables: [
+            let compilation = try TLASpec(name: "FiniteProjection", variables: [
                 .init(name: "record", initialization: .expression(.recordLiteral(.init(["value": .value(.constant("first"))]))), generatedSwiftType: "Record<Payload>", origin: .compiler)
             ], actions: [], invariants: [], formalOperatorDefinitions: [
                 .init(name: "Read", parameters: [], body: .recordAccess(.variable("record"), "value"))
-            ]).compile())
-            let inference = try NativeTypeInference(plan: plan, sourceTypes: sourceTypes)
-            let body = plan.formalOperatorDefinitions[0].body
+            ]).compile()
+            let inference = try NativeTypeInference(compilation: compilation, sourceTypes: sourceTypes)
+            let body = compilation.semantics.formalOperatorDefinitions[0].body
             let stored = try inference.type(of: body)
             guard case .finite = stored else { Issue.record("Expected finite field"); return }
             if mixed {
@@ -83,7 +83,7 @@ import Testing
         .init(enums: ["Key": [.constant("first")]])
     }
 
-    private func makePlan(key: StateExpr, rawStorage: Bool = false) throws -> NativeMachinePlan {
+    private func compileSpecification(key: StateExpr, rawStorage: Bool = false) throws -> CompiledSpecification {
         var variables: [NamedVar] = [
             .init(name: "number", initialization: .expression(.int(0)), origin: .compiler)
         ]
@@ -93,9 +93,9 @@ import Testing
         let projection = StateExpr.recordAccess(.recordLiteral(.init([
             "key": key, "valid": .bool(true)
         ])), "key")
-        return .init(compilation: try TLASpec(name: "RecordProjection", variables: variables,
+        return try TLASpec(name: "RecordProjection", variables: variables,
             actions: [], invariants: [], formalOperatorDefinitions: [
                 .init(name: "Projection", parameters: [], body: projection)
-            ]).compile())
+            ]).compile()
     }
 }

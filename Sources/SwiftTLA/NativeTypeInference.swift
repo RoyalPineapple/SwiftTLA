@@ -311,13 +311,13 @@ private enum NativeExpressionCheckTask {
 struct NativeTypeInference: Sendable {
     /// Shared immutable inputs stay outside lexical scope snapshots.
     private final class Inputs: Sendable {
-        let plan: NativeMachinePlan
+        let compilation: CompiledSpecification
         let sourceTypes: NativeSourceTypeMetadata
         let namedDomains: [String: Set<CompiledValue>]
         let namedRepresentations: [String: NativeType]
 
-        init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata) throws {
-            self.plan = plan
+        init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata) throws {
+            self.compilation = compilation
             self.sourceTypes = sourceTypes
             var namedDomains: [String: Set<CompiledValue>] = [:]
             var namedRepresentations: [String: NativeType] = [:]
@@ -348,7 +348,7 @@ struct NativeTypeInference: Sendable {
     var namedDomains: [String: Set<CompiledValue>] { inputs.namedDomains }
     var namedRepresentations: [String: NativeType] { inputs.namedRepresentations }
     private var sourceTypes: NativeSourceTypeMetadata { inputs.sourceTypes }
-    private var plan: NativeMachinePlan { inputs.plan }
+    private var compilation: CompiledSpecification { inputs.compilation }
     private var bindingSources: [BinderID: CompiledStateExpr] = [:]
     private var argumentSources: [BinderID: NativeArgumentSource] = [:]
     private var activeArgumentRefinements: Set<NativeArgumentRefinement> = []
@@ -396,9 +396,9 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    init(plan: NativeMachinePlan, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
-        inputs = try Inputs(plan: plan, sourceTypes: sourceTypes)
-        for variable in plan.variables {
+    init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
+        inputs = try Inputs(compilation: compilation, sourceTypes: sourceTypes)
+        for variable in compilation.layout.variables {
             if let collection = variable.collection,
                let element = collection.elementType, let value = collection.valueType {
                 collectionDomains[variable.id] = Set(collection.members)
@@ -409,8 +409,8 @@ struct NativeTypeInference: Sendable {
                 variables[variable.id] = .unknown
             }
         }
-        for action in plan.actions {
-            let collection = action.collection.flatMap { id in plan.variables.first { $0.id == id }?.collection }
+        for action in compilation.semantics.actions {
+            let collection = action.collection.flatMap { id in compilation.layout.variables.first { $0.id == id }?.collection }
             for binding in action.bindings {
                 let hint: NativeType
                 if let variable = action.collection, let element = collection?.elementType {
@@ -427,7 +427,7 @@ struct NativeTypeInference: Sendable {
             let previousVariables = variables
             let previousBindings = bindings
             let previousOperators = specializationResults
-            for initialization in plan.initializations {
+            for initialization in compilation.semantics.variableInitializations {
                 let expected = variables[initialization.variable] ?? .unknown
                 let inferred: NativeType
                 switch initialization.initialization {
@@ -438,24 +438,24 @@ struct NativeTypeInference: Sendable {
                 }
                 variables[initialization.variable] = try Self.merge(expected, inferred)
             }
-            for action in plan.actions {
+            for action in compilation.semantics.actions {
                 do { try actionTypes(action.body) }
                 catch let diagnostic as CompilationDiagnostic {
-                    let name = plan.actionLayouts.first { $0.id == action.id }?.declaration.name ?? String(action.id.ordinal)
+                    let name = compilation.layout.actions.first { $0.id == action.id }?.declaration.name ?? String(action.id.ordinal)
                     throw Self.diagnostic("actions.\(name)", causedBy: diagnostic)
                 }
             }
-            for invariant in plan.invariants {
+            for invariant in compilation.semantics.invariants {
                 do { _ = try infer(invariant.body, expected: .bool) }
                 catch let diagnostic as CompilationDiagnostic {
                     throw Self.diagnostic("invariants.\(invariant.name)", causedBy: diagnostic)
                 }
             }
-            if let constraint = plan.constraint { _ = try infer(constraint, expected: .bool) }
-            if let assume = plan.assume { _ = try infer(assume, expected: .bool) }
+            if let constraint = compilation.semantics.constraint { _ = try infer(constraint, expected: .bool) }
+            if let assume = compilation.semantics.assume { _ = try infer(assume, expected: .bool) }
             if variables == previousVariables && bindings == previousBindings && specializationResults == previousOperators { break }
         }
-        for variable in plan.variables {
+        for variable in compilation.layout.variables {
             guard let type = variables[variable.id], type.resolved else {
                 throw Self.unresolvedDiagnostic(variables[variable.id] ?? .unknown,
                     at: "variables.\(variable.declaration.name)")
@@ -1003,12 +1003,12 @@ struct NativeTypeInference: Sendable {
             formalParameters = lambda.parameters.map { .value($0) }
             body = lambda.body; domain = nil
         case .reference(let id, _):
-            if let definition = plan.formalOperatorDefinitions.first(where: { $0.id == id }) {
+            if let definition = compilation.semantics.formalOperatorDefinitions.first(where: { $0.id == id }) {
                 formalParameters = definition.parameters; body = definition.body; domain = nil
             } else if let definition = localOperators[id] {
                 formalParameters = definition.parameters.map { .value($0) }
                 body = definition.body; domain = definition.domain
-            } else if let definition = plan.recursiveFunctions.first(where: { $0.id == id }) {
+            } else if let definition = compilation.semantics.recursiveFunctions.first(where: { $0.id == id }) {
                 formalParameters = definition.parameters.map { .value($0) }
                 body = definition.body; domain = nil
             } else { throw Self.diagnostic("operator", "unknown operator identity \(id.ordinal)") }
@@ -1135,7 +1135,7 @@ struct NativeTypeInference: Sendable {
         let location: String
         switch expression {
         case .boundValue(let id): location = "binder[\(id.ordinal)]"
-        case .stateVariable(let id): location = "variable[\(plan.variables.first { $0.id == id }?.declaration.name ?? String(id.ordinal))]"
+        case .stateVariable(let id): location = "variable[\(compilation.layout.variables.first { $0.id == id }?.declaration.name ?? String(id.ordinal))]"
         case .tupleAccess(_, let index): location = "tupleAccess[\(index)]"
         case .operatorApplication(let id, _), .recursiveCall(let id, _): location = "operator[\(id.ordinal)]"
         default: location = expression.diagnosticName

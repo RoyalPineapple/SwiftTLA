@@ -622,17 +622,17 @@ struct CompiledSymmetrySet: Sendable {
     let values: Set<CompiledValue>
 }
 
-struct CompiledSemantics: Sendable {
+package struct CompiledSemantics: Sendable {
     let checkDeadlock: Bool
-    let variableInitializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
-    let actions: [CompiledAction]
-    let invariants: [CompiledInvariant]
+    package let variableInitializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
+    package let actions: [CompiledAction]
+    package let invariants: [CompiledInvariant]
     let temporalProperties: [CompiledTemporal]
     let fairness: [CompiledFairnessCondition]
-    let constraint: CompiledStateExpr?
-    let assume: CompiledStateExpr?
-    let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]
-    let recursiveFunctions: [CompiledRecursiveFunction]
+    package let constraint: CompiledStateExpr?
+    package let assume: CompiledStateExpr?
+    package let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]
+    package let recursiveFunctions: [CompiledRecursiveFunction]
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]
     let symmetrySets: [CompiledSymmetrySet]

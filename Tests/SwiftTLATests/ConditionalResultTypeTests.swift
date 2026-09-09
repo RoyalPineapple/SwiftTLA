@@ -13,7 +13,7 @@ import Testing
                 .init(name: "selected", initialization: .expression(.int(1)), generatedSwiftType: "Node", origin: .compiler),
                 .init(name: "stored", initialization: .expression(.int(2)), generatedSwiftType: "OneOf<Node,Missing>", origin: .compiler)
             ], actions: [], invariants: [.init(name: "Result", body: .equal(lookup, wide))])
-            let program = try NativeResolvedProgram(plan: .init(compilation: specification.compile()),
+            let program = try NativeResolvedProgram(compilation: specification.compile(),
                 sourceTypes: .init(enums: ["Node": [.int(1)], "Missing": [.int(2)]]))
             let root = try #require(program.invariants.values.first)
             let application = program[program[root].children[0]]

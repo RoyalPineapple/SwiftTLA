@@ -178,14 +178,14 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
     let moduleName: String
 }
 
-struct CompiledLayout: Hashable, Sendable {
-    let variables: [CompiledVariableLayout]
-    let actions: [CompiledActionLayout]
+package struct CompiledLayout: Hashable, Sendable {
+    package let variables: [CompiledVariableLayout]
+    package let actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
     let temporalProperties: [CompiledPropertyLayout]
     let fields: [CompiledFieldLayout]
     let procedures: [CompiledProcedureLayout]
-    let controlLocations: [CompiledControlLocation]
+    package let controlLocations: [CompiledControlLocation]
     let moduleInstances: [CompiledModuleInstanceLayout]
     let declarations: [CompiledDeclaration]
 
