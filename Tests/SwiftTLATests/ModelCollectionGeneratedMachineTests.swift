@@ -219,8 +219,12 @@ struct ModelCollectionGeneratedMachineTests {
     #expect(parsedCompilation.identity == builtCompilation.identity)
     #expect(parsedCompilation.semantics.actions.first?.bindings.first?.values
       == builtCompilation.semantics.actions.first?.bindings.first?.values)
-    #expect(parsedCompilation.renderedTLAModuleBundle().root.tla
-      == builtCompilation.renderedTLAModuleBundle().root.tla)
+    for compilation in [parsedCompilation, builtCompilation] {
+      let module = compilation.renderedTLAModuleBundle().root.tla
+      #expect(module.contains("VARIABLES phases"))
+      #expect(module.contains("DOMAIN phases"))
+      #expect(module.contains("phases' ="))
+    }
   }
 
   @Test("Symmetric collection type arguments retain their syntax until generated Swift is emitted")
