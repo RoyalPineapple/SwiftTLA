@@ -931,29 +931,7 @@ struct NativeTypeInference: Sendable {
     private mutating func specializeCall(
         _ requestedOperation: CompiledFormalOperator, arguments: [CompiledFormalCallArgument], expected: NativeType
     ) throws -> NativeOperatorCall {
-        let argumentTypes = try arguments.map { argument -> NativeType in
-            if case .value(let value) = argument { return try infer(value) }
-            return .unknown
-        }
-        // Infer every argument before capturing the caller scope: a later
-        // argument can establish type information used by an earlier one.
-        let checkedArguments = zip(arguments, argumentTypes).map { argument, type -> NativeCallArgument in
-            switch argument {
-            case .value(let value):
-                let source: NativeArgumentSource
-                if case .boundValue(let id) = value, let existing = argumentSources[id] {
-                    source = existing
-                } else {
-                    source = .init(expression: value, scope: self)
-                }
-                return .value(type: type, domain: literalValues(value), source: source)
-            case .operator(let operation):
-                if case .reference(let target, _) = operation, let binding = boundOperators[target] {
-                    return .operator(.init(forwarding: binding, from: target))
-                }
-                return .operator(.init(operation: operation, scope: self))
-            }
-        }
+        let checkedArguments = try checkCallArguments(arguments)
         let callbackID: OperatorID?
         if case .reference(let id, _) = requestedOperation, boundOperators[id] != nil { callbackID = id }
         else { callbackID = nil }
@@ -970,8 +948,42 @@ struct NativeTypeInference: Sendable {
         specializationResults.merge(scope.specializationResults) { _, current in current }
         variables = scope.variables
         if let callbackID { recordCallback(callbackID, call: resolved) }
-        let valueArguments = zip(arguments, argumentTypes).compactMap { argument, type -> (expression: CompiledStateExpr, type: NativeType)? in
-            guard case .value(let expression) = argument else { return nil }
+        try refineCall(operation, arguments: arguments, checkedArguments: checkedArguments, using: resolved)
+        return resolved
+    }
+
+    private mutating func checkCallArguments(_ arguments: [CompiledFormalCallArgument]) throws -> [NativeCallArgument] {
+        let argumentTypes = try arguments.map { argument -> NativeType in
+            if case .value(let value) = argument { return try infer(value) }
+            return .unknown
+        }
+        // Infer every argument before capturing the caller scope: a later
+        // argument can establish type information used by an earlier one.
+        return zip(arguments, argumentTypes).map { argument, type -> NativeCallArgument in
+            switch argument {
+            case .value(let value):
+                let source: NativeArgumentSource
+                if case .boundValue(let id) = value, let existing = argumentSources[id] {
+                    source = existing
+                } else {
+                    source = .init(expression: value, scope: self)
+                }
+                return .value(type: type, domain: literalValues(value), source: source)
+            case .operator(let operation):
+                if case .reference(let target, _) = operation, let binding = boundOperators[target] {
+                    return .operator(.init(forwarding: binding, from: target))
+                }
+                return .operator(.init(operation: operation, scope: self))
+            }
+        }
+    }
+
+    private mutating func refineCall(
+        _ operation: CompiledFormalOperator, arguments: [CompiledFormalCallArgument],
+        checkedArguments: [NativeCallArgument], using resolved: NativeOperatorCall
+    ) throws {
+        let valueArguments = zip(arguments, checkedArguments).compactMap { argument, checked -> (expression: CompiledStateExpr, type: NativeType)? in
+            guard case .value(let expression) = argument, case .value(let type, _, _) = checked else { return nil }
             return (expression, type)
         }
         for (argument, parameter) in zip(valueArguments, resolved.parameters) {
@@ -1009,7 +1021,6 @@ struct NativeTypeInference: Sendable {
                 for use in uses { recordCallback(origin, call: use) }
             }
         }
-        return resolved
     }
 
     private mutating func refineCapturedValues(

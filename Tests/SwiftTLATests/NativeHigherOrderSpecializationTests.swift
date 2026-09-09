@@ -62,7 +62,7 @@ import Testing
         let plan = NativeMachinePlan(compilation: compilation)
         let operation = try #require(plan.formalOperatorDefinitions.first)
         let inference = try NativeTypeInference(plan: plan)
-        let expression = (0..<8).reduce(CompiledStateExpr.value(.integer(7))) { nested, _ in
+        let expression = (0..<24).reduce(CompiledStateExpr.value(.integer(7))) { nested, _ in
             .operatorApplication(operation.id, [.value(nested)])
         }
         #expect(try inference.type(of: expression) == .int)
