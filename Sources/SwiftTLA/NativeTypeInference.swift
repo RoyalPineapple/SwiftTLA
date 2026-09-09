@@ -387,7 +387,7 @@ struct NativeTypeInference: Sendable {
             throw Self.unresolvedDiagnostic(result, at: "resolution")
         }
         var intrinsicScope = scope
-        if let constructor = try scope.unionConstructor(expression, expected: result) {
+        if case .union = result, let constructor = try scope.unionConstructor(expression, expected: result) {
             return (scope, result, constructor)
         }
         let intrinsic = (try? intrinsicScope.infer(expression)) ?? result
@@ -1088,8 +1088,350 @@ struct NativeTypeInference: Sendable {
         }
     }
 
+    private mutating func inferBoundValue(_ id: BinderID, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let existing = bindings[id] ?? .unknown
+        // A use-site projection does not replace the binder's chosen native
+        // representation. Later raw scalar reads must not erase enum identity.
+        if canProjectRead(existing, to: expected) { return expected }
+        if expected != .unknown, existing != expected, let evidence = argumentEvidence[id] {
+            let refinement = NativeArgumentRefinement(expression: evidence.expression, bindings: evidence.scope.bindings, expected: expected)
+            if activeArgumentRefinements.insert(refinement).inserted {
+                defer { activeArgumentRefinements.remove(refinement) }
+                var caller = evidence.scope
+                caller.activeArgumentRefinements = activeArgumentRefinements
+                caller.activeOperators = activeOperators
+                caller.specializationResults.merge(specializationResults) { _, current in current }
+                let refined = try caller.infer(evidence.expression, expected: expected)
+                specializationResults.merge(caller.specializationResults) { _, current in current }
+                bindings[id] = refined
+                return refined
+            }
+            // Recursive construction proofs share the active obligation's
+            // provisional type. Its outer invocation still validates every
+            // constructor/base branch in the original lexical scope before
+            // any successful call annotation can escape.
+            bindings[id] = expected
+            return expected
+        }
+        if expected != .unknown, existing != expected, let domain = bindingSources[id],
+           activeBindingRefinements.insert(id).inserted {
+            defer { activeBindingRefinements.remove(id) }
+            let refined = try element(infer(domain, expected: .set(expected)))
+            bindings[id] = refined
+            return refined
+        }
+        if case .finite(let values) = expected, let domain = bindingDomains[id], domain.isSubset(of: Set(values)) {
+            bindings[id] = expected
+            return expected
+        }
+        if case .named(let name) = expected,
+           let values = bindingDomains[id], let admitted = namedDomains[name],
+           values.isSubset(of: admitted), namedRepresentations[name] == existing {
+            result = expected
+        } else {
+            do { result = try Self.merge(existing, expected) }
+            catch {
+                let representation: NativeType? = if case .named(let name) = existing { namedRepresentations[name] } else { nil }
+                throw Self.diagnostic("binding[\(id.ordinal)]", "stored \(existing), requested \(expected); known representation \(String(describing: representation))")
+            }
+        }
+        bindings[id] = result
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferTupleLiteral(_ expressions: [CompiledStateExpr], expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        if case .tuple(let hints) = expected, hints.count == expressions.count {
+            let types = try zip(expressions, hints).map { try infer($0, expected: $1) }
+            result = .tuple(types)
+        } else {
+            let hint: NativeType = if case .array(let value) = expected { value } else { .unknown }
+            let types = try expressions.map { try infer($0, expected: hint) }
+            if expected == .unknown, !types.isEmpty, types.allSatisfy({ $0 == .unknown }) { result = .tuple(types) }
+            else if hint == .unknown, let first = types.first, types.contains(where: { $0 != first }) { result = .tuple(types) }
+            else { result = .array(try types.reduce(hint, Self.merge)) }
+        }
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferRecordLiteral(_ record: CompiledRecordExpression, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let hints: [NativeField] = if case .record(let fields) = expected { fields } else { [] }
+        let fields = try record.fields.map { field -> NativeField in
+            guard case .string(let name) = field.key else { throw Self.diagnostic("record", "non-string field") }
+            let expectedType = hints.first { $0.name == name }?.type ?? .unknown
+            return .init(name: name, type: try infer(field.value, expected: expectedType))
+        }
+        result = .record(fields.sorted { $0.name < $1.name })
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferFunctionLiteral(_ domain: CompiledStateExpr, binder id: BinderID, body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        bindingSources[id] = domain
+        bindingDomains[id] = literalDomain(domain)
+        let hints: (key: NativeType, value: NativeType) = if case .dictionary(let key, let value) = expected {
+            (key, value)
+        } else {
+            (.unknown, .unknown)
+        }
+        let key = try element(infer(domain, expected: .set(hints.key)))
+        bindings[id] = key
+        result = .dictionary(key, try infer(body, expected: hints.value))
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferFunctionApplication(_ function: CompiledStateExpr, key: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        if case .operatorReference(let id) = function { return try inferCall(id, arguments: [.value(key)], expected: expected) }
+        let base = try infer(function)
+        let functionType: NativeType
+        if base == .unknown { functionType = try infer(function, expected: .dictionary(infer(key), expected)) }
+        else { functionType = base }
+        switch functionType {
+        case .dictionary(let domain, let value):
+            _ = try infer(key, expected: domain)
+            result = try Self.operandContext(value, expected)
+            _ = try infer(function, expected: .dictionary(domain, result))
+        case .array(let value):
+            _ = try infer(key, expected: .int)
+            result = try Self.operandContext(value, expected)
+            _ = try infer(function, expected: .array(result))
+        case .tuple(let elements):
+            _ = try infer(key, expected: .int)
+            if case .value(.integer(let index)) = key, index >= 1, index <= elements.count {
+                var hints = elements
+                hints[index - 1] = try Self.operandContext(elements[index - 1], expected)
+                _ = try infer(function, expected: .tuple(hints))
+                result = hints[index - 1]
+            } else if case .value(.integer) = key, expected != .unknown {
+                result = expected
+            } else {
+                result = try elements.reduce(expected, Self.merge)
+                _ = try infer(function, expected: .tuple(elements.map { _ in result }))
+            }
+        case .record(let fields):
+            _ = try infer(key, expected: .string)
+            if case .value(.string(let name)) = key {
+                if let selected = fields.first(where: { $0.name == name }) {
+                    result = try Self.operandContext(selected.type, expected)
+                    _ = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) }))
+                } else { result = expected }
+            } else {
+                result = try fields.map(\.type).reduce(expected, Self.merge)
+                _ = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: result) }))
+            }
+        default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
+        }
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferFunctionUpdate(_ function: CompiledStateExpr, key: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let base = try infer(function, expected: expected)
+        switch base {
+        case .array(let item): _ = try infer(key, expected: .int); result = .array(try infer(value, expected: item))
+        case .dictionary(let domain, let item): _ = try infer(key, expected: domain); result = .dictionary(domain, try infer(value, expected: item))
+        case .record(let fields):
+            _ = try infer(key, expected: .string)
+            if case .value(.string(let name)) = key {
+                _ = try infer(value, expected: fields.first { $0.name == name }?.type ?? .unknown)
+            } else {
+                let replacementType = fields.first?.type ?? .unknown
+                guard fields.allSatisfy({ $0.type == replacementType }) else {
+                    throw Self.diagnostic("except", "dynamic record keys require homogeneous field types")
+                }
+                _ = try infer(value, expected: replacementType)
+            }
+            result = base
+        case .unknown: result = .dictionary(try infer(key), try infer(value))
+        default: throw Self.diagnostic("except", "unsupported update shape \(base.swiftType)")
+        }
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferSequenceSelection(_ sequence: CompiledStateExpr, binder id: BinderID, predicate: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let hint: NativeType = if case .array(let item) = expected { item } else { .unknown }
+        let initial = try inferSequence(sequence)
+        let item = try projectionStorageType(sequenceElementType(initial), expected: hint)
+        _ = try inferSequence(sequence, element: item)
+        bindings[id] = item
+        // Literal members can supply finite nominal evidence; an arbitrary
+        // sequence initializer never proves the domain of stored values.
+        switch sequence {
+        case .value(.tuple(let members)): bindingDomains[id] = Set(members)
+        case .tupleLiteral(let members): bindingDomains[id] = literalDomain(.setLiteral(members))
+        default: bindingDomains.removeValue(forKey: id)
+        }
+        _ = try infer(predicate, expected: .bool)
+        let selected = bindings[id] ?? item
+        _ = try inferSequence(sequence, element: selected)
+        result = .array(selected)
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferSetFilter(_ domain: CompiledStateExpr, binder id: BinderID, predicate: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        bindingSources[id] = domain
+        bindingDomains[id] = literalDomain(domain)
+        let initial = try infer(domain, expected: expected == .unknown ? .set(.unknown) : expected)
+        bindings[id] = try element(initial); _ = try infer(predicate, expected: .bool)
+        let refined = bindings[id] ?? .unknown
+        result = try infer(domain, expected: .set(refined))
+        // A predicate can prove a stronger nominal representation than an
+        // earlier raw context. Its collection retains that representation.
+        return result
+    }
+
+    private mutating func inferSetMap(_ body: CompiledStateExpr, binder id: BinderID, domain: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        bindingSources[id] = domain
+        bindingDomains[id] = literalDomain(domain)
+        bindings[id] = try element(infer(domain, expected: .set(.unknown)))
+        let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
+        result = .set(try infer(body, expected: hint))
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferChoice(_ domain: CompiledStateExpr, binder id: BinderID, predicate body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        bindingSources[id] = domain
+        bindingDomains[id] = literalDomain(domain)
+        let initial = try element(infer(domain, expected: .set(expected))); bindings[id] = initial
+        _ = try infer(body, expected: .bool)
+        result = try element(infer(domain, expected: .set(bindings[id] ?? initial)))
+        return result
+    }
+
+    private mutating func inferFunctionSet(_ domain: CompiledStateExpr, range: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let candidate: NativeType = if case .set(let value) = expected { value } else { .unknown }
+        let hint: NativeType = candidate == .unknown ? .dictionary(.unknown, .unknown) : candidate
+        guard case .dictionary(let key, let value) = hint else { throw Self.diagnostic("functionSet", "expected set of dictionaries") }
+        let inferredKey = try element(infer(domain, expected: .set(key)))
+        let inferredValue = try element(infer(range, expected: .set(value)))
+        result = .set(.dictionary(inferredKey, inferredValue))
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferFold(_ operation: CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        guard operation.parameters.count == 2 else { throw Self.diagnostic("fold", "expected two lambda parameters") }
+        let accumulator = try infer(initial, expected: expected)
+        bindings[operation.parameters[1]] = accumulator
+        bindings[operation.parameters[0]] = try sequenceElementType(inferSequence(sequence))
+        result = try infer(operation.body, expected: accumulator)
+        _ = try infer(initial, expected: result)
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferAppend(_ sequence: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
+        let item = try sequenceElementType(inferSequence(sequence, element: hint))
+        let appended = try infer(value, expected: item)
+        let elementType = try Self.merge(item, appended)
+        _ = try inferSequence(sequence, element: elementType)
+        _ = try infer(value, expected: elementType)
+        result = .array(elementType)
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferConcatenation(_ a: CompiledStateExpr, _ b: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
+        let left = try sequenceElementType(inferSequence(a, element: hint))
+        let right = try sequenceElementType(inferSequence(b, element: left))
+        let elementType = try Self.merge(left, right)
+        _ = try inferSequence(a, element: elementType)
+        _ = try inferSequence(b, element: elementType)
+        result = .array(elementType)
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferTupleAccess(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let shape = try inferProjectionSource(value, index: index, expected: expected)
+        if case .tuple(let elements) = shape { result = try projectedReadType(elements[index - 1], expected: expected) }
+        else { result = try sequenceElementType(shape) }
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferRecordAccess(_ record: CompiledStateExpr, key: CompiledValue, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let source = try inferRecordProjectionSource(record, key: key, expected: expected)
+        if case .string(let name) = key, case .record(let fields) = source,
+           let field = fields.first(where: { $0.name == name }) { result = try projectedReadType(field.type, expected: expected) }
+        else { result = .unknown }
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferDomain(_ function: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        switch try inferDomainSource(function, expected: expected) {
+        case .dictionary(let key, _): result = .set(key)
+        case .array, .tuple: result = .set(.int)
+        case .record: result = .set(.string)
+        case .unknown: result = .set(.unknown)
+        default: throw Self.diagnostic("domain", "unsupported domain shape")
+        }
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferLetValue(_ id: BinderID, value: CompiledStateExpr, body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        bindingSources[id] = .setLiteral([value])
+        bindingDomains[id] = literalValues(value)
+        bindings[id] = try infer(value, expected: bindings[id] ?? .unknown); result = try infer(body, expected: expected)
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferLambdaApplication(_ lambda: CompiledFormalLambda, arguments: [CompiledStateExpr], expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        result = try specializeCall(.lambda(lambda), arguments: arguments.map { .value($0) }, expected: expected).result
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferLocalOperators(_ definitions: [CompiledLocalOperator], body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        for definition in definitions {
+            localOperators[definition.id] = definition
+            localCaptures[definition.id] = bindings
+        }
+        result = try infer(body, expected: expected)
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferSetLiteral(_ expressions: [CompiledStateExpr], expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
+        var value = hint
+        for expression in expressions { value = try Self.merge(value, infer(expression, expected: value)) }
+        result = .set(value)
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferQuantifier(_ domain: CompiledStateExpr, binder id: BinderID, predicate body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        bindingSources[id] = domain
+        bindingDomains[id] = literalDomain(domain)
+        bindings[id] = try element(infer(domain, expected: .set(.unknown)))
+        _ = try infer(body, expected: .bool); result = .bool
+        return try projectedReadType(result, expected: expected)
+    }
+
+    private mutating func inferCases(_ first: CompiledCaseBranch, rest: [CompiledCaseBranch], otherwise: CompiledStateExpr?, expected: NativeType) throws -> NativeType {
+        let result: NativeType
+        var type = expected
+        for branch in [first] + rest { _ = try infer(branch.condition, expected: .bool); type = try infer(branch.value, expected: type) }
+        if let otherwise { type = try infer(otherwise, expected: type) }; result = type
+        return try projectedReadType(result, expected: expected)
+    }
+
     private mutating func inferResolved(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
-        if try unionConstructor(expression, expected: expected) != nil { return expected }
+        if case .union = expected, try unionConstructor(expression, expected: expected) != nil { return expected }
         let result: NativeType
         switch expression {
         case .assertView(let value, let shape):
@@ -1100,54 +1442,7 @@ struct NativeTypeInference: Sendable {
             let existing = variables[id] ?? .unknown
             if canProjectRead(existing, to: expected) { result = expected }
             else { result = try Self.merge(existing, expected); variables[id] = result }
-        case .boundValue(let id):
-            let existing = bindings[id] ?? .unknown
-            // A use-site projection does not replace the binder's chosen native
-            // representation. Later raw scalar reads must not erase enum identity.
-            if canProjectRead(existing, to: expected) { return expected }
-            if expected != .unknown, existing != expected, let evidence = argumentEvidence[id] {
-                let refinement = NativeArgumentRefinement(expression: evidence.expression, bindings: evidence.scope.bindings, expected: expected)
-                if activeArgumentRefinements.insert(refinement).inserted {
-                    defer { activeArgumentRefinements.remove(refinement) }
-                    var caller = evidence.scope
-                    caller.activeArgumentRefinements = activeArgumentRefinements
-                    caller.activeOperators = activeOperators
-                    caller.specializationResults.merge(specializationResults) { _, current in current }
-                    let refined = try caller.infer(evidence.expression, expected: expected)
-                    specializationResults.merge(caller.specializationResults) { _, current in current }
-                    bindings[id] = refined
-                    return refined
-                }
-                // Recursive construction proofs share the active obligation's
-                // provisional type. Its outer invocation still validates every
-                // constructor/base branch in the original lexical scope before
-                // any successful call annotation can escape.
-                bindings[id] = expected
-                return expected
-            }
-            if expected != .unknown, existing != expected, let domain = bindingSources[id],
-               activeBindingRefinements.insert(id).inserted {
-                defer { activeBindingRefinements.remove(id) }
-                let refined = try element(infer(domain, expected: .set(expected)))
-                bindings[id] = refined
-                return refined
-            }
-            if case .finite(let values) = expected, let domain = bindingDomains[id], domain.isSubset(of: Set(values)) {
-                bindings[id] = expected
-                return expected
-            }
-            if case .named(let name) = expected,
-               let values = bindingDomains[id], let admitted = namedDomains[name],
-               values.isSubset(of: admitted), namedRepresentations[name] == existing {
-                result = expected
-            } else {
-                do { result = try Self.merge(existing, expected) }
-                catch {
-                    let representation: NativeType? = if case .named(let name) = existing { namedRepresentations[name] } else { nil }
-                    throw Self.diagnostic("binding[\(id.ordinal)]", "stored \(existing), requested \(expected); known representation \(String(describing: representation))")
-                }
-            }
-            bindings[id] = result
+        case .boundValue(let id): return try inferBoundValue(id, expected: expected)
         case .controlLocation: result = .control
         case .enabledAction: result = .bool
         case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .integerDivide(let a, let b), .modulo(let a, let b):
@@ -1164,10 +1459,7 @@ struct NativeTypeInference: Sendable {
             _ = try infer(condition, expected: .bool)
             result = try comparisonOperands(a, b, expected: expected)
         case .setLiteral(let expressions):
-            let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
-            var value = hint
-            for expression in expressions { value = try Self.merge(value, infer(expression, expected: value)) }
-            result = .set(value)
+            return try inferSetLiteral(expressions, expected: expected)
         case .in(let value, let domain):
             _ = try membershipElement(value: value, domain: domain); result = .bool
         case .subset(let a, let b):
@@ -1180,50 +1472,15 @@ struct NativeTypeInference: Sendable {
         case .cardinality(let value): _ = try infer(value, expected: .set(.unknown)); result = .int
         case .integerRange(let a, let b): _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .set(.int)
         case .sequenceSelect(let sequence, let id, let predicate):
-            let hint: NativeType = if case .array(let item) = expected { item } else { .unknown }
-            let initial = try inferSequence(sequence)
-            let item = try projectionStorageType(sequenceElementType(initial), expected: hint)
-            _ = try inferSequence(sequence, element: item)
-            bindings[id] = item
-            // Literal members can supply finite nominal evidence; an arbitrary
-            // sequence initializer never proves the domain of stored values.
-            switch sequence {
-            case .value(.tuple(let members)): bindingDomains[id] = Set(members)
-            case .tupleLiteral(let members): bindingDomains[id] = literalDomain(.setLiteral(members))
-            default: bindingDomains.removeValue(forKey: id)
-            }
-            _ = try infer(predicate, expected: .bool)
-            let selected = bindings[id] ?? item
-            _ = try inferSequence(sequence, element: selected)
-            result = .array(selected)
+            return try inferSequenceSelection(sequence, binder: id, predicate: predicate, expected: expected)
         case .setFilter(let domain, let id, let predicate):
-            bindingSources[id] = domain
-            bindingDomains[id] = literalDomain(domain)
-            let initial = try infer(domain, expected: expected == .unknown ? .set(.unknown) : expected)
-            bindings[id] = try element(initial); _ = try infer(predicate, expected: .bool)
-            let refined = bindings[id] ?? .unknown
-            result = try infer(domain, expected: .set(refined))
-            // A predicate can prove a stronger nominal representation than an
-            // earlier raw context. Its collection retains that representation.
-            return result
+            return try inferSetFilter(domain, binder: id, predicate: predicate, expected: expected)
         case .setMap(let body, let id, let domain):
-            bindingSources[id] = domain
-            bindingDomains[id] = literalDomain(domain)
-            bindings[id] = try element(infer(domain, expected: .set(.unknown)))
-            let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
-            result = .set(try infer(body, expected: hint))
+            return try inferSetMap(body, binder: id, domain: domain, expected: expected)
         case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
-            bindingSources[id] = domain
-            bindingDomains[id] = literalDomain(domain)
-            bindings[id] = try element(infer(domain, expected: .set(.unknown)))
-            _ = try infer(body, expected: .bool); result = .bool
+            return try inferQuantifier(domain, binder: id, predicate: body, expected: expected)
         case .choose(let domain, let id, let body):
-            bindingSources[id] = domain
-            bindingDomains[id] = literalDomain(domain)
-            let initial = try element(infer(domain, expected: .set(expected))); bindings[id] = initial
-            _ = try infer(body, expected: .bool)
-            result = try element(infer(domain, expected: .set(bindings[id] ?? initial)))
-            return result
+            return try inferChoice(domain, binder: id, predicate: body, expected: expected)
         case .sequenceFromSet(let domain):
             let hint: NativeType = if case .array(let value) = expected { value } else { .unknown }
             result = .array(try element(infer(domain, expected: .set(hint))))
@@ -1234,39 +1491,15 @@ struct NativeTypeInference: Sendable {
             let hint: NativeType = expected == .unknown ? .set(.unknown) : expected
             result = try element(infer(domain, expected: .set(hint)))
         case .functionSet(let domain, let range):
-            let candidate: NativeType = if case .set(let value) = expected { value } else { .unknown }
-            let hint: NativeType = candidate == .unknown ? .dictionary(.unknown, .unknown) : candidate
-            guard case .dictionary(let key, let value) = hint else { throw Self.diagnostic("functionSet", "expected set of dictionaries") }
-            let inferredKey = try element(infer(domain, expected: .set(key)))
-            let inferredValue = try element(infer(range, expected: .set(value)))
-            result = .set(.dictionary(inferredKey, inferredValue))
+            return try inferFunctionSet(domain, range: range, expected: expected)
         case .setSum(let function, let domain):
             let key = try element(infer(domain, expected: .set(.unknown)))
             _ = try infer(function, expected: .dictionary(key, .int)); result = .int
         case .foldFunction(let operation, let initial, let sequence):
-            guard operation.parameters.count == 2 else { throw Self.diagnostic("fold", "expected two lambda parameters") }
-            let accumulator = try infer(initial, expected: expected)
-            bindings[operation.parameters[1]] = accumulator
-            bindings[operation.parameters[0]] = try sequenceElementType(inferSequence(sequence))
-            result = try infer(operation.body, expected: accumulator)
-            _ = try infer(initial, expected: result)
-        case .tupleLiteral(let expressions):
-            if case .tuple(let hints) = expected, hints.count == expressions.count {
-                var types: [NativeType] = []
-                for (expression, hint) in zip(expressions, hints) { types.append(try infer(expression, expected: hint)) }
-                result = .tuple(types)
-            } else {
-                let hint: NativeType = if case .array(let value) = expected { value } else { .unknown }
-                var types: [NativeType] = []
-                for expression in expressions { types.append(try infer(expression, expected: hint)) }
-                if expected == .unknown, !types.isEmpty, types.allSatisfy({ $0 == .unknown }) { result = .tuple(types) }
-                else if hint == .unknown, let first = types.first, types.contains(where: { $0 != first }) { result = .tuple(types) }
-                else { result = .array(try types.reduce(hint, Self.merge)) }
-            }
+            return try inferFold(operation, initial: initial, sequence: sequence, expected: expected)
+        case .tupleLiteral(let expressions): return try inferTupleLiteral(expressions, expected: expected)
         case .tupleAccess(let value, let index):
-            let shape = try inferProjectionSource(value, index: index, expected: expected)
-            if case .tuple(let elements) = shape { result = try projectedReadType(elements[index - 1], expected: expected) }
-            else { result = try sequenceElementType(shape) }
+            return try inferTupleAccess(value, index: index, expected: expected)
         case .tupleDynamicAccess(let value, let index):
             _ = try infer(index, expected: .int)
             result = try sequenceElementType(inferSequence(value, element: expected))
@@ -1282,129 +1515,29 @@ struct NativeTypeInference: Sendable {
             result = .array(try sequenceElementType(inferSequence(sequence, element: hint)))
             _ = try infer(index, expected: .int)
         case .tupleAppend(let sequence, let value):
-            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-            let item = try sequenceElementType(inferSequence(sequence, element: hint))
-            let appended = try infer(value, expected: item)
-            let elementType = try Self.merge(item, appended)
-            _ = try inferSequence(sequence, element: elementType)
-            _ = try infer(value, expected: elementType)
-            result = .array(elementType)
+            return try inferAppend(sequence, value: value, expected: expected)
         case .tupleConcatenate(let a, let b):
-            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-            let left = try sequenceElementType(inferSequence(a, element: hint))
-            let right = try sequenceElementType(inferSequence(b, element: left))
-            let elementType = try Self.merge(left, right)
-            _ = try inferSequence(a, element: elementType)
-            _ = try inferSequence(b, element: elementType)
-            result = .array(elementType)
-        case .recordLiteral(let record):
-            let hints: [NativeField] = if case .record(let fields) = expected { fields } else { [] }
-            var fields: [NativeField] = []
-            for field in record.fields {
-                guard case .string(let name) = field.key else { throw Self.diagnostic("record", "non-string field") }
-                fields.append(.init(name: name, type: try infer(field.value, expected: hints.first { $0.name == name }?.type ?? .unknown)))
-            }
-            result = .record(fields.sorted { $0.name < $1.name })
+            return try inferConcatenation(a, b, expected: expected)
+        case .recordLiteral(let record): return try inferRecordLiteral(record, expected: expected)
         case .recordAccess(let record, _, let key):
-            let source = try inferRecordProjectionSource(record, key: key, expected: expected)
-            if case .string(let name) = key, case .record(let fields) = source,
-               let field = fields.first(where: { $0.name == name }) { result = try projectedReadType(field.type, expected: expected) }
-            else { result = .unknown }
-        case .functionLiteral(let domain, let id, let body):
-            bindingSources[id] = domain
-            bindingDomains[id] = literalDomain(domain)
-            let hints: (NativeType, NativeType) = if case .dictionary(let key, let value) = expected { (key, value) } else { (.unknown, .unknown) }
-            let key = try element(infer(domain, expected: .set(hints.0))); bindings[id] = key
-            result = .dictionary(key, try infer(body, expected: hints.1))
-        case .functionApply(let function, let key):
-            if case .operatorReference(let id) = function { return try inferCall(id, arguments: [.value(key)], expected: expected) }
-            let base = try infer(function)
-            let functionType: NativeType
-            if base == .unknown { functionType = try infer(function, expected: .dictionary(infer(key), expected)) }
-            else { functionType = base }
-            switch functionType {
-            case .dictionary(let domain, let value):
-                _ = try infer(key, expected: domain)
-                result = try Self.operandContext(value, expected)
-                _ = try infer(function, expected: .dictionary(domain, result))
-            case .array(let value):
-                _ = try infer(key, expected: .int)
-                result = try Self.operandContext(value, expected)
-                _ = try infer(function, expected: .array(result))
-            case .tuple(let elements):
-                _ = try infer(key, expected: .int)
-                if case .value(.integer(let index)) = key, index >= 1, index <= elements.count {
-                    var hints = elements
-                    hints[index - 1] = try Self.operandContext(elements[index - 1], expected)
-                    _ = try infer(function, expected: .tuple(hints))
-                    result = hints[index - 1]
-                } else if case .value(.integer) = key, expected != .unknown {
-                    result = expected
-                } else {
-                    result = try elements.reduce(expected, Self.merge)
-                    _ = try infer(function, expected: .tuple(elements.map { _ in result }))
-                }
-            case .record(let fields):
-                _ = try infer(key, expected: .string)
-                if case .value(.string(let name)) = key {
-                    if let selected = fields.first(where: { $0.name == name }) {
-                        result = try Self.operandContext(selected.type, expected)
-                        _ = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) }))
-                    } else { result = expected }
-                } else {
-                    result = try fields.map(\.type).reduce(expected, Self.merge)
-                    _ = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: result) }))
-                }
-            default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
-            }
-        case .except(let function, let key, let value):
-            let base = try infer(function, expected: expected)
-            switch base {
-            case .array(let item): _ = try infer(key, expected: .int); result = .array(try infer(value, expected: item))
-            case .dictionary(let domain, let item): _ = try infer(key, expected: domain); result = .dictionary(domain, try infer(value, expected: item))
-            case .record(let fields):
-                _ = try infer(key, expected: .string)
-                if case .value(.string(let name)) = key {
-                    _ = try infer(value, expected: fields.first { $0.name == name }?.type ?? .unknown)
-                } else {
-                    let replacementType = fields.first?.type ?? .unknown
-                    guard fields.allSatisfy({ $0.type == replacementType }) else {
-                        throw Self.diagnostic("except", "dynamic record keys require homogeneous field types")
-                    }
-                    _ = try infer(value, expected: replacementType)
-                }
-                result = base
-            case .unknown: result = .dictionary(try infer(key), try infer(value))
-            default: throw Self.diagnostic("except", "unsupported update shape \(base.swiftType)")
-            }
+            return try inferRecordAccess(record, key: key, expected: expected)
+        case .functionLiteral(let domain, let id, let body): return try inferFunctionLiteral(domain, binder: id, body: body, expected: expected)
+        case .functionApply(let function, let key): return try inferFunctionApplication(function, key: key, expected: expected)
+        case .except(let function, let key, let value): return try inferFunctionUpdate(function, key: key, value: value, expected: expected)
         case .domain(let function):
-            switch try inferDomainSource(function, expected: expected) {
-            case .dictionary(let key, _): result = .set(key)
-            case .array, .tuple: result = .set(.int)
-            case .record: result = .set(.string)
-            case .unknown: result = .set(.unknown)
-            default: throw Self.diagnostic("domain", "unsupported domain shape")
-            }
+            return try inferDomain(function, expected: expected)
         case .letValue(let id, let value, let body):
-            bindingSources[id] = .setLiteral([value])
-            bindingDomains[id] = literalValues(value)
-            bindings[id] = try infer(value, expected: bindings[id] ?? .unknown); result = try infer(body, expected: expected)
+            return try inferLetValue(id, value: value, body: body, expected: expected)
         case .operatorApplication(let id, let arguments):
             result = try inferCall(id, arguments: arguments, expected: expected)
         case .recursiveCall(let id, let arguments):
             result = try inferCall(id, arguments: arguments.map { .value($0) }, expected: expected)
         case .lambdaApplication(let lambda, let arguments):
-            result = try specializeCall(.lambda(lambda), arguments: arguments.map { .value($0) }, expected: expected).result
+            return try inferLambdaApplication(lambda, arguments: arguments, expected: expected)
         case .letIn(let definitions, let body):
-            for definition in definitions {
-                localOperators[definition.id] = definition
-                localCaptures[definition.id] = bindings
-            }
-            result = try infer(body, expected: expected)
+            return try inferLocalOperators(definitions, body: body, expected: expected)
         case .caseExpr(let first, let rest, let otherwise):
-            var type = expected
-            for branch in [first] + rest { _ = try infer(branch.condition, expected: .bool); type = try infer(branch.value, expected: type) }
-            if let otherwise { type = try infer(otherwise, expected: type) }; result = type
+            return try inferCases(first, rest: rest, otherwise: otherwise, expected: expected)
         default: throw Self.diagnostic("expression", "expression is outside the native machine subset: \(expression)")
         }
         return try projectedReadType(result, expected: expected)
