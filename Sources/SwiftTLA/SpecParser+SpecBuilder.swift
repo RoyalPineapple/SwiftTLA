@@ -21,9 +21,6 @@ package struct ParsedSpecComponents {
     var formalOperatorDefinitions: [FormalOperatorDefinition] = []
     var symmetrySets: [SymmetrySet] = []
     var constants: [ConstantDecl] = []
-    var instanceBindings: [String: FormalModuleInstance] = [:]
-    var algorithmBindings: [String: Algorithm] = [:]
-    var moduleBindings: [String: TLASpec] = [:]
 
     package var hasStateDeclarations: Bool {
         variables.isEmpty == false || sourceAlgorithms.isEmpty == false
@@ -35,9 +32,9 @@ extension ParserSession {
 
       func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var components = ParsedSpecComponents()
-        let outerActionBindings = sourceActionBindings
-        sourceActionBindings = [:]
-        defer { sourceActionBindings = outerActionBindings }
+        let outerBindings = specBindings
+        specBindings = .init()
+        defer { specBindings = outerBindings }
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
         sourceScope = typedFacadeScope(
             .empty,
@@ -52,15 +49,15 @@ extension ParserSession {
                 parseBuilderCall(fc, into: &components, collectionTypes: collectionTypes)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      components.instanceBindings[reference.baseName.text] != nil {
+                      specBindings.instances[reference.baseName.text] != nil {
                 continue
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      let action = sourceActionBindings[reference.baseName.text] {
+                      let action = specBindings.actions[reference.baseName.text] {
                 components.actions.append(action)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      let algorithm = components.algorithmBindings[reference.baseName.text] {
+                      let algorithm = specBindings.algorithms[reference.baseName.text] {
                 components.sourceAlgorithms.append(algorithm)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &components)
@@ -107,7 +104,7 @@ extension ParserSession {
                 guard components.moduleInstances.count == count + 1,
                       let instance = components.moduleInstances.last
                 else { continue }
-                components.instanceBindings[sourceName] = instance
+                specBindings.instances[sourceName] = instance
             } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
                 parseFormalModuleBinding(
                     sourceName: sourceName,
@@ -115,7 +112,7 @@ extension ParserSession {
                     into: &components
                 )
             } else if compilerGrammarName(in: call.calledExpression) == "Action" {
-                guard sourceActionBindings[sourceName] == nil else {
+                guard specBindings.actions[sourceName] == nil else {
                     components.diagnostics.append(.init(
                         message: "Action binding '\(sourceName)' is declared more than once.",
                         source: binding
@@ -123,11 +120,11 @@ extension ParserSession {
                     continue
                 }
                 if let action = parseAction(call, into: &components, loopVar: nil, loopValue: nil) {
-                    sourceActionBindings[sourceName] = action
+                    specBindings.actions[sourceName] = action
                 }
             } else if algorithmBindingType(in: binding),
                       call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" {
-                guard components.algorithmBindings[sourceName] == nil else {
+                guard specBindings.algorithms[sourceName] == nil else {
                     components.diagnostics.append(.init(
                         message: "Specification algorithm binding '\(sourceName)' is declared more than once.",
                         source: binding
@@ -135,7 +132,7 @@ extension ParserSession {
                     continue
                 }
                 if let algorithm = parseAlgorithm(call, into: &components) {
-                    components.algorithmBindings[sourceName] = algorithm
+                    specBindings.algorithms[sourceName] = algorithm
                 }
             } else if typedFacadeType(call.calledExpression)?.name == "SymmetricCollectionVar" {
                 continue
@@ -163,7 +160,7 @@ extension ParserSession {
         call: FunctionCallExprSyntax,
         into components: inout ParsedSpecComponents
     ) {
-        guard components.moduleBindings[sourceName] == nil else {
+        guard specBindings.modules[sourceName] == nil else {
             components.diagnostics.append(.init(
                 message: "Formal module binding '\(sourceName)' is declared more than once.",
                 source: call
@@ -185,7 +182,7 @@ extension ParserSession {
         defer { sourceScope = outerScope }
         let parsed = parseSpecClosure(body)
         do {
-            components.moduleBindings[sourceName] = try parsed.sourceModel(specificationName: moduleName)
+            specBindings.modules[sourceName] = try parsed.sourceModel(specificationName: moduleName)
         } catch let diagnostic {
             components.diagnostics.append(diagnostic)
         }
@@ -728,7 +725,7 @@ extension ParserSession {
                 components.diagnostics.append(.init(message: "Import requires a concrete typed formal module.", source: call))
                 return
             }
-            guard let module = formalModule(from: argument, bindings: components.moduleBindings) else {
+            guard let module = formalModule(from: argument, bindings: specBindings.modules) else {
                 components.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
                 return
             }
@@ -800,7 +797,7 @@ extension ParserSession {
         guard let name = extractStringArg(call, index: 0), !name.isEmpty,
               let instanceSyntax = call.arguments.first(where: { $0.label?.text == "instance" })?.expression,
               let sourceName = instanceSyntax.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              let instance = components.instanceBindings[sourceName]
+              let instance = specBindings.instances[sourceName]
         else {
             components.diagnostics.append(.init(
                 message: "Refinement requires a declared Instance binding.",
@@ -1004,7 +1001,7 @@ extension ParserSession {
             components.diagnostics.append(.init(message: "Instance requires a name and a named formal module.", source: call))
             return
         }
-        guard let module = formalModule(from: moduleArgument, bindings: components.moduleBindings) else {
+        guard let module = formalModule(from: moduleArgument, bindings: specBindings.modules) else {
             components.diagnostics.append(.init(message: "Instance requires a concrete typed formal module.", source: call))
             return
         }

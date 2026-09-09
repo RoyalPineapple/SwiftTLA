@@ -172,7 +172,13 @@ final class ParserSession {
     var algorithmTupleVariables: Set<String> = []
     /// Source bindings visible to the source expression currently being parsed.
     var sourceScope = TypedFacadeScope.empty
-    var sourceActionBindings: [String: NamedAction] = [:]
+    struct SpecBindings {
+        var actions: [String: NamedAction] = [:]
+        var instances: [String: FormalModuleInstance] = [:]
+        var algorithms: [String: Algorithm] = [:]
+        var modules: [String: TLASpec] = [:]
+    }
+    var specBindings = SpecBindings()
     var algorithmParseFailure: String?
     var algorithmSourceDiagnostic: SourceParseDiagnostic?
 
@@ -2491,7 +2497,7 @@ extension ParserSession {
 
     func actionReference(_ expression: ExprSyntax?) -> NamedAction? {
         guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
-        return sourceActionBindings[reference.baseName.text]
+        return specBindings.actions[reference.baseName.text]
     }
 
 }
