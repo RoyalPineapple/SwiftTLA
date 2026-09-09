@@ -208,9 +208,7 @@ private final class NativeProgramResolver {
                 let resolved = try require(resolution.call)
                 call = try resolveCall(resolved, operation: id, values: [argument], scope: scope, callbackScope: callbackScope, arguments: &children)
             } else {
-                let shape = try scope.functionApplicationSourceType(function, argument: argument, expected: computationType)
-                let key: NativeType = switch shape { case .dictionary(let key, _): key; case .record: .string; default: .int }
-                children = [try child(function, shape), try child(argument, key)]
+                children = try checkedChildren([function, argument])
             }
         case .except(let source, let key, let replacement):
             let sourceID = try child(source, computationType)

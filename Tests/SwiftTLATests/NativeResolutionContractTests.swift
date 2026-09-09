@@ -19,6 +19,9 @@ import Testing
             let checked = try checker.resolutionScope(expression, expected: .int)
             #expect(checked.resultType == .int)
             #expect(checked.computationType == .named("Node"))
+            if case .functionApply = expression {
+                #expect(checked.operandTypes == [.dictionary(.int, .named("Node")), .int])
+            }
         }
     }
 

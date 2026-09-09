@@ -433,26 +433,6 @@ struct NativeTypeInference: Sendable {
         return (scope, result, resolved.computationType, resolved.operandTypes, resolved.call)
     }
 
-    func functionApplicationSourceType(_ function: CompiledStateExpr, argument: CompiledStateExpr, expected: NativeType) throws -> NativeType {
-        var scope = self
-        let base = try scope.infer(function)
-        let hint: NativeType
-        switch base {
-        case .array: hint = .array(expected)
-        case .dictionary(let key, _): hint = .dictionary(key, expected)
-        case .tuple(let elements):
-            if case .value(.integer(let index)) = argument, index >= 1, index <= elements.count {
-                var values = elements; values[index - 1] = expected; hint = .tuple(values)
-            } else { hint = base }
-        case .record(let fields):
-            if case .value(.string(let name)) = argument {
-                hint = .record(fields.map { .init(name: $0.name, type: $0.name == name ? expected : $0.type) })
-            } else { hint = base }
-        default: hint = base
-        }
-        return try scope.infer(function, expected: hint)
-    }
-
     func type(of expression: CompiledStateExpr, expected: NativeType? = nil) throws -> NativeType {
         var inference = self
         let result = try inference.infer(expression, expected: expected ?? .unknown)
@@ -1294,42 +1274,48 @@ struct NativeTypeInference: Sendable {
         let functionType: NativeType
         if base == .unknown { functionType = try infer(function, expected: .dictionary(infer(key), expected)) }
         else { functionType = base }
+        var sourceType = functionType
+        let keyType: NativeType
         switch functionType {
         case .dictionary(let domain, let value):
+            keyType = domain
             _ = try infer(key, expected: domain)
             result = try Self.operandContext(value, expected)
-            _ = try infer(function, expected: .dictionary(domain, result))
+            sourceType = try infer(function, expected: .dictionary(domain, result))
         case .array(let value):
+            keyType = .int
             _ = try infer(key, expected: .int)
             result = try Self.operandContext(value, expected)
-            _ = try infer(function, expected: .array(result))
+            sourceType = try infer(function, expected: .array(result))
         case .tuple(let elements):
+            keyType = .int
             _ = try infer(key, expected: .int)
             if case .value(.integer(let index)) = key, index >= 1, index <= elements.count {
                 var hints = elements
                 hints[index - 1] = try Self.operandContext(elements[index - 1], expected)
-                _ = try infer(function, expected: .tuple(hints))
+                sourceType = try infer(function, expected: .tuple(hints))
                 result = hints[index - 1]
             } else if case .value(.integer) = key, expected != .unknown {
                 result = expected
             } else {
                 result = try elements.reduce(expected, Self.merge)
-                _ = try infer(function, expected: .tuple(elements.map { _ in result }))
+                sourceType = try infer(function, expected: .tuple(elements.map { _ in result }))
             }
         case .record(let fields):
+            keyType = .string
             _ = try infer(key, expected: .string)
             if case .value(.string(let name)) = key {
                 if let selected = fields.first(where: { $0.name == name }) {
                     result = try Self.operandContext(selected.type, expected)
-                    _ = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) }))
+                    sourceType = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) }))
                 } else { result = expected }
             } else {
                 result = try fields.map(\.type).reduce(expected, Self.merge)
-                _ = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: result) }))
+                sourceType = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: result) }))
             }
         default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
         }
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [sourceType, keyType])
     }
 
     private mutating func inferFunctionUpdate(_ function: CompiledStateExpr, key: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
