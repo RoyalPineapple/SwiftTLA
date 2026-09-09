@@ -467,8 +467,8 @@ struct NativeTypeInference: Sendable {
         let right = try infer(rhs, expected: expected)
         let context = try Self.operandContext(left, right)
         if context != expected {
-            _ = try infer(lhs, expected: context)
-            _ = try infer(rhs, expected: context)
+            if left != context { _ = try infer(lhs, expected: context) }
+            if right != context { _ = try infer(rhs, expected: context) }
         }
         return context
     }

@@ -8,6 +8,21 @@ struct NativeCompoundContextTests {
               enums: ["Color": [.string("red"), .string("blue")]])
     }
 
+    @Test("nested comparisons preserve their resolved Boolean result")
+    func nestedComparisons() throws {
+        let compilation = try TLASpec(name: "NestedComparisons", variables: [
+            .init(name: "number", initialization: .value(.int(0)), origin: .compiler)
+        ], actions: [], invariants: []).compile()
+        let inference = try NativeTypeInference(plan: .init(compilation: compilation))
+        let expression = (0..<12).reduce(CompiledStateExpr.value(.boolean(true))) { nested, _ in
+            .equal(nested, .value(.boolean(true)))
+        }
+        #expect(try inference.type(of: expression) == .bool)
+        #expect(throws: CompilationDiagnostic.self) {
+            try inference.type(of: .equal(expression, .value(.integer(1))))
+        }
+    }
+
     @Test("Equality and inequality acquire nominal evidence at every compound field")
     func comparisonContext() throws {
         let fixtures: [(String, TLAValue, NativeType)] = [
