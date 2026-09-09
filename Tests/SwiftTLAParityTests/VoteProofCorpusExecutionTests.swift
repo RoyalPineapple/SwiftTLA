@@ -13,7 +13,7 @@ struct VoteProofCorpusExecutionTests {
         var native = try VoteProofModel.makeMachine()
         let votes = try #require(compilation.layout.testVariableID(named: "votes"))
         let maxBal = try #require(compilation.layout.testVariableID(named: "maxBal"))
-        let acc = try #require(compilation.layout.testActionID(named: "acc"))
+        let voteAction = try #require(compilation.layout.testActionID(named: "pcalProcess1"))
         let formalVotes = CompiledValue.function(Dictionary(uniqueKeysWithValues:
             native.state.votes.map { acceptor, votes in
                 (CompiledValue(formal: acceptor.tlaValue), .set(Set(votes.map { vote in
@@ -32,18 +32,18 @@ struct VoteProofCorpusExecutionTests {
         #expect(violations.isEmpty)
         #expect(try native.violatedInvariants() == violations)
         #expect(try Set(native.enabledActions()) == [
-            .acc(process: .a1), .acc(process: .a2), .acc(process: .a3)
+            .pcalProcess1(process: .a1), .pcalProcess1(process: .a2), .pcalProcess1(process: .a3)
         ])
-        let alternatives = try runtime.successors(for: acc, from: initial).filter {
+        let alternatives = try runtime.successors(for: voteAction, from: initial).filter {
             $0.arguments == [CompiledValue(formal: VoteProofModel.Acceptor.a1.tlaValue)]
         }
         #expect(Set(alternatives.map(\.state)).count > 1)
         let before = native.state
         do {
-            _ = try native.send(.acc(process: .a1))
+            _ = try native.send(.pcalProcess1(process: .a1))
             Issue.record("Distinct ballot or vote outcomes must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(native.state == before)
-        #expect(try native.isEnabled(.acc(process: .a1)))
+        #expect(try native.isEnabled(.pcalProcess1(process: .a1)))
     }
 }
