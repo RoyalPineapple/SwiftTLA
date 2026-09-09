@@ -18,7 +18,7 @@ private struct PartialFunctionExecution {
                     "entries", initial: PartialFunction<Key, Int>.empty
                 )
                 Do(Step.insert) {
-                    Assign(entries, to: entries.overriding(Key.first, with: 1))
+                    Assign(entries, to: entries.expr.overriding(Key.first, with: 1))
                 }
             })
         }
