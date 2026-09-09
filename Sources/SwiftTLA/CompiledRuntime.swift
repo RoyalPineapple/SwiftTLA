@@ -65,11 +65,8 @@ struct CompiledRuntime {
         guard let action = semantics.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
-        let requiresEnabled = action.body.requiresEnabledActions(
-            formalOperators: semantics.formalOperatorDefinitions,
-            recursiveFunctions: semantics.recursiveFunctions
-        )
-        return try successors(for: actionID, from: state, enabledActions: requiresEnabled ? enabledActions(in: state) : [])
+        return try successors(for: actionID, from: state,
+            enabledActions: enabledActions(in: state, required: semantics.enabledActionDependencies[action.id] ?? []))
     }
 
     private func successors(
@@ -107,7 +104,9 @@ struct CompiledRuntime {
             state: state,
             semantics: semantics,
             layout: layout,
-            enabledActions: expressions.contains(where: requiresEnabledActions) ? try enabledActions(in: state) : []
+            enabledActions: try enabledActions(in: state, required: expressions.reduce(into: Set<ActionID>()) {
+                $0.formUnion(compilation.enabledActionDependencies(in: $1))
+            })
         )
         return try expressions.map(evaluator.evaluate)
     }
@@ -117,22 +116,16 @@ struct CompiledRuntime {
         return try boolean(constraint, in: state)
     }
 
-    private func enabledActions(in state: CompiledState) throws -> Set<ActionID> {
+    private func enabledActions(in state: CompiledState, required: Set<ActionID>? = nil) throws -> Set<ActionID> {
         var enabled = Set<ActionID>()
         for index in semantics.enabledActionIndices {
             let action = semantics.actions[index]
+            if let required, !required.contains(action.id) { continue }
             if try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout, enabledActions: enabled).enumerate(action).isEmpty == false {
                 enabled.insert(action.id)
             }
         }
         return enabled
-    }
-
-    private func requiresEnabledActions(_ expression: CompiledStateExpr) -> Bool {
-        expression.requiresEnabledActions(
-            formalOperators: semantics.formalOperatorDefinitions,
-            recursiveFunctions: semantics.recursiveFunctions
-        )
     }
 
     private func boolean(
@@ -143,7 +136,7 @@ struct CompiledRuntime {
             state: state,
             semantics: semantics,
             layout: layout,
-            enabledActions: requiresEnabledActions(expression) ? try enabledActions(in: state) : []
+            enabledActions: try enabledActions(in: state, required: compilation.enabledActionDependencies(in: expression))
         ).evaluate(expression)
         guard case .boolean(let boolean) = value else {
             throw EvalError.expected(.boolean, actual: [value])

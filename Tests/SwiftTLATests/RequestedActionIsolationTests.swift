@@ -19,6 +19,26 @@ private struct IndependentActionFaults {
     }
 }
 
+@TLAModel
+private struct IsolatedEnabledDependencies {
+    static var spec: TLASpec {
+        TLASpec("IsolatedEnabledDependencies") {
+            let count = Var<Int>("count")
+            Variable(count, 0)
+            let ceiling = Var<Int>("ceiling")
+            Variable(ceiling, 9_223_372_036_854_775_807)
+            let valid = SwiftTLA.Action("valid") { count.becomes(count) }
+            valid
+            let middle = SwiftTLA.Action("middle") { StateExpr.enabled(valid) && count.becomes(count) }
+            middle
+            SwiftTLA.Action("probe") { StateExpr.enabled(middle) && count.becomes(count + 1) }
+            SwiftTLA.Action("invalid") { count.becomes(ceiling + 1) }
+            Invariant("Enabled") { StateExpr.enabled(middle) }
+            Constraint(StateExpr.enabled(middle))
+        }
+    }
+}
+
 @Suite struct RequestedActionIsolationTests {
     @Test("requested actions and independent predicates do not execute unrelated actions")
     func requestedActionIsolatedFromFault() throws {
@@ -47,8 +67,8 @@ private struct IndependentActionFaults {
             try native.enabledActions()
         }
     }
-    @Test("transitive ENABLED dependencies retain complete action enumeration")
-    func enabledDependenciesRemainComplete() throws {
+    @Test("ENABLED through a formal operator excludes unrelated action faults")
+    func operatorEnabledDependenciesAreIsolated() throws {
         let compilation = try TLASpec(
             name: "EnabledDependency",
             variables: [.init(name: "count", initialization: .value(.int(0)), origin: .compiler)],
@@ -64,16 +84,32 @@ private struct IndependentActionFaults {
         let probe = try #require(compilation.layout.testActionID(named: "probe"))
         let action = try #require(compilation.semantics.actions.first { $0.id == probe })
         let invariant = try #require(compilation.semantics.invariants.first)
-        #expect(compilation.requiresEnabledActions(in: action.body))
-        #expect(compilation.requiresEnabledActions(in: invariant.body))
+        #expect(!(compilation.semantics.enabledActionDependencies[action.id] ?? []).isEmpty)
+        #expect(!compilation.enabledActionDependencies(in: invariant.body).isEmpty)
         let runtime = CompiledRuntime(compilation: compilation)
         let initial = try #require(try runtime.initialStates().first)
-        #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
-            try runtime.successors(for: probe, from: initial)
+        #expect(try runtime.successors(for: probe, from: initial).count == 1)
+        #expect(try runtime.invariantHolds(invariant, in: initial))
+        #expect(try runtime.evaluate([invariant.body], in: initial) == [.boolean(true)])
+    }
+
+    @Test("native and formal ENABLED dependencies isolate guards, invariants, and target constraints")
+    func transitiveEnabledDependenciesAreIsolated() throws {
+        let compilation = try IsolatedEnabledDependencies.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let probe = try #require(compilation.layout.testActionID(named: "probe"))
+        let count = try #require(compilation.layout.testVariableID(named: "count"))
+        let successor = try #require(try runtime.successors(for: probe, from: initial).first)
+        var native = try IsolatedEnabledDependencies.makeMachine()
+        #expect(try native.isEnabled(.probe))
+        #expect(try native.violatedInvariants().isEmpty)
+        #expect(try native.send(.probe).after.count == 1)
+        #expect(try successor.state.value(for: count) == .integer(native.state.count))
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try native.send(.invalid)
         }
-        #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
-            try runtime.invariantHolds(invariant, in: initial)
-        }
+        #expect(native.state.count == 1)
     }
 
 }

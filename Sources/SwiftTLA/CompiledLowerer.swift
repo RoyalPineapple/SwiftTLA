@@ -276,11 +276,13 @@ struct CompiledLowerer {
             formalOperators: allFormalOperators,
             recursiveFunctions: allRecursiveFunctions
         )
+        let enabledActions = try orderedEnabledActions(actions, formalOperators: allFormalOperators, recursiveFunctions: allRecursiveFunctions)
         return CompiledSemantics(
             checkDeadlock: spec.checkDeadlock,
             variableInitializations: orderedInitializations,
             actions: actions,
-            enabledActionIndices: try orderedEnabledActions(actions, formalOperators: allFormalOperators, recursiveFunctions: allRecursiveFunctions),
+            enabledActionIndices: enabledActions.indices,
+            enabledActionDependencies: enabledActions.dependencies,
             invariants: invariants,
             temporalProperties: temporalProperties,
             fairness: fairness,
@@ -615,13 +617,14 @@ struct CompiledLowerer {
         _ actions: [CompiledAction],
         formalOperators: [CompiledFormalOperatorDefinition],
         recursiveFunctions: [CompiledRecursiveFunction]
-    ) throws -> [Int] {
+    ) throws -> (indices: [Int], dependencies: [ActionID: Set<ActionID>]) {
         let dependencies = actions.map {
             $0.body.enabledActionDependencies(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions)
         }
         var remaining = Array(actions.indices)
         var resolved: Set<ActionID> = []
         var ordered: [Int] = []
+        var transitive: [ActionID: Set<ActionID>] = [:]
         while !remaining.isEmpty {
             guard let position = remaining.firstIndex(where: { dependencies[$0].isSubset(of: resolved) }) else {
                 let unresolved = Set(remaining.map { actions[$0].id })
@@ -636,10 +639,13 @@ struct CompiledLowerer {
                 )
             }
             let index = remaining.remove(at: position)
+            transitive[actions[index].id] = dependencies[index].reduce(into: dependencies[index]) {
+                $0.formUnion(transitive[$1] ?? [])
+            }
             ordered.append(index)
             resolved.insert(actions[index].id)
         }
-        return ordered
+        return (ordered, transitive)
     }
 
     private func orderedInitializations(

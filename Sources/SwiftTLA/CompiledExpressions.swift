@@ -645,6 +645,8 @@ package struct CompiledSemantics: Sendable {
     package let actions: [CompiledAction]
     /// Indices into actions, with ENABLED dependencies before their users.
     package let enabledActionIndices: [Int]
+    /// Transitive ENABLED dependencies, excluding the action itself.
+    package let enabledActionDependencies: [ActionID: Set<ActionID>]
     package let invariants: [CompiledInvariant]
     let temporalProperties: [CompiledTemporal]
     let fairness: [CompiledFairnessCondition]

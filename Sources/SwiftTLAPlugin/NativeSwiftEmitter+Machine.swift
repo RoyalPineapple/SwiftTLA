@@ -337,6 +337,12 @@ extension NativeSwiftEmitter {
         """)
     }
 
+    private func enabledActionsCall(_ dependencies: Set<ActionID>, state: String, collectionArguments: String) -> String {
+        guard !dependencies.isEmpty else { return "[]" }
+        let identifiers = dependencies.map(\.ordinal).sorted().map(String.init).joined(separator: ", ")
+        return "try Self._enabledActions(in: \(state)\(collectionArguments), required: [\(identifiers)])"
+    }
+
     mutating func enabledDeclarations(collectionParameters: String, collectionArguments: String) throws -> [DeclSyntax] {
         var checks = ""
         for index in compilation.semantics.enabledActionIndices {
@@ -351,10 +357,10 @@ extension NativeSwiftEmitter {
                 closing += "}\n"
                 arguments.append("\(name): \(name)")
             }
-            checks += loops + "if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), enabled: result).isEmpty { result.insert(\(action.id.ordinal)) }\n" + closing
+            checks += "if required.contains(\(action.id.ordinal)) {\n" + loops + "if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), enabled: result).isEmpty { result.insert(\(action.id.ordinal)) }\n" + closing + "}\n"
         }
         return try nativeDeclarations("""
-        private static func _enabledActions(in state: _ExecutionState\(collectionParameters)) throws -> Set<Int> {
+        private static func _enabledActions(in state: _ExecutionState\(collectionParameters), required: Set<Int>) throws -> Set<Int> {
             \(checks.isEmpty ? "return []" : "var result: Set<Int> = []\n" + checks + "\nreturn result")
         }
         """)
@@ -368,8 +374,8 @@ extension NativeSwiftEmitter {
         let filtering: String
         if let constraint = compilation.semantics.constraint {
             let condition = try expression(program.constraint!)
-            let enabled = compilation.requiresEnabledActions(in: constraint)
-                ? "let enabled = try Self._enabledActions(in: state\(collectionArguments))\n" : ""
+            let dependencies = compilation.enabledActionDependencies(in: constraint)
+            let enabled = dependencies.isEmpty ? "" : "let enabled = \(enabledActionsCall(dependencies, state: "state", collectionArguments: collectionArguments))\n"
             let effect = nativeCodeContainsTry(condition) || !enabled.isEmpty ? "try " : ""
             filtering = "let candidates = \(effect)updates.map { $0.applying(to: state) }.filter { state in\n\(enabled)return \(condition)\n}"
         } else {
@@ -434,8 +440,8 @@ extension NativeSwiftEmitter {
                 }
             }
             let label = ".\(surface.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
-            let enabled = compilation.requiresEnabledActions(in: action.body)
-                ? "try Self._enabledActions(in: _execution\(collectionArguments))" : "[]"
+            let enabled = enabledActionsCall(compilation.semantics.enabledActionDependencies[action.id] ?? [],
+                state: "_execution", collectionArguments: collectionArguments)
             cases.append("""
             case \(label):
                 \(validations.joined(separator: "\n"))
@@ -478,7 +484,7 @@ extension NativeSwiftEmitter {
                 \(try expression(program.invariants[invariant.id]!))
             }
             """)
-            let enabled = compilation.requiresEnabledActions(in: invariant.body) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
+            let enabled = enabledActionsCall(compilation.enabledActionDependencies(in: invariant.body), state: "_execution", collectionArguments: arguments)
             checks.append("if try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(\(String(reflecting: invariant.name))) }")
         }
         declarations += try nativeDeclarations("""
@@ -487,7 +493,7 @@ extension NativeSwiftEmitter {
         }
         """)
         if let assume = compilation.semantics.assume {
-            let enabled = compilation.requiresEnabledActions(in: assume) ? "try Self._enabledActions(in: _execution\(arguments))" : "[]"
+            let enabled = enabledActionsCall(compilation.enabledActionDependencies(in: assume), state: "_execution", collectionArguments: arguments)
             declarations += try nativeDeclarations("""
             private static func _assumptionsHold(in state: _ExecutionState\(collectionParameters), enabled: Set<Int>) throws -> Bool {
                 \(try expression(program.assume!))

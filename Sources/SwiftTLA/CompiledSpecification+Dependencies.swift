@@ -1,12 +1,3 @@
-extension CompiledStateExpr {
-    func requiresEnabledActions(
-        formalOperators: [CompiledFormalOperatorDefinition],
-        recursiveFunctions: [CompiledRecursiveFunction]
-    ) -> Bool {
-        stateRequirements(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions).requiresCompleteState
-    }
-}
-
 extension CompiledActionExpr {
     func enabledActionDependencies(
         formalOperators: [CompiledFormalOperatorDefinition],
@@ -33,20 +24,16 @@ extension CompiledActionExpr {
         return dependencies
     }
 
-    func requiresEnabledActions(
-        formalOperators: [CompiledFormalOperatorDefinition],
-        recursiveFunctions: [CompiledRecursiveFunction]
-    ) -> Bool {
-        !enabledActionDependencies(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions).isEmpty
-    }
 }
 
 extension CompiledSpecification {
-    package func requiresEnabledActions(in expression: CompiledStateExpr) -> Bool {
-        expression.requiresEnabledActions(formalOperators: semantics.formalOperatorDefinitions, recursiveFunctions: semantics.recursiveFunctions)
-    }
-
-    package func requiresEnabledActions(in action: CompiledActionExpr) -> Bool {
-        action.requiresEnabledActions(formalOperators: semantics.formalOperatorDefinitions, recursiveFunctions: semantics.recursiveFunctions)
+    package func enabledActionDependencies(in expression: CompiledStateExpr) -> Set<ActionID> {
+        let direct = expression.stateRequirements(
+            formalOperators: semantics.formalOperatorDefinitions,
+            recursiveFunctions: semantics.recursiveFunctions
+        ).enabledActions
+        return direct.reduce(into: direct) { dependencies, action in
+            dependencies.formUnion(semantics.enabledActionDependencies[action] ?? [])
+        }
     }
 }
