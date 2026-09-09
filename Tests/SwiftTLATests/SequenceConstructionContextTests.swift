@@ -24,4 +24,23 @@ import Testing
             #expect(function.parameterTypes == [.record([.init(name: "items", type: .array(.int))])])
         }
     }
+
+    @Test("Recursive folds carry the resolved accumulator type into their empty base value")
+    func recursiveFoldAccumulator() throws {
+        let append = FormalOperatorDefinition(name: "AppendItem", parameters: [.value("item"), .value("accumulator")],
+            body: .recordLiteral(.init(["items": .tupleAppend(
+                .recordAccess(.variable("accumulator"), "items"), .variable("item"))])))
+        let fold = StateExpr.operatorApplication(.reference("FoldFunction", arity: 3), [
+            .operator(.reference("AppendItem", arity: 2)),
+            .value(.recordLiteral(.init(["items": .tupleLiteral([])]))),
+            .value(.tupleLiteral([.int(1), .int(2)]))
+        ])
+        let specification = TLASpec(name: "FoldContext", variables: [], actions: [],
+            invariants: [.init(name: "Count", body: .equal(
+                .tupleLength(.recordAccess(fold, "items")), .int(2)))],
+            formalOperatorDefinitions: [append], imports: [FunctionsModule.module])
+        let program = try NativeResolvedProgram(plan: .init(compilation: specification.compile()))
+        let accumulator = NativeType.record([.init(name: "items", type: .array(.int))])
+        #expect(program.functions.contains { $0.parameterTypes.contains(accumulator) })
+    }
 }

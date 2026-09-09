@@ -425,9 +425,11 @@ struct NativeTypeInference: Sendable {
         return try element(infer(domain, expected: .set(context)))
     }
 
-    private mutating func comparisonOperands(_ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr) throws -> NativeType {
-        let left = try infer(lhs)
-        let right = try infer(rhs)
+    private mutating func comparisonOperands(
+        _ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr, expected: NativeType = .unknown
+    ) throws -> NativeType {
+        let left = try infer(lhs, expected: expected)
+        let right = try infer(rhs, expected: expected)
         let context = try Self.operandContext(left, right)
         _ = try infer(lhs, expected: context)
         _ = try infer(rhs, expected: context)
@@ -1129,12 +1131,7 @@ struct NativeTypeInference: Sendable {
             _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .bool
         case .ifThenElse(let condition, let a, let b):
             _ = try infer(condition, expected: .bool)
-            if expected == .unknown {
-                result = try comparisonOperands(a, b)
-            } else {
-                _ = try infer(a, expected: expected)
-                result = try infer(b, expected: expected)
-            }
+            result = try comparisonOperands(a, b, expected: expected)
         case .setLiteral(let expressions):
             let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
             var value = hint
