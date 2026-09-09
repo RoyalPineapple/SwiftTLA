@@ -245,8 +245,8 @@ private func parserEnum(
         #expect(try loweredSource(parsed, named: "MacroScope").actions.map(\.name) == ["advance", "Terminating"])
     }
 
-    @Test("Algorithm parser resolves enum cases through lexical and declared type scope")
-    func parsesScopedEnumCases() throws {
+    @Test("Algorithm parser resolves enum cases through lexical and declared type scope", arguments: ["current", "selectedNode"])
+    func parsesScopedEnumCases(localName: String) throws {
         let source = """
         {
             Algorithm("EnumScope", scoped: { scope in
@@ -254,7 +254,7 @@ private func parserEnum(
                     If(node == Node.one, then: .ready, else: .done)
                 })
                 Each(Worker.all, scoped: { _, scope in
-                    let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
+                    let current: LocalVariable<Node> = scope.localVar("\(localName)", initial: .one)
                     Do(TestControlLabel.advance) {
                         Await(phases[current] == .ready)
                         Stop()
@@ -1014,14 +1014,14 @@ private func parserEnum(
         #expect(diagnostic.contains("Next safe action"))
     }
 
-    @Test("source model compiles procedure bindings to deterministic formal slots")
-    func parsesTypedProcedureBindings() throws {
+    @Test("source model compiles procedure bindings to deterministic formal slots", arguments: ["offset", "adjustment"])
+    func parsesTypedProcedureBindings(localName: String) throws {
         let source = """
         {
             Algorithm("ProcedureSource") { scope in
                 let output = scope.sharedVar("output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
-                    let offset = scope.localVar("offset", initial: 1)
+                    let offset = scope.localVar("\(localName)", initial: 1)
                     Do(TestControlLabel.enter) {
                         Await(value.expr >= 0)
                         Assign(output, to: value.expr + offset.expr)

@@ -274,7 +274,7 @@ extension ParserSession {
                 if case .shared(let state) = component {
                     sourceScope = typedFacadeScope(
                         sourceScope,
-                        binding: state.root,
+                        binding: parsedVariable.sourceName,
                         to: .variable(state.root),
                         shape: parsedVariable.shape
                     )
@@ -478,7 +478,7 @@ extension ParserSession {
                 components.append(parsedVariable.component)
                 procedureScope = typedFacadeScope(
                     procedureScope,
-                    binding: local.root,
+                    binding: parsedVariable.sourceName,
                     to: .variable(local.root),
                     shape: parsedVariable.shape
                 )
@@ -663,7 +663,7 @@ extension ParserSession {
                 )))
                 processScope = typedFacadeScope(
                     processScope,
-                    binding: state.root,
+                    binding: parsedVariable.sourceName,
                     to: .variable(state.root),
                     shape: parsedVariable.shape
                 )
@@ -721,16 +721,17 @@ extension ParserSession {
         kind: AlgorithmStateDeclarationKind,
         scope: TypedFacadeScope = .empty,
         declarationScope: String? = nil
-    ) -> (component: AlgorithmComponentModel, shape: TypedFacadeValueShape?)? {
+    ) -> (sourceName: String, component: AlgorithmComponentModel, shape: TypedFacadeValueShape?)? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
-              let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
               let construct = AlgorithmSourceConstruct(initializer.calledExpression),
               construct.isState(kind, in: declarationScope)
         else { return nil }
 
-        if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
+        guard let declaredName = extractStringArg(initializer, index: 0) else {
+            algorithmParseFailure = "State declarations require a literal model variable name."
             return nil
         }
 
@@ -789,7 +790,7 @@ extension ParserSession {
             return nil
         }
         let component: AlgorithmComponentModel = kind == .shared ? .shared(state) : .local(state)
-        return (component, shape)
+        return (sourceName, component, shape)
     }
 
     private func parseAlgorithmMacroDeclaration(
