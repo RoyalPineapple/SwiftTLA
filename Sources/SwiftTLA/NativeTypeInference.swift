@@ -1257,12 +1257,18 @@ struct NativeTypeInference: Sendable {
             let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
             let item = try sequenceElementType(inferSequence(sequence, element: hint))
             let appended = try infer(value, expected: item)
-            result = .array(try Self.merge(item, appended))
+            let elementType = try Self.merge(item, appended)
+            _ = try inferSequence(sequence, element: elementType)
+            _ = try infer(value, expected: elementType)
+            result = .array(elementType)
         case .tupleConcatenate(let a, let b):
             let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
             let left = try sequenceElementType(inferSequence(a, element: hint))
             let right = try sequenceElementType(inferSequence(b, element: left))
-            result = .array(try Self.merge(left, right))
+            let elementType = try Self.merge(left, right)
+            _ = try inferSequence(a, element: elementType)
+            _ = try inferSequence(b, element: elementType)
+            result = .array(elementType)
         case .recordLiteral(let record):
             let hints: [NativeField] = if case .record(let fields) = expected { fields } else { [] }
             var fields: [NativeField] = []
