@@ -4,7 +4,7 @@ import SwiftTLA
 extension MacroExpander {
     static func generateActorMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
-        let collections = model.compilation.machineSurfacePlan.collections
+        let collections = model.surface.collections
         let collectionParameters = collections.map {
             "\($0.swiftIdentifier) \(nativeCollectionBinding($0, in: model)): [\($0.elementType).ID]"
         }.joined(separator: ", ")
@@ -14,7 +14,7 @@ extension MacroExpander {
         let collectionArguments = collections.map {
             "\($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))"
         }.joined(separator: ", ")
-        let actionMembers = model.compilation.machineSurfacePlan.actions.isEmpty ? "" : """
+        let actionMembers = model.surface.actions.isEmpty ? "" : """
 
                 public func isEnabled(_ action: Action) throws -> Bool {
                     try machine.isEnabled(action)

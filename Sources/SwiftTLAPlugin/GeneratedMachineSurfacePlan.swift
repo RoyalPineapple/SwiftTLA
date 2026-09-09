@@ -1,3 +1,4 @@
+import SwiftTLA
 import Foundation
 import SwiftParser
 import SwiftSyntax
@@ -56,13 +57,13 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Collection: Sendable, Equatable {
         package let formalName: String
         package let swiftIdentifier: String
-        package let members: [TLAValue]
+        package let members: [CompiledValue]
         package let elementType: String
         package let valueType: String
 
         init(
             formalName: String,
-            members: [TLAValue],
+            members: [CompiledValue],
             elementType: String,
             valueType: String
         ) throws {
@@ -100,7 +101,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                     variable.id,
                     try Collection(
                         formalName: variable.declaration.name,
-                        members: try declaration.members.map { try $0.rendered(using: layout) },
+                        members: declaration.members,
                         elementType: elementType,
                         valueType: valueType
                     )

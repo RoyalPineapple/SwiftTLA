@@ -41,7 +41,7 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
         self = Self.formalValue(value)
     }
 
-    func rendered(using layout: CompiledLayout) throws -> TLAValue {
+    package func rendered(using layout: CompiledLayout) throws -> TLAValue {
         switch self {
         case .integer(let value):
             return .int(value)

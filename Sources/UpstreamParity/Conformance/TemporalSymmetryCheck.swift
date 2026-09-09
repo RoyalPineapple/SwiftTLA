@@ -214,13 +214,14 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TemporalSymmetryOutcome {
     let scope = symmetryCase.scope
-    guard compilation.machineSurfacePlan.collections.count == 1,
-          let collection = compilation.machineSurfacePlan.collections.first,
+    let collections = compilation.layout.variables.filter { $0.declaration.origin == .source }.compactMap(\.collection)
+    guard collections.count == 1,
+          let collection = collections.first,
           collection.members.count == scope else {
       throw EvidenceFormatError.invalidField(
         record: symmetryCase.id, field: "symmetric collection")
     }
-    let generators = try symmetryGenerators(members: collection.members)
+    let generators = try symmetryGenerators(members: try collection.members.map { try $0.rendered(using: compilation.layout) })
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     try RetainedFiles.createDirectory(outputDirectory, beneath: projectRoot)
     let rawRunID = UUID()

@@ -1,4 +1,5 @@
 import Testing
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 import SwiftTLAMacros
 
@@ -1672,7 +1673,7 @@ struct AlgorithmBuilderTests {
         }
 
         let compilation = try loweredSourceSpecification(algorithm).compile()
-        let action = try #require(compilation.machineSurfacePlan.actions.first { $0.swiftIdentifier == "mark" })
+        let action = try #require(MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics).actions.first { $0.swiftIdentifier == "mark" })
         #expect(compilation.semantics.actions.first { $0.id == action.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])
     }
 }

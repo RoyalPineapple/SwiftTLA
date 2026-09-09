@@ -1,4 +1,5 @@
 import Testing
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 import SwiftTLAMacros
 
@@ -21,7 +22,7 @@ struct ActionIdentifierSpellingTests {
     @Test("Keyword action labels retain their formal names and compile as Swift cases")
     func keywordActionDispatches() throws {
         let compilation = try KeywordActionExecution.spec.compile()
-        let action = try #require(compilation.machineSurfacePlan.actions.first)
+        let action = try #require(MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics).actions.first)
         #expect(compilation.layout.actions[action.compiledAction.ordinal].declaration.name == "repeat")
         #expect(action.swiftIdentifier == "`repeat`")
         var machine = try KeywordActionExecution.makeMachine()
@@ -40,7 +41,7 @@ struct ActionIdentifierSpellingTests {
         ).compile()
         #expect(compilation.layout.actions.map { $0.declaration.name }
             == ["class", "default", "switch", "repeat", "repeat!"])
-        #expect(compilation.machineSurfacePlan.actions.map(\.swiftIdentifier)
+        #expect(try MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics).actions.map(\.swiftIdentifier)
             == ["`class`", "`default`", "`switch`", "`repeat`", "repeat_"])
     }
 }
@@ -80,7 +81,8 @@ extension ActionIdentifierSpellingTests {
         #expect(try stateMachine.send(.advance).after.class == 1)
         var actionMachine = try WildcardActionExecution.makeMachine()
         #expect(try actionMachine.send(.action__(class: 1)).after.value == 1)
-        let surface = try WildcardActionExecution.spec.compile().machineSurfacePlan
+        let compilation = try WildcardActionExecution.spec.compile()
+        let surface = try MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics)
         #expect(surface.actions.first?.bindings.first?.formalName == "class")
         #expect(surface.actions.first?.bindings.first?.swiftIdentifier == "`class`")
     }

@@ -19,6 +19,7 @@ struct MacroCompilation {
     let typeName: String
     let compilation: CompiledSpecification
     let enumInfos: [ParsedEnum]
+    let surface: MachineSurfacePlan
     let nativeProgram: NativeResolvedProgram
 }
 
@@ -58,6 +59,7 @@ enum TLASpecVerifier {
             typeName: typeName,
             compilation: compilation,
             enumInfos: enumInfos,
+            surface: try MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics),
             nativeProgram: try NativeResolvedProgram(compilation: compilation, sourceTypes: sourceMetadata)
         )
     }

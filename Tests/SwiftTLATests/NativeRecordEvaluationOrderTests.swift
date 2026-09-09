@@ -34,7 +34,8 @@ struct NativeRecordEvaluationOrderTests {
         ], actions: [], invariants: []).compile()
         let program = try NativeResolvedProgram(compilation: compilation, sourceTypes: .init())
         let annotatedModel = MacroCompilation(typeName: model.typeName, compilation: compilation,
-            enumInfos: model.enumInfos, nativeProgram: program)
+            enumInfos: model.enumInfos,
+            surface: try MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics), nativeProgram: program)
         var emitter = NativeSwiftEmitter(model: annotatedModel)
         let root = try #require(program.initializations.values.first)
         let generated = try emitter.expression(root)

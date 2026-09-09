@@ -5,7 +5,7 @@ import SwiftTLA
 
 extension NativeSwiftEmitter {
     mutating func machineMembers() throws -> [DeclSyntax] {
-        let surface = model.compilation.machineSurfacePlan
+        let surface = model.surface
         let collections = surface.collections
         let collectionParameters = collections.map { "\($0.swiftIdentifier) \(nativeCollectionBinding($0, in: model)): [\($0.elementType).ID]" }.joined(separator: ", ")
         let collectionArguments = collections.map { "\($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined(separator: ", ")
@@ -145,7 +145,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func actionDeclarations() throws -> [DeclSyntax] {
-        let cases = try model.compilation.machineSurfacePlan.actions.map { surface in
+        let cases = try model.surface.actions.map { surface in
             guard let action = compilation.semantics.actions.first(where: { $0.id == surface.compiledAction }),
                   action.bindings.count == surface.bindings.count else {
                 throw unsupported("action binding layout")
@@ -167,7 +167,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func collectionValidationDeclarations(parameters: String) throws -> [DeclSyntax] {
-        let checks = model.compilation.machineSurfacePlan.variables.compactMap { variable -> String? in
+        let checks = model.surface.variables.compactMap { variable -> String? in
             guard let collection = variable.collection else { return nil }
             return """
             guard Set(\(stateValue(compilation.layout.variables[variable.storageOrdinal].id)).keys) == Set(\(nativeCollectionBinding(collection, in: model))) else {
@@ -187,7 +187,7 @@ extension NativeSwiftEmitter {
     }
 
     private func executionState(values: (VariableID) -> String) -> String {
-        let publicFields = compilation.machineSurfacePlan.variables.map {
+        let publicFields = model.surface.variables.map {
             "\($0.swiftIdentifier): \(values(compilation.layout.variables[$0.storageOrdinal].id))"
         }.joined(separator: ", ")
         let privateFields = compilation.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
@@ -244,7 +244,7 @@ extension NativeSwiftEmitter {
         code += "for state in result { try _validateCollections(state\(validationArguments)) }\nreturn result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
-        let validation = model.compilation.machineSurfacePlan.collections.map { collection in
+        let validation = model.surface.collections.map { collection in
             """
             guard \(nativeCollectionBinding(collection, in: model)).count == \(collection.members.count), Set(\(nativeCollectionBinding(collection, in: model))).count == \(collection.members.count) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
@@ -397,7 +397,7 @@ extension NativeSwiftEmitter {
     mutating func dispatchDeclarations(collectionArguments: String) throws -> [DeclSyntax] {
         var cases: [String] = []
         var enumeration: [String] = []
-        for surface in model.compilation.machineSurfacePlan.actions {
+        for surface in model.surface.actions {
             guard let action = compilation.semantics.actions.first(where: { $0.id == surface.compiledAction }) else { throw unsupported("action dispatch") }
             var pattern: [String] = []
             var invocation: [String] = []
@@ -477,7 +477,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func propertyDeclarations(collectionParameters: String) throws -> [DeclSyntax] {
-        let arguments = model.compilation.machineSurfacePlan.collections.map { ", \($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined()
+        let arguments = model.surface.collections.map { ", \($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined()
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         if let constraint = program.constraint {

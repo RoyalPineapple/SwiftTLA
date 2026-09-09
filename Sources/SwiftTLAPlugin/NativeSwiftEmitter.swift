@@ -22,7 +22,7 @@ struct NativeSwiftEmitter {
     init(model: MacroCompilation) {
         self.model = model
         program = model.nativeProgram
-        stateMemberNames = Dictionary(uniqueKeysWithValues: model.compilation.machineSurfacePlan.variables.map {
+        stateMemberNames = Dictionary(uniqueKeysWithValues: model.surface.variables.map {
             (model.compilation.layout.variables[$0.storageOrdinal].id, $0.swiftIdentifier)
         })
     }
@@ -129,8 +129,8 @@ struct NativeSwiftEmitter {
             throw unsupported("literal outside union")
         }
         if case .collectionMember(let variable, _) = type {
-            guard let collection = model.compilation.machineSurfacePlan.variables.first(where: { $0.storageOrdinal == variable.ordinal })?.collection,
-                  let index = collection.members.firstIndex(where: { CompiledValue(formal: $0) == value }) else {
+            guard let collection = model.surface.variables.first(where: { $0.storageOrdinal == variable.ordinal })?.collection,
+                  let index = collection.members.firstIndex(of: value) else {
                 throw unsupported("literal outside collection domain")
             }
             return "\(nativeCollectionBinding(collection, in: model))[\(index)]"
@@ -248,10 +248,10 @@ struct NativeSwiftEmitter {
                 body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
             } else { throw unsupported("ordering opaque type \(name)") }
         case .collectionMember(let variable, _):
-            guard let collection = model.compilation.machineSurfacePlan.variables.first(where: { $0.storageOrdinal == variable.ordinal })?.collection else {
+            guard let collection = model.surface.variables.first(where: { $0.storageOrdinal == variable.ordinal })?.collection else {
                 throw unsupported("collection ordering domain")
             }
-            let indices = collection.members.indices.sorted { CompiledValue(formal: collection.members[$0]) < CompiledValue(formal: collection.members[$1]) }
+            let indices = collection.members.indices.sorted { collection.members[$0] < collection.members[$1] }
             let members = indices.map { "\(nativeCollectionBinding(collection, in: model))[\($0)]" }.joined(separator: ", ")
             body = "let ordered = [\(members)]; return (ordered.firstIndex(of: lhs) ?? Int.max) < (ordered.firstIndex(of: rhs) ?? Int.max)"
         case .array(let element):

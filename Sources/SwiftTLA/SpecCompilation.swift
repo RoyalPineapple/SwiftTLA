@@ -143,7 +143,6 @@ struct CompiledRefinement: Sendable {
 public struct CompiledSpecification: Sendable {
     public let description: CompilationDescription
     public var identity: CompilationIdentity { description.identity }
-    package let machineSurfacePlan: MachineSurfacePlan
     package let layout: CompiledLayout
     package let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
@@ -158,7 +157,6 @@ public struct CompiledSpecification: Sendable {
 
     fileprivate init(
         description: CompilationDescription,
-        machineSurfacePlan: MachineSurfacePlan,
         layout: CompiledLayout,
         semantics: CompiledSemantics,
         refinements: [CompiledRefinement],
@@ -168,7 +166,6 @@ public struct CompiledSpecification: Sendable {
         renderedPlusCalModuleBundle: TLAModuleBundle?
     ) {
         self.description = description
-        self.machineSurfacePlan = machineSurfacePlan
         self.layout = layout
         self.semantics = semantics
         self.refinements = refinements
@@ -439,7 +436,6 @@ public extension TLASpec {
         )
         let bindings = lowerer.bindings
         let identity = compilationIdentity
-        let machineSurfacePlan = try MachineSurfacePlan(layout: layout, semantics: semantics)
         let directModuleSections = try directModuleSectionPlan(
             layout: layout,
             bindings: bindings,
@@ -580,7 +576,6 @@ public extension TLASpec {
         )
         return CompiledSpecification(
             description: description,
-            machineSurfacePlan: machineSurfacePlan,
             layout: layout,
             semantics: semantics,
             refinements: compiledRefinements,

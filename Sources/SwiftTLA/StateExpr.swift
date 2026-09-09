@@ -1,4 +1,4 @@
-enum CompilerControlSymbol: String, Sendable {
+package enum CompilerControlSymbol: String, Sendable {
     case programCounter = "pc"
     case stack
     case procedure

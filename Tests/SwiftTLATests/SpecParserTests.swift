@@ -1,4 +1,5 @@
 import Testing
+@testable import SwiftTLAPlugin
 import SwiftSyntax
 import SwiftParser
 @testable import SwiftTLA
@@ -132,7 +133,7 @@ private func parserEnum(
         #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
         #expect(specification.actions.first?.bindings.map(\.name) == ["process"])
         #expect(specification.actions.first?.bindings.map(\.values) == [[.string("left"), .string("right")]])
-        let increment = try #require(compilation.machineSurfacePlan.actions.first {
+        let increment = try #require(MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics).actions.first {
             $0.swiftIdentifier == "increment"
         })
         #expect(compilation.semantics.actions.first { $0.id == increment.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])

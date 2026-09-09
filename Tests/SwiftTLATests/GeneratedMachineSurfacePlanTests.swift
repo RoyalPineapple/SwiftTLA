@@ -1,8 +1,26 @@
 import Testing
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 
 @Suite("Generated machine surface planning")
 struct GeneratedMachineSurfacePlanTests {
+    @Test("formal collections compile without Swift API metadata")
+    func formalCompilationDoesNotRequireSwiftSurface() throws {
+        let specification = TLASpec("FormalCollection") {
+            ModelCollectionDecl(name: "members", verificationScope: 2, initial: .int(0),
+                generatedElementType: nil, generatedValueType: nil)
+        }
+        let compilation = try specification.compile()
+        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let variable = try #require(compilation.layout.variables.first)
+        let members = try #require(variable.collection?.members)
+        #expect(try initial.value(for: variable.id) == .function(Dictionary(
+            uniqueKeysWithValues: members.map { ($0, .integer(0)) })))
+        #expect(throws: CompilationDiagnostic.self) {
+            try MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics)
+        }
+    }
+
     @Test("raw formal values cannot enter a generated state")
     func rejectsRawFormalState() throws {
         let value = Var<TLAValue>("value")

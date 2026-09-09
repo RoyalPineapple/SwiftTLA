@@ -1,4 +1,5 @@
 import Testing
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 import SwiftTLAMacros
 
@@ -2222,7 +2223,7 @@ struct CompilerPipelineCanonicalizationTests {
         let action = try #require(source.actions.first { $0.name == "advance" })
         let compiledAction = try #require(compilation.semantics.actions.first)
         let machineVariable = try #require(
-            compilation.machineSurfacePlan.variables.first { $0.formalName == "devices" }
+            MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics).variables.first { $0.formalName == "devices" }
         )
         let machineCollection = try #require(machineVariable.collection)
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
@@ -2251,7 +2252,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(machineCollection.elementType == "CompilerPipelineMember")
         #expect(machineCollection.valueType == "Int")
         #expect(machineCollection.formalName == "devices")
-        #expect(compilation.machineSurfacePlan.collections == [machineCollection])
+        #expect(try MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics).collections == [machineCollection])
         #expect(hasOuterExistential)
         #expect(try successors.map { successor in
             try successor.arguments.map { try $0.rendered(using: compilation.layout) }
