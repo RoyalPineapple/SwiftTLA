@@ -83,6 +83,33 @@ struct NativeCodeGenerationTests {
 }
 
 extension NativeCodeGenerationTests {
+    @Test("Nested source updates preserve scoped variables through parentheses")
+    func nestedSourceUpdates() throws {
+        let update = (0..<12).reduce("count.expr") { expression, _ in "(\(expression) + 1)" }
+        let source = Parser.parse(source: """
+        struct NestedSource {
+            enum Step: String, CaseIterable { case advance }
+            static var spec: TLASpec {
+                #spec("NestedSource") {
+                    Algorithm("NestedSource", scoped: { scope in
+                        let count = scope.sharedVar("count", initial: 0)
+                        Do(Step.advance) { Assign(count, to: \(update)) }
+                    })
+                }
+            }
+        }
+        """)
+        #expect(!source.hasError)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let model = try TLASpecVerifier.parseAndVerify(declaration)
+        let runtime = CompiledRuntime(compilation: model.compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(model.compilation.layout.testActionID(named: "advance"))
+        let count = try #require(model.compilation.layout.testVariableID(named: "count"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        #expect(try successor.state.value(for: count) == .integer(12))
+    }
+
     @Test("Nested state-dependent updates emit valid Swift")
     func nestedUpdateEmission() throws {
         let update = (0..<12).reduce(StateExpr.variable("count")) { expression, _ in

@@ -690,6 +690,57 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        // SwiftSyntax represents a parenthesized expression as a one-element
+        // tuple. Keep decoding through the typed path so scoped facade values
+        // such as `current.expr` retain their lexical scope.
+        if let tuple = expression.as(TupleExprSyntax.self),
+           tuple.elements.count == 1,
+           let value = tuple.elements.first?.expression {
+            return decodeTypedFacadeValue(value, scope: scope, expectedEnumType: expectedEnumType)
+        }
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            return decodeInfixExpr(
+                Array(sequence.elements),
+                expectedEnumType: expectedEnumType,
+                enumType: { self.typedFacadeValueShape($0, scope: scope)?.enumerationType }
+            ) { expression, expectedEnumType in
+                decodeTypedFacadeValue(
+                    expression,
+                    scope: scope,
+                    expectedEnumType: expectedEnumType
+                )
+            }
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
+           let lhs = decodeTypedFacadeValue(
+                infix.leftOperand,
+                scope: scope,
+                expectedEnumType: typedFacadeValueShape(infix.rightOperand, scope: scope)?.enumerationType
+           ),
+           let rhs = decodeTypedFacadeValue(
+                infix.rightOperand,
+                scope: scope,
+                expectedEnumType: typedFacadeValueShape(infix.leftOperand, scope: scope)?.enumerationType
+           ) {
+            return applyInfixOp(operation, lhs, rhs)
+        }
+        if let prefix = expression.as(PrefixOperatorExprSyntax.self),
+           let operand = decodeTypedFacadeValue(prefix.expression, scope: scope) {
+            switch prefix.operator.text {
+            case "!": return .not(operand)
+            case "-": return negated(operand)
+            default: return nil
+            }
+        }
+        return decodeTypedFacadeOperation(expression, scope: scope, expectedEnumType: expectedEnumType)
+    }
+
+    private func decodeTypedFacadeOperation(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope,
+        expectedEnumType: String?
+    ) -> StateExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let family = decodeProcessLocalFamily(call) {
             return family
@@ -714,14 +765,6 @@ final class ParserSession {
         }
         if let functions = decodeBoundedFunctionDomain(expression, scope: scope) {
             return functions
-        }
-        // SwiftSyntax represents a parenthesized expression as a one-element
-        // tuple. Keep decoding through the typed path so scoped facade values
-        // such as `current.expr` retain their lexical scope.
-        if let tuple = expression.as(TupleExprSyntax.self),
-           tuple.elements.count == 1,
-           let value = tuple.elements.first?.expression {
-            return decodeTypedFacadeValue(value, scope: scope, expectedEnumType: expectedEnumType)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
@@ -801,19 +844,6 @@ final class ParserSession {
         }
         if let localRecursion = decodeLocalRecursion(expression, scope: scope) {
             return localRecursion
-        }
-        if let sequence = expression.as(SequenceExprSyntax.self) {
-            return decodeInfixExpr(
-                Array(sequence.elements),
-                expectedEnumType: expectedEnumType,
-                enumType: { self.typedFacadeValueShape($0, scope: scope)?.enumerationType }
-            ) { expression, expectedEnumType in
-                decodeTypedFacadeValue(
-                    expression,
-                    scope: scope,
-                    expectedEnumType: expectedEnumType
-                )
-            }
         }
         // `IntRange` occurs inside scoped typed expressions as well as at the
         // top level.  Decode both bounds here so closure bindings such as a
@@ -992,28 +1022,6 @@ final class ParserSession {
                 scope: typedFacadeScope(scope, bindings: [(sourceName: binder, value: .variable(binder))])
             ) else { return nil }
             return .sequenceSelect(sequence, binder, predicate)
-        }
-        if let infix = expression.as(InfixOperatorExprSyntax.self),
-           let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
-           let lhs = decodeTypedFacadeValue(
-                infix.leftOperand,
-                scope: scope,
-                expectedEnumType: typedFacadeValueShape(infix.rightOperand, scope: scope)?.enumerationType
-           ),
-           let rhs = decodeTypedFacadeValue(
-                infix.rightOperand,
-                scope: scope,
-                expectedEnumType: typedFacadeValueShape(infix.leftOperand, scope: scope)?.enumerationType
-           ) {
-            return applyInfixOp(operation, lhs, rhs)
-        }
-        if let prefix = expression.as(PrefixOperatorExprSyntax.self),
-           let operand = decodeTypedFacadeValue(prefix.expression, scope: scope) {
-            switch prefix.operator.text {
-            case "!": return .not(operand)
-            case "-": return negated(operand)
-            default: return nil
-            }
         }
         if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
            subscriptCall.arguments.count == 1,
