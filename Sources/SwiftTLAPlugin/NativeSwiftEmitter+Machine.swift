@@ -275,61 +275,58 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    mutating func actionFunctions(_ root: NativeActionNodeID) throws -> String {
-        var pending: [(id: NativeActionNodeID, bindings: [BinderID])] = [(root, [])]
+    mutating func actionFunctions(_ root: CompiledActionExpr<NativeExpressionID>) throws -> String {
+        var pending: [(node: CompiledActionExpr<NativeExpressionID>, id: Int, bindings: [BinderID])] = [(root, 0, [])]
+        var nextID = 1
         var declarations: [String] = []
-        while let (id, bindings) = pending.popLast() {
-            let node = program[id]
-            var childBindings = bindings
-            switch node.expression {
-            case .define(let binding, _, _), .existsAction(let binding, _, _):
-                childBindings.append(binding)
-            default: break
-            }
-            pending.append(contentsOf: node.children.reversed().map { ($0, childBindings) })
-            func childCall(_ index: Int) -> String {
-                "try _actionPart\(node.children[index].ordinal)(\(childBindings.map(binder).joined(separator: ", ")))"
+        while let (node, id, bindings) = pending.popLast() {
+            func childCall(_ child: CompiledActionExpr<NativeExpressionID>, binding: BinderID? = nil) -> String {
+                let childBindings = bindings + (binding.map { [$0] } ?? [])
+                let childID = nextID
+                nextID += 1
+                pending.append((child, childID, childBindings))
+                return "try _actionPart\(childID)(\(childBindings.map(binder).joined(separator: ", ")))"
             }
             let body: String
-            switch node.expression {
-            case .assign(let variableID, _):
-                body = "return [_Updates(\(variable(variableID)): \(try expression(node.expressions[0])))]"
+            switch node {
+            case .assign(let variableID, let value):
+                body = "return [_Updates(\(variable(variableID)): \(try expression(value)))]"
             case .unchanged(let variableID):
                 body = "return [_Updates(\(variable(variableID)): \(stateValue(variableID)))]"
-            case .guard_:
-                body = "guard \(try expression(node.expressions[0])) else { return [] }\nreturn [_Updates()]"
-            case .existsAction(let binding, _, _):
-                let element = node.bindings[binding]!
-                let domain = try expression(node.expressions[0])
+            case .guard_(let predicate):
+                body = "guard \(try expression(predicate)) else { return [] }\nreturn [_Updates()]"
+            case .existsAction(let binding, let domainExpression, let child):
+                let element = program.bindingTypes[binding]!
+                let domain = try expression(domainExpression)
                 body = """
                 return try \(domain).sorted(by: \(try ordering(element))).flatMap { (\(binder(binding)): \(try swiftType(element))) throws -> [_Updates] in
-                    return \(childCall(0))
+                    return \(childCall(child, binding: binding))
                 }
                 """
-            case .define(let binding, _, _):
-                body = "let \(binder(binding)) = \(try expression(node.expressions[0]))\nreturn \(childCall(0))"
-            case .ifElse:
-                body = "if \(try expression(node.expressions[0])) { return \(childCall(0)) } else { return \(childCall(1)) }"
-            case .and:
+            case .define(let binding, let value, let child):
+                body = "let \(binder(binding)) = \(try expression(value))\nreturn \(childCall(child, binding: binding))"
+            case .ifElse(let condition, let yes, let no):
+                body = "if \(try expression(condition)) { return \(childCall(yes)) } else { return \(childCall(no)) }"
+            case .and(let lhs, let rhs):
                 body = """
-                let left = \(childCall(0))
+                let left = \(childCall(lhs))
                 guard !left.isEmpty else { return [] }
-                let right = \(childCall(1))
+                let right = \(childCall(rhs))
                 return try left.flatMap { first -> [_Updates] in try right.map { try first.merging($0) } }
                 """
-            case .or:
-                body = "let left = \(childCall(0))\nlet right = \(childCall(1))\nreturn left + right"
+            case .or(let lhs, let rhs):
+                body = "let left = \(childCall(lhs))\nlet right = \(childCall(rhs))\nreturn left + right"
             }
             let parameters = try bindings.map {
                 "_ \(binder($0)): \(try swiftType(program.bindingTypes[$0]!))"
             }.joined(separator: ", ")
             declarations.append("""
-            func _actionPart\(id.ordinal)(\(parameters)) throws -> [_Updates] {
+            func _actionPart\(id)(\(parameters)) throws -> [_Updates] {
                 \(body)
             }
             """)
         }
-        return declarations.joined(separator: "\n") + "\nreturn try _actionPart\(root.ordinal)()"
+        return declarations.joined(separator: "\n") + "\nreturn try _actionPart0()"
     }
 
     mutating func rawActionFunction(_ action: CompiledAction, collectionParameters: String) throws -> DeclSyntax {

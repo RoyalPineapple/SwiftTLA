@@ -1012,7 +1012,7 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func actionTypes(_ action: CompiledActionExpr, roots: inout [NativeCheckedExpression]) throws {
+    private mutating func actionTypes(_ action: CompiledActionExpr<CompiledStateExpr>, roots: inout [NativeCheckedExpression]) throws {
         switch action {
         case .assign(let id, let expression):
             let checked = try checkOperand(expression, expected: variables[id] ?? .unknown)

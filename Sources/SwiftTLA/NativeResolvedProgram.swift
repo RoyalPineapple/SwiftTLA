@@ -1,7 +1,6 @@
 /// Immutable expansion-time annotations over the existing compiled program.
 /// Expression IDs identify uses, so one formal body can have several Swift shapes.
 package struct NativeExpressionID: Hashable, Sendable { package let ordinal: Int }
-package struct NativeActionNodeID: Hashable, Sendable { package let ordinal: Int }
 package struct NativeFunctionID: Hashable, Sendable { package let ordinal: Int }
 package struct NativeCallbackID: Hashable, Sendable { package let ordinal: Int }
 
@@ -43,13 +42,6 @@ package struct NativeResolvedFunction: Sendable {
     package let domainGuard: NativeExpressionID?
 }
 
-package struct NativeResolvedAction: Sendable {
-    package let expression: CompiledActionExpr
-    package let expressions: [NativeExpressionID]
-    package let children: [NativeActionNodeID]
-    package let bindings: [BinderID: NativeType]
-}
-
 package struct NativeProjectionPair: Hashable, Sendable {
     package let source: NativeType
     package let target: NativeType
@@ -65,18 +57,16 @@ package struct NativeResolvedProgram: Sendable {
     package let variableTypes: [VariableID: NativeType]
     package let bindingTypes: [BinderID: NativeType]
     package let expressions: [NativeResolvedExpression]
-    package let actionNodes: [NativeResolvedAction]
     package let functions: [NativeResolvedFunction]
     package let callbacks: [NativeResolvedCallback]
     /// A value initializer is represented by its existing `.value` expression.
     package let initializations: [VariableID: NativeExpressionID]
-    package let actions: [ActionID: NativeActionNodeID]
+    package let actions: [ActionID: CompiledActionExpr<NativeExpressionID>]
     package let invariants: [PropertyID: NativeExpressionID]
     package let constraint: NativeExpressionID?
     package let assume: NativeExpressionID?
 
     package subscript(_ id: NativeExpressionID) -> NativeResolvedExpression { expressions[id.ordinal] }
-    package subscript(_ id: NativeActionNodeID) -> NativeResolvedAction { actionNodes[id.ordinal] }
     package subscript(_ id: NativeFunctionID) -> NativeResolvedFunction { functions[id.ordinal] }
     package subscript(_ id: NativeCallbackID) -> NativeResolvedCallback { callbacks[id.ordinal] }
 }

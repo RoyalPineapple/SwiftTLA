@@ -24,7 +24,7 @@ private enum ActionLoweringTask {
     case build(
         childCount: Int,
         path: String,
-        ([CompiledActionExpr]) throws -> CompiledActionExpr
+        ([CompiledActionExpr<CompiledStateExpr>]) throws -> CompiledActionExpr<CompiledStateExpr>
     )
 }
 
@@ -1564,9 +1564,9 @@ struct CompiledLowerer {
         _ action: ActionExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledActionExpr {
+    ) throws -> CompiledActionExpr<CompiledStateExpr> {
         var tasks = [ActionLoweringTask.expression(action, path: path, scope: scope)]
-        var lowered: [CompiledActionExpr] = []
+        var lowered: [CompiledActionExpr<CompiledStateExpr>] = []
         while let task = tasks.popLast() {
             switch task {
             case .build(let childCount, let taskPath, let build):
@@ -1646,7 +1646,7 @@ struct CompiledLowerer {
         _ children: [(expression: ActionExpr, path: String)],
         at path: String,
         scope: BindingScope,
-        build: @escaping ([CompiledActionExpr]) throws -> CompiledActionExpr,
+        build: @escaping ([CompiledActionExpr<CompiledStateExpr>]) throws -> CompiledActionExpr<CompiledStateExpr>,
         on tasks: inout [ActionLoweringTask]
     ) {
         tasks.append(.build(childCount: children.count, path: path, build))

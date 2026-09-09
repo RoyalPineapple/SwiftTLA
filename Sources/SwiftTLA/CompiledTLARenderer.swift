@@ -7,7 +7,7 @@ private enum StateRenderingTask {
 }
 
 private enum ActionRenderingTask {
-    case expression(CompiledActionExpr)
+    case expression(CompiledActionExpr<CompiledStateExpr>)
     case text(String)
 }
 
@@ -15,7 +15,7 @@ struct CompiledTLARenderer {
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
 
-    func action(_ expression: CompiledActionExpr) throws -> String {
+    func action(_ expression: CompiledActionExpr<CompiledStateExpr>) throws -> String {
         var tasks = [ActionRenderingTask.expression(expression)]
         var parts: [String] = []
         func schedule(_ values: [ActionRenderingTask]) {

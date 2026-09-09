@@ -543,21 +543,38 @@ package struct CompiledLocalOperator: Hashable, Sendable {
     package let referencedOperators: Set<OperatorID>
 }
 
-package indirect enum CompiledActionExpr: Sendable {
-    case assign(VariableID, CompiledStateExpr)
+/// Shared action structure; each consumer supplies its state-expression representation.
+package indirect enum CompiledActionExpr<Expression: Sendable>: Sendable {
+    case assign(VariableID, Expression)
     case unchanged(VariableID)
-    case guard_(CompiledStateExpr)
-    case existsAction(BinderID, CompiledStateExpr, CompiledActionExpr)
-    case ifElse(CompiledStateExpr, CompiledActionExpr, CompiledActionExpr)
-    case define(BinderID, CompiledStateExpr, CompiledActionExpr)
-    case and(CompiledActionExpr, CompiledActionExpr)
-    case or(CompiledActionExpr, CompiledActionExpr)
+    case guard_(Expression)
+    case existsAction(BinderID, Expression, Self)
+    case ifElse(Expression, Self, Self)
+    case define(BinderID, Expression, Self)
+    case and(Self, Self)
+    case or(Self, Self)
+
+    package func map<Result: Sendable>(_ transform: (Expression) throws -> Result) rethrows -> CompiledActionExpr<Result> {
+        switch self {
+        case .assign(let id, let value): return .assign(id, try transform(value))
+        case .unchanged(let id): return .unchanged(id)
+        case .guard_(let predicate): return .guard_(try transform(predicate))
+        case .existsAction(let id, let domain, let body):
+            return .existsAction(id, try transform(domain), try body.map(transform))
+        case .define(let id, let value, let body):
+            return .define(id, try transform(value), try body.map(transform))
+        case .ifElse(let condition, let yes, let no):
+            return .ifElse(try transform(condition), try yes.map(transform), try no.map(transform))
+        case .and(let lhs, let rhs): return .and(try lhs.map(transform), try rhs.map(transform))
+        case .or(let lhs, let rhs): return .or(try lhs.map(transform), try rhs.map(transform))
+        }
+    }
 }
 
 package struct CompiledAction: Sendable {
     package let id: ActionID
     package let bindings: [CompiledActionBinding]
-    package let body: CompiledActionExpr
+    package let body: CompiledActionExpr<CompiledStateExpr>
     package let collection: VariableID?
 }
 

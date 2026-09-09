@@ -27,7 +27,6 @@ private final class NativeProgramResolver {
     let inference: NativeTypeInference
     var checkedRoots: ArraySlice<NativeCheckedExpression>
     var expressions: [NativeResolvedExpression] = []
-    var actions: [NativeResolvedAction] = []
     var functions: [NativeResolvedFunction?] = []
     var functionIDs: [NativeResolvedFunctionKey: NativeFunctionID] = [:]
     var functionCallbacks: [NativeFunctionID: [(OperatorID, NativeOperatorCall, NativeCallbackID)]] = [:]
@@ -44,8 +43,8 @@ private final class NativeProgramResolver {
         for item in compilation.semantics.variableInitializations {
             initializations[item.variable] = try nextExpression()
         }
-        var actionRoots: [ActionID: NativeActionNodeID] = [:]
-        for item in compilation.semantics.actions { actionRoots[item.id] = try action(item.body) }
+        var actionRoots: [ActionID: CompiledActionExpr<NativeExpressionID>] = [:]
+        for item in compilation.semantics.actions { actionRoots[item.id] = try item.body.map { _ in try nextExpression() } }
         var invariantRoots: [PropertyID: NativeExpressionID] = [:]
         for item in compilation.semantics.invariants { invariantRoots[item.id] = try nextExpression() }
         let constraint = try compilation.semantics.constraint.map { _ in try nextExpression() }
@@ -62,7 +61,7 @@ private final class NativeProgramResolver {
         }
         let projections = Set(checks.compactMap { pair, allowed in allowed ? pair : nil })
         return .init(projections: projections, variableTypes: inference.variables, bindingTypes: inference.bindings,
-            expressions: expressions, actionNodes: actions, functions: try functions.map { try require($0) }, callbacks: callbacks,
+            expressions: expressions, functions: try functions.map { try require($0) }, callbacks: callbacks,
             initializations: initializations, actions: actionRoots, invariants: invariantRoots, constraint: constraint, assume: assume)
     }
 
@@ -98,29 +97,6 @@ private final class NativeProgramResolver {
                 nextSafeAction: "Resolve every expression and callback before generating Swift.")
         }
         return value
-    }
-
-    func action(_ value: CompiledActionExpr) throws -> NativeActionNodeID {
-        var children: [NativeActionNodeID] = []
-        var values: [NativeExpressionID] = []
-        var bindings: [BinderID: NativeType] = [:]
-        switch value {
-        case .assign: values = [try nextExpression()]
-        case .unchanged: break
-        case .guard_: values = [try nextExpression()]
-        case .existsAction(let id, _, let body):
-            let type = try require(inference.bindings[id]); bindings[id] = type
-            values = [try nextExpression()]; children = [try action(body)]
-        case .define(let id, _, let body):
-            let type = try require(inference.bindings[id]); bindings[id] = type
-            values = [try nextExpression()]; children = [try action(body)]
-        case .ifElse(_, let yes, let no):
-            values = [try nextExpression()]; children = [try action(yes), try action(no)]
-        case .and(let lhs, let rhs), .or(let lhs, let rhs): children = [try action(lhs), try action(rhs)]
-        }
-        let id = NativeActionNodeID(ordinal: actions.count)
-        actions.append(.init(expression: value, expressions: values, children: children, bindings: bindings))
-        return id
     }
 
     /// Consume roots in the shared program's initialization/action/predicate order.

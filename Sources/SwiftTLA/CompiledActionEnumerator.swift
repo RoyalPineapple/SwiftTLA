@@ -33,7 +33,7 @@ struct CompiledActionEnumerator {
     }
 
     private func execute(
-        _ action: CompiledActionExpr,
+        _ action: CompiledActionExpr<CompiledStateExpr>,
         bindings: CompiledBindings
     ) throws -> [CompiledActionDelta] {
         let evaluator = CompiledEvaluator(

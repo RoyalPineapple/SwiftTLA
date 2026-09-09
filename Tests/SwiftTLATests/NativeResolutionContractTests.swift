@@ -314,7 +314,10 @@ extension NativeResolutionContractTests {
         let initial = try #require(program.initializations.values.first)
         #expect(program[initial].resultType == .set(.int))
         let action = try #require(program.actions.values.first)
-        let assigned = try #require(program[action].expressions.first)
+        guard case .assign(_, let assigned) = action else {
+            Issue.record("Expected the checked assignment")
+            return
+        }
         #expect(program[assigned].resultType == .set(.int))
         let invariant = try #require(program.invariants.values.first)
         #expect(program[invariant].resultType == .bool)

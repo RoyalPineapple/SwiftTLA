@@ -1,4 +1,4 @@
-extension CompiledActionExpr {
+extension CompiledActionExpr where Expression == CompiledStateExpr {
     func enabledActionDependencies(
         formalOperators: [CompiledFormalOperatorDefinition],
         recursiveFunctions: [CompiledRecursiveFunction]
