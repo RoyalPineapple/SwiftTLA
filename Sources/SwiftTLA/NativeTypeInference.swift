@@ -243,6 +243,12 @@ private struct NativeCheckedType: Sendable {
     }
 }
 
+private enum NativeBoundValueCheck {
+    case checked(NativeCheckedType)
+    case argument(NativeArgumentSource, NativeArgumentRefinement)
+    case domain(CompiledStateExpr)
+}
+
 private enum NativeExpressionCheckTask {
     case check(CompiledStateExpr, expected: NativeType)
     case reconcile(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
@@ -251,8 +257,12 @@ private enum NativeExpressionCheckTask {
     case subset(expected: NativeType)
     case setOperands(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
     case bind(BinderID)
+    case finishArgument(BinderID, NativeArgumentRefinement)
+    case finishBindingDomain(BinderID)
     case bindDomain(BinderID, retainElement: Bool)
     case set
+    case setElements(ArraySlice<CompiledStateExpr>, element: NativeType)
+    case mergeSetElement(ArraySlice<CompiledStateExpr>, previous: NativeType)
     case dictionary
     case result(NativeType)
     case discard
@@ -1100,10 +1110,10 @@ struct NativeTypeInference: Sendable {
 
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
         switch expression {
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
+        case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
              .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
              .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference:
+             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral:
             return try inferStructuredExpression(expression, expected: expected).type
         default: break
         }
@@ -1123,10 +1133,10 @@ struct NativeTypeInference: Sendable {
         guard isOperatorApplication(expression) else {
             let checked: NativeCheckedType
             switch expression {
-            case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
+            case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
                  .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
                  .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-                 .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference:
+                 .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral:
                 checked = try inferStructuredExpression(expression, expected: expected)
             default:
                 do { checked = try inferResolved(expression, expected: expected) }
@@ -1173,42 +1183,33 @@ struct NativeTypeInference: Sendable {
             nextSafeAction: diagnostic.nextSafeAction)
     }
 
-    private mutating func inferBoundValue(_ id: BinderID, expected: NativeType) throws -> NativeType {
+    private mutating func checkBoundValue(_ id: BinderID, expected: NativeType) throws -> NativeBoundValueCheck {
         let result: NativeType
         let existing = bindings[id] ?? .unknown
         // A use-site projection does not replace the binder's chosen native
         // representation. Later raw scalar reads must not erase enum identity.
-        if canProjectRead(existing, to: expected) { return expected }
+        if canProjectRead(existing, to: expected) {
+            return .checked(.init(type: expected, computationType: existing))
+        }
         if expected != .unknown, existing != expected, let evidence = argumentSources[id] {
             let refinement = NativeArgumentRefinement(expression: evidence.expression, bindings: evidence.scope.bindings, expected: expected)
             if activeArgumentRefinements.insert(refinement).inserted {
-                defer { activeArgumentRefinements.remove(refinement) }
-                var caller = evidence.scope
-                caller.activeArgumentRefinements = activeArgumentRefinements
-                caller.activeOperators = activeOperators
-                caller.specializationResults.merge(specializationResults) { _, current in current }
-                let refined = try caller.infer(evidence.expression, expected: expected)
-                specializationResults.merge(caller.specializationResults) { _, current in current }
-                bindings[id] = refined
-                return refined
+                return .argument(evidence, refinement)
             }
             // Recursive construction proofs share the active obligation's
             // provisional type. Its outer invocation still validates every
             // constructor/base branch in the original lexical scope before
             // any successful call annotation can escape.
             bindings[id] = expected
-            return expected
+            return .checked(.init(type: expected, computationType: expected))
         }
         if expected != .unknown, existing != expected, let domain = bindingSources[id],
            activeBindingRefinements.insert(id).inserted {
-            defer { activeBindingRefinements.remove(id) }
-            let refined = try element(infer(domain, expected: .set(expected)))
-            bindings[id] = refined
-            return refined
+            return .domain(domain)
         }
         if case .finite(let values) = expected, let domain = bindingDomains[id], domain.isSubset(of: Set(values)) {
             bindings[id] = expected
-            return expected
+            return .checked(.init(type: expected, computationType: expected))
         }
         if case .named(let name) = expected,
            let values = bindingDomains[id], let admitted = namedDomains[name],
@@ -1222,7 +1223,8 @@ struct NativeTypeInference: Sendable {
             }
         }
         bindings[id] = result
-        return try checkedType(result, expected: expected).type
+        let checked = try checkedType(result, expected: expected)
+        return .checked(.init(type: checked.type, computationType: result))
     }
 
     private mutating func inferTupleLiteral(_ expressions: [CompiledStateExpr], expected: NativeType) throws -> NativeCheckedType {
@@ -1491,13 +1493,16 @@ struct NativeTypeInference: Sendable {
         var results: [NativeType] = []
         var ancestors: [CompiledStateExpr] = []
         var completed: NativeCheckedType?
+        var suspendedScopes: [NativeTypeInference] = []
+        let initialArgumentRefinements = activeArgumentRefinements
+        let initialBindingRefinements = activeBindingRefinements
         do {
             while let task = pending.popLast() {
                 switch task {
                 case .check(let expression, let expected):
                     if case .union = expected {
                         switch expression {
-                        case .functionLiteral, .union, .intersection, .setDifference:
+                        case .functionLiteral, .setLiteral, .union, .intersection, .setDifference:
                             ancestors.append(expression)
                             if let constructor = try unionResultType(expression, expected: expected) {
                                 let checked = NativeCheckedType(type: expected, computationType: constructor)
@@ -1511,6 +1516,37 @@ struct NativeTypeInference: Sendable {
                         }
                     }
                     switch expression {
+                    case .setLiteral(let elements):
+                        ancestors.append(expression)
+                        let hint: NativeType = if case .set(let item) = expected { item } else { .unknown }
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .setElements(elements[...], element: hint),
+                        ])
+                    case .boundValue(let id):
+                        ancestors.append(expression)
+                        switch try checkBoundValue(id, expected: expected) {
+                        case .checked(let checked):
+                            results.append(checked.type)
+                            completed = checked
+                            ancestors.removeLast()
+                        case .argument(let source, let refinement):
+                            suspendedScopes.append(self)
+                            var caller = source.scope
+                            caller.activeArgumentRefinements = activeArgumentRefinements
+                            caller.activeOperators = activeOperators
+                            caller.specializationResults.merge(specializationResults) { _, current in current }
+                            self = caller
+                            pending.append(contentsOf: [
+                                .finishArgument(id, refinement),
+                                .check(source.expression, expected: expected),
+                            ])
+                        case .domain(let domain):
+                            pending.append(contentsOf: [
+                                .finishBindingDomain(id),
+                                .check(domain, expected: .set(expected)),
+                            ])
+                        }
                     case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
                          .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs), .modulo(let lhs, let rhs),
                          .lessThan(let lhs, let rhs), .lessOrEqual(let lhs, let rhs),
@@ -1641,6 +1677,27 @@ struct NativeTypeInference: Sendable {
                     default:
                         results.append(try infer(expression, expected: expected))
                     }
+                case .finishArgument(let id, let refinement):
+                    guard let refined = results.popLast(), var caller = suspendedScopes.popLast() else {
+                        throw Self.diagnostic("checking", "missing suspended argument context")
+                    }
+                    caller.specializationResults.merge(specializationResults) { _, current in current }
+                    caller.bindings[id] = refined
+                    caller.activeArgumentRefinements.remove(refinement)
+                    self = caller
+                    results.append(refined)
+                    completed = .init(type: refined, computationType: refined)
+                    ancestors.removeLast()
+                case .finishBindingDomain(let id):
+                    guard let domain = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing refined binding domain")
+                    }
+                    let refined = try element(domain)
+                    bindings[id] = refined
+                    activeBindingRefinements.remove(id)
+                    results.append(refined)
+                    completed = .init(type: refined, computationType: refined)
+                    ancestors.removeLast()
                 case .bind(let id):
                     guard let type = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked binding type")
@@ -1658,6 +1715,21 @@ struct NativeTypeInference: Sendable {
                         throw Self.diagnostic("checking", "missing checked set element")
                     }
                     results.append(.set(item))
+                case .setElements(var remaining, let element):
+                    if let next = remaining.popFirst() {
+                        pending.append(contentsOf: [
+                            .mergeSetElement(remaining, previous: element),
+                            .check(next, expected: element),
+                        ])
+                    } else {
+                        results.append(.set(element))
+                    }
+                case .mergeSetElement(let remaining, let previous):
+                    guard let item = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked set member")
+                    }
+                    let element = try Self.merge(previous, item)
+                    pending.append(.setElements(remaining, element: element))
                 case .dictionary:
                     guard let value = results.popLast(), let key = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked function operands")
@@ -1718,8 +1790,14 @@ struct NativeTypeInference: Sendable {
                     _ = results.popLast()
                 }
             }
-        } catch let diagnostic as CompilationDiagnostic {
-            throw ancestors.reversed().reduce(diagnostic) { annotated($0, at: $1) }
+        } catch {
+            while let caller = suspendedScopes.popLast() { self = caller }
+            activeArgumentRefinements = initialArgumentRefinements
+            activeBindingRefinements = initialBindingRefinements
+            if let diagnostic = error as? CompilationDiagnostic {
+                throw ancestors.reversed().reduce(diagnostic) { annotated($0, at: $1) }
+            }
+            throw error
         }
         guard let completed else {
             throw Self.diagnostic("checking", "missing checked expression")
@@ -1737,15 +1815,6 @@ struct NativeTypeInference: Sendable {
             pending.append(contentsOf: referenced.referencedOperators)
         }
         return captures
-    }
-
-    private mutating func inferSetLiteral(_ expressions: [CompiledStateExpr], expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
-        var value = hint
-        for expression in expressions { value = try Self.merge(value, infer(expression, expected: value)) }
-        result = .set(value)
-        return try checkedType(result, expected: expected)
     }
 
     private mutating func inferCases(_ first: CompiledCaseBranch, rest: [CompiledCaseBranch], otherwise: CompiledStateExpr?, expected: NativeType) throws -> NativeCheckedType {
@@ -1772,13 +1841,8 @@ struct NativeTypeInference: Sendable {
             let existing = variables[id] ?? .unknown
             if canProjectRead(existing, to: expected) { return .init(type: expected, computationType: existing) }
             else { result = try Self.merge(existing, expected); variables[id] = result }
-        case .boundValue(let id):
-            let type = try inferBoundValue(id, expected: expected)
-            return .init(type: type, computationType: bindings[id] ?? type)
         case .controlLocation: result = .control
         case .enabledAction: result = .bool
-        case .setLiteral(let expressions):
-            return try inferSetLiteral(expressions, expected: expected)
         case .in(let value, let domain):
             let item = try membershipElement(value: value, domain: domain)
             let checked = try checkedType(.bool, expected: expected)

@@ -25,6 +25,41 @@ import Testing
         }
     }
 
+    @Test("bound nominal reads preserve storage while projecting to scalar results")
+    func boundReadRepresentations() throws {
+        let plan = NativeMachinePlan(compilation: try TLASpec(name: "BoundRead", variables: [
+            .init(name: "node", initialization: .value(.int(1)), generatedSwiftType: "Node", origin: .compiler)
+        ], actions: [], invariants: []).compile())
+        let checker = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Node": [.int(1), .int(2)]]))
+        let variable = try #require(plan.variables.first)
+        let binder = BinderID(ordinal: 0)
+        let binding = CompiledStateExpr.letValue(binder, .stateVariable(variable.id), .boundValue(binder))
+        let scope = try checker.resolutionScope(binding, expected: .int).scope
+        let checked = try scope.resolutionScope(.boundValue(binder), expected: .int)
+        #expect(checked.resultType == .int)
+        #expect(checked.computationType == .named("Node"))
+        #expect(checked.scope.bindings[binder] == .named("Node"))
+    }
+
+    @Test("linked binding domains refine without recursive source checking")
+    func linkedBindingDomains() throws {
+        let plan = NativeMachinePlan(compilation: try TLASpec(
+            name: "LinkedDomains", variables: [], actions: [], invariants: []
+        ).compile())
+        let checker = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Node": [.int(1), .int(2)]]))
+        let count = 1_000
+        var expression = CompiledStateExpr.boundValue(.init(ordinal: count - 1))
+        for index in (0..<count).reversed() {
+            let source: CompiledStateExpr = index == 0
+                ? .value(.integer(1)) : .boundValue(.init(ordinal: index - 1))
+            expression = .letValue(.init(ordinal: index), source, expression)
+        }
+        let checked = try checker.resolutionScope(expression, expected: .named("Node"))
+        #expect(checked.resultType == .named("Node"))
+        #expect(checked.scope.bindings[BinderID(ordinal: 0)] == .named("Node"))
+        #expect(checked.scope.bindings[BinderID(ordinal: count - 1)] == .named("Node"))
+    }
+
     @Test("function constructors retain the selected representation within a union")
     func functionConstructorUnionContext() throws {
         let plan = NativeMachinePlan(compilation: try TLASpec(
