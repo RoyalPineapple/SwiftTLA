@@ -1079,13 +1079,31 @@ struct NativeTypeInference: Sendable {
             result: result, inference: scoped, callbackUses: callbackUses, callbackArguments: callbackArguments)
     }
 
+    private func isOperatorApplication(_ expression: CompiledStateExpr) -> Bool {
+        switch expression {
+        case .operatorApplication, .recursiveCall, .lambdaApplication,
+             .functionApply(.operatorReference, _): return true
+        default: return false
+        }
+    }
+
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
-        try inferExpression(expression, expected: expected).type
+        if isOperatorApplication(expression) {
+            return try inferExpression(expression, expected: expected).type
+        }
+        do {
+            return try inferResolved(expression, expected: expected)
+        } catch let diagnostic as CompilationDiagnostic {
+            throw annotated(diagnostic, at: expression)
+        }
     }
 
     private mutating func inferExpression(
         _ expression: CompiledStateExpr, expected: NativeType = .unknown
     ) throws -> (type: NativeType, call: NativeOperatorCall?) {
+        guard isOperatorApplication(expression) else {
+            return (try infer(expression, expected: expected), nil)
+        }
         do {
             let call: NativeOperatorCall
             switch expression {
@@ -1104,19 +1122,23 @@ struct NativeTypeInference: Sendable {
             return (try projectedReadType(call.result, expected: expected), call)
         }
         catch let diagnostic as CompilationDiagnostic {
-            let location: String
-            switch expression {
-            case .boundValue(let id): location = "binder[\(id.ordinal)]"
-            case .stateVariable(let id): location = "variable[\(plan.variables.first { $0.id == id }?.declaration.name ?? String(id.ordinal))]"
-            case .tupleAccess(_, let index): location = "tupleAccess[\(index)]"
-            case .operatorApplication(let id, _), .recursiveCall(let id, _): location = "operator[\(id.ordinal)]"
-            default: location = expression.diagnosticName
-            }
-            throw CompilationDiagnostic(code: diagnostic.code, stage: diagnostic.stage,
-                path: diagnostic.path + " <- " + location,
-                expected: diagnostic.expected, actual: diagnostic.actual,
-                nextSafeAction: diagnostic.nextSafeAction)
+            throw annotated(diagnostic, at: expression)
         }
+    }
+
+    private func annotated(_ diagnostic: CompilationDiagnostic, at expression: CompiledStateExpr) -> CompilationDiagnostic {
+        let location: String
+        switch expression {
+        case .boundValue(let id): location = "binder[\(id.ordinal)]"
+        case .stateVariable(let id): location = "variable[\(plan.variables.first { $0.id == id }?.declaration.name ?? String(id.ordinal))]"
+        case .tupleAccess(_, let index): location = "tupleAccess[\(index)]"
+        case .operatorApplication(let id, _), .recursiveCall(let id, _): location = "operator[\(id.ordinal)]"
+        default: location = expression.diagnosticName
+        }
+        return CompilationDiagnostic(code: diagnostic.code, stage: diagnostic.stage,
+            path: diagnostic.path + " <- " + location,
+            expected: diagnostic.expected, actual: diagnostic.actual,
+            nextSafeAction: diagnostic.nextSafeAction)
     }
 
     private mutating func inferBoundValue(_ id: BinderID, expected: NativeType) throws -> NativeType {
