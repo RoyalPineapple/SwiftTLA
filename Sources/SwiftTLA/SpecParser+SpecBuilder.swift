@@ -114,7 +114,7 @@ extension ParserSession {
                     call: call,
                     into: &components
                 )
-            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Action" {
+            } else if compilerGrammarName(in: call.calledExpression) == "Action" {
                 guard sourceActionBindings[sourceName] == nil else {
                     components.diagnostics.append(.init(
                         message: "Action binding '\(sourceName)' is declared more than once.",
