@@ -382,24 +382,27 @@ struct NativeTypeInference: Sendable {
         return match.1
     }
 
-    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (scope: NativeTypeInference, resultType: NativeType, computationType: NativeType) {
+    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (scope: NativeTypeInference, resultType: NativeType, computationType: NativeType, call: NativeOperatorCall?) {
         var scope = self
-        let result = try scope.infer(expression, expected: expected ?? .unknown)
+        let resolved = try scope.inferExpression(expression, expected: expected ?? .unknown)
+        let result = resolved.type
         guard result.resolved else {
             throw Self.unresolvedDiagnostic(result, at: "resolution")
         }
         if case .union = result, let constructor = try scope.unionConstructor(expression, expected: result) {
-            return (scope, result, constructor)
+            return (scope, result, constructor, resolved.call)
         }
         // Without a contextual type, the first pass already found the
         // expression's intrinsic representation.
         guard let expected, expected != .unknown else {
-            return (scope, result, result)
+            return (scope, result, result, resolved.call)
         }
         var intrinsicScope = scope
-        let intrinsic = (try? intrinsicScope.infer(expression)) ?? result
-        let computation = intrinsic.resolved && scope.canProjectRead(intrinsic, to: result) ? intrinsic : result
-        return (scope, result, computation)
+        if let intrinsic = try? intrinsicScope.inferExpression(expression),
+           intrinsic.type.resolved, scope.canProjectRead(intrinsic.type, to: result) {
+            return (scope, result, intrinsic.type, intrinsic.call)
+        }
+        return (scope, result, result, resolved.call)
     }
 
     func functionApplicationSourceType(_ function: CompiledStateExpr, argument: CompiledStateExpr, expected: NativeType) throws -> NativeType {
@@ -905,17 +908,6 @@ struct NativeTypeInference: Sendable {
         return try inference.specializeCall(.reference(id, arity: arguments.count), arguments: arguments, expected: expected ?? .unknown)
     }
 
-    func lambdaCall(
-        _ lambda: CompiledFormalLambda, arguments: [CompiledStateExpr], expected: NativeType? = nil
-    ) throws -> NativeOperatorCall {
-        var inference = self
-        return try inference.specializeCall(.lambda(lambda), arguments: arguments.map { .value($0) }, expected: expected ?? .unknown)
-    }
-
-    private mutating func inferCall(_ id: OperatorID, arguments: [CompiledFormalCallArgument], expected: NativeType) throws -> NativeType {
-        try specializeCall(.reference(id, arity: arguments.count), arguments: arguments, expected: expected).result
-    }
-
     private mutating func specializeCall(
         _ requestedOperation: CompiledFormalOperator, arguments: [CompiledFormalCallArgument], expected: NativeType
     ) throws -> NativeOperatorCall {
@@ -1095,7 +1087,29 @@ struct NativeTypeInference: Sendable {
     }
 
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
-        do { return try inferResolved(expression, expected: expected) }
+        try inferExpression(expression, expected: expected).type
+    }
+
+    private mutating func inferExpression(
+        _ expression: CompiledStateExpr, expected: NativeType = .unknown
+    ) throws -> (type: NativeType, call: NativeOperatorCall?) {
+        do {
+            let call: NativeOperatorCall
+            switch expression {
+            case .operatorApplication(let id, let arguments):
+                call = try specializeCall(.reference(id, arity: arguments.count), arguments: arguments, expected: expected)
+            case .recursiveCall(let id, let values):
+                call = try specializeCall(.reference(id, arity: values.count), arguments: values.map { .value($0) }, expected: expected)
+            case .lambdaApplication(let lambda, let values):
+                call = try specializeCall(.lambda(lambda), arguments: values.map { .value($0) }, expected: expected)
+            case .functionApply(.operatorReference(let id), let argument):
+                call = try specializeCall(.reference(id, arity: 1), arguments: [.value(argument)], expected: expected)
+                return (call.result, call)
+            default:
+                return (try inferResolved(expression, expected: expected), nil)
+            }
+            return (try projectedReadType(call.result, expected: expected), call)
+        }
         catch let diagnostic as CompilationDiagnostic {
             let location: String
             switch expression {
@@ -1208,7 +1222,6 @@ struct NativeTypeInference: Sendable {
 
     private mutating func inferFunctionApplication(_ function: CompiledStateExpr, key: CompiledStateExpr, expected: NativeType) throws -> NativeType {
         let result: NativeType
-        if case .operatorReference(let id) = function { return try inferCall(id, arguments: [.value(key)], expected: expected) }
         let base = try infer(function)
         let functionType: NativeType
         if base == .unknown { functionType = try infer(function, expected: .dictionary(infer(key), expected)) }
@@ -1412,12 +1425,6 @@ struct NativeTypeInference: Sendable {
         return try projectedReadType(result, expected: expected)
     }
 
-    private mutating func inferLambdaApplication(_ lambda: CompiledFormalLambda, arguments: [CompiledStateExpr], expected: NativeType) throws -> NativeType {
-        let result: NativeType
-        result = try specializeCall(.lambda(lambda), arguments: arguments.map { .value($0) }, expected: expected).result
-        return try projectedReadType(result, expected: expected)
-    }
-
     private mutating func inferLocalOperators(_ definitions: [CompiledLocalOperator], body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
         let result: NativeType
         for definition in definitions {
@@ -1552,12 +1559,6 @@ struct NativeTypeInference: Sendable {
             return try inferDomain(function, expected: expected)
         case .letValue(let id, let value, let body):
             return try inferLetValue(id, value: value, body: body, expected: expected)
-        case .operatorApplication(let id, let arguments):
-            result = try inferCall(id, arguments: arguments, expected: expected)
-        case .recursiveCall(let id, let arguments):
-            result = try inferCall(id, arguments: arguments.map { .value($0) }, expected: expected)
-        case .lambdaApplication(let lambda, let arguments):
-            return try inferLambdaApplication(lambda, arguments: arguments, expected: expected)
         case .letIn(let definitions, let body):
             return try inferLocalOperators(definitions, body: body, expected: expected)
         case .caseExpr(let first, let rest, let otherwise):

@@ -200,7 +200,7 @@ private final class NativeProgramResolver {
             bindings[id] = key; children = [try child(domain, .set(key)), try child(body, item)]
         case .functionApply(let function, let argument):
             if case .operatorReference(let id) = function {
-                let resolved = try scope.operatorCall(id, arguments: [.value(argument)], expected: computationType)
+                let resolved = try require(resolution.call)
                 call = try resolveCall(resolved, operation: id, values: [argument], scope: scope, callbackScope: callbackScope, arguments: &children)
             } else {
                 let shape = try scope.functionApplicationSourceType(function, argument: argument, expected: computationType)
@@ -231,14 +231,14 @@ private final class NativeProgramResolver {
             bindings[operation.parameters[0]] = try element(shape); bindings[operation.parameters[1]] = computationType
             children = [try child(operation.body, computationType), try child(initial, computationType), try child(sequence, shape)]
         case .operatorApplication(let id, let arguments):
-            let resolved = try scope.operatorCall(id, arguments: arguments, expected: computationType)
+            let resolved = try require(resolution.call)
             let values = arguments.compactMap { if case .value(let value) = $0 { return value }; return nil }
             call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .recursiveCall(let id, let values):
-            let resolved = try scope.operatorCall(id, arguments: values.map { .value($0) }, expected: computationType)
+            let resolved = try require(resolution.call)
             call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
-        case .lambdaApplication(let lambda, let values):
-            let resolved = try scope.lambdaCall(lambda, arguments: values, expected: computationType)
+        case .lambdaApplication(_, let values):
+            let resolved = try require(resolution.call)
             call = try resolveCall(resolved, operation: nil, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .letValue(let id, let rhs, let body):
             let item = try require(scope.bindings[id]); bindings[id] = item
