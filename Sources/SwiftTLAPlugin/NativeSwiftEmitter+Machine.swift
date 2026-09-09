@@ -12,11 +12,12 @@ extension NativeSwiftEmitter {
         let appendedParameters = collectionParameters.isEmpty ? "" : ", \(collectionParameters)"
         let appendedArguments = collectionArguments.isEmpty ? "" : ", \(collectionArguments)"
         var declarations: [DeclSyntax] = []
-        let fields = try compilation.layout.variables.map { variable in
-            "var \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
+        let fields = try compilation.layout.variables.filter { stateMemberNames[$0.id] == nil }.map { variable in
+            "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
         declarations += try nativeDeclarations("""
         private struct _ExecutionState: Equatable, Sendable {
+            let state: State
             \(fields)
         }
         private var _execution: _ExecutionState
@@ -37,7 +38,6 @@ extension NativeSwiftEmitter {
             "\(variable.swiftIdentifier) _value\(variable.storageOrdinal): \(try swiftType(program.variableTypes[compilation.layout.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: ", ")
         let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = _value\($0.storageOrdinal)" }.joined(separator: "\n")
-        let stateArguments = surface.variables.map { "\($0.swiftIdentifier): execution.\(variable(compilation.layout.variables[$0.storageOrdinal].id))" }.joined(separator: ", ")
         declarations += try nativeDeclarations("""
         public struct State: Equatable, Sendable {
             \(stateFields)
@@ -45,10 +45,7 @@ extension NativeSwiftEmitter {
                 \(stateAssignments)
             }
         }
-        private static func _publicState(_ execution: _ExecutionState) -> State {
-            State(\(stateArguments))
-        }
-        public var state: State { Self._publicState(_execution) }
+        public var state: State { _execution.state }
         public struct Transition: Equatable, Sendable {
             public let action: Action
             public let before: State
@@ -173,11 +170,11 @@ extension NativeSwiftEmitter {
         let checks = model.compilation.machineSurfacePlan.variables.compactMap { variable -> String? in
             guard let collection = variable.collection else { return nil }
             return """
-            guard Set(state.\(self.variable(compilation.layout.variables[variable.storageOrdinal].id)).keys) == Set(\(nativeCollectionBinding(collection, in: model))) else {
+            guard Set(\(stateValue(compilation.layout.variables[variable.storageOrdinal].id)).keys) == Set(\(nativeCollectionBinding(collection, in: model))) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: \(String(reflecting: collection.formalName)),
                     expected: "exactly the application IDs bound when the machine was created",
-                    actual: String(describing: Array(state.\(self.variable(compilation.layout.variables[variable.storageOrdinal].id)).keys))
+                    actual: String(describing: Array(\(stateValue(compilation.layout.variables[variable.storageOrdinal].id)).keys))
                 )
             }
             """
@@ -187,6 +184,16 @@ extension NativeSwiftEmitter {
             \(checks)
         }
         """)
+    }
+
+    private func executionState(values: (VariableID) -> String) -> String {
+        let publicFields = compilation.machineSurfacePlan.variables.map {
+            "\($0.swiftIdentifier): \(values(compilation.layout.variables[$0.storageOrdinal].id))"
+        }.joined(separator: ", ")
+        let privateFields = compilation.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
+            ", \(variable($0.id)): \(values($0.id))"
+        }.joined()
+        return "_ExecutionState(state: State(\(publicFields))\(privateFields))"
     }
 
     mutating func updateDeclarations() throws -> [DeclSyntax] {
@@ -202,7 +209,7 @@ extension NativeSwiftEmitter {
             }
             """
         }.joined(separator: "\n")
-        let arguments = compilation.layout.variables.map { "\(variable($0.id)): \(variable($0.id)) ?? state.\(variable($0.id))" }.joined(separator: ", ")
+        let updated = executionState { "\(variable($0)) ?? \(stateValue($0))" }
         return try nativeDeclarations("""
         private struct _Updates: Sendable {
             \(fields)
@@ -212,7 +219,7 @@ extension NativeSwiftEmitter {
                 return result
             }
             func applying(to state: _ExecutionState) -> _ExecutionState {
-                _ExecutionState(\(arguments))
+                \(updated)
             }
         }
         """)
@@ -232,8 +239,7 @@ extension NativeSwiftEmitter {
                 closing += "}\n"
             }
         }
-        let stateArguments = compilation.layout.variables.map { "\(variable($0.id)): \(variable($0.id))" }.joined(separator: ", ")
-        code += "result.append(_ExecutionState(\(stateArguments)))\n" + closing
+        code += "result.append(\(executionState(values: variable)))\n" + closing
         let validationArguments = arguments.isEmpty ? "" : ", " + arguments
         code += "for state in result { try _validateCollections(state\(validationArguments)) }\nreturn result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
@@ -261,7 +267,7 @@ extension NativeSwiftEmitter {
             return Self(execution: execution\(appendedArguments))
         }
         public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
-            var candidates = try _initialStates(\(arguments)).filter { _publicState($0) == initial }[...]
+            var candidates = try _initialStates(\(arguments)).filter { $0.state == initial }[...]
             guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
             guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
             return Self(execution: execution\(appendedArguments))
@@ -289,7 +295,7 @@ extension NativeSwiftEmitter {
             case .assign(let variableID, _):
                 body = "return [_Updates(\(variable(variableID)): \(try expression(node.expressions[0])))]"
             case .unchanged(let variableID):
-                body = "return [_Updates(\(variable(variableID)): state.\(variable(variableID)))]"
+                body = "return [_Updates(\(variable(variableID)): \(stateValue(variableID)))]"
             case .guard_:
                 body = "guard \(try expression(node.expressions[0])) else { return [] }\nreturn [_Updates()]"
             case .existsAction(let binding, _, _):

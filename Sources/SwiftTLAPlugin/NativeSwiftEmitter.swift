@@ -9,6 +9,7 @@ struct NativeSwiftEmitter {
     let model: MacroCompilation
     var compilation: CompiledSpecification { model.compilation }
     let program: NativeResolvedProgram
+    let stateMemberNames: [VariableID: String]
     var records: [NativeType] = []
     var atoms: [String] = []
     var finiteValues: [[CompiledValue]] = []
@@ -21,6 +22,9 @@ struct NativeSwiftEmitter {
     init(model: MacroCompilation) {
         self.model = model
         program = model.nativeProgram
+        stateMemberNames = Dictionary(uniqueKeysWithValues: model.compilation.machineSurfacePlan.variables.map {
+            (model.compilation.layout.variables[$0.storageOrdinal].id, $0.swiftIdentifier)
+        })
     }
 
     func unsupported(_ operation: String) -> CompilationDiagnostic {
@@ -70,6 +74,11 @@ struct NativeSwiftEmitter {
         })
         return "_value_\(name)_\(id.ordinal)"
     }
+    func stateValue(_ id: VariableID, prefix: String = "state.") -> String {
+        guard !prefix.isEmpty, let field = stateMemberNames[id] else { return prefix + variable(id) }
+        return prefix + "state." + field
+    }
+
     func binder(_ id: BinderID) -> String { "b\(id.ordinal)" }
 
     private mutating func cachedBinding(named name: String, type: NativeType, value: String) throws -> String {
@@ -623,7 +632,7 @@ struct NativeSwiftEmitter {
         switch expression {
         case .value(let value): return try literal(value, as: node.computationType)
         case .stateVariable(let id):
-            return state + variable(id)
+            return stateValue(id, prefix: state)
         case .boundValue(let id):
             return substitutions[id] ?? binder(id)
         case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"

@@ -74,7 +74,7 @@ private struct AmbiguousExecutionChoice {
 private extension AmbiguousExecutionChoice {
     // Exercise the generated relation before send applies its uniqueness rule.
     func candidateStates(for action: Action) throws -> [State] {
-        try _successors(for: action).map(Self._publicState)
+        try _successors(for: action).map(\.state)
     }
 }
 
