@@ -388,10 +388,15 @@ struct NativeTypeInference: Sendable {
         guard result.resolved else {
             throw Self.unresolvedDiagnostic(result, at: "resolution")
         }
-        var intrinsicScope = scope
         if case .union = result, let constructor = try scope.unionConstructor(expression, expected: result) {
             return (scope, result, constructor)
         }
+        // Without a contextual type, the first pass already found the
+        // expression's intrinsic representation.
+        guard let expected, expected != .unknown else {
+            return (scope, result, result)
+        }
+        var intrinsicScope = scope
         let intrinsic = (try? intrinsicScope.infer(expression)) ?? result
         let computation = intrinsic.resolved && scope.canProjectRead(intrinsic, to: result) ? intrinsic : result
         return (scope, result, computation)
