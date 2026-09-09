@@ -684,6 +684,8 @@ struct NativeTypeInference: Sendable {
             return try declared(alias, metadata: metadata, resolving: resolving.union([source]), forView: forView)
         }
         switch source {
+        case "TLAValue", "SwiftTLA.TLAValue":
+            throw diagnostic("type", "raw TLAValue is a formal-engine value, not a generated Swift state type")
         case "Int": return .int
         case "Bool": return .bool
         case "String": return .string
