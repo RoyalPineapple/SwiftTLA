@@ -101,15 +101,16 @@ private enum EvaluatorBinding {
 }
 
 private final class EvaluatorThunk {
-    let expression: CompiledStateExpr
-    let scope: EvaluatorScope
-    var value: CompiledValue?
-
-    init(expression: CompiledStateExpr, scope: EvaluatorScope) {
-        self.expression = expression
-        self.scope = scope
+    enum State {
+        case pending(CompiledStateExpr, EvaluatorScope)
+        case evaluated(CompiledValue)
     }
 
+    var state: State
+
+    init(expression: CompiledStateExpr, scope: EvaluatorScope) {
+        state = .pending(expression, scope)
+    }
 }
 
 private struct EvaluatorBindings {
@@ -890,7 +891,9 @@ struct CompiledEvaluator: Sendable {
 
             case .store(let thunk):
                 let value = try popValue(from: &values)
-                thunk.value = value
+                // The cached result replaces its inputs so completed arguments
+                // do not retain chains of earlier lexical scopes.
+                thunk.state = .evaluated(value)
                 values.append(value)
 
             case .expression(let expression, let scope):
@@ -905,11 +908,12 @@ struct CompiledEvaluator: Sendable {
                         case .value(let value):
                             values.append(value)
                         case .expression(let thunk):
-                            if let value = thunk.value {
+                            switch thunk.state {
+                            case .evaluated(let value):
                                 values.append(value)
-                            } else {
+                            case .pending(let expression, let argumentScope):
                                 tasks.append(.store(thunk))
-                                tasks.append(.expression(thunk.expression, thunk.scope))
+                                tasks.append(.expression(expression, argumentScope))
                             }
                         }
                     } else {
