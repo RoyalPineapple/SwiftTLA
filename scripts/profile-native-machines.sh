@@ -23,8 +23,8 @@ Generated-source bytes sum captured macro expansion bodies; per-expansion names 
 ContinuousClock measurements follow warmup, with equal semantic checksums and no timing thresholds.
 Construction retains every result through the allocation snapshot; outer retention buffers are preallocated. Non-inlined consumers exercise retained state/control after timing.
 Malloc snapshots measure process-wide retained live blocks/bytes in the default zone, not total allocations or peaks.
-Optional Instruments traces launch the actual test executable, not swift test. Raw traces and export tables require attribution review before reporting allocation totals.
-Both release builds enable testing access for the formal-engine comparison. This can affect optimization and executable size; results describe this identical diagnostic harness.
+Optional Instruments traces launch the Swift Testing helper that loads the test bundle, not swift test. Raw traces and export tables require attribution review before reporting allocation totals.
+Both release builds enable testing access for the formal-engine comparison. This can affect optimization and test bundle size; results describe this identical diagnostic harness.
 These measurements are hosted diagnostics, not a replacement for CI correctness admission.
 SCOPE
 
@@ -81,10 +81,10 @@ MANIFEST
         swift build -c release --show-bin-path > "$destination/bin-path.txt"
     )
     binary_dir="$(cat "$destination/bin-path.txt")"
-    executable="$binary_dir/SwiftTLAPackageTests.xctest/Contents/MacOS/SwiftTLAPackageTests"
-    [[ -f "$executable" ]] || { echo "Missing actual test executable: $executable" >&2; exit 1; }
-    stat -f '%z' "$executable" > "$destination/test-executable-bytes.txt"
-    size "$executable" > "$destination/test-executable-sections.txt"
+    test_image="$binary_dir/SwiftTLAPackageTests.xctest/Contents/MacOS/SwiftTLAPackageTests"
+    [[ -f "$test_image" ]] || { echo "Missing test bundle image: $test_image" >&2; exit 1; }
+    stat -f '%z' "$test_image" > "$destination/test-bundle-bytes.txt"
+    size "$test_image" > "$destination/test-bundle-sections.txt"
     python3 - "$destination" <<'PY'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
@@ -99,8 +99,14 @@ PY
     if [[ "${RECORD_ALLOCATIONS:-false}" == true ]]; then
         # Failure to profile (permissions/template availability) must not masquerade
         # as zero allocations or erase ordinary release timing evidence.
+        # Darwin test products are bundles. Launch the same in-process loader
+        # SwiftPM uses, so Instruments observes the tests rather than the build tool.
+        swift_tool="$(xcrun --find swift)"
+        test_runner="$(dirname "$swift_tool")/../libexec/swift/pm/swiftpm-testing-helper"
+        [[ -x "$test_runner" ]] || { echo "Missing Swift Testing runner: $test_runner" >&2; exit 1; }
         if xcrun xctrace record --template Allocations --time-limit 30s \
-            --output "$destination/allocations.trace" --launch -- "$executable" \
+            --output "$destination/allocations.trace" --launch -- "$test_runner" \
+            --test-bundle-path "$test_image" \
             --testing-library swift-testing --filter NativeMachinePerformanceTests \
             > "$destination/allocations-record.log" 2>&1; then
             xcrun xctrace export --input "$destination/allocations.trace" --toc \
