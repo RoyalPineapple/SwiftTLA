@@ -359,9 +359,10 @@ struct NativeSwiftEmitter {
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
         switch program[id].expression {
+        case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
+            return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .value, .stateVariable, .boundValue, .controlLocation, .enabledAction,
-             .assertView, .add, .subtract, .multiply, .divide,
-             .integerDivide, .modulo, .negate, .equal, .notEqual,
+             .assertView, .equal, .notEqual,
              .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and,
              .or, .not, .ifThenElse:
             return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
@@ -377,11 +378,60 @@ struct NativeSwiftEmitter {
             return try functionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .except, .recordLiteral, .recordAccess:
             return try aggregateExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .caseExpr, .letValue, .letIn, .operatorApplication, .recursiveCall,
-             .lambdaApplication:
+        case .caseExpr, .letValue, .letIn, .operatorApplication, .recursiveCall, .lambdaApplication:
             return try controlExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .operatorReference: throw unsupported("operator reference without an application")
         }
+    }
+
+    /// Keep checked arithmetic in evaluation order without nesting Swift calls
+    /// according to the depth of the formal expression tree.
+    private mutating func arithmeticExpression(
+        _ root: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        var pending: [(id: NativeExpressionID, expanded: Bool)] = [(root, false)]
+        var values: [String] = []
+        var statements: [String] = []
+        while let (id, expanded) = pending.popLast() {
+            let node = program[id]
+            let operation: String?
+            switch node.expression {
+            case .add: operation = "add"
+            case .subtract: operation = "subtract"
+            case .multiply: operation = "multiply"
+            case .divide, .integerDivide: operation = "divide"
+            case .modulo: operation = "modulo"
+            case .negate: operation = "negate"
+            default: operation = nil
+            }
+            let code: String
+            if let operation, id == root || node.resultType == .int {
+                let rightFirst = operation == "divide" || operation == "modulo"
+                if !expanded {
+                    pending.append((id, true))
+                    let evaluationOrder = rightFirst ? Array(node.children.reversed()) : node.children
+                    pending.append(contentsOf: evaluationOrder.reversed().map { ($0, false) })
+                    continue
+                }
+                let operands = Array(values.suffix(node.children.count))
+                values.removeLast(node.children.count)
+                let arguments = rightFirst ? Array(operands.reversed()) : operands
+                code = "try _NativeMachineOperations.\(operation)(\(arguments.joined(separator: ", ")))"
+            } else {
+                code = try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            }
+            let name = "_arithmetic\(statements.count)"
+            statements.append("let \(name): Int = \(code)")
+            values.append(name)
+        }
+        guard let result = values.last else { throw unsupported("arithmetic result") }
+        return """
+        (try { () throws -> Int in
+            \(statements.joined(separator: "\n"))
+            return \(result)
+        }())
+        """
     }
 
     private mutating func scalarExpression(
@@ -397,9 +447,6 @@ struct NativeSwiftEmitter {
         func binary(_ operation: String) throws -> String {
             "(\(try emit(0)) \(operation) \(try emit(1)))"
         }
-        func arithmetic(_ name: String) throws -> String {
-            "(try _NativeMachineOperations.\(name)(\(try emit(0)), \(try emit(1))))"
-        }
         switch expression {
         case .value(let value): return try literal(value, as: node.computationType)
         case .stateVariable(let id):
@@ -410,20 +457,6 @@ struct NativeSwiftEmitter {
         case .enabledAction(let id): return "enabled.contains(\(id.ordinal))"
         case .assertView:
             return try checkedView(emit(0), from: childType(0), to: node.computationType)
-        case .add(_, _): return try arithmetic("add")
-        case .subtract(_, _): return try arithmetic("subtract")
-        case .multiply(_, _): return try arithmetic("multiply")
-        case .divide(_, _), .integerDivide(_, _), .modulo(_, _):
-            let operation: String
-            if case .modulo = expression { operation = "modulo" } else { operation = "divide" }
-            return """
-            (try { () throws -> Int in
-                let _rightOperand = \(try emit(1))
-                let _leftOperand = \(try emit(0))
-                return try _NativeMachineOperations.\(operation)(_leftOperand, _rightOperand)
-            }())
-            """
-        case .negate(_): return "(try _NativeMachineOperations.negate(\(try emit(0))))"
         case .equal(_, _): return try binary("==")
         case .notEqual(_, _): return try binary("!=")
         case .lessThan(_, _): return try binary("<")

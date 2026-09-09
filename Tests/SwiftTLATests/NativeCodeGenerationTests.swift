@@ -1,6 +1,7 @@
 import Testing
 @testable import SwiftTLA
 import SwiftParser
+import SwiftParserDiagnostics
 import SwiftSyntax
 @testable import SwiftTLAPlugin
 
@@ -79,4 +80,28 @@ struct NativeCodeGenerationTests {
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
     }
 
+}
+
+extension NativeCodeGenerationTests {
+    @Test("Nested state-dependent updates emit valid Swift")
+    func nestedUpdateEmission() throws {
+        let update = (0..<12).reduce(StateExpr.variable("count")) { expression, _ in
+            .add(expression, .int(1))
+        }
+        let compilation = try TLASpec(
+            name: "NestedUpdate",
+            variables: [.init(name: "count", initialization: .value(.int(0)), origin: .compiler)],
+            actions: [.init(name: "advance", body: .assign(.named("count"), update))],
+            invariants: []
+        ).compile()
+        let model = MacroCompilation(
+            typeName: "NestedUpdate", compilation: compilation, enumInfos: [],
+            nativeProgram: try NativeResolvedProgram(plan: .init(compilation: compilation))
+        )
+        let members = try MacroExpander.generateStateMachineMembers(model: model)
+        let generated = members.map(\.description).joined(separator: "\n")
+        let syntax = Parser.parse(source: "struct Expansion {\n\(generated)\n}")
+        let diagnostics = ParseDiagnosticsGenerator.diagnostics(for: syntax).map(\.message)
+        #expect(!syntax.hasError, "\(diagnostics)")
+    }
 }
