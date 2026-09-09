@@ -1243,26 +1243,39 @@ struct NativeTypeInference: Sendable {
 
     private mutating func inferFunctionUpdate(_ function: CompiledStateExpr, key: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
+        let keyType: NativeType
+        let valueType: NativeType
         let base = try infer(function, expected: expected)
         switch base {
-        case .array(let item): _ = try infer(key, expected: .int); result = .array(try infer(value, expected: item))
-        case .dictionary(let domain, let item): _ = try infer(key, expected: domain); result = .dictionary(domain, try infer(value, expected: item))
+        case .array(let item):
+            keyType = try infer(key, expected: .int)
+            valueType = try infer(value, expected: item)
+            result = .array(valueType)
+        case .dictionary(let domain, let item):
+            keyType = try infer(key, expected: domain)
+            valueType = try infer(value, expected: item)
+            result = .dictionary(domain, valueType)
         case .record(let fields):
-            _ = try infer(key, expected: .string)
+            keyType = try infer(key, expected: .string)
             if case .value(.string(let name)) = key {
-                _ = try infer(value, expected: fields.first { $0.name == name }?.type ?? .unknown)
+                valueType = try infer(value, expected: fields.first { $0.name == name }?.type ?? .unknown)
             } else {
                 let replacementType = fields.first?.type ?? .unknown
                 guard fields.allSatisfy({ $0.type == replacementType }) else {
                     throw Self.diagnostic("except", "dynamic record keys require homogeneous field types")
                 }
-                _ = try infer(value, expected: replacementType)
+                valueType = try infer(value, expected: replacementType)
             }
             result = base
-        case .unknown: result = .dictionary(try infer(key), try infer(value))
+        case .unknown:
+            keyType = try infer(key)
+            valueType = try infer(value)
+            result = .dictionary(keyType, valueType)
         default: throw Self.diagnostic("except", "unsupported update shape \(base.swiftType)")
         }
-        return try checkedType(result, expected: expected)
+        let checked = try checkedType(result, expected: expected)
+        return .init(type: checked.type, computationType: checked.computationType,
+            operandTypes: [checked.computationType, keyType, valueType])
     }
 
     private mutating func inferSequenceSelection(_ sequence: CompiledStateExpr, binder id: BinderID, predicate: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {

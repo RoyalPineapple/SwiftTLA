@@ -142,7 +142,6 @@ private final class NativeProgramResolver {
             guard values.count == resolution.operandTypes.count else { return try require(nil) }
             return try zip(values, resolution.operandTypes).map { try child($0, $1) }
         }
-        func type(_ expression: CompiledStateExpr) throws -> NativeType { try scope.type(of: expression) }
         func element(_ source: NativeType) throws -> NativeType {
             switch source {
             case .array(let item), .set(let item), .dictionary(.int, let item): return item
@@ -211,20 +210,7 @@ private final class NativeProgramResolver {
                 children = try checkedChildren([function, argument])
             }
         case .except(let source, let key, let replacement):
-            let sourceID = try child(source, computationType)
-            let shape = expressions[sourceID.ordinal].resultType
-            let keyType: NativeType
-            let item: NativeType
-            switch shape {
-            case .dictionary(let key, let value): keyType = key; item = value
-            case .array(let value): keyType = .int; item = value
-            case .record(let fields):
-                keyType = .string
-                if case .value(.string(let name)) = key { item = try fields.first { $0.name == name }?.type ?? type(replacement) }
-                else { item = try require(fields.first?.type) }
-            default: return try require(nil as NativeExpressionID?)
-            }
-            children = [sourceID, try child(key, keyType), try child(replacement, item)]
+            children = try checkedChildren([source, key, replacement])
         case .sequenceFromSet(let domain): children = [try child(domain, .set(element(computationType)))]
         case .setSum(let function, let domain): children = [try child(function), try child(domain)]
         case .functionSet(let domain, let range):
