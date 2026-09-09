@@ -16,7 +16,7 @@ private struct NominalActionChoice {
             Algorithm("NominalActionChoice", scoped: { scope in
                 let selected = scope.sharedVar("selected", initial: Value.first)
                 Do(Step.select) {
-                    Choose(SetExpr<Value>.literal(.first, .second)) { candidate in
+                    Choose(Value.all) { candidate in
                         When(candidate == Value.second)
                         Assign(selected, to: candidate.expr)
                     }
