@@ -138,6 +138,10 @@ private final class NativeProgramResolver {
         func child(_ expression: CompiledStateExpr, _ type: NativeType? = nil) throws -> NativeExpressionID {
             try self.expression(expression, expected: type, scope: scope, callbackScope: callbackScope)
         }
+        func checkedChildren(_ values: [CompiledStateExpr]) throws -> [NativeExpressionID] {
+            guard values.count == resolution.operandTypes.count else { return try require(nil) }
+            return try zip(values, resolution.operandTypes).map { try child($0, $1) }
+        }
         func type(_ expression: CompiledStateExpr) throws -> NativeType { try scope.type(of: expression) }
         func element(_ source: NativeType) throws -> NativeType {
             switch source {
@@ -158,17 +162,15 @@ private final class NativeProgramResolver {
         case .and(let a, let b), .or(let a, let b): try pair(a, b, .bool)
         case .not(let a): children = [try child(a, .bool)]
         case .equal(let a, let b), .notEqual(let a, let b), .subset(let a, let b), .in(let a, let b):
-            guard resolution.operandTypes.count == 2 else { return try require(nil) }
-            children = try zip([a, b], resolution.operandTypes).map { try child($0, $1) }
+            children = try checkedChildren([a, b])
         case .ifThenElse(let condition, let a, let b): children = [try child(condition, .bool), try child(a, computationType), try child(b, computationType)]
         case .setLiteral(let values): children = try values.map { try child($0, element(computationType)) }
         case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): try pair(a, b, computationType)
         case .cardinality(let a): children = [try child(a)]
         case .sequenceSelect(let sequence, let id, let predicate):
             let item = try element(computationType)
-            let source = try scope.sequenceSourceType(sequence, element: item)
             bindings[id] = item
-            children = [try child(sequence, source), try child(predicate, .bool)]
+            children = try checkedChildren([sequence, predicate])
         case .setFilter(let domain, let id, let body), .choose(let domain, let id, let body):
             let item: NativeType = if case .setFilter = value { try element(computationType) } else { computationType }
             bindings[id] = item
@@ -185,34 +187,19 @@ private final class NativeProgramResolver {
         case .tupleLiteral(let values):
             if case .tuple(let types) = computationType { children = try zip(values, types).map { try child($0, $1) } }
             else { children = try values.map { try child($0, element(computationType)) } }
-        case .tupleAccess(let source, let index):
-            let shape = try scope.projectionSourceType(source, index: index, expected: computationType)
-            computationType = if case .tuple(let fields) = shape { fields[index - 1] } else { try element(shape) }
-            children = [try child(source, shape)]
-        case .tupleDynamicAccess(let source, let index):
-            let shape = try scope.sequenceSourceType(source, element: computationType)
-            children = [try child(source, shape), try child(index, .int)]
-        case .tupleLength(let source):
-            let shape = try type(source)
-            children = [try child(source, { if case .tuple = shape { return shape }; return try scope.sequenceSourceType(source) }())]
-        case .tupleHead(let source): children = [try child(source, scope.sequenceSourceType(source, element: computationType))]
-        case .tupleTail(let source): children = [try child(source, scope.sequenceSourceType(source, element: element(computationType)))]
-        case .tupleRemoving(let source, let index):
-            children = [try child(source, scope.sequenceSourceType(source, element: element(computationType))), try child(index, .int)]
-        case .tupleAppend(let source, let item): children = [try child(source, scope.sequenceSourceType(source, element: element(computationType))), try child(item, element(computationType))]
-        case .tupleConcatenate(let a, let b): children = [try child(a, scope.sequenceSourceType(a, element: element(computationType))), try child(b, scope.sequenceSourceType(b, element: element(computationType)))]
+        case .tupleAccess(let source, _), .tupleLength(let source), .tupleHead(let source), .tupleTail(let source),
+             .recordAccess(let source, _, _), .domain(let source):
+            children = try checkedChildren([source])
+        case .tupleDynamicAccess(let source, let index), .tupleRemoving(let source, let index):
+            children = try checkedChildren([source, index])
+        case .tupleAppend(let source, let item), .tupleConcatenate(let source, let item):
+            children = try checkedChildren([source, item])
         case .recordLiteral(let record):
             guard case .record(let fields) = computationType else { return try require(nil as NativeExpressionID?) }
             children = try record.fields.map { field in
                 guard case .string(let name) = field.key else { return try require(nil as NativeExpressionID?) }
                 return try child(field.value, require(fields.first { $0.name == name }?.type))
             }
-        case .recordAccess(let source, _, let key):
-            let shape = try scope.recordProjectionSourceType(source, key: key, expected: computationType)
-            guard case .record(let fields) = shape, case .string(let name) = key else { return try require(nil as NativeExpressionID?) }
-            computationType = try require(fields.first { $0.name == name }?.type)
-            children = [try child(source, shape)]
-        case .domain(let source): children = [try child(source, scope.domainSourceType(source, expected: computationType))]
         case .functionLiteral(let domain, let id, let body):
             guard case .dictionary(let key, let item) = computationType else { return try require(nil as NativeExpressionID?) }
             bindings[id] = key; children = [try child(domain, .set(key)), try child(body, item)]

@@ -6,11 +6,8 @@ import Testing
     func selectedFieldContext() throws {
         let plan = try makePlan(key: .value(.constant("first")))
         let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
-        guard case .recordAccess(let record, _, let key) = plan.formalOperatorDefinitions[0].body else {
-            Issue.record("Expected record projection fixture")
-            return
-        }
-        let source = try inference.recordProjectionSourceType(record, key: key, expected: .named("Key"))
+        let checked = try inference.resolutionScope(plan.formalOperatorDefinitions[0].body, expected: .named("Key"))
+        let source = try #require(checked.operandTypes.first)
         #expect(source == .record([
             .init(name: "key", type: .named("Key")),
             .init(name: "valid", type: .bool)

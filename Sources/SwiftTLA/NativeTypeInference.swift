@@ -510,13 +510,6 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    func projectionSourceType(_ value: CompiledStateExpr, index: Int, expected: NativeType? = nil) throws -> NativeType {
-        var inference = self
-        let shape = try inference.inferProjectionSource(value, index: index, expected: expected ?? .unknown)
-        guard shape.resolved else { throw Self.unresolvedDiagnostic(shape, at: "tupleAccess") }
-        return shape
-    }
-
     private mutating func inferProjectionSource(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeType {
         let members: [CompiledStateExpr]?
         switch value {
@@ -582,26 +575,19 @@ struct NativeTypeInference: Sendable {
         return false
     }
 
-    private func checkedType(_ source: NativeType, expected: NativeType) throws -> NativeCheckedType {
+    private func checkedType(
+        _ source: NativeType, expected: NativeType, operandTypes: [NativeType] = []
+    ) throws -> NativeCheckedType {
         if canProjectRead(source, to: expected) {
-            return .init(type: expected, computationType: source)
+            return .init(type: expected, computationType: source, operandTypes: operandTypes)
         }
         let type = try Self.merge(source, expected)
-        return .init(type: type, computationType: type)
+        return .init(type: type, computationType: type, operandTypes: operandTypes)
     }
 
     private func projectionStorageType(_ source: NativeType, expected: NativeType) throws -> NativeType {
         if canProjectRead(source, to: expected) { return source }
         return try Self.operandContext(source, expected)
-    }
-
-    func recordProjectionSourceType(
-        _ value: CompiledStateExpr, key: CompiledValue, expected: NativeType? = nil
-    ) throws -> NativeType {
-        var inference = self
-        let shape = try inference.inferRecordProjectionSource(value, key: key, expected: expected ?? .unknown)
-        guard shape.resolved else { throw Self.unresolvedDiagnostic(shape, at: "recordAccess") }
-        return shape
     }
 
     private mutating func inferRecordProjectionSource(
@@ -618,11 +604,6 @@ struct NativeTypeInference: Sendable {
         // must prove the selected field's nominal domain; stored raw data
         // cannot acquire a different representation from a projection alone.
         return try infer(value, expected: .record(fields))
-    }
-
-    func domainSourceType(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType {
-        var scope = self
-        return try scope.inferDomainSource(expression, expected: expected)
     }
 
     private mutating func inferDomainSource(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType {
@@ -1389,9 +1370,9 @@ struct NativeTypeInference: Sendable {
         }
         _ = try infer(predicate, expected: .bool)
         let selected = bindings[id] ?? item
-        _ = try inferSequence(sequence, element: selected)
+        let source = try inferSequence(sequence, element: selected)
         result = .array(selected)
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [source, .bool])
     }
 
     private mutating func inferSetFilter(_ domain: CompiledStateExpr, binder id: BinderID, predicate: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1449,16 +1430,50 @@ struct NativeTypeInference: Sendable {
         return try checkedType(result, expected: expected)
     }
 
+    private mutating func inferSequenceOperation(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
+        let result: NativeType
+        switch expression {
+        case .tupleDynamicAccess(let value, let index):
+            _ = try infer(index, expected: .int)
+            let source = try inferSequence(value, element: expected)
+            result = try sequenceElementType(source)
+            return try checkedType(result, expected: expected, operandTypes: [source, .int])
+        case .tupleLength(let value):
+            let initial = try infer(value)
+            let source: NativeType
+            if case .tuple = initial { source = initial }
+            else { source = try inferSequence(value) }
+            return try checkedType(.int, expected: expected, operandTypes: [source])
+        case .tupleHead(let value):
+            let source = try inferSequence(value, element: expected)
+            result = try sequenceElementType(source)
+            return try checkedType(result, expected: expected, operandTypes: [source])
+        case .tupleTail(let value):
+            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
+            let source = try inferSequence(value, element: hint)
+            result = .array(try sequenceElementType(source))
+            return try checkedType(result, expected: expected, operandTypes: [source])
+        case .tupleRemoving(let sequence, let index):
+            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
+            let source = try inferSequence(sequence, element: hint)
+            result = .array(try sequenceElementType(source))
+            _ = try infer(index, expected: .int)
+            return try checkedType(result, expected: expected, operandTypes: [source, .int])
+        default:
+            throw Self.diagnostic("sequence", "expected a sequence access, length, tail, or removal")
+        }
+    }
+
     private mutating func inferAppend(_ sequence: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
         let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
         let item = try sequenceElementType(inferSequence(sequence, element: hint))
         let appended = try infer(value, expected: item)
         let elementType = try Self.merge(item, appended)
-        _ = try inferSequence(sequence, element: elementType)
+        let source = try inferSequence(sequence, element: elementType)
         _ = try infer(value, expected: elementType)
         result = .array(elementType)
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [source, elementType])
     }
 
     private mutating func inferConcatenation(_ a: CompiledStateExpr, _ b: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1467,10 +1482,10 @@ struct NativeTypeInference: Sendable {
         let left = try sequenceElementType(inferSequence(a, element: hint))
         let right = try sequenceElementType(inferSequence(b, element: left))
         let elementType = try Self.merge(left, right)
-        _ = try inferSequence(a, element: elementType)
-        _ = try inferSequence(b, element: elementType)
+        let leftSource = try inferSequence(a, element: elementType)
+        let rightSource = try inferSequence(b, element: elementType)
         result = .array(elementType)
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [leftSource, rightSource])
     }
 
     private mutating func inferTupleAccess(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeCheckedType {
@@ -1478,7 +1493,7 @@ struct NativeTypeInference: Sendable {
         let shape = try inferProjectionSource(value, index: index, expected: expected)
         if case .tuple(let elements) = shape { result = elements[index - 1] }
         else { result = try sequenceElementType(shape) }
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [shape])
     }
 
     private mutating func inferRecordAccess(_ record: CompiledStateExpr, key: CompiledValue, expected: NativeType) throws -> NativeCheckedType {
@@ -1487,19 +1502,20 @@ struct NativeTypeInference: Sendable {
         if case .string(let name) = key, case .record(let fields) = source,
            let field = fields.first(where: { $0.name == name }) { result = field.type }
         else { result = .unknown }
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [source])
     }
 
     private mutating func inferDomain(_ function: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
-        switch try inferDomainSource(function, expected: expected) {
+        let source = try inferDomainSource(function, expected: expected)
+        switch source {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
         case .record: result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw Self.diagnostic("domain", "unsupported domain shape")
         }
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [source])
     }
 
     /// Visit operands in source order and retain ancestry for diagnostics.
@@ -1677,20 +1693,8 @@ struct NativeTypeInference: Sendable {
         case .tupleLiteral(let expressions): return try inferTupleLiteral(expressions, expected: expected)
         case .tupleAccess(let value, let index):
             return try inferTupleAccess(value, index: index, expected: expected)
-        case .tupleDynamicAccess(let value, let index):
-            _ = try infer(index, expected: .int)
-            result = try sequenceElementType(inferSequence(value, element: expected))
-        case .tupleLength(let value):
-            if case .tuple = try infer(value) {} else { _ = try inferSequence(value) }
-            result = .int
-        case .tupleHead(let value): result = try sequenceElementType(inferSequence(value, element: expected))
-        case .tupleTail(let value):
-            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-            result = .array(try sequenceElementType(inferSequence(value, element: hint)))
-        case .tupleRemoving(let sequence, let index):
-            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-            result = .array(try sequenceElementType(inferSequence(sequence, element: hint)))
-            _ = try infer(index, expected: .int)
+        case .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving:
+            return try inferSequenceOperation(expression, expected: expected)
         case .tupleAppend(let sequence, let value):
             return try inferAppend(sequence, value: value, expected: expected)
         case .tupleConcatenate(let a, let b):

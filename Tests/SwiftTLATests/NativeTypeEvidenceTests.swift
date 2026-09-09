@@ -215,10 +215,12 @@ struct NativeTypeEvidenceTests {
     func projectedLiteralRetainsNamedAndFiniteFieldTypes() throws {
         let evidence = try NativeTypeInference(plan: .init(compilation: canonicalTestSpec().compile()), sourceTypes: .init(enums: ["Process": [.int(1)]]))
         let namedTuple = CompiledStateExpr.tupleLiteral([.value(.integer(1)), .value(.string("other"))])
-        #expect(try evidence.projectionSourceType(namedTuple, index: 1, expected: .named("Process")) == .tuple([.named("Process"), .string]))
+        let namedRead = try evidence.resolutionScope(.tupleAccess(namedTuple, 1), expected: .named("Process"))
+        #expect(namedRead.operandTypes == [.tuple([.named("Process"), .string])])
         let finite = NativeType.finite([.constant("member")])
         let finiteTuple = CompiledStateExpr.value(.tuple([.constant("member"), .integer(1)]))
-        #expect(try evidence.projectionSourceType(finiteTuple, index: 1, expected: finite) == .tuple([finite, .int]))
+        let finiteRead = try evidence.resolutionScope(.tupleAccess(finiteTuple, 1), expected: finite)
+        #expect(finiteRead.operandTypes == [.tuple([finite, .int])])
     }
 
     @Test("Recursive record schema metadata fails with a typed diagnostic")

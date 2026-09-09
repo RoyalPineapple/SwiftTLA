@@ -55,6 +55,32 @@ import Testing
         }
     }
 
+    @Test("sequence operations retain integer-keyed function operands")
+    func sequenceSourceRepresentations() throws {
+        let sequence = StateExpr.functionLiteral(.integerRange(.int(1), .int(3)), "index", .variable("index"))
+        let operations: [(name: String, expression: StateExpr, type: NativeType)] = [
+            ("head", .tupleHead(sequence), .int),
+            ("length", .tupleLength(sequence), .int),
+            ("access", .tupleDynamicAccess(sequence, .int(2)), .int),
+            ("tail", .tupleTail(sequence), .array(.int)),
+            ("remove", .tupleRemoving(sequence, .int(2)), .array(.int)),
+            ("append", .tupleAppend(sequence, .int(4)), .array(.int)),
+            ("concatenate", .tupleConcatenate(sequence, sequence), .array(.int))
+        ]
+        for operation in operations {
+            let plan = NativeMachinePlan(compilation: try TLASpec(name: "SequenceOperands", variables: [
+                .init(name: operation.name, initialization: .expression(operation.expression),
+                      generatedSwiftType: operation.type.swiftType, origin: .compiler)
+            ], actions: [], invariants: []).compile())
+            let program = try NativeResolvedProgram(plan: plan)
+            let root = try #require(program.initializations.values.first)
+            let node = program[root]
+            let source = try #require(node.children.first)
+            #expect(node.resultType == operation.type)
+            #expect(program[source].resultType == .dictionary(.int, .int))
+        }
+    }
+
     @Test("unrelated declared types do not expand the program's conversion table")
     func conversionsFollowExpressionUses() throws {
         let names = (0..<12).map { "Value\($0)" }
