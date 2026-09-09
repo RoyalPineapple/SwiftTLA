@@ -26,7 +26,7 @@ struct SymmetryParserFidelityTests {
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.symmetrySets == [
+        #expect(try parsed.sourceModel(specificationName: "SymmetryParsing").symmetrySets == [
             SymmetrySet(variableName: "TxId", values: [.string("t1"), .string("t2")])
         ])
     }
