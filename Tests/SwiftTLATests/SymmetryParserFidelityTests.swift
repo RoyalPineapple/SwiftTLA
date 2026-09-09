@@ -14,7 +14,7 @@ struct SymmetryParserFidelityTests {
         }
         """).statements.first?.item.as(ClosureExprSyntax.self))
 
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
             closure,
             enumDefinitions: [
                 .init(
@@ -26,7 +26,7 @@ struct SymmetryParserFidelityTests {
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(try parsed.sourceModel(specificationName: "SymmetryParsing").symmetrySets == [
+        #expect(parsed.symmetrySets == [
             SymmetrySet(variableName: "TxId", values: [.string("t1"), .string("t2")])
         ])
     }

@@ -53,9 +53,9 @@ struct ModelCollectionCompilationParityTests {
     let closure = try #require(
       Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
     )
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "OpaqueMemberSemantics2", closure)
     let built = parserParitySpec(scope: 2)
-    let parsedCompilation = try parsed.compile(specificationName: "OpaqueMemberSemantics2")
+    let parsedCompilation = try parsed.compile()
     let builtCompilation = try built.compile()
 
     #expect(parsed.diagnostics.isEmpty)

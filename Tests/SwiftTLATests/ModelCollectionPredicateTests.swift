@@ -16,9 +16,9 @@ private struct PredicateDevice: Identifiable, Sendable {
 struct ModelCollectionPredicateTests {
   @Test("Parser lowers collection predicates to the direct invariant AST")
   func parserMatchesDirectCollectionPredicateInvariants() throws {
-    let parsed = SpecParser.parseSpecClosure(try predicateClosure())
+    let parsed = SpecParser.parseSpecClosure(named: "CollectionPredicateSemantics", try predicateClosure())
     let direct = directPredicateSpec()
-    let parsedCompilation = try parsed.compile(specificationName: "CollectionPredicateSemantics")
+    let parsedCompilation = try parsed.compile()
     let directCompilation = try direct.compile()
 
     #expect(parsed.diagnostics.isEmpty)
@@ -32,7 +32,7 @@ struct ModelCollectionPredicateTests {
 
   @Test("Parser lowers shorthand collection predicates in ordinary action guards")
   func parserLowersShorthandCollectionPredicateActionGuards() throws {
-    let parsed = SpecParser.parseSpecClosure(try shorthandPredicateClosure())
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", try shorthandPredicateClosure())
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.actions.count == 2)
@@ -65,7 +65,7 @@ struct ModelCollectionPredicateTests {
     let source = "devices.allSatisfy { phase in phase >= 0 && phase <= 1 }"
     let expression = try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
     let direct = try #require(SpecParser.decodeStateExpr(expression))
-    let parsed = SpecParser.parseSpecClosure(try predicateClosure())
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", try predicateClosure())
     let builder = try #require(parsed.invariants.first(where: { $0.name == "validPhase" })?.body)
 
     #expect(alphaKey(direct) == alphaKey(builder))
@@ -73,8 +73,8 @@ struct ModelCollectionPredicateTests {
 
   @Test("Shorthand collection predicates compile and check")
   func shorthandCollectionPredicatesCompileAndCheck() throws {
-    let parsed = SpecParser.parseSpecClosure(try shorthandPredicateClosure())
-    let compilation = try parsed.compile(specificationName: "ShorthandCollectionPredicates")
+    let parsed = SpecParser.parseSpecClosure(named: "ShorthandCollectionPredicates", try shorthandPredicateClosure())
+    let compilation = try parsed.compile()
 
     #expect(parsed.actions.count == 2)
     #expect(parsed.invariants.count == 2)
@@ -86,8 +86,8 @@ struct ModelCollectionPredicateTests {
 
   @Test("Parsed collection predicates preserve invariant violations")
   func parserPreservesCollectionPredicateInvariantViolations() throws {
-    let parsed = SpecParser.parseSpecClosure(try violatingPredicateClosure())
-    let parsedCompilation = try parsed.compile(specificationName: "ViolatingPredicate")
+    let parsed = SpecParser.parseSpecClosure(named: "ViolatingPredicate", try violatingPredicateClosure())
+    let parsedCompilation = try parsed.compile()
     let devices = CollectionVar<PredicateDevice, Int>("devices")
     let direct = TLASpec("ViolatingPredicate") {
       ModelCollection(devices, verificationScope: 1, initial: 0)
@@ -119,7 +119,7 @@ struct ModelCollectionPredicateTests {
 
   @Test("Unsupported invariant syntax becomes a source-aware diagnostic")
   func parserRejectsUnsupportedCollectionPredicateInvariant() throws {
-    let parsed = SpecParser.parseSpecClosure(try unsupportedPredicateClosure())
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", try unsupportedPredicateClosure())
 
     #expect(parsed.invariants.isEmpty)
     let diagnostic = try #require(parsed.diagnostics.first)

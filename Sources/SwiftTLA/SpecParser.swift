@@ -21,6 +21,7 @@ package struct ParserEnumDefinition: Sendable {
 }
 
 final class ParserSession {
+    var symmetryDeclarations: [SymmetrySetDecl] = []
     enum FormalModuleProvider: Equatable {
         case folds
         case functions
@@ -2158,11 +2159,12 @@ final class ParserSession {
 /// Package parser entry points create a fresh session for each source tree.
 package enum SpecParser {
     package static func parseSpecClosure(
+        named name: String,
         _ closure: ClosureExprSyntax,
         enumDefinitions: [ParserEnumDefinition] = [],
         sourceTypes: NativeSourceTypeMetadata = .init()
-    ) -> ParsedSpecComponents {
-        ParserSession(enumDefinitions: enumDefinitions, sourceTypes: sourceTypes).parseSpecClosure(closure)
+    ) -> TLASpec {
+        ParserSession(enumDefinitions: enumDefinitions, sourceTypes: sourceTypes).parseSpecClosure(named: name, closure)
     }
 
     static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {

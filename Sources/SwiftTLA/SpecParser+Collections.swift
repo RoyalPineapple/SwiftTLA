@@ -39,7 +39,7 @@ extension ParserSession {
 
     func parseModelCollectionDecl(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents,
+        into components: inout TLASpec,
         collectionTypes: [String: ModelCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
@@ -74,7 +74,7 @@ extension ParserSession {
 
     func parseCollectionAction(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents,
+        into components: inout TLASpec,
         collectionTypes: [String: ModelCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
@@ -153,7 +153,7 @@ extension ParserSession {
         in closure: ClosureExprSyntax,
         owning collection: String,
         action: String,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         let validator = CollectionMemberUseValidator(member: member, collection: collection)
         validator.walk(Syntax(closure))
@@ -423,7 +423,7 @@ extension ParserSession {
         return value
     }
 
-    func parseVariableDecl(_ call: FunctionCallExprSyntax, into components: inout ParsedSpecComponents) {
+    func parseVariableDecl(_ call: FunctionCallExprSyntax, into components: inout TLASpec) {
         let args = Array(call.arguments)
         if args.first?.label?.text == "from",
            args.count >= 2,
@@ -536,7 +536,7 @@ extension ParserSession {
         }
     }
 
-    func parseConstantDecl(_ call: FunctionCallExprSyntax, into components: inout ParsedSpecComponents) {
+    func parseConstantDecl(_ call: FunctionCallExprSyntax, into components: inout TLASpec) {
         let args = Array(call.arguments)
         guard args.count >= 2,
               let name = extractStringArg(call, index: 0)

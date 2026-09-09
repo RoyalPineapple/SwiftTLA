@@ -81,7 +81,7 @@ struct RefinementDeclarationTests {
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.moduleInstances.count == 1)
@@ -105,7 +105,7 @@ struct RefinementDeclarationTests {
       ])
     }
     #expect(parsed.moduleInstances == builder.moduleInstances)
-    let parsedCompilation = try parsed.compile(specificationName: "Parsed")
+    let parsedCompilation = try parsed.compile()
     let builderCompilation = try builder.compile()
     #expect(parsedCompilation.identity == builderCompilation.identity)
   }
@@ -125,7 +125,7 @@ struct RefinementDeclarationTests {
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.refinements.first?.operator == .liveSpec)

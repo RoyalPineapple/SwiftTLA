@@ -2,36 +2,14 @@ import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
 
-package struct ParsedSpecComponents {
-    var variables: [NamedVar] = []
-    var actions: [NamedAction] = []
-    var collections: [ModelCollectionDecl] = []
-    var diagnostics: [SourceParseDiagnostic] = []
-    var invariants: [(name: String, body: StateExpr)] = []
-    var temporal: [(name: String, expr: TemporalExpr)] = []
-    var fairness: [FairnessCondition] = []
-    var constraint: StateExpr?
-    var imports: [TLASpec] = []
-    var importConfigurations: [FormalModuleConfiguration] = []
-    var moduleInstances: [FormalModuleInstance] = []
-    var refinements: [RefinementDecl] = []
-    var extendsModules: [StandardModule] = []
-    var sourceAlgorithms: [Algorithm] = []
-    var formalParameters: [FormalModuleParameter] = []
-    var formalOperatorDefinitions: [FormalOperatorDefinition] = []
-    var symmetryDeclarations: [SymmetrySetDecl] = []
-    var constants: [ConstantDecl] = []
-
-    package var hasStateDeclarations: Bool {
-        variables.isEmpty == false || sourceAlgorithms.isEmpty == false
-    }
-}
-
 extension ParserSession {
     // MARK: - Unified spec builder parser
 
-      func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
-        var components = ParsedSpecComponents()
+    func parseSpecClosure(named name: String, _ closure: ClosureExprSyntax) -> TLASpec {
+        var components = TLASpec(name: name, variables: [], actions: [], invariants: [])
+        let outerSymmetry = symmetryDeclarations
+        symmetryDeclarations = []
+        defer { symmetryDeclarations = outerSymmetry }
         let outerBindings = specBindings
         specBindings = .init()
         defer { specBindings = outerBindings }
@@ -75,12 +53,15 @@ extension ParserSession {
                 ))
             }
         }
+        components.symmetrySets = symmetryDeclarations.map { $0.resolved(in: components.collections) }
+        components.extendsModules = canonicalStandardModules(components.extendsModules)
+        components.algorithmPhase = components.sourceAlgorithms.isEmpty ? .lowered : .source
         return components
     }
 
     private func parseLocalDeclaration(
         _ declaration: VariableDeclSyntax,
-        into components: inout ParsedSpecComponents,
+        into components: inout TLASpec,
         declarationScope: String? = nil
     ) {
         var containsVariableConstructor = false
@@ -158,7 +139,7 @@ extension ParserSession {
     private func parseFormalModuleBinding(
         sourceName: String,
         call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         guard specBindings.modules[sourceName] == nil else {
             components.diagnostics.append(.init(
@@ -180,11 +161,11 @@ extension ParserSession {
 
         let outerScope = sourceScope
         defer { sourceScope = outerScope }
-        let parsed = parseSpecClosure(body)
-        do {
-            specBindings.modules[sourceName] = try parsed.sourceModel(specificationName: moduleName)
-        } catch let diagnostic {
+        let parsed = parseSpecClosure(named: moduleName, body)
+        if let diagnostic = parsed.diagnostics.first {
             components.diagnostics.append(diagnostic)
+        } else {
+            specBindings.modules[sourceName] = parsed
         }
     }
 
@@ -192,7 +173,7 @@ extension ParserSession {
         binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)?.name.text == "Algorithm"
     }
 
-    func parseForLoop(_ forStmt: ForStmtSyntax, into components: inout ParsedSpecComponents) {
+    func parseForLoop(_ forStmt: ForStmtSyntax, into components: inout TLASpec) {
         guard let pattern = forStmt.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let range = parseIntegerClosedRange(forStmt.sequence)
         else {
@@ -221,10 +202,10 @@ extension ParserSession {
         }
     }
 
-    /// Parses supported variable bindings into `ParsedSpecComponents.variables`.
+    /// Parses supported variable bindings into `TLASpec.variables`.
     func parseVarDecl(
         _ varDecl: VariableDeclSyntax,
-        into components: inout ParsedSpecComponents,
+        into components: inout TLASpec,
         declarationScope: String? = nil
     ) {
         for binding in varDecl.bindings {
@@ -615,7 +596,7 @@ extension ParserSession {
 
     func parseBuilderCall(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents,
+        into components: inout TLASpec,
         loopVar: String? = nil,
         loopValue: Int? = nil,
         collectionTypes: [String: ModelCollectionSourceTypes] = [:]
@@ -718,7 +699,7 @@ extension ParserSession {
                 ))
                 return
             }
-            components.temporal.append((declarationName, temporal))
+            components.temporalProperties.append(.init(name: declarationName, expr: temporal))
         case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
             if let fc = decodeFairness(call) {
                 components.fairness.append(fc)
@@ -786,13 +767,13 @@ extension ParserSession {
 
     private func parseSymmetry(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         if call.arguments.count == 1,
            let source = call.arguments.first?.expression,
            let reference = source.as(DeclReferenceExprSyntax.self),
            case .variable(let name) = sourceScope.value(for: reference) {
-            components.symmetryDeclarations.append(.init(collectionName: name))
+            symmetryDeclarations.append(.init(collectionName: name))
             return
         }
         guard let variableName = extractStringArg(call, index: 0), !variableName.isEmpty,
@@ -806,12 +787,12 @@ extension ParserSession {
             ))
             return
         }
-        components.symmetryDeclarations.append(.init(variableName, Set(values)))
+        symmetryDeclarations.append(.init(variableName, Set(values)))
     }
 
     private func parseRefinement(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         guard let name = extractStringArg(call, index: 0), !name.isEmpty,
               let instanceSyntax = call.arguments.first(where: { $0.label?.text == "instance" })?.expression,
@@ -910,7 +891,7 @@ extension ParserSession {
 
     private func parseFormalDefinition(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         guard let definition = decodeFormalDefinition(call)
         else {
@@ -1011,7 +992,7 @@ extension ParserSession {
 
     private func parseFormalModuleInstance(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents,
+        into components: inout TLASpec,
         scope: TypedFacadeScope = .empty
     ) {
         guard let name = extractStringArg(call, index: 0),
@@ -1123,7 +1104,7 @@ extension ParserSession {
 
     func mergeVariableDeclaration(
         named name: String,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         let matchingIndices = components.variables.indices.filter { components.variables[$0].name == name }
         guard matchingIndices.count > 1, let latest = matchingIndices.last else { return }
@@ -1141,7 +1122,7 @@ extension ParserSession {
 
     func validateVariableDeclaration(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         let arguments = Array(call.arguments)
         guard let reference = arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
@@ -1161,7 +1142,7 @@ extension ParserSession {
 
     func parseAction(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents,
+        into components: inout TLASpec,
         loopVar: String?,
         loopValue: Int?
     ) -> NamedAction? {
@@ -1424,7 +1405,7 @@ extension ParserSession {
 
     func parseInvariant(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) {
         guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
             components.diagnostics.append(.init(
@@ -1454,7 +1435,7 @@ extension ParserSession {
             }
             return
         }
-        components.invariants.append((name, body))
+        components.invariants.append(.init(name: name, body: body))
     }
 
     func parseInvariantBody(

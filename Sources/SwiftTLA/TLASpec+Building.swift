@@ -17,33 +17,7 @@ extension TLASpec {
   }
 
   private init(_ name: String, components: [SpecComponent]) {
-    var variables: [NamedVar] = []
-    var actions: [NamedAction] = []
-    var invariants: [NamedInvariant] = []
-    var temporalProperties: [NamedTemporal] = []
-    var fairness: [FairnessCondition] = []
-    var constants: [ConstantDecl] = []
-    var formalParameters: [FormalModuleParameter] = []
-    var assumes: StateExpr?
-    var extendsMods: [StandardModule] = [.integers]
-    var deadlockFlag = false
-    var constraint: StateExpr?
-    var recursiveFuncs: [RecursiveFunc] = []
-    var formalOperatorDefinitions: [FormalOperatorDefinition] = []
-    let imports = components.compactMap { $0 as? ImportDecl }
-    let importedModules = imports.map(\.module)
-    let importConfigurations = imports.compactMap(\.configuration)
-    let moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
-    let refinements = components.compactMap { $0 as? RefinementDecl }
-    var collections: [ModelCollectionDecl] = []
-    var sourceAlgorithms: [Algorithm] = []
-    // Collect the definitions needed to materialize closed Algorithm initial values.
-    for comp in components {
-      if let definition = comp as? FormalOperatorDecl {
-        formalOperatorDefinitions.append(definition.definition)
-      }
-    }
-
+    self.init(name: name, variables: [], actions: [], invariants: [])
     for comp in components {
       if let v = comp as? VarDecl {
         variables.append(
@@ -73,43 +47,32 @@ extension TLASpec {
       } else if let parameter = comp as? FormalModuleParameter {
         formalParameters.append(parameter)
       } else if let a = comp as? AssumeDecl {
-        assumes = assumes.map { .and($0, a.expr) } ?? a.expr
+        assume = assume.map { .and($0, a.expr) } ?? a.expr
       } else if let e = comp as? ExtendsDecl {
-        extendsMods.append(contentsOf: e.modules)
+        extendsModules.append(contentsOf: e.modules)
       } else if comp is DeadlockDecl {
-        deadlockFlag = true
+        checkDeadlock = true
       } else if let c = comp as? ConstraintDecl {
         constraint = constraint.map { .and($0, c.body) } ?? c.body
       } else if let rf = comp as? RecursiveFuncDecl {
         recursiveFuncs.append(rf.funcDef)
+      } else if let definition = comp as? FormalOperatorDecl {
+        formalOperatorDefinitions.append(definition.definition)
+      } else if let imported = comp as? ImportDecl {
+        imports.append(imported.module)
+        if let configuration = imported.configuration { importConfigurations.append(configuration) }
+      } else if let instance = comp as? FormalModuleInstance {
+        moduleInstances.append(instance)
+      } else if let refinement = comp as? RefinementDecl {
+        refinements.append(refinement)
       }
     }
 
     let symmetrySets = components.compactMap { $0 as? SymmetrySetDecl }
       .map { $0.resolved(in: collections) }
 
-    self.name = name
-    self.variables = variables
-    self.constants = constants
-    self.formalParameters = formalParameters
-    self.actions = actions
-    self.invariants = invariants
-    self.temporalProperties = temporalProperties
-    self.fairness = fairness
-    self.assume = assumes
-    self.checkDeadlock = deadlockFlag
-    self.extendsModules = canonicalStandardModules(extendsMods)
-    self.constraint = constraint
-    self.recursiveFuncs = recursiveFuncs
-    self.formalOperatorDefinitions = formalOperatorDefinitions
-    self.imports = importedModules
-    self.importConfigurations = importConfigurations
-    self.moduleInstances = moduleInstances
-    self.refinements = refinements
     self.symmetrySets = symmetrySets
-    self.collections = collections
-    self.sourceAlgorithms = sourceAlgorithms
-    self.authoredPlusCalAlgorithmPlan = nil
+    self.extendsModules = canonicalStandardModules(extendsModules)
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }
 }

@@ -164,7 +164,7 @@ struct ModelCollectionGeneratedMachineTests {
     """
     let closure = try parseClosure(source)
 
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.collections.map(\.name) == ["devices"])
     #expect(parsed.collections[0].generatedElementType == "Device")
@@ -193,7 +193,7 @@ struct ModelCollectionGeneratedMachineTests {
       }
     }
     """
-    let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+    let parsed = SpecParser.parseSpecClosure(named: "DeclaredCollectionName", try parseClosure(source))
     let devices = CollectionVar<Device, Int>("phases")
     let built = TLASpec("DeclaredCollectionName") {
       ModelCollection(devices, verificationScope: 1, initial: 0)
@@ -205,7 +205,7 @@ struct ModelCollectionGeneratedMachineTests {
       }
     }
 
-    let parsedCompilation = try parsed.compile(specificationName: "DeclaredCollectionName")
+    let parsedCompilation = try parsed.compile()
     let builtCompilation = try built.compile()
 
     #expect(parsed.diagnostics.isEmpty)
@@ -238,7 +238,7 @@ struct ModelCollectionGeneratedMachineTests {
     let statements = Parser.parse(source: source).statements
     let closure = try #require(statements.first?.item.as(ClosureExprSyntax.self))
 
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.collections.map(\.generatedElementType) == ["Model.Device"])
     #expect(parsed.collections.map(\.generatedValueType) == ["Swift.Int"])
@@ -257,7 +257,7 @@ struct ModelCollectionGeneratedMachineTests {
     }
     """
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "CollectionActionBehavior", closure)
     guard case .value(let initial) = try #require(parsed.variables.first?.initialization) else {
       Issue.record("Expected a fixed collection initializer")
       return
@@ -270,7 +270,7 @@ struct ModelCollectionGeneratedMachineTests {
       }
     }
 
-    let parsedCompilation = try parsed.compile(specificationName: "CollectionActionBehavior")
+    let parsedCompilation = try parsed.compile()
     let builtCompilation = try built.compile()
     let advanced = try collectionValue([1], in: built)
 
@@ -295,7 +295,7 @@ struct ModelCollectionGeneratedMachineTests {
     let closure = try #require(
       Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
     )
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
     let devices = CollectionVar<Device, Int>("devices")
     let authored = TLASpec("AuthoredCollectionAction") {
       ModelCollection(devices, verificationScope: 1, initial: 0)
@@ -324,7 +324,7 @@ struct ModelCollectionGeneratedMachineTests {
     """
     let closure = try parseClosure(source)
 
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.count == 1)
     #expect(parsed.diagnostics[0].message.contains("opaque"))
@@ -353,7 +353,7 @@ struct ModelCollectionGeneratedMachineTests {
       """
       let closure = try parseClosure(source)
 
-      #expect(SpecParser.parseSpecClosure(closure).diagnostics.isEmpty == false)
+      #expect(SpecParser.parseSpecClosure(named: "Parsed", closure).diagnostics.isEmpty == false)
     }
   }
 
@@ -370,7 +370,7 @@ struct ModelCollectionGeneratedMachineTests {
     """
     let closure = try parseClosure(source)
 
-    #expect(SpecParser.parseSpecClosure(closure).diagnostics.isEmpty == false)
+    #expect(SpecParser.parseSpecClosure(named: "Parsed", closure).diagnostics.isEmpty == false)
   }
 
   @Test("Generated state binds the exact collection population to application IDs")

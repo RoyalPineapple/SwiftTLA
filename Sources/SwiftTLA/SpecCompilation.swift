@@ -330,51 +330,9 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
     }
 }
 
-extension ParsedSpecComponents {
-    func sourceModel(
-        specificationName: String,
-        additionalInvariants: [NamedInvariant] = []
-    ) throws(SourceParseDiagnostic) -> TLASpec {
-        if let diagnostic = diagnostics.first {
-            throw diagnostic
-        }
-        return TLASpec(
-            name: specificationName,
-            variables: variables,
-            constants: constants,
-            formalParameters: formalParameters,
-            actions: actions,
-            invariants: invariants.map { NamedInvariant(name: $0.name, body: $0.body) } + additionalInvariants,
-            temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
-            fairness: fairness,
-            constraint: constraint,
-            formalOperatorDefinitions: formalOperatorDefinitions,
-            imports: imports,
-            importConfigurations: importConfigurations,
-            moduleInstances: moduleInstances,
-            refinements: refinements,
-            symmetrySets: symmetryDeclarations.map { $0.resolved(in: collections) },
-            collections: collections,
-            sourceAlgorithms: sourceAlgorithms
-        )
-    }
-}
-
-package extension ParsedSpecComponents {
-    /// Compiles parser output and generated-machine type facts.
-    func compile(
-        specificationName: String,
-        additionalInvariants: [NamedInvariant] = []
-    ) throws -> CompiledSpecification {
-        try sourceModel(
-            specificationName: specificationName,
-            additionalInvariants: additionalInvariants
-        ).compile()
-    }
-}
-
 private extension TLASpec {
     func validateSourceDeclarationNames() throws {
+        if let diagnostic = diagnostics.first { throw diagnostic }
         guard name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             throw CompilationDiagnostic(
                 code: .emptySpecificationName,

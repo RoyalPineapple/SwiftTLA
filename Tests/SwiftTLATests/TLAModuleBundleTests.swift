@@ -103,7 +103,7 @@ struct TLAModuleBundleTests {
   func parserRetainsImportedModule() throws {
     let source = "{ Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2)) }"
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
     let built = TLASpec("Imported") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
     }
@@ -123,7 +123,7 @@ struct TLAModuleBundleTests {
   func parserRetainsFormalModuleParameters() throws {
     let source = "{ Parameter(\"Base\") }"
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
     let built = TLASpec("Parameterized") {
       Parameter("Base")
     }

@@ -285,7 +285,7 @@ struct LocalOperatorTests {
     }
     """
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
     #expect(parsed.formalOperatorDefinitions.count == 1)
@@ -335,7 +335,7 @@ struct LocalOperatorTests {
     }
     """
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
     let definition = try #require(parsed.formalOperatorDefinitions.first)
@@ -410,7 +410,7 @@ struct LocalOperatorTests {
     }
     """
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.contains { $0.message.contains("FormalDefinition requires") })
   }

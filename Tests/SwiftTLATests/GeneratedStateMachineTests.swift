@@ -738,7 +738,7 @@ struct GeneratedStateMachineTests {
         }
         """
         let closure = try #require(Parser.parse(source: sourceText).statements.first?.item.as(ClosureExprSyntax.self))
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
         let value = Var<Int>("value")
         let source = Expr<Int>(.variable("source"))
         let destination = Expr<Int>(.variable("destination"))

@@ -196,7 +196,7 @@ extension ParserSession {
     /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
-        into components: inout ParsedSpecComponents
+        into components: inout TLASpec
     ) -> Algorithm? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil

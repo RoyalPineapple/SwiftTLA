@@ -51,9 +51,9 @@ import SwiftSyntax
         }
         """
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "CollectionSymmetry", closure)
         #expect(parsed.diagnostics.isEmpty)
-        let compilation = try parsed.compile(specificationName: "CollectionSymmetry")
+        let compilation = try parsed.compile()
         let direct = try model(symmetric: true).compile()
         #expect(compilation.identity == direct.identity)
     }

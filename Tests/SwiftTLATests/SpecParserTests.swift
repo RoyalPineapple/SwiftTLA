@@ -28,7 +28,7 @@ private func parserEnum(
 @Suite(.serialized) struct StructuralActionReferenceParsingTests {
     @Test("action declarations carry fairness and enabled references")
     func actionDeclarationsCarryReferences() throws {
-        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        let parsed = SpecParser.parseSpecClosure(named: "StructuralActionReferences", try parseClosure("""
         {
             let count = Var<Int>("count", initial: 0)
             Variable(count)
@@ -44,12 +44,12 @@ private func parserEnum(
         #expect(parsed.actions.map(\.name) == ["advance"])
         #expect(parsed.fairness == [.weakFairness("advance"), .strongFairness("advance")])
         #expect(parsed.invariants.first?.body == .enabledAction("advance"))
-        _ = try parsed.compile(specificationName: "StructuralActionReferences")
+        _ = try parsed.compile()
     }
 
     @Test("fairness rejects an undeclared action reference")
     func fairnessRejectsUndeclaredActionReference() throws {
-        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", try parseClosure("""
         {
             WeakFairness(missing)
         }
@@ -74,11 +74,12 @@ private func parserEnum(
     }
 
     private func parseAlgorithm(
+        named name: String = "Parsed",
         _ closure: ClosureExprSyntax,
         enumDefinitions: [ParserEnumDefinition] = [],
         sourceTypes: NativeSourceTypeMetadata = .init()
-    ) -> ParsedSpecComponents {
-        SpecParser.parseSpecClosure(
+    ) -> TLASpec {
+        SpecParser.parseSpecClosure(named: name,
             closure,
             enumDefinitions: [controlLabels] + enumDefinitions,
             sourceTypes: sourceTypes
@@ -86,17 +87,21 @@ private func parserEnum(
     }
 
     private func compile(
-        _ parsed: ParsedSpecComponents,
+        _ parsed: TLASpec,
         named name: String
     ) throws -> CompiledSpecification {
-        try parsed.compile(specificationName: name)
+        var specification = parsed
+        specification.name = name
+        return try specification.compile()
     }
 
     private func loweredSource(
-        _ parsed: ParsedSpecComponents,
+        _ parsed: TLASpec,
         named name: String
     ) throws -> TLASpec {
-        try parsed.sourceModel(specificationName: name).loweredSourceModel()
+        var specification = parsed
+        specification.name = name
+        return try specification.loweredSourceModel()
     }
 
     @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
@@ -453,7 +458,7 @@ private func parserEnum(
 
     @Test("CollectionAction reports an incomplete declaration")
     func reportsIncompleteCollectionAction() throws {
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
             try parseClosure("{ CollectionAction(\"update\") }")
         )
 
@@ -465,7 +470,7 @@ private func parserEnum(
 
     @Test("Variable reports an unsupported initializer")
     func reportsUnsupportedVariableInitializer() throws {
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
             try parseClosure("{ let value = Var<Int>(\"value\"); Variable(value, UnsupportedValue()) }")
         )
 
@@ -531,7 +536,7 @@ private func parserEnum(
         """
 
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.map(\.name) == ["count"])
@@ -548,7 +553,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.actions.isEmpty)
@@ -655,7 +660,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
@@ -671,7 +676,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.map(\.message) == [
             "Specification body contains an unsupported declaration 'UnsupportedDeclaration'."
@@ -686,7 +691,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
@@ -704,7 +709,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
@@ -722,7 +727,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
@@ -1322,7 +1327,7 @@ private func parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
             closure,
             enumDefinitions: [parserEnum("Step", cases: [
                 "start": .string("Begin"),
@@ -1455,14 +1460,14 @@ private func parserEnum(
             let count: SharedVariable<Int> = scope.sharedVar("count", initial: 1 + 2)
         }
         """)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
         #expect(parsed.diagnostics.isEmpty)
 
         let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
 
         #expect(parsedVariable.initialization == .expression(.add(.value(.int(1)), .value(.int(2)))))
 
-        let compilation = try parsed.compile(specificationName: "SharedInitializer")
+        let compilation = try parsed.compile()
         let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let count = try #require(TLAStateProjection.Token(validating: "count"))
         #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
@@ -1475,9 +1480,7 @@ private func parserEnum(
             let count = scope.sharedVar("count", initial: 1)
         }
         """)
-        let parsed = try SpecParser.parseSpecClosure(closure).compile(
-            specificationName: "LiteralInitializer"
-        )
+        let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
         let built = try TLASpec("LiteralInitializer") { scope in
             let _ = scope.sharedVar("count", initial: 1)
         }.compile()
@@ -1495,8 +1498,8 @@ private func parserEnum(
             })
         }
         """)
-        let parsed = SpecParser.parseSpecClosure(closure)
-        let compilation = try parsed.compile(specificationName: "DependentInitialDomain")
+        let parsed = SpecParser.parseSpecClosure(named: "DependentInitialDomain", closure)
+        let compilation = try parsed.compile()
         let choice = try #require(compilation.layout.testVariableID(named: "choice"))
         let states = try CompiledRuntime(compilation: compilation).initialStates()
 
@@ -1512,7 +1515,7 @@ private func parserEnum(
             let count = Var("count", UnsupportedInitialValue())
         }
         """)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == ["Var requires a supported initial formal value."])
@@ -1573,7 +1576,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.count == 1)
@@ -1593,7 +1596,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.count == 2)
@@ -1607,13 +1610,13 @@ private enum ParserNode: String, FiniteTLAValueDomain {
 
     @Test("an explicit declaration initializer replaces the unresolved Var initializer")
     func explicitVariableInitializerReplacesUnresolvedInitializer() throws {
-        let unresolved = SpecParser.parseSpecClosure(try parseClosure("""
+        let unresolved = SpecParser.parseSpecClosure(named: "UnresolvedInitializer", try parseClosure("""
         {
             let values = Var<SetExpr<Int>>("values")
             Variable(values)
         }
         """))
-        let resolved = SpecParser.parseSpecClosure(try parseClosure("""
+        let resolved = SpecParser.parseSpecClosure(named: "ResolvedInitializer", try parseClosure("""
         {
             let values = Var<SetExpr<Int>>("values")
             Variable(values, SetExpr<Int>())
@@ -1621,12 +1624,12 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         """))
 
         do {
-            _ = try unresolved.compile(specificationName: "UnresolvedInitializer")
+            _ = try unresolved.compile()
             Issue.record("Expected compilation to reject the unresolved initializer")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .missingVariableInitializer)
         }
-        let compilation = try resolved.compile(specificationName: "ResolvedInitializer")
+        let compilation = try resolved.compile()
         #expect(compilation.description.variables.map(\.name) == ["values"])
     }
 
@@ -1639,7 +1642,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         """
         let closure = try parseClosure(source)
 
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.map(\.generatedSwiftType) == ["SwiftTLA.Function<Model.Node, SwiftTLA.SetExpr<Swift.Int>>"])
@@ -1653,7 +1656,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, enumDefinitions: [cameraModeDefinition])
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.map(\.generatedSwiftType) == ["CameraMode"])
@@ -1673,10 +1676,10 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
 
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.temporal.map(\.name) == ["progress", "eventual", "safe", "recurs", "settles"])
+        #expect(parsed.temporalProperties.map(\.name) == ["progress", "eventual", "safe", "recurs", "settles"])
     }
 
     @Test func finiteVariableDomainsCompareAsFormalSets() throws {
@@ -1774,7 +1777,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.formalOperatorDefinitions == [
@@ -1797,7 +1800,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
             closure,
             enumDefinitions: [parserEnum("Key", finiteValues: [.string("k1"), .string("k2")])]
         )
@@ -1833,7 +1836,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.formalOperatorDefinitions == [
@@ -1867,7 +1870,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Formal",
             closure,
             enumDefinitions: [parserEnum(
                 "TestControlLabel",
@@ -1891,7 +1894,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
                 Stop()
             }
         })
-        let parsedCompilation = try parsed.compile(specificationName: "Formal")
+        let parsedCompilation = try parsed.compile()
         let builderCompilation = try TLASpec("Formal") { built }.compile()
         #expect(parsedCompilation.identity == builderCompilation.identity)
     }
@@ -1907,7 +1910,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         guard let definition = parsed.formalOperatorDefinitions.first else {
@@ -1940,7 +1943,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         #expect(parsed.formalOperatorDefinitions.first?.body == .equal(
@@ -2058,7 +2061,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         guard let diagnostic = parsed.diagnostics.first else {
             Issue.record("Expected a diagnostic for the unbound variable declaration")
@@ -2079,7 +2082,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == ["Variable 'missing' is not bound by a prior Var declaration"])
@@ -2093,7 +2096,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.map(\.message) == ["Malformed Variable declaration"])
     }
@@ -2608,7 +2611,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """)
 
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.invariants.first?.body == .equal(.variable("mode"), .value(.string("idle"))))
         #expect(
             SpecParser.decodeStateExpr(try parseExpression("CameraMode.idle"))
@@ -2625,7 +2628,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.invariants.count == 1)
         #expect(parsed.invariants[0].body == .equal(.variable("mode"), .value(.string("idle"))))
     }
@@ -2639,14 +2642,14 @@ private let cameraModeDefinition = parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.actions.count == 1)
         #expect(parsed.actions[0].body == .assign(.named("mode"), .value(.string("live"))))
     }
 
     @Test("qualified formal Action parses as an action declaration")
     func parsesQualifiedFormalAction() throws {
-        let parsed = SpecParser.parseSpecClosure(try parseClosure("""
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", try parseClosure("""
         {
             SwiftTLA.Action("advance") {
                 count.becomes(count + 1)
@@ -2676,7 +2679,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
         #expect(parsed.actions.count == 1)
         #expect(parsed.actions[0].bindings.map(\.name) == ["source", "destination", "amount"])
         #expect(parsed.actions[0].bindings.map(\.values) == [
@@ -2702,7 +2705,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """
 
-        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.actions[0].bindings.map(\.name) == ["from", "to", "round"])
@@ -2725,7 +2728,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
             "Parameterized action 'transfer' parameter 'source' requires an explicitly written finite values array.",
@@ -2806,7 +2809,7 @@ private let cameraModeDefinition = parserEnum(
             )
         ]
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
             closure,
             enumDefinitions: enumDefinitions,
             sourceTypes: .init(records: ["CarSchema": [
@@ -2866,7 +2869,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
@@ -2900,7 +2903,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.invariants.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
             "Invariant 'bad' contains an unsupported invariant expression."
@@ -2919,7 +2922,7 @@ private let cameraModeDefinition = parserEnum(
             parserEnum("CameraMode", cases: ["idle": .string("idle"), "error": .string("error")])
         ]
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: enumDefinitions)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, enumDefinitions: enumDefinitions)
         #expect(parsed.invariants.count == 1)
         #expect(parsed.invariants[0].body == .notEqual(.variable("mode"), .value(.string("error"))))
     }
@@ -2931,7 +2934,7 @@ private let cameraModeDefinition = parserEnum(
         }
         """
         let closure = try parseClosure(source)
-        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.variables.count == 1)
         #expect(parsed.variables[0].name == "mode")
         #expect(parsed.variables[0].initialization == .value(.string("idle")))

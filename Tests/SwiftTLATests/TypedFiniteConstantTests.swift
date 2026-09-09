@@ -67,7 +67,7 @@ struct TypedFiniteConstantTests {
             Variable(count, 0)
         }
         """)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
@@ -99,7 +99,7 @@ struct TypedFiniteConstantTests {
             Constant("Value", values)
         }
         """)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         guard let diagnostic = parsed.diagnostics.first else {
             Issue.record("Expected a dynamic constant diagnostic")

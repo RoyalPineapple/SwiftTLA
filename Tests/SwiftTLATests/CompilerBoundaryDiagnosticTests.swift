@@ -89,7 +89,7 @@ struct CompilerBoundaryDiagnosticTests {
             }
             """).statements.first?.item.as(ClosureExprSyntax.self)
         )
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Rejected", closure)
 
         #expect(parsed.sourceAlgorithms.isEmpty)
         #expect(parsed.diagnostics.count == 1)
@@ -103,14 +103,29 @@ struct CompilerBoundaryDiagnosticTests {
         #expect(expectedDiagnostic.actual == "unknown Algorithm declaration 'UnsupportedAlgorithmConstruct'")
         #expect(expectedDiagnostic.nextSafeAction == "Use a declaration supported by Algorithm.")
 
-        do {
-            _ = try parsed.compile(specificationName: "Rejected")
-            Issue.record("A parser diagnostic must prevent compilation publication.")
-        } catch let diagnostic as SourceParseDiagnostic {
-            #expect(diagnostic == expectedDiagnostic)
-        } catch {
-            Issue.record("Expected SourceParseDiagnostic, received \(error).")
+        for specification in [parsed, TLASpec("ImportingRejected") { Import(parsed) }] {
+            do {
+                _ = try specification.compile()
+                Issue.record("A parser diagnostic must prevent compilation publication.")
+            } catch let diagnostic as SourceParseDiagnostic {
+                #expect(diagnostic == expectedDiagnostic)
+            } catch {
+                Issue.record("Expected SourceParseDiagnostic, received \(error).")
+            }
         }
+    }
+
+    @Test("Parser and result builder normalize repeated standard-module declarations")
+    func standardModuleDeclarationsShareNormalization() throws {
+        let closure = try #require(Parser.parse(source:
+            "{ Extends(.sequences, .integers, .sequences) }"
+        ).statements.first?.item.as(ClosureExprSyntax.self))
+        let parsed = SpecParser.parseSpecClosure(named: "StandardModules", closure)
+        let built = TLASpec("StandardModules") {
+            Extends(.sequences, .integers, .sequences)
+        }
+        #expect(parsed.extendsModules == built.extendsModules)
+        #expect(try parsed.compile().identity == built.compile().identity)
     }
 
     @Test("Parser and result builder produce the same compilation identity")
@@ -127,14 +142,14 @@ struct CompilerBoundaryDiagnosticTests {
         }
         """
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "IdentityAlgorithm",
             closure,
             enumDefinitions: [ParserEnumDefinition(
                 typeName: "TestControlLabel",
                 cases: ["increment": .string("increment")]
             )]
         )
-        let parsedCompilation = try parsed.compile(specificationName: "IdentityAlgorithm")
+        let parsedCompilation = try parsed.compile()
         let resultBuilderCompilation = try TLASpec("IdentityAlgorithm") {
             Algorithm("IdentityAlgorithm", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)

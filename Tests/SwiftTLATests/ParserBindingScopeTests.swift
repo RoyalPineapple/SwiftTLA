@@ -18,7 +18,7 @@ import SwiftSyntax
         }
         """
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.actions.map(\.name) == ["outer"])
         #expect(parsed.invariants.first?.body == .enabledAction("outer"))

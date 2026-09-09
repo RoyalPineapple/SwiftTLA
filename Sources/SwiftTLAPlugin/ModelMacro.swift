@@ -44,12 +44,13 @@ enum TLASpecVerifier {
         }
         let sourceMetadata = try sourceTypes(in: memberList, enums: enumInfos)
         let parsed = SpecParser.parseSpecClosure(
+            named: source.name,
             source.closure,
             enumDefinitions: enumDefinitions,
             sourceTypes: sourceMetadata
         )
-        let compilation = try parsed.compile(specificationName: source.name)
-        if parsed.hasStateDeclarations == false {
+        let compilation = try parsed.compile()
+        if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty {
             throw ModelMacroError.emptyState
         }
 
