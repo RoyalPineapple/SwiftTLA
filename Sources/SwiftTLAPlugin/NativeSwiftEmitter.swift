@@ -325,20 +325,46 @@ struct NativeSwiftEmitter {
         let outerCallbacks = callbackFunctions
         callbackFunctions = nestedCallbacks
         defer { callbackFunctions = outerCallbacks }
-        let body = try expression(resolved.body, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))
         let domainGuard = try resolved.domainGuard.map {
             "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
         } ?? ""
+        let depthGuard = """
+        guard _nativeDepth < _NativeMachineOperations.maximumRecursiveDepth else {
+            throw NativeMachineEvaluationError.recursionDepthExceeded(_NativeMachineOperations.maximumRecursiveDepth)
+        }
+        _nativeDepth += 1
+        """
+        let bodyNode = program[resolved.body]
+        let body: String
+        if resolved.parameters.isEmpty, resolved.callbacks.isEmpty,
+           bodyNode.children.isEmpty,
+           bodyNode.computationType == bodyNode.resultType,
+           let recursiveCall = bodyNode.call,
+           case .function(let target) = recursiveCall.target, target == id,
+           recursiveCall.callbacks.isEmpty {
+            // A direct tail call with no arguments repeats the same invocation.
+            // Retain the formal call budget without consuming the Swift stack.
+            body = """
+            let entryDepth = _nativeDepth
+            defer { _nativeDepth = entryDepth }
+            while true {
+                \(depthGuard)
+                \(domainGuard)
+            }
+            """
+        } else {
+            let result = try expression(resolved.body, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))
+            body = """
+            \(depthGuard)
+            defer { _nativeDepth -= 1 }
+            \(domainGuard)
+            return \(result)
+            """
+        }
         return """
         (try { () throws -> \(try swiftType(resolved.resultType)) in
             func \(function)(\(declarations.joined(separator: ", "))) throws -> \(try swiftType(resolved.resultType)) {
-                guard _nativeDepth < _NativeMachineOperations.maximumRecursiveDepth else {
-                    throw NativeMachineEvaluationError.recursionDepthExceeded(_NativeMachineOperations.maximumRecursiveDepth)
-                }
-                _nativeDepth += 1
-                defer { _nativeDepth -= 1 }
-                \(domainGuard)
-                return \(body)
+                \(body)
             }
             return \(call)
         }())
