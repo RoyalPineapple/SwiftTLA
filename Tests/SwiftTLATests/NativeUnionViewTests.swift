@@ -17,7 +17,7 @@ private struct CheckedUnionExecution {
     typealias Temporary = OneOf<Missing, Active>
     typealias FiniteChoice = OneOf<Node, Missing>
     typealias Overlap = OneOf<Node, Node>
-    enum Step: String, CaseIterable { case load, inspect, collect, count, invalid }
+    enum Step: String, CaseIterable { case load, inspect, collect, intersect, subtract, count, invalid }
     static var spec: TLASpec {
         #spec("CheckedUnionExecution") {
             Algorithm("CheckedUnionExecution", scoped: { scope in
@@ -38,7 +38,23 @@ private struct CheckedUnionExecution {
                     Goto(Step.collect)
                 }
                 Do(Step.collect) {
-                    Assign(temporary, to: Temporary.second(Active.second(SetExpr<Node>.literal(.first, .second))))
+                    Assign(temporary, to: Temporary.second(Active.second(
+                        SetExpr<Node>.literal(.first).union(SetExpr<Node>.literal(.second))
+                    )))
+                    Goto(Step.intersect)
+                }
+                Do(Step.intersect) {
+                    Assign(temporary, to: Temporary.second(Active.second(
+                        temporary.expr.assumingSecond(Active.self).assumingSecond(SetExpr<Node>.self)
+                            .intersection(SetExpr<Node>.literal(.first, .second))
+                    )))
+                    Goto(Step.subtract)
+                }
+                Do(Step.subtract) {
+                    Assign(temporary, to: Temporary.second(Active.second(
+                        temporary.expr.assumingSecond(Active.self).assumingSecond(SetExpr<Node>.self)
+                            .subtracting(SetExpr<Node>.literal(.first))
+                    )))
                     Goto(Step.count)
                 }
                 Do(Step.count) {
@@ -62,7 +78,8 @@ struct NativeUnionViewTests {
         var formal = try #require(try runtime.initialStates().first)
         var machine = try CheckedUnionExecution.makeMachine()
         let actions: [(String, CheckedUnionExecution.Action)] = [
-            ("load", .load), ("inspect", .inspect), ("collect", .collect), ("count", .count)
+            ("load", .load), ("inspect", .inspect), ("collect", .collect),
+            ("intersect", .intersect), ("subtract", .subtract), ("count", .count)
         ]
         for (name, action) in actions {
             let id = try #require(compilation.layout.testActionID(named: name))
@@ -71,12 +88,12 @@ struct NativeUnionViewTests {
         }
         #expect(machine.state.selected == .second)
         #expect(machine.state.overlapFirst == machine.state.overlapSecond)
-        #expect(machine.state.size == 2)
+        #expect(machine.state.size == 1)
         #expect(machine.state.finiteSelected == .second)
         let selected = try #require(compilation.layout.testVariableID(named: "selected"))
         let size = try #require(compilation.layout.testVariableID(named: "size"))
         #expect(try formal.value(for: selected) == .integer(2))
-        #expect(try formal.value(for: size) == .integer(2))
+        #expect(try formal.value(for: size) == .integer(1))
         let invalid = try #require(compilation.layout.testActionID(named: "invalid"))
         #expect(throws: EvalError.noMatchingCase) { _ = try runtime.successors(for: invalid, from: formal) }
         let before = machine.state

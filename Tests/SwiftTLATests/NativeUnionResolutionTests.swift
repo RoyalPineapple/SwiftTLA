@@ -28,6 +28,22 @@ import Testing
         }
     }
 
+    @Test("set algebra retains its collection type inside a union", arguments: [
+        StateExpr.union(.setLiteral([.int(1)]), .setLiteral([.int(2)])),
+        StateExpr.intersection(.setLiteral([.int(1)]), .setLiteral([])),
+        StateExpr.setDifference(.setLiteral([.int(1)]), .setLiteral([.int(2)])),
+        StateExpr.union(.setLiteral([]), .setLiteral([]))
+    ])
+    func collectionOperations(expression: StateExpr) throws {
+        let program = try resolve(type: "Choice", initial: expression)
+        let root = try #require(program.initializations.values.first)
+        #expect(program[root].computationType == .set(.named("Node")))
+        #expect(program[root].resultType == program.variableTypes.values.first)
+        for child in program[root].children {
+            #expect(program[child].resultType == .set(.named("Node")))
+        }
+    }
+
     @Test("finite-only unions retain deduplicated finite storage")
     func finiteStorage() throws {
         let program = try resolve(type: "OneOf<Node,Node>", initial: .int(1))

@@ -362,10 +362,11 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func unionConstructor(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType? {
+    private mutating func unionResultType(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType? {
         guard case .union(let alternatives) = expected else { return nil }
         switch expression {
-        case .value, .setLiteral, .tupleLiteral, .recordLiteral, .functionLiteral: break
+        case .value, .setLiteral, .tupleLiteral, .recordLiteral, .functionLiteral,
+             .union, .intersection, .setDifference: break
         default: return nil
         }
         var matches: [(NativeTypeInference, NativeType)] = []
@@ -376,7 +377,7 @@ struct NativeTypeInference: Sendable {
             }
         }
         guard matches.count == 1, let match = matches.first else {
-            throw Self.diagnostic("union", "constructor must belong to exactly one declared union alternative")
+            throw Self.diagnostic("union", "expression must belong to exactly one declared union alternative")
         }
         self = match.0
         return match.1
@@ -389,7 +390,7 @@ struct NativeTypeInference: Sendable {
         guard result.resolved else {
             throw Self.unresolvedDiagnostic(result, at: "resolution")
         }
-        if case .union = result, let constructor = try scope.unionConstructor(expression, expected: result) {
+        if case .union = result, let constructor = try scope.unionResultType(expression, expected: result) {
             return (scope, result, constructor, resolved.call)
         }
         // Without a contextual type, the first pass already found the
@@ -1477,7 +1478,7 @@ struct NativeTypeInference: Sendable {
     }
 
     private mutating func inferResolved(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
-        if case .union = expected, try unionConstructor(expression, expected: expected) != nil { return expected }
+        if case .union = expected, try unionResultType(expression, expected: expected) != nil { return expected }
         let result: NativeType
         switch expression {
         case .assertView(let value, let shape):
