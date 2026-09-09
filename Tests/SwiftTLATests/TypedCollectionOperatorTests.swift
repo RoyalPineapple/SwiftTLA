@@ -539,20 +539,14 @@ private struct FoldGeneratedModel {
         }
         #expect(try emptySpec.compile().renderedTLAModuleBundle().tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
 
-        let input = try #require(ZeroBasedSequence<Int>(formalValue: .function([
-            .int(0): .int(0)
-        ])))
-        let table = try #require(ZeroBasedSequence<Int>(formalValue: .function([
-            .int(0): .int(-1),
-            .int(1): .int(-1),
-            .int(2): .int(-1)
-        ])))
+        let input = [0: 0]
+        let table = [0: -1, 1: -1, 2: -1]
         var machine = try ZeroBasedSequenceGeneratedModel.makeMachine(
             .init(input: input, table: table)
         )
         let transition = try machine.send(.writeFirst)
-        let tableValue = try #require(transition.after.table.element(at: 0))
-        let inputValue = try #require(transition.after.input.element(at: 0))
+        let tableValue = try #require(transition.after.table[0])
+        let inputValue = try #require(transition.after.input[0])
         #expect(tableValue == inputValue)
         #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("0.."))
     }
