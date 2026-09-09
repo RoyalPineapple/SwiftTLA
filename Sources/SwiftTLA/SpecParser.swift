@@ -2194,6 +2194,21 @@ extension ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> ActionExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
+           let constructor = call.calledExpression.as(MemberAccessExprSyntax.self),
+           compilerGrammarName(in: constructor.base) == "ActionExpr",
+           constructor.declName.baseName.text == "assign",
+           call.arguments.count == 2,
+           let target = call.arguments.first?.expression.as(FunctionCallExprSyntax.self),
+           let selector = target.calledExpression.as(MemberAccessExprSyntax.self),
+           selector.base == nil || compilerGrammarName(in: selector.base) == "ActionTarget",
+           selector.declName.baseName.text == "named",
+           target.arguments.count == 1,
+           let name = target.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+           let valueSyntax = call.arguments.last?.expression,
+           let value = decodeActionState(valueSyntax, scope: scope) {
+            return .assign(.named(name), value)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ActionExpr",
            access.declName.baseName.text == "exists",

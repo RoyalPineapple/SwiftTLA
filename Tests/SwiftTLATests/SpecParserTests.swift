@@ -2421,6 +2421,14 @@ private enum ParserNode: String, FiniteTLAValueDomain {
 // MARK: - ActionExpr: basic assignments
 
 @Suite(.serialized) struct ActionExprBasicTests {
+    @Test("Explicit formal assignments resolve a named target without declaring a variable", arguments: [
+        "ActionExpr.assign(.named(\"counter\"), 1)",
+        "SwiftTLA.ActionExpr.assign(ActionTarget.named(\"counter\"), 1)"
+    ])
+    func namedAssignmentConstructors(source: String) throws {
+        #expect(SpecParser.decodeActionExpr(try parseExpression(source)) == .assign(.named("counter"), .value(.int(1))))
+    }
+
     @Test func parseBecomes() throws {
         #expect(SpecParser.decodeActionExpr(try parseExpression("x.becomes(5)")) == ActionExpr.assign(.named("x"), .value(.int(5))))
         #expect(

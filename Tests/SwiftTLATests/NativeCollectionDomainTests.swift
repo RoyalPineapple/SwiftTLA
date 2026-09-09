@@ -9,14 +9,13 @@ private struct ShrinkingCollectionDomain {
     static var spec: TLASpec {
         TLASpec("ShrinkingCollectionDomain") {
             let devices = CollectionVar<Device, Int>("devices")
-            let function = Var<Function<Int, Int>>("devices")
             ModelCollection(devices, verificationScope: 1, initial: 0)
             SwiftTLA.Action("shrink") {
-                function.becomes(Expr<Function<Int, Int>>(StateExpr.functionLiteral(
+                ActionExpr.assign(.named("devices"), StateExpr.functionLiteral(
                     StateExpr.setFilter(StateExpr.variable("devices").domain, "member", false),
                     "member",
                     0
-                )))
+                ))
             }
         }
     }
