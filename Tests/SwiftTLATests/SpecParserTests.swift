@@ -75,11 +75,13 @@ private func parserEnum(
 
     private func parseAlgorithm(
         _ closure: ClosureExprSyntax,
-        enumDefinitions: [ParserEnumDefinition] = []
+        enumDefinitions: [ParserEnumDefinition] = [],
+        sourceTypes: NativeSourceTypeMetadata = .init()
     ) -> ParsedSpecComponents {
         SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: [controlLabels] + enumDefinitions
+            enumDefinitions: [controlLabels] + enumDefinitions,
+            sourceTypes: sourceTypes
         )
     }
 
@@ -1175,7 +1177,11 @@ private func parserEnum(
             enumDefinitions: [
                 parserEnum("Door", cases: ["closed": .string("closed")]),
                 parserEnum("Car", finiteValues: [.string("north"), .string("south")])
-            ]
+            ],
+            sourceTypes: .init(records: ["CarRecord": [
+                .init(sourceName: "floor", name: "floor", swiftType: "Int"),
+                .init(sourceName: "door", name: "door", swiftType: "Door")
+            ]])
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
