@@ -31,20 +31,19 @@ private struct RecordFieldExecution {
                     .init(Schema.count, 0), .init(Schema.ready, false)
                 ))
                 While(Step.advance, true) {
-                    Assign(record, to: record.updating(Schema.count, to: record[Schema.count] + 1))
+                    Assign(record, to: record.expr.updating(Schema.count, to: record[Schema.count] + 1))
                 }
             })
             // Formal boundary cases cannot name a missing typed schema field.
-            let record = Var<Record<Schema>>("record")
             SwiftTLA.Action("missing") {
-                record.becomes(Expr<Record<Schema>>(
+                ActionExpr.assign(.named("record"),
                     StateExpr.variable("record").updated(at: "missing", to: 9)
-                ))
+                )
             }
             SwiftTLA.Action("missingError") {
-                record.becomes(Expr<Record<Schema>>(
+                ActionExpr.assign(.named("record"),
                     StateExpr.variable("record").updated(at: "missing", to: Expr<Int>(1) / 0)
-                ))
+                )
             }
             SwiftTLA.Action("recordDomain") {
                 StateExpr.variable("record").updated(at: "count", to: Expr<Int>(1) / 0).domain.cardinality == 2
@@ -117,7 +116,7 @@ private struct UpdateOperandErrors {
             }
             SwiftTLA.Action("function") {
                 result.becomes(Expr<Int>(
-                    Function<Int, Int>.literal((1, Expr<Int>(1) / 0)).stateExpr
+                    StateExpr.functionLiteral(StateExpr.set([1]), "key", (Expr<Int>(1) / 0).stateExpr)
                         .updated(at: 1, to: StateExpr.negate(-9223372036854775808)).applying(1)
                 ))
             }

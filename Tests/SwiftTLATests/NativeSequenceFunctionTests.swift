@@ -28,11 +28,11 @@ private struct InvalidSequenceFunctionExecution {
             let result = Var<Int>("result")
             Variable(result, 0)
             SwiftTLA.Action("length") {
-                result.becomes(Expr<Int>(Function<Int, Int>.literal((2, 7)).stateExpr.count))
+                result.becomes(Expr<Int>(StateExpr.functionLiteral(StateExpr.set([2]), "key", 7).count))
             }
             SwiftTLA.Action("indexFailure") {
                 result.becomes(Expr<TupleExpr<Int>>(
-                    Function<Int, Int>.literal((2, 7)).stateExpr
+                    StateExpr.functionLiteral(StateExpr.set([2]), "key", 7)
                 ).at(Expr<Int>(1) / 0))
             }
         }

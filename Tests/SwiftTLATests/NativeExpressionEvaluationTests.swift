@@ -11,7 +11,7 @@ private struct ExpressionEvaluationOrder {
             Variable(result, 0)
             SwiftTLA.Action("mapped") {
                 result.becomes(Expr<Int>(StateExpr.if(
-                    SetExpr<Int>.literal(1, 2).mapping { member in member + 1 }
+                    SetExpr<Int>.literal(1, 2).mapping { member in member.expr + 1 }
                         == SetExpr<Int>.literal(2, 3),
                     then: 1, else: 0
                 )))
@@ -24,7 +24,7 @@ private struct ExpressionEvaluationOrder {
             }
             SwiftTLA.Action("application") {
                 result.becomes(Expr<Int>(
-                    Function<Int, Int>.literal((1, Expr<Int>(1) / 0)).stateExpr
+                    StateExpr.functionLiteral(StateExpr.set([1]), "key", (Expr<Int>(1) / 0).stateExpr)
                         .applying(StateExpr.negate(-9223372036854775808))
                 ))
             }

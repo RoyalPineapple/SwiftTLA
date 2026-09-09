@@ -27,7 +27,7 @@ private struct SequenceRemovalFailure {
             Variable(items, TupleExpr<Int>.literal(7))
             SwiftTLA.Action("remove") {
                 items.becomes(Expr<TupleExpr<Int>>(
-                    Function<Int, Int>.literal((2, 7)).stateExpr
+                    StateExpr.functionLiteral(StateExpr.set([2]), "key", 7)
                 ).removing(at: Expr<Int>(1) / 0))
             }
         }
