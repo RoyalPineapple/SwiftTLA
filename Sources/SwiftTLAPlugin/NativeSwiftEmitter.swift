@@ -463,10 +463,8 @@ struct NativeSwiftEmitter {
         case .lessOrEqual(_, _): return try binary("<=")
         case .greaterThan(_, _): return try binary(">")
         case .greaterOrEqual(_, _): return try binary(">=")
-        case .and(_, _):
-            return try Self.shortCircuitBoolean(left: emit(0), right: emit(1), conjunction: true)
-        case .or(_, _):
-            return try Self.shortCircuitBoolean(left: emit(0), right: emit(1), conjunction: false)
+        case .and, .or:
+            return try booleanExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .not(_): return "(!\(try emit(0)))"
         case .ifThenElse(_, _, _):
             return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"

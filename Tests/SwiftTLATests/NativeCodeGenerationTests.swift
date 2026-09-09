@@ -3,6 +3,7 @@ import Testing
 import SwiftParser
 import SwiftParserDiagnostics
 import SwiftSyntax
+import SwiftBasicFormat
 @testable import SwiftTLAPlugin
 
 struct NativeCodeGenerationTests {
@@ -83,6 +84,30 @@ struct NativeCodeGenerationTests {
 }
 
 extension NativeCodeGenerationTests {
+    @Test("Nested predicates emit Swift that remains valid after macro formatting")
+    func nestedPredicateEmission() throws {
+        let leaf = StateExpr.forAll(.set(["ready"]), "member", .equal(.variable("count"), .int(0)))
+        let predicate = (0..<8).reduce(leaf) { expression, _ in .and(leaf, expression) }
+        let compilation = try TLASpec(
+            name: "NestedPredicates",
+            variables: [
+                .init(name: "count", initialization: .value(.int(0)), origin: .compiler),
+                .init(name: "result", initialization: .value(.bool(false)), origin: .compiler)
+            ],
+            actions: [.init(name: "evaluate", body: .assign(.named("result"), predicate))],
+            invariants: []
+        ).compile()
+        let model = MacroCompilation(
+            typeName: "NestedPredicates", compilation: compilation, enumInfos: [],
+            nativeProgram: try NativeResolvedProgram(plan: .init(compilation: compilation))
+        )
+        let declarations = try MacroExpander.generateStateMachineMembers(model: model)
+        for source in [declarations.map(\.description), declarations.map { $0.formatted().description }] {
+            let syntax = Parser.parse(source: "struct Expansion {\n\(source.joined(separator: "\n"))\n}")
+            #expect(!syntax.hasError, "\(ParseDiagnosticsGenerator.diagnostics(for: syntax).map(\.message))")
+        }
+    }
+
     @Test("Nested source updates preserve scoped variables through parentheses")
     func nestedSourceUpdates() throws {
         let update = (0..<12).reduce("count.expr") { expression, _ in "(\(expression) + 1)" }
