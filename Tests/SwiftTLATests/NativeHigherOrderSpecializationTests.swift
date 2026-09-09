@@ -137,7 +137,7 @@ import Testing
         let resolution = try inference.resolutionScope(expression, expected: .int)
         #expect(resolution.resultType == .int)
         for index in 0..<count {
-            #expect(resolution.scope.bindings[.init(ordinal: index)] == .int)
+            #expect(resolution.bindings[.init(ordinal: index)] == .int)
         }
     }
 

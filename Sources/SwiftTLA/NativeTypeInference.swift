@@ -265,10 +265,11 @@ struct NativeCheckedType: Sendable {
     }
 }
 
-/// A checked occurrence retains its operands and lexical context for emission.
+/// A checked occurrence retains typed operands and bindings, not the compiler that checked it.
 struct NativeCheckedExpression: Sendable {
     let expression: CompiledStateExpr
-    let scope: NativeTypeInference
+    let bindings: [BinderID: NativeType]
+    let operatorParameters: Set<OperatorID>
     let annotation: NativeCheckedType
 
     var resultType: NativeType { annotation.type }
@@ -436,7 +437,6 @@ struct NativeTypeInference: Sendable {
         return (values, callbacks)
     }
 
-    func isOperatorParameter(_ id: OperatorID) -> Bool { boundOperators[id] != nil }
 
     private mutating func recordCallback(_ id: OperatorID, call: NativeOperatorCall) {
         if !(callbackUses[id] ?? []).contains(where: { existing in
@@ -521,8 +521,8 @@ struct NativeTypeInference: Sendable {
                     at: "variables.\(variable.declaration.name)")
             }
         }
-        // Scope snapshots were taken while checkedRoots was empty. Attach only
-        // the converged roots, so snapshots do not retain preceding passes.
+        // Attach roots after convergence so deferred argument and callback scopes
+        // do not retain expression graphs from earlier passes.
         checkedRoots = roots
     }
 
@@ -581,9 +581,14 @@ struct NativeTypeInference: Sendable {
         return checked
     }
 
+    private func checkedOccurrence(_ expression: CompiledStateExpr, annotation: NativeCheckedType) -> NativeCheckedExpression {
+        .init(expression: expression, bindings: bindings,
+            operatorParameters: annotation.call == nil ? [] : Set(boundOperators.keys), annotation: annotation)
+    }
+
     private mutating func checkOperand(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedExpression {
         let annotation = try checkExpression(expression, expected: expected)
-        return .init(expression: expression, scope: self, annotation: annotation)
+        return checkedOccurrence(expression, annotation: annotation)
     }
 
     private mutating func refineOperand(_ checked: NativeCheckedExpression, expected: NativeType) throws -> NativeCheckedExpression {
@@ -645,7 +650,7 @@ struct NativeTypeInference: Sendable {
             // A formal tuple value remains a literal; its components supplied the
             // contextual shape, while expression tuples retain their operands.
             if case .value = value { return try checkOperand(value, expected: type) }
-            return .init(expression: value, scope: self,
+            return checkedOccurrence(value,
                 annotation: .init(type: type, computationType: type, operandTypes: children.map(\.resultType), children: children))
         }
         let source = try checkOperand(value)
@@ -1360,7 +1365,7 @@ struct NativeTypeInference: Sendable {
             _ = operandFrames.popLast()
             var checked = annotation
             if !children.isEmpty || annotation.call != nil { checked.children = children }
-            completed = .init(expression: expression, scope: scope, annotation: checked)
+            completed = scope.checkedOccurrence(expression, annotation: checked)
         }
         let initialArgumentRefinements = activeArgumentRefinements
         let initialBindingRefinements = activeBindingRefinements

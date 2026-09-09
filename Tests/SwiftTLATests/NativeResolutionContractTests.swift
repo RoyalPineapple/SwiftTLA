@@ -34,11 +34,11 @@ import Testing
         let variable = try #require(compilation.layout.variables.first)
         let binder = BinderID(ordinal: 0)
         let binding = CompiledStateExpr.letValue(binder, .stateVariable(variable.id), .boundValue(binder))
-        let scope = try checker.resolutionScope(binding, expected: .int).scope
-        let checked = try scope.resolutionScope(.boundValue(binder), expected: .int)
+        let checked = try #require(checker.resolutionScope(binding, expected: .int).children.last)
+        #expect(checked.expression == .boundValue(binder))
         #expect(checked.resultType == .int)
         #expect(checked.computationType == .named("Node"))
-        #expect(checked.scope.bindings[binder] == .named("Node"))
+        #expect(checked.bindings[binder] == .named("Node"))
     }
 
     @Test("linked binding domains refine without recursive source checking")
@@ -56,8 +56,8 @@ import Testing
         }
         let checked = try checker.resolutionScope(expression, expected: .named("Node"))
         #expect(checked.resultType == .named("Node"))
-        #expect(checked.scope.bindings[BinderID(ordinal: 0)] == .named("Node"))
-        #expect(checked.scope.bindings[BinderID(ordinal: count - 1)] == .named("Node"))
+        #expect(checked.bindings[BinderID(ordinal: 0)] == .named("Node"))
+        #expect(checked.bindings[BinderID(ordinal: count - 1)] == .named("Node"))
     }
 
     @Test("function constructors retain the selected representation within a union")
@@ -296,7 +296,7 @@ import Testing
 
 
 extension NativeResolutionContractTests {
-    @Test("resolved roots retain converged types without retaining earlier passes")
+    @Test("initialization, action, and invariant roots retain their converged types")
     func convergedRootAnnotations() throws {
         let compilation = try TLASpec(name: "ConvergedRoots", variables: [
             .init(name: "members", initialization: .value(.set([])), origin: .compiler)
@@ -307,7 +307,6 @@ extension NativeResolutionContractTests {
         ]).compile()
         let inference = try NativeTypeInference(compilation: compilation)
         #expect(inference.checkedRoots.map(\.resultType) == [.set(.int), .set(.int), .bool])
-        #expect(inference.checkedRoots.allSatisfy { $0.scope.checkedRoots.isEmpty })
         let program = try NativeResolvedProgram(compilation: compilation)
         let initial = try #require(program.initializations.values.first)
         #expect(program[initial].resultType == .set(.int))

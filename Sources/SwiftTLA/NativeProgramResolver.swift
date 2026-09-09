@@ -142,7 +142,7 @@ private final class NativeProgramResolver {
         case .setFilter(_, let id, _), .choose(_, let id, _), .setMap(_, let id, _),
              .forAll(_, let id, _), .exists(_, let id, _), .sequenceSelect(_, let id, _),
              .letValue(let id, _, _):
-            bindings[id] = try require(checked.scope.bindings[id])
+            bindings[id] = try require(checked.bindings[id])
         case .functionLiteral(_, let id, _):
             guard case .dictionary(let key, _) = checked.computationType else { return try require(nil) }
             bindings[id] = key
@@ -163,7 +163,7 @@ private final class NativeProgramResolver {
             default: operation = nil
             }
             guard checked.children.count == resolved.parameters.count else { return try require(nil) }
-            call = try resolveCall(resolved, operation: operation, scope: checked.scope, callbackScope: callbackScope)
+            call = try resolveCall(resolved, operation: operation, operatorParameters: checked.operatorParameters, callbackScope: callbackScope)
         } else {
             guard checked.children.count == checked.operandTypes.count else { return try require(nil) }
             call = nil
@@ -177,9 +177,9 @@ private final class NativeProgramResolver {
 
     func resolveCall(
         _ call: NativeOperatorCall, operation: OperatorID?,
-        scope: NativeTypeInference, callbackScope: [NativeCallbackUseKey: NativeCallbackID]
+        operatorParameters: Set<OperatorID>, callbackScope: [NativeCallbackUseKey: NativeCallbackID]
     ) throws -> NativeResolvedCall {
-        if let operation, scope.isOperatorParameter(operation) {
+        if let operation, operatorParameters.contains(operation) {
             guard call.callbackArguments.isEmpty else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
                     path: "native.callback", expected: "a callback with value parameters",
@@ -192,7 +192,7 @@ private final class NativeProgramResolver {
         for (operation, use, parameter) in functionCallbacks[id] ?? [] {
             let actual = try require(call.callbackArguments[operation])
             let target: NativeResolvedCallTarget
-            if case .reference(let origin, _) = actual, scope.isOperatorParameter(origin) {
+            if case .reference(let origin, _) = actual, operatorParameters.contains(origin) {
                 target = .callback(try require(callbackScope[.init(origin, use)]))
             } else {
                 target = .function(try function(use, callbackScope: callbackScope))
