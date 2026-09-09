@@ -201,9 +201,15 @@ private struct NativeCallbackBinding: Sendable {
     }
 }
 
-private struct NativeArgumentEvidence: Sendable {
+private struct NativeArgumentSource: Sendable {
     let expression: CompiledStateExpr
     let scope: NativeTypeInference
+}
+
+/// A checked call argument retains its type and lexical source together.
+private enum NativeCallArgument: Sendable {
+    case value(type: NativeType, domain: Set<CompiledValue>?, source: NativeArgumentSource)
+    case `operator`(NativeCallbackBinding)
 }
 
 private struct NativeArgumentRefinement: Hashable, Sendable {
@@ -236,7 +242,7 @@ struct NativeTypeInference: Sendable {
     private let sourceTypes: NativeSourceTypeMetadata
     private let plan: NativeMachinePlan
     private var bindingSources: [BinderID: CompiledStateExpr] = [:]
-    private var argumentEvidence: [BinderID: NativeArgumentEvidence] = [:]
+    private var argumentSources: [BinderID: NativeArgumentSource] = [:]
     private var activeArgumentRefinements: Set<NativeArgumentRefinement> = []
     private var activeBindingRefinements: Set<BinderID> = []
     private var bindingDomains: [BinderID: Set<CompiledValue>] = [:]
@@ -910,21 +916,24 @@ struct NativeTypeInference: Sendable {
             if case .value(let value) = argument { return try infer(value) }
             return .unknown
         }
-        let argumentDomains = arguments.map { argument -> Set<CompiledValue>? in
-            if case .value(let value) = argument { return literalValues(value) }
-            return nil
-        }
-        let evidence = arguments.map { argument -> NativeArgumentEvidence? in
-            guard case .value(let value) = argument else { return nil }
-            if case .boundValue(let id) = value, let existing = argumentEvidence[id] { return existing }
-            return .init(expression: value, scope: self)
-        }
-        let callbacks = arguments.map { argument -> NativeCallbackBinding? in
-            guard case .operator(let operation) = argument else { return nil }
-            if case .reference(let target, _) = operation, let binding = boundOperators[target] {
-                return .init(forwarding: binding, from: target)
+        // Infer every argument before capturing the caller scope: a later
+        // argument can establish type information used by an earlier one.
+        let checkedArguments = zip(arguments, argumentTypes).map { argument, type -> NativeCallArgument in
+            switch argument {
+            case .value(let value):
+                let source: NativeArgumentSource
+                if case .boundValue(let id) = value, let existing = argumentSources[id] {
+                    source = existing
+                } else {
+                    source = .init(expression: value, scope: self)
+                }
+                return .value(type: type, domain: literalValues(value), source: source)
+            case .operator(let operation):
+                if case .reference(let target, _) = operation, let binding = boundOperators[target] {
+                    return .operator(.init(forwarding: binding, from: target))
+                }
+                return .operator(.init(operation: operation, scope: self))
             }
-            return .init(operation: operation, scope: self)
         }
         let callbackID: OperatorID?
         if case .reference(let id, _) = requestedOperation, boundOperators[id] != nil { callbackID = id }
@@ -938,8 +947,7 @@ struct NativeTypeInference: Sendable {
         scope.specializationResults.merge(specializationResults) { _, current in current }
         let operation = callback?.operation ?? requestedOperation
         let resolved = try scope.specializeOperation(operation,
-            argumentTypes: argumentTypes, argumentDomains: argumentDomains, evidence: evidence,
-            callbacks: callbacks, expected: expected)
+            arguments: checkedArguments, expected: expected)
         specializationResults.merge(scope.specializationResults) { _, current in current }
         variables = scope.variables
         if let callbackID { recordCallback(callbackID, call: resolved) }
@@ -993,8 +1001,7 @@ struct NativeTypeInference: Sendable {
 
     private mutating func specializeOperation(
         _ operation: CompiledFormalOperator,
-        argumentTypes: [NativeType], argumentDomains: [Set<CompiledValue>?], evidence: [NativeArgumentEvidence?],
-        callbacks: [NativeCallbackBinding?], expected: NativeType
+        arguments: [NativeCallArgument], expected: NativeType
     ) throws -> NativeOperatorCall {
         let formalParameters: [CompiledFormalParameter]
         let body: CompiledStateExpr
@@ -1016,23 +1023,30 @@ struct NativeTypeInference: Sendable {
                 body = definition.body; domain = nil
             } else { throw Self.diagnostic("operator", "unknown operator identity \(id.ordinal)") }
         }
-        guard formalParameters.count == argumentTypes.count else { throw Self.diagnostic("operator", "argument count mismatch") }
+        guard formalParameters.count == arguments.count else { throw Self.diagnostic("operator", "argument count mismatch") }
         var callbackArguments: [OperatorID: CompiledFormalOperator] = [:]
         var identities = callbackIdentities
-        for (index, parameter) in formalParameters.enumerated() {
-            switch parameter {
-            case .value:
-                guard callbacks[index] == nil else { throw Self.diagnostic("operator", "expected value argument") }
-            case .operator(let id, let arity):
-                guard let callback = callbacks[index], callback.operation.arity == arity else { throw Self.diagnostic("operator", "operator argument arity mismatch") }
+        var valueTypes: [NativeType] = []
+        for (parameter, argument) in zip(formalParameters, arguments) {
+            switch (parameter, argument) {
+            case (.value, .value(let type, _, _)):
+                valueTypes.append(type)
+            case (.operator(let id, let arity), .operator(let callback)):
+                guard callback.operation.arity == arity else {
+                    throw Self.diagnostic("operator", "operator argument arity mismatch")
+                }
                 identities[id] = callback.identity
                 callbackArguments[id] = callback.forwardedFrom.map { .reference($0, arity: arity) } ?? callback.operation
+            case (.value, .operator):
+                throw Self.diagnostic("operator", "expected value argument")
+            case (.operator, .value):
+                throw Self.diagnostic("operator", "expected operator argument")
             }
         }
         let parameters = formalParameters.compactMap { parameter -> BinderID? in
             if case .value(let binder) = parameter { return binder }; return nil
         }
-        let key = NativeOperatorSpecialization(operation: operation.identity, arguments: argumentTypes,
+        let key = NativeOperatorSpecialization(operation: operation.identity, arguments: valueTypes,
             resultContext: expected, captures: captures, callbacks: identities)
         if activeOperators.contains(where: { active in
             guard active.operation == key.operation, active.arguments.count == key.arguments.count else { return false }
@@ -1057,17 +1071,20 @@ struct NativeTypeInference: Sendable {
         activeOperators.insert(key)
         specializationResults[key] = context
         callbackUses = [:]
-        for (index, parameter) in formalParameters.enumerated() {
-            switch parameter {
-            case .value(let binder):
-                bindings[binder] = argumentTypes[index]
-                argumentEvidence[binder] = evidence[index]
-                if let values = argumentDomains[index] {
-                    bindingSources[binder] = .value(.set(values)); bindingDomains[binder] = values
+        for (parameter, argument) in zip(formalParameters, arguments) {
+            switch (parameter, argument) {
+            case (.value(let binder), .value(let type, let domain, let source)):
+                bindings[binder] = type
+                argumentSources[binder] = source
+                if let domain {
+                    bindingSources[binder] = .value(.set(domain)); bindingDomains[binder] = domain
                 } else {
                     bindingSources.removeValue(forKey: binder); bindingDomains.removeValue(forKey: binder)
                 }
-            case .operator(let id, _): boundOperators[id] = callbacks[index]
+            case (.operator(let id, _), .operator(let callback)):
+                boundOperators[id] = callback
+            default:
+                throw Self.diagnostic("operator", "argument kind changed after validation")
             }
         }
         if let domain, let binder = parameters.first {
@@ -1149,7 +1166,7 @@ struct NativeTypeInference: Sendable {
         // A use-site projection does not replace the binder's chosen native
         // representation. Later raw scalar reads must not erase enum identity.
         if canProjectRead(existing, to: expected) { return expected }
-        if expected != .unknown, existing != expected, let evidence = argumentEvidence[id] {
+        if expected != .unknown, existing != expected, let evidence = argumentSources[id] {
             let refinement = NativeArgumentRefinement(expression: evidence.expression, bindings: evidence.scope.bindings, expected: expected)
             if activeArgumentRefinements.insert(refinement).inserted {
                 defer { activeArgumentRefinements.remove(refinement) }

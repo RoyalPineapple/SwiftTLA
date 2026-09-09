@@ -19,6 +19,8 @@ import Testing
         let string = try #require(stringResolution.call)
         #expect(integer.result == .int)
         #expect(string.result == .string)
+        #expect(integer.specialization.arguments.isEmpty)
+        #expect(string.specialization.arguments.isEmpty)
         #expect(integer.specialization != string.specialization)
         let otherIntegerExpression = CompiledStateExpr.operatorApplication(operation.id, [
             .operator(.lambda(.init(id: .init(ordinal: 2), parameters: [], body: .value(.integer(9)))))
@@ -27,6 +29,27 @@ import Testing
         #expect(integer.specialization != otherInteger.specialization)
         #expect(integer.callbackUses.values.flatMap { $0 }.allSatisfy { $0.parameters.isEmpty })
         #expect(integer.callbackUses.values.flatMap { $0 }.count == 1)
+    }
+
+    @Test("call arguments distinguish values from operators and validate callback arity")
+    func argumentKinds() throws {
+        let plan = NativeMachinePlan(compilation: try specification().compile())
+        let inference = try NativeTypeInference(plan: plan)
+        let callbackOperation = try #require(plan.formalOperatorDefinitions.first)
+        let valueOperation = try #require(plan.formalOperatorDefinitions.last)
+        let callback = CompiledFormalOperator.lambda(.init(
+            id: .init(ordinal: 0), parameters: [], body: .value(.integer(7))))
+        let unaryCallback = CompiledFormalOperator.lambda(.init(
+            id: .init(ordinal: 1), parameters: [.init(ordinal: 0)], body: .value(.integer(7))))
+        for expression in [
+            CompiledStateExpr.operatorApplication(callbackOperation.id, [.value(.value(.integer(7)))]),
+            .operatorApplication(callbackOperation.id, [.operator(unaryCallback)]),
+            .operatorApplication(valueOperation.id, [.operator(callback)])
+        ] {
+            #expect(throws: CompilationDiagnostic.self) {
+                try inference.resolutionScope(expression, expected: .int)
+            }
+        }
     }
 
     @Test("Shared lowering assigns deterministic identities to anonymous functions")
