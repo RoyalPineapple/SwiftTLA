@@ -18,7 +18,7 @@ struct SpecificationSourceAuthorityTests {
         ]
         for getter in getters {
             let declaration = try declaration("static var spec: TLASpec { \(getter) }")
-            let source = try #require(TLASpecVerifier.findSpec(in: declaration.memberBlock.members))
+            let source = try #require(try TLASpecVerifier.findSpec(in: declaration.memberBlock.members))
             #expect(source.name == "Authority")
         }
     }
