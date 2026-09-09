@@ -1128,6 +1128,11 @@ struct NativeTypeInference: Sendable {
     }
 
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
+        switch expression {
+        case .letValue, .letIn:
+            return try inferLexicalScopes(expression, expected: expected)
+        default: break
+        }
         if isOperatorApplication(expression) {
             return try inferExpression(expression, expected: expected).type
         }
@@ -1472,22 +1477,36 @@ struct NativeTypeInference: Sendable {
         return try projectedReadType(result, expected: expected)
     }
 
-    private mutating func inferLetValue(_ id: BinderID, value: CompiledStateExpr, body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
-        let result: NativeType
-        bindingSources[id] = .setLiteral([value])
-        bindingDomains[id] = literalValues(value)
-        bindings[id] = try infer(value, expected: bindings[id] ?? .unknown); result = try infer(body, expected: expected)
-        return try projectedReadType(result, expected: expected)
-    }
-
-    private mutating func inferLocalOperators(_ definitions: [CompiledLocalOperator], body: CompiledStateExpr, expected: NativeType) throws -> NativeType {
-        let result: NativeType
-        for definition in definitions {
-            localOperators[definition.id] = definition
-            localCaptures[definition.id] = bindings
+    private mutating func inferLexicalScopes(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType {
+        var body = expression
+        var scopes: [CompiledStateExpr] = []
+        while true {
+            switch body {
+            case .letValue(let id, let value, let next):
+                bindingSources[id] = .setLiteral([value])
+                bindingDomains[id] = literalValues(value)
+                do {
+                    bindings[id] = try infer(value, expected: bindings[id] ?? .unknown)
+                } catch let diagnostic as CompilationDiagnostic {
+                    throw (scopes + [body]).reversed().reduce(diagnostic) { annotated($0, at: $1) }
+                }
+                scopes.append(body)
+                body = next
+            case .letIn(let definitions, let next):
+                for definition in definitions {
+                    localOperators[definition.id] = definition
+                    localCaptures[definition.id] = bindings
+                }
+                scopes.append(body)
+                body = next
+            default:
+                do {
+                    return try projectedReadType(infer(body, expected: expected), expected: expected)
+                } catch let diagnostic as CompilationDiagnostic {
+                    throw scopes.reversed().reduce(diagnostic) { annotated($0, at: $1) }
+                }
+            }
         }
-        result = try infer(body, expected: expected)
-        return try projectedReadType(result, expected: expected)
     }
 
     private mutating func inferSetLiteral(_ expressions: [CompiledStateExpr], expected: NativeType) throws -> NativeType {
@@ -1612,10 +1631,6 @@ struct NativeTypeInference: Sendable {
         case .except(let function, let key, let value): return try inferFunctionUpdate(function, key: key, value: value, expected: expected)
         case .domain(let function):
             return try inferDomain(function, expected: expected)
-        case .letValue(let id, let value, let body):
-            return try inferLetValue(id, value: value, body: body, expected: expected)
-        case .letIn(let definitions, let body):
-            return try inferLocalOperators(definitions, body: body, expected: expected)
         case .caseExpr(let first, let rest, let otherwise):
             return try inferCases(first, rest: rest, otherwise: otherwise, expected: expected)
         default: throw Self.diagnostic("expression", "expression is outside the native machine subset: \(expression.diagnosticName)")

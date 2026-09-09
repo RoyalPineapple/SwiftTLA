@@ -71,6 +71,23 @@ import Testing
         }
     }
 
+    @Test("long lexical binding chains preserve each binding's type")
+    func lexicalBindingChain() throws {
+        let plan = NativeMachinePlan(compilation: try specification().compile())
+        let inference = try NativeTypeInference(plan: plan)
+        let count = 64
+        let expression = (0..<count).reversed().reduce(
+            CompiledStateExpr.boundValue(.init(ordinal: count - 1))
+        ) { body, index in
+            .letValue(.init(ordinal: index), .value(.integer(index)), body)
+        }
+        let resolution = try inference.resolutionScope(expression, expected: .int)
+        #expect(resolution.resultType == .int)
+        for index in 0..<count {
+            #expect(resolution.scope.bindings[.init(ordinal: index)] == .int)
+        }
+    }
+
     @Test("Shared lowering assigns deterministic identities to anonymous functions")
     func loweredFunctionIdentities() throws {
         let spec = TLASpec(name: "AnonymousFunctions", variables: [
