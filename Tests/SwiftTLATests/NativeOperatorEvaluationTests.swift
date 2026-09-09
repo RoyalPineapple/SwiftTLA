@@ -10,6 +10,13 @@ private struct UnusedOperatorArguments {
             let result = Var<Int>("result")
             Variable(result, 0)
             FormalDefinition("Ignore", parameters: [.value("unused")], body: 7)
+            FormalDefinition("Every", parameters: [.value("domain"), .value("unused")], body: StateExpr.forAll(
+                StateExpr.variable("domain"), "item",
+                StateExpr.variable("item") == StateExpr.variable("unused")
+            ))
+            FormalDefinition("Map", parameters: [.value("domain"), .value("unused")], body: StateExpr.setMap(
+                StateExpr.variable("unused"), "item", StateExpr.variable("domain")
+            ))
             SwiftTLA.Action("formal") {
                 result.becomes(FormalCall("Ignore", Expr<Int>(1) / 0))
             }
@@ -19,6 +26,24 @@ private struct UnusedOperatorArguments {
                 ], StateExpr.operatorApplication(
                     .reference("IgnoreLocal", arity: 1), [.value(StateExpr.variable("result") / 0)]
                 ))))
+            }
+            SwiftTLA.Action("emptyDomain") {
+                result.becomes(Expr<Int>(StateExpr.if(
+                    StateExpr.operatorApplication(.reference("Every", arity: 2), [
+                        .value(StateExpr.integerRange(1, 0)),
+                        .value(StateExpr.variable("result") / 0)
+                    ]),
+                    then: 7,
+                    else: 9
+                )))
+            }
+            SwiftTLA.Action("emptyMapping") {
+                result.becomes(Expr<Int>(StateExpr.operatorApplication(
+                    .reference("Map", arity: 2), [
+                        .value(StateExpr.integerRange(1, 0)),
+                        .value(StateExpr.variable("result") / 0)
+                    ]
+                ).cardinality))
             }
         }
     }
@@ -97,6 +122,15 @@ private struct TailArgumentFailureOrder {
             SwiftTLA.Action("earlyFailure") {
                 result.becomes(FormalCall("FailBeforeRead", Expr<Int>(9_223_372_036_854_775_807) + 1))
             }
+            FormalDefinition("Reverse", parameters: [.value("first"), .value("second")], body:
+                StateExpr.variable("second") - StateExpr.variable("first")
+            )
+            SwiftTLA.Action("reverseFailure") {
+                result.becomes(FormalCall("Reverse",
+                    Expr<Int>(9_223_372_036_854_775_807) + 1,
+                    Expr<Int>(1) / 0
+                ))
+            }
         }
     }
 }
@@ -162,6 +196,32 @@ private struct EvaluatedArgumentReuse {
 }
 
 @Suite struct NativeOperatorEvaluationTests {
+    @Test("an empty mapping domain leaves its body argument unevaluated")
+    func emptyMappingDoesNotForceBodyArguments() throws {
+        let compilation = try UnusedOperatorArguments.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "emptyMapping"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        var machine = try UnusedOperatorArguments.makeMachine()
+        #expect(try successor.state.value(for: result) == .integer(0))
+        #expect(try machine.send(.emptyMapping).after.result == 0)
+    }
+
+    @Test("an empty quantifier domain leaves its body argument unevaluated")
+    func emptyDomainDoesNotForceBodyArguments() throws {
+        let compilation = try UnusedOperatorArguments.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "emptyDomain"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        var machine = try UnusedOperatorArguments.makeMachine()
+        #expect(try successor.state.value(for: result) == .integer(7))
+        #expect(try machine.send(.emptyDomain).after.result == 7)
+    }
+
     @Test("formal and local operators do not evaluate unused invalid arguments")
     func unusedArgumentsRemainLazy() throws {
         let compilation = try UnusedOperatorArguments.spec.compile()
@@ -308,6 +368,23 @@ private struct EvaluatedArgumentReuse {
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.divisionByZero) {
             try machine.send(.earlyFailure)
+        }
+        #expect(machine.state == before)
+    }
+
+    @Test("arguments are evaluated in first-read order rather than declaration order")
+    func firstReadDeterminesArgumentFailure() throws {
+        let compilation = try TailArgumentFailureOrder.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "reverseFailure"))
+        #expect(throws: EvalError.divisionByZero) {
+            try runtime.successors(for: action, from: initial)
+        }
+        var machine = try TailArgumentFailureOrder.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.reverseFailure)
         }
         #expect(machine.state == before)
     }

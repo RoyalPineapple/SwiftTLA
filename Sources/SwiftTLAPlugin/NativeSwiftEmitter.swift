@@ -15,7 +15,7 @@ struct NativeSwiftEmitter {
     var unions: [[NativeType]] = []
     private var hasDepthScope = false
     private var callbackFunctions: [NativeCallbackID: String] = [:]
-    private var tailCalls: [NativeFunctionID: NativeTailCallPlan] = [:]
+    private var functionPlans: [NativeFunctionID: NativeFunctionPlan] = [:]
 
     init(model: MacroCompilation) {
         self.model = model
@@ -350,14 +350,14 @@ struct NativeSwiftEmitter {
         _nativeDepth += 1
         """
         let body: String
-        let tail: NativeTailCallPlan
-        if let checked = tailCalls[id] {
-            tail = checked
+        let functionPlan: NativeFunctionPlan
+        if let checked = functionPlans[id] {
+            functionPlan = checked
         } else {
-            tail = NativeTailCallPlan(function: id, program: program)
-            tailCalls[id] = tail
+            functionPlan = NativeFunctionPlan(function: id, program: program)
+            functionPlans[id] = functionPlan
         }
-        if case .loop(let parameterOrder, let tailPlan) = tail {
+        if case .loop(let parameterOrder, let tailPlan) = functionPlan {
             let inputs = resolved.parameters.map {
                 "var _tailArgument\($0.ordinal) = _input\($0.ordinal)"
             }.joined(separator: "\n")
@@ -381,8 +381,15 @@ struct NativeSwiftEmitter {
             }
             """
         } else {
-            let argumentBindings = try zip(resolved.parameters, resolved.parameterTypes).map { parameter, type in
-                try cachedBinding(named: binder(parameter), type: type, value: "try _input\(parameter.ordinal)()")
+            let eagerParameters = Set(functionPlan.parameterOrder)
+            var argumentBindings: [String] = []
+            for parameter in functionPlan.parameterOrder {
+                let name = binder(parameter)
+                argumentBindings.append("let \(name) = try _input\(parameter.ordinal)()")
+                nested[parameter] = name
+            }
+            for (parameter, type) in zip(resolved.parameters, resolved.parameterTypes) where !eagerParameters.contains(parameter) {
+                argumentBindings.append(try cachedBinding(named: binder(parameter), type: type, value: "try _input\(parameter.ordinal)()"))
             }
             let bindingCode = argumentBindings
                 .flatMap { $0.split(separator: "\n", omittingEmptySubsequences: false) }
@@ -421,7 +428,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func tailBody(
-        _ body: NativeTailCallPlan.Body, function: NativeFunctionID, depthGuard: String,
+        _ body: NativeFunctionPlan.Body, function: NativeFunctionID, depthGuard: String,
         state: String, substitutions: [BinderID: String], activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
         switch body {

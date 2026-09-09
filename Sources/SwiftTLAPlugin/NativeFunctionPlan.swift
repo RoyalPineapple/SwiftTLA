@@ -1,7 +1,7 @@
 import SwiftTLA
 
-/// A tail-call optimization over checked expressions. It introduces no runtime IR.
-enum NativeTailCallPlan {
+/// Evaluation and tail-call decisions over the checked function graph.
+enum NativeFunctionPlan {
     indirect enum Body {
         case result(NativeExpressionID)
         case condition(NativeExpressionID, Body, Body)
@@ -10,13 +10,19 @@ enum NativeTailCallPlan {
         case repeatCall([NativeExpressionID])
     }
 
-    case ordinary
+    case ordinary(parameterOrder: [BinderID])
     case loop(parameterOrder: [BinderID], body: Body)
+
+    var parameterOrder: [BinderID] {
+        switch self {
+        case .ordinary(let order), .loop(let order, _): order
+        }
+    }
 
     init(function: NativeFunctionID, program: NativeResolvedProgram) {
         let resolved = program[function]
         guard resolved.callbacks.isEmpty, resolved.domainGuard == nil else {
-            self = .ordinary
+            self = .ordinary(parameterOrder: [])
             return
         }
         let parameters = Set(resolved.parameters)
@@ -28,7 +34,7 @@ enum NativeTailCallPlan {
         guard seen == parameters,
               let body = Self.lower(resolved.body, returningTo: function, visited: [function], program: program)
         else {
-            self = .ordinary
+            self = .ordinary(parameterOrder: order)
             return
         }
         self = .loop(parameterOrder: order, body: body)
@@ -42,12 +48,18 @@ enum NativeTailCallPlan {
         case .boundValue(let binder) where parameters.contains(binder):
             return ([binder], node.computationType == node.resultType)
         case .value(.integer), .value(.boolean), .value(.string): return ([], true)
-        case .ifThenElse, .and, .or, .letIn:
+        case .ifThenElse, .and, .or, .letIn,
+             .setFilter, .forAll, .exists, .choose, .functionLiteral, .sequenceSelect:
             return (entryReads(node.children[0], parameters: parameters, program: program).bindings, false)
+        case .setMap:
+            // The IR stores the mapped expression first; evaluation starts with the domain.
+            return (entryReads(node.children[1], parameters: parameters, program: program).bindings, false)
         case .letValue:
             return entryReads(node.children[1], parameters: parameters, program: program)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate,
-             .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not:
+             .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
+             .recordLiteral, .tupleLiteral, .setLiteral,
+             .cardinality, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .powerSet, .unionAll:
             var bindings: [BinderID] = []
             for child in node.children {
                 let prefix = entryReads(child, parameters: parameters, program: program)
