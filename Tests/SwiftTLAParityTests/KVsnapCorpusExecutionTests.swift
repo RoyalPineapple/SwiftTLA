@@ -25,7 +25,8 @@ struct KVsnapCorpusExecutionTests {
                 })))
             }
         ))
-        #expect(native.state.missed.values.allSatisfy(\.isEmpty))
+        let hasNoMissedVersions = native.state.missed.values.allSatisfy(\.isEmpty)
+        #expect(hasNoMissedVersions)
         #expect(try initial.value(for: missed) == formalMissed)
         let violations = try compilation.semantics.invariants.filter {
             try !runtime.invariantHolds($0, in: initial)
