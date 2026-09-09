@@ -27,9 +27,11 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         case .tuple(let items): return items.allSatisfy(\.isSupported)
         case .function(let key, let value): return key.isSupported && value.isSupported
         case .union:
-            let hasSupportedAlternatives = alternatives.allSatisfy(\.isSupported)
-            let structuralAlternatives = Set(alternatives.filter { !$0.isScalar })
-            return hasSupportedAlternatives && structuralAlternatives.count <= 1
+            let hasSupportedShapes = possibleShapes.allSatisfy(\.isSupported)
+            let collectionShapes = Set(possibleShapes.filter { !$0.isScalar })
+            // TLA collection predicates can fail on the wrong kind of value.
+            // Until we can distinguish those kinds safely, allow only one.
+            return hasSupportedShapes && collectionShapes.count <= 1
         case .record(let fields):
             let hasUniqueNames = Set(fields.map(\.name)).count == fields.count
             let hasSupportedFields = fields.allSatisfy { $0.shape.isSupported }
@@ -38,8 +40,10 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         }
     }
 
-    private var alternatives: [Self] {
-        if case .union(let first, let second) = self { return first.alternatives + second.alternatives }
+    private var possibleShapes: [Self] {
+        if case .union(let first, let second) = self {
+            return first.possibleShapes + second.possibleShapes
+        }
         return [self]
     }
 
@@ -93,7 +97,7 @@ public indirect enum FormalValueShape: Hashable, Sendable {
             let checks = fields.map { nested($0.shape, "\(value)[\(TLAValue.string($0.name).description)]") }
             return "(DOMAIN \(value) = {\(keys)}" + checks.map { " /\\ (\($0))" }.joined() + ")"
         case .union:
-            let ordered = alternatives.filter(\.isScalar) + alternatives.filter { !$0.isScalar }
+            let ordered = possibleShapes.filter(\.isScalar) + possibleShapes.filter { !$0.isScalar }
             return "(" + ordered.map { "(\(nested($0, value)))" }.joined(separator: " \\/ ") + ")"
         case .unsupported: return "FALSE"
         }
