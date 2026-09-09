@@ -293,3 +293,28 @@ import Testing
             formalOperatorDefinitions: [operation]).compile()
     }
 }
+
+
+extension NativeResolutionContractTests {
+    @Test("resolved roots retain converged types without retaining earlier passes")
+    func convergedRootAnnotations() throws {
+        let compilation = try TLASpec(name: "ConvergedRoots", variables: [
+            .init(name: "members", initialization: .value(.set([])), origin: .compiler)
+        ], actions: [
+            .init(name: "insert", body: .assign(.named("members"), .setLiteral([.int(1)])))
+        ], invariants: [
+            .init(name: "Nonempty", body: .greaterThan(.cardinality(.variable("members")), .int(0)))
+        ]).compile()
+        let inference = try NativeTypeInference(compilation: compilation)
+        #expect(inference.checkedRoots.map(\.resultType) == [.set(.int), .set(.int), .bool])
+        #expect(inference.checkedRoots.allSatisfy { $0.scope.checkedRoots.isEmpty })
+        let program = try NativeResolvedProgram(compilation: compilation)
+        let initial = try #require(program.initializations.values.first)
+        #expect(program[initial].resultType == .set(.int))
+        let action = try #require(program.actions.values.first)
+        let assigned = try #require(program[action].expressions.first)
+        #expect(program[assigned].resultType == .set(.int))
+        let invariant = try #require(program.invariants.values.first)
+        #expect(program[invariant].resultType == .bool)
+    }
+}

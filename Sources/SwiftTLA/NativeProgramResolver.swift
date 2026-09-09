@@ -25,6 +25,7 @@ private struct NativeResolvedFunctionKey: Hashable {
 private final class NativeProgramResolver {
     let compilation: CompiledSpecification
     let inference: NativeTypeInference
+    var checkedRoots: ArraySlice<NativeCheckedExpression>
     var expressions: [NativeResolvedExpression] = []
     var actions: [NativeResolvedAction] = []
     var functions: [NativeResolvedFunction?] = []
@@ -35,24 +36,23 @@ private final class NativeProgramResolver {
     init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata) throws {
         self.compilation = compilation
         inference = try .init(compilation: compilation, sourceTypes: sourceTypes)
+        checkedRoots = inference.checkedRoots[...]
     }
 
     func resolve() throws -> NativeResolvedProgram {
         var initializations: [VariableID: NativeExpressionID] = [:]
         for item in compilation.semantics.variableInitializations {
-            let expected = try require(inference.variables[item.variable])
-            switch item.initialization {
-            case .value(let value): initializations[item.variable] = try expression(.value(value), expected: expected)
-            case .expression(let value): initializations[item.variable] = try expression(value, expected: expected)
-            case .memberOf(let value): initializations[item.variable] = try expression(value, expected: .set(expected))
-            }
+            initializations[item.variable] = try nextExpression()
         }
         var actionRoots: [ActionID: NativeActionNodeID] = [:]
         for item in compilation.semantics.actions { actionRoots[item.id] = try action(item.body) }
         var invariantRoots: [PropertyID: NativeExpressionID] = [:]
-        for item in compilation.semantics.invariants { invariantRoots[item.id] = try expression(item.body, expected: .bool) }
-        let constraint = try compilation.semantics.constraint.map { try expression($0, expected: .bool) }
-        let assume = try compilation.semantics.assume.map { try expression($0, expected: .bool) }
+        for item in compilation.semantics.invariants { invariantRoots[item.id] = try nextExpression() }
+        let constraint = try compilation.semantics.constraint.map { _ in try nextExpression() }
+        let assume = try compilation.semantics.assume.map { _ in try nextExpression() }
+        guard checkedRoots.isEmpty else {
+            throw NativeTypeInference.diagnostic("resolution", "unconsumed checked roots")
+        }
         var checks: [NativeProjectionPair: Bool] = [:]
         for node in expressions {
             collectProjection(node.computationType, to: node.resultType, checks: &checks)
@@ -105,17 +105,17 @@ private final class NativeProgramResolver {
         var values: [NativeExpressionID] = []
         var bindings: [BinderID: NativeType] = [:]
         switch value {
-        case .assign(let id, let rhs): values = [try expression(rhs, expected: require(inference.variables[id]))]
+        case .assign: values = [try nextExpression()]
         case .unchanged: break
-        case .guard_(let condition): values = [try expression(condition, expected: .bool)]
-        case .existsAction(let id, let domain, let body):
+        case .guard_: values = [try nextExpression()]
+        case .existsAction(let id, _, let body):
             let type = try require(inference.bindings[id]); bindings[id] = type
-            values = [try expression(domain, expected: .set(type))]; children = [try action(body)]
-        case .define(let id, let rhs, let body):
+            values = [try nextExpression()]; children = [try action(body)]
+        case .define(let id, _, let body):
             let type = try require(inference.bindings[id]); bindings[id] = type
-            values = [try expression(rhs, expected: type)]; children = [try action(body)]
-        case .ifElse(let condition, let yes, let no):
-            values = [try expression(condition, expected: .bool)]; children = [try action(yes), try action(no)]
+            values = [try nextExpression()]; children = [try action(body)]
+        case .ifElse(_, let yes, let no):
+            values = [try nextExpression()]; children = [try action(yes), try action(no)]
         case .and(let lhs, let rhs), .or(let lhs, let rhs): children = [try action(lhs), try action(rhs)]
         }
         let id = NativeActionNodeID(ordinal: actions.count)
@@ -123,12 +123,13 @@ private final class NativeProgramResolver {
         return id
     }
 
-    func expression(
-        _ value: CompiledStateExpr, expected: NativeType? = nil,
-        callbackScope: [NativeCallbackUseKey: NativeCallbackID] = [:]
-    ) throws -> NativeExpressionID {
-        let checked = try inference.resolutionScope(value, expected: expected)
-        return try expression(checked, callbackScope: callbackScope)
+    /// Consume roots in the shared program's initialization/action/predicate order.
+    func nextExpression() throws -> NativeExpressionID {
+        let checked = try require(checkedRoots.popFirst())
+        for type in [checked.resultType, checked.computationType] where !type.resolved {
+            throw NativeTypeInference.unresolvedDiagnostic(type, at: "resolution")
+        }
+        return try expression(checked, callbackScope: [:])
     }
 
     func expression(
