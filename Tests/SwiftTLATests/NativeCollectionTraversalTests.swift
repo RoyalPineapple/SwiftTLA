@@ -8,11 +8,11 @@ private struct IndependentCollectionDomains {
     struct Device: Identifiable, Sendable { let id: Int }
     static var spec: TLASpec {
         TLASpec("IndependentCollectionDomains") {
-            let first = SymmetricCollectionVar<Device, Int>("first")
-            let second = SymmetricCollectionVar<Device, Int>("second")
+            let first = CollectionVar<Device, Int>("first")
+            let second = CollectionVar<Device, Int>("second")
             let selected = Var<Int>("selected")
-            SymmetricCollection(first, verificationScope: 2, initial: 0)
-            SymmetricCollection(second, verificationScope: 2, initial: 0)
+            ModelCollection(first, verificationScope: 2, initial: 0)
+            ModelCollection(second, verificationScope: 2, initial: 0)
             Variable(selected, 0)
             CollectionAction("markSecond", on: second) { member in
                 second.update(member, to: 1)

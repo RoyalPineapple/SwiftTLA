@@ -1,16 +1,16 @@
 import SwiftSyntax
 
 extension ParserSession {
-    struct SymmetricCollectionSourceTypes {
+    struct ModelCollectionSourceTypes {
         let formalName: String
         let element: TypeSyntax
         let value: TypeSyntax
     }
 
-    func collectSymmetricCollectionTypes(
+    func collectModelCollectionTypes(
         in closure: ClosureExprSyntax
-    ) -> [String: SymmetricCollectionSourceTypes] {
-        var types: [String: SymmetricCollectionSourceTypes] = [:]
+    ) -> [String: ModelCollectionSourceTypes] {
+        var types: [String: ModelCollectionSourceTypes] = [:]
         for statement in closure.statements {
             guard case .decl(let declaration) = statement.item,
                   let variable = declaration.as(VariableDeclSyntax.self)
@@ -19,7 +19,7 @@ extension ParserSession {
                 guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
                   let type = typedFacadeType(call.calledExpression),
-                  type.name == "SymmetricCollectionVar",
+                  type.name == "CollectionVar",
                   let formalName = call.arguments.first?.expression
                     .as(StringLiteralExprSyntax.self)?.representedLiteralValue
                 else { continue }
@@ -37,10 +37,10 @@ extension ParserSession {
         return types
     }
 
-    func parseSymmetricCollectionDecl(
+    func parseModelCollectionDecl(
         _ call: FunctionCallExprSyntax,
         into components: inout ParsedSpecComponents,
-        collectionTypes: [String: SymmetricCollectionSourceTypes]
+        collectionTypes: [String: ModelCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
         guard let collectionReference = arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
@@ -54,28 +54,28 @@ extension ParserSession {
               let valueType = Self.sourceTypeSpelling(types.value)
         else {
             components.diagnostics.append(.init(
-                message: "Symmetric collections require SymmetricCollectionVar<Element, Value>, "
+                message: "Model collections require CollectionVar<Element, Value>, "
                     + "a positive integer literal scope, and a literal uniform initial value.",
                 source: call
             ))
             return
         }
 
-        let declaration = SymmetricCollectionDecl(
+        let declaration = ModelCollectionDecl(
             name: types.formalName,
             verificationScope: scope,
             initial: initial,
             generatedElementType: elementType,
             generatedValueType: valueType
         )
-        components.symmetricCollections.append(declaration)
+        components.collections.append(declaration)
         components.variables.append(declaration.variable)
     }
 
     func parseCollectionAction(
         _ call: FunctionCallExprSyntax,
         into components: inout ParsedSpecComponents,
-        collectionTypes: [String: SymmetricCollectionSourceTypes]
+        collectionTypes: [String: ModelCollectionSourceTypes]
     ) {
         let arguments = Array(call.arguments)
         guard let actionName = extractStringArg(call, index: 0),
@@ -172,9 +172,9 @@ extension ParserSession {
         detail: String
     ) -> SourceParseDiagnostic {
         .init(
-            message: "\(detail) for symmetric collection '\(collection)' in action '\(action)': "
+            message: "\(detail) for model collection '\(collection)' in action '\(action)': "
                 + "member identity is opaque and may only select or update its owning collection. "
-                + "Model the distinction as member state or use a non-symmetric collection.",
+                + "Model the distinction as member state or use a non-model collection.",
             source: source
         )
     }

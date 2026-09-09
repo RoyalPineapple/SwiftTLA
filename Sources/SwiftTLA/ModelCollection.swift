@@ -1,28 +1,28 @@
-/// A typed facade for a verification collection whose members are exchangeable.
+/// A typed collection of modeled values indexed by application member identities.
 ///
 /// Runtime element identity remains outside the verification AST. The modeled
 /// collection is a function keyed by opaque constants derived from its scope.
-public struct SymmetricCollectionVar<Element: Identifiable & Sendable, Value: TLAValueType>: Sendable {
+public struct CollectionVar<Element: Identifiable & Sendable, Value: TLAValueType>: Sendable {
   public let name: String
 
   public init(_ name: String) {
     self.name = name
   }
 
-  public subscript(_ member: SymmetricMember<Element>) -> Expr<Value> {
+  public subscript(_ member: CollectionMember<Element>) -> Expr<Value> {
     guard member.owner == name else {
-      return Expr(.sourceIssue(.symmetricMember(collection: name, owner: member.owner)))
+      return Expr(.sourceIssue(.collectionMember(collection: name, owner: member.owner)))
     }
     return Expr(.functionApply(.variable(name), member.binding))
   }
 
-  public func update(_ member: SymmetricMember<Element>, to value: Value) -> ActionExpr {
+  public func update(_ member: CollectionMember<Element>, to value: Value) -> ActionExpr {
     update(member, to: Expr<Value>(.value(value.tlaValue)))
   }
 
-  public func update(_ member: SymmetricMember<Element>, to value: Expr<Value>) -> ActionExpr {
+  public func update(_ member: CollectionMember<Element>, to value: Expr<Value>) -> ActionExpr {
     guard member.owner == name else {
-      return .assign(.named(name), .sourceIssue(.symmetricMember(collection: name, owner: member.owner)))
+      return .assign(.named(name), .sourceIssue(.collectionMember(collection: name, owner: member.owner)))
     }
     return .assign(.named(name), .except(.variable(name), member.binding, value.raw))
   }
@@ -44,7 +44,7 @@ public struct SymmetricCollectionVar<Element: Identifiable & Sendable, Value: TL
   }
 }
 
-public struct SymmetricMember<Element: Identifiable & Sendable>: Sendable {
+public struct CollectionMember<Element: Identifiable & Sendable>: Sendable {
   fileprivate let owner: String
   fileprivate let binding: StateExpr
 
@@ -54,8 +54,8 @@ public struct SymmetricMember<Element: Identifiable & Sendable>: Sendable {
   }
 }
 
-public struct SymmetricCollectionDecl: SpecComponent, Sendable {
-  package let metadata: SymmetricCollectionMetadata
+public struct ModelCollectionDecl: SpecComponent, Sendable {
+  package let metadata: ModelCollectionMetadata
   let generatedElementType: String?
   let generatedValueType: String?
 
@@ -70,7 +70,7 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
     generatedElementType: String?,
     generatedValueType: String?
   ) {
-    self.metadata = SymmetricCollectionMetadata(
+    self.metadata = ModelCollectionMetadata(
       name: name,
       verificationScope: verificationScope,
       initial: initial
@@ -89,13 +89,12 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   }
 }
 
-package struct SymmetricCollectionMetadata: Equatable, Sendable {
+package struct ModelCollectionMetadata: Equatable, Sendable {
   package let name: String
   package let verificationScope: Int
   package let initial: TLAValue
   package let members: [TLAValue]
   package let domainSymbol: String
-  package let symmetrySymbol: String
 
   init(name: String, verificationScope: Int, initial: TLAValue) {
     let symbolStem = name.prefix(1).uppercased() + name.dropFirst()
@@ -108,98 +107,17 @@ package struct SymmetricCollectionMetadata: Equatable, Sendable {
     self.initial = initial
     self.members = members
     self.domainSymbol = "\(symbolStem)Keys"
-    self.symmetrySymbol = "Symm\(symbolStem)"
   }
 
   package var generatedSymbols: [String] {
     members.compactMap { value in
       guard case .constant(let symbol) = value else { return nil }
       return symbol
-    } + [domainSymbol, symmetrySymbol]
+    } + [domainSymbol]
   }
 }
 
-struct SymmetryPlan: Sendable {
-  private let compilationIdentity: CompilationIdentity
-  private let groups: [[[CompiledValue: CompiledValue]]]
-
-  init(
-    compilation: CompiledSpecification,
-    reduction: SymmetryReduction
-  ) throws {
-    compilationIdentity = compilation.identity
-    guard case .enabled(let limit) = reduction else {
-      groups = []
-      return
-    }
-
-    let domains = compilation.semantics.symmetricCollections.map(\.members)
-      + compilation.semantics.symmetrySets.map { $0.values.sorted() }
-    guard domains.isEmpty == false else {
-      throw FiniteExplorationConfigurationError.symmetryReductionWithoutDeclarations
-    }
-
-    var permutationCount = 1
-    var groups: [[[CompiledValue: CompiledValue]]] = []
-    for members in domains {
-      let permutations = try Self.permutations(
-        of: members,
-        maximumCount: limit / permutationCount,
-        precedingCount: permutationCount,
-        limit: limit
-      )
-      permutationCount *= permutations.count
-      groups.append(permutations.map { permutation in
-        Dictionary(uniqueKeysWithValues: zip(members, permutation))
-      })
-    }
-    self.groups = groups
-  }
-
-  func canonicalState(_ state: CompiledState) throws -> CompiledState {
-    try state.requireIdentity(compilationIdentity)
-    let candidates = groups.reduce([state]) { candidates, group in
-      candidates.flatMap { candidate in
-        group.map { mapping in
-          candidate.applying(mapping)
-        }
-      }
-    }
-    return candidates.min() ?? state
-  }
-
-  private static func permutations(
-    of values: [CompiledValue],
-    maximumCount: Int,
-    precedingCount: Int,
-    limit: Int
-  ) throws -> [[CompiledValue]] {
-    var permutations: [[CompiledValue]] = [[]]
-    for value in values {
-      var next: [[CompiledValue]] = []
-      for permutation in permutations {
-        for index in 0...permutation.count {
-          guard next.count < maximumCount else {
-            let (required, overflow) = precedingCount.multipliedReportingOverflow(
-              by: next.count + 1
-            )
-            throw FiniteExplorationConfigurationError.permutationLimitExceeded(
-              required: overflow ? .max : required,
-              limit: limit
-            )
-          }
-          var candidate = permutation
-          candidate.insert(value, at: index)
-          next.append(candidate)
-        }
-      }
-      permutations = next
-    }
-    return permutations
-  }
-}
-
-enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
+enum ModelCollectionValidationError: Error, CustomStringConvertible {
   case invalidScope(collection: String, scope: Int)
   case missingCollectionName
   case invalidCollectionName(String)
@@ -211,27 +129,27 @@ enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
   public var description: String {
     switch self {
     case .invalidScope(let collection, let scope):
-      return "Symmetric collection '\(collection)' has verification scope \(scope); use a positive scope."
+      return "Model collection '\(collection)' has verification scope \(scope); use a positive scope."
     case .missingCollectionName:
-      return "A symmetric collection is missing a name; provide a unique collection name."
+      return "A model collection is missing a name; provide a unique collection name."
     case .invalidCollectionName(let name):
-      return "Symmetric collection '\(name)' is not a formal identifier; use letters, digits, and underscores, beginning with a letter or underscore."
+      return "Model collection '\(name)' is not a formal identifier; use letters, digits, and underscores, beginning with a letter or underscore."
     case .duplicateCollection(let collection):
-      return "Symmetric collection '\(collection)' is declared more than once; declare it once with one scope."
+      return "Model collection '\(collection)' is declared more than once; declare it once with one scope."
     case .symbolCollision(let collection, let symbol):
-      return "Symmetric collection '\(collection)' generated symbol '\(symbol)' collides with an existing symbol; rename the collection."
+      return "Model collection '\(collection)' generated symbol '\(symbol)' collides with an existing symbol; rename the collection."
     case .invalidOwnership(let collection):
-      return "Symmetric collection '\(collection)' must own exactly one modeled variable; remove duplicate declarations."
+      return "Model collection '\(collection)' must own exactly one modeled variable; remove duplicate declarations."
     case .invalidDomain(let collection):
-      return "Symmetric collection '\(collection)' must initialize every scoped member to the declared uniform value; "
-        + "use SymmetricCollection(_:verificationScope:initial:)."
+      return "Model collection '\(collection)' must initialize every scoped member to the declared uniform value; "
+        + "use ModelCollection(_:verificationScope:initial:)."
     }
   }
 }
 
 extension TLASpec {
-  func symmetricCollectionValidationError() -> SymmetricCollectionValidationError? {
-    let collections = symmetricCollections
+  func collectionValidationError() -> ModelCollectionValidationError? {
+    let collections = self.collections
     guard !collections.isEmpty else { return nil }
 
     var collectionNames = Set<String>()
@@ -276,12 +194,12 @@ extension TLASpec {
 }
 
 @discardableResult
-public func SymmetricCollection<Element: Identifiable & Sendable, Value: TLAValueType>(
-  _ collection: SymmetricCollectionVar<Element, Value>,
+public func ModelCollection<Element: Identifiable & Sendable, Value: TLAValueType>(
+  _ collection: CollectionVar<Element, Value>,
   verificationScope: Int,
   initial: Value
-) -> SymmetricCollectionDecl {
-  SymmetricCollectionDecl(
+) -> ModelCollectionDecl {
+  ModelCollectionDecl(
     name: collection.name,
     verificationScope: verificationScope,
     initial: initial.tlaValue,
@@ -293,11 +211,11 @@ public func SymmetricCollection<Element: Identifiable & Sendable, Value: TLAValu
 @discardableResult
 public func CollectionAction<Element: Identifiable & Sendable, Value: TLAValueType>(
   _ name: String,
-  on collection: SymmetricCollectionVar<Element, Value>,
-  @ActionBuilder _ body: (SymmetricMember<Element>) -> ActionExpr
+  on collection: CollectionVar<Element, Value>,
+  @ActionBuilder _ body: (CollectionMember<Element>) -> ActionExpr
 ) -> ActionDecl {
   let member = "member"
-  let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member))
+  let token = CollectionMember<Element>(owner: collection.name, binding: .variable(member))
   return ActionDecl(
     name,
     .existsAction(member, collection.memberDomain, body(token))

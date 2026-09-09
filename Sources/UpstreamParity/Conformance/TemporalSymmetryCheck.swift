@@ -214,8 +214,8 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TemporalSymmetryOutcome {
     let scope = symmetryCase.scope
-    guard compilation.machineSurfacePlan.symmetricCollections.count == 1,
-          let collection = compilation.machineSurfacePlan.symmetricCollections.first,
+    guard compilation.machineSurfacePlan.collections.count == 1,
+          let collection = compilation.machineSurfacePlan.collections.first,
           collection.members.count == scope else {
       throw EvidenceFormatError.invalidField(
         record: symmetryCase.id, field: "symmetric collection")
@@ -508,9 +508,10 @@ private func fairness(_ fairness: TemporalFairnessMode) -> [FairnessCondition] {
 }
 
 package func symmetryConformanceSpec(scope: Int) -> TLASpec {
-  let chosen = SymmetricCollectionVar<ConformanceMember, Int>("chosen")
-  return TLASpec("SymmetricCollection\(scope)") {
-    SymmetricCollection(chosen, verificationScope: scope, initial: 0)
+  let chosen = CollectionVar<ConformanceMember, Int>("chosen")
+  return TLASpec("ModelCollection\(scope)") {
+    ModelCollection(chosen, verificationScope: scope, initial: 0)
+    Symmetry(chosen)
     CollectionAction("Choose", on: chosen) { member in
       chosen[member] == 0 && chosen.update(member, to: 1)
     }

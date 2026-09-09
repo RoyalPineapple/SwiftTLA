@@ -5,7 +5,7 @@ import SwiftBasicFormat
 package struct ParsedSpecComponents {
     var variables: [NamedVar] = []
     var actions: [NamedAction] = []
-    var symmetricCollections: [SymmetricCollectionDecl] = []
+    var collections: [ModelCollectionDecl] = []
     var diagnostics: [SourceParseDiagnostic] = []
     var invariants: [(name: String, body: StateExpr)] = []
     var temporal: [(name: String, expr: TemporalExpr)] = []
@@ -19,7 +19,7 @@ package struct ParsedSpecComponents {
     var sourceAlgorithms: [Algorithm] = []
     var formalParameters: [FormalModuleParameter] = []
     var formalOperatorDefinitions: [FormalOperatorDefinition] = []
-    var symmetrySets: [SymmetrySet] = []
+    var symmetryDeclarations: [SymmetrySetDecl] = []
     var constants: [ConstantDecl] = []
 
     package var hasStateDeclarations: Bool {
@@ -35,7 +35,7 @@ extension ParserSession {
         let outerBindings = specBindings
         specBindings = .init()
         defer { specBindings = outerBindings }
-        let collectionTypes = collectSymmetricCollectionTypes(in: closure)
+        let collectionTypes = collectModelCollectionTypes(in: closure)
         sourceScope = typedFacadeScope(
             .empty,
             bindings: collectionTypes.map {
@@ -134,7 +134,7 @@ extension ParserSession {
                 if let algorithm = parseAlgorithm(call, into: &components) {
                     specBindings.algorithms[sourceName] = algorithm
                 }
-            } else if typedFacadeType(call.calledExpression)?.name == "SymmetricCollectionVar" {
+            } else if typedFacadeType(call.calledExpression)?.name == "CollectionVar" {
                 continue
             } else if resolveVarCall(call, in: declarationScope) != nil {
                 containsVariableConstructor = true
@@ -606,7 +606,7 @@ extension ParserSession {
         into components: inout ParsedSpecComponents,
         loopVar: String? = nil,
         loopValue: Int? = nil,
-        collectionTypes: [String: SymmetricCollectionSourceTypes] = [:]
+        collectionTypes: [String: ModelCollectionSourceTypes] = [:]
     ) {
         guard let name = builderCallName(call.calledExpression) else {
             components.diagnostics.append(.init(
@@ -621,8 +621,8 @@ extension ParserSession {
             if let algorithm = parseAlgorithm(call, into: &components) {
                 components.sourceAlgorithms.append(algorithm)
             }
-        case "SymmetricCollection":
-            parseSymmetricCollectionDecl(call, into: &components, collectionTypes: collectionTypes)
+        case "ModelCollection":
+            parseModelCollectionDecl(call, into: &components, collectionTypes: collectionTypes)
         case "CollectionAction":
             parseCollectionAction(call, into: &components, collectionTypes: collectionTypes)
         case "Variable":
@@ -776,6 +776,13 @@ extension ParserSession {
         _ call: FunctionCallExprSyntax,
         into components: inout ParsedSpecComponents
     ) {
+        if call.arguments.count == 1,
+           let source = call.arguments.first?.expression,
+           let reference = source.as(DeclReferenceExprSyntax.self),
+           case .variable(let name) = sourceScope.value(for: reference) {
+            components.symmetryDeclarations.append(.init(collectionName: name))
+            return
+        }
         guard let variableName = extractStringArg(call, index: 0), !variableName.isEmpty,
               let valuesSyntax = call.arguments.dropFirst().first?.expression,
               let values = parseSymmetryValues(valuesSyntax)
@@ -787,7 +794,7 @@ extension ParserSession {
             ))
             return
         }
-        components.symmetrySets.append(SymmetrySet(variableName: variableName, values: Set(values)))
+        components.symmetryDeclarations.append(.init(variableName, Set(values)))
     }
 
     private func parseRefinement(
@@ -1416,12 +1423,12 @@ extension ParserSession {
         }
         guard let body = parseInvariantBody(
             closure,
-            symmetricCollections: Set(components.symmetricCollections.map(\.name))
+            collections: Set(components.collections.map(\.name))
         ) else {
-            let symmetricCollections = Set(components.symmetricCollections.map(\.name))
+            let collections = Set(components.collections.map(\.name))
             if let expression = unsupportedInvariantExpression(
                 in: closure,
-                symmetricCollections: symmetricCollections
+                collections: collections
             ) {
                 components.diagnostics.append(.init(
                     message: "Invariant '\(name)' contains an unsupported invariant expression.",
@@ -1440,12 +1447,12 @@ extension ParserSession {
 
     func parseInvariantBody(
         _ closure: ClosureExprSyntax,
-        symmetricCollections: Set<String>
+        collections: Set<String>
     ) -> StateExpr? {
         var expressions: [StateExpr] = []
         for statement in closure.statements {
             guard case .expr(let expression) = statement.item else { return nil }
-            guard let parsed = decodeInvariantExpression(expression, symmetricCollections: symmetricCollections)
+            guard let parsed = decodeInvariantExpression(expression, collections: collections)
             else { return nil }
             expressions.append(parsed)
         }
@@ -1455,25 +1462,25 @@ extension ParserSession {
 
     func decodeInvariantExpression(
         _ expression: ExprSyntax,
-        symmetricCollections: Set<String>
+        collections: Set<String>
     ) -> StateExpr? {
-        if let predicate = parseCollectionPredicate(expression, symmetricCollections: symmetricCollections) {
+        if let predicate = parseCollectionPredicate(expression, collections: collections) {
             return predicate
         }
         let unwrapped = unwrapSingleElementTuple(expression)
         if unwrapped != expression {
-            return decodeInvariantExpression(unwrapped, symmetricCollections: symmetricCollections)
+            return decodeInvariantExpression(unwrapped, collections: collections)
         }
         return decodeStateExpr(unwrapped)
     }
 
     func unsupportedInvariantExpression(
         in closure: ClosureExprSyntax,
-        symmetricCollections: Set<String>
+        collections: Set<String>
     ) -> ExprSyntax? {
         for statement in closure.statements {
             guard case .expr(let expression) = statement.item else { continue }
-            if decodeInvariantExpression(expression, symmetricCollections: symmetricCollections) == nil {
+            if decodeInvariantExpression(expression, collections: collections) == nil {
                 return expression
             }
         }
@@ -1482,12 +1489,12 @@ extension ParserSession {
 
     func parseCollectionPredicate(
         _ expression: ExprSyntax,
-        symmetricCollections: Set<String>
+        collections: Set<String>
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
         return decodeCollectionPredicate(
             call,
-            requiringCollectionIn: symmetricCollections
+            requiringCollectionIn: collections
         ) { body, scope in
             decodeTypedFacadeValue(body, scope: scope)
         }

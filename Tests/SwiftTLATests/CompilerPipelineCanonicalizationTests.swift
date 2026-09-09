@@ -105,8 +105,8 @@ private struct CompilerPipelineInitializationModel {
 private struct CompilerPipelineCollectionModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineCollectionModel") {
-            let devices = SymmetricCollectionVar<CompilerPipelineMember, Int>("devices")
-            SymmetricCollection(devices, verificationScope: 2, initial: 0)
+            let devices = CollectionVar<CompilerPipelineMember, Int>("devices")
+            ModelCollection(devices, verificationScope: 2, initial: 0)
             CollectionAction("advance", on: devices) { member in
                 devices[member] == 0 && devices.update(member, to: 1)
             }
@@ -2214,11 +2214,11 @@ struct CompilerPipelineCanonicalizationTests {
     }
 
     @Test("symmetric collection actions lower to the declared finite member binding")
-    func symmetricCollectionActionsUseDeclaredMemberBindings() throws {
+    func collectionActionsUseDeclaredMemberBindings() throws {
         let source = try CompilerPipelineCollectionModel.spec.loweredSourceModel()
         let compilation = try source.compile()
         let devices = try #require(source.variables.first { $0.name == "devices" })
-        let declaration = try #require(source.symmetricCollections.first { $0.name == "devices" })
+        let declaration = try #require(source.collections.first { $0.name == "devices" })
         let action = try #require(source.actions.first { $0.name == "advance" })
         let compiledAction = try #require(compilation.semantics.actions.first)
         let machineVariable = try #require(
@@ -2251,7 +2251,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(machineCollection.elementType == "CompilerPipelineMember")
         #expect(machineCollection.valueType == "Int")
         #expect(machineCollection.formalName == "devices")
-        #expect(compilation.machineSurfacePlan.symmetricCollections == [machineCollection])
+        #expect(compilation.machineSurfacePlan.collections == [machineCollection])
         #expect(hasOuterExistential)
         #expect(try successors.map { successor in
             try successor.arguments.map { try $0.rendered(using: compilation.layout) }
@@ -2266,9 +2266,9 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("lowered collection actions retain nested existential bodies")
     func loweredCollectionActionsRetainNestedExistentials() throws {
-        let devices = SymmetricCollectionVar<CompilerPipelineMember, Int>("devices")
+        let devices = CollectionVar<CompilerPipelineMember, Int>("devices")
         let specification = TLASpec("NestedCollectionExistential") {
-            SymmetricCollection(devices, verificationScope: 2, initial: 0)
+            ModelCollection(devices, verificationScope: 2, initial: 0)
             CollectionAction("advance", on: devices) { member in
                 .existsAction(
                     "choice",
@@ -2290,7 +2290,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstAction.bindings.isEmpty)
         #expect(
             compiledAction.bindings[0].values
-                == specification.symmetricCollections[0].metadata.members.map(CompiledValue.init(formal:))
+                == specification.collections[0].metadata.members.map(CompiledValue.init(formal:))
         )
         guard case .existsAction = compiledAction.body else {
             Issue.record("Expected the authored nested existential to remain in the compiled body")
@@ -2312,7 +2312,7 @@ struct CompilerPipelineCanonicalizationTests {
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], temporalProperties: [.init(name: "Safety", expr: .always(.value(.bool(true))))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
             {
-                let collection = SymmetricCollectionDecl(
+                let collection = ModelCollectionDecl(
                     name: "members",
                     verificationScope: 1,
                     initial: .int(0),
@@ -2324,7 +2324,7 @@ struct CompilerPipelineCanonicalizationTests {
                     variables: base.variables + [collection.variable],
                     actions: base.actions,
                     invariants: [],
-                    symmetricCollections: [collection]
+                    collections: [collection]
                 )
             }(),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], extendsModules: [.naturals])

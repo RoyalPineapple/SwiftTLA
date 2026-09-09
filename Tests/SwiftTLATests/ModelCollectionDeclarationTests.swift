@@ -2,7 +2,7 @@ import Testing
 @testable import SwiftTLA
 
 @Suite(.serialized)
-struct SymmetricCollectionDeclarationTests {
+struct ModelCollectionDeclarationTests {
   private struct Device: Identifiable {
     let id: Int
   }
@@ -11,9 +11,9 @@ struct SymmetricCollectionDeclarationTests {
     "A symmetric collection lowers declaration, predicates, and selected updates to existing AST forms"
   )
   func declarationLowersToFunctionQuantifierAndExcept() throws {
-    let phases = SymmetricCollectionVar<Device, Int>("phases")
+    let phases = CollectionVar<Device, Int>("phases")
     let spec = TLASpec("Phases") {
-      SymmetricCollection(phases, verificationScope: 2, initial: 0)
+      ModelCollection(phases, verificationScope: 2, initial: 0)
       CollectionAction("begin", on: phases) { member in
         phases[member] == 0 && phases.update(member, to: 1)
       }
@@ -23,9 +23,9 @@ struct SymmetricCollectionDeclarationTests {
       }
     }
 
-    #expect(spec.symmetricCollections.count == 1)
-    #expect(spec.symmetricCollections[0].name == "phases")
-    #expect(spec.symmetricCollections[0].verificationScope == 2)
+    #expect(spec.collections.count == 1)
+    #expect(spec.collections[0].name == "phases")
+    #expect(spec.collections[0].verificationScope == 2)
     #expect(spec.variables.map(\.name) == ["phases"])
 
     guard case .value(.function(let initial)) = spec.variables[0].initialization else {
@@ -37,7 +37,7 @@ struct SymmetricCollectionDeclarationTests {
 
     let compilation = try spec.compile()
     let initialState = try firstCompiledState(in: compilation)
-    let successors = try spec.symmetricCollections[0].metadata.members.flatMap { member in
+    let successors = try spec.collections[0].metadata.members.flatMap { member in
       try compiledSuccessors(named: "begin", arguments: [member], in: compilation, from: initialState)
     }
     #expect(successors.count == 2)

@@ -47,7 +47,7 @@ struct CompiledLowerer {
     let layout: CompiledLayout
     private let constants: [ConstantDecl]
     private let formalParameters: Set<String>
-    private let symmetricMembers: [CompiledValue]
+    private let collectionMembers: [CompiledValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
     private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
@@ -71,11 +71,11 @@ struct CompiledLowerer {
         self.layout = layout
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
-        symmetricMembers = layout.variables.compactMap(\.collection).flatMap(\.members)
+        collectionMembers = layout.variables.compactMap(\.collection).flatMap(\.members)
         self.incomingModuleParameters = incomingModuleParameters
         authoredAlgorithm = spec.sourceAlgorithms.first?.model
         var renderedNames = spec.renderedDeclarationNames()
-        renderedNames.formUnion(spec.symmetricCollections.flatMap(\.metadata.generatedSymbols))
+        renderedNames.formUnion(spec.collections.flatMap(\.metadata.generatedSymbols))
         renderedNames.formUnion(spec.symmetrySets.map { "Symm\($0.variableName)" })
         renderedNames.formUnion(incomingModuleParameters.map(\.operatorName))
         reservedRenderedNames = renderedNames
@@ -126,7 +126,7 @@ struct CompiledLowerer {
         for (declaration, variableLayout) in zip(spec.variables, layout.variables) {
             let path = "variables.\(declaration.name)"
             if case .value(let value) = declaration.initialization,
-               spec.symmetricCollections.contains(where: { $0.name == declaration.name }) == false {
+               spec.collections.contains(where: { $0.name == declaration.name }) == false {
                 try validateValue(value, at: "\(path).initialization")
             }
             initializations[variableLayout.id] = try lower(
@@ -284,7 +284,7 @@ struct CompiledLowerer {
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: Set(symmetry.values.map(CompiledValue.init(formal:))))
             },
-            symmetricCollections: try spec.symmetricCollections.map { collection in
+            collections: try spec.collections.map { collection in
                 let variable = try variable(named: collection.name, at: "variables.\(collection.name).declaration")
                 guard layout.variables.indices.contains(variable.ordinal),
                       let compiledCollection = layout.variables[variable.ordinal].collection else {
@@ -1879,15 +1879,15 @@ struct CompiledLowerer {
 
     private func validateValue(_ value: TLAValue, at path: String) throws {
         let compiled = CompiledValue(formal: value)
-        guard let member = symmetricMembers.first(where: { compiled.contains($0) }) else { return }
+        guard let member = collectionMembers.first(where: { compiled.contains($0) }) else { return }
         let renderedMember = try member.rendered(using: layout)
         throw CompilationDiagnostic(
-            code: .invalidSymmetricCollection,
+            code: .invalidModelCollection,
             stage: .binding,
             path: path,
             expected: "logic invariant under exchangeable member renaming",
             actual: "authored expression names compiler-owned symmetric member '\(renderedMember)'",
-            nextSafeAction: "Use the symmetric collection declaration instead of a concrete member."
+            nextSafeAction: "Use the model collection declaration instead of a concrete member."
         )
     }
 

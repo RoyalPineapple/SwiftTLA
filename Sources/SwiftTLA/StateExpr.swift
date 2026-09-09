@@ -190,7 +190,7 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
     case actionBinding(action: String, parameter: String?, problem: String)
     case formalDeclaration(kind: String, name: String?, problem: String)
     case missingVariableInitializer(name: String, type: String)
-    case symmetricMember(collection: String, owner: String)
+    case collectionMember(collection: String, owner: String)
 
     private var diagnostic: (code: CompilationDiagnostic.Code, expected: String, actual: String, nextSafeAction: String) {
         switch self {
@@ -238,8 +238,8 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
                 "variable '\(name)' has no initial value",
                 "Provide the initial value in Var or Variable, then compile again."
             )
-        case .symmetricMember(let collection, let owner):
-            return (.invalidSymmetricMember, "a member declared by symmetric collection '\(collection)'", "the member belongs to symmetric collection '\(owner)'", "Use a member from '\(collection)', then compile again.")
+        case .collectionMember(let collection, let owner):
+            return (.invalidCollectionMember, "a member declared by model collection '\(collection)'", "the member belongs to model collection '\(owner)'", "Use a member from '\(collection)', then compile again.")
         }
     }
 

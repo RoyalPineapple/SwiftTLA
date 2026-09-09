@@ -10,8 +10,8 @@ struct Device: Identifiable {
 struct DeviceContract {
     static var spec: TLASpec {
         TLASpec("DeviceContract") {
-            let phases = SymmetricCollectionVar<Device, Int>("phases")
-            SymmetricCollection(phases, verificationScope: 4, initial: 0)
+            let phases = CollectionVar<Device, Int>("phases")
+            ModelCollection(phases, verificationScope: 4, initial: 0)
 
             CollectionAction("beginConnect", on: phases) { member in
                 phases[member] == 0 && phases.update(member, to: 1)

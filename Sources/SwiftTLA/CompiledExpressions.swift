@@ -597,7 +597,7 @@ struct CompiledSymmetrySet: Sendable {
     let values: Set<CompiledValue>
 }
 
-struct CompiledSymmetricCollection: Sendable {
+struct CompiledModelCollection: Sendable {
     let variable: VariableID
     let members: [CompiledValue]
     let domainSymbol: String
@@ -618,5 +618,5 @@ struct CompiledSemantics: Sendable {
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]
     let symmetrySets: [CompiledSymmetrySet]
-    let symmetricCollections: [CompiledSymmetricCollection]
+    let collections: [CompiledModelCollection]
 }

@@ -20,8 +20,8 @@ public struct StringDevice: Identifiable, Sendable {
 public struct GeneratedSymmetricMachine: Sendable {
   public static var spec: TLASpec {
     TLASpec("GeneratedSymmetricMachine") {
-      let devices = SymmetricCollectionVar<IntegerDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<IntegerDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
       }
@@ -33,8 +33,8 @@ public struct GeneratedSymmetricMachine: Sendable {
 public struct GeneratedExpressionSymmetricMachine {
   public static var spec: TLASpec {
     TLASpec("GeneratedExpressionSymmetricMachine") {
-      let devices = SymmetricCollectionVar<IntegerDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<IntegerDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] < 5 && devices.update(member, to: devices[member] + 1)
       }
@@ -46,8 +46,8 @@ public struct GeneratedExpressionSymmetricMachine {
 public struct GeneratedScopedSymmetricMachine {
   public static var spec: TLASpec {
     TLASpec("GeneratedScopedSymmetricMachine") {
-      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<StringDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
       }
@@ -60,9 +60,9 @@ public struct GeneratedSharedGuardSymmetricMachine {
   public static var spec: TLASpec {
     TLASpec("GeneratedSharedGuardSymmetricMachine") {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
+      let devices = CollectionVar<StringDevice, Int>("devices")
       Variable(phase, 4)
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         phase == 5 && devices[member] == 0 && devices.update(member, to: 1)
       }
@@ -74,8 +74,8 @@ public struct GeneratedSharedGuardSymmetricMachine {
 public struct GeneratedMultiStatementSymmetricMachine {
   public static var spec: TLASpec {
     TLASpec("GeneratedMultiStatementSymmetricMachine") {
-      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<StringDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 || devices[member] == 1
         devices[member] == 1
@@ -89,8 +89,8 @@ public struct GeneratedMultiStatementSymmetricMachine {
 public struct GeneratedDisjunctiveSymmetricMachine {
   public static var spec: TLASpec {
     TLASpec("GeneratedDisjunctiveSymmetricMachine") {
-      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<StringDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
         (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
           || (devices[member] == 2 && devices.update(member, to: devices[member] + 20))
@@ -104,9 +104,9 @@ public struct GeneratedAllSatisfyPredicateMachine {
   public static var spec: TLASpec {
     TLASpec("GeneratedAllSatisfyPredicateMachine") {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
+      let devices = CollectionVar<StringDevice, Int>("devices")
       Variable(phase, 0)
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      ModelCollection(devices, verificationScope: 2, initial: 0)
       SwiftTLA.Action("advance") {
         devices.allSatisfy { $0 == 0 } && phase.becomes(1)
       }
@@ -119,9 +119,9 @@ public struct GeneratedContainsPredicateMachine {
   public static var spec: TLASpec {
     TLASpec("GeneratedContainsPredicateMachine") {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<StringDevice, Int>("devices")
+      let devices = CollectionVar<StringDevice, Int>("devices")
       Variable(phase, 0)
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      ModelCollection(devices, verificationScope: 2, initial: 0)
       SwiftTLA.Action("advance") {
         devices.contains(where: { $0 == 1 }) && phase.becomes(1)
       }
@@ -130,7 +130,7 @@ public struct GeneratedContainsPredicateMachine {
 }
 
 @Suite(.serialized)
-struct SymmetricCollectionGeneratedMachineTests {
+struct ModelCollectionGeneratedMachineTests {
   private func compiledSuccessors(
     in compilation: CompiledSpecification,
     from values: [CompiledValue]
@@ -142,7 +142,7 @@ struct SymmetricCollectionGeneratedMachineTests {
   }
 
   private func collectionValue(_ values: [Int], in spec: TLASpec) throws -> TLAValue {
-    let members = try #require(spec.symmetricCollections.first?.metadata.members)
+    let members = try #require(spec.collections.first?.metadata.members)
     try #require(members.count == values.count)
     return .function(Dictionary(uniqueKeysWithValues: zip(members, values.map(TLAValue.int))))
   }
@@ -155,8 +155,8 @@ struct SymmetricCollectionGeneratedMachineTests {
   func parserRetainsCollectionStructure() throws {
     let source = """
     {
-      let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<Device, Int>(\"devices\")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction(\"begin\", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
       }
@@ -166,10 +166,10 @@ struct SymmetricCollectionGeneratedMachineTests {
 
     let parsed = SpecParser.parseSpecClosure(closure)
 
-    #expect(parsed.symmetricCollections.map(\.name) == ["devices"])
-    #expect(parsed.symmetricCollections[0].generatedElementType == "Device")
-    #expect(parsed.symmetricCollections[0].generatedValueType == "Int")
-    #expect(parsed.symmetricCollections[0].verificationScope == 2)
+    #expect(parsed.collections.map(\.name) == ["devices"])
+    #expect(parsed.collections[0].generatedElementType == "Device")
+    #expect(parsed.collections[0].generatedValueType == "Int")
+    #expect(parsed.collections[0].verificationScope == 2)
     let action = try #require(parsed.actions.first)
     guard case .existsAction(_, .domain(.variable(let collection)), _) = action.body else {
       Issue.record("Expected a collection-member existential")
@@ -183,8 +183,8 @@ struct SymmetricCollectionGeneratedMachineTests {
   func parserAndResultBuilderShareTheDeclaredCollectionName() throws {
     let source = """
     {
-      let devices = SymmetricCollectionVar<Device, Int>("phases")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<Device, Int>("phases")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
       }
@@ -194,9 +194,9 @@ struct SymmetricCollectionGeneratedMachineTests {
     }
     """
     let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
-    let devices = SymmetricCollectionVar<Device, Int>("phases")
+    let devices = CollectionVar<Device, Int>("phases")
     let built = TLASpec("DeclaredCollectionName") {
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
       }
@@ -209,7 +209,7 @@ struct SymmetricCollectionGeneratedMachineTests {
     let builtCompilation = try built.compile()
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(parsed.symmetricCollections.map(\.name) == ["phases"])
+    #expect(parsed.collections.map(\.name) == ["phases"])
     let action = try #require(parsed.actions.first)
     guard case .existsAction(_, .domain(.variable(let collection)), _) = action.body else {
       Issue.record("Expected a collection-member existential")
@@ -227,8 +227,8 @@ struct SymmetricCollectionGeneratedMachineTests {
   func parserRetainsQualifiedCollectionTypeArguments() throws {
     let source = """
     {
-      let devices = SwiftTLA.SymmetricCollectionVar<Model.Device, Swift.Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = SwiftTLA.CollectionVar<Model.Device, Swift.Int>("devices")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
     }
     """
     let statements = Parser.parse(source: source).statements
@@ -236,8 +236,8 @@ struct SymmetricCollectionGeneratedMachineTests {
 
     let parsed = SpecParser.parseSpecClosure(closure)
 
-    #expect(parsed.symmetricCollections.map(\.generatedElementType) == ["Model.Device"])
-    #expect(parsed.symmetricCollections.map(\.generatedValueType) == ["Swift.Int"])
+    #expect(parsed.collections.map(\.generatedElementType) == ["Model.Device"])
+    #expect(parsed.collections.map(\.generatedValueType) == ["Swift.Int"])
     #expect(parsed.diagnostics.isEmpty)
   }
 
@@ -245,8 +245,8 @@ struct SymmetricCollectionGeneratedMachineTests {
   func parserPreservesCollectionActionBody() throws {
     let source = """
     {
-      let devices = SymmetricCollectionVar<Device, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<Device, Int>("devices")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
       }
@@ -258,9 +258,9 @@ struct SymmetricCollectionGeneratedMachineTests {
       Issue.record("Expected a fixed collection initializer")
       return
     }
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let devices = CollectionVar<Device, Int>("devices")
     let built = TLASpec("CollectionActionBehavior") {
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
       }
@@ -280,8 +280,8 @@ struct SymmetricCollectionGeneratedMachineTests {
   func parserPreservesCollectionActionPrecedence() throws {
     let source = """
     {
-      let devices = SymmetricCollectionVar<Device, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<Device, Int>("devices")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("advance", on: devices) { member in
         (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
           || (devices[member] == 2 && devices.update(member, to: devices[member] + 20))
@@ -292,9 +292,9 @@ struct SymmetricCollectionGeneratedMachineTests {
       Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
     )
     let parsed = SpecParser.parseSpecClosure(closure)
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let devices = CollectionVar<Device, Int>("devices")
     let authored = TLASpec("AuthoredCollectionAction") {
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("advance", on: devices) { member in
         (devices[member] == 0 && devices.update(member, to: devices[member] + 1))
           || (devices[member] == 2 && devices.update(member, to: devices[member] + 20))
@@ -309,10 +309,10 @@ struct SymmetricCollectionGeneratedMachineTests {
   func parserRejectsIdentityObservations() throws {
     let source = """
     {
-      let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
-      let other = SymmetricCollectionVar<Device, Int>(\"other\")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
-      SymmetricCollection(other, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<Device, Int>(\"devices\")
+      let other = CollectionVar<Device, Int>(\"other\")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
+      ModelCollection(other, verificationScope: 2, initial: 0)
       CollectionAction(\"invalid\", on: devices) { member in
         devices[member] == 0 && other.update(member, to: 1)
       }
@@ -340,8 +340,8 @@ struct SymmetricCollectionGeneratedMachineTests {
     for body in cases {
       let source = """
       {
-        let devices = SymmetricCollectionVar<Device, Int>(\"devices\")
-        SymmetricCollection(devices, verificationScope: 2, initial: 0)
+        let devices = CollectionVar<Device, Int>(\"devices\")
+        ModelCollection(devices, verificationScope: 2, initial: 0)
         CollectionAction(\"invalid\", on: devices) { member in
           \(body)
         }
@@ -357,8 +357,8 @@ struct SymmetricCollectionGeneratedMachineTests {
   func parserRejectsTriviaVariedRawDomainAccess() throws {
     let source = """
     {
-      let devices = SymmetricCollectionVar<Device, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<Device, Int>("devices")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("invalid", on: devices) { member in
         devices /* identity must remain opaque */ . domain == StateExpr.set([])
       }

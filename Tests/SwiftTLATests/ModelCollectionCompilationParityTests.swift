@@ -4,7 +4,7 @@ import SwiftSyntax
 import Testing
 
 @Suite(.serialized)
-struct SymmetricCollectionCompilationParityTests {
+struct ModelCollectionCompilationParityTests {
   private struct Device: Identifiable {
     let id: Int
   }
@@ -27,7 +27,7 @@ struct SymmetricCollectionCompilationParityTests {
       let bundle = compilation.renderedTLAModuleBundle()
       #expect(bundle.tla.contains("DevicesKeys == {DevicesMember0"))
       #expect(bundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))
-      #expect(bundle.cfg.contains("SYMMETRY SymmDevices"))
+      #expect(bundle.cfg.contains("SYMMETRY Symmdevices"))
       #expect(bundle.tla.contains("\"DevicesMember0\"") == false)
 
       let rawGraph = try ModelChecker(
@@ -42,8 +42,9 @@ struct SymmetricCollectionCompilationParityTests {
   func parserAndResultBuilderUseTheSameOpaqueMemberSemantics() throws {
     let source = """
     {
-      let devices = SymmetricCollectionVar<Device, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<Device, Int>("devices")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
+      Symmetry(devices)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
       }
@@ -58,8 +59,8 @@ struct SymmetricCollectionCompilationParityTests {
     let builtCompilation = try built.compile()
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(parsed.symmetricCollections.map(\.metadata)
-      == built.symmetricCollections.map(\.metadata))
+    #expect(parsed.collections.map(\.metadata)
+      == built.collections.map(\.metadata))
     #expect(parsedCompilation.description == builtCompilation.description)
     let parsedInitialStates = try CompiledRuntime(compilation: parsedCompilation).initialStates()
       .map { try $0.projection(using: parsedCompilation.layout) }
@@ -74,9 +75,10 @@ struct SymmetricCollectionCompilationParityTests {
   }
 
   private func symmetricSpec(scope: Int) -> TLASpec {
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let devices = CollectionVar<Device, Int>("devices")
     return TLASpec("SymmetricScope\(scope)") {
-      SymmetricCollection(devices, verificationScope: scope, initial: 0)
+      ModelCollection(devices, verificationScope: scope, initial: 0)
+      Symmetry(devices)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
       }
@@ -85,9 +87,10 @@ struct SymmetricCollectionCompilationParityTests {
   }
 
   private func parserParitySpec(scope: Int) -> TLASpec {
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
+    let devices = CollectionVar<Device, Int>("devices")
     return TLASpec("OpaqueMemberSemantics\(scope)") {
-      SymmetricCollection(devices, verificationScope: scope, initial: 0)
+      ModelCollection(devices, verificationScope: scope, initial: 0)
+      Symmetry(devices)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: devices[member] + 1)
       }

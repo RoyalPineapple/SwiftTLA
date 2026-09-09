@@ -249,7 +249,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case actionEnablednessInInitializer
         case cyclicVariableInitialization
         case stateDependentAssumption
-        case invalidSymmetricMember
+        case invalidCollectionMember
         case emptySpecificationName
         case invalidSpecificationName
         case duplicateVariable
@@ -257,7 +257,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateInvariant
         case duplicateAlgorithm
         case invalidAuthoredPlusCalPlan
-        case invalidSymmetricCollection
+        case invalidModelCollection
         case invalidSymmetryDeclaration
         case duplicateRecordField
         case compilationIdentityMismatch
@@ -352,8 +352,8 @@ extension ParsedSpecComponents {
             importConfigurations: importConfigurations,
             moduleInstances: moduleInstances,
             refinements: refinements,
-            symmetrySets: symmetrySets,
-            symmetricCollections: symmetricCollections,
+            symmetrySets: symmetryDeclarations.map { $0.resolved(in: collections) },
+            collections: collections,
             sourceAlgorithms: sourceAlgorithms
         )
     }
@@ -408,9 +408,9 @@ private extension TLASpec {
             }
         }
 
-        let symmetricCollectionNames = Set(symmetricCollections.map(\.name))
+        let collectionNames = Set(collections.map(\.name))
         let declarationGroups: [([String], String, String)] = [
-            (variables.filter { symmetricCollectionNames.contains($0.name) == false }.map(\.name), "variable", "variables"),
+            (variables.filter { collectionNames.contains($0.name) == false }.map(\.name), "variable", "variables"),
             (constants.map(\.name), "constant", "constants"),
             (invariants.map(\.name), "invariant", "invariants"),
             (temporalProperties.map(\.name), "temporal property", "temporalProperties"),
@@ -457,7 +457,7 @@ public extension TLASpec {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
-        try validateSymmetricCollectionDeclarations()
+        try validateModelCollectionDeclarations()
         try validateSymmetryDeclarations()
         try validateRefinements()
         let closure = try FormalModuleClosure.resolve(root: self)
@@ -783,7 +783,7 @@ public extension TLASpec {
         try source.validateUnique(source.variables.map(\.name), code: .duplicateVariable, path: "variables")
         try source.validateUnique(source.actions.map(\.name), code: .duplicateAction, path: "actions")
         try source.validateUnique(source.invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
-        try source.validateSymmetricCollectionDeclarations()
+        try source.validateModelCollectionDeclarations()
         try source.validateSymmetryDeclarations()
         try source.validateRefinements()
         let layout = CompiledLayout(spec: source, closure: context.closure)
@@ -809,17 +809,17 @@ public extension TLASpec {
         )
     }
 
-    private func validateSymmetricCollectionDeclarations() throws {
-        guard let error = symmetricCollectionValidationError() else {
+    private func validateModelCollectionDeclarations() throws {
+        guard let error = collectionValidationError() else {
             return
         }
         throw CompilationDiagnostic(
-            code: .invalidSymmetricCollection,
+            code: .invalidModelCollection,
             stage: .validation,
-            path: "symmetricCollections",
-            expected: "a valid symmetric collection declaration",
+            path: "collections",
+            expected: "a valid model collection declaration",
             actual: error.description,
-            nextSafeAction: "Correct the symmetric collection declaration, then compile again."
+            nextSafeAction: "Correct the model collection declaration, then compile again."
         )
     }
 
@@ -843,7 +843,7 @@ public extension TLASpec {
 
         lines.append("---- MODULE \(name) ----")
 
-        let symmetryModule: [StandardModule] = symmetrySets.isEmpty && symmetricCollections.isEmpty ? [] : [.tlc]
+        let symmetryModule: [StandardModule] = symmetrySets.isEmpty ? [] : [.tlc]
         let importedNames = imports.map(\.name)
         let modules = ((extendsModules + [.finiteSets, .sequences] + requiredStandardModules.sorted { $0.rawValue < $1.rawValue } + symmetryModule)
             .map(\.rawValue)
@@ -854,7 +854,7 @@ public extension TLASpec {
         lines.append("EXTENDS \(modules.joined(separator: ", "))")
         lines.append("")
 
-        let generatedMemberSymbols = symmetricCollections.flatMap { collection in
+        let generatedMemberSymbols = collections.flatMap { collection in
             collection.metadata.generatedSymbols.filter { symbol in
                 collection.metadata.members.contains(.constant(symbol))
             }
@@ -874,16 +874,15 @@ public extension TLASpec {
             lines.append("")
         }
 
-        for collection in symmetricCollections {
+        for collection in collections {
             let metadata = collection.metadata
             lines.append("\(metadata.domainSymbol) == {\(metadata.members.map(\.description).joined(separator: ", "))}")
-            lines.append("\(metadata.symmetrySymbol) == Permutations(\(metadata.domainSymbol))")
         }
         for symmetry in symmetrySets {
             let values = Array(symmetry.values).sorted()
             lines.append("Symm\(symmetry.variableName) == Permutations({\(values.map(\.description).joined(separator: ", "))})")
         }
-        if !symmetricCollections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
+        if !collections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
 
         if let assume = semantics.assume {
             lines.append("ASSUME \(try renderer.state(assume))")
@@ -956,7 +955,7 @@ public extension TLASpec {
                     nextSafeAction: "Compile the source model again."
                 )
             }
-            if let collection = semantics.symmetricCollections.first(where: { $0.variable == variable.id }) {
+            if let collection = semantics.collections.first(where: { $0.variable == variable.id }) {
                 return "\(name) = [member \\in \(collection.domainSymbol) |-> \(try collection.initial.rendered(using: layout))]"
             }
             switch initialization {
@@ -1031,7 +1030,7 @@ public extension TLASpec {
                 "CONSTANT \(replacement.operatorName) <- [\(replacement.moduleName)]\(replacement.definitionName)"
             )
         }
-        for collection in symmetricCollections {
+        for collection in collections {
             for member in collection.metadata.members {
                 lines.append("CONSTANT \(member) = \(member)")
             }
@@ -1041,9 +1040,6 @@ public extension TLASpec {
         for temporal in temporalProperties { lines.append("PROPERTY \(temporal.name)") }
         if usesSymmetryReduction {
             for symmetry in symmetrySets { lines.append("SYMMETRY Symm\(symmetry.variableName)") }
-            for collection in symmetricCollections {
-                lines.append("SYMMETRY \(collection.metadata.symmetrySymbol)")
-            }
         }
         return lines.joined(separator: "\n") + "\n"
     }
@@ -1450,14 +1446,14 @@ private struct CanonicalSpecificationEncoder {
             node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
         }
         list("symmetrySets", symmetrySets) { $0 }
-        let symmetricCollections = spec.symmetricCollections.map {
-            node("symmetric-collection", [
+        let collections = spec.collections.map {
+            node("model-collection", [
                 $0.name,
                 String($0.verificationScope),
                 canonicalValue($0.initial)
             ])
         }
-        list("symmetricCollections", symmetricCollections) { $0 }
+        list("collections", collections) { $0 }
     }
 
     private func canonicalVariable(_ variable: NamedVar) -> String {

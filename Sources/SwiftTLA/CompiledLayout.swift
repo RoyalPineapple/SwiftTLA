@@ -73,10 +73,10 @@ package struct CompiledVariableLayout: Hashable, Sendable {
     package let id: VariableID
     package let declaration: CompiledDeclaration
     package let generatedSwiftType: String?
-    package let collection: CompiledSymmetricCollectionLayout?
+    package let collection: CompiledModelCollectionLayout?
 }
 
-package struct CompiledSymmetricCollectionLayout: Hashable, Sendable {
+package struct CompiledModelCollectionLayout: Hashable, Sendable {
     package let members: [CompiledValue]
     package let elementType: String?
     package let valueType: String?
@@ -195,7 +195,7 @@ struct CompiledLayout: Hashable, Sendable {
 
     private init(spec: TLASpec, modules: [TLASpec]) {
         variables = spec.variables.enumerated().map { ordinal, variable in
-            let collection = spec.symmetricCollections.first { $0.name == variable.name }
+            let collection = spec.collections.first { $0.name == variable.name }
             return CompiledVariableLayout(
                 id: VariableID(ordinal: ordinal),
                 declaration: .init(

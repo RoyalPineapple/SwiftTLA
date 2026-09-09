@@ -2,7 +2,7 @@
 import Testing
 
 @Suite(.serialized)
-struct SymmetricCollectionCanonicalizationTests {
+struct ModelCollectionCanonicalizationTests {
   private struct Device: Identifiable {
     let id: Int
   }
@@ -174,9 +174,10 @@ struct SymmetricCollectionCanonicalizationTests {
 
   @Test("Reduced transitions retain the executed symmetric member")
   func reducedTransitionsRetainExecutedMember() throws {
-    let members = SymmetricCollectionVar<Device, Int>("members")
+    let members = CollectionVar<Device, Int>("members")
     let spec = TLASpec("MemberActions") {
-      SymmetricCollection(members, verificationScope: 2, initial: 0)
+      ModelCollection(members, verificationScope: 2, initial: 0)
+      Symmetry(members)
       CollectionAction("mark", on: members) { member in
         (members[member] == 0) && members.update(member, to: 1)
       }
@@ -194,13 +195,13 @@ struct SymmetricCollectionCanonicalizationTests {
     #expect(transitions.count == 2)
     #expect(
       Set(transitions.flatMap(\.label.arguments))
-        == Set(spec.symmetricCollections[0].metadata.members.map(CompiledValue.init(formal:)))
+        == Set(spec.collections[0].metadata.members.map(CompiledValue.init(formal:)))
     )
   }
 
   @Test("Nested symmetric values are quotient-canonicalized without collapsing identities")
   func nestedValuesUseFullStatePermutations() throws {
-    let members = SymmetricCollectionVar<Device, TLAValue>("members")
+    let members = CollectionVar<Device, TLAValue>("members")
     let selected = "selected"
     let nestedValue = StateExpr.record([
       "member": .variable(selected),
@@ -214,7 +215,8 @@ struct SymmetricCollectionCanonicalizationTests {
       ])
     ])
     let symmetric = TLASpec("NestedMembers") {
-      SymmetricCollection(members, verificationScope: 2, initial: .record([:]))
+      ModelCollection(members, verificationScope: 2, initial: .record([:]))
+      Symmetry(members)
       Action("mark") {
         .existsAction(
           selected,
@@ -224,7 +226,7 @@ struct SymmetricCollectionCanonicalizationTests {
       }
     }
     let graphs = try explorationGraphs(for: symmetric)
-    let groups = symmetric.symmetricCollections.map { $0.metadata.members }
+    let groups = symmetric.collections.map { $0.metadata.members }
     #expect(storesOneRepresentativePerOrbit(graphs.reduced, groups: groups))
     #expect(try independentlyCanonicalizedGraph(graphs.raw, groups: groups, layout: graphs.compilation.layout)
       == independentlyCanonicalizedGraph(graphs.reduced, groups: groups, layout: graphs.compilation.layout))
@@ -233,11 +235,13 @@ struct SymmetricCollectionCanonicalizationTests {
   @Test("Independent collection groups preserve the exhaustive orbit quotient at scopes one through four")
   func independentGroupsMatchAnExhaustiveRawOrbitQuotient() throws {
     for scope in 1...4 {
-      let left = SymmetricCollectionVar<Device, Int>("left")
-      let right = SymmetricCollectionVar<Device, Int>("right")
+      let left = CollectionVar<Device, Int>("left")
+      let right = CollectionVar<Device, Int>("right")
       let symmetric = TLASpec("IndependentMembers\(scope)") {
-        SymmetricCollection(left, verificationScope: scope, initial: 0)
-        SymmetricCollection(right, verificationScope: scope, initial: 0)
+        ModelCollection(left, verificationScope: scope, initial: 0)
+        Symmetry(left)
+        ModelCollection(right, verificationScope: scope, initial: 0)
+        Symmetry(right)
         CollectionAction("markLeft", on: left) { member in
           (left[member] == 0) && left.update(member, to: 1)
         }
@@ -246,7 +250,7 @@ struct SymmetricCollectionCanonicalizationTests {
         }
       }
       let graphs = try explorationGraphs(for: symmetric)
-      let groups = symmetric.symmetricCollections.map { $0.metadata.members }
+      let groups = symmetric.collections.map { $0.metadata.members }
       #expect(storesOneRepresentativePerOrbit(graphs.reduced, groups: groups))
       #expect(try independentlyCanonicalizedGraph(graphs.raw, groups: groups, layout: graphs.compilation.layout)
         == independentlyCanonicalizedGraph(graphs.reduced, groups: groups, layout: graphs.compilation.layout))
@@ -254,31 +258,33 @@ struct SymmetricCollectionCanonicalizationTests {
   }
 
   @Test("TLA and CFG declare symmetric members as TLC model values")
-  func symmetricCollectionsEmitModelValueSymmetryBundle() throws {
-    let members = SymmetricCollectionVar<Device, Int>("devicePhases")
+  func collectionsEmitModelValueSymmetryBundle() throws {
+    let members = CollectionVar<Device, Int>("devicePhases")
     let spec = TLASpec("DevicePhases") {
-      SymmetricCollection(members, verificationScope: 2, initial: 0)
+      ModelCollection(members, verificationScope: 2, initial: 0)
+      Symmetry(members)
     }
 
     let bundle = try spec.compile().renderedTLAModuleBundle()
     #expect(bundle.tla.contains("CONSTANTS DevicePhasesMember0, DevicePhasesMember1"))
     #expect(bundle.tla.contains("DevicePhasesKeys == {DevicePhasesMember0, DevicePhasesMember1}"))
-    #expect(bundle.tla.contains("SymmDevicePhases == Permutations(DevicePhasesKeys)"))
+    #expect(bundle.tla.contains("SymmdevicePhases == Permutations({DevicePhasesMember0, DevicePhasesMember1})"))
     #expect(bundle.tla.contains("devicePhases = [member \\in DevicePhasesKeys |-> 0]"))
     #expect(bundle.cfg.contains("CONSTANT DevicePhasesMember0 = DevicePhasesMember0"))
     #expect(bundle.cfg.contains("CONSTANT DevicePhasesMember1 = DevicePhasesMember1"))
-    #expect(bundle.cfg.contains("SYMMETRY SymmDevicePhases"))
+    #expect(bundle.cfg.contains("SYMMETRY SymmdevicePhases"))
     #expect(bundle.tla.contains("\"DevicePhasesMember0\"") == false)
   }
 
   @Test("Compiled symmetric collections retain their declared variable identity")
-  func symmetricCollectionUsesCompiledVariableIdentity() throws {
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
+  func collectionUsesCompiledVariableIdentity() throws {
+    let devices = CollectionVar<Device, Int>("devices")
     let compilation = try TLASpec("DeviceIdentity") {
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      ModelCollection(devices, verificationScope: 2, initial: 0)
+      Symmetry(devices)
     }.compile()
 
-    let collection = try #require(compilation.semantics.symmetricCollections.first)
+    let collection = try #require(compilation.semantics.collections.first)
     let variable = try #require(compilation.layout.testVariableID(named: devices.name))
     #expect(collection.variable == variable)
     #expect(collection.domainSymbol == "DevicesKeys")

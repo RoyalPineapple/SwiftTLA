@@ -6,7 +6,7 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     mutating func machineMembers() throws -> [DeclSyntax] {
         let surface = model.compilation.machineSurfacePlan
-        let collections = surface.symmetricCollections
+        let collections = surface.collections
         let collectionParameters = collections.map { "\($0.swiftIdentifier) \(nativeCollectionBinding($0, in: model)): [\($0.elementType).ID]" }.joined(separator: ", ")
         let collectionArguments = collections.map { "\($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined(separator: ", ")
         let appendedParameters = collectionParameters.isEmpty ? "" : ", \(collectionParameters)"
@@ -238,7 +238,7 @@ extension NativeSwiftEmitter {
         code += "for state in result { try _validateCollections(state\(validationArguments)) }\nreturn result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
-        let validation = model.compilation.machineSurfacePlan.symmetricCollections.map { collection in
+        let validation = model.compilation.machineSurfacePlan.collections.map { collection in
             """
             guard \(nativeCollectionBinding(collection, in: model)).count == \(collection.members.count), Set(\(nativeCollectionBinding(collection, in: model))).count == \(collection.members.count) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
@@ -460,7 +460,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func propertyDeclarations(collectionParameters: String) throws -> [DeclSyntax] {
-        let arguments = model.compilation.machineSurfacePlan.symmetricCollections.map { ", \($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined()
+        let arguments = model.compilation.machineSurfacePlan.collections.map { ", \($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined()
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         for invariant in plan.invariants {

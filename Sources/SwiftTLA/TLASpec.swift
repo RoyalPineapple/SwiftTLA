@@ -270,7 +270,7 @@ public struct TLASpec: Sendable {
   package let moduleInstances: [FormalModuleInstance]
   package let refinements: [RefinementDecl]
   package let symmetrySets: [SymmetrySet]
-  package let symmetricCollections: [SymmetricCollectionDecl]
+  package let collections: [ModelCollectionDecl]
   /// The authored Algorithm declaration that supplies the compiled PlusCal plan.
   let sourceAlgorithms: [Algorithm]
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
@@ -286,7 +286,7 @@ public struct TLASpec: Sendable {
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [], refinements: [RefinementDecl] = [], symmetrySets: [SymmetrySet] = [],
-    symmetricCollections: [SymmetricCollectionDecl] = [],
+    collections: [ModelCollectionDecl] = [],
     sourceAlgorithms: [Algorithm] = []
   ) {
     self.name = name
@@ -308,7 +308,7 @@ public struct TLASpec: Sendable {
     self.moduleInstances = moduleInstances
     self.refinements = refinements
     self.symmetrySets = symmetrySets
-    self.symmetricCollections = symmetricCollections
+    self.collections = collections
     self.sourceAlgorithms = sourceAlgorithms
     self.authoredPlusCalAlgorithmPlan = nil
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
@@ -655,7 +655,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ModelCollectionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
     if let issue = expr.sourceIssue {

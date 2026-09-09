@@ -13,7 +13,7 @@ private struct PredicateDevice: Identifiable, Sendable {
 }
 
 @Suite(.serialized)
-struct SymmetricCollectionPredicateTests {
+struct ModelCollectionPredicateTests {
   @Test("Parser lowers collection predicates to the direct invariant AST")
   func parserMatchesDirectCollectionPredicateInvariants() throws {
     let parsed = SpecParser.parseSpecClosure(try predicateClosure())
@@ -22,8 +22,8 @@ struct SymmetricCollectionPredicateTests {
     let directCompilation = try direct.compile()
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(parsed.symmetricCollections.map(\.metadata)
-      == direct.symmetricCollections.map(\.metadata))
+    #expect(parsed.collections.map(\.metadata)
+      == direct.collections.map(\.metadata))
     #expect(parsedCompilation.identity == directCompilation.identity)
     #expect(try renderedInitialStates(in: parsedCompilation) == renderedInitialStates(in: directCompilation))
     #expect(try ModelChecker(compilation: parsedCompilation, configuration: symmetricExplorationConfiguration()).check().description
@@ -88,9 +88,10 @@ struct SymmetricCollectionPredicateTests {
   func parserPreservesCollectionPredicateInvariantViolations() throws {
     let parsed = SpecParser.parseSpecClosure(try violatingPredicateClosure())
     let parsedCompilation = try parsed.compile(specificationName: "ViolatingPredicate")
-    let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
+    let devices = CollectionVar<PredicateDevice, Int>("devices")
     let direct = TLASpec("ViolatingPredicate") {
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      ModelCollection(devices, verificationScope: 1, initial: 0)
+      Symmetry(devices)
       CollectionAction("break", on: devices) { member in
         devices.update(member, to: 2)
       }
@@ -139,8 +140,9 @@ struct SymmetricCollectionPredicateTests {
   private func predicateClosure() throws -> ClosureExprSyntax {
     try parseClosure("""
     {
-      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      let devices = CollectionVar<PredicateDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 2, initial: 0)
+      Symmetry(devices)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
       }
@@ -157,8 +159,9 @@ struct SymmetricCollectionPredicateTests {
   private func violatingPredicateClosure() throws -> ClosureExprSyntax {
     try parseClosure("""
     {
-      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<PredicateDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
+      Symmetry(devices)
       CollectionAction("break", on: devices) { member in
         devices.update(member, to: 2)
       }
@@ -173,9 +176,10 @@ struct SymmetricCollectionPredicateTests {
     try parseClosure("""
     {
       let phase = Var<Int>("phase")
-      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
+      let devices = CollectionVar<PredicateDevice, Int>("devices")
       Variable(phase, 0)
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      ModelCollection(devices, verificationScope: 2, initial: 0)
+      Symmetry(devices)
       Action("advance") {
         devices.allSatisfy { $0 == 0 } && phase.becomes(1)
       }
@@ -195,8 +199,9 @@ struct SymmetricCollectionPredicateTests {
   private func unsupportedPredicateClosure() throws -> ClosureExprSyntax {
     try parseClosure("""
     {
-      let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<PredicateDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
+      Symmetry(devices)
       Invariant("unsupported") {
         devices.allSatisfy { phase in unmodeledPredicate(phase) }
       }
@@ -215,9 +220,10 @@ struct SymmetricCollectionPredicateTests {
   }
 
   private func directPredicateSpec() -> TLASpec {
-    let devices = SymmetricCollectionVar<PredicateDevice, Int>("devices")
+    let devices = CollectionVar<PredicateDevice, Int>("devices")
     return TLASpec("CollectionPredicateSemantics") {
-      SymmetricCollection(devices, verificationScope: 2, initial: 0)
+      ModelCollection(devices, verificationScope: 2, initial: 0)
+      Symmetry(devices)
       CollectionAction("advance", on: devices) { member in
         devices[member] == 0 && devices.update(member, to: 1)
       }

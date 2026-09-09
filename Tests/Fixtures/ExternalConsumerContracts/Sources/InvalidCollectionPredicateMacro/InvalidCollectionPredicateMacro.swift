@@ -9,8 +9,8 @@ struct FixtureDevice: Identifiable {
 struct InvalidCollectionPredicateModel {
   static var spec: TLASpec {
     TLASpec("InvalidCollectionPredicateModel") {
-      let devices = SymmetricCollectionVar<FixtureDevice, Int>("devices")
-      SymmetricCollection(devices, verificationScope: 1, initial: 0)
+      let devices = CollectionVar<FixtureDevice, Int>("devices")
+      ModelCollection(devices, verificationScope: 1, initial: 0)
       Invariant("unsupported") {
         devices.allSatisfy { $0 >= 0 && unmodeledPredicate($0) }
       }

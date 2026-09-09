@@ -35,8 +35,7 @@ extension TLASpec {
     let importConfigurations = imports.compactMap(\.configuration)
     let moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
     let refinements = components.compactMap { $0 as? RefinementDecl }
-    var symmetrySets: [SymmetrySet] = []
-    var symmetricCollections: [SymmetricCollectionDecl] = []
+    var collections: [ModelCollectionDecl] = []
     var sourceAlgorithms: [Algorithm] = []
     // Collect the definitions needed to materialize closed Algorithm initial values.
     for comp in components {
@@ -51,9 +50,9 @@ extension TLASpec {
           NamedVar(
             name: v.name, initialization: v.initialization, collectionType: v.collectionType,
             generatedSwiftType: v.generatedSwiftType, origin: .source))
-      } else if let s = comp as? SymmetricCollectionDecl {
+      } else if let s = comp as? ModelCollectionDecl {
         variables.append(s.variable)
-        symmetricCollections.append(s)
+        collections.append(s)
       } else if let a = comp as? ActionDecl {
         actions.append(NamedAction(
           name: a.name,
@@ -83,10 +82,11 @@ extension TLASpec {
         constraint = constraint.map { .and($0, c.body) } ?? c.body
       } else if let rf = comp as? RecursiveFuncDecl {
         recursiveFuncs.append(rf.funcDef)
-      } else if let s = comp as? SymmetrySetDecl {
-        symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
       }
     }
+
+    let symmetrySets = components.compactMap { $0 as? SymmetrySetDecl }
+      .map { $0.resolved(in: collections) }
 
     self.name = name
     self.variables = variables
@@ -107,7 +107,7 @@ extension TLASpec {
     self.moduleInstances = moduleInstances
     self.refinements = refinements
     self.symmetrySets = symmetrySets
-    self.symmetricCollections = symmetricCollections
+    self.collections = collections
     self.sourceAlgorithms = sourceAlgorithms
     self.authoredPlusCalAlgorithmPlan = nil
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
@@ -197,7 +197,7 @@ extension TLASpec {
       moduleInstances: moduleInstances,
       refinements: refinements,
       symmetrySets: symmetrySets,
-      symmetricCollections: symmetricCollections,
+      collections: collections,
       sourceAlgorithms: sourceAlgorithms
     )
     lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
@@ -420,4 +420,3 @@ package func assignedVars(_ e: ActionExpr) -> Set<ActionTarget> {
   case .existsAction(_, _, let b): return assignedVars(b)
   }
 }
-

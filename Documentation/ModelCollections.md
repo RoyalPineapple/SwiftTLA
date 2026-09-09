@@ -1,18 +1,18 @@
-# Symmetric collections
+# Typed model collections
 
-Symmetric collections model an exact finite set of exchangeable application
-members. The same declared population drives generated-machine execution,
-bounded exploration, rendered TLA+, and TLC symmetry checks.
+Model collections store typed values for a fixed set of application members.
+Generated machines use ordinary Swift dictionaries keyed by member IDs.
+Symmetry is an explicit verification declaration, independent of collection storage.
 
 ## Declare a collection
 
-Use `SymmetricCollectionVar` with `SymmetricCollection` and
+Use `CollectionVar` with `ModelCollection` and
 `CollectionAction` in a source model.
 
 ```swift
 let spec = #spec("Devices") {
-    let devices = SymmetricCollectionVar<Device, Int>("devices")
-    SymmetricCollection(devices, verificationScope: 2, initial: 0)
+    let devices = CollectionVar<Device, Int>("devices")
+    ModelCollection(devices, verificationScope: 2, initial: 0)
     CollectionAction("advance", on: devices) { member in
         devices.update(member, to: devices[member] + 1)
     }
@@ -24,21 +24,27 @@ and each exploration.
 The compiler creates opaque compiled member values and a typed function from
 those members to collection values.
 
-## Preserve member symmetry
+## Declare symmetry for verification
 
-A collection action selects one opaque member. Its update becomes a function
-update for that member. The compiler evaluates predicates over the same finite
-member domain.
+Collection actions select an opaque member and update its value. This does not
+assume that members are interchangeable.
 
-The symmetry reducer canonicalizes each complete state under every
-declared member permutation. It includes nested compiled values that contain
-member values. Independent collections use independent permutation groups.
+Add `Symmetry(devices)` beside the collection declaration only when consistently
+renaming its members preserves both the model behavior and the checked properties:
 
-## Run a bounded check
+```swift
+ModelCollection(devices, verificationScope: 2, initial: 0)
+Symmetry(devices)
+```
 
-The rendered TLA+ bundle declares the member domain, symmetry operator, and
-TLC configuration. Temporal and symmetry conformance compares the
-declared finite SwiftTLA and TLC explorations.
+The verifier can then canonicalize states under member permutations. Independently
+declared symmetry domains have independent permutations. Ordinary collections emit
+no symmetry operator or TLC `SYMMETRY` configuration. Generated Swift execution is
+unchanged by the declaration.
+
+Do not declare a whole collection symmetric when ordering, distinguished members,
+or identity-dependent rules break interchangeability. TLC symmetry reduction is
+not used for liveness checking.
 
 ## Use the generated machine
 

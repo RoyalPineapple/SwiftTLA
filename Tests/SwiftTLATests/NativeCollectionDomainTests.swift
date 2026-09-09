@@ -8,9 +8,9 @@ private struct ShrinkingCollectionDomain {
     struct Device: Identifiable, Sendable { let id: Int }
     static var spec: TLASpec {
         TLASpec("ShrinkingCollectionDomain") {
-            let devices = SymmetricCollectionVar<Device, Int>("devices")
+            let devices = CollectionVar<Device, Int>("devices")
             let function = Var<Function<Int, Int>>("devices")
-            SymmetricCollection(devices, verificationScope: 1, initial: 0)
+            ModelCollection(devices, verificationScope: 1, initial: 0)
             SwiftTLA.Action("shrink") {
                 function.becomes(Expr<Function<Int, Int>>(StateExpr.functionLiteral(
                     StateExpr.setFilter(StateExpr.variable("devices").domain, "member", false),

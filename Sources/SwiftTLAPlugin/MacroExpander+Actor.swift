@@ -4,7 +4,7 @@ import SwiftTLA
 extension MacroExpander {
     static func generateActorMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
-        let collections = model.compilation.machineSurfacePlan.symmetricCollections
+        let collections = model.compilation.machineSurfacePlan.collections
         let collectionParameters = collections.map {
             "\($0.swiftIdentifier) \(nativeCollectionBinding($0, in: model)): [\($0.elementType).ID]"
         }.joined(separator: ", ")
