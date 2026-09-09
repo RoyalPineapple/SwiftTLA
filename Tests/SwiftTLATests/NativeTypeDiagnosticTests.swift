@@ -16,6 +16,43 @@ import Testing
         #expect(try checker.resolutionScope(expression, expected: .bool).resultType == .bool)
     }
 
+    @Test("deep conditionals preserve branch types without recursive checking")
+    func deepConditionals() throws {
+        let specification = TLASpec(name: "ConditionalChains", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let expression = (0..<1_000).reduce(CompiledStateExpr.value(.integer(1))) { nested, index in
+            if index.isMultiple(of: 2) {
+                .ifThenElse(.value(.boolean(true)), nested, .value(.integer(0)))
+            } else {
+                .ifThenElse(.value(.boolean(false)), .value(.integer(0)), nested)
+            }
+        }
+        #expect(try checker.resolutionScope(expression, expected: .int).resultType == .int)
+        let invalid = CompiledStateExpr.ifThenElse(.value(.boolean(true)),
+            .ifThenElse(.value(.integer(1)), .value(.integer(0)), .value(.integer(2))),
+            .value(.string("later")))
+        do {
+            _ = try checker.type(of: invalid, expected: .int)
+            Issue.record("A non-Boolean condition must be rejected first")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasSuffix(" <- value <- ifThenElse <- ifThenElse"))
+        }
+    }
+
+    @Test("mixed Boolean, conditional, and lexical nesting shares one checking worklist")
+    func mixedExpressionNesting() throws {
+        let specification = TLASpec(name: "MixedNesting", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let expression = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
+            switch index % 3 {
+            case 0: .not(nested)
+            case 1: .ifThenElse(.value(.boolean(true)), nested, .value(.boolean(false)))
+            default: .letValue(.init(ordinal: index), .value(.integer(index)), nested)
+            }
+        }
+        #expect(try checker.resolutionScope(expression, expected: .bool).resultType == .bool)
+    }
+
     @Test("Boolean diagnostics retain the failing branch's ancestry and left-to-right order")
     func booleanBranchDiagnostics() throws {
         let specification = TLASpec(name: "BooleanBranches", variables: [], actions: [], invariants: [])

@@ -243,6 +243,15 @@ private struct NativeCheckedType: Sendable {
     }
 }
 
+private enum NativeExpressionCheckTask {
+    case check(CompiledStateExpr, expected: NativeType)
+    case reconcile(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
+    case finish(expected: NativeType)
+    case bind(BinderID)
+    case result(NativeType)
+    case discard
+}
+
 /// Derives native shapes from the resolved formal program and source hints.
 /// Empty collection holes are refined by assignments before admission completes.
 struct NativeTypeInference: Sendable {
@@ -1098,10 +1107,8 @@ struct NativeTypeInference: Sendable {
 
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
         switch expression {
-        case .letValue, .letIn:
-            return try inferLexicalScopes(expression, expected: expected).type
-        case .and, .or, .not:
-            return try inferBooleanChain(expression, expected: expected).type
+        case .letValue, .letIn, .and, .or, .not, .ifThenElse:
+            return try inferStructuredExpression(expression, expected: expected).type
         default: break
         }
         if isOperatorApplication(expression) {
@@ -1120,10 +1127,8 @@ struct NativeTypeInference: Sendable {
         guard isOperatorApplication(expression) else {
             let checked: NativeCheckedType
             switch expression {
-            case .letValue, .letIn:
-                checked = try inferLexicalScopes(expression, expected: expected)
-            case .and, .or, .not:
-                checked = try inferBooleanChain(expression, expected: expected)
+            case .letValue, .letIn, .and, .or, .not, .ifThenElse:
+                checked = try inferStructuredExpression(expression, expected: expected)
             default:
                 do { checked = try inferResolved(expression, expected: expected) }
                 catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
@@ -1506,61 +1511,117 @@ struct NativeTypeInference: Sendable {
     }
 
     /// Visit operands in source order and retain ancestry for diagnostics.
-    private mutating func inferBooleanChain(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        var pending = [(expression: expression, depth: 0)]
+    private mutating func inferStructuredExpression(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
+        // Tasks are appended in reverse execution order.
+        var pending: [NativeExpressionCheckTask] = [.check(expression, expected: expected)]
+        var results: [NativeType] = []
         var ancestors: [CompiledStateExpr] = []
-        while let next = pending.popLast() {
-            ancestors.removeLast(ancestors.count - next.depth)
-            switch next.expression {
-            case .and(let lhs, let rhs), .or(let lhs, let rhs):
-                ancestors.append(next.expression)
-                pending.append((rhs, ancestors.count))
-                pending.append((lhs, ancestors.count))
-            case .not(let operand):
-                ancestors.append(next.expression)
-                pending.append((operand, ancestors.count))
-            default:
-                do { _ = try infer(next.expression, expected: .bool) }
-                catch let diagnostic as CompilationDiagnostic {
-                    throw ancestors.reversed().reduce(diagnostic) { annotated($0, at: $1) }
+        var completed: NativeCheckedType?
+        do {
+            while let task = pending.popLast() {
+                switch task {
+                case .check(let expression, let expected):
+                    switch expression {
+                    case .ifThenElse(let condition, let yes, let no):
+                        ancestors.append(expression)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .reconcile(yes, no, expected: expected),
+                            .check(no, expected: expected),
+                            .check(yes, expected: expected),
+                            .discard,
+                            .check(condition, expected: .bool),
+                        ])
+                    case .and(let lhs, let rhs), .or(let lhs, let rhs):
+                        ancestors.append(expression)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .result(.bool),
+                            .discard,
+                            .check(rhs, expected: .bool),
+                            .discard,
+                            .check(lhs, expected: .bool),
+                        ])
+                    case .not(let operand):
+                        ancestors.append(expression)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .result(.bool),
+                            .discard,
+                            .check(operand, expected: .bool),
+                        ])
+                    case .letValue(let id, let value, let body):
+                        ancestors.append(expression)
+                        bindingSources[id] = .setLiteral([value])
+                        bindingDomains[id] = literalValues(value)
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .check(body, expected: expected),
+                            .bind(id),
+                            .check(value, expected: bindings[id] ?? .unknown),
+                        ])
+                    case .letIn(let definitions, let body):
+                        ancestors.append(expression)
+                        for definition in definitions { localOperators[definition.id] = definition }
+                        for definition in definitions {
+                            let captures = capturedBindings(of: definition)
+                            localCaptures[definition.id] = bindings.filter { captures.contains($0.key) }
+                        }
+                        pending.append(contentsOf: [
+                            .finish(expected: expected),
+                            .check(body, expected: expected),
+                        ])
+                    default:
+                        results.append(try infer(expression, expected: expected))
+                    }
+                case .bind(let id):
+                    guard let type = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked binding type")
+                    }
+                    bindings[id] = type
+                case .reconcile(let yes, let no, let expected):
+                    guard let right = results.popLast(), let left = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked branch types")
+                    }
+                    let context = try Self.operandContext(left, right)
+                    pending.append(.result(context))
+                    // Recheck only branches whose context changed, preserving
+                    // the same left-to-right order as initial branch checking.
+                    if context != expected {
+                        if right != context {
+                            pending.append(contentsOf: [
+                                .discard,
+                                .check(no, expected: context),
+                            ])
+                        }
+                        if left != context {
+                            pending.append(contentsOf: [
+                                .discard,
+                                .check(yes, expected: context),
+                            ])
+                        }
+                    }
+                case .finish(let expected):
+                    guard let result = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked expression type")
+                    }
+                    let checked = try checkedType(result, expected: expected)
+                    results.append(checked.type)
+                    completed = checked
+                    ancestors.removeLast()
+                case .result(let type):
+                    results.append(type)
+                case .discard:
+                    _ = results.popLast()
                 }
             }
+        } catch let diagnostic as CompilationDiagnostic {
+            throw ancestors.reversed().reduce(diagnostic) { annotated($0, at: $1) }
         }
-        do { return try checkedType(.bool, expected: expected) }
-        catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
-    }
-
-    private mutating func inferLexicalScopes(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        var body = expression
-        var scopes: [CompiledStateExpr] = []
-        while true {
-            switch body {
-            case .letValue(let id, let value, let next):
-                bindingSources[id] = .setLiteral([value])
-                bindingDomains[id] = literalValues(value)
-                do {
-                    bindings[id] = try infer(value, expected: bindings[id] ?? .unknown)
-                } catch let diagnostic as CompilationDiagnostic {
-                    throw (scopes + [body]).reversed().reduce(diagnostic) { annotated($0, at: $1) }
-                }
-                scopes.append(body)
-                body = next
-            case .letIn(let definitions, let next):
-                for definition in definitions { localOperators[definition.id] = definition }
-                for definition in definitions {
-                    let captures = capturedBindings(of: definition)
-                    localCaptures[definition.id] = bindings.filter { captures.contains($0.key) }
-                }
-                scopes.append(body)
-                body = next
-            default:
-                do {
-                    return try checkedType(infer(body, expected: expected), expected: expected)
-                } catch let diagnostic as CompilationDiagnostic {
-                    throw scopes.reversed().reduce(diagnostic) { annotated($0, at: $1) }
-                }
-            }
+        guard let completed else {
+            throw Self.diagnostic("checking", "missing checked expression")
         }
+        return completed
     }
 
     private func capturedBindings(of definition: CompiledLocalOperator) -> Set<BinderID> {
@@ -1631,9 +1692,6 @@ struct NativeTypeInference: Sendable {
             return .init(type: checked.type, computationType: checked.computationType, operandTypes: [operand, operand])
         case .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b):
             _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .bool
-        case .ifThenElse(let condition, let a, let b):
-            _ = try infer(condition, expected: .bool)
-            result = try comparisonOperands(a, b, expected: expected)
         case .setLiteral(let expressions):
             return try inferSetLiteral(expressions, expected: expected)
         case .in(let value, let domain):
