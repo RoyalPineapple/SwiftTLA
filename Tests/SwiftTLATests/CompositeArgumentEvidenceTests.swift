@@ -26,6 +26,34 @@ import Testing
         #expect(throws: CompilationDiagnostic.self) { try inference.type(of: body, expected: expected) }
     }
 
+    @Test("shared operator calls validate each argument construction independently")
+    func distinctConstructionDomains() throws {
+        for invalidFirst in [false, true] {
+            func call(member: String) -> StateExpr {
+                let dictionary = StateExpr.functionLiteral(
+                    .setLiteral([.value(.constant(member))]), "key", .value(.constant("NoValue"))
+                )
+                return .operatorApplication(.reference("Read", arity: 1), [
+                    .value(.recordLiteral(.init(["nextState": dictionary])))
+                ])
+            }
+            let valid = call(member: "first")
+            let invalid = call(member: "other")
+            let body = StateExpr.tupleLiteral(invalidFirst ? [invalid, valid] : [valid, invalid])
+            let plan = NativeMachinePlan(compilation: try TLASpec(name: "DistinctDomains",
+                variables: [], actions: [], invariants: [], formalOperatorDefinitions: [
+                    .init(name: "Read", parameters: [.value("acc")],
+                        body: .recordAccess(.variable("acc"), "nextState")),
+                    .init(name: "Construct", parameters: [], body: body)
+                ]).compile())
+            let checker = try NativeTypeInference(plan: plan, sourceTypes: metadata)
+            let compiled = try #require(plan.formalOperatorDefinitions.last).body
+            #expect(throws: CompilationDiagnostic.self) {
+                try checker.type(of: compiled, expected: .array(expected))
+            }
+        }
+    }
+
     @Test("nominal dictionary fields project outward without changing stored key or value evidence")
     func dictionaryReadProjection() throws {
         let sourceTypes = NativeSourceTypeMetadata(records: ["Payload": [
