@@ -71,7 +71,7 @@ enum NativeFunctionPlan {
             return (entryReads(node.children[1], parameters: parameters, program: program).bindings, false)
         case .letValue:
             return entryReads(node.children[1], parameters: parameters, program: program)
-        case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate,
+        case .add, .subtract, .multiply, .negate,
              .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
              .recordLiteral, .tupleLiteral, .setLiteral,
              .cardinality, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .powerSet, .unionAll:

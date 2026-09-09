@@ -195,7 +195,40 @@ private struct EvaluatedArgumentReuse {
     }
 }
 
+// Division reads the denominator first; argument forcing must preserve that order.
+@TLAModel
+private struct DivisionArgumentOrder {
+    static var spec: TLASpec {
+        TLASpec("DivisionArgumentOrder") {
+            let result = Var<Int>("result")
+            Variable(result, 0)
+            FormalDefinition("Divide", parameters: [.value("left"), .value("right")],
+                body: StateExpr.variable("left") / StateExpr.variable("right"))
+            SwiftTLA.Action("divide") {
+                result.becomes(FormalCall("Divide", Expr<Int>(9_223_372_036_854_775_807) + 1, Expr<Int>(1) / 0))
+            }
+        }
+    }
+}
+
 @Suite struct NativeOperatorEvaluationTests {
+    @Test("division evaluates the denominator argument before a failing numerator")
+    func denominatorArgumentFailsFirst() throws {
+        let compilation = try DivisionArgumentOrder.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "divide"))
+        #expect(throws: EvalError.divisionByZero) {
+            try runtime.successors(for: action, from: initial)
+        }
+        var machine = try DivisionArgumentOrder.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.divide)
+        }
+        #expect(machine.state == before)
+    }
+
     @Test("an empty mapping domain leaves its body argument unevaluated")
     func emptyMappingDoesNotForceBodyArguments() throws {
         let compilation = try UnusedOperatorArguments.spec.compile()
