@@ -269,53 +269,61 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    mutating func actionBody(_ id: NativeActionNodeID) throws -> String {
-        let node = program[id]
-        switch node.expression {
-        case .assign(let id, _):
-            return "return [_Updates(\(variable(id)): \(try expression(node.expressions[0])))]"
-        case .unchanged(let id): return "return [_Updates(\(variable(id)): state.\(variable(id)))]"
-        case .guard_: return "guard \(try expression(node.expressions[0])) else { return [] }\nreturn [_Updates()]"
-        case .existsAction(let id, _, _):
-            let element = node.bindings[id]!
-            let domainCode = try expression(node.expressions[0])
-            let bodyCode = try actionBody(node.children[0])
-            let effect = nativeCodeContainsTry(bodyCode) ? "try " : ""
-            return """
-            return \(effect)\(domainCode).sorted(by: \(try ordering(element))).flatMap { (\(binder(id)): \(try swiftType(element))) -> [_Updates] in
-                \(bodyCode)
+    mutating func actionFunctions(_ root: NativeActionNodeID) throws -> String {
+        var pending: [(id: NativeActionNodeID, bindings: [BinderID])] = [(root, [])]
+        var declarations: [String] = []
+        while let (id, bindings) = pending.popLast() {
+            let node = program[id]
+            var childBindings = bindings
+            switch node.expression {
+            case .define(let binding, _, _), .existsAction(let binding, _, _):
+                childBindings.append(binding)
+            default: break
             }
-            """
-        case .define(let id, _, _):
-            let bodyCode = try actionBody(node.children[0])
-            let name = binder(id)
-            let used = Parser.parse(source: bodyCode).tokens(viewMode: .sourceAccurate).contains { $0.tokenKind == .identifier(name) }
-            let binding = used ? "let \(name)" : "_"
-            return "\(binding) = \(try expression(node.expressions[0]))\n\(bodyCode)"
-        case .ifElse:
-            return "if \(try expression(node.expressions[0])) {\n\(try actionBody(node.children[0]))\n} else {\n\(try actionBody(node.children[1]))\n}"
-        case .and:
-            return """
-            let left = try { () throws -> [_Updates] in
-                \(try actionBody(node.children[0]))
-            }()
-            guard !left.isEmpty else { return [] }
-            let right = try { () throws -> [_Updates] in
-                \(try actionBody(node.children[1]))
-            }()
-            return try left.flatMap { first -> [_Updates] in try right.map { try first.merging($0) } }
-            """
-        case .or:
-            return """
-            let left = try { () throws -> [_Updates] in
-                \(try actionBody(node.children[0]))
-            }()
-            let right = try { () throws -> [_Updates] in
-                \(try actionBody(node.children[1]))
-            }()
-            return left + right
-            """
+            pending.append(contentsOf: node.children.reversed().map { ($0, childBindings) })
+            func childCall(_ index: Int) -> String {
+                "try _actionPart\(node.children[index].ordinal)(\(childBindings.map(binder).joined(separator: ", ")))"
+            }
+            let body: String
+            switch node.expression {
+            case .assign(let variableID, _):
+                body = "return [_Updates(\(variable(variableID)): \(try expression(node.expressions[0])))]"
+            case .unchanged(let variableID):
+                body = "return [_Updates(\(variable(variableID)): state.\(variable(variableID)))]"
+            case .guard_:
+                body = "guard \(try expression(node.expressions[0])) else { return [] }\nreturn [_Updates()]"
+            case .existsAction(let binding, _, _):
+                let element = node.bindings[binding]!
+                let domain = try expression(node.expressions[0])
+                body = """
+                return try \(domain).sorted(by: \(try ordering(element))).flatMap { (\(binder(binding)): \(try swiftType(element))) throws -> [_Updates] in
+                    return \(childCall(0))
+                }
+                """
+            case .define(let binding, _, _):
+                body = "let \(binder(binding)) = \(try expression(node.expressions[0]))\nreturn \(childCall(0))"
+            case .ifElse:
+                body = "if \(try expression(node.expressions[0])) { return \(childCall(0)) } else { return \(childCall(1)) }"
+            case .and:
+                body = """
+                let left = \(childCall(0))
+                guard !left.isEmpty else { return [] }
+                let right = \(childCall(1))
+                return try left.flatMap { first -> [_Updates] in try right.map { try first.merging($0) } }
+                """
+            case .or:
+                body = "let left = \(childCall(0))\nlet right = \(childCall(1))\nreturn left + right"
+            }
+            let parameters = try bindings.map {
+                "_ \(binder($0)): \(try swiftType(program.bindingTypes[$0]!))"
+            }.joined(separator: ", ")
+            declarations.append("""
+            func _actionPart\(id.ordinal)(\(parameters)) throws -> [_Updates] {
+                \(body)
+            }
+            """)
         }
+        return declarations.joined(separator: "\n") + "\nreturn try _actionPart\(root.ordinal)()"
     }
 
     mutating func rawActionFunction(_ action: CompiledAction, collectionParameters: String) throws -> DeclSyntax {
@@ -324,7 +332,7 @@ extension NativeSwiftEmitter {
         }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
         private static func _updates\(action.id.ordinal)(from state: _ExecutionState\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), enabled: Set<Int>) throws -> [_Updates] {
-            \(try actionBody(program.actions[action.id]!))
+            \(try actionFunctions(program.actions[action.id]!))
         }
         """)
     }
