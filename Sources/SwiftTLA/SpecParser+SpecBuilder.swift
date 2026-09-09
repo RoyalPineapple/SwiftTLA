@@ -531,6 +531,18 @@ extension ParserSession {
 
     func initialValueTypeName(from expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           ["first", "second"].contains(member.declName.baseName.text),
+           call.arguments.count == 1 {
+            if let type = typedFacadeType(member.base), type.name == "OneOf" {
+                return type.renderedSourceName
+            }
+            if let name = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+               sourceTypes.aliases[name] != nil {
+                return name
+            }
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange" {
             return "SetExpr<Int>"
         }
