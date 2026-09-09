@@ -141,6 +141,24 @@ package indirect enum NativeType: Hashable, Sendable {
         default: true
         }
     }
+
+    func missingTypePaths(from path: String = "value") -> [String] {
+        switch self {
+        case .unknown: return [path]
+        case .set(let element), .array(let element):
+            return element.missingTypePaths(from: path + ".element")
+        case .dictionary(let key, let value):
+            return key.missingTypePaths(from: path + ".key")
+                + value.missingTypePaths(from: path + ".value")
+        case .record(let fields):
+            return fields.flatMap { $0.type.missingTypePaths(from: path + "." + $0.name) }
+        case .tuple(let elements), .union(let elements):
+            return elements.enumerated().flatMap {
+                $0.element.missingTypePaths(from: path + "[\($0.offset + 1)]")
+            }
+        default: return []
+        }
+    }
 }
 
 /// A compile-time function instance. No specialization metadata enters a machine.
@@ -300,12 +318,14 @@ struct NativeTypeInference: Sendable {
                 do { try actionTypes(action.body) }
                 catch let diagnostic as CompilationDiagnostic {
                     let name = plan.actionLayouts.first { $0.id == action.id }?.declaration.name ?? String(action.id.ordinal)
-                    throw Self.diagnostic("actions.\(name)", diagnostic.description)
+                    throw Self.diagnostic("actions.\(name)", causedBy: diagnostic)
                 }
             }
             for invariant in plan.invariants {
                 do { _ = try infer(invariant.body, expected: .bool) }
-                catch let diagnostic as CompilationDiagnostic { throw Self.diagnostic("invariants.\(invariant.name)", diagnostic.description) }
+                catch let diagnostic as CompilationDiagnostic {
+                    throw Self.diagnostic("invariants.\(invariant.name)", causedBy: diagnostic)
+                }
             }
             if let constraint = plan.constraint { _ = try infer(constraint, expected: .bool) }
             if let assume = plan.assume { _ = try infer(assume, expected: .bool) }
@@ -313,7 +333,8 @@ struct NativeTypeInference: Sendable {
         }
         for variable in plan.variables {
             guard let type = variables[variable.id], type.resolved else {
-                throw Self.diagnostic("variables.\(variable.declaration.name)", "unresolved native shape")
+                throw Self.unresolvedDiagnostic(variables[variable.id] ?? .unknown,
+                    at: "variables.\(variable.declaration.name)")
             }
         }
     }
@@ -363,10 +384,7 @@ struct NativeTypeInference: Sendable {
         var scope = self
         let result = try scope.infer(expression, expected: expected ?? .unknown)
         guard result.resolved else {
-            let operation = String(String(describing: expression).prefix { $0 != "(" })
-            let requestedType = expected?.swiftType ?? "no contextual type"
-            throw Self.diagnostic("resolution.\(operation)",
-                "unresolved shape \(result) with \(requestedType): \(String(describing: expression).prefix(512))")
+            throw Self.unresolvedDiagnostic(result, at: "resolution")
         }
         var intrinsicScope = scope
         if let constructor = try scope.unionConstructor(expression, expected: result) {
@@ -400,7 +418,7 @@ struct NativeTypeInference: Sendable {
     func type(of expression: CompiledStateExpr, expected: NativeType? = nil) throws -> NativeType {
         var inference = self
         let result = try inference.infer(expression, expected: expected ?? .unknown)
-        guard result.resolved else { throw Self.diagnostic("expression", "unresolved native shape") }
+        guard result.resolved else { throw Self.unresolvedDiagnostic(result, at: "expression") }
         return result
     }
 
@@ -462,7 +480,7 @@ struct NativeTypeInference: Sendable {
     func projectionSourceType(_ value: CompiledStateExpr, index: Int, expected: NativeType? = nil) throws -> NativeType {
         var inference = self
         let shape = try inference.inferProjectionSource(value, index: index, expected: expected ?? .unknown)
-        guard shape.resolved else { throw Self.diagnostic("tupleAccess", "unresolved tuple member shape") }
+        guard shape.resolved else { throw Self.unresolvedDiagnostic(shape, at: "tupleAccess") }
         return shape
     }
 
@@ -546,7 +564,7 @@ struct NativeTypeInference: Sendable {
     ) throws -> NativeType {
         var inference = self
         let shape = try inference.inferRecordProjectionSource(value, key: key, expected: expected ?? .unknown)
-        guard shape.resolved else { throw Self.diagnostic("recordAccess", "unresolved record member shape") }
+        guard shape.resolved else { throw Self.unresolvedDiagnostic(shape, at: "recordAccess") }
         return shape
     }
 
@@ -608,6 +626,19 @@ struct NativeTypeInference: Sendable {
         .init(code: .unsupportedGeneratedValueShape, stage: .lowering,
               path: "nativeMachine.\(path)", expected: "a statically resolved native Swift value shape",
               actual: actual, nextSafeAction: "Use a concrete typed value and an operation supported by native machine generation.")
+    }
+
+    private static func unresolvedDiagnostic(_ type: NativeType, at path: String) -> CompilationDiagnostic {
+        .init(code: .unresolvedGeneratedValueShape, stage: .lowering,
+              path: "nativeMachine.\(path)", expected: "concrete Swift types for every value",
+              actual: "type inference could not determine \(type.missingTypePaths().joined(separator: ", "))",
+              nextSafeAction: "Inspect compiler type propagation for this expression; this diagnostic does not establish that the model is unsupported.")
+    }
+
+    private static func diagnostic(_ context: String, causedBy cause: CompilationDiagnostic) -> CompilationDiagnostic {
+        .init(code: cause.code, stage: cause.stage,
+              path: "nativeMachine.\(context) → \(cause.path)",
+              expected: cause.expected, actual: cause.actual, nextSafeAction: cause.nextSafeAction)
     }
 
     private static func merge(_ lhs: NativeType, _ rhs: NativeType) throws -> NativeType {

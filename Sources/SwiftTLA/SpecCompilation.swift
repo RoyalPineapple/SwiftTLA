@@ -262,6 +262,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateRecordField
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape
+        case unresolvedGeneratedValueShape
         case emptyFormalModuleClosure
         case cyclicFormalModule
         case conflictingFormalModuleSource
