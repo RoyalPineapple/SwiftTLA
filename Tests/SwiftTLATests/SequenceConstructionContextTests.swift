@@ -43,4 +43,24 @@ import Testing
         let accumulator = NativeType.record([.init(name: "items", type: .array(.int))])
         #expect(program.functions.contains { $0.parameterTypes.contains(accumulator) })
     }
+
+    @Test("A fold refines an empty accumulator captured by a surrounding collection mapping")
+    func capturedFoldAccumulator() throws {
+        let append = FormalOperatorDefinition(name: "AppendItem", parameters: [.value("item"), .value("accumulator")],
+            body: .recordLiteral(.init(["items": .tupleAppend(
+                .recordAccess(.variable("accumulator"), "items"), .variable("item"))])))
+        let fold = StateExpr.operatorApplication(.reference("FoldFunction", arity: 3), [
+            .operator(.reference("AppendItem", arity: 2)),
+            .value(.variable("initial")), .value(.variable("sequence"))
+        ])
+        let results = StateExpr.letValue("initial", .recordLiteral(.init(["items": .tupleLiteral([])])),
+            .setMap(fold, "sequence", .setLiteral([.tupleLiteral([.int(1), .int(2)])])))
+        let specification = TLASpec(name: "CapturedFoldContext", variables: [], actions: [],
+            invariants: [.init(name: "Count", body: .forAll(results, "result", .equal(
+                .tupleLength(.recordAccess(.variable("result"), "items")), .int(2))))],
+            formalOperatorDefinitions: [append], imports: [FunctionsModule.module])
+        let program = try NativeResolvedProgram(plan: .init(compilation: specification.compile()))
+        let accumulator = NativeType.record([.init(name: "items", type: .array(.int))])
+        #expect(program.functions.contains { $0.parameterTypes.contains(accumulator) })
+    }
 }

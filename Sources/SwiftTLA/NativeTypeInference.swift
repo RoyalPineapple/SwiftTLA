@@ -950,6 +950,11 @@ struct NativeTypeInference: Sendable {
         for (index, parameter) in resolved.parameters.enumerated() {
             _ = try infer(valueArguments[index], expected: resolved.inference.bindings[parameter] ?? .unknown)
         }
+        // Local operators can refine values captured from their enclosing
+        // operator, including an initially empty recursive accumulator.
+        if case .reference(let id, _) = operation, let captures = localCaptures[id] {
+            try refineCapturedValues(captures, using: resolved.inference)
+        }
         // A closure may establish stronger finite-domain evidence for a
         // captured value. Revalidate that evidence in its declaration scope,
         // never by copying a callee's BinderID/type pair over the caller.
@@ -960,12 +965,9 @@ struct NativeTypeInference: Sendable {
             let lambdaParameters: Set<BinderID>
             if case .lambda(let lambda) = binding.operation { lambdaParameters = Set(lambda.parameters) }
             else { lambdaParameters = [] }
+            let captures = binding.scope.bindings.filter { !lambdaParameters.contains($0.key) }
             for use in uses {
-                for (binder, original) in binding.scope.bindings where !lambdaParameters.contains(binder) {
-                    guard bindings[binder] == original,
-                          let refined = use.inference.bindings[binder], refined != original else { continue }
-                    _ = try infer(.boundValue(binder), expected: refined)
-                }
+                try refineCapturedValues(captures, using: use.inference)
             }
         }
         // A forwarded callback remains a value in the caller's lexical scope.
@@ -978,6 +980,16 @@ struct NativeTypeInference: Sendable {
             }
         }
         return resolved
+    }
+
+    private mutating func refineCapturedValues(
+        _ captures: [BinderID: NativeType], using resolved: NativeTypeInference
+    ) throws {
+        for (binder, original) in captures {
+            guard bindings[binder] == original,
+                  let refined = resolved.bindings[binder], refined != original else { continue }
+            _ = try infer(.boundValue(binder), expected: refined)
+        }
     }
 
     private mutating func specializeOperation(
