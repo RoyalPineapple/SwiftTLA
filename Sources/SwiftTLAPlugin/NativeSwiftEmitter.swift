@@ -72,6 +72,19 @@ struct NativeSwiftEmitter {
     }
     func binder(_ id: BinderID) -> String { "b\(id.ordinal)" }
 
+    private mutating func cachedBinding(named name: String, type: NativeType, value: String) throws -> String {
+        let valueType = try swiftType(type)
+        return """
+        var \(name)Value: \(valueType)?
+        func \(name)() throws -> \(valueType) {
+            if let value = \(name)Value { return value }
+            let value = \(value)
+            \(name)Value = value
+            return value
+        }
+        """
+    }
+
     func fieldName(_ type: NativeType, index: Int) -> String {
         switch type {
         case .record(let fields): return "`\(fields[index].name)`"
@@ -295,7 +308,7 @@ struct NativeSwiftEmitter {
         var nested = substitutions
         var nestedCallbacks = callbackFunctions
         for (parameter, type) in zip(resolved.parameters, resolved.parameterTypes) {
-            declarations.append("_ \(binder(parameter)): @escaping () throws -> \(try swiftType(type))")
+            declarations.append("_ _input\(parameter.ordinal): @escaping () throws -> \(try swiftType(type))")
             nested[parameter] = "(try \(binder(parameter))())"
         }
         for callback in resolved.callbacks {
@@ -346,7 +359,7 @@ struct NativeSwiftEmitter {
         }
         if case .loop(let parameterOrder, let tailPlan) = tail {
             let inputs = resolved.parameters.map {
-                "var _tailArgument\($0.ordinal) = \(binder($0))"
+                "var _tailArgument\($0.ordinal) = _input\($0.ordinal)"
             }.joined(separator: "\n")
             let values = parameterOrder.map {
                 "let _tailValue\($0.ordinal) = try _tailArgument\($0.ordinal)()"
@@ -368,6 +381,12 @@ struct NativeSwiftEmitter {
             }
             """
         } else {
+            let argumentBindings = try zip(resolved.parameters, resolved.parameterTypes).map { parameter, type in
+                try cachedBinding(named: binder(parameter), type: type, value: "try _input\(parameter.ordinal)()")
+            }
+            let bindingCode = argumentBindings
+                .flatMap { $0.split(separator: "\n", omittingEmptySubsequences: false) }
+                .joined(separator: "\n        ")
             let result = try expression(resolved.body, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))
             return """
             (try { () throws -> \(try swiftType(resolved.resultType)) in
@@ -377,6 +396,7 @@ struct NativeSwiftEmitter {
                     }
                     _nativeDepth += 1
                     defer { _nativeDepth -= 1 }
+                    \(bindingCode)
                     \(domainGuard)
                     return \(result)
                 }
@@ -426,25 +446,16 @@ struct NativeSwiftEmitter {
             nested[binderID] = "(try \(binder(binderID))())"
             let bodyCode = try tailBody(body, function: function, depthGuard: depthGuard,
                 state: state, substitutions: nested, activeFunctions: activeFunctions)
-            return "func \(binder(binderID))() throws -> \(try swiftType(program[value].resultType)) { return \(valueCode) }\n\(bodyCode)"
+            let binding = try cachedBinding(named: binder(binderID), type: program[value].resultType, value: valueCode)
+            return "\(binding)\n\(bodyCode)"
         case .call(let target, let arguments, let body):
             let callee = program[target]
             var nested = substitutions
             var bindings: [String] = []
             for ((parameter, type), argument) in zip(zip(callee.parameters, callee.parameterTypes), arguments) {
                 let getter = "_tailRead\(target.ordinal)_\(parameter.ordinal)"
-                let cache = "_tailCached\(target.ordinal)_\(parameter.ordinal)"
                 let value = try expression(argument, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-                let valueType = try swiftType(type)
-                bindings.append("""
-                var \(cache): \(valueType)?
-                func \(getter)() throws -> \(valueType) {
-                    if let value = \(cache) { return value }
-                    let value = \(value)
-                    \(cache) = value
-                    return value
-                }
-                """)
+                bindings.append(try cachedBinding(named: getter, type: type, value: value))
                 nested[parameter] = "(try \(getter)())"
             }
             let domainGuard = try callee.domainGuard.map {
@@ -921,7 +932,8 @@ struct NativeSwiftEmitter {
             let valueType = childType(0)
             let valueCode = try emit(0)
             let bodyCode = try self.expression(node.children[1], state: state, substitutions: nested, activeFunctions: activeFunctions)
-            return "(try { () throws -> \(try swiftType(result)) in func \(binder(binding))() throws -> \(try swiftType(valueType)) { return \(valueCode) }; return \(bodyCode) }())"
+            let declaration = try cachedBinding(named: binder(binding), type: valueType, value: valueCode)
+            return "(try { () throws -> \(try swiftType(result)) in\n\(declaration)\nreturn \(bodyCode)\n}())"
         case .letIn: return try emit(0)
         case .operatorApplication:
             guard let call = node.call else { throw unsupported("resolved call") }

@@ -102,9 +102,9 @@ private struct TailArgumentFailureOrder {
 }
 
 @TLAModel
-private struct TailArgumentReuse {
+private struct EvaluatedArgumentReuse {
     static var spec: TLASpec {
-        TLASpec("TailArgumentReuse") {
+        TLASpec("EvaluatedArgumentReuse") {
             let result = Var<Int>("result")
             Variable(result, 9)
             FormalDefinition("Start", parameters: [.value("remaining")], body: StateExpr.if(
@@ -130,6 +130,32 @@ private struct TailArgumentReuse {
             ))
             SwiftTLA.Action("finish") {
                 result.becomes(FormalCall("Start", 1))
+            }
+            FormalDefinition("UseTwice", parameters: [.value("value")], body: StateExpr.if(
+                StateExpr.variable("value") > 0,
+                then: StateExpr.operatorApplication(.reference("ReadLater", arity: 1), [.value(
+                    StateExpr.variable("value")
+                )]),
+                else: 0
+            ))
+            FormalDefinition("ReadLater", parameters: [.value("value")], body: StateExpr.variable("value") - 1)
+            SwiftTLA.Action("reuseOrdinary") {
+                result.becomes(FormalCall("UseTwice", Expr<Int>(StateExpr.operatorApplication(
+                    .reference("DeepValue", arity: 1), [.value(4094)]
+                ))))
+            }
+            SwiftTLA.Action("reuseLet") {
+                result.becomes(Expr<Int>(StateExpr.letValue(
+                    "once",
+                    StateExpr.operatorApplication(.reference("DeepValue", arity: 1), [.value(4095)]),
+                    StateExpr.if(
+                        StateExpr.variable("once") > 0,
+                        then: StateExpr.operatorApplication(.reference("ReadLater", arity: 1), [.value(
+                            StateExpr.variable("once")
+                        )]),
+                        else: 0
+                    )
+                )))
             }
         }
     }
@@ -232,15 +258,41 @@ private struct TailArgumentReuse {
 
     @Test("an evaluated tail argument is reused after entering a deeper call")
     func evaluatedTailArgumentsAreReused() throws {
-        let compilation = try TailArgumentReuse.spec.compile()
+        let compilation = try EvaluatedArgumentReuse.spec.compile()
         let runtime = CompiledRuntime(compilation: compilation)
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "finish"))
         let result = try #require(compilation.layout.testVariableID(named: "result"))
         let successor = try #require(try runtime.successors(for: action, from: initial).first)
-        var machine = try TailArgumentReuse.makeMachine()
+        var machine = try EvaluatedArgumentReuse.makeMachine()
         #expect(try machine.send(.finish).after.result == 0)
         #expect(try successor.state.value(for: result) == .integer(machine.state.result))
+    }
+
+    @Test("ordinary calls reuse an evaluated argument in a deeper callee")
+    func ordinaryCallsReuseEvaluatedArguments() throws {
+        let compilation = try EvaluatedArgumentReuse.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "reuseOrdinary"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        var machine = try EvaluatedArgumentReuse.makeMachine()
+        #expect(try successor.state.value(for: result) == .integer(0))
+        #expect(try machine.send(.reuseOrdinary).after.result == 0)
+    }
+
+    @Test("LET values reuse their evaluated result inside a deeper callee")
+    func letValuesReuseEvaluatedResults() throws {
+        let compilation = try EvaluatedArgumentReuse.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "reuseLet"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        var machine = try EvaluatedArgumentReuse.makeMachine()
+        #expect(try successor.state.value(for: result) == .integer(0))
+        #expect(try machine.send(.reuseLet).after.result == 0)
     }
 
     @Test("an earlier body failure does not force a later argument")
