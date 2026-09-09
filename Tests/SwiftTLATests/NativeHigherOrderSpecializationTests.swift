@@ -63,9 +63,11 @@ import Testing
             .init(name: "Invoke", parameters: [.operator("callback", arity: 0)],
                 body: .operatorApplication(.reference("callback", arity: 0), [])),
             .init(name: "Capture", parameters: [.value("value")],
-                body: .operatorApplication(.reference("Invoke", arity: 1), [
-                    .operator(.lambda(.init(parameters: [], body: .variable("value"))))
-                ]))
+                body: .letIn([
+                    .init("Captured", parameters: [], body: .variable("value"))
+                ], .operatorApplication(.reference("Invoke", arity: 1), [
+                    .operator(.reference("Captured", arity: 0))
+                ])))
         ])
     }
 }
