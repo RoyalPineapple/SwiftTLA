@@ -126,18 +126,20 @@ results = []
 try:
     document = ET.parse(toc).getroot()
     for run_index, run in enumerate(document.findall('run'), start=1):
-        for table_index, table in enumerate(run.findall('./data/table'), start=1):
-            schema = table.get('schema', '')
-            if 'alloc' not in schema.lower():
+        for track_index, track in enumerate(run.findall('./tracks/track'), start=1):
+            if track.get('name') != 'Allocations':
                 continue
-            output = f'allocations-run-{run_index}-table-{table_index}.xml'
-            # Positional selectors avoid interpreting schema names as XPath syntax.
-            xpath = f'/trace-toc/run[{run_index}]/data/table[{table_index}]'
-            command = ['xcrun', 'xctrace', 'export', '--input', str(root / 'allocations.trace'),
-                       '--xpath', xpath, '--output', str(root / output)]
-            result = subprocess.run(command, capture_output=True, text=True)
-            results.append({'schema': schema, 'file': output, 'exitCode': result.returncode,
-                            'diagnostic': result.stdout + result.stderr})
+            for detail_index, detail in enumerate(track.findall('./details/detail'), start=1):
+                if detail.get('kind') != 'table':
+                    continue
+                output = f'allocations-run-{run_index}-track-{track_index}-detail-{detail_index}.xml'
+                # Select actual detail tables from the recording's table of contents.
+                xpath = f'/trace-toc/run[{run_index}]/tracks/track[{track_index}]/details/detail[{detail_index}]'
+                command = ['xcrun', 'xctrace', 'export', '--input', str(root / 'allocations.trace'),
+                           '--xpath', xpath, '--output', str(root / output)]
+                result = subprocess.run(command, capture_output=True, text=True)
+                results.append({'name': detail.get('name'), 'file': output, 'exitCode': result.returncode,
+                                'diagnostic': result.stdout + result.stderr})
     status = 'exported' if results and all(r['exitCode'] == 0 for r in results) else 'unavailable or incomplete'
 except (OSError, ET.ParseError) as error:
     status = f'unavailable: {error}'
