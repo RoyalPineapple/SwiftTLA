@@ -1276,25 +1276,25 @@ struct NativeTypeInference: Sendable {
             keyType = domain
             _ = try infer(key, expected: domain)
             result = try Self.operandContext(value, expected)
-            sourceType = try infer(function, expected: .dictionary(domain, result))
+            sourceType = .dictionary(domain, result)
         case .array(let value):
             keyType = .int
             _ = try infer(key, expected: .int)
             result = try Self.operandContext(value, expected)
-            sourceType = try infer(function, expected: .array(result))
+            sourceType = .array(result)
         case .tuple(let elements):
             keyType = .int
             _ = try infer(key, expected: .int)
             if case .value(.integer(let index)) = key, index >= 1, index <= elements.count {
                 var hints = elements
                 hints[index - 1] = try Self.operandContext(elements[index - 1], expected)
-                sourceType = try infer(function, expected: .tuple(hints))
+                sourceType = .tuple(hints)
                 result = hints[index - 1]
             } else if case .value(.integer) = key, expected != .unknown {
                 result = expected
             } else {
                 result = try elements.reduce(expected, Self.merge)
-                sourceType = try infer(function, expected: .tuple(elements.map { _ in result }))
+                sourceType = .tuple(elements.map { _ in result })
             }
         case .record(let fields):
             keyType = .string
@@ -1302,13 +1302,16 @@ struct NativeTypeInference: Sendable {
             if case .value(.string(let name)) = key {
                 if let selected = fields.first(where: { $0.name == name }) {
                     result = try Self.operandContext(selected.type, expected)
-                    sourceType = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) }))
+                    sourceType = .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) })
                 } else { result = expected }
             } else {
                 result = try fields.map(\.type).reduce(expected, Self.merge)
-                sourceType = try infer(function, expected: .record(fields.map { .init(name: $0.name, type: result) }))
+                sourceType = .record(fields.map { .init(name: $0.name, type: result) })
             }
         default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
+        }
+        if sourceType != functionType {
+            sourceType = try infer(function, expected: sourceType)
         }
         return try checkedType(result, expected: expected, operandTypes: [sourceType, keyType])
     }
