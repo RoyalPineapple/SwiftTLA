@@ -35,6 +35,20 @@ private struct NominalMembershipDomain {
 
 @Suite("Membership preserves the domain's native element representation")
 struct NativeMembershipContextTests {
+    @Test("nested membership retains its Boolean type and rejects incompatible domains")
+    func nestedMembership() throws {
+        let specification = TLASpec(name: "NestedMembership", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let booleans = CompiledStateExpr.value(.set([.boolean(false), .boolean(true)]))
+        let expression = (0..<12).reduce(CompiledStateExpr.value(.boolean(true))) { nested, _ in
+            .in(nested, booleans)
+        }
+        #expect(try checker.type(of: expression) == .bool)
+        #expect(throws: CompilationDiagnostic.self) {
+            try checker.type(of: .in(expression, .value(.set([.integer(1)]))))
+        }
+    }
+
     @Test("A tuple candidate acquires its stored set's enum field type")
     func candidateUsesNominalDomainContext() throws {
         let compilation = try NominalMembershipDomain.spec.compile()

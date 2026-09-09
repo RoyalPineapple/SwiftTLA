@@ -469,8 +469,11 @@ struct NativeTypeInference: Sendable {
         let domainElement = try element(infer(domain, expected: .set(.unknown)))
         let candidate = try infer(value)
         let context = try Self.operandContext(domainElement, candidate)
-        _ = try infer(value, expected: context)
-        return try element(infer(domain, expected: .set(context)))
+        if candidate != context { _ = try infer(value, expected: context) }
+        if domainElement != context {
+            return try element(infer(domain, expected: .set(context)))
+        }
+        return domainElement
     }
 
     private mutating func comparisonOperands(
