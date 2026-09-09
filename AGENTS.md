@@ -25,6 +25,13 @@ Treat string-keyed and otherwise untyped data as a guarded boundary.
 - Do not use `@unchecked Sendable` in repository-owned source or tests.
 - SwiftTLA model state is value data only. Do not add arbitrary instance storage to a model declaration.
 
+## Swift Style
+
+- Prioritize human readability in handwritten code, generated code, and public APIs.
+- Prefer idiomatic Swift and standard library types, protocols, and collection operations.
+- Use functional transformations when they clarify intent. Split dense expressions into clearly named steps instead of optimizing for brevity.
+- Keep specialized helpers focused on behavior that TLA semantics require; avoid parallel collection APIs and unnecessary abstractions.
+
 ## Model Authoring
 
 - New application models, examples, and documentation use `#spec` with scoped `Algorithm`, `scope.sharedVar`, process or procedure `scope.localVar`, `Each`, and `Do`.
