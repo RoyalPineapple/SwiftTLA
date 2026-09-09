@@ -339,7 +339,8 @@ extension NativeSwiftEmitter {
 
     mutating func enabledDeclarations(collectionParameters: String, collectionArguments: String) throws -> [DeclSyntax] {
         var checks = ""
-        for action in compilation.semantics.actions {
+        for index in compilation.semantics.enabledActionIndices {
+            let action = compilation.semantics.actions[index]
             var loops = ""
             var closing = ""
             var arguments: [String] = []
@@ -350,7 +351,7 @@ extension NativeSwiftEmitter {
                 closing += "}\n"
                 arguments.append("\(name): \(name)")
             }
-            checks += loops + "if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), enabled: []).isEmpty { result.insert(\(action.id.ordinal)) }\n" + closing
+            checks += loops + "if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), enabled: result).isEmpty { result.insert(\(action.id.ordinal)) }\n" + closing
         }
         return try nativeDeclarations("""
         private static func _enabledActions(in state: _ExecutionState\(collectionParameters)) throws -> Set<Int> {

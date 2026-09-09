@@ -247,6 +247,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFormalOperatorApplication
         case missingVariableInitializer
         case actionEnablednessInInitializer
+        case cyclicActionEnabledness
         case cyclicVariableInitialization
         case stateDependentAssumption
         case invalidCollectionMember

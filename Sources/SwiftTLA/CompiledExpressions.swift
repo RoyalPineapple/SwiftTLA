@@ -125,6 +125,12 @@ private struct CompiledOperatorDemandKey: Hashable {
     let parameter: OperatorID
 }
 
+struct CompiledStateRequirements: Sendable {
+    var variables: Set<VariableID> = []
+    var enabledActions: Set<ActionID> = []
+    var requiresCompleteState: Bool { !enabledActions.isEmpty }
+}
+
 extension CompiledStateExpr {
     /// Diagnostic-only reflection of the outer case, without rendering its payload.
     var diagnosticName: String {
@@ -134,11 +140,11 @@ extension CompiledStateExpr {
     func stateRequirements(
         formalOperators: [CompiledFormalOperatorDefinition],
         recursiveFunctions: [CompiledRecursiveFunction]
-    ) -> (variables: Set<VariableID>, requiresCompleteState: Bool) {
+    ) -> CompiledStateRequirements {
         let formalOperators = Dictionary(uniqueKeysWithValues: formalOperators.map { ($0.id, $0) })
         let recursiveFunctions = Dictionary(uniqueKeysWithValues: recursiveFunctions.map { ($0.id, $0) })
         var variables: Set<VariableID> = []
-        var requiresCompleteState = false
+        var enabledActions: Set<ActionID> = []
         var activeOperators: Set<OperatorID> = []
         var activeValues: Set<BinderID> = []
         var parametersByOperator: [OperatorID: [CompiledFormalParameter]] = [:]
@@ -375,8 +381,8 @@ extension CompiledStateExpr {
                 else { return }
                 defer { activeValues.remove(binder) }
                 visit(binding.value, scope: binding.scope)
-            case .enabledAction:
-                requiresCompleteState = true
+            case .enabledAction(let action):
+                enabledActions.insert(action)
             case .stateVariable(let variable):
                 variables.insert(variable)
             case .operatorReference(let id):
@@ -463,7 +469,7 @@ extension CompiledStateExpr {
         }
 
         visit(self, scope: .init())
-        return (variables, requiresCompleteState)
+        return .init(variables: variables, enabledActions: enabledActions)
     }
 }
 
@@ -626,6 +632,8 @@ package struct CompiledSemantics: Sendable {
     let checkDeadlock: Bool
     package let variableInitializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
     package let actions: [CompiledAction]
+    /// Indices into actions, with ENABLED dependencies before their users.
+    package let enabledActionIndices: [Int]
     package let invariants: [CompiledInvariant]
     let temporalProperties: [CompiledTemporal]
     let fairness: [CompiledFairnessCondition]

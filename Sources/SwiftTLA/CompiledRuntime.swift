@@ -119,8 +119,9 @@ struct CompiledRuntime {
 
     private func enabledActions(in state: CompiledState) throws -> Set<ActionID> {
         var enabled = Set<ActionID>()
-        for action in semantics.actions {
-            if try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout).enumerate(action).isEmpty == false {
+        for index in semantics.enabledActionIndices {
+            let action = semantics.actions[index]
+            if try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout, enabledActions: enabled).enumerate(action).isEmpty == false {
                 enabled.insert(action.id)
             }
         }

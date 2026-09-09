@@ -280,6 +280,7 @@ struct CompiledLowerer {
             checkDeadlock: spec.checkDeadlock,
             variableInitializations: orderedInitializations,
             actions: actions,
+            enabledActionIndices: try orderedEnabledActions(actions, formalOperators: allFormalOperators, recursiveFunctions: allRecursiveFunctions),
             invariants: invariants,
             temporalProperties: temporalProperties,
             fairness: fairness,
@@ -610,6 +611,37 @@ struct CompiledLowerer {
         )
     }
 
+    private func orderedEnabledActions(
+        _ actions: [CompiledAction],
+        formalOperators: [CompiledFormalOperatorDefinition],
+        recursiveFunctions: [CompiledRecursiveFunction]
+    ) throws -> [Int] {
+        let dependencies = actions.map {
+            $0.body.enabledActionDependencies(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions)
+        }
+        var remaining = Array(actions.indices)
+        var resolved: Set<ActionID> = []
+        var ordered: [Int] = []
+        while !remaining.isEmpty {
+            guard let position = remaining.firstIndex(where: { dependencies[$0].isSubset(of: resolved) }) else {
+                let unresolved = Set(remaining.map { actions[$0].id })
+                let names = layout.actions.filter { unresolved.contains($0.id) }.map(\.declaration.name)
+                throw CompilationDiagnostic(
+                    code: .cyclicActionEnabledness,
+                    stage: .lowering,
+                    path: "actions",
+                    expected: "acyclic ENABLED action dependencies",
+                    actual: "unresolved ENABLED dependencies among actions \(names.joined(separator: ", "))",
+                    nextSafeAction: "Break the ENABLED dependency cycle between actions."
+                )
+            }
+            let index = remaining.remove(at: position)
+            ordered.append(index)
+            resolved.insert(actions[index].id)
+        }
+        return ordered
+    }
+
     private func orderedInitializations(
         _ initializations: [VariableID: CompiledVariableInitialization],
         formalOperators: [CompiledFormalOperatorDefinition],
@@ -619,10 +651,10 @@ struct CompiledLowerer {
         let declared = Set(declarationOrder)
         var dependencies: [VariableID: Set<VariableID>] = [:]
         for variable in declarationOrder {
-            let analysis: (variables: Set<VariableID>, requiresCompleteState: Bool)
+            let analysis: CompiledStateRequirements
             switch initializations[variable] {
             case .value:
-                analysis = ([], false)
+                analysis = .init()
             case .expression(let expression), .memberOf(let expression):
                 analysis = expression.stateRequirements(
                     formalOperators: formalOperators,

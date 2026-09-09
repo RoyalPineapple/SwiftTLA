@@ -8,25 +8,32 @@ extension CompiledStateExpr {
 }
 
 extension CompiledActionExpr {
+    func enabledActionDependencies(
+        formalOperators: [CompiledFormalOperatorDefinition],
+        recursiveFunctions: [CompiledRecursiveFunction]
+    ) -> Set<ActionID> {
+        func expression(_ value: CompiledStateExpr) -> Set<ActionID> {
+            value.stateRequirements(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions).enabledActions
+        }
+        func action(_ value: CompiledActionExpr) -> Set<ActionID> {
+            value.enabledActionDependencies(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions)
+        }
+        switch self {
+        case .assign(_, let value), .guard_(let value): return expression(value)
+        case .unchanged: return []
+        case .existsAction(_, let domain, let body), .define(_, let domain, let body):
+            return expression(domain).union(action(body))
+        case .ifElse(let condition, let then, let otherwise):
+            return expression(condition).union(action(then)).union(action(otherwise))
+        case .and(let lhs, let rhs), .or(let lhs, let rhs): return action(lhs).union(action(rhs))
+        }
+    }
+
     func requiresEnabledActions(
         formalOperators: [CompiledFormalOperatorDefinition],
         recursiveFunctions: [CompiledRecursiveFunction]
     ) -> Bool {
-        func expression(_ value: CompiledStateExpr) -> Bool {
-            value.requiresEnabledActions(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions)
-        }
-        func action(_ value: CompiledActionExpr) -> Bool {
-            value.requiresEnabledActions(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions)
-        }
-        switch self {
-        case .assign(_, let value), .guard_(let value): return expression(value)
-        case .unchanged: return false
-        case .existsAction(_, let domain, let body), .define(_, let domain, let body):
-            return expression(domain) || action(body)
-        case .ifElse(let condition, let then, let otherwise):
-            return expression(condition) || action(then) || action(otherwise)
-        case .and(let lhs, let rhs), .or(let lhs, let rhs): return action(lhs) || action(rhs)
-        }
+        !enabledActionDependencies(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions).isEmpty
     }
 }
 
