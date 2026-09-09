@@ -58,10 +58,13 @@ public func -(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.subtract(lhs.ra
 public func -(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(lhs.raw, rhs.raw)) }
 public func *(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.multiply(lhs.raw, rhs.raw)) }
 public func *(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.multiply(lhs.raw, .int(rhs))) }
+public func /(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.divide(lhs.raw, .int(rhs))) }
+public func /(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.divide(lhs.raw, rhs.raw)) }
 public func -(_ lhs: Int, _ rhs: Var<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.stateExpr)) }
 public func -(_ lhs: Int, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.raw)) }
 public func +(_ lhs: Expr<Int>, _ rhs: Var<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.stateExpr)) }
 public func %(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.modulo(lhs.raw, .int(rhs))) }
+public func %(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.modulo(lhs.raw, rhs.raw)) }
 public func <(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .lessThan(lhs.raw, rhs.raw) }
 public func >(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .greaterThan(lhs.raw, rhs.raw) }
 public func <=(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .lessOrEqual(lhs.raw, rhs.raw) }
