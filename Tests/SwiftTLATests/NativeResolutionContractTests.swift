@@ -2,6 +2,26 @@ import Testing
 @testable import SwiftTLA
 
 @Suite struct NativeResolutionContractTests {
+    @Test("checked reads retain stored representations alongside their contextual types")
+    func storedReadRepresentations() throws {
+        let specification = TLASpec(name: "StoredRepresentations", variables: [
+            .init(name: "node", initialization: .value(.int(1)), generatedSwiftType: "Node", origin: .compiler),
+            .init(name: "nodes", initialization: .value(.function([.int(0): .int(1)])), generatedSwiftType: "[Int: Node]", origin: .compiler)
+        ], actions: [], invariants: [])
+        let plan = NativeMachinePlan(compilation: try specification.compile())
+        let checker = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Node": [.int(1), .int(2)]]))
+        let node = try #require(plan.variables.first { $0.declaration.name == "node" })
+        let nodes = try #require(plan.variables.first { $0.declaration.name == "nodes" })
+        for expression in [
+            CompiledStateExpr.stateVariable(node.id),
+            .functionApply(.stateVariable(nodes.id), .value(.integer(0)))
+        ] {
+            let checked = try checker.resolutionScope(expression, expected: .int)
+            #expect(checked.resultType == .int)
+            #expect(checked.computationType == .named("Node"))
+        }
+    }
+
     @Test("unrelated declared types do not expand the program's conversion table")
     func conversionsFollowExpressionUses() throws {
         let names = (0..<12).map { "Value\($0)" }
