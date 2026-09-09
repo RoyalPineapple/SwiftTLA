@@ -104,6 +104,7 @@ private final class EvaluatorThunk {
     enum State {
         case pending(CompiledStateExpr, EvaluatorScope)
         case evaluated(CompiledValue)
+        case discarded
     }
 
     var state: State
@@ -126,7 +127,8 @@ private struct EvaluatorBindings {
     func binding(
         _ expression: CompiledStateExpr,
         from scope: EvaluatorScope,
-        to binder: BinderID
+        to binder: BinderID,
+        retainingIn pendingArguments: inout [ObjectIdentifier: EvaluatorThunk]
     ) -> EvaluatorBindings {
         var bindings = self
         if case .boundValue(let source) = expression,
@@ -134,7 +136,9 @@ private struct EvaluatorBindings {
             bindings.values[binder] = binding
             return bindings
         }
-        bindings.values[binder] = .expression(.init(expression: expression, scope: scope))
+        let thunk = EvaluatorThunk(expression: expression, scope: scope)
+        pendingArguments[ObjectIdentifier(thunk)] = thunk
+        bindings.values[binder] = .expression(thunk)
         return bindings
     }
 }
@@ -243,6 +247,12 @@ struct CompiledEvaluator: Sendable {
     }
 
     func evaluate(_ expression: CompiledStateExpr) throws -> CompiledValue {
+        var pendingArguments: [ObjectIdentifier: EvaluatorThunk] = [:]
+        defer {
+            // Keep every pending argument alive while breaking captured-scope
+            // chains, including when evaluation exits before demanding them.
+            for argument in pendingArguments.values { argument.state = .discarded }
+        }
         let scope = EvaluatorScope(
             bindings: .init(inherited: bindings),
             localOperators: localOperators,
@@ -746,7 +756,8 @@ struct CompiledEvaluator: Sendable {
                         callScope.bindings = callScope.bindings.binding(
                             expression,
                             from: argumentScope,
-                            to: parameter
+                            to: parameter,
+                            retainingIn: &pendingArguments
                         )
                     }
                     tasks.append(.expression(lambda.body, callScope))
@@ -777,7 +788,7 @@ struct CompiledEvaluator: Sendable {
                         for (parameter, argument) in zip(local.parameters, arguments) {
                             switch argument {
                             case .value(let expression):
-                                callScope.bindings = callScope.bindings.binding(expression, from: argumentScope, to: parameter)
+                                callScope.bindings = callScope.bindings.binding(expression, from: argumentScope, to: parameter, retainingIn: &pendingArguments)
                             case .operator(let operation):
                                 throw EvalError.invalidFormalArgument(expected: .value, actual: .operator(arity: operation.arity))
                             }
@@ -807,7 +818,8 @@ struct CompiledEvaluator: Sendable {
                             callScope.bindings = callScope.bindings.binding(
                                 expression,
                                 from: argumentScope,
-                                to: binder
+                                to: binder,
+                                retainingIn: &pendingArguments
                             )
                         case (.operator(let operatorID, let expectedArity), .operator(let supplied)):
                             guard supplied.arity == expectedArity else {
@@ -847,7 +859,7 @@ struct CompiledEvaluator: Sendable {
                     }
                     var callScope = scope
                     for (parameter, argument) in zip(operation.parameters, arguments) {
-                        callScope.bindings = callScope.bindings.binding(argument, from: scope, to: parameter)
+                        callScope.bindings = callScope.bindings.binding(argument, from: scope, to: parameter, retainingIn: &pendingArguments)
                     }
                     if let domain = operation.domain {
                         guard let parameter = operation.parameters.first else {
@@ -876,7 +888,7 @@ struct CompiledEvaluator: Sendable {
                 }
                 var callScope = scope
                 for (parameter, argument) in zip(function.parameters, arguments) {
-                    callScope.bindings = callScope.bindings.binding(argument, from: scope, to: parameter)
+                    callScope.bindings = callScope.bindings.binding(argument, from: scope, to: parameter, retainingIn: &pendingArguments)
                 }
                 tasks.append(.expression(function.body, callScope))
 
@@ -894,6 +906,7 @@ struct CompiledEvaluator: Sendable {
                 // The cached result replaces its inputs so completed arguments
                 // do not retain chains of earlier lexical scopes.
                 thunk.state = .evaluated(value)
+                pendingArguments.removeValue(forKey: ObjectIdentifier(thunk))
                 values.append(value)
 
             case .expression(let expression, let scope):
@@ -911,6 +924,8 @@ struct CompiledEvaluator: Sendable {
                             switch thunk.state {
                             case .evaluated(let value):
                                 values.append(value)
+                            case .discarded:
+                                throw EvalError.invalidContinuation(availableValues: values.count)
                             case .pending(let expression, let argumentScope):
                                 tasks.append(.store(thunk))
                                 tasks.append(.expression(expression, argumentScope))
@@ -1129,7 +1144,7 @@ struct CompiledEvaluator: Sendable {
                     ))
                 case .letValue(let binder, let expression, let body):
                     var bodyScope = scope
-                    bodyScope.bindings = bodyScope.bindings.binding(expression, from: scope, to: binder)
+                    bodyScope.bindings = bodyScope.bindings.binding(expression, from: scope, to: binder, retainingIn: &pendingArguments)
                     tasks.append(.expression(body, bodyScope))
                 case .letIn(let operators, let body):
                     var bodyScope = scope

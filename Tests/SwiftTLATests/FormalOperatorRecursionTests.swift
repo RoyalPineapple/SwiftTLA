@@ -63,4 +63,20 @@ import Testing
             try countDown(from: 2_050)
         }
     }
+    @Test("unused recursive arguments are released without exhausting the Swift stack")
+    func releasesUndemandedArgumentsAtDepthLimit() {
+        let operation = FormalOperatorDefinition(
+            name: "Loop", parameters: [.value("unused")],
+            body: .operatorApplication(.reference("Loop", arity: 1), [
+                .value(.add(.variable("unused"), .int(1)))
+            ])
+        )
+        #expect(throws: EvalError.recursionDepthExceeded(4_096)) {
+            try compiledValue(
+                .operatorApplication(.reference("Loop", arity: 1), [.value(.int(Int.max))]),
+                formalOperators: [operation]
+            )
+        }
+    }
+
 }
