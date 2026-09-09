@@ -283,19 +283,6 @@ struct CompiledLowerer {
             moduleInstances: moduleInstances,
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: Set(symmetry.values.map(CompiledValue.init(formal:))))
-            },
-            collections: try spec.collections.map { collection in
-                let variable = try variable(named: collection.name, at: "variables.\(collection.name).declaration")
-                guard layout.variables.indices.contains(variable.ordinal),
-                      let compiledCollection = layout.variables[variable.ordinal].collection else {
-                    throw diagnostic(path: "variables.\(collection.name).declaration")
-                }
-                return .init(
-                    variable: variable,
-                    members: compiledCollection.members,
-                    domainSymbol: collection.metadata.domainSymbol,
-                    initial: .init(formal: collection.metadata.initial)
-                )
             }
         )
     }

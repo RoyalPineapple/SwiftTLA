@@ -597,13 +597,6 @@ struct CompiledSymmetrySet: Sendable {
     let values: Set<CompiledValue>
 }
 
-struct CompiledModelCollection: Sendable {
-    let variable: VariableID
-    let members: [CompiledValue]
-    let domainSymbol: String
-    let initial: CompiledValue
-}
-
 struct CompiledSemantics: Sendable {
     let checkDeadlock: Bool
     let variableInitializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
@@ -618,5 +611,4 @@ struct CompiledSemantics: Sendable {
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]
     let symmetrySets: [CompiledSymmetrySet]
-    let collections: [CompiledModelCollection]
 }

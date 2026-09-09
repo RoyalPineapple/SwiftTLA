@@ -955,9 +955,6 @@ public extension TLASpec {
                     nextSafeAction: "Compile the source model again."
                 )
             }
-            if let collection = semantics.collections.first(where: { $0.variable == variable.id }) {
-                return "\(name) = [member \\in \(collection.domainSymbol) |-> \(try collection.initial.rendered(using: layout))]"
-            }
             switch initialization {
             case .value(let value):
                 return "\(name) = \(try value.rendered(using: layout))"

@@ -269,7 +269,7 @@ struct ModelCollectionCanonicalizationTests {
     #expect(bundle.tla.contains("CONSTANTS DevicePhasesMember0, DevicePhasesMember1"))
     #expect(bundle.tla.contains("DevicePhasesKeys == {DevicePhasesMember0, DevicePhasesMember1}"))
     #expect(bundle.tla.contains("SymmdevicePhases == Permutations({DevicePhasesMember0, DevicePhasesMember1})"))
-    #expect(bundle.tla.contains("devicePhases = [member \\in DevicePhasesKeys |-> 0]"))
+    #expect(bundle.tla.contains("devicePhases = [__tla_fn_0 \\in {DevicePhasesMember0, DevicePhasesMember1} |-> 0]"))
     #expect(bundle.cfg.contains("CONSTANT DevicePhasesMember0 = DevicePhasesMember0"))
     #expect(bundle.cfg.contains("CONSTANT DevicePhasesMember1 = DevicePhasesMember1"))
     #expect(bundle.cfg.contains("SYMMETRY SymmdevicePhases"))
@@ -284,9 +284,10 @@ struct ModelCollectionCanonicalizationTests {
       Symmetry(devices)
     }.compile()
 
-    let collection = try #require(compilation.semantics.collections.first)
-    let variable = try #require(compilation.layout.testVariableID(named: devices.name))
-    #expect(collection.variable == variable)
-    #expect(collection.domainSymbol == "DevicesKeys")
+    let variable = try #require(compilation.layout.variables.first { $0.declaration.name == devices.name })
+    let collection = try #require(variable.collection)
+    let symmetry = try #require(compilation.semantics.symmetrySets.first)
+    #expect(collection.members.count == 2)
+    #expect(symmetry.values == Set(collection.members))
   }
 }
