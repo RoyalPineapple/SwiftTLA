@@ -766,6 +766,26 @@ struct CompiledEvaluator: Sendable {
                         ))
                         continue
                     }
+                    if let local = boundOperation.scope.localOperators[id] {
+                        guard local.parameters.count == arity, arguments.count == arity else {
+                            throw EvalError.invalidArity(
+                                .formalOperator, expected: local.parameters.count, actual: arguments.count
+                            )
+                        }
+                        var callScope = boundOperation.scope
+                        for (parameter, argument) in zip(local.parameters, arguments) {
+                            switch argument {
+                            case .value(let expression):
+                                callScope.bindings = callScope.bindings.binding(expression, from: argumentScope, to: parameter)
+                            case .operator(let operation):
+                                throw EvalError.invalidFormalArgument(expected: .value, actual: .operator(arity: operation.arity))
+                            }
+                        }
+                        tasks.append(.recursiveCall(
+                            id, arguments: local.parameters.map(CompiledStateExpr.boundValue), scope: callScope
+                        ))
+                        continue
+                    }
                     guard let definition = formalDefinitions[id] else {
                         throw CompiledEvaluationError.unresolvedOperator
                     }
