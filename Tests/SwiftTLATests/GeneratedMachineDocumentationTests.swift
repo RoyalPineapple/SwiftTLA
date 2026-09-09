@@ -136,7 +136,7 @@ struct GeneratedMachineDocumentationTests {
         [
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/GeneratedMachineError.swift", "public enum GeneratedMachineError"),
-            ("Generated `Action`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum Action"),
+            ("Generated `Action`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift", "public enum Action"),
             ("Generated `Transition`", "Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift", "public struct Transition"),
             ("Generated `Actor`", "Sources/SwiftTLAPlugin/MacroExpander+Actor.swift", "public actor Actor"),
         ]
