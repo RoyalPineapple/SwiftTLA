@@ -319,6 +319,10 @@ private enum NativeExpressionCheckTask {
     case completeCall(CompiledStateExpr, NativeOperatorCall, expected: NativeType)
     case reconcile(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
     case finish(expected: NativeType)
+    case completeOccurrence(NativeCheckedType)
+    case sequenceContext(element: NativeType)
+    case sequenceValue(CompiledStateExpr, expected: NativeType)
+    case finishSequenceConstruction(expected: NativeType)
     case comparison(expected: NativeType)
     case subset(expected: NativeType)
     case setOperands(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
@@ -724,15 +728,15 @@ struct NativeTypeInference: Sendable {
     }
 
     private mutating func refineSequence(_ source: NativeCheckedExpression, element expected: NativeType = .unknown) throws -> NativeCheckedExpression {
-        switch source.resultType {
-        case .array(let element):
-            guard expected != .unknown, expected != element else { return source }
-            return try refineOperand(source, expected: .array(expected))
-        case .dictionary(.int, let element):
-            guard expected != .unknown, expected != element else { return source }
-            return try refineOperand(source, expected: .dictionary(.int, expected))
-        case .unknown: return try refineOperand(source, expected: .array(expected))
-        default: throw Self.diagnostic("sequence", "expected an array or integer-keyed function, received \(source.resultType.swiftType)")
+        try refineOperand(source, expected: sequenceContext(source.resultType, element: expected))
+    }
+
+    private func sequenceContext(_ source: NativeType, element expected: NativeType) throws -> NativeType {
+        switch source {
+        case .array(let element): return .array(expected == .unknown ? element : expected)
+        case .dictionary(.int, let element): return .dictionary(.int, expected == .unknown ? element : expected)
+        case .unknown: return .array(expected)
+        default: throw Self.diagnostic("sequence", "expected an array or integer-keyed function, received \(source.swiftType)")
         }
     }
 
@@ -1140,7 +1144,7 @@ struct NativeTypeInference: Sendable {
              .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide,
              .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
              .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral,
-             .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet,
+             .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate,
              .operatorApplication, .recursiveCall, .lambdaApplication, .functionApply(.operatorReference, _):
             return try inferStructuredExpression(expression, expected: expected)
         default: break
@@ -1394,26 +1398,6 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func inferAppend(_ sequence: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-        let initial = try inferSequence(sequence, element: hint)
-        let item = try sequenceElementType(initial.resultType)
-        let appended = try checkOperand(value, expected: item)
-        let element = try Self.merge(item, appended.resultType)
-        let source = try refineSequence(initial, element: element)
-        return try checkedType(.array(element), expected: expected,
-            children: [source, refineOperand(appended, expected: element)])
-    }
-
-    private mutating func inferConcatenation(_ a: CompiledStateExpr, _ b: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-        let left = try inferSequence(a, element: hint)
-        let right = try inferSequence(b, element: sequenceElementType(left.resultType))
-        let element = try Self.merge(sequenceElementType(left.resultType), sequenceElementType(right.resultType))
-        return try checkedType(.array(element), expected: expected,
-            children: [refineSequence(left, element: element), refineSequence(right, element: element)])
-    }
-
     private mutating func inferTupleAccess(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeCheckedType {
         let source = try inferProjectionSource(value, index: index, expected: expected)
         let result: NativeType
@@ -1454,21 +1438,34 @@ struct NativeTypeInference: Sendable {
         var operandFrames: [[Int: NativeCheckedExpression]] = []
         var suspendedScopes: [NativeTypeInference] = []
         var checkedCalls: [NativeOperatorCall] = []
-        func finish(_ annotation: NativeCheckedType, in scope: inout NativeTypeInference) throws {
-            guard let expression = ancestors.popLast(), let operands = operandFrames.popLast() else {
+        func finish(_ annotation: NativeCheckedType, in scope: inout NativeTypeInference, refineOperands: Bool = true) throws {
+            guard let expression = ancestors.last, let operands = operandFrames.last else {
                 throw Self.diagnostic("checking", "missing checked occurrence")
             }
-            let children = operands.keys.sorted().compactMap { operands[$0] }
-            let checked: NativeCheckedType
-            if annotation.call != nil {
-                var call = annotation
-                call.children = children
-                checked = call
-            } else if children.isEmpty {
-                checked = annotation
-            } else {
-                checked = try scope.retaining(children, in: annotation)
+            let orderedOperands = operands.sorted { $0.key < $1.key }
+            let children = orderedOperands.map(\.value)
+            if refineOperands, annotation.call == nil, !children.isEmpty {
+                guard children.count == annotation.operandTypes.count else {
+                    throw Self.diagnostic("checking", "missing checked operands")
+                }
+                let refinements = zip(orderedOperands, annotation.operandTypes).filter { operand, expected in
+                    operand.value.resultType != expected
+                }
+                if !refinements.isEmpty {
+                    pending.append(.completeOccurrence(annotation))
+                    for (operand, expected) in refinements.reversed() {
+                        pending.append(contentsOf: [
+                            .discard, .retainOperand(operand.key),
+                            .check(operand.value.expression, expected: expected)
+                        ])
+                    }
+                    return
+                }
             }
+            _ = ancestors.popLast()
+            _ = operandFrames.popLast()
+            var checked = annotation
+            if !children.isEmpty || annotation.call != nil { checked.children = children }
             completed = .init(expression: expression, scope: scope, annotation: checked)
         }
         let initialArgumentRefinements = activeArgumentRefinements
@@ -1493,6 +1490,14 @@ struct NativeTypeInference: Sendable {
                         }
                     }
                     switch expression {
+                    case .tupleAppend(let sequence, let value), .tupleConcatenate(let sequence, let value):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        let element = if case .array(let element) = expected { element } else { NativeType.unknown }
+                        pending.append(contentsOf: [
+                            .sequenceValue(value, expected: expected), .retainOperand(0),
+                            .sequenceContext(element: element), .check(sequence, expected: .unknown)
+                        ])
                     case .operatorApplication(let id, let arguments):
                         ancestors.append(expression)
                         operandFrames.append([:])
@@ -1982,6 +1987,41 @@ struct NativeTypeInference: Sendable {
                     let checked = try finishExpression(expression, result: result, expected: expected)
                     results.append(checked.type)
                     try finish(checked, in: &self)
+                case .sequenceContext(let element):
+                    guard let source = completed, let type = results.popLast() else {
+                        throw Self.diagnostic("sequence", "missing checked sequence")
+                    }
+                    let context = try sequenceContext(type, element: element)
+                    if type == context { results.append(type) }
+                    else { pending.append(.check(source.expression, expected: context)) }
+                case .sequenceValue(let value, let expected):
+                    guard let source = results.last, let expression = ancestors.last else {
+                        throw Self.diagnostic("sequence", "missing checked construction source")
+                    }
+                    let element = try sequenceElementType(source)
+                    pending.append(contentsOf: [.finishSequenceConstruction(expected: expected), .retainOperand(1)])
+                    if case .tupleConcatenate = expression {
+                        pending.append(contentsOf: [.sequenceContext(element: element), .check(value, expected: .unknown)])
+                    } else {
+                        pending.append(.check(value, expected: element))
+                    }
+                case .finishSequenceConstruction(let expected):
+                    guard let value = results.popLast(), let source = results.popLast(), let expression = ancestors.last else {
+                        throw Self.diagnostic("sequence", "missing checked construction operands")
+                    }
+                    let valueElement: NativeType
+                    if case .tupleConcatenate = expression { valueElement = try sequenceElementType(value) }
+                    else { valueElement = value }
+                    let element = try Self.merge(sequenceElementType(source), valueElement)
+                    let valueContext: NativeType
+                    if case .tupleConcatenate = expression { valueContext = try sequenceContext(value, element: element) }
+                    else { valueContext = element }
+                    let checked = try checkedType(.array(element), expected: expected,
+                        operandTypes: [sequenceContext(source, element: element), valueContext])
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
+                case .completeOccurrence(let annotation):
+                    try finish(annotation, in: &self, refineOperands: false)
                 case .result(let type):
                     results.append(type)
                 case .retainOperand(let index):
@@ -2109,10 +2149,6 @@ struct NativeTypeInference: Sendable {
             return try inferTupleAccess(value, index: index, expected: expected)
         case .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving:
             return try inferSequenceOperation(expression, expected: expected)
-        case .tupleAppend(let sequence, let value):
-            return try inferAppend(sequence, value: value, expected: expected)
-        case .tupleConcatenate(let a, let b):
-            return try inferConcatenation(a, b, expected: expected)
         case .recordLiteral(let record): return try inferRecordLiteral(record, expected: expected)
         case .recordAccess(let record, _, let key):
             return try inferRecordAccess(record, key: key, expected: expected)
