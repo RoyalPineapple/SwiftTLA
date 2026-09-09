@@ -901,13 +901,6 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    func operatorCall(
-        _ id: OperatorID, arguments: [CompiledFormalCallArgument], expected: NativeType? = nil
-    ) throws -> NativeOperatorCall {
-        var inference = self
-        return try inference.specializeCall(.reference(id, arity: arguments.count), arguments: arguments, expected: expected ?? .unknown)
-    }
-
     private mutating func specializeCall(
         _ requestedOperation: CompiledFormalOperator, arguments: [CompiledFormalCallArgument], expected: NativeType
     ) throws -> NativeOperatorCall {

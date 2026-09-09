@@ -14,7 +14,10 @@ import Testing
         let plan = try makePlan(argument: .value(.string("read")), parameterized: false)
         let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
         let operation = try #require(plan.formalOperatorDefinitions.first)
-        #expect(try inference.operatorCall(operation.id, arguments: operation.parameters.isEmpty ? [] : [.value(.value(.string("read")))], expected: .record([.init(name: "op", type: .named("OperationKind"))])).result == .record([.init(name: "op", type: .named("OperationKind"))]))
+        let expected = NativeType.record([.init(name: "op", type: .named("OperationKind"))])
+        let resolution = try inference.resolutionScope(.operatorApplication(operation.id, []), expected: expected)
+        #expect(resolution.resultType == expected)
+        #expect(try #require(resolution.call).result == expected)
     }
 
     @Test("operator result refinement revalidates actual literal arguments")
@@ -22,7 +25,11 @@ import Testing
         let plan = try makePlan(argument: .value(.string("read")), parameterized: true)
         let inference = try NativeTypeInference(plan: plan, sourceTypes: metadata)
         let operation = try #require(plan.formalOperatorDefinitions.first)
-        #expect(try inference.operatorCall(operation.id, arguments: operation.parameters.isEmpty ? [] : [.value(.value(.string("read")))], expected: .record([.init(name: "op", type: .named("OperationKind"))])).result == .record([.init(name: "op", type: .named("OperationKind"))]))
+        let expected = NativeType.record([.init(name: "op", type: .named("OperationKind"))])
+        let expression = CompiledStateExpr.operatorApplication(operation.id, [.value(.value(.string("read")))])
+        let resolution = try inference.resolutionScope(expression, expected: expected)
+        #expect(resolution.resultType == expected)
+        #expect(try #require(resolution.call).result == expected)
         let invalid = try makePlan(argument: .value(.string("write")), parameterized: true)
         #expect(throws: CompilationDiagnostic.self) {
             try NativeTypeInference(plan: invalid, sourceTypes: metadata)

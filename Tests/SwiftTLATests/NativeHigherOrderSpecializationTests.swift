@@ -7,12 +7,16 @@ import Testing
         let plan = NativeMachinePlan(compilation: try specification().compile())
         let inference = try NativeTypeInference(plan: plan)
         let operation = try #require(plan.formalOperatorDefinitions.first)
-        let integer = try inference.operatorCall(operation.id, arguments: [
+        let integerExpression = CompiledStateExpr.operatorApplication(operation.id, [
             .operator(.lambda(.init(parameters: [], body: .value(.integer(7)))))
-        ], expected: .int)
-        let string = try inference.operatorCall(operation.id, arguments: [
+        ])
+        let integerResolution = try inference.resolutionScope(integerExpression, expected: .int)
+        let integer = try #require(integerResolution.call)
+        let stringExpression = CompiledStateExpr.operatorApplication(operation.id, [
             .operator(.lambda(.init(parameters: [], body: .value(.string("seven")))))
-        ], expected: .string)
+        ])
+        let stringResolution = try inference.resolutionScope(stringExpression, expected: .string)
+        let string = try #require(stringResolution.call)
         #expect(integer.result == .int)
         #expect(string.result == .string)
         #expect(integer.specialization != string.specialization)
@@ -25,10 +29,14 @@ import Testing
         let plan = NativeMachinePlan(compilation: try specification().compile())
         let inference = try NativeTypeInference(plan: plan)
         let operation = try #require(plan.formalOperatorDefinitions.last)
-        let integer = try inference.operatorCall(operation.id,
-            arguments: [.value(.value(.integer(7)))], expected: .int)
-        let string = try inference.operatorCall(operation.id,
-            arguments: [.value(.value(.string("seven")))], expected: .string)
+        let integerExpression = CompiledStateExpr.operatorApplication(operation.id,
+            [.value(.value(.integer(7)))])
+        let integerResolution = try inference.resolutionScope(integerExpression, expected: .int)
+        let integer = try #require(integerResolution.call)
+        let stringExpression = CompiledStateExpr.operatorApplication(operation.id,
+            [.value(.value(.string("seven")))])
+        let stringResolution = try inference.resolutionScope(stringExpression, expected: .string)
+        let string = try #require(stringResolution.call)
         #expect(integer.result == .int)
         #expect(string.result == .string)
         #expect(integer.specialization != string.specialization)
@@ -49,9 +57,11 @@ import Testing
         let plan = NativeMachinePlan(compilation: try spec.compile())
         let inference = try NativeTypeInference(plan: plan)
         let operation = try #require(plan.formalOperatorDefinitions.first)
-        let call = try inference.operatorCall(operation.id, arguments: [
+        let callExpression = CompiledStateExpr.operatorApplication(operation.id, [
             .operator(.lambda(.init(parameters: [], body: .value(.integer(7)))))
-        ], expected: .int)
+        ])
+        let callResolution = try inference.resolutionScope(callExpression, expected: .int)
+        let call = try #require(callResolution.call)
         #expect(call.result == .int)
         #expect(call.callbackUses.values.flatMap { $0 }.count == 1)
     }
