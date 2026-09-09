@@ -219,12 +219,12 @@ private struct NativeArgumentRefinement: Hashable, Sendable {
     let expected: NativeType
 }
 
-indirect enum NativeOperatorImplementation: Sendable {
+enum NativeOperatorImplementation: Sendable {
     case checked(body: NativeCheckedExpression, domainGuard: NativeCheckedExpression?)
     case recursive
 }
 
-struct NativeOperatorCall: Sendable {
+final class NativeOperatorCall: Sendable {
     let specialization: NativeOperatorSpecialization
     let parameters: [BinderID]
     let implementation: NativeOperatorImplementation
@@ -232,6 +232,19 @@ struct NativeOperatorCall: Sendable {
     let inference: NativeTypeInference
     let callbackUses: [OperatorID: [NativeOperatorCall]]
     let callbackArguments: [OperatorID: CompiledFormalOperator]
+
+    init(specialization: NativeOperatorSpecialization, parameters: [BinderID],
+         implementation: NativeOperatorImplementation, result: NativeType,
+         inference: NativeTypeInference, callbackUses: [OperatorID: [NativeOperatorCall]],
+         callbackArguments: [OperatorID: CompiledFormalOperator]) {
+        self.specialization = specialization
+        self.parameters = parameters
+        self.implementation = implementation
+        self.result = result
+        self.inference = inference
+        self.callbackUses = callbackUses
+        self.callbackArguments = callbackArguments
+    }
 }
 
 /// Checking retains the representation before an implicit use-site conversion.
@@ -256,7 +269,7 @@ struct NativeCheckedType: Sendable {
 struct NativeCheckedExpression: Sendable {
     let expression: CompiledStateExpr
     let scope: NativeTypeInference
-    var annotation: NativeCheckedType
+    let annotation: NativeCheckedType
 
     var resultType: NativeType { annotation.type }
     var computationType: NativeType { annotation.computationType }
