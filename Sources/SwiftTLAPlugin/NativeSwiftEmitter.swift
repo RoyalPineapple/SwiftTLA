@@ -367,16 +367,38 @@ struct NativeSwiftEmitter {
             functionPlans[id] = functionPlan
         }
         if case .loop(let parameterOrder, let tailPlan) = functionPlan {
-            let inputs = resolved.parameters.map {
+            let inputs = parameterOrder.map {
                 "var _tailArgument\($0.ordinal) = _input\($0.ordinal)"
             }.joined(separator: "\n")
             let values = parameterOrder.map {
                 "let _tailValue\($0.ordinal) = try _tailArgument\($0.ordinal)()"
             }.joined(separator: "\n")
             var tailBindings = substitutions
-            for parameter in resolved.parameters {
+            let deferredParameters = resolved.parameters.filter { !parameterOrder.contains($0) }
+            for parameter in parameterOrder {
                 tailBindings[parameter] = "_tailValue\(parameter.ordinal)"
             }
+            for parameter in deferredParameters {
+                tailBindings[parameter] = "(try _readDeferred\(parameter.ordinal)())"
+            }
+            let deferredInputs = try zip(resolved.parameters, resolved.parameterTypes).compactMap { parameter, type -> String? in
+                guard deferredParameters.contains(parameter) else { return nil }
+                let name = String(parameter.ordinal)
+                let valueType = try swiftType(type)
+                return """
+                var _deferredValue\(name): \(valueType)?
+                var _deferredUpdates\(name): [(\(valueType)) throws -> \(valueType)] = []
+                func _readDeferred\(name)() throws -> \(valueType) {
+                    var value = try _deferredValue\(name) ?? _input\(name)()
+                    for update in _deferredUpdates\(name) {
+                        value = try update(value)
+                    }
+                    _deferredValue\(name) = value
+                    _deferredUpdates\(name).removeAll(keepingCapacity: true)
+                    return value
+                }
+                """
+            }.joined(separator: "\n")
             let hasPendingReturns = tailPlan.hasPendingReturns
             let statements = try recursiveBody(tailPlan, function: id, depthGuard: depthGuard,
                 state: state, substitutions: tailBindings, activeFunctions: activeFunctions.union([id]), hasPendingReturns: hasPendingReturns)
@@ -399,10 +421,11 @@ struct NativeSwiftEmitter {
             return returnedValue
             """ : statements
             body = """
-            \(inputs)
-            \(pendingReturns)
             let entryDepth = _nativeDepth
             defer { _nativeDepth = entryDepth }
+            \(inputs)
+            \(deferredInputs)
+            \(pendingReturns)
             _recursiveEvaluation: while true {
                 \(depthGuard)
                 \(values)
@@ -486,6 +509,12 @@ struct NativeSwiftEmitter {
             """
         case .repeatCall(let arguments):
             let assignments = try zip(program[function].parameters, arguments).map { parameter, argument in
+                if functionPlans[function]?.parameterOrder.contains(parameter) == false {
+                    var deferredBindings = substitutions
+                    deferredBindings[parameter] = "previousValue"
+                    let value = try expression(argument, state: state, substitutions: deferredBindings, activeFunctions: activeFunctions)
+                    return "_deferredUpdates\(parameter.ordinal).append({ previousValue in \(value) })"
+                }
                 let value = try expression(argument, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
                 return "_tailArgument\(parameter.ordinal) = { \(value) }"
             }

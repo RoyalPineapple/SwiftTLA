@@ -141,3 +141,65 @@ private struct RecursiveMembers {
     }
 
 }
+
+// Formal boundary fixture: the accumulator is first demanded at the recursion base case.
+@TLAModel
+private struct LazyAccumulator {
+    static var spec: TLASpec {
+        TLASpec("LazyAccumulator") {
+            let result = Var<Int>("result")
+            Variable(result, 0)
+            FormalDefinition("Count", parameters: [.value("remaining"), .value("accumulator")], body: StateExpr.if(
+                StateExpr.variable("remaining") == 0,
+                then: StateExpr.variable("accumulator"),
+                else: StateExpr.operatorApplication(.reference("Count", arity: 2), [
+                    .value(StateExpr.variable("remaining") - 1),
+                    .value(StateExpr.variable("accumulator") + 1)
+                ])
+            ))
+            SwiftTLA.Action("count") { result.becomes(FormalCall("Count", 4095, 0)) }
+            SwiftTLA.Action("tooDeep") { result.becomes(FormalCall("Count", 4096, 0)) }
+            SwiftTLA.Action("deferredCall") { result.becomes(FormalCall("Count", 4095, FormalCall(as: Int.self, "Count", 0, 0))) }
+            SwiftTLA.Action("unusedOverflow") { result.becomes(FormalCall("Count", -1, 9_223_372_036_854_775_807)) }
+            SwiftTLA.Action("demandedOverflow") { result.becomes(FormalCall("Count", 1, 9_223_372_036_854_775_807)) }
+        }
+    }
+}
+
+extension NativeRecursiveExecutionTests {
+    @Test func deferredAccumulatorMatchesFormalExecution() throws {
+        let compilation = try LazyAccumulator.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "count"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        #expect(try successor.state.value(for: result) == .integer(4095))
+        var machine = try LazyAccumulator.makeMachine()
+        #expect(try machine.send(.count).after.result == 4095)
+    }
+}
+
+extension NativeRecursiveExecutionTests {
+    @Test func deferredRecursiveFailuresPreserveDemandAndState() throws {
+        let compilation = try LazyAccumulator.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let cases: [(String, LazyAccumulator.Action, EvalError, NativeMachineEvaluationError)] = [
+            ("tooDeep", .tooDeep, .recursionDepthExceeded(4096), .recursionDepthExceeded(4096)),
+            ("deferredCall", .deferredCall, .recursionDepthExceeded(4096), .recursionDepthExceeded(4096)),
+            ("unusedOverflow", .unusedOverflow, .recursionDepthExceeded(4096), .recursionDepthExceeded(4096)),
+            ("demandedOverflow", .demandedOverflow,
+                .integerOverflow(.addition, operands: [Int.max, 1]),
+                .integerOverflow(.addition, operands: [Int.max, 1]))
+        ]
+        var machine = try LazyAccumulator.makeMachine()
+        let before = machine.state
+        for (name, action, formalError, nativeError) in cases {
+            let id = try #require(compilation.layout.testActionID(named: name))
+            #expect(throws: formalError) { try runtime.successors(for: id, from: initial) }
+            #expect(throws: nativeError) { try machine.send(action) }
+            #expect(machine.state == before)
+        }
+    }
+}

@@ -46,13 +46,45 @@ enum NativeFunctionPlan {
         let order = prefix.bindings.filter { seen.insert($0).inserted }
         // Forcing these arguments preserves the original first-use order. Once
         // forced, a tail argument captures values instead of a chain of thunks.
-        guard seen == parameters,
-              let body = Self.lower(resolved.body, returningTo: function, visited: [function], program: program)
+        guard let body = Self.lower(resolved.body, returningTo: function, visited: [function], program: program),
+              seen == parameters || Self.canDeferArguments(in: body, parameters: resolved.parameters,
+                  deferred: parameters.subtracting(seen), program: program)
         else {
             self = .ordinary(parameterOrder: order)
             return
         }
         self = .loop(parameterOrder: order, body: body)
+    }
+
+    /// A deferred update must demand its own previous value first. Independent
+    /// updates can then be composed and evaluated iteratively when demanded.
+    private static func canDeferArguments(
+        in body: Body, parameters: [BinderID], deferred: Set<BinderID>, program: NativeResolvedProgram
+    ) -> Bool {
+        switch body {
+        case .result: return true
+        case .condition(_, let yes, let no):
+            return canDeferArguments(in: yes, parameters: parameters, deferred: deferred, program: program)
+                && canDeferArguments(in: no, parameters: parameters, deferred: deferred, program: program)
+        case .repeatCall(let arguments):
+            return zip(parameters, arguments).allSatisfy { parameter, argument in
+                let isDeferred = deferred.contains(parameter)
+                if isDeferred && entryReads(argument, parameters: Set(parameters), program: program).bindings.first != parameter {
+                    return false
+                }
+                var pending = [argument]
+                while let id = pending.popLast() {
+                    let node = program[id]
+                    // Calls can capture bindings not present in their argument list.
+                    guard node.call == nil else { return false }
+                    if case .boundValue(let binding) = node.expression, deferred.contains(binding),
+                       !isDeferred || binding != parameter { return false }
+                    pending.append(contentsOf: node.children)
+                }
+                return true
+            }
+        case .binding, .call, .resume: return false
+        }
     }
 
     private static func entryReads(
