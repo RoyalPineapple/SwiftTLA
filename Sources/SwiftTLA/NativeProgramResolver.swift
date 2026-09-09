@@ -108,8 +108,10 @@ private final class NativeProgramResolver {
         scope incoming: NativeTypeInference? = nil,
         callbackScope: [NativeCallbackUseKey: NativeCallbackID] = [:]
     ) throws -> NativeExpressionID {
-        let (scope, output, result) = try (incoming ?? inference).resolutionScope(value, expected: expected)
-        var computation = result
+        let resolution = try (incoming ?? inference).resolutionScope(value, expected: expected)
+        let scope = resolution.scope
+        let resultType = resolution.resultType
+        var computationType = resolution.computationType
         var children: [NativeExpressionID] = []
         var bindings: [BinderID: NativeType] = [:]
         var call: NativeResolvedCall?
@@ -129,79 +131,79 @@ private final class NativeProgramResolver {
         switch value {
         case .value, .controlLocation, .enabledAction: break
         case .assertView(let source, _): children = [try child(source)]
-        case .stateVariable(let id): computation = try require(scope.variables[id])
-        case .boundValue(let id): computation = try require(scope.bindings[id])
+        case .stateVariable(let id): computationType = try require(scope.variables[id])
+        case .boundValue(let id): computationType = try require(scope.bindings[id])
         case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .modulo(let a, let b), .integerDivide(let a, let b), .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b): try pair(a, b, .int)
         case .negate(let a): children = [try child(a, .int)]
         case .and(let a, let b), .or(let a, let b): try pair(a, b, .bool)
         case .not(let a): children = [try child(a, .bool)]
         case .equal(let a, let b), .notEqual(let a, let b): try pair(a, b, scope.operandType(a, b))
-        case .ifThenElse(let condition, let a, let b): children = [try child(condition, .bool), try child(a, result), try child(b, result)]
-        case .setLiteral(let values): children = try values.map { try child($0, element(result)) }
+        case .ifThenElse(let condition, let a, let b): children = [try child(condition, .bool), try child(a, computationType), try child(b, computationType)]
+        case .setLiteral(let values): children = try values.map { try child($0, element(computationType)) }
         case .in(let value, let domain):
             let item = try scope.membershipElementType(value: value, domain: domain)
             children = [try child(value, item), try child(domain, .set(item))]
         case .subset(let a, let b): try pair(a, b, scope.operandType(a, b))
-        case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): try pair(a, b, result)
+        case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): try pair(a, b, computationType)
         case .cardinality(let a): children = [try child(a)]
         case .sequenceSelect(let sequence, let id, let predicate):
-            let item = try element(result)
+            let item = try element(computationType)
             let source = try scope.sequenceSourceType(sequence, element: item)
             bindings[id] = item
             children = [try child(sequence, source), try child(predicate, .bool)]
         case .setFilter(let domain, let id, let body), .choose(let domain, let id, let body):
-            let item: NativeType = if case .setFilter = value { try element(result) } else { result }
+            let item: NativeType = if case .setFilter = value { try element(computationType) } else { computationType }
             bindings[id] = item
             children = [try child(domain, .set(item)), try child(body, .bool)]
         case .setMap(let body, let id, let domain):
             let item = try require(scope.bindings[id]); bindings[id] = item
-            children = [try child(body, element(result)), try child(domain, .set(item))]
+            children = [try child(body, element(computationType)), try child(domain, .set(item))]
         case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
             let item = try require(scope.bindings[id]); bindings[id] = item
             children = [try child(domain, .set(item)), try child(body, .bool)]
-        case .powerSet(let domain): children = [try child(domain, element(result))]
-        case .unionAll(let domain): children = [try child(domain, .set(result))]
+        case .powerSet(let domain): children = [try child(domain, element(computationType))]
+        case .unionAll(let domain): children = [try child(domain, .set(computationType))]
         case .integerRange(let a, let b): try pair(a, b, .int)
         case .tupleLiteral(let values):
-            if case .tuple(let types) = result { children = try zip(values, types).map { try child($0, $1) } }
-            else { children = try values.map { try child($0, element(result)) } }
+            if case .tuple(let types) = computationType { children = try zip(values, types).map { try child($0, $1) } }
+            else { children = try values.map { try child($0, element(computationType)) } }
         case .tupleAccess(let source, let index):
-            let shape = try scope.projectionSourceType(source, index: index, expected: result)
-            computation = if case .tuple(let fields) = shape { fields[index - 1] } else { try element(shape) }
+            let shape = try scope.projectionSourceType(source, index: index, expected: computationType)
+            computationType = if case .tuple(let fields) = shape { fields[index - 1] } else { try element(shape) }
             children = [try child(source, shape)]
         case .tupleDynamicAccess(let source, let index):
-            let shape = try scope.sequenceSourceType(source, element: result)
+            let shape = try scope.sequenceSourceType(source, element: computationType)
             children = [try child(source, shape), try child(index, .int)]
         case .tupleLength(let source):
             let shape = try type(source)
             children = [try child(source, { if case .tuple = shape { return shape }; return try scope.sequenceSourceType(source) }())]
-        case .tupleHead(let source): children = [try child(source, scope.sequenceSourceType(source, element: result))]
-        case .tupleTail(let source): children = [try child(source, scope.sequenceSourceType(source, element: element(result)))]
+        case .tupleHead(let source): children = [try child(source, scope.sequenceSourceType(source, element: computationType))]
+        case .tupleTail(let source): children = [try child(source, scope.sequenceSourceType(source, element: element(computationType)))]
         case .tupleRemoving(let source, let index):
-            children = [try child(source, scope.sequenceSourceType(source, element: element(result))), try child(index, .int)]
-        case .tupleAppend(let source, let item): children = [try child(source, scope.sequenceSourceType(source, element: element(result))), try child(item, element(result))]
-        case .tupleConcatenate(let a, let b): children = [try child(a, scope.sequenceSourceType(a, element: element(result))), try child(b, scope.sequenceSourceType(b, element: element(result)))]
+            children = [try child(source, scope.sequenceSourceType(source, element: element(computationType))), try child(index, .int)]
+        case .tupleAppend(let source, let item): children = [try child(source, scope.sequenceSourceType(source, element: element(computationType))), try child(item, element(computationType))]
+        case .tupleConcatenate(let a, let b): children = [try child(a, scope.sequenceSourceType(a, element: element(computationType))), try child(b, scope.sequenceSourceType(b, element: element(computationType)))]
         case .recordLiteral(let record):
-            guard case .record(let fields) = result else { return try require(nil as NativeExpressionID?) }
+            guard case .record(let fields) = computationType else { return try require(nil as NativeExpressionID?) }
             children = try record.fields.map { field in
                 guard case .string(let name) = field.key else { return try require(nil as NativeExpressionID?) }
                 return try child(field.value, require(fields.first { $0.name == name }?.type))
             }
         case .recordAccess(let source, _, let key):
-            let shape = try scope.recordProjectionSourceType(source, key: key, expected: result)
+            let shape = try scope.recordProjectionSourceType(source, key: key, expected: computationType)
             guard case .record(let fields) = shape, case .string(let name) = key else { return try require(nil as NativeExpressionID?) }
-            computation = try require(fields.first { $0.name == name }?.type)
+            computationType = try require(fields.first { $0.name == name }?.type)
             children = [try child(source, shape)]
-        case .domain(let source): children = [try child(source, scope.domainSourceType(source, expected: result))]
+        case .domain(let source): children = [try child(source, scope.domainSourceType(source, expected: computationType))]
         case .functionLiteral(let domain, let id, let body):
-            guard case .dictionary(let key, let item) = result else { return try require(nil as NativeExpressionID?) }
+            guard case .dictionary(let key, let item) = computationType else { return try require(nil as NativeExpressionID?) }
             bindings[id] = key; children = [try child(domain, .set(key)), try child(body, item)]
         case .functionApply(let function, let argument):
             if case .operatorReference(let id) = function {
-                let resolved = try scope.operatorCall(id, arguments: [.value(argument)], expected: result)
+                let resolved = try scope.operatorCall(id, arguments: [.value(argument)], expected: computationType)
                 call = try resolveCall(resolved, operation: id, values: [argument], scope: scope, callbackScope: callbackScope, arguments: &children)
             } else {
-                let shape = try scope.functionApplicationSourceType(function, argument: argument, expected: result)
+                let shape = try scope.functionApplicationSourceType(function, argument: argument, expected: computationType)
                 let key: NativeType = switch shape { case .dictionary(let key, _): key; case .record: .string; default: .int }
                 children = [try child(function, shape), try child(argument, key)]
             }
@@ -219,37 +221,37 @@ private final class NativeProgramResolver {
             default: return try require(nil as NativeExpressionID?)
             }
             children = [try child(source, shape), try child(key, keyType), try child(replacement, item)]
-        case .sequenceFromSet(let domain): children = [try child(domain, .set(element(result)))]
+        case .sequenceFromSet(let domain): children = [try child(domain, .set(element(computationType)))]
         case .setSum(let function, let domain): children = [try child(function), try child(domain)]
         case .functionSet(let domain, let range):
-            guard case .set(.dictionary(let key, let item)) = result else { return try require(nil as NativeExpressionID?) }
+            guard case .set(.dictionary(let key, let item)) = computationType else { return try require(nil as NativeExpressionID?) }
             children = [try child(domain, .set(key)), try child(range, .set(item))]
         case .foldFunction(let operation, let initial, let sequence):
             let shape = try scope.sequenceSourceType(sequence)
-            bindings[operation.parameters[0]] = try element(shape); bindings[operation.parameters[1]] = result
-            children = [try child(operation.body, result), try child(initial, result), try child(sequence, shape)]
+            bindings[operation.parameters[0]] = try element(shape); bindings[operation.parameters[1]] = computationType
+            children = [try child(operation.body, computationType), try child(initial, computationType), try child(sequence, shape)]
         case .operatorApplication(let id, let arguments):
-            let resolved = try scope.operatorCall(id, arguments: arguments, expected: result)
+            let resolved = try scope.operatorCall(id, arguments: arguments, expected: computationType)
             let values = arguments.compactMap { if case .value(let value) = $0 { return value }; return nil }
             call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .recursiveCall(let id, let values):
-            let resolved = try scope.operatorCall(id, arguments: values.map { .value($0) }, expected: result)
+            let resolved = try scope.operatorCall(id, arguments: values.map { .value($0) }, expected: computationType)
             call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .lambdaApplication(let lambda, let values):
-            let resolved = try scope.lambdaCall(lambda, arguments: values, expected: result)
+            let resolved = try scope.lambdaCall(lambda, arguments: values, expected: computationType)
             call = try resolveCall(resolved, operation: nil, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .letValue(let id, let rhs, let body):
             let item = try require(scope.bindings[id]); bindings[id] = item
-            children = [try child(rhs, item), try child(body, result)]
-        case .letIn(_, let body): children = [try child(body, result)]
+            children = [try child(rhs, item), try child(body, computationType)]
+        case .letIn(_, let body): children = [try child(body, computationType)]
         case .caseExpr(let first, let rest, let otherwise):
-            for branch in [first] + rest { children += [try child(branch.condition, .bool), try child(branch.value, result)] }
-            if let otherwise { children.append(try child(otherwise, result)) }
+            for branch in [first] + rest { children += [try child(branch.condition, .bool), try child(branch.value, computationType)] }
+            if let otherwise { children.append(try child(otherwise, computationType)) }
         case .operatorReference: return try require(nil as NativeExpressionID?)
         }
-        guard computation == output || scope.canProjectRead(computation, to: output) else { return try require(nil as NativeExpressionID?) }
+        guard computationType == resultType || scope.canProjectRead(computationType, to: resultType) else { return try require(nil as NativeExpressionID?) }
         let id = NativeExpressionID(ordinal: expressions.count)
-        expressions.append(.init(expression: value, resultType: output, computationType: computation, children: children, bindings: bindings, call: call))
+        expressions.append(.init(expression: value, resultType: resultType, computationType: computationType, children: children, bindings: bindings, call: call))
         return id
     }
 

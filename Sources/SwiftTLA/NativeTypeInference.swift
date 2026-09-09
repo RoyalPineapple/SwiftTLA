@@ -359,7 +359,7 @@ struct NativeTypeInference: Sendable {
         return match.1
     }
 
-    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (NativeTypeInference, NativeType, NativeType) {
+    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (scope: NativeTypeInference, resultType: NativeType, computationType: NativeType) {
         var scope = self
         let result = try scope.infer(expression, expected: expected ?? .unknown)
         guard result.resolved else {
