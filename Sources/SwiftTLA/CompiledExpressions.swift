@@ -156,6 +156,7 @@ extension CompiledStateExpr {
         var operatorsApplyingDemands: Set<OperatorID> = []
         var operatorDemandKeys: Set<CompiledOperatorDemandKey> = []
         var nextOperatorDemandIdentity = 0
+        var work: [() -> Void] = []
 
         func register(_ parameters: [CompiledFormalParameter], for operation: OperatorID) {
             parametersByOperator[operation] = parameters
@@ -220,6 +221,14 @@ extension CompiledStateExpr {
             arguments: [CompiledFormalCallArgument],
             argumentScope: CompiledDependencyScope
         ) {
+            work.append { processCall(operation, arguments: arguments, argumentScope: argumentScope) }
+        }
+
+        func processCall(
+            _ operation: CompiledDependencyBinding<CompiledFormalOperator>,
+            arguments: [CompiledFormalCallArgument],
+            argumentScope: CompiledDependencyScope
+        ) {
             switch operation.value {
             case .lambda(let lambda):
                 visit(
@@ -249,25 +258,25 @@ extension CompiledStateExpr {
                 demandedValues[id] = []
                 operatorDemands[id] = []
                 pendingCalls[id] = []
-                defer {
+                work.append {
                     activeOperators.remove(id)
                     demandedValues.removeValue(forKey: id)
                     operatorDemands.removeValue(forKey: id)
                     pendingCalls.removeValue(forKey: id)
                 }
+                work.append { visitPendingCalls(for: id) }
                 if let local = operation.scope.localOperators[id] {
                     let nested = bind(local.parameters, to: arguments, in: operation.scope, from: argumentScope)
+                    visit(local.body, scope: nested)
                     if let domain = local.domain {
+                        visit(domain, scope: nested)
                         if let parameter = local.parameters.first {
                             demandedValues[id, default: []].insert(parameter)
                         }
                         if case .value(let argument) = arguments.first {
                             visit(argument, scope: argumentScope)
                         }
-                        visit(domain, scope: nested)
                     }
-                    visit(local.body, scope: nested)
-                    visitPendingCalls(for: id)
                     return
                 }
                 if let function = recursiveFunctions[id] {
@@ -275,13 +284,11 @@ extension CompiledStateExpr {
                         function.body,
                         scope: bind(function.parameters, to: arguments, in: operation.scope, from: argumentScope)
                     )
-                    visitPendingCalls(for: id)
                     return
                 }
                 guard let definition = formalOperators[id] else { return }
                 let nested = bind(definition.parameters, to: arguments, in: operation.scope, from: argumentScope)
                 visit(definition.body, scope: nested)
-                visitPendingCalls(for: id)
             }
         }
 
@@ -302,74 +309,77 @@ extension CompiledStateExpr {
                 return resolved
             }
 
-            while true {
-                var calls = pendingCalls[operation, default: []]
-                var valueWork: [(CompiledStateExpr, CompiledDependencyScope)] = []
-                var operatorWork: [(CompiledDependencyBinding<CompiledFormalOperator>, [CompiledFormalCallArgument], CompiledDependencyScope)] = []
-                for index in calls.indices {
+            var calls = pendingCalls[operation, default: []]
+            var valueWork: [(CompiledStateExpr, CompiledDependencyScope)] = []
+            var operatorWork: [(CompiledDependencyBinding<CompiledFormalOperator>, [CompiledFormalCallArgument], CompiledDependencyScope)] = []
+            for index in calls.indices {
+                for (parameter, argument) in zip(parameters, calls[index].arguments) {
+                    switch (parameter, argument) {
+                    case (.value(let binder), .value(let expression))
+                        where demandedValues[operation, default: []].contains(binder)
+                            && calls[index].processedValues.insert(binder).inserted:
+                        valueWork.append((expression, calls[index].scope))
+                    default:
+                        break
+                    }
+                }
+                let demands = operatorDemands[operation, default: []]
+                while calls[index].processedOperatorDemands < demands.count {
+                    let demand = demands[calls[index].processedOperatorDemands]
+                    calls[index].processedOperatorDemands += 1
+                    var supplied: CompiledFormalOperator?
                     for (parameter, argument) in zip(parameters, calls[index].arguments) {
-                        switch (parameter, argument) {
-                        case (.value(let binder), .value(let expression))
-                            where demandedValues[operation, default: []].contains(binder)
-                                && calls[index].processedValues.insert(binder).inserted:
-                            valueWork.append((expression, calls[index].scope))
-                        default:
-                            break
-                        }
-                    }
-                    let demands = operatorDemands[operation, default: []]
-                    while calls[index].processedOperatorDemands < demands.count {
-                        let demand = demands[calls[index].processedOperatorDemands]
-                        calls[index].processedOperatorDemands += 1
-                        var supplied: CompiledFormalOperator?
-                        for (parameter, argument) in zip(parameters, calls[index].arguments) {
-                            guard case .operator(let id, _) = parameter,
-                                  id == demand.parameter,
-                                  case .operator(let argument) = argument
-                            else { continue }
-                            supplied = argument
-                            break
-                        }
-                        guard let supplied else { continue }
-                        if case .reference(let parameter, _) = supplied,
-                           operatorParameterOwners[parameter] == operation,
-                           operatorDemandKeys.insert(.init(
-                               identity: demand.identity,
-                               parameter: parameter
-                           )).inserted {
-                            operatorDemands[operation, default: []].append(.init(
-                                identity: demand.identity,
-                                parameter: parameter,
-                                arguments: demand.arguments,
-                                scope: demand.scope
-                            ))
-                        }
-                        guard let supplied = resolve(supplied, in: calls[index].scope)
+                        guard case .operator(let id, _) = parameter,
+                              id == demand.parameter,
+                              case .operator(let argument) = argument
                         else { continue }
-                        let argumentScope = bind(
-                            parameters,
-                            to: calls[index].arguments,
-                            in: demand.scope,
-                            from: calls[index].scope
-                        )
-                        operatorWork.append((supplied, demand.arguments, argumentScope))
+                        supplied = argument
+                        break
                     }
-                }
-                pendingCalls[operation] = calls
-                guard valueWork.isEmpty == false || operatorWork.isEmpty == false else {
-                    pendingCalls.removeValue(forKey: operation)
-                    return
-                }
-                valueWork.forEach { visit($0.0, scope: $0.1) }
-                for work in operatorWork {
-                    operatorsApplyingDemands.insert(operation)
-                    visitCall(work.0, arguments: work.1, argumentScope: work.2)
-                    operatorsApplyingDemands.remove(operation)
+                    guard let supplied else { continue }
+                    if case .reference(let parameter, _) = supplied,
+                       operatorParameterOwners[parameter] == operation,
+                       operatorDemandKeys.insert(.init(
+                           identity: demand.identity,
+                           parameter: parameter
+                       )).inserted {
+                        operatorDemands[operation, default: []].append(.init(
+                            identity: demand.identity,
+                            parameter: parameter,
+                            arguments: demand.arguments,
+                            scope: demand.scope
+                        ))
+                    }
+                    guard let supplied = resolve(supplied, in: calls[index].scope)
+                    else { continue }
+                    let argumentScope = bind(
+                        parameters,
+                        to: calls[index].arguments,
+                        in: demand.scope,
+                        from: calls[index].scope
+                    )
+                    operatorWork.append((supplied, demand.arguments, argumentScope))
                 }
             }
+            pendingCalls[operation] = calls
+            guard valueWork.isEmpty == false || operatorWork.isEmpty == false else {
+                pendingCalls.removeValue(forKey: operation)
+                return
+            }
+            work.append { visitPendingCalls(for: operation) }
+            for call in operatorWork.reversed() {
+                work.append { operatorsApplyingDemands.remove(operation) }
+                visitCall(call.0, arguments: call.1, argumentScope: call.2)
+                work.append { operatorsApplyingDemands.insert(operation) }
+            }
+            valueWork.reversed().forEach { visit($0.0, scope: $0.1) }
         }
 
         func visit(_ expression: CompiledStateExpr, scope: CompiledDependencyScope) {
+            work.append { process(expression, scope: scope) }
+        }
+
+        func process(_ expression: CompiledStateExpr, scope: CompiledDependencyScope) {
             switch expression {
             case .value, .controlLocation:
                 return
@@ -379,7 +389,7 @@ extension CompiledStateExpr {
                 }
                 guard let binding = scope.valueBindings[binder], activeValues.insert(binder).inserted
                 else { return }
-                defer { activeValues.remove(binder) }
+                work.append { activeValues.remove(binder) }
                 visit(binding.value, scope: binding.scope)
             case .enabledAction(let action):
                 enabledActions.insert(action)
@@ -469,6 +479,7 @@ extension CompiledStateExpr {
         }
 
         visit(self, scope: .init())
+        while let next = work.popLast() { next() }
         return .init(variables: variables, enabledActions: enabledActions)
     }
 }

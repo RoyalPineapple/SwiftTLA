@@ -15,18 +15,22 @@ extension CompiledActionExpr {
         func expression(_ value: CompiledStateExpr) -> Set<ActionID> {
             value.stateRequirements(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions).enabledActions
         }
-        func action(_ value: CompiledActionExpr) -> Set<ActionID> {
-            value.enabledActionDependencies(formalOperators: formalOperators, recursiveFunctions: recursiveFunctions)
+        var dependencies: Set<ActionID> = []
+        var pending = [self]
+        while let action = pending.popLast() {
+            switch action {
+            case .assign(_, let value), .guard_(let value): dependencies.formUnion(expression(value))
+            case .unchanged: break
+            case .existsAction(_, let domain, let body), .define(_, let domain, let body):
+                dependencies.formUnion(expression(domain))
+                pending.append(body)
+            case .ifElse(let condition, let then, let otherwise):
+                dependencies.formUnion(expression(condition))
+                pending.append(contentsOf: [otherwise, then])
+            case .and(let lhs, let rhs), .or(let lhs, let rhs): pending.append(contentsOf: [rhs, lhs])
+            }
         }
-        switch self {
-        case .assign(_, let value), .guard_(let value): return expression(value)
-        case .unchanged: return []
-        case .existsAction(_, let domain, let body), .define(_, let domain, let body):
-            return expression(domain).union(action(body))
-        case .ifElse(let condition, let then, let otherwise):
-            return expression(condition).union(action(then)).union(action(otherwise))
-        case .and(let lhs, let rhs), .or(let lhs, let rhs): return action(lhs).union(action(rhs))
-        }
+        return dependencies
     }
 
     func requiresEnabledActions(
