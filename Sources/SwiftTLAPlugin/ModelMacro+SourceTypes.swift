@@ -12,6 +12,14 @@ extension TLASpecVerifier {
             }
         }
         let structs = members.compactMap { $0.decl.as(StructDeclSyntax.self) }
+        let enclosingType = members.parent?.parent?.as(StructDeclSyntax.self)?.name.text
+        func fieldStorageName(_ type: TypeSyntax) -> String? {
+            if let reference = type.as(IdentifierTypeSyntax.self) { return reference.name.text }
+            guard let qualified = type.as(MemberTypeSyntax.self),
+                  let owner = qualified.baseType.as(IdentifierTypeSyntax.self),
+                  owner.name.text == enclosingType else { return nil }
+            return qualified.name.text
+        }
         let schemas = members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.filter {
             $0.inheritanceClause?.inheritedTypes.contains {
                 $0.type.as(IdentifierTypeSyntax.self)?.name.text == "TLARecordSchema"
@@ -21,7 +29,7 @@ extension TLASpecVerifier {
             let failure = ModelMacroError.unsupportedRecordSchema(typeName: schema.name.text)
             let members = schema.memberBlock.members
             guard let fieldsAlias = members.compactMap({ $0.decl.as(TypeAliasDeclSyntax.self) }).first(where: { $0.name.sourceIdentifierName == "Fields" }),
-                  let fieldsName = fieldsAlias.initializer.value.as(IdentifierTypeSyntax.self)?.name.text,
+                  let fieldsName = fieldStorageName(fieldsAlias.initializer.value),
                   let fields = structs.first(where: { $0.name.text == fieldsName }),
                   let nameFunction = members.compactMap({ $0.decl.as(FunctionDeclSyntax.self) }).first(where: { $0.name.sourceIdentifierName == "fieldName" }),
                   let parameter = nameFunction.signature.parameterClause.parameters.first,
