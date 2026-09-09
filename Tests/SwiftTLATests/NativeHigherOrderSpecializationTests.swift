@@ -39,7 +39,7 @@ import Testing
     @Test("local operators propagate the callback signatures they capture")
     func localOperatorCallbackDemand() throws {
         let spec = TLASpec(name: "CapturedCallback", variables: [
-            .init(name: "number", initialization: .int(0), origin: .compiler)
+            .init(name: "number", initialization: .expression(.int(0)), origin: .compiler)
         ], actions: [], invariants: [], formalOperatorDefinitions: [
             .init(name: "ApplyThroughLocal", parameters: [.operator("callback", arity: 0)],
                 body: .letIn([
@@ -58,7 +58,7 @@ import Testing
 
     private func specification() -> TLASpec {
         TLASpec(name: "CallbackShapes", variables: [
-            .init(name: "number", initialization: .int(0), origin: .compiler)
+            .init(name: "number", initialization: .expression(.int(0)), origin: .compiler)
         ], actions: [], invariants: [], formalOperatorDefinitions: [
             .init(name: "Invoke", parameters: [.operator("callback", arity: 0)],
                 body: .operatorApplication(.reference("callback", arity: 0), [])),

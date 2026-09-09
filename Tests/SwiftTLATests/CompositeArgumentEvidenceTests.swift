@@ -33,7 +33,7 @@ import Testing
         ]], enums: ["Key": [.constant("first")], "First": [.constant("NoValue")], "Second": [.constant("second")]])
         let dictionary = StateExpr.functionLiteral(.setLiteral([.value(.constant("first"))]), "key", .value(.constant("NoValue")))
         let plan = NativeMachinePlan(compilation: try TLASpec(name: "DictionaryProjection", variables: [
-            .init(name: "stored", initialization: .recordLiteral(.init(["nextState": dictionary])), generatedSwiftType: "Record<Payload>", origin: .compiler)
+            .init(name: "stored", initialization: .expression(.recordLiteral(.init(["nextState": dictionary]))), generatedSwiftType: "Record<Payload>", origin: .compiler)
         ], actions: [], invariants: [], formalOperatorDefinitions: [
             .init(name: "Read", parameters: [], body: .recordAccess(.variable("stored"), "nextState"))
         ]).compile())
@@ -51,8 +51,8 @@ import Testing
     func recursiveConstructionEvidence() throws {
         for rawStorage in [false, true] {
             let dictionary = StateExpr.functionLiteral(.setLiteral([.value(.constant("first"))]), "key", .value(.constant("NoValue")))
-            var variables: [NamedVar] = [.init(name: "number", initialization: .int(0), origin: .compiler)]
-            if rawStorage { variables.append(.init(name: "raw", initialization: dictionary, origin: .compiler)) }
+            var variables: [NamedVar] = [.init(name: "number", initialization: .expression(.int(0)), origin: .compiler)]
+            if rawStorage { variables.append(.init(name: "raw", initialization: .expression(dictionary), origin: .compiler)) }
             let initial = StateExpr.recordLiteral(.init(["nextState": rawStorage ? .variable("raw") : dictionary]))
             let operation = FormalOperatorDefinition(name: "Accumulate", parameters: [.value("n"), .value("acc")], body: .ifThenElse(
                 .equal(.variable("n"), .int(0)), .variable("acc"),
@@ -82,8 +82,8 @@ import Testing
     private func makePlan(invalid: Bool = false, rawStorage: Bool = false) throws -> NativeMachinePlan {
         let dictionary = StateExpr.functionLiteral(
             .setLiteral([.value(.constant(invalid ? "other" : "first"))]), "key", .value(.constant("NoValue")))
-        var variables: [NamedVar] = [.init(name: "number", initialization: .int(0), origin: .compiler)]
-        if rawStorage { variables.append(.init(name: "raw", initialization: dictionary, origin: .compiler)) }
+        var variables: [NamedVar] = [.init(name: "number", initialization: .expression(.int(0)), origin: .compiler)]
+        if rawStorage { variables.append(.init(name: "raw", initialization: .expression(dictionary), origin: .compiler)) }
         let record = StateExpr.recordLiteral(.init([
             "nextState": rawStorage ? .variable("raw") : dictionary,
             "execution": .tupleLiteral([])

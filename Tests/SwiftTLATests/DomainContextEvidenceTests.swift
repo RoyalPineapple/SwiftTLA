@@ -27,9 +27,9 @@ import Testing
     private func makePlan(rawStorage: Bool = false, invalid: Bool = false) throws -> NativeMachinePlan {
         let function = StateExpr.functionLiteral(.setLiteral([.value(.constant(invalid ? "other" : "first"))]), "key", .int(1))
         var variables: [NamedVar] = [
-            .init(name: "keys", initialization: .setLiteral([.value(.constant("first"))]), generatedSwiftType: "SetExpr<Key>", origin: .compiler)
+            .init(name: "keys", initialization: .expression(.setLiteral([.value(.constant("first"))])), generatedSwiftType: "SetExpr<Key>", origin: .compiler)
         ]
-        if rawStorage { variables.append(.init(name: "raw", initialization: function, origin: .compiler)) }
+        if rawStorage { variables.append(.init(name: "raw", initialization: .expression(function), origin: .compiler)) }
         let domain = StateExpr.domain(rawStorage ? .variable("raw") : function)
         return .init(compilation: try TLASpec(name: "DomainContext", variables: variables,
             actions: [], invariants: [.init(name: "Keys", body: .equal(domain, .variable("keys")))]).compile())

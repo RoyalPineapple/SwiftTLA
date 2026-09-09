@@ -42,8 +42,8 @@ import Testing
             .init(sourceName: "valid", name: "valid", swiftType: "Bool")
         ]], enums: ["Key": [.constant("first")]])
         let plan = NativeMachinePlan(compilation: try TLASpec(name: "StoredProjection", variables: [
-            .init(name: "record", initialization: .recordLiteral(.init(["key": .value(.constant("first")), "valid": .bool(true)])), generatedSwiftType: "Record<Payload>", origin: .compiler),
-            .init(name: "pair", initialization: .tupleLiteral([.value(.constant("first")), .bool(true)]), generatedSwiftType: "Pair<Key,Bool>", origin: .compiler)
+            .init(name: "record", initialization: .expression(.recordLiteral(.init(["key": .value(.constant("first")), "valid": .bool(true)]))), generatedSwiftType: "Record<Payload>", origin: .compiler),
+            .init(name: "pair", initialization: .expression(.tupleLiteral([.value(.constant("first")), .bool(true)])), generatedSwiftType: "Pair<Key,Bool>", origin: .compiler)
         ], actions: [], invariants: [], formalOperatorDefinitions: [
             .init(name: "RecordKey", parameters: [], body: .recordAccess(.variable("record"), "key")),
             .init(name: "TupleKey", parameters: [], body: .tupleAccess(.variable("pair"), 1))
@@ -63,7 +63,7 @@ import Testing
                 .init(sourceName: "value", name: "value", swiftType: "OneOf<First,Second>")
             ]], enums: ["First": [.constant("first")], "Second": mixed ? [.int(2)] : [.constant("second")]])
             let plan = NativeMachinePlan(compilation: try TLASpec(name: "FiniteProjection", variables: [
-                .init(name: "record", initialization: .recordLiteral(.init(["value": .value(.constant("first"))])), generatedSwiftType: "Record<Payload>", origin: .compiler)
+                .init(name: "record", initialization: .expression(.recordLiteral(.init(["value": .value(.constant("first"))]))), generatedSwiftType: "Record<Payload>", origin: .compiler)
             ], actions: [], invariants: [], formalOperatorDefinitions: [
                 .init(name: "Read", parameters: [], body: .recordAccess(.variable("record"), "value"))
             ]).compile())
@@ -88,7 +88,7 @@ import Testing
 
     private func makePlan(key: StateExpr, rawStorage: Bool = false) throws -> NativeMachinePlan {
         var variables: [NamedVar] = [
-            .init(name: "number", initialization: .int(0), origin: .compiler)
+            .init(name: "number", initialization: .expression(.int(0)), origin: .compiler)
         ]
         if rawStorage {
             variables.append(.init(name: "raw", initialization: .value(.constant("first")), origin: .compiler))

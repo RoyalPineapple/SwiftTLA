@@ -6,7 +6,7 @@ import Testing
     func polymorphicUsesHaveSeparateBodies() throws {
         let identity = FormalOperatorDefinition(name: "Identity", parameters: [.value("value")], body: .variable("value"))
         let plan = NativeMachinePlan(compilation: try TLASpec(name: "ResolvedCalls", variables: [
-            .init(name: "number", initialization: .int(0), origin: .compiler),
+            .init(name: "number", initialization: .expression(.int(0)), origin: .compiler),
             .init(name: "text", initialization: .value(.string("")), origin: .compiler)
         ], actions: [.init(name: "step", body: .and(
             .assign(.named("number"), .operatorApplication(.reference("Identity", arity: 1), [.value(.int(1))])),
@@ -77,7 +77,7 @@ import Testing
         let sequence = StateExpr.functionLiteral(.integerRange(.int(1), .int(3)), "index", .variable("index"))
         let selection = StateExpr.sequenceSelect(sequence, "item", .greaterThan(.variable("item"), .int(1)))
         let plan = NativeMachinePlan(compilation: try TLASpec(name: "SelectedSequence", variables: [
-            .init(name: "items", initialization: selection, generatedSwiftType: "[Int]", origin: .compiler)
+            .init(name: "items", initialization: .expression(selection), generatedSwiftType: "[Int]", origin: .compiler)
         ], actions: [], invariants: []).compile())
         let program = try NativeResolvedProgram(plan: plan)
         let root = try #require(program.initializations.values.first)
@@ -90,7 +90,7 @@ import Testing
     private func plan(operation: FormalOperatorDefinition, arguments: [FormalCallArgument], boolean: Bool) throws -> NativeMachinePlan {
         let call = StateExpr.operatorApplication(.reference(operation.name, arity: arguments.count), arguments)
         return .init(compilation: try TLASpec(name: "ResolvedRecursion", variables: [
-            .init(name: "number", initialization: .int(0), origin: .compiler)
+            .init(name: "number", initialization: .expression(.int(0)), origin: .compiler)
         ], actions: [], invariants: [.init(name: "Check", body: boolean ? call : .equal(call, .int(0)))],
             formalOperatorDefinitions: [operation]).compile())
     }

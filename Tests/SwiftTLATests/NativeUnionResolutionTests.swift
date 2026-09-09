@@ -88,7 +88,7 @@ import Testing
 
     private func resolve(type: String, initial: StateExpr, invariant: StateExpr? = nil) throws -> NativeResolvedProgram {
         let specification = TLASpec(name: "UnionEvidence", variables: [
-            .init(name: "value", initialization: initial, generatedSwiftType: type, origin: .compiler)
+            .init(name: "value", initialization: .expression(initial), generatedSwiftType: type, origin: .compiler)
         ], actions: [], invariants: invariant.map { [.init(name: "View", body: $0)] } ?? [])
         return try .init(plan: .init(compilation: specification.compile()), sourceTypes: metadata)
     }
