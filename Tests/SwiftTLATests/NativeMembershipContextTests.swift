@@ -10,18 +10,24 @@ private struct NominalMembershipDomain {
         static let finiteValues = allCases
         var tlaValue: TLAValue { .string(rawValue) }
     }
+    enum Key: Int, CaseIterable, FiniteTLAValueDomain {
+        case entry = 0
+        static var defaultValue: Self { .entry }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .int(rawValue) }
+    }
+    enum Step: String, CaseIterable { case lookup }
+
     static var spec: TLASpec {
-        TLASpec("NominalMembershipDomain") {
-            let entries = Var<Function<Int, SetExpr<Pair<Int, Value>>>>("entries")
-            let found = Var<Bool>("found")
-            Variable(entries, Expr<Function<Int, SetExpr<Pair<Int, Value>>>>(StateExpr.functionLiteral(
-                StateExpr.set([0]), "key", SetExpr<Pair<Int, Value>>.literal(Pair<Int, Value>.literal(1, Value.first)).raw
-            )))
-            Variable(found, false)
-            SwiftTLA.Action("lookup") {
-                found.becomes(Expr<Bool>(Expr<SetExpr<Pair<Int, Value>>>(entries.stateExpr.applying(0)).contains(
-                    Pair<Int, Value>.literal(1, Value.first)
-                )))
+        #spec("NominalMembershipDomain") {
+            Algorithm("NominalMembershipDomain") { scope in
+                let entries = scope.sharedVar("entries", initial: Function<Key, SetExpr<Pair<Int, Value>>>.mapping { _ in
+                    SetExpr<Pair<Int, Value>>.literal(Pair<Int, Value>.literal(1, Value.first))
+                })
+                let found = scope.sharedVar("found", initial: false)
+                Do(Step.lookup) {
+                    Assign(found, to: entries[Key.entry].contains(Pair<Int, Value>.literal(1, Value.first)))
+                }
             }
         }
     }
@@ -49,7 +55,7 @@ struct NativeMembershipContextTests {
             name: "ProjectedNominalMember",
             variables: [.init(name: "entry", initialization: .value(.tuple([.int(1), .string("first")])), generatedSwiftType: "Pair<Int, Value>", origin: .compiler)],
             actions: [], invariants: [],
-            constraint: .in(.tupleAccess(.variable("entry"), 2), .setLiteral([.string("first"), .string("second")]))
+            constraint: .in(.tupleAccess(.variable("entry"), 2), .setLiteral([.value(.string("first")), .value(.string("second"))]))
         ).compile()
         let plan = NativeMachinePlan(compilation: compilation)
         let evidence = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Value": [.string("first"), .string("second")]]))
@@ -68,7 +74,7 @@ struct NativeMembershipContextTests {
             name: "InvalidNominalMember",
             variables: [.init(name: "entries", initialization: .value(.set([])), generatedSwiftType: "SetExpr<Pair<Int, Value>>", origin: .compiler)],
             actions: [], invariants: [],
-            constraint: .in(.tupleLiteral([.int(1), .string("other")]), .variable("entries"))
+            constraint: .in(.tupleLiteral([.int(1), .value(.string("other"))]), .variable("entries"))
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
             try NativeTypeInference(plan: .init(compilation: compilation), sourceTypes: .init(enums: ["Value": [.string("first"), .string("second")]]))
