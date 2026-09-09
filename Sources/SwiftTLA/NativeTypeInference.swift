@@ -219,11 +219,15 @@ private struct NativeArgumentRefinement: Hashable, Sendable {
     let expected: NativeType
 }
 
+indirect enum NativeOperatorImplementation: Sendable {
+    case checked(body: NativeCheckedExpression, domainGuard: NativeCheckedExpression?)
+    case recursive
+}
+
 struct NativeOperatorCall: Sendable {
     let specialization: NativeOperatorSpecialization
     let parameters: [BinderID]
-    let body: CompiledStateExpr
-    let domain: CompiledStateExpr?
+    let implementation: NativeOperatorImplementation
     let result: NativeType
     let inference: NativeTypeInference
     let callbackUses: [OperatorID: [NativeOperatorCall]]
@@ -231,19 +235,34 @@ struct NativeOperatorCall: Sendable {
 }
 
 /// Checking retains the representation before an implicit use-site conversion.
-private struct NativeCheckedType: Sendable {
+struct NativeCheckedType: Sendable {
     let type: NativeType
     let computationType: NativeType
     /// Context selected while checking operands, in expression order.
     let operandTypes: [NativeType]
     let call: NativeOperatorCall?
+    var children: [NativeCheckedExpression] = []
 
-    init(type: NativeType, computationType: NativeType, operandTypes: [NativeType] = [], call: NativeOperatorCall? = nil) {
+    init(type: NativeType, computationType: NativeType, operandTypes: [NativeType] = [], call: NativeOperatorCall? = nil, children: [NativeCheckedExpression] = []) {
         self.type = type
         self.computationType = computationType
         self.operandTypes = operandTypes
         self.call = call
+        self.children = children
     }
+}
+
+/// A checked occurrence retains its operands and lexical context for emission.
+struct NativeCheckedExpression: Sendable {
+    let expression: CompiledStateExpr
+    let scope: NativeTypeInference
+    var annotation: NativeCheckedType
+
+    var resultType: NativeType { annotation.type }
+    var computationType: NativeType { annotation.computationType }
+    var operandTypes: [NativeType] { annotation.operandTypes }
+    var call: NativeOperatorCall? { annotation.call }
+    var children: [NativeCheckedExpression] { annotation.children }
 }
 
 private struct NativeOperatorBody {
@@ -304,6 +323,7 @@ private enum NativeExpressionCheckTask {
     case dictionary
     case result(NativeType)
     case discard
+    case retainOperand(Int)
 }
 
 /// Derives native shapes from the resolved formal program and source hints.
@@ -432,9 +452,9 @@ struct NativeTypeInference: Sendable {
                 let inferred: NativeType
                 switch initialization.initialization {
                 case .value(let value): inferred = try literal(value, expected: expected)
-                case .expression(let expression): inferred = try infer(expression, expected: expected)
+                case .expression(let expression): inferred = try checkExpression(expression, expected: expected).type
                 case .memberOf(let domain):
-                    inferred = try element(infer(domain, expected: .set(expected)))
+                    inferred = try element(checkExpression(domain, expected: .set(expected)).type)
                 }
                 variables[initialization.variable] = try Self.merge(expected, inferred)
             }
@@ -446,13 +466,13 @@ struct NativeTypeInference: Sendable {
                 }
             }
             for invariant in compilation.semantics.invariants {
-                do { _ = try infer(invariant.body, expected: .bool) }
+                do { _ = try checkExpression(invariant.body, expected: .bool) }
                 catch let diagnostic as CompilationDiagnostic {
                     throw Self.diagnostic("invariants.\(invariant.name)", causedBy: diagnostic)
                 }
             }
-            if let constraint = compilation.semantics.constraint { _ = try infer(constraint, expected: .bool) }
-            if let assume = compilation.semantics.assume { _ = try infer(assume, expected: .bool) }
+            if let constraint = compilation.semantics.constraint { _ = try checkExpression(constraint, expected: .bool) }
+            if let assume = compilation.semantics.assume { _ = try checkExpression(assume, expected: .bool) }
             if variables == previousVariables && bindings == previousBindings && specializationResults == previousOperators { break }
         }
         for variable in compilation.layout.variables {
@@ -494,7 +514,7 @@ struct NativeTypeInference: Sendable {
         var matches: [(scope: NativeTypeInference, checked: NativeCheckedType)] = []
         for alternative in alternatives {
             var candidate = self
-            if let checked = try? candidate.inferExpression(expression, expected: alternative) {
+            if let checked = try? candidate.checkExpression(expression, expected: alternative) {
                 matches.append((candidate, checked))
             }
         }
@@ -503,41 +523,44 @@ struct NativeTypeInference: Sendable {
         }
         self = match.scope
         return .init(type: expected, computationType: match.checked.type,
-            operandTypes: match.checked.operandTypes, call: match.checked.call)
+            operandTypes: match.checked.operandTypes, call: match.checked.call, children: match.checked.children)
     }
 
-    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (scope: NativeTypeInference, resultType: NativeType, computationType: NativeType, operandTypes: [NativeType], call: NativeOperatorCall?) {
+    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> NativeCheckedExpression {
         var scope = self
-        let resolved = try scope.inferExpression(expression, expected: expected ?? .unknown)
-        let result = resolved.type
-        guard result.resolved else {
-            throw Self.unresolvedDiagnostic(result, at: "resolution")
+        let checked = try scope.checkOperand(expression, expected: expected ?? .unknown)
+        guard checked.resultType.resolved else {
+            throw Self.unresolvedDiagnostic(checked.resultType, at: "resolution")
         }
-        guard resolved.computationType.resolved else {
-            throw Self.unresolvedDiagnostic(resolved.computationType, at: "resolution")
+        guard checked.computationType.resolved else {
+            throw Self.unresolvedDiagnostic(checked.computationType, at: "resolution")
         }
-        return (scope, result, resolved.computationType, resolved.operandTypes, resolved.call)
+        return checked
+    }
+
+    private mutating func checkOperand(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedExpression {
+        let annotation = try checkExpression(expression, expected: expected)
+        return .init(expression: expression, scope: self, annotation: annotation)
+    }
+
+    private mutating func refineOperand(_ checked: NativeCheckedExpression, expected: NativeType) throws -> NativeCheckedExpression {
+        if checked.resultType == expected { return checked }
+        return try checkOperand(checked.expression, expected: expected)
     }
 
     func type(of expression: CompiledStateExpr, expected: NativeType? = nil) throws -> NativeType {
         var inference = self
-        let result = try inference.infer(expression, expected: expected ?? .unknown)
+        let result = try inference.checkExpression(expression, expected: expected ?? .unknown).type
         guard result.resolved else { throw Self.unresolvedDiagnostic(result, at: "expression") }
         return result
     }
 
-    private mutating func membershipElement(value: CompiledStateExpr, domain: CompiledStateExpr) throws -> NativeType {
-        // Either operand may carry nominal evidence: a stored domain or a
-        // selected field tested against a literal domain. Validate both under
-        // that shared context without replacing stored representations.
-        let domainElement = try element(infer(domain, expected: .set(.unknown)))
-        let candidate = try infer(value)
-        let context = try Self.operandContext(domainElement, candidate)
-        if candidate != context { _ = try infer(value, expected: context) }
-        if domainElement != context {
-            return try element(infer(domain, expected: .set(context)))
-        }
-        return domainElement
+    private mutating func checkMembership(value: CompiledStateExpr, domain: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
+        let domain = try checkOperand(domain, expected: .set(.unknown))
+        let value = try checkOperand(value)
+        let context = try Self.operandContext(element(domain.resultType), value.resultType)
+        let children = try [refineOperand(value, expected: context), refineOperand(domain, expected: .set(context))]
+        return try checkedType(.bool, expected: expected, children: children)
     }
 
     /// Selects contextual evidence without admitting a conversion. Both
@@ -563,7 +586,7 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func inferProjectionSource(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeType {
+    private mutating func inferProjectionSource(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeCheckedExpression {
         let members: [CompiledStateExpr]?
         switch value {
         case .tupleLiteral(let expressions): members = expressions
@@ -572,19 +595,23 @@ struct NativeTypeInference: Sendable {
         }
         if let members {
             guard index >= 1, index <= members.count else { throw Self.diagnostic("tupleAccess", "index outside tuple literal") }
-            var elements: [NativeType] = []
-            for (offset, member) in members.enumerated() {
-                elements.append(try infer(member, expected: offset == index - 1 ? expected : .unknown))
+            let children = try members.enumerated().map { offset, member in
+                try checkOperand(member, expected: offset == index - 1 ? expected : .unknown)
             }
-            return .tuple(elements)
+            let type = NativeType.tuple(children.map(\.resultType))
+            // A formal tuple value remains a literal; its components supplied the
+            // contextual shape, while expression tuples retain their operands.
+            if case .value = value { return try checkOperand(value, expected: type) }
+            return .init(expression: value, scope: self,
+                annotation: .init(type: type, computationType: type, operandTypes: children.map(\.resultType), children: children))
         }
-        let type = try infer(value)
-        if case .tuple(var elements) = type {
+        let source = try checkOperand(value)
+        if case .tuple(var elements) = source.resultType {
             guard index >= 1, index <= elements.count else { throw Self.diagnostic("tupleAccess", "index outside tuple shape") }
             elements[index - 1] = try projectionStorageType(elements[index - 1], expected: expected)
-            return try infer(value, expected: .tuple(elements))
+            return try refineOperand(source, expected: .tuple(elements))
         }
-        return try inferSequence(value, element: expected)
+        return try refineSequence(source, element: expected)
     }
 
     func canProjectRead(_ source: NativeType, to expected: NativeType) -> Bool {
@@ -638,48 +665,61 @@ struct NativeTypeInference: Sendable {
         return .init(type: type, computationType: type, operandTypes: operandTypes)
     }
 
+    private func checkedType(_ source: NativeType, expected: NativeType, children: [NativeCheckedExpression]) throws -> NativeCheckedType {
+        var checked = try checkedType(source, expected: expected, operandTypes: children.map(\.resultType))
+        checked.children = children
+        return checked
+    }
+
+    private mutating func retaining(_ children: [NativeCheckedExpression], in annotation: NativeCheckedType) throws -> NativeCheckedType {
+        guard children.count == annotation.operandTypes.count else {
+            throw Self.diagnostic("checking", "missing checked operands")
+        }
+        var result = annotation
+        result.children = try zip(children, annotation.operandTypes).map { try refineOperand($0, expected: $1) }
+        return result
+    }
+
     private func projectionStorageType(_ source: NativeType, expected: NativeType) throws -> NativeType {
         if canProjectRead(source, to: expected) { return source }
         return try Self.operandContext(source, expected)
     }
 
-    private mutating func inferRecordProjectionSource(
-        _ value: CompiledStateExpr, key: CompiledValue, expected: NativeType
-    ) throws -> NativeType {
-        let source = try infer(value)
-        if source == .unknown { return .unknown }
-        guard case .string(let name) = key, case .record(var fields) = source,
+    private mutating func inferRecordProjectionSource(_ value: CompiledStateExpr, key: CompiledValue, expected: NativeType) throws -> NativeCheckedExpression {
+        let source = try checkOperand(value)
+        if source.resultType == .unknown { return source }
+        guard case .string(let name) = key, case .record(var fields) = source.resultType,
               let index = fields.firstIndex(where: { $0.name == name }) else {
             throw Self.diagnostic("recordAccess", "unknown record field")
         }
         fields[index] = .init(name: name, type: try projectionStorageType(fields[index].type, expected: expected))
-        // Keep every sibling in the contextual shape. The source expression
-        // must prove the selected field's nominal domain; stored raw data
-        // cannot acquire a different representation from a projection alone.
-        return try infer(value, expected: .record(fields))
+        return try refineOperand(source, expected: .record(fields))
     }
 
-    private mutating func inferDomainSource(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType {
-        let source = try infer(expression)
+    private mutating func inferDomainSource(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedExpression {
+        let source = try checkOperand(expression)
         guard case .set(let element) = expected,
-              case .dictionary(let key, let value) = source else { return source }
+              case .dictionary(let key, let value) = source.resultType else { return source }
         let context = try projectionStorageType(key, expected: element)
         guard context != key else { return source }
-        return try infer(expression, expected: .dictionary(context, value))
+        return try refineOperand(source, expected: .dictionary(context, value))
     }
 
-    private mutating func inferSequence(_ expression: CompiledStateExpr, element expected: NativeType = .unknown) throws -> NativeType {
-        let source = try infer(expression)
-        switch source {
+    private mutating func inferSequence(_ expression: CompiledStateExpr, element expected: NativeType = .unknown) throws -> NativeCheckedExpression {
+        let source = try checkOperand(expression)
+        return try refineSequence(source, element: expected)
+    }
+
+    private mutating func refineSequence(_ source: NativeCheckedExpression, element expected: NativeType = .unknown) throws -> NativeCheckedExpression {
+        switch source.resultType {
         case .array(let element):
             guard expected != .unknown, expected != element else { return source }
-            return try infer(expression, expected: .array(expected))
+            return try refineOperand(source, expected: .array(expected))
         case .dictionary(.int, let element):
             guard expected != .unknown, expected != element else { return source }
-            return try infer(expression, expected: .dictionary(.int, expected))
-        case .unknown:
-            return try infer(expression, expected: .array(expected))
-        default: throw Self.diagnostic("sequence", "expected an array or integer-keyed function, received \(source.swiftType)")
+            return try refineOperand(source, expected: .dictionary(.int, expected))
+        case .unknown: return try refineOperand(source, expected: .array(expected))
+        default: throw Self.diagnostic("sequence", "expected an array or integer-keyed function, received \(source.resultType.swiftType)")
         }
     }
 
@@ -940,20 +980,20 @@ struct NativeTypeInference: Sendable {
     private mutating func actionTypes(_ action: CompiledActionExpr) throws {
         switch action {
         case .assign(let id, let expression):
-            variables[id] = try Self.merge(variables[id] ?? .unknown, infer(expression, expected: variables[id] ?? .unknown))
+            variables[id] = try Self.merge(variables[id] ?? .unknown, checkExpression(expression, expected: variables[id] ?? .unknown).type)
         case .unchanged: break
-        case .guard_(let expression): _ = try infer(expression, expected: .bool)
+        case .guard_(let expression): _ = try checkExpression(expression, expected: .bool)
         case .and(let lhs, let rhs), .or(let lhs, let rhs): try actionTypes(lhs); try actionTypes(rhs)
         case .ifElse(let condition, let lhs, let rhs):
-            _ = try infer(condition, expected: .bool); try actionTypes(lhs); try actionTypes(rhs)
+            _ = try checkExpression(condition, expected: .bool); try actionTypes(lhs); try actionTypes(rhs)
         case .define(let id, let value, let body):
             bindingSources[id] = .setLiteral([value])
             bindingDomains[id] = literalValues(value)
-            bindings[id] = try infer(value, expected: bindings[id] ?? .unknown); try actionTypes(body)
+            bindings[id] = try checkExpression(value, expected: bindings[id] ?? .unknown).type; try actionTypes(body)
         case .existsAction(let id, let domain, let body):
             bindingSources[id] = domain
             bindingDomains[id] = literalDomain(domain)
-            bindings[id] = try element(infer(domain, expected: .set(bindings[id] ?? .unknown))); try actionTypes(body)
+            bindings[id] = try element(checkExpression(domain, expected: .set(bindings[id] ?? .unknown)).type); try actionTypes(body)
         }
     }
 
@@ -1055,7 +1095,7 @@ struct NativeTypeInference: Sendable {
         }
         let context = try Self.operandContext(specializationResults[key] ?? .unknown, expected)
         if activeOperators.contains(key) {
-            return .recursive(.init(specialization: key, parameters: parameters, body: body, domain: domain,
+            return .recursive(.init(specialization: key, parameters: parameters, implementation: .recursive,
                 result: context, inference: self, callbackUses: callbackUses, callbackArguments: callbackArguments))
         }
         activeOperators.insert(key)
@@ -1081,54 +1121,22 @@ struct NativeTypeInference: Sendable {
             context: context, callbackArguments: callbackArguments))
     }
 
-    private func isOperatorApplication(_ expression: CompiledStateExpr) -> Bool {
-        switch expression {
-        case .operatorApplication, .recursiveCall, .lambdaApplication,
-             .functionApply(.operatorReference, _): return true
-        default: return false
-        }
-    }
-
-    private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
+    private mutating func checkExpression(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedType {
         switch expression {
         case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
              .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide,
              .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
              .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral,
-             .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet:
-            return try inferStructuredExpression(expression, expected: expected).type
+             .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet,
+             .operatorApplication, .recursiveCall, .lambdaApplication, .functionApply(.operatorReference, _):
+            return try inferStructuredExpression(expression, expected: expected)
         default: break
         }
-        if isOperatorApplication(expression) {
-            return try inferStructuredExpression(expression, expected: expected).type
-        }
         do {
-            return try inferResolved(expression, expected: expected).type
+            return try inferResolved(expression, expected: expected)
         } catch let diagnostic as CompilationDiagnostic {
             throw annotated(diagnostic, at: expression)
         }
-    }
-
-    private mutating func inferExpression(
-        _ expression: CompiledStateExpr, expected: NativeType = .unknown
-    ) throws -> NativeCheckedType {
-        if isOperatorApplication(expression) {
-            let checked = try inferStructuredExpression(expression, expected: expected)
-            return checked
-        }
-        let checked: NativeCheckedType
-        switch expression {
-        case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
-             .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide,
-             .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral,
-             .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet:
-            checked = try inferStructuredExpression(expression, expected: expected)
-        default:
-            do { checked = try inferResolved(expression, expected: expected) }
-            catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
-        }
-        return checked
     }
 
     private func annotated(_ diagnostic: CompilationDiagnostic, at expression: CompiledStateExpr) -> CompilationDiagnostic {
@@ -1192,12 +1200,14 @@ struct NativeTypeInference: Sendable {
 
     private mutating func inferTupleLiteral(_ expressions: [CompiledStateExpr], expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
+        let children: [NativeCheckedExpression]
         if case .tuple(let hints) = expected, hints.count == expressions.count {
-            let types = try zip(expressions, hints).map { try infer($0, expected: $1) }
-            result = .tuple(types)
+            children = try zip(expressions, hints).map { try checkOperand($0, expected: $1) }
+            result = .tuple(children.map(\.resultType))
         } else {
             let hint: NativeType = if case .array(let value) = expected { value } else { .unknown }
-            let types = try expressions.map { try infer($0, expected: hint) }
+            children = try expressions.map { try checkOperand($0, expected: hint) }
+            let types = children.map(\.resultType)
             if expected == .unknown, !types.isEmpty, types.allSatisfy({ $0 == .unknown }) { result = .tuple(types) }
             else if hint == .unknown, let first = types.first, types.contains(where: { $0 != first }) { result = .tuple(types) }
             else { result = .array(try types.reduce(hint, Self.merge)) }
@@ -1209,43 +1219,44 @@ struct NativeTypeInference: Sendable {
         case .array(let item): operands = Array(repeating: item, count: expressions.count)
         default: throw Self.diagnostic("tuple", "expected tuple or sequence representation")
         }
-        return .init(type: checked.type, computationType: checked.computationType, operandTypes: operands)
+        return try retaining(children, in: .init(type: checked.type, computationType: checked.computationType, operandTypes: operands))
     }
 
     private mutating func inferRecordLiteral(_ record: CompiledRecordExpression, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         let hints: [NativeField] = if case .record(let fields) = expected { fields } else { [] }
+        var children: [NativeCheckedExpression] = []
         let fields = try record.fields.map { field -> NativeField in
             guard case .string(let name) = field.key else { throw Self.diagnostic("record", "non-string field") }
-            let expectedType = hints.first { $0.name == name }?.type ?? .unknown
-            return .init(name: name, type: try infer(field.value, expected: expectedType))
+            let child = try checkOperand(field.value, expected: hints.first { $0.name == name }?.type ?? .unknown)
+            children.append(child)
+            return .init(name: name, type: child.resultType)
         }
-        result = .record(fields.sorted { $0.name < $1.name })
-        return try checkedType(result, expected: expected, operandTypes: fields.map(\.type))
+        return try checkedType(.record(fields.sorted { $0.name < $1.name }), expected: expected, children: children)
     }
 
     private mutating func inferFunctionApplication(_ function: CompiledStateExpr, key: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
-        let base = try infer(function)
+        var source = try checkOperand(function)
+        let base = source.resultType
         let functionType: NativeType
-        if base == .unknown { functionType = try infer(function, expected: .dictionary(infer(key), expected)) }
+        if base == .unknown {
+            source = try checkOperand(function, expected: .dictionary(checkExpression(key).type, expected))
+            functionType = source.resultType
+        }
         else { functionType = base }
         var sourceType = functionType
-        let keyType: NativeType
+        let checkedKey: NativeCheckedExpression
         switch functionType {
         case .dictionary(let domain, let value):
-            keyType = domain
-            _ = try infer(key, expected: domain)
+            checkedKey = try checkOperand(key, expected: domain)
             result = try Self.operandContext(value, expected)
             sourceType = .dictionary(domain, result)
         case .array(let value):
-            keyType = .int
-            _ = try infer(key, expected: .int)
+            checkedKey = try checkOperand(key, expected: .int)
             result = try Self.operandContext(value, expected)
             sourceType = .array(result)
         case .tuple(let elements):
-            keyType = .int
-            _ = try infer(key, expected: .int)
+            checkedKey = try checkOperand(key, expected: .int)
             if case .value(.integer(let index)) = key, index >= 1, index <= elements.count {
                 var hints = elements
                 hints[index - 1] = try Self.operandContext(elements[index - 1], expected)
@@ -1258,8 +1269,7 @@ struct NativeTypeInference: Sendable {
                 sourceType = .tuple(elements.map { _ in result })
             }
         case .record(let fields):
-            keyType = .string
-            _ = try infer(key, expected: .string)
+            checkedKey = try checkOperand(key, expected: .string)
             if case .value(.string(let name)) = key {
                 if let selected = fields.first(where: { $0.name == name }) {
                     result = try Self.operandContext(selected.type, expected)
@@ -1272,167 +1282,153 @@ struct NativeTypeInference: Sendable {
         default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
         }
         if sourceType != functionType {
-            sourceType = try infer(function, expected: sourceType)
+            source = try refineOperand(source, expected: sourceType)
         }
-        return try checkedType(result, expected: expected, operandTypes: [sourceType, keyType])
+        return try checkedType(result, expected: expected, children: [source, checkedKey])
     }
 
     private mutating func inferFunctionUpdate(_ function: CompiledStateExpr, key: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         let result: NativeType
-        let keyType: NativeType
-        let valueType: NativeType
-        let base = try infer(function, expected: expected)
+        let checkedKey: NativeCheckedExpression
+        let checkedValue: NativeCheckedExpression
+        let source = try checkOperand(function, expected: expected)
+        let base = source.resultType
         switch base {
         case .array(let item):
-            keyType = try infer(key, expected: .int)
-            valueType = try infer(value, expected: item)
-            result = .array(valueType)
+            checkedKey = try checkOperand(key, expected: .int)
+            checkedValue = try checkOperand(value, expected: item)
+            result = .array(checkedValue.resultType)
         case .dictionary(let domain, let item):
-            keyType = try infer(key, expected: domain)
-            valueType = try infer(value, expected: item)
-            result = .dictionary(domain, valueType)
+            checkedKey = try checkOperand(key, expected: domain)
+            checkedValue = try checkOperand(value, expected: item)
+            result = .dictionary(domain, checkedValue.resultType)
         case .record(let fields):
-            keyType = try infer(key, expected: .string)
+            checkedKey = try checkOperand(key, expected: .string)
             if case .value(.string(let name)) = key {
-                valueType = try infer(value, expected: fields.first { $0.name == name }?.type ?? .unknown)
+                checkedValue = try checkOperand(value, expected: fields.first { $0.name == name }?.type ?? .unknown)
             } else {
                 let replacementType = fields.first?.type ?? .unknown
                 guard fields.allSatisfy({ $0.type == replacementType }) else {
                     throw Self.diagnostic("except", "dynamic record keys require homogeneous field types")
                 }
-                valueType = try infer(value, expected: replacementType)
+                checkedValue = try checkOperand(value, expected: replacementType)
             }
             result = base
         case .unknown:
-            keyType = try infer(key)
-            valueType = try infer(value)
-            result = .dictionary(keyType, valueType)
+            checkedKey = try checkOperand(key)
+            checkedValue = try checkOperand(value)
+            result = .dictionary(checkedKey.resultType, checkedValue.resultType)
         default: throw Self.diagnostic("except", "unsupported update shape \(base.swiftType)")
         }
         let checked = try checkedType(result, expected: expected)
-        return .init(type: checked.type, computationType: checked.computationType,
-            operandTypes: [checked.computationType, keyType, valueType])
+        return try retaining([source, checkedKey, checkedValue], in: .init(type: checked.type, computationType: checked.computationType,
+            operandTypes: [checked.computationType, checkedKey.resultType, checkedValue.resultType]))
     }
 
     private mutating func inferSequenceSelection(_ sequence: CompiledStateExpr, binder id: BinderID, predicate: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         let hint: NativeType = if case .array(let item) = expected { item } else { .unknown }
         let initial = try inferSequence(sequence)
-        let item = try projectionStorageType(sequenceElementType(initial), expected: hint)
-        _ = try inferSequence(sequence, element: item)
+        let item = try projectionStorageType(sequenceElementType(initial.resultType), expected: hint)
+        let contextual = try refineSequence(initial, element: item)
         bindings[id] = item
-        // Literal members can supply finite nominal evidence; an arbitrary
-        // sequence initializer never proves the domain of stored values.
         switch sequence {
         case .value(.tuple(let members)): bindingDomains[id] = Set(members)
         case .tupleLiteral(let members): bindingDomains[id] = literalDomain(.setLiteral(members))
         default: bindingDomains.removeValue(forKey: id)
         }
-        _ = try infer(predicate, expected: .bool)
+        let body = try checkOperand(predicate, expected: .bool)
         let selected = bindings[id] ?? item
-        let source = try inferSequence(sequence, element: selected)
-        result = .array(selected)
-        return try checkedType(result, expected: expected, operandTypes: [source, .bool])
+        let source = try refineSequence(contextual, element: selected)
+        return try checkedType(.array(selected), expected: expected, children: [source, body])
     }
 
     private mutating func inferFold(_ operation: CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         guard operation.parameters.count == 2 else { throw Self.diagnostic("fold", "expected two lambda parameters") }
-        let accumulator = try infer(initial, expected: expected)
-        bindings[operation.parameters[1]] = accumulator
+        var accumulator = try checkOperand(initial, expected: expected)
+        bindings[operation.parameters[1]] = accumulator.resultType
         let source = try inferSequence(sequence)
-        bindings[operation.parameters[0]] = try sequenceElementType(source)
-        result = try infer(operation.body, expected: accumulator)
-        _ = try infer(initial, expected: result)
-        return try checkedType(result, expected: expected, operandTypes: [result, result, source])
+        bindings[operation.parameters[0]] = try sequenceElementType(source.resultType)
+        let body = try checkOperand(operation.body, expected: accumulator.resultType)
+        accumulator = try refineOperand(accumulator, expected: body.resultType)
+        return try checkedType(body.resultType, expected: expected, children: [body, accumulator, source])
     }
 
     private mutating func inferSequenceOperation(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         switch expression {
         case .tupleDynamicAccess(let value, let index):
-            _ = try infer(index, expected: .int)
+            let index = try checkOperand(index, expected: .int)
             let source = try inferSequence(value, element: expected)
-            result = try sequenceElementType(source)
-            return try checkedType(result, expected: expected, operandTypes: [source, .int])
+            return try checkedType(sequenceElementType(source.resultType), expected: expected, children: [source, index])
         case .tupleLength(let value):
-            let initial = try infer(value)
-            let source: NativeType
-            if case .tuple = initial { source = initial }
-            else { source = try inferSequence(value) }
-            return try checkedType(.int, expected: expected, operandTypes: [source])
+            let initial = try checkOperand(value)
+            let source: NativeCheckedExpression
+            if case .tuple = initial.resultType { source = initial }
+            else { source = try refineSequence(initial) }
+            return try checkedType(.int, expected: expected, children: [source])
         case .tupleHead(let value):
             let source = try inferSequence(value, element: expected)
-            result = try sequenceElementType(source)
-            return try checkedType(result, expected: expected, operandTypes: [source])
+            return try checkedType(sequenceElementType(source.resultType), expected: expected, children: [source])
         case .tupleTail(let value):
             let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
             let source = try inferSequence(value, element: hint)
-            result = .array(try sequenceElementType(source))
-            return try checkedType(result, expected: expected, operandTypes: [source])
+            return try checkedType(.array(sequenceElementType(source.resultType)), expected: expected, children: [source])
         case .tupleRemoving(let sequence, let index):
             let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
             let source = try inferSequence(sequence, element: hint)
-            result = .array(try sequenceElementType(source))
-            _ = try infer(index, expected: .int)
-            return try checkedType(result, expected: expected, operandTypes: [source, .int])
-        default:
-            throw Self.diagnostic("sequence", "expected a sequence access, length, tail, or removal")
+            let index = try checkOperand(index, expected: .int)
+            return try checkedType(.array(sequenceElementType(source.resultType)), expected: expected, children: [source, index])
+        default: throw Self.diagnostic("sequence", "expected a sequence access, length, tail, or removal")
         }
     }
 
     private mutating func inferAppend(_ sequence: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-        let item = try sequenceElementType(inferSequence(sequence, element: hint))
-        let appended = try infer(value, expected: item)
-        let elementType = try Self.merge(item, appended)
-        let source = try inferSequence(sequence, element: elementType)
-        _ = try infer(value, expected: elementType)
-        result = .array(elementType)
-        return try checkedType(result, expected: expected, operandTypes: [source, elementType])
+        let initial = try inferSequence(sequence, element: hint)
+        let item = try sequenceElementType(initial.resultType)
+        let appended = try checkOperand(value, expected: item)
+        let element = try Self.merge(item, appended.resultType)
+        let source = try refineSequence(initial, element: element)
+        return try checkedType(.array(element), expected: expected,
+            children: [source, refineOperand(appended, expected: element)])
     }
 
     private mutating func inferConcatenation(_ a: CompiledStateExpr, _ b: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-        let left = try sequenceElementType(inferSequence(a, element: hint))
-        let right = try sequenceElementType(inferSequence(b, element: left))
-        let elementType = try Self.merge(left, right)
-        let leftSource = try inferSequence(a, element: elementType)
-        let rightSource = try inferSequence(b, element: elementType)
-        result = .array(elementType)
-        return try checkedType(result, expected: expected, operandTypes: [leftSource, rightSource])
+        let left = try inferSequence(a, element: hint)
+        let right = try inferSequence(b, element: sequenceElementType(left.resultType))
+        let element = try Self.merge(sequenceElementType(left.resultType), sequenceElementType(right.resultType))
+        return try checkedType(.array(element), expected: expected,
+            children: [refineSequence(left, element: element), refineSequence(right, element: element)])
     }
 
     private mutating func inferTupleAccess(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeCheckedType {
+        let source = try inferProjectionSource(value, index: index, expected: expected)
         let result: NativeType
-        let shape = try inferProjectionSource(value, index: index, expected: expected)
-        if case .tuple(let elements) = shape { result = elements[index - 1] }
-        else { result = try sequenceElementType(shape) }
-        return try checkedType(result, expected: expected, operandTypes: [shape])
+        if case .tuple(let elements) = source.resultType { result = elements[index - 1] }
+        else { result = try sequenceElementType(source.resultType) }
+        return try checkedType(result, expected: expected, children: [source])
     }
 
     private mutating func inferRecordAccess(_ record: CompiledStateExpr, key: CompiledValue, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         let source = try inferRecordProjectionSource(record, key: key, expected: expected)
-        if case .string(let name) = key, case .record(let fields) = source,
+        let result: NativeType
+        if case .string(let name) = key, case .record(let fields) = source.resultType,
            let field = fields.first(where: { $0.name == name }) { result = field.type }
         else { result = .unknown }
-        return try checkedType(result, expected: expected, operandTypes: [source])
+        return try checkedType(result, expected: expected, children: [source])
     }
 
     private mutating func inferDomain(_ function: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         let source = try inferDomainSource(function, expected: expected)
-        switch source {
+        let result: NativeType
+        switch source.resultType {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
         case .record: result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw Self.diagnostic("domain", "unsupported domain shape")
         }
-        return try checkedType(result, expected: expected, operandTypes: [source])
+        return try checkedType(result, expected: expected, children: [source])
     }
 
     /// Visit operands in source order and retain ancestry for diagnostics.
@@ -1441,9 +1437,27 @@ struct NativeTypeInference: Sendable {
         var pending: [NativeExpressionCheckTask] = [.check(expression, expected: expected)]
         var results: [NativeType] = []
         var ancestors: [CompiledStateExpr] = []
-        var completed: NativeCheckedType?
+        var completed: NativeCheckedExpression?
+        var operandFrames: [[Int: NativeCheckedExpression]] = []
         var suspendedScopes: [NativeTypeInference] = []
         var checkedCalls: [NativeOperatorCall] = []
+        func finish(_ annotation: NativeCheckedType, in scope: inout NativeTypeInference) throws {
+            guard let expression = ancestors.popLast(), let operands = operandFrames.popLast() else {
+                throw Self.diagnostic("checking", "missing checked occurrence")
+            }
+            let children = operands.keys.sorted().compactMap { operands[$0] }
+            let checked: NativeCheckedType
+            if annotation.call != nil {
+                var call = annotation
+                call.children = children
+                checked = call
+            } else if children.isEmpty {
+                checked = annotation
+            } else {
+                checked = try scope.retaining(children, in: annotation)
+            }
+            completed = .init(expression: expression, scope: scope, annotation: checked)
+        }
         let initialArgumentRefinements = activeArgumentRefinements
         let initialBindingRefinements = activeBindingRefinements
         do {
@@ -1454,12 +1468,13 @@ struct NativeTypeInference: Sendable {
                         switch expression {
                         case .functionLiteral, .setLiteral, .union, .intersection, .setDifference:
                             ancestors.append(expression)
+                            operandFrames.append([:])
                             if let checked = try checkUnionConstructor(expression, expected: expected) {
                                 results.append(checked.type)
-                                completed = checked
-                                ancestors.removeLast()
+                                try finish(checked, in: &self)
                                 continue
                             }
+                            _ = operandFrames.popLast()
                             ancestors.removeLast()
                         default: break
                         }
@@ -1467,18 +1482,23 @@ struct NativeTypeInference: Sendable {
                     switch expression {
                     case .operatorApplication(let id, let arguments):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(.call(expression, .reference(id, arity: arguments.count), arguments, expected: expected))
                     case .recursiveCall(let id, let arguments):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(.call(expression, .reference(id, arity: arguments.count), arguments.map { .value($0) }, expected: expected))
                     case .lambdaApplication(let lambda, let arguments):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(.call(expression, .lambda(lambda), arguments.map { .value($0) }, expected: expected))
                     case .functionApply(.operatorReference(let id), let argument):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(.call(expression, .reference(id, arity: 1), [.value(argument)], expected: expected))
                     case .setLiteral(let elements):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         let hint: NativeType = if case .set(let item) = expected { item } else { .unknown }
                         pending.append(contentsOf: [
                             .finish(expected: expected),
@@ -1486,11 +1506,11 @@ struct NativeTypeInference: Sendable {
                         ])
                     case .boundValue(let id):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         switch try checkBoundValue(id, expected: expected) {
                         case .checked(let checked):
                             results.append(checked.type)
-                            completed = checked
-                            ancestors.removeLast()
+                            try finish(checked, in: &self)
                         case .argument(let source, let refinement):
                             suspendedScopes.append(self)
                             var caller = source.scope
@@ -1519,75 +1539,84 @@ struct NativeTypeInference: Sendable {
                         default: .int
                         }
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(contentsOf: [
                             .finish(expected: expected), .result(result),
-                            .discard, .check(rhs, expected: .int),
-                            .discard, .check(lhs, expected: .int),
+                            .discard, .retainOperand(1), .check(rhs, expected: .int),
+                            .discard, .retainOperand(0), .check(lhs, expected: .int),
                         ])
                     case .negate(let operand):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(contentsOf: [
                             .finish(expected: expected), .result(.int),
-                            .discard, .check(operand, expected: .int),
+                            .discard, .retainOperand(0), .check(operand, expected: .int),
                         ])
                     case .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .subset(let lhs, let rhs):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         if case .subset = expression { pending.append(.subset(expected: expected)) }
                         else { pending.append(.comparison(expected: expected)) }
                         pending.append(contentsOf: [
                             .reconcile(lhs, rhs, expected: .unknown),
-                            .check(rhs, expected: .unknown),
-                            .check(lhs, expected: .unknown),
+                            .retainOperand(1), .check(rhs, expected: .unknown),
+                            .retainOperand(0), .check(lhs, expected: .unknown),
                         ])
                     case .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(contentsOf: [
                             .finish(expected: expected),
                             .setOperands(lhs, rhs, expected: expected),
                             .reconcile(lhs, rhs, expected: .unknown),
-                            .check(rhs, expected: .unknown),
-                            .check(lhs, expected: .unknown),
+                            .retainOperand(1), .check(rhs, expected: .unknown),
+                            .retainOperand(0), .check(lhs, expected: .unknown),
                         ])
                     case .ifThenElse(let condition, let yes, let no):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(contentsOf: [
                             .finish(expected: expected),
                             .reconcile(yes, no, expected: expected),
-                            .check(no, expected: expected),
-                            .check(yes, expected: expected),
+                            .retainOperand(2), .check(no, expected: expected),
+                            .retainOperand(1), .check(yes, expected: expected),
                             .discard,
-                            .check(condition, expected: .bool),
+                            .retainOperand(0), .check(condition, expected: .bool),
                         ])
                     case .and(let lhs, let rhs), .or(let lhs, let rhs):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(contentsOf: [
                             .finish(expected: expected),
                             .result(.bool),
                             .discard,
-                            .check(rhs, expected: .bool),
+                            .retainOperand(1), .check(rhs, expected: .bool),
                             .discard,
-                            .check(lhs, expected: .bool),
+                            .retainOperand(0), .check(lhs, expected: .bool),
                         ])
                     case .not(let operand):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         pending.append(contentsOf: [
                             .finish(expected: expected),
                             .result(.bool),
                             .discard,
-                            .check(operand, expected: .bool),
+                            .retainOperand(0), .check(operand, expected: .bool),
                         ])
                     case .letValue(let id, let value, let body):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         bindingSources[id] = .setLiteral([value])
                         bindingDomains[id] = literalValues(value)
                         pending.append(contentsOf: [
                             .finish(expected: expected),
-                            .check(body, expected: expected),
+                            .retainOperand(1), .check(body, expected: expected),
                             .bind(id),
-                            .check(value, expected: bindings[id] ?? .unknown),
+                            .retainOperand(0), .check(value, expected: bindings[id] ?? .unknown),
                         ])
                     case .letIn(let definitions, let body):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         for definition in definitions { localOperators[definition.id] = definition }
                         for definition in definitions {
                             let captures = capturedBindings(of: definition)
@@ -1595,10 +1624,11 @@ struct NativeTypeInference: Sendable {
                         }
                         pending.append(contentsOf: [
                             .finish(expected: expected),
-                            .check(body, expected: expected),
+                            .retainOperand(0), .check(body, expected: expected),
                         ])
                     case .functionLiteral(let domain, let id, let body):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         bindingSources[id] = domain
                         bindingDomains[id] = literalDomain(domain)
                         let hints: (key: NativeType, value: NativeType)
@@ -1607,12 +1637,13 @@ struct NativeTypeInference: Sendable {
                         pending.append(contentsOf: [
                             .finish(expected: expected),
                             .dictionary,
-                            .check(body, expected: hints.value),
+                            .retainOperand(1), .check(body, expected: hints.value),
                             .bindDomain(id, retainElement: true),
-                            .check(domain, expected: .set(hints.key)),
+                            .retainOperand(0), .check(domain, expected: .set(hints.key)),
                         ])
                     case .cardinality(let domain), .powerSet(let domain), .unionAll(let domain), .sequenceFromSet(let domain):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         let hint: NativeType
                         switch expression {
                         case .powerSet:
@@ -1623,9 +1654,10 @@ struct NativeTypeInference: Sendable {
                             hint = if case .array(let item) = expected { .set(item) } else { .set(.unknown) }
                         default: hint = .set(.unknown)
                         }
-                        pending.append(contentsOf: [.finishUnaryCollection(expected: expected), .check(domain, expected: hint)])
+                        pending.append(contentsOf: [.finishUnaryCollection(expected: expected), .retainOperand(0), .check(domain, expected: hint)])
                     case .functionSet(let domain, let range):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         let candidate: NativeType = if case .set(let item) = expected { item } else { .unknown }
                         let hint: NativeType = candidate == .unknown ? .dictionary(.unknown, .unknown) : candidate
                         guard case .dictionary(let key, let value) = hint else {
@@ -1633,11 +1665,12 @@ struct NativeTypeInference: Sendable {
                         }
                         pending.append(contentsOf: [
                             .finishFunctionSet(expected: expected),
-                            .check(range, expected: .set(value)),
-                            .check(domain, expected: .set(key)),
+                            .retainOperand(1), .check(range, expected: .set(value)),
+                            .retainOperand(0), .check(domain, expected: .set(key)),
                         ])
                     case .setFilter(let domain, let id, let predicate), .choose(let domain, let id, let predicate):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         bindingSources[id] = domain
                         bindingDomains[id] = literalDomain(domain)
                         let choosing: Bool = if case .choose = expression { true } else { false }
@@ -1645,42 +1678,46 @@ struct NativeTypeInference: Sendable {
                         pending.append(contentsOf: [
                             .finishSetPredicate(choosing: choosing),
                             .refineDomain(domain, id),
-                            .discard, .check(predicate, expected: .bool),
+                            .discard, .retainOperand(1), .check(predicate, expected: .bool),
                             .bindDomain(id, retainElement: false),
-                            .check(domain, expected: hint),
+                            .retainOperand(0), .check(domain, expected: hint),
                         ])
                     case .setMap(let body, let id, let domain):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         bindingSources[id] = domain
                         bindingDomains[id] = literalDomain(domain)
                         let hint: NativeType = if case .set(let item) = expected { item } else { .unknown }
                         pending.append(contentsOf: [
                             .finish(expected: expected),
                             .set,
-                            .check(body, expected: hint),
+                            .retainOperand(0), .check(body, expected: hint),
                             .bindDomain(id, retainElement: false),
-                            .check(domain, expected: .set(.unknown)),
+                            .retainOperand(1), .check(domain, expected: .set(.unknown)),
                         ])
                     case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
                         ancestors.append(expression)
+                        operandFrames.append([:])
                         bindingSources[id] = domain
                         bindingDomains[id] = literalDomain(domain)
                         pending.append(contentsOf: [
                             .finish(expected: expected),
                             .result(.bool),
                             .discard,
-                            .check(body, expected: .bool),
+                            .retainOperand(1), .check(body, expected: .bool),
                             .bindDomain(id, retainElement: false),
-                            .check(domain, expected: .set(.unknown)),
+                            .retainOperand(0), .check(domain, expected: .set(.unknown)),
                         ])
                     default:
-                        results.append(try infer(expression, expected: expected))
+                        let checked = try checkOperand(expression, expected: expected)
+                        results.append(checked.resultType)
+                        completed = checked
                     }
                 case .call(let expression, let operation, let arguments, let expected):
                     pending.append(.enterCall(expression, operation, arguments, expected: expected))
-                    for argument in arguments.reversed() {
+                    for (index, argument) in arguments.enumerated().reversed() {
                         switch argument {
-                        case .value(let value): pending.append(.check(value, expected: .unknown))
+                        case .value(let value): pending.append(contentsOf: [.retainOperand(index), .check(value, expected: .unknown)])
                         case .operator: pending.append(.result(.unknown))
                         }
                     }
@@ -1719,14 +1756,18 @@ struct NativeTypeInference: Sendable {
                         }
                     }
                 case .finishOperator(let operation):
-                    guard let result = results.popLast() else {
+                    guard let result = results.popLast(), let body = completed else {
                         throw Self.diagnostic("checking", "missing checked operator body")
                     }
+                    let domainGuard: NativeCheckedExpression?
+                    if let domain = operation.domain, let parameter = operation.parameters.first {
+                        domainGuard = try checkOperand(.in(.boundValue(parameter), domain), expected: .bool)
+                    } else { domainGuard = nil }
                     specializationResults[operation.specialization] = try Self.operandContext(operation.context, result)
                     let scoped = self
                     activeOperators.remove(operation.specialization)
                     checkedCalls.append(.init(specialization: operation.specialization, parameters: operation.parameters,
-                        body: operation.body, domain: operation.domain, result: result, inference: scoped,
+                        implementation: .checked(body: body, domainGuard: domainGuard), result: result, inference: scoped,
                         callbackUses: callbackUses, callbackArguments: operation.callbackArguments))
                 case .leaveCall(let call):
                     guard let resolved = checkedCalls.popLast(), var caller = suspendedScopes.popLast() else {
@@ -1740,14 +1781,15 @@ struct NativeTypeInference: Sendable {
                         .completeCall(call.expression, resolved, expected: call.expected),
                         .refineCallCaptures(call.operation, resolved),
                     ])
-                    let values = zip(call.arguments, call.checkedArguments).compactMap { argument, checked -> (CompiledStateExpr, NativeType)? in
+                    let values = zip(call.arguments, call.checkedArguments).enumerated().compactMap { index, pair -> (Int, CompiledStateExpr, NativeType)? in
+                        let (argument, checked) = pair
                         guard case .value(let value) = argument, case .value(let type, _, _) = checked else { return nil }
-                        return (value, type)
+                        return (index, value, type)
                     }
                     for (argument, parameter) in zip(values, resolved.parameters).reversed() {
                         let refined = resolved.inference.bindings[parameter] ?? .unknown
-                        if argument.1 != refined {
-                            pending.append(contentsOf: [.discard, .check(argument.0, expected: refined)])
+                        if argument.2 != refined {
+                            pending.append(contentsOf: [.discard, .retainOperand(argument.0), .check(argument.1, expected: refined)])
                         }
                     }
                 case .refineCallCaptures(let operation, let resolved):
@@ -1789,8 +1831,7 @@ struct NativeTypeInference: Sendable {
                             operandTypes: result.operandTypes, call: call)
                     }
                     results.append(checked.type)
-                    completed = checked
-                    ancestors.removeLast()
+                    try finish(checked, in: &self)
                 case .finishArgument(let id, let refinement):
                     guard let refined = results.popLast(), var caller = suspendedScopes.popLast() else {
                         throw Self.diagnostic("checking", "missing suspended argument context")
@@ -1800,8 +1841,7 @@ struct NativeTypeInference: Sendable {
                     caller.activeArgumentRefinements.remove(refinement)
                     self = caller
                     results.append(refined)
-                    completed = .init(type: refined, computationType: refined)
-                    ancestors.removeLast()
+                    try finish(.init(type: refined, computationType: refined), in: &self)
                 case .finishBindingDomain(let id):
                     guard let domain = results.popLast() else {
                         throw Self.diagnostic("checking", "missing refined binding domain")
@@ -1810,8 +1850,7 @@ struct NativeTypeInference: Sendable {
                     bindings[id] = refined
                     activeBindingRefinements.remove(id)
                     results.append(refined)
-                    completed = .init(type: refined, computationType: refined)
-                    ancestors.removeLast()
+                    try finish(.init(type: refined, computationType: refined), in: &self)
                 case .bind(let id):
                     guard let type = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked binding type")
@@ -1837,29 +1876,26 @@ struct NativeTypeInference: Sendable {
                     default: throw Self.diagnostic("checking", "unexpected collection operation")
                     }
                     let checked = try checkedType(result, expected: expected, operandTypes: [source])
-                    completed = checked
                     results.append(checked.type)
-                    ancestors.removeLast()
+                    try finish(checked, in: &self)
                 case .finishFunctionSet(let expected):
                     guard let range = results.popLast(), let domain = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked function-set operands")
                     }
                     let result = NativeType.set(.dictionary(try element(domain), try element(range)))
                     let checked = try checkedType(result, expected: expected, operandTypes: [domain, range])
-                    completed = checked
                     results.append(checked.type)
-                    ancestors.removeLast()
+                    try finish(checked, in: &self)
                 case .refineDomain(let domain, let id):
-                    pending.append(.check(domain, expected: .set(bindings[id] ?? .unknown)))
+                    pending.append(contentsOf: [.retainOperand(0), .check(domain, expected: .set(bindings[id] ?? .unknown))])
                 case .finishSetPredicate(let choosing):
                     guard let domain = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked predicate domain")
                     }
                     let result = choosing ? try element(domain) : domain
                     // Preserve nominal refinements established by the predicate.
-                    completed = .init(type: result, computationType: result, operandTypes: [domain, .bool])
                     results.append(result)
-                    ancestors.removeLast()
+                    try finish(.init(type: result, computationType: result, operandTypes: [domain, .bool]), in: &self)
                 case .set:
                     guard let item = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked set element")
@@ -1869,7 +1905,7 @@ struct NativeTypeInference: Sendable {
                     if let next = remaining.popFirst() {
                         pending.append(contentsOf: [
                             .mergeSetElement(remaining, previous: element),
-                            .check(next, expected: element),
+                            .retainOperand(remaining.startIndex - 1), .check(next, expected: element),
                         ])
                     } else {
                         results.append(.set(element))
@@ -1890,6 +1926,7 @@ struct NativeTypeInference: Sendable {
                         throw Self.diagnostic("checking", "missing checked branch types")
                     }
                     let context = try Self.operandContext(left, right)
+                    let offset: Int = if case .ifThenElse = ancestors.last { 1 } else { 0 }
                     pending.append(.result(context))
                     // Recheck only branches whose context changed, preserving
                     // the same left-to-right order as initial branch checking.
@@ -1897,13 +1934,13 @@ struct NativeTypeInference: Sendable {
                         if right != context {
                             pending.append(contentsOf: [
                                 .discard,
-                                .check(no, expected: context),
+                                .retainOperand(offset + 1), .check(no, expected: context),
                             ])
                         }
                         if left != context {
                             pending.append(contentsOf: [
                                 .discard,
-                                .check(yes, expected: context),
+                                .retainOperand(offset), .check(yes, expected: context),
                             ])
                         }
                     }
@@ -1914,8 +1951,8 @@ struct NativeTypeInference: Sendable {
                     let context = try Self.operandContext(compared, expected)
                     _ = try element(context)
                     pending.append(contentsOf: [
-                        .check(rhs, expected: context),
-                        .discard, .check(lhs, expected: context),
+                        .retainOperand(1), .check(rhs, expected: context),
+                        .discard, .retainOperand(0), .check(lhs, expected: context),
                     ])
                 case .comparison(let expected), .subset(let expected):
                     guard let context = results.popLast() else {
@@ -1924,18 +1961,21 @@ struct NativeTypeInference: Sendable {
                     if case .subset = task { _ = try element(context) }
                     let checked = try checkedType(.bool, expected: expected, operandTypes: [context, context])
                     results.append(checked.type)
-                    completed = checked
-                    ancestors.removeLast()
+                    try finish(checked, in: &self)
                 case .finish(let expected):
                     guard let result = results.popLast(), let expression = ancestors.last else {
                         throw Self.diagnostic("checking", "missing checked expression type")
                     }
                     let checked = try finishExpression(expression, result: result, expected: expected)
                     results.append(checked.type)
-                    completed = checked
-                    ancestors.removeLast()
+                    try finish(checked, in: &self)
                 case .result(let type):
                     results.append(type)
+                case .retainOperand(let index):
+                    guard let completed, !operandFrames.isEmpty else {
+                        throw Self.diagnostic("checking", "missing checked operand")
+                    }
+                    operandFrames[operandFrames.count - 1][index] = completed
                 case .discard:
                     _ = results.popLast()
                 }
@@ -1952,7 +1992,7 @@ struct NativeTypeInference: Sendable {
         guard let completed else {
             throw Self.diagnostic("checking", "missing checked expression")
         }
-        return completed
+        return completed.annotation
     }
 
     private func finishExpression(
@@ -2002,14 +2042,23 @@ struct NativeTypeInference: Sendable {
     }
 
     private mutating func inferCases(_ first: CompiledCaseBranch, rest: [CompiledCaseBranch], otherwise: CompiledStateExpr?, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
         var type = expected
-        for branch in [first] + rest { _ = try infer(branch.condition, expected: .bool); type = try infer(branch.value, expected: type) }
-        if let otherwise { type = try infer(otherwise, expected: type) }; result = type
-        let checked = try checkedType(result, expected: expected)
+        var children: [NativeCheckedExpression] = []
+        for branch in [first] + rest {
+            children.append(try checkOperand(branch.condition, expected: .bool))
+            let value = try checkOperand(branch.value, expected: type)
+            children.append(value)
+            type = value.resultType
+        }
+        if let otherwise {
+            let value = try checkOperand(otherwise, expected: type)
+            children.append(value)
+            type = value.resultType
+        }
+        let checked = try checkedType(type, expected: expected)
         let operands = ([first] + rest).flatMap { _ in [NativeType.bool, checked.computationType] }
             + (otherwise == nil ? [] : [checked.computationType])
-        return .init(type: checked.type, computationType: checked.computationType, operandTypes: operands)
+        return try retaining(children, in: .init(type: checked.type, computationType: checked.computationType, operandTypes: operands))
     }
 
     private mutating func inferResolved(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedType {
@@ -2019,9 +2068,9 @@ struct NativeTypeInference: Sendable {
         let result: NativeType
         switch expression {
         case .assertView(let value, let shape):
-            let source = try infer(value)
+            let source = try checkOperand(value)
             result = try viewType(shape)
-            return try checkedType(result, expected: expected, operandTypes: [source])
+            return try checkedType(result, expected: expected, children: [source])
         case .value(let value):
             let type = try literal(value, expected: expected)
             return .init(type: type, computationType: type)
@@ -2032,16 +2081,14 @@ struct NativeTypeInference: Sendable {
         case .controlLocation: result = .control
         case .enabledAction: result = .bool
         case .in(let value, let domain):
-            let item = try membershipElement(value: value, domain: domain)
-            let checked = try checkedType(.bool, expected: expected)
-            return .init(type: checked.type, computationType: checked.computationType, operandTypes: [item, .set(item)])
+            return try checkMembership(value: value, domain: domain, expected: expected)
         case .sequenceSelect(let sequence, let id, let predicate):
             return try inferSequenceSelection(sequence, binder: id, predicate: predicate, expected: expected)
         case .setSum(let function, let domain):
-            let source = try infer(domain, expected: .set(.unknown))
-            let key = try element(source)
-            let operation = try infer(function, expected: .dictionary(key, .int))
-            return try checkedType(.int, expected: expected, operandTypes: [operation, source])
+            let source = try checkOperand(domain, expected: .set(.unknown))
+            let key = try element(source.resultType)
+            let operation = try checkOperand(function, expected: .dictionary(key, .int))
+            return try checkedType(.int, expected: expected, children: [operation, source])
         case .foldFunction(let operation, let initial, let sequence):
             return try inferFold(operation, initial: initial, sequence: sequence, expected: expected)
         case .tupleLiteral(let expressions): return try inferTupleLiteral(expressions, expected: expected)

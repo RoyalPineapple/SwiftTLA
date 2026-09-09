@@ -229,14 +229,14 @@ import Testing
         #expect(locals.allSatisfy { $0.resultType == .int })
     }
 
-    @Test("recursive calls reference a finite registered function graph")
+    @Test("recursive calls share one function for their resolved signature")
     func recursiveBodiesUseBackReferences() throws {
         let operation = FormalOperatorDefinition(name: "CountDown", parameters: [.value("value")], body: .ifThenElse(
             .lessOrEqual(.variable("value"), .int(0)), .int(0),
             .operatorApplication(.reference("CountDown", arity: 1), [.value(.subtract(.variable("value"), .int(1)))])
         ))
         let program = try NativeResolvedProgram(compilation: compileSpecification(operation: operation, arguments: [.value(.int(2))], boolean: false))
-        #expect(program.functions.count <= 2)
+        #expect(program.functions.count == 1)
         #expect(program.expressions.contains { expression in
             guard let call = expression.call, case .function(let id) = call.target else { return false }
             return program[id].resultType == .int

@@ -125,126 +125,59 @@ private final class NativeProgramResolver {
 
     func expression(
         _ value: CompiledStateExpr, expected: NativeType? = nil,
-        scope incoming: NativeTypeInference? = nil,
         callbackScope: [NativeCallbackUseKey: NativeCallbackID] = [:]
     ) throws -> NativeExpressionID {
-        let resolution = try (incoming ?? inference).resolutionScope(value, expected: expected)
-        let scope = resolution.scope
-        let resultType = resolution.resultType
-        var computationType = resolution.computationType
-        var children: [NativeExpressionID] = []
+        let checked = try inference.resolutionScope(value, expected: expected)
+        return try expression(checked, callbackScope: callbackScope)
+    }
+
+    func expression(
+        _ checked: NativeCheckedExpression,
+        callbackScope: [NativeCallbackUseKey: NativeCallbackID]
+    ) throws -> NativeExpressionID {
+        let value = checked.expression
         var bindings: [BinderID: NativeType] = [:]
-        var call: NativeResolvedCall?
-        func checkedChildren(_ values: [CompiledStateExpr]) throws -> [NativeExpressionID] {
-            guard values.count == resolution.operandTypes.count else { return try require(nil) }
-            return try zip(values, resolution.operandTypes).map { expression, type in
-                try self.expression(expression, expected: type, scope: scope, callbackScope: callbackScope)
-            }
-        }
-        func element(_ source: NativeType) throws -> NativeType {
-            switch source {
-            case .array(let item), .set(let item), .dictionary(.int, let item): return item
-            default: return try require(nil as NativeType?)
-            }
-        }
         switch value {
-        case .value, .controlLocation, .enabledAction: break
-        case .assertView(let source, _): children = try checkedChildren([source])
-        case .stateVariable(let id): computationType = try require(scope.variables[id])
-        case .boundValue(let id): computationType = try require(scope.bindings[id])
-        case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .modulo(let a, let b), .integerDivide(let a, let b), .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b): children = try checkedChildren([a, b])
-        case .negate(let a): children = try checkedChildren([a])
-        case .and(let a, let b), .or(let a, let b): children = try checkedChildren([a, b])
-        case .not(let a): children = try checkedChildren([a])
-        case .equal(let a, let b), .notEqual(let a, let b), .subset(let a, let b), .in(let a, let b):
-            children = try checkedChildren([a, b])
-        case .ifThenElse(let condition, let a, let b): children = try checkedChildren([condition, a, b])
-        case .setLiteral(let values): children = try checkedChildren(values)
-        case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): children = try checkedChildren([a, b])
-        case .cardinality(let a): children = try checkedChildren([a])
-        case .sequenceSelect(let sequence, let id, let predicate):
-            let item = try element(computationType)
-            bindings[id] = item
-            children = try checkedChildren([sequence, predicate])
-        case .setFilter(let domain, let id, let body), .choose(let domain, let id, let body):
-            let item: NativeType = if case .setFilter = value { try element(computationType) } else { computationType }
-            bindings[id] = item
-            children = try checkedChildren([domain, body])
-        case .setMap(let body, let id, let domain):
-            let item = try require(scope.bindings[id]); bindings[id] = item
-            children = try checkedChildren([body, domain])
-        case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
-            let item = try require(scope.bindings[id]); bindings[id] = item
-            children = try checkedChildren([domain, body])
-        case .powerSet(let domain), .unionAll(let domain): children = try checkedChildren([domain])
-        case .integerRange(let a, let b): children = try checkedChildren([a, b])
-        case .tupleLiteral(let values):
-            children = try checkedChildren(values)
-        case .tupleAccess(let source, _), .tupleLength(let source), .tupleHead(let source), .tupleTail(let source),
-             .recordAccess(let source, _, _), .domain(let source):
-            children = try checkedChildren([source])
-        case .tupleDynamicAccess(let source, let index), .tupleRemoving(let source, let index):
-            children = try checkedChildren([source, index])
-        case .tupleAppend(let source, let item), .tupleConcatenate(let source, let item):
-            children = try checkedChildren([source, item])
-        case .recordLiteral(let record):
-            children = try checkedChildren(record.fields.map(\.value))
-        case .functionLiteral(let domain, let id, let body):
-            guard case .dictionary(let key, _) = computationType else { return try require(nil as NativeExpressionID?) }
+        case .setFilter(_, let id, _), .choose(_, let id, _), .setMap(_, let id, _),
+             .forAll(_, let id, _), .exists(_, let id, _), .sequenceSelect(_, let id, _),
+             .letValue(let id, _, _):
+            bindings[id] = try require(checked.scope.bindings[id])
+        case .functionLiteral(_, let id, _):
+            guard case .dictionary(let key, _) = checked.computationType else { return try require(nil) }
             bindings[id] = key
-            children = try checkedChildren([domain, body])
-        case .functionApply(let function, let argument):
-            if case .operatorReference(let id) = function {
-                let resolved = try require(resolution.call)
-                call = try resolveCall(resolved, operation: id, values: [argument], scope: scope, callbackScope: callbackScope, arguments: &children)
-            } else {
-                children = try checkedChildren([function, argument])
+        case .foldFunction(let operation, _, _):
+            let source = try require(checked.children.last).resultType
+            switch source {
+            case .array(let item), .dictionary(.int, let item): bindings[operation.parameters[0]] = item
+            default: return try require(nil)
             }
-        case .except(let source, let key, let replacement):
-            children = try checkedChildren([source, key, replacement])
-        case .sequenceFromSet(let domain): children = try checkedChildren([domain])
-        case .setSum(let function, let domain): children = try checkedChildren([function, domain])
-        case .functionSet(let domain, let range):
-            children = try checkedChildren([domain, range])
-        case .foldFunction(let operation, let initial, let sequence):
-            children = try checkedChildren([operation.body, initial, sequence])
-            let source = expressions[children[2].ordinal].resultType
-            bindings[operation.parameters[0]] = try element(source)
-            bindings[operation.parameters[1]] = computationType
-        case .operatorApplication(let id, let arguments):
-            let resolved = try require(resolution.call)
-            let values = arguments.compactMap { if case .value(let value) = $0 { return value }; return nil }
-            call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
-        case .recursiveCall(let id, let values):
-            let resolved = try require(resolution.call)
-            call = try resolveCall(resolved, operation: id, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
-        case .lambdaApplication(_, let values):
-            let resolved = try require(resolution.call)
-            call = try resolveCall(resolved, operation: nil, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
-        case .letValue(let id, let rhs, let body):
-            let item = try require(scope.bindings[id]); bindings[id] = item
-            children = try checkedChildren([rhs, body])
-        case .letIn(_, let body): children = try checkedChildren([body])
-        case .caseExpr(let first, let rest, let otherwise):
-            let values = ([first] + rest).flatMap { [$0.condition, $0.value] }
-                + (otherwise.map { [$0] } ?? [])
-            children = try checkedChildren(values)
-        case .operatorReference: return try require(nil as NativeExpressionID?)
+            bindings[operation.parameters[1]] = checked.computationType
+        default: break
         }
-        guard computationType == resultType || scope.canProjectRead(computationType, to: resultType) else { return try require(nil as NativeExpressionID?) }
+        let call: NativeResolvedCall?
+        if let resolved = checked.call {
+            let operation: OperatorID?
+            switch value {
+            case .operatorApplication(let id, _), .recursiveCall(let id, _), .functionApply(.operatorReference(let id), _): operation = id
+            default: operation = nil
+            }
+            guard checked.children.count == resolved.parameters.count else { return try require(nil) }
+            call = try resolveCall(resolved, operation: operation, scope: checked.scope, callbackScope: callbackScope)
+        } else {
+            guard checked.children.count == checked.operandTypes.count else { return try require(nil) }
+            call = nil
+        }
+        let children = try checked.children.map { try expression($0, callbackScope: callbackScope) }
         let id = NativeExpressionID(ordinal: expressions.count)
-        expressions.append(.init(expression: value, resultType: resultType, computationType: computationType, children: children, bindings: bindings, call: call))
+        expressions.append(.init(expression: value, resultType: checked.resultType,
+            computationType: checked.computationType, children: children, bindings: bindings, call: call))
         return id
     }
 
     func resolveCall(
-        _ call: NativeOperatorCall, operation: OperatorID?, values: [CompiledStateExpr],
-        scope: NativeTypeInference, callbackScope: [NativeCallbackUseKey: NativeCallbackID],
-        arguments: inout [NativeExpressionID]
+        _ call: NativeOperatorCall, operation: OperatorID?,
+        scope: NativeTypeInference, callbackScope: [NativeCallbackUseKey: NativeCallbackID]
     ) throws -> NativeResolvedCall {
-        arguments = try zip(values, call.parameters).map { value, parameter in
-            try expression(value, expected: require(call.inference.bindings[parameter]), scope: scope, callbackScope: callbackScope)
-        }
         if let operation, scope.isOperatorParameter(operation) {
             guard call.callbackArguments.isEmpty else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
@@ -276,7 +209,13 @@ private final class NativeProgramResolver {
                 captures[key] = try require(callbackScope[key])
             }
         }
-        let key = NativeResolvedFunctionKey(specialization: call.specialization, capturedCallbacks: captures)
+        let specialization = NativeOperatorSpecialization(
+            operation: call.specialization.operation,
+            arguments: try call.parameters.map { try require(call.inference.bindings[$0]) },
+            resultContext: call.result,
+            captures: call.specialization.captures,
+            callbacks: call.specialization.callbacks)
+        let key = NativeResolvedFunctionKey(specialization: specialization, capturedCallbacks: captures)
         if let id = functionIDs[key] { return id }
         let id = NativeFunctionID(ordinal: functions.count)
         functionIDs[key] = id
@@ -294,11 +233,11 @@ private final class NativeProgramResolver {
             }
         }
         functionCallbacks[id] = demands
-        let body = try expression(call.body, expected: call.result, scope: call.inference, callbackScope: nested)
-        let domainGuard: NativeExpressionID?
-        if let domain = call.domain, let parameter = call.parameters.first {
-            domainGuard = try expression(.in(.boundValue(parameter), domain), expected: .bool, scope: call.inference, callbackScope: nested)
-        } else { domainGuard = nil }
+        guard case .checked(let checkedBody, let checkedGuard) = call.implementation else {
+            return try require(nil)
+        }
+        let body = try expression(checkedBody, callbackScope: nested)
+        let domainGuard = try checkedGuard.map { try expression($0, callbackScope: nested) }
         functions[id.ordinal] = .init(parameters: call.parameters,
             parameterTypes: try call.parameters.map { try require(call.inference.bindings[$0]) },
             resultType: call.result,

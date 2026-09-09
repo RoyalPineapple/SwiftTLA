@@ -21,7 +21,11 @@ import Testing
                 .value(.value(.integer(7))), .value(.value(unused))
             ])
             let outer = try #require(try checker.resolutionScope(expression, expected: .int).call)
-            let inner = try #require(try outer.inference.resolutionScope(outer.body, expected: .int).call)
+            guard case .checked(let body, _) = outer.implementation else {
+                Issue.record("Expected a checked operator body")
+                return outer.specialization
+            }
+            let inner = try #require(body.call)
             return inner.specialization
         }
         #expect(try specialization(unused: .integer(1)) == specialization(unused: .string("unrelated")))
@@ -175,8 +179,13 @@ import Testing
         #expect(integer.result == .int)
         #expect(string.result == .string)
         #expect(integer.specialization != string.specialization)
-        #expect(try integer.inference.type(of: integer.body, expected: .int) == .int)
-        #expect(try string.inference.type(of: string.body, expected: .string) == .string)
+        guard case .checked(let integerBody, _) = integer.implementation,
+              case .checked(let stringBody, _) = string.implementation else {
+            Issue.record("Expected checked operator bodies")
+            return
+        }
+        #expect(integerBody.resultType == .int)
+        #expect(stringBody.resultType == .string)
     }
 
     @Test("local operators propagate the callback signatures they capture")
