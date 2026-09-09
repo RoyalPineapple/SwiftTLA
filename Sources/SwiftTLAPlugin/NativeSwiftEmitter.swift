@@ -373,16 +373,31 @@ struct NativeSwiftEmitter {
                 state: state, substitutions: tailBindings, activeFunctions: activeFunctions.union([id]), hasPendingReturns: hasPendingReturns)
             let resultType = try swiftType(resolved.resultType)
             let pendingReturns = hasPendingReturns
-                ? "var _pendingReturns: [(depth: Int, apply: (\(resultType)) throws -> \(resultType))] = []" : ""
+                ? """
+                var _pendingReturns: [(depth: Int, apply: (\(resultType)) throws -> \(resultType)?)] = []
+                // Continuations can schedule more returns; release them on failure too.
+                defer { _pendingReturns.removeAll() }
+                """ : ""
+            let iteration = hasPendingReturns ? """
+            guard var returnedValue = try ({ () throws -> \(resultType)? in
+                \(statements)
+            })() else { continue }
+            while let frame = _pendingReturns.popLast() {
+                _nativeDepth = frame.depth
+                guard let value = try frame.apply(returnedValue) else { continue _recursiveEvaluation }
+                returnedValue = value
+            }
+            return returnedValue
+            """ : statements
             body = """
             \(inputs)
             \(pendingReturns)
             let entryDepth = _nativeDepth
             defer { _nativeDepth = entryDepth }
-            while true {
+            _recursiveEvaluation: while true {
                 \(depthGuard)
                 \(values)
-                \(statements)
+                \(iteration)
             }
             """
         } else {
@@ -438,18 +453,8 @@ struct NativeSwiftEmitter {
     ) throws -> String {
         switch body {
         case .result(let value):
-            if !hasPendingReturns {
-                return "return \(try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions))"
-            }
-            return """
-            var _returnedValue: \(try swiftType(program[function].resultType)) = \(try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions))
-            while let frame = _pendingReturns.popLast() {
-                _nativeDepth = frame.depth
-                _returnedValue = try frame.apply(_returnedValue)
-            }
-            return _returnedValue
-            """
-        case .resume(let value, let operand, let before, let body):
+            return "return \(try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions))"
+        case .resume(let operand, let before, let body, let continuation):
             var captures: [String] = []
             let outerValues = expressionValues
             defer { expressionValues = outerValues }
@@ -458,14 +463,16 @@ struct NativeSwiftEmitter {
                 captures.append("let \(name): \(try swiftType(program[id].resultType)) = \(try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions))")
                 expressionValues[id] = name
             }
-            expressionValues[operand] = "_returnedValue"
-            let resumed = try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            let returnedOperand = "_returnedOperand\(operand.ordinal)"
+            expressionValues[operand] = returnedOperand
+            let resumed = try recursiveBody(continuation, function: function, depthGuard: depthGuard,
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
             expressionValues = outerValues
             let next = try recursiveBody(body, function: function, depthGuard: depthGuard,
                 state: state, substitutions: substitutions, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
             return """
             \(captures.joined(separator: "\n"))
-            _pendingReturns.append((depth: _nativeDepth, apply: { _returnedValue in \(resumed) }))
+            _pendingReturns.append((depth: _nativeDepth, apply: { \(returnedOperand) in \(resumed) }))
             \(next)
             """
         case .repeatCall(let arguments):
@@ -473,7 +480,7 @@ struct NativeSwiftEmitter {
                 let value = try expression(argument, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
                 return "_tailArgument\(parameter.ordinal) = { \(value) }"
             }
-            return (assignments + ["continue"]).joined(separator: "\n")
+            return (assignments + [hasPendingReturns ? "return nil" : "continue"]).joined(separator: "\n")
         case .condition(let condition, let yes, let no):
             let predicate = try expression(condition, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
             let yesBody = try recursiveBody(yes, function: function, depthGuard: depthGuard,

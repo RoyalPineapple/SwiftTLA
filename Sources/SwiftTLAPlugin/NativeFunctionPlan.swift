@@ -8,8 +8,8 @@ enum NativeFunctionPlan {
         case binding(BinderID, NativeExpressionID, Body)
         case call(NativeFunctionID, [NativeExpressionID], Body)
         case repeatCall([NativeExpressionID])
-        /// Freeze earlier operands, then apply the surrounding expression on return.
-        case resume(NativeExpressionID, operand: NativeExpressionID, before: [NativeExpressionID], Body)
+        /// Freeze earlier operands, then continue evaluation when this operand returns.
+        case resume(operand: NativeExpressionID, before: [NativeExpressionID], evaluate: Body, then: Body)
 
         var hasPendingReturns: Bool {
             var pending = [self]
@@ -90,8 +90,9 @@ enum NativeFunctionPlan {
 
     private static func lower(
         _ expression: NativeExpressionID, returningTo function: NativeFunctionID,
-        visited: Set<NativeFunctionID>, program: NativeResolvedProgram
+        visited: Set<NativeFunctionID>, program: NativeResolvedProgram, completed: Set<NativeExpressionID> = []
     ) -> Body? {
+        guard !completed.contains(expression) else { return nil }
         let node = program[expression]
         guard node.computationType == node.resultType,
               node.resultType == program[function].resultType else { return nil }
@@ -122,34 +123,14 @@ enum NativeFunctionPlan {
             default: evaluationOrder = node.children
             }
             for (index, child) in evaluationOrder.enumerated() {
-                guard let body = lower(child, returningTo: function, visited: visited, program: program) else { continue }
-                let siblings = evaluationOrder.filter { $0 != child }
-                guard !siblings.contains(where: { references(function, from: $0, program: program) }) else { return nil }
-                return .resume(expression, operand: child, before: Array(evaluationOrder.prefix(index)), body)
+                guard let body = lower(child, returningTo: function, visited: visited, program: program, completed: completed) else { continue }
+                let before = evaluationOrder.prefix(index).filter { !completed.contains($0) }
+                let continuation = lower(expression, returningTo: function, visited: visited, program: program,
+                    completed: completed.union(before).union([child])) ?? .result(expression)
+                return .resume(operand: child, before: before, evaluate: body, then: continuation)
             }
             return nil
         default: return nil
         }
-    }
-
-    /// A suspended return must not start another call into the same cycle.
-    private static func references(_ function: NativeFunctionID, from expression: NativeExpressionID, program: NativeResolvedProgram) -> Bool {
-        var pending = [expression]
-        var visited: Set<NativeExpressionID> = []
-        while let id = pending.popLast() {
-            guard visited.insert(id).inserted else { continue }
-            let node = program[id]
-            pending.append(contentsOf: node.children)
-            guard let call = node.call else { continue }
-            if !call.callbacks.isEmpty { return true }
-            switch call.target {
-            case .callback: return true
-            case .function(let target):
-                if target == function { return true }
-                pending.append(program[target].body)
-                if let domain = program[target].domainGuard { pending.append(domain) }
-            }
-        }
-        return false
     }
 }

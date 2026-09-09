@@ -18,6 +18,15 @@ private struct RecursiveCounting {
             ))
             SwiftTLA.Action("count") { result.becomes(FormalCall("Count", 4095)) }
             SwiftTLA.Action("tooDeep") { result.becomes(FormalCall("Count", 4096)) }
+            FormalDefinition("CountWithSibling", parameters: [.value("remaining")], body: StateExpr.if(
+                StateExpr.variable("remaining") == 0,
+                then: 0,
+                else: 1 + StateExpr.operatorApplication(.reference("CountWithSibling", arity: 1), [
+                    .value(StateExpr.variable("remaining") - 1)
+                ]) + StateExpr.operatorApplication(.reference("CountWithSibling", arity: 1), [.value(0)])
+            ))
+            SwiftTLA.Action("countWithSibling") { result.becomes(FormalCall("CountWithSibling", 4095)) }
+            SwiftTLA.Action("siblingTooDeep") { result.becomes(FormalCall("CountWithSibling", 4096)) }
             FormalDefinition("Overflow", parameters: [.value("remaining")], body: StateExpr.if(
                 StateExpr.variable("remaining") == 0,
                 then: 0,
@@ -59,6 +68,28 @@ private struct RecursiveMembers {
 }
 
 @Suite struct NativeRecursiveExecutionTests {
+    @Test("sequential recursive operands return without consuming the Swift stack")
+    func sequentialRecursiveOperands() throws {
+        let compilation = try RecursiveCounting.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "countWithSibling"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        #expect(try successor.state.value(for: result) == .integer(4095))
+        var machine = try RecursiveCounting.makeMachine()
+        #expect(try machine.send(.countWithSibling).after.result == 4095)
+        let exhausted = try #require(compilation.layout.testActionID(named: "siblingTooDeep"))
+        #expect(throws: EvalError.recursionDepthExceeded(4096)) {
+            try runtime.successors(for: exhausted, from: initial)
+        }
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(4096)) {
+            try machine.send(.siblingTooDeep)
+        }
+        #expect(machine.state == before)
+    }
+
     @Test("non-tail recursive execution matches the formal result within its call budget")
     func boundedNonTailRecursion() throws {
         let compilation = try RecursiveCounting.spec.compile()
