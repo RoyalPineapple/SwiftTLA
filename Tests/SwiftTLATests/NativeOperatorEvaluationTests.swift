@@ -57,6 +57,80 @@ private struct NestedLambdaCallDepth {
             SwiftTLA.Action("countDown") {
                 result.becomes(FormalCall("CountDown", 2050))
             }
+            SwiftTLA.Action("complete") {
+                result.becomes(FormalCall("CountDown", 1000))
+            }
+        }
+    }
+}
+
+@TLAModel
+private struct TailArgumentFailureOrder {
+    static var spec: TLASpec {
+        TLASpec("TailArgumentFailureOrder") {
+            let result = Var<Int>("result")
+            Variable(result, 9)
+            FormalDefinition("CountDown", parameters: [.value("remaining")], body: StateExpr.if(
+                StateExpr.variable("remaining") == 0,
+                then: 0,
+                else: StateExpr.operatorApplication(.reference("CountDown", arity: 1), [.value(
+                    StateExpr.if(
+                        StateExpr.variable("remaining") == 1,
+                        then: StateExpr.variable("remaining") / 0,
+                        else: StateExpr.variable("remaining") - 1
+                    )
+                )])
+            ))
+            SwiftTLA.Action("atLimit") {
+                result.becomes(FormalCall("CountDown", 4096))
+            }
+            SwiftTLA.Action("belowLimit") {
+                result.becomes(FormalCall("CountDown", 4095))
+            }
+            FormalDefinition("FailBeforeRead", parameters: [.value("remaining")], body: StateExpr.if(
+                StateExpr.variable("result") / 0 == StateExpr.variable("remaining"),
+                then: 0,
+                else: StateExpr.operatorApplication(.reference("FailBeforeRead", arity: 1), [.value(
+                    StateExpr.variable("remaining")
+                )])
+            ))
+            SwiftTLA.Action("earlyFailure") {
+                result.becomes(FormalCall("FailBeforeRead", Expr<Int>(9_223_372_036_854_775_807) + 1))
+            }
+        }
+    }
+}
+
+@TLAModel
+private struct TailArgumentReuse {
+    static var spec: TLASpec {
+        TLASpec("TailArgumentReuse") {
+            let result = Var<Int>("result")
+            Variable(result, 9)
+            FormalDefinition("Start", parameters: [.value("remaining")], body: StateExpr.if(
+                StateExpr.variable("remaining") == 0,
+                then: 0,
+                else: StateExpr.operatorApplication(.reference("Finish", arity: 1), [.value(
+                    StateExpr.operatorApplication(.reference("DeepValue", arity: 1), [.value(4093)])
+                )])
+            ))
+            FormalDefinition("Finish", parameters: [.value("value")], body: StateExpr.if(
+                StateExpr.variable("value") > 0,
+                then: StateExpr.operatorApplication(.reference("Start", arity: 1), [.value(
+                    StateExpr.variable("value") - 1
+                )]),
+                else: 0
+            ))
+            FormalDefinition("DeepValue", parameters: [.value("remaining")], body: StateExpr.if(
+                StateExpr.variable("remaining") == 0,
+                then: 1,
+                else: StateExpr.operatorApplication(.reference("DeepValue", arity: 1), [.value(
+                    StateExpr.variable("remaining") - 1
+                )])
+            ))
+            SwiftTLA.Action("finish") {
+                result.becomes(FormalCall("Start", 1))
+            }
         }
     }
 }
@@ -114,6 +188,74 @@ private struct NestedLambdaCallDepth {
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(limit)) {
             try machine.send(.countDown)
+        }
+        #expect(machine.state == before)
+    }
+
+    @Test("deep calls through lambdas return the same value as formal execution")
+    func deepLambdaCallsComplete() throws {
+        let compilation = try NestedLambdaCallDepth.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "complete"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        var machine = try NestedLambdaCallDepth.makeMachine()
+        #expect(try machine.send(.complete).after.result == 0)
+        #expect(try successor.state.value(for: result) == .integer(machine.state.result))
+    }
+
+    @Test("the call budget is checked before evaluating a deferred tail argument")
+    func tailArgumentsPreserveFailureOrder() throws {
+        let compilation = try TailArgumentFailureOrder.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let atLimit = try #require(compilation.layout.testActionID(named: "atLimit"))
+        let belowLimit = try #require(compilation.layout.testActionID(named: "belowLimit"))
+        let limit = _NativeMachineOperations.maximumRecursiveDepth
+        #expect(throws: EvalError.recursionDepthExceeded(limit)) {
+            try runtime.successors(for: atLimit, from: initial)
+        }
+        #expect(throws: EvalError.divisionByZero) {
+            try runtime.successors(for: belowLimit, from: initial)
+        }
+        var machine = try TailArgumentFailureOrder.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(limit)) {
+            try machine.send(.atLimit)
+        }
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.belowLimit)
+        }
+        #expect(machine.state == before)
+    }
+
+    @Test("an evaluated tail argument is reused after entering a deeper call")
+    func evaluatedTailArgumentsAreReused() throws {
+        let compilation = try TailArgumentReuse.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "finish"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        let successor = try #require(try runtime.successors(for: action, from: initial).first)
+        var machine = try TailArgumentReuse.makeMachine()
+        #expect(try machine.send(.finish).after.result == 0)
+        #expect(try successor.state.value(for: result) == .integer(machine.state.result))
+    }
+
+    @Test("an earlier body failure does not force a later argument")
+    func bodyFailurePrecedesArgumentFailure() throws {
+        let compilation = try TailArgumentFailureOrder.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let action = try #require(compilation.layout.testActionID(named: "earlyFailure"))
+        #expect(throws: EvalError.divisionByZero) {
+            try runtime.successors(for: action, from: initial)
+        }
+        var machine = try TailArgumentFailureOrder.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.earlyFailure)
         }
         #expect(machine.state == before)
     }

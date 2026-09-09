@@ -1,5 +1,6 @@
 import SwiftSyntax
 import SwiftSyntaxBuilder
+import SwiftBasicFormat
 import SwiftTLA
 
 /// Translates the resolved compiler program into typed Swift expressions.
@@ -14,6 +15,7 @@ struct NativeSwiftEmitter {
     var unions: [[NativeType]] = []
     private var hasDepthScope = false
     private var callbackFunctions: [NativeCallbackID: String] = [:]
+    private var tailCalls: [NativeFunctionID: NativeTailCallPlan] = [:]
 
     init(model: MacroCompilation) {
         self.model = model
@@ -334,34 +336,55 @@ struct NativeSwiftEmitter {
         }
         _nativeDepth += 1
         """
-        let bodyNode = program[resolved.body]
         let body: String
-        if resolved.parameters.isEmpty, resolved.callbacks.isEmpty,
-           bodyNode.children.isEmpty,
-           bodyNode.computationType == bodyNode.resultType,
-           let recursiveCall = bodyNode.call,
-           case .function(let target) = recursiveCall.target, target == id,
-           recursiveCall.callbacks.isEmpty {
-            // A direct tail call with no arguments repeats the same invocation.
-            // Retain the formal call budget without consuming the Swift stack.
+        let tail: NativeTailCallPlan
+        if let checked = tailCalls[id] {
+            tail = checked
+        } else {
+            tail = NativeTailCallPlan(function: id, program: program)
+            tailCalls[id] = tail
+        }
+        if case .loop(let parameterOrder, let tailPlan) = tail {
+            let inputs = resolved.parameters.map {
+                "var _tailArgument\($0.ordinal) = \(binder($0))"
+            }.joined(separator: "\n")
+            let values = parameterOrder.map {
+                "let _tailValue\($0.ordinal) = try _tailArgument\($0.ordinal)()"
+            }.joined(separator: "\n")
+            var tailBindings = substitutions
+            for parameter in resolved.parameters {
+                tailBindings[parameter] = "_tailValue\(parameter.ordinal)"
+            }
+            let statements = try tailBody(tailPlan, function: id, depthGuard: depthGuard,
+                state: state, substitutions: tailBindings, activeFunctions: activeFunctions.union([id]))
             body = """
+            \(inputs)
             let entryDepth = _nativeDepth
             defer { _nativeDepth = entryDepth }
             while true {
                 \(depthGuard)
-                \(domainGuard)
+                \(values)
+                \(statements)
             }
             """
         } else {
             let result = try expression(resolved.body, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))
-            body = """
-            \(depthGuard)
-            defer { _nativeDepth -= 1 }
-            \(domainGuard)
-            return \(result)
+            return """
+            (try { () throws -> \(try swiftType(resolved.resultType)) in
+                func \(function)(\(declarations.joined(separator: ", "))) throws -> \(try swiftType(resolved.resultType)) {
+                    guard _nativeDepth < _NativeMachineOperations.maximumRecursiveDepth else {
+                        throw NativeMachineEvaluationError.recursionDepthExceeded(_NativeMachineOperations.maximumRecursiveDepth)
+                    }
+                    _nativeDepth += 1
+                    defer { _nativeDepth -= 1 }
+                    \(domainGuard)
+                    return \(result)
+                }
+                return \(call)
+            }())
             """
         }
-        return """
+        let code = """
         (try { () throws -> \(try swiftType(resolved.resultType)) in
             func \(function)(\(declarations.joined(separator: ", "))) throws -> \(try swiftType(resolved.resultType)) {
                 \(body)
@@ -369,6 +392,68 @@ struct NativeSwiftEmitter {
             return \(call)
         }())
         """
+        // Value literals are escaped onto one source line. Discard template
+        // indentation so SwiftSyntax can format the generated expression.
+        let unindented = code.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.drop(while: { $0 == " " || $0 == "\t" }) }
+            .joined(separator: "\n")
+        return ExprSyntax(stringLiteral: unindented).formatted().description
+    }
+
+    private mutating func tailBody(
+        _ body: NativeTailCallPlan.Body, function: NativeFunctionID, depthGuard: String,
+        state: String, substitutions: [BinderID: String], activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        switch body {
+        case .result(let value):
+            return "return \(try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions))"
+        case .repeatCall(let arguments):
+            let assignments = try zip(program[function].parameters, arguments).map { parameter, argument in
+                let value = try expression(argument, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                return "_tailArgument\(parameter.ordinal) = { \(value) }"
+            }
+            return (assignments + ["continue"]).joined(separator: "\n")
+        case .condition(let condition, let yes, let no):
+            let predicate = try expression(condition, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            let yesBody = try tailBody(yes, function: function, depthGuard: depthGuard,
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            let noBody = try tailBody(no, function: function, depthGuard: depthGuard,
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            return "if \(predicate) {\n\(yesBody)\n} else {\n\(noBody)\n}"
+        case .binding(let binderID, let value, let body):
+            let valueCode = try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            var nested = substitutions
+            nested[binderID] = "(try \(binder(binderID))())"
+            let bodyCode = try tailBody(body, function: function, depthGuard: depthGuard,
+                state: state, substitutions: nested, activeFunctions: activeFunctions)
+            return "func \(binder(binderID))() throws -> \(try swiftType(program[value].resultType)) { return \(valueCode) }\n\(bodyCode)"
+        case .call(let target, let arguments, let body):
+            let callee = program[target]
+            var nested = substitutions
+            var bindings: [String] = []
+            for ((parameter, type), argument) in zip(zip(callee.parameters, callee.parameterTypes), arguments) {
+                let getter = "_tailRead\(target.ordinal)_\(parameter.ordinal)"
+                let cache = "_tailCached\(target.ordinal)_\(parameter.ordinal)"
+                let value = try expression(argument, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                let valueType = try swiftType(type)
+                bindings.append("""
+                var \(cache): \(valueType)?
+                func \(getter)() throws -> \(valueType) {
+                    if let value = \(cache) { return value }
+                    let value = \(value)
+                    \(cache) = value
+                    return value
+                }
+                """)
+                nested[parameter] = "(try \(getter)())"
+            }
+            let domainGuard = try callee.domainGuard.map {
+                "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions)) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
+            } ?? ""
+            let bodyCode = try tailBody(body, function: function, depthGuard: depthGuard,
+                state: state, substitutions: nested, activeFunctions: activeFunctions)
+            return "\(depthGuard)\n\(bindings.joined(separator: "\n"))\n\(domainGuard)\n\(bodyCode)"
+        }
     }
 
     mutating func expression(
