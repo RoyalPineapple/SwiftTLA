@@ -98,8 +98,11 @@ struct NativeTypeEvidenceTests {
         let plan = NativeMachinePlan(compilation: compilation)
         let evidence = try NativeTypeInference(plan: plan)
         let member = CompiledStateExpr.stateVariable(plan.variables[0].id)
-        #expect(try evidence.operandType(.value(.string("a")), member) == .named("Member"))
-        #expect(try evidence.operandType(member, .value(.string("a"))) == .named("Member"))
+        let literal = CompiledStateExpr.value(.string("a"))
+        for expression in [CompiledStateExpr.equal(literal, member), .equal(member, literal)] {
+            let checked = try evidence.resolutionScope(expression, expected: .bool)
+            #expect(checked.operandTypes == [.named("Member"), .named("Member")])
+        }
         #expect(throws: CompilationDiagnostic.self) {
             try evidence.type(of: .add(member, .value(.integer(1))))
         }

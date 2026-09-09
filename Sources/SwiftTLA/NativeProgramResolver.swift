@@ -157,13 +157,11 @@ private final class NativeProgramResolver {
         case .negate(let a): children = [try child(a, .int)]
         case .and(let a, let b), .or(let a, let b): try pair(a, b, .bool)
         case .not(let a): children = [try child(a, .bool)]
-        case .equal(let a, let b), .notEqual(let a, let b): try pair(a, b, scope.operandType(a, b))
+        case .equal(let a, let b), .notEqual(let a, let b), .subset(let a, let b), .in(let a, let b):
+            guard resolution.operandTypes.count == 2 else { return try require(nil) }
+            children = try zip([a, b], resolution.operandTypes).map { try child($0, $1) }
         case .ifThenElse(let condition, let a, let b): children = [try child(condition, .bool), try child(a, computationType), try child(b, computationType)]
         case .setLiteral(let values): children = try values.map { try child($0, element(computationType)) }
-        case .in(let value, let domain):
-            let item = try scope.membershipElementType(value: value, domain: domain)
-            children = [try child(value, item), try child(domain, .set(item))]
-        case .subset(let a, let b): try pair(a, b, scope.operandType(a, b))
         case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): try pair(a, b, computationType)
         case .cardinality(let a): children = [try child(a)]
         case .sequenceSelect(let sequence, let id, let predicate):

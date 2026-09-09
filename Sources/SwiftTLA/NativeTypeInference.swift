@@ -233,6 +233,14 @@ struct NativeOperatorCall: Sendable {
 private struct NativeCheckedType: Sendable {
     let type: NativeType
     let computationType: NativeType
+    /// Context selected while checking operands, in expression order.
+    let operandTypes: [NativeType]
+
+    init(type: NativeType, computationType: NativeType, operandTypes: [NativeType] = []) {
+        self.type = type
+        self.computationType = computationType
+        self.operandTypes = operandTypes
+    }
 }
 
 /// Derives native shapes from the resolved formal program and source hints.
@@ -412,7 +420,7 @@ struct NativeTypeInference: Sendable {
         return match.1
     }
 
-    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (scope: NativeTypeInference, resultType: NativeType, computationType: NativeType, call: NativeOperatorCall?) {
+    func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (scope: NativeTypeInference, resultType: NativeType, computationType: NativeType, operandTypes: [NativeType], call: NativeOperatorCall?) {
         var scope = self
         let resolved = try scope.inferExpression(expression, expected: expected ?? .unknown)
         let result = resolved.type
@@ -422,7 +430,7 @@ struct NativeTypeInference: Sendable {
         guard resolved.computationType.resolved else {
             throw Self.unresolvedDiagnostic(resolved.computationType, at: "resolution")
         }
-        return (scope, result, resolved.computationType, resolved.call)
+        return (scope, result, resolved.computationType, resolved.operandTypes, resolved.call)
     }
 
     func functionApplicationSourceType(_ function: CompiledStateExpr, argument: CompiledStateExpr, expected: NativeType) throws -> NativeType {
@@ -450,16 +458,6 @@ struct NativeTypeInference: Sendable {
         let result = try inference.infer(expression, expected: expected ?? .unknown)
         guard result.resolved else { throw Self.unresolvedDiagnostic(result, at: "expression") }
         return result
-    }
-
-    func operandType(_ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr) throws -> NativeType {
-        var inference = self
-        return try inference.comparisonOperands(lhs, rhs)
-    }
-
-    func membershipElementType(value: CompiledStateExpr, domain: CompiledStateExpr) throws -> NativeType {
-        var inference = self
-        return try inference.membershipElement(value: value, domain: domain)
     }
 
     private mutating func membershipElement(value: CompiledStateExpr, domain: CompiledStateExpr) throws -> NativeType {
@@ -1160,7 +1158,7 @@ struct NativeTypeInference: Sendable {
 
     private mutating func inferExpression(
         _ expression: CompiledStateExpr, expected: NativeType = .unknown
-    ) throws -> (type: NativeType, computationType: NativeType, call: NativeOperatorCall?) {
+    ) throws -> (type: NativeType, computationType: NativeType, operandTypes: [NativeType], call: NativeOperatorCall?) {
         guard isOperatorApplication(expression) else {
             let checked: NativeCheckedType
             switch expression {
@@ -1172,7 +1170,7 @@ struct NativeTypeInference: Sendable {
                 do { checked = try inferResolved(expression, expected: expected) }
                 catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
             }
-            return (checked.type, checked.computationType, nil)
+            return (checked.type, checked.computationType, checked.operandTypes, nil)
         }
         do {
             let call: NativeOperatorCall
@@ -1185,13 +1183,13 @@ struct NativeTypeInference: Sendable {
                 call = try specializeCall(.lambda(lambda), arguments: values.map { .value($0) }, expected: expected)
             case .functionApply(.operatorReference(let id), let argument):
                 call = try specializeCall(.reference(id, arity: 1), arguments: [.value(argument)], expected: expected)
-                return (call.result, call.result, call)
+                return (call.result, call.result, [], call)
             default:
                 let checked = try inferResolved(expression, expected: expected)
-                return (checked.type, checked.computationType, nil)
+                return (checked.type, checked.computationType, checked.operandTypes, nil)
             }
             let checked = try checkedType(call.result, expected: expected)
-            return (checked.type, checked.computationType, call)
+            return (checked.type, checked.computationType, checked.operandTypes, call)
         }
         catch let diagnostic as CompilationDiagnostic {
             throw annotated(diagnostic, at: expression)
@@ -1612,7 +1610,9 @@ struct NativeTypeInference: Sendable {
             _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .int
         case .negate(let value): _ = try infer(value, expected: .int); result = .int
         case .equal(let a, let b), .notEqual(let a, let b):
-            _ = try comparisonOperands(a, b); result = .bool
+            let operand = try comparisonOperands(a, b)
+            let checked = try checkedType(.bool, expected: expected)
+            return .init(type: checked.type, computationType: checked.computationType, operandTypes: [operand, operand])
         case .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b):
             _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .bool
         case .ifThenElse(let condition, let a, let b):
@@ -1621,10 +1621,14 @@ struct NativeTypeInference: Sendable {
         case .setLiteral(let expressions):
             return try inferSetLiteral(expressions, expected: expected)
         case .in(let value, let domain):
-            _ = try membershipElement(value: value, domain: domain); result = .bool
+            let item = try membershipElement(value: value, domain: domain)
+            let checked = try checkedType(.bool, expected: expected)
+            return .init(type: checked.type, computationType: checked.computationType, operandTypes: [item, .set(item)])
         case .subset(let a, let b):
             let context = try comparisonOperands(a, b)
-            _ = try element(context); result = .bool
+            _ = try element(context)
+            let checked = try checkedType(.bool, expected: expected)
+            return .init(type: checked.type, computationType: checked.computationType, operandTypes: [context, context])
         case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b):
             let context = try Self.operandContext(comparisonOperands(a, b), expected)
             _ = try element(context)

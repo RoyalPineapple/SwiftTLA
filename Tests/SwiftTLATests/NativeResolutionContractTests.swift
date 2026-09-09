@@ -22,6 +22,39 @@ import Testing
         }
     }
 
+    @Test("predicate operands retain nominal context in the resolved graph")
+    func predicateOperandRepresentations() throws {
+        let member = StateExpr.variable("member")
+        let members = StateExpr.variable("members")
+        let specification = TLASpec(name: "PredicateOperands", variables: [
+            .init(name: "member", initialization: .value(.int(1)), generatedSwiftType: "Member", origin: .compiler),
+            .init(name: "members", initialization: .value(.set([.int(1)])), generatedSwiftType: "Set<Member>", origin: .compiler)
+        ], actions: [], invariants: [
+            .init(name: "Equal", body: .equal(.int(1), member)),
+            .init(name: "NotEqual", body: .notEqual(member, .int(2))),
+            .init(name: "Subset", body: .subset(.setLiteral([]), members)),
+            .init(name: "Membership", body: .in(.int(1), members))
+        ])
+        let plan = NativeMachinePlan(compilation: try specification.compile())
+        let program = try NativeResolvedProgram(plan: plan, sourceTypes: .init(enums: ["Member": [.int(1), .int(2)]]))
+        for invariant in plan.invariants {
+            let root = try #require(program.invariants[invariant.id])
+            let node = program[root]
+            let operands = node.children.map { program[$0].resultType }
+            #expect(node.resultType == .bool)
+            switch node.expression {
+            case .equal, .notEqual:
+                #expect(operands == [.named("Member"), .named("Member")])
+            case .subset:
+                #expect(operands == [.set(.named("Member")), .set(.named("Member"))])
+            case .in:
+                #expect(operands == [.named("Member"), .set(.named("Member"))])
+            default:
+                Issue.record("Expected a comparison or membership predicate")
+            }
+        }
+    }
+
     @Test("unrelated declared types do not expand the program's conversion table")
     func conversionsFollowExpressionUses() throws {
         let names = (0..<12).map { "Value\($0)" }

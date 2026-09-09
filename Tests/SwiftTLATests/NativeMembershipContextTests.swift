@@ -75,11 +75,8 @@ struct NativeMembershipContextTests {
         let evidence = try NativeTypeInference(plan: plan, sourceTypes: .init(enums: ["Value": [.string("first"), .string("second")]]))
         #expect(evidence.variables[plan.variables[0].id] == .tuple([.int, .named("Value")]))
         let constraint = try #require(plan.constraint)
-        guard case .in(let candidate, let domain) = constraint else {
-            Issue.record("Expected membership constraint")
-            return
-        }
-        #expect(try evidence.membershipElementType(value: candidate, domain: domain) == .named("Value"))
+        let checked = try evidence.resolutionScope(constraint, expected: .bool)
+        #expect(checked.operandTypes == [.named("Value"), .set(.named("Value"))])
     }
 
     @Test("Membership context rejects a literal outside its declared enum domain")
