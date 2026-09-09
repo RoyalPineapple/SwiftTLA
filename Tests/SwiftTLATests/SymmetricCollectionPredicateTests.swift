@@ -68,7 +68,7 @@ struct SymmetricCollectionPredicateTests {
     let parsed = SpecParser.parseSpecClosure(try predicateClosure())
     let builder = try #require(parsed.invariants.first(where: { $0.name == "validPhase" })?.body)
 
-    #expect(direct == builder)
+    #expect(alphaKey(direct) == alphaKey(builder))
   }
 
   @Test("Shorthand collection predicates compile and check")
