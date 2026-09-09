@@ -136,9 +136,17 @@ import Testing
         }
         let resolution = try inference.resolutionScope(expression, expected: .int)
         #expect(resolution.resultType == .int)
+        var binding = resolution
         for index in 0..<count {
-            #expect(resolution.bindings[.init(ordinal: index)] == .int)
+            guard case .letValue(let id, _, _) = binding.expression else {
+                Issue.record("Expected lexical binding at depth \(index)")
+                return
+            }
+            #expect(id == .init(ordinal: index))
+            #expect(binding.children[0].resultType == .int)
+            binding = binding.children[1]
         }
+        #expect(binding.computationType == .int)
     }
 
     @Test("Shared lowering assigns deterministic identities to anonymous functions")

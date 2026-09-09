@@ -19,8 +19,12 @@ import Testing
         }
         let checked = try checker.resolutionScope(try #require(layers.last), expected: .bool)
         #expect(checked.resultType == .bool)
-        #expect(checked.bindings[.init(ordinal: 0)] == .int)
-        #expect(checked.bindings[.init(ordinal: 999)] == .int)
+        var predicate = checked
+        for _ in 0..<1_000 {
+            let selection = predicate.children[0]
+            #expect(selection.children[0].resultType == .set(.int))
+            predicate = selection.children[1]
+        }
     }
 
     @Test("deep Boolean expressions retain their Boolean type")
@@ -92,8 +96,16 @@ import Testing
         for (expression, expected) in cases {
             let checked = try checker.resolutionScope(expression, expected: expected)
             #expect(checked.resultType == expected)
-            #expect(checked.bindings[BinderID(ordinal: 0)] == .int)
-            #expect(checked.bindings[BinderID(ordinal: 999)] == .int)
+            var quantifier: NativeCheckedExpression
+            switch expression {
+            case .setMap: quantifier = checked.children[0]
+            case .functionLiteral: quantifier = checked.children[1]
+            default: quantifier = checked
+            }
+            for _ in 0..<1_000 {
+                #expect(quantifier.children[0].resultType == .set(.int))
+                quantifier = quantifier.children[1]
+            }
         }
     }
 

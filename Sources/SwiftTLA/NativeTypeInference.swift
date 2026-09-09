@@ -265,10 +265,9 @@ struct NativeCheckedType: Sendable {
     }
 }
 
-/// A checked occurrence retains typed operands and bindings, not the compiler that checked it.
+/// A checked occurrence retains operand types; lexical scopes belong to the checker.
 struct NativeCheckedExpression: Sendable {
     let expression: CompiledStateExpr
-    let bindings: [BinderID: NativeType]
     let operatorParameters: Set<OperatorID>
     let annotation: NativeCheckedType
 
@@ -557,8 +556,8 @@ struct NativeTypeInference: Sendable {
         var matches: [(scope: NativeTypeInference, checked: NativeCheckedType)] = []
         for alternative in alternatives {
             var candidate = self
-            if let checked = try? candidate.checkExpression(expression, expected: alternative) {
-                matches.append((candidate, checked))
+            if let checked = try? candidate.checkOperand(expression, expected: alternative) {
+                matches.append((candidate, checked.annotation))
             }
         }
         guard matches.count == 1, let match = matches.first else {
@@ -582,13 +581,7 @@ struct NativeTypeInference: Sendable {
     }
 
     private func checkedOccurrence(_ expression: CompiledStateExpr, annotation: NativeCheckedType) -> NativeCheckedExpression {
-        .init(expression: expression, bindings: bindings,
-            operatorParameters: annotation.call == nil ? [] : Set(boundOperators.keys), annotation: annotation)
-    }
-
-    private mutating func checkOperand(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedExpression {
-        let annotation = try checkExpression(expression, expected: expected)
-        return checkedOccurrence(expression, annotation: annotation)
+        .init(expression: expression, operatorParameters: annotation.call == nil ? [] : Set(boundOperators.keys), annotation: annotation)
     }
 
     private mutating func refineOperand(_ checked: NativeCheckedExpression, expected: NativeType) throws -> NativeCheckedExpression {
@@ -598,7 +591,7 @@ struct NativeTypeInference: Sendable {
 
     func type(of expression: CompiledStateExpr, expected: NativeType? = nil) throws -> NativeType {
         var inference = self
-        let result = try inference.checkExpression(expression, expected: expected ?? .unknown).type
+        let result = try inference.checkOperand(expression, expected: expected ?? .unknown).resultType
         guard result.resolved else { throw Self.unresolvedDiagnostic(result, at: "expression") }
         return result
     }
@@ -1170,13 +1163,13 @@ struct NativeTypeInference: Sendable {
             context: context, callbackArguments: callbackArguments))
     }
 
-    private mutating func checkExpression(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedType {
+    private mutating func checkOperand(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedExpression {
         switch expression {
         case .boundValue(let id):
             let check: NativeBoundValueCheck
             do { check = try checkBoundValue(id, expected: expected) }
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
-            if case .checked(let result) = check { return result }
+            if case .checked(let result) = check { return checkedOccurrence(expression, annotation: result) }
             return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
         case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except,
              .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving,
@@ -1189,7 +1182,8 @@ struct NativeTypeInference: Sendable {
         default: break
         }
         do {
-            return try inferResolved(expression, expected: expected)
+            let annotation = try inferResolved(expression, expected: expected)
+            return checkedOccurrence(expression, annotation: annotation)
         } catch let diagnostic as CompilationDiagnostic {
             throw annotated(diagnostic, at: expression)
         }
@@ -1328,7 +1322,7 @@ struct NativeTypeInference: Sendable {
     }
 
     /// Visit operands in source order and retain ancestry for diagnostics.
-    private mutating func checkWorklist(startingWith task: NativeExpressionCheckTask) throws -> NativeCheckedType {
+    private mutating func checkWorklist(startingWith task: NativeExpressionCheckTask) throws -> NativeCheckedExpression {
         // Tasks are appended in reverse execution order.
         var pending = [task]
         var results: [NativeType] = []
@@ -2182,7 +2176,7 @@ struct NativeTypeInference: Sendable {
         guard let completed else {
             throw Self.diagnostic("checking", "missing checked expression")
         }
-        return completed.annotation
+        return completed
     }
 
     private func finishExpression(

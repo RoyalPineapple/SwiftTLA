@@ -38,7 +38,6 @@ import Testing
         #expect(checked.expression == .boundValue(binder))
         #expect(checked.resultType == .int)
         #expect(checked.computationType == .named("Node"))
-        #expect(checked.bindings[binder] == .named("Node"))
     }
 
     @Test("linked binding domains refine without recursive source checking")
@@ -56,8 +55,12 @@ import Testing
         }
         let checked = try checker.resolutionScope(expression, expected: .named("Node"))
         #expect(checked.resultType == .named("Node"))
-        #expect(checked.bindings[BinderID(ordinal: 0)] == .named("Node"))
-        #expect(checked.bindings[BinderID(ordinal: count - 1)] == .named("Node"))
+        var binding = checked
+        for _ in 0..<count {
+            #expect(binding.children[0].resultType == .named("Node"))
+            binding = binding.children[1]
+        }
+        #expect(binding.computationType == .named("Node"))
     }
 
     @Test("function constructors retain the selected representation within a union")

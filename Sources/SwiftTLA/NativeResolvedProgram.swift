@@ -11,7 +11,6 @@ package struct NativeResolvedExpression: Sendable {
     package let computationType: NativeType
     /// Children follow structural IR order, independent of evaluation scheduling.
     package let children: [NativeExpressionID]
-    package let bindings: [BinderID: NativeType]
     package let call: NativeResolvedCall?
 }
 

@@ -684,13 +684,13 @@ struct NativeSwiftEmitter {
             return "Set<\(try swiftType(element))>(try \(try emit(0)).sorted(by: \(try ordering(element))).filter { \(binder(binding)) in \(try emit(1)) })"
         case .setMap(_, let binding, _):
             guard case .set(let element) = node.computationType else { throw unsupported("set map") }
-            guard let input = node.bindings[binding] else { throw unsupported("set map binding") }
+            guard case .set(let input) = childType(1) else { throw unsupported("set map domain") }
             return "Set<\(try swiftType(element))>(try \(try emit(1)).sorted(by: \(try ordering(input))).map { \(binder(binding)) in \(try emit(0)) })"
         case .forAll(_, let binding, _):
-            guard let element = node.bindings[binding] else { throw unsupported("quantifier binding") }
+            guard case .set(let element) = childType(0) else { throw unsupported("quantifier domain") }
             return "(try \(try emit(0)).sorted(by: \(try ordering(element))).allSatisfy { \(binder(binding)) in \(try emit(1)) })"
         case .exists(_, let binding, _):
-            guard let element = node.bindings[binding] else { throw unsupported("quantifier binding") }
+            guard case .set(let element) = childType(0) else { throw unsupported("quantifier domain") }
             return "(try \(try emit(0)).sorted(by: \(try ordering(element))).contains { \(binder(binding)) in \(try emit(1)) })"
         case .choose(_, let binding, _):
             let element = node.computationType

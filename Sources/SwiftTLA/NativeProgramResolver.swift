@@ -137,24 +137,6 @@ private final class NativeProgramResolver {
         callbackScope: [NativeCallbackUseKey: NativeCallbackID]
     ) throws -> NativeExpressionID {
         let value = checked.expression
-        var bindings: [BinderID: NativeType] = [:]
-        switch value {
-        case .setFilter(_, let id, _), .choose(_, let id, _), .setMap(_, let id, _),
-             .forAll(_, let id, _), .exists(_, let id, _), .sequenceSelect(_, let id, _),
-             .letValue(let id, _, _):
-            bindings[id] = try require(checked.bindings[id])
-        case .functionLiteral(_, let id, _):
-            guard case .dictionary(let key, _) = checked.computationType else { return try require(nil) }
-            bindings[id] = key
-        case .foldFunction(let operation, _, _):
-            let source = try require(checked.children.last).resultType
-            switch source {
-            case .array(let item), .dictionary(.int, let item): bindings[operation.parameters[0]] = item
-            default: return try require(nil)
-            }
-            bindings[operation.parameters[1]] = checked.computationType
-        default: break
-        }
         let call: NativeResolvedCall?
         if let resolved = checked.call {
             let operation: OperatorID?
@@ -171,7 +153,7 @@ private final class NativeProgramResolver {
         let children = try checked.children.map { try expression($0, callbackScope: callbackScope) }
         let id = NativeExpressionID(ordinal: expressions.count)
         expressions.append(.init(expression: value, resultType: checked.resultType,
-            computationType: checked.computationType, children: children, bindings: bindings, call: call))
+            computationType: checked.computationType, children: children, call: call))
         return id
     }
 
