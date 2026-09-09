@@ -607,6 +607,7 @@ struct NativeTypeInference: Sendable {
         guard case .set(let element) = expected,
               case .dictionary(let key, let value) = source else { return source }
         let context = try projectionStorageType(key, expected: element)
+        guard context != key else { return source }
         return try infer(expression, expected: .dictionary(context, value))
     }
 
