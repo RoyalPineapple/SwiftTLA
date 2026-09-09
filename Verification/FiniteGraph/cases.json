@@ -54,7 +54,7 @@
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
       },
-      "moduleSHA256": "0b7dd6242996ea4cd1f1a55deabd2f434cc98a5732e861ddd24f601b6bf83a0c",
+      "moduleSHA256": "254cbb462b26ba4eb85905fff86f55ea4e9c0ba78e4b597cfe105299fa07234b",
       "cfgSHA256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87"
     }
   ]
