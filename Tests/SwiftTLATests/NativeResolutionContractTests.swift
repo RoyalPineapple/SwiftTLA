@@ -84,6 +84,29 @@ import Testing
         }
     }
 
+    @Test("fold retains array and integer-keyed function operands")
+    func foldOperandRepresentations() throws {
+        let sources: [(StateExpr, NativeType)] = [
+            (.tupleLiteral([.int(1), .int(2)]), .array(.int)),
+            (.functionLiteral(.integerRange(.int(1), .int(2)), "index", .variable("index")), .dictionary(.int, .int))
+        ]
+        for (source, sourceType) in sources {
+            let fold = StateExpr.foldFunction(
+                FormalLambda(parameters: ["element", "accumulator"],
+                    body: .add(.variable("element"), .variable("accumulator"))),
+                initial: .int(0), sequence: source
+            )
+            let plan = NativeMachinePlan(compilation: try TLASpec(name: "FoldOperands", variables: [
+                .init(name: "total", initialization: .expression(fold), generatedSwiftType: "Int", origin: .compiler)
+            ], actions: [], invariants: []).compile())
+            let program = try NativeResolvedProgram(plan: plan)
+            let root = try #require(program.initializations.values.first)
+            let node = program[root]
+            #expect(node.resultType == .int)
+            #expect(node.children.map { program[$0].resultType } == [.int, .int, sourceType])
+        }
+    }
+
     @Test("unrelated declared types do not expand the program's conversion table")
     func conversionsFollowExpressionUses() throws {
         let names = (0..<12).map { "Value\($0)" }

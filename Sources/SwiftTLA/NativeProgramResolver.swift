@@ -231,9 +231,10 @@ private final class NativeProgramResolver {
             guard case .set(.dictionary(let key, let item)) = computationType else { return try require(nil as NativeExpressionID?) }
             children = [try child(domain, .set(key)), try child(range, .set(item))]
         case .foldFunction(let operation, let initial, let sequence):
-            let shape = try scope.sequenceSourceType(sequence)
-            bindings[operation.parameters[0]] = try element(shape); bindings[operation.parameters[1]] = computationType
-            children = [try child(operation.body, computationType), try child(initial, computationType), try child(sequence, shape)]
+            children = try checkedChildren([operation.body, initial, sequence])
+            let source = expressions[children[2].ordinal].resultType
+            bindings[operation.parameters[0]] = try element(source)
+            bindings[operation.parameters[1]] = computationType
         case .operatorApplication(let id, let arguments):
             let resolved = try require(resolution.call)
             let values = arguments.compactMap { if case .value(let value) = $0 { return value }; return nil }

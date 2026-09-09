@@ -595,11 +595,6 @@ struct NativeTypeInference: Sendable {
         return try infer(expression, expected: .dictionary(context, value))
     }
 
-    func sequenceSourceType(_ expression: CompiledStateExpr, element expected: NativeType = .unknown) throws -> NativeType {
-        var inference = self
-        return try inference.inferSequence(expression, element: expected)
-    }
-
     private mutating func inferSequence(_ expression: CompiledStateExpr, element expected: NativeType = .unknown) throws -> NativeType {
         let source = try infer(expression)
         switch source {
@@ -1412,10 +1407,11 @@ struct NativeTypeInference: Sendable {
         guard operation.parameters.count == 2 else { throw Self.diagnostic("fold", "expected two lambda parameters") }
         let accumulator = try infer(initial, expected: expected)
         bindings[operation.parameters[1]] = accumulator
-        bindings[operation.parameters[0]] = try sequenceElementType(inferSequence(sequence))
+        let source = try inferSequence(sequence)
+        bindings[operation.parameters[0]] = try sequenceElementType(source)
         result = try infer(operation.body, expected: accumulator)
         _ = try infer(initial, expected: result)
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [result, result, source])
     }
 
     private mutating func inferSequenceOperation(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
