@@ -1110,7 +1110,7 @@ struct NativeTypeInference: Sendable {
             case .stateVariable(let id): location = "variable[\(plan.variables.first { $0.id == id }?.declaration.name ?? String(id.ordinal))]"
             case .tupleAccess(_, let index): location = "tupleAccess[\(index)]"
             case .operatorApplication(let id, _), .recursiveCall(let id, _): location = "operator[\(id.ordinal)]"
-            default: location = String(String(describing: expression).prefix { $0 != "(" })
+            default: location = expression.diagnosticName
             }
             throw CompilationDiagnostic(code: diagnostic.code, stage: diagnostic.stage,
                 path: diagnostic.path + " <- " + location,
@@ -1556,7 +1556,7 @@ struct NativeTypeInference: Sendable {
             return try inferLocalOperators(definitions, body: body, expected: expected)
         case .caseExpr(let first, let rest, let otherwise):
             return try inferCases(first, rest: rest, otherwise: otherwise, expected: expected)
-        default: throw Self.diagnostic("expression", "expression is outside the native machine subset: \(expression)")
+        default: throw Self.diagnostic("expression", "expression is outside the native machine subset: \(expression.diagnosticName)")
         }
         return try projectedReadType(result, expected: expected)
     }

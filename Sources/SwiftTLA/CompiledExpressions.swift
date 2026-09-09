@@ -126,6 +126,11 @@ private struct CompiledOperatorDemandKey: Hashable {
 }
 
 extension CompiledStateExpr {
+    /// Diagnostic-only reflection of the outer case, without rendering its payload.
+    var diagnosticName: String {
+        Mirror(reflecting: self).children.first?.label ?? "expression"
+    }
+
     func stateRequirements(
         formalOperators: [CompiledFormalOperatorDefinition],
         recursiveFunctions: [CompiledRecursiveFunction]
