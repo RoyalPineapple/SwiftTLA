@@ -1133,6 +1133,8 @@ struct NativeTypeInference: Sendable {
         switch expression {
         case .letValue, .letIn:
             return try inferLexicalScopes(expression, expected: expected).type
+        case .and, .or, .not:
+            return try inferBooleanChain(expression, expected: expected).type
         default: break
         }
         if isOperatorApplication(expression) {
@@ -1153,6 +1155,8 @@ struct NativeTypeInference: Sendable {
             switch expression {
             case .letValue, .letIn:
                 checked = try inferLexicalScopes(expression, expected: expected)
+            case .and, .or, .not:
+                checked = try inferBooleanChain(expression, expected: expected)
             default:
                 do { checked = try inferResolved(expression, expected: expected) }
                 catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
@@ -1489,6 +1493,31 @@ struct NativeTypeInference: Sendable {
         return try checkedType(result, expected: expected)
     }
 
+    /// Visit operands in source order and retain ancestry for diagnostics.
+    private mutating func inferBooleanChain(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
+        var pending = [(expression: expression, depth: 0)]
+        var ancestors: [CompiledStateExpr] = []
+        while let next = pending.popLast() {
+            ancestors.removeLast(ancestors.count - next.depth)
+            switch next.expression {
+            case .and(let lhs, let rhs), .or(let lhs, let rhs):
+                ancestors.append(next.expression)
+                pending.append((rhs, ancestors.count))
+                pending.append((lhs, ancestors.count))
+            case .not(let operand):
+                ancestors.append(next.expression)
+                pending.append((operand, ancestors.count))
+            default:
+                do { _ = try infer(next.expression, expected: .bool) }
+                catch let diagnostic as CompilationDiagnostic {
+                    throw ancestors.reversed().reduce(diagnostic) { annotated($0, at: $1) }
+                }
+            }
+        }
+        do { return try checkedType(.bool, expected: expected) }
+        catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
+    }
+
     private mutating func inferLexicalScopes(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         var body = expression
         var scopes: [CompiledStateExpr] = []
@@ -1571,9 +1600,6 @@ struct NativeTypeInference: Sendable {
         case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .integerDivide(let a, let b), .modulo(let a, let b):
             _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .int
         case .negate(let value): _ = try infer(value, expected: .int); result = .int
-        case .and(let a, let b), .or(let a, let b):
-            _ = try infer(a, expected: .bool); _ = try infer(b, expected: .bool); result = .bool
-        case .not(let value): _ = try infer(value, expected: .bool); result = .bool
         case .equal(let a, let b), .notEqual(let a, let b):
             _ = try comparisonOperands(a, b); result = .bool
         case .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b):

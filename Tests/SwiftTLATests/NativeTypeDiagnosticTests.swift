@@ -2,6 +2,36 @@ import Testing
 @testable import SwiftTLA
 
 @Suite struct NativeTypeDiagnosticTests {
+    @Test("deep Boolean expressions retain their Boolean type")
+    func longBooleanChains() throws {
+        let specification = TLASpec(name: "BooleanChains", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let expression = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
+            switch index % 3 {
+            case 0: .not(nested)
+            case 1: .and(nested, .value(.boolean(true)))
+            default: .or(.value(.boolean(false)), nested)
+            }
+        }
+        #expect(try checker.resolutionScope(expression, expected: .bool).resultType == .bool)
+    }
+
+    @Test("Boolean diagnostics retain the failing branch's ancestry and left-to-right order")
+    func booleanBranchDiagnostics() throws {
+        let specification = TLASpec(name: "BooleanBranches", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let first = CompiledStateExpr.and(.not(.value(.integer(1))), .value(.string("later")))
+        let second = CompiledStateExpr.and(.or(.value(.boolean(true)), .value(.boolean(false))), .not(.value(.integer(1))))
+        for expression in [first, second] {
+            do {
+                _ = try checker.resolutionScope(expression, expected: .bool)
+                Issue.record("A non-Boolean operand must be rejected")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasSuffix(" <- value <- not <- and"))
+            }
+        }
+    }
+
     @Test("Incomplete inference identifies the missing field type without an internal expression dump")
     func missingCollectionElement() throws {
         let specification = TLASpec(name: "MissingElementType", variables: [
