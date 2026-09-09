@@ -362,7 +362,12 @@ struct NativeTypeInference: Sendable {
     func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (NativeTypeInference, NativeType, NativeType) {
         var scope = self
         let result = try scope.infer(expression, expected: expected ?? .unknown)
-        guard result.resolved else { throw Self.diagnostic("resolution", "unresolved expression shape") }
+        guard result.resolved else {
+            let operation = String(String(describing: expression).prefix { $0 != "(" })
+            let requestedType = expected?.swiftType ?? "no contextual type"
+            throw Self.diagnostic("resolution.\(operation)",
+                "unresolved shape \(result) with \(requestedType): \(String(describing: expression).prefix(512))")
+        }
         var intrinsicScope = scope
         if let constructor = try scope.unionConstructor(expression, expected: result) {
             return (scope, result, constructor)
