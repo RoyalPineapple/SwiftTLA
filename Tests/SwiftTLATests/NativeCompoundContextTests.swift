@@ -37,7 +37,7 @@ struct NativeCompoundContextTests {
 
     @Test("Literal-left set operations retain the stored set's enum representation")
     func setOperationContext() throws {
-        let literal = StateExpr.setLiteral([.string("red")])
+        let literal = StateExpr.setLiteral([.value(.string("red"))])
         let stored = StateExpr.variable("stored")
         let operations: [StateExpr] = [.union(literal, stored), .intersection(literal, stored), .setDifference(literal, stored)]
         for operation in operations {
@@ -57,7 +57,7 @@ struct NativeCompoundContextTests {
         let compilation = try TLASpec(
             name: "InvalidCompoundContext",
             variables: [.init(name: "stored", initialization: .value(.set([])), generatedSwiftType: "SetExpr<Color>", origin: .compiler)],
-            actions: [], invariants: [], constraint: .equal(.setLiteral([.string("green")]), .variable("stored"))
+            actions: [], invariants: [], constraint: .equal(.setLiteral([.value(.string("green"))]), .variable("stored"))
         ).compile()
         #expect(throws: CompilationDiagnostic.self) {
             try NativeTypeInference(plan: .init(compilation: compilation), sourceTypes: metadata)
