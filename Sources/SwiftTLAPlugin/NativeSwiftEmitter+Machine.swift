@@ -34,9 +34,9 @@ extension NativeSwiftEmitter {
             "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[plan.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: "\n")
         let stateParameters = try surface.variables.map { variable in
-            "\(variable.swiftIdentifier): \(try swiftType(program.variableTypes[plan.variables[variable.storageOrdinal].id]!))"
+            "\(variable.swiftIdentifier) _value\(variable.storageOrdinal): \(try swiftType(program.variableTypes[plan.variables[variable.storageOrdinal].id]!))"
         }.joined(separator: ", ")
-        let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = \($0.swiftIdentifier)" }.joined(separator: "\n")
+        let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = _value\($0.storageOrdinal)" }.joined(separator: "\n")
         let stateArguments = surface.variables.map { "\($0.swiftIdentifier): execution.\(variable(plan.variables[$0.storageOrdinal].id))" }.joined(separator: ", ")
         declarations += try nativeDeclarations("""
         public struct State: Equatable, Sendable {
@@ -127,8 +127,8 @@ extension NativeSwiftEmitter {
             default: throw unsupported("record declaration")
             }
             let fields = try elements.enumerated().map { "public let \(fieldName(type, index: $0.offset)): \(try swiftType($0.element))" }.joined(separator: "\n")
-            let parameters = try elements.enumerated().map { "\(fieldName(type, index: $0.offset)): \(try swiftType($0.element))" }.joined(separator: ", ")
-            let assignments = elements.indices.map { "self.\(fieldName(type, index: $0)) = \(fieldName(type, index: $0))" }.joined(separator: "\n")
+            let parameters = try elements.enumerated().map { "\(fieldName(type, index: $0.offset)) _field\($0.offset): \(try swiftType($0.element))" }.joined(separator: ", ")
+            let assignments = elements.indices.map { "self.\(fieldName(type, index: $0)) = _field\($0)" }.joined(separator: "\n")
             declarations += try nativeDeclarations("""
             public struct NativeRecord\(index): Hashable, Sendable {
                 \(fields)
