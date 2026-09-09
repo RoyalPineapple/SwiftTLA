@@ -294,6 +294,10 @@ private enum NativeExpressionCheckTask {
     case finishArgument(BinderID, NativeArgumentRefinement)
     case finishBindingDomain(BinderID)
     case bindDomain(BinderID, retainElement: Bool)
+    case refineDomain(CompiledStateExpr, BinderID)
+    case finishSetPredicate(choosing: Bool)
+    case finishUnaryCollection(expected: NativeType)
+    case finishFunctionSet(expected: NativeType)
     case set
     case setElements(ArraySlice<CompiledStateExpr>, element: NativeType)
     case mergeSetElement(ArraySlice<CompiledStateExpr>, previous: NativeType)
@@ -1088,9 +1092,10 @@ struct NativeTypeInference: Sendable {
     private mutating func infer(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeType {
         switch expression {
         case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
-             .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
+             .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide,
              .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral:
+             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral,
+             .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet:
             return try inferStructuredExpression(expression, expected: expected).type
         default: break
         }
@@ -1114,9 +1119,10 @@ struct NativeTypeInference: Sendable {
         let checked: NativeCheckedType
         switch expression {
         case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
-             .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
+             .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide,
              .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral:
+             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral,
+             .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet:
             checked = try inferStructuredExpression(expression, expected: expected)
         default:
             do { checked = try inferResolved(expression, expected: expected) }
@@ -1327,41 +1333,6 @@ struct NativeTypeInference: Sendable {
         let source = try inferSequence(sequence, element: selected)
         result = .array(selected)
         return try checkedType(result, expected: expected, operandTypes: [source, .bool])
-    }
-
-    private mutating func inferSetFilter(_ domain: CompiledStateExpr, binder id: BinderID, predicate: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        bindingSources[id] = domain
-        bindingDomains[id] = literalDomain(domain)
-        let initial = try infer(domain, expected: expected == .unknown ? .set(.unknown) : expected)
-        bindings[id] = try element(initial); _ = try infer(predicate, expected: .bool)
-        let refined = bindings[id] ?? .unknown
-        result = try infer(domain, expected: .set(refined))
-        // A predicate can prove a stronger nominal representation than an
-        // earlier raw context. Its collection retains that representation.
-        return .init(type: result, computationType: result, operandTypes: [result, .bool])
-    }
-
-    private mutating func inferChoice(_ domain: CompiledStateExpr, binder id: BinderID, predicate body: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        bindingSources[id] = domain
-        bindingDomains[id] = literalDomain(domain)
-        let initial = try element(infer(domain, expected: .set(expected))); bindings[id] = initial
-        _ = try infer(body, expected: .bool)
-        let source = try infer(domain, expected: .set(bindings[id] ?? initial))
-        result = try element(source)
-        return .init(type: result, computationType: result, operandTypes: [source, .bool])
-    }
-
-    private mutating func inferFunctionSet(_ domain: CompiledStateExpr, range: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        let candidate: NativeType = if case .set(let value) = expected { value } else { .unknown }
-        let hint: NativeType = candidate == .unknown ? .dictionary(.unknown, .unknown) : candidate
-        guard case .dictionary(let key, let value) = hint else { throw Self.diagnostic("functionSet", "expected set of dictionaries") }
-        let inferredKey = try element(infer(domain, expected: .set(key)))
-        let inferredValue = try element(infer(range, expected: .set(value)))
-        result = .set(.dictionary(inferredKey, inferredValue))
-        return try checkedType(result, expected: expected, operandTypes: [.set(inferredKey), .set(inferredValue)])
     }
 
     private mutating func inferFold(_ operation: CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1640,6 +1611,44 @@ struct NativeTypeInference: Sendable {
                             .bindDomain(id, retainElement: true),
                             .check(domain, expected: .set(hints.key)),
                         ])
+                    case .cardinality(let domain), .powerSet(let domain), .unionAll(let domain), .sequenceFromSet(let domain):
+                        ancestors.append(expression)
+                        let hint: NativeType
+                        switch expression {
+                        case .powerSet:
+                            hint = if case .set(let item) = expected { item } else { .set(.unknown) }
+                        case .unionAll:
+                            hint = .set(expected == .unknown ? .set(.unknown) : expected)
+                        case .sequenceFromSet:
+                            hint = if case .array(let item) = expected { .set(item) } else { .set(.unknown) }
+                        default: hint = .set(.unknown)
+                        }
+                        pending.append(contentsOf: [.finishUnaryCollection(expected: expected), .check(domain, expected: hint)])
+                    case .functionSet(let domain, let range):
+                        ancestors.append(expression)
+                        let candidate: NativeType = if case .set(let item) = expected { item } else { .unknown }
+                        let hint: NativeType = candidate == .unknown ? .dictionary(.unknown, .unknown) : candidate
+                        guard case .dictionary(let key, let value) = hint else {
+                            throw Self.diagnostic("functionSet", "expected set of dictionaries")
+                        }
+                        pending.append(contentsOf: [
+                            .finishFunctionSet(expected: expected),
+                            .check(range, expected: .set(value)),
+                            .check(domain, expected: .set(key)),
+                        ])
+                    case .setFilter(let domain, let id, let predicate), .choose(let domain, let id, let predicate):
+                        ancestors.append(expression)
+                        bindingSources[id] = domain
+                        bindingDomains[id] = literalDomain(domain)
+                        let choosing: Bool = if case .choose = expression { true } else { false }
+                        let hint: NativeType = choosing ? .set(expected) : (expected == .unknown ? .set(.unknown) : expected)
+                        pending.append(contentsOf: [
+                            .finishSetPredicate(choosing: choosing),
+                            .refineDomain(domain, id),
+                            .discard, .check(predicate, expected: .bool),
+                            .bindDomain(id, retainElement: false),
+                            .check(domain, expected: hint),
+                        ])
                     case .setMap(let body, let id, let domain):
                         ancestors.append(expression)
                         bindingSources[id] = domain
@@ -1815,6 +1824,42 @@ struct NativeTypeInference: Sendable {
                     let item = try element(domain)
                     bindings[id] = item
                     if retainElement { results.append(item) }
+                case .finishUnaryCollection(let expected):
+                    guard let source = results.popLast(), let expression = ancestors.last else {
+                        throw Self.diagnostic("checking", "missing checked collection operand")
+                    }
+                    let result: NativeType
+                    switch expression {
+                    case .cardinality: result = .int
+                    case .powerSet: result = .set(source)
+                    case .unionAll: result = try element(source)
+                    case .sequenceFromSet: result = .array(try element(source))
+                    default: throw Self.diagnostic("checking", "unexpected collection operation")
+                    }
+                    let checked = try checkedType(result, expected: expected, operandTypes: [source])
+                    completed = checked
+                    results.append(checked.type)
+                    ancestors.removeLast()
+                case .finishFunctionSet(let expected):
+                    guard let range = results.popLast(), let domain = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked function-set operands")
+                    }
+                    let result = NativeType.set(.dictionary(try element(domain), try element(range)))
+                    let checked = try checkedType(result, expected: expected, operandTypes: [domain, range])
+                    completed = checked
+                    results.append(checked.type)
+                    ancestors.removeLast()
+                case .refineDomain(let domain, let id):
+                    pending.append(.check(domain, expected: .set(bindings[id] ?? .unknown)))
+                case .finishSetPredicate(let choosing):
+                    guard let domain = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked predicate domain")
+                    }
+                    let result = choosing ? try element(domain) : domain
+                    // Preserve nominal refinements established by the predicate.
+                    completed = .init(type: result, computationType: result, operandTypes: [domain, .bool])
+                    results.append(result)
+                    ancestors.removeLast()
                 case .set:
                     guard let item = results.popLast() else {
                         throw Self.diagnostic("checking", "missing checked set element")
@@ -1990,32 +2035,8 @@ struct NativeTypeInference: Sendable {
             let item = try membershipElement(value: value, domain: domain)
             let checked = try checkedType(.bool, expected: expected)
             return .init(type: checked.type, computationType: checked.computationType, operandTypes: [item, .set(item)])
-        case .cardinality(let value):
-            let source = try infer(value, expected: .set(.unknown))
-            return try checkedType(.int, expected: expected, operandTypes: [source])
         case .sequenceSelect(let sequence, let id, let predicate):
             return try inferSequenceSelection(sequence, binder: id, predicate: predicate, expected: expected)
-        case .setFilter(let domain, let id, let predicate):
-            return try inferSetFilter(domain, binder: id, predicate: predicate, expected: expected)
-        case .choose(let domain, let id, let body):
-            return try inferChoice(domain, binder: id, predicate: body, expected: expected)
-        case .sequenceFromSet(let domain):
-            let hint: NativeType = if case .array(let value) = expected { value } else { .unknown }
-            let source = try infer(domain, expected: .set(hint))
-            result = .array(try element(source))
-            return try checkedType(result, expected: expected, operandTypes: [source])
-        case .powerSet(let domain):
-            let hint: NativeType = if case .set(let value) = expected { value } else { .set(.unknown) }
-            let source = try infer(domain, expected: hint)
-            result = .set(source)
-            return try checkedType(result, expected: expected, operandTypes: [source])
-        case .unionAll(let domain):
-            let hint: NativeType = expected == .unknown ? .set(.unknown) : expected
-            let source = try infer(domain, expected: .set(hint))
-            result = try element(source)
-            return try checkedType(result, expected: expected, operandTypes: [source])
-        case .functionSet(let domain, let range):
-            return try inferFunctionSet(domain, range: range, expected: expected)
         case .setSum(let function, let domain):
             let source = try infer(domain, expected: .set(.unknown))
             let key = try element(source)

@@ -2,6 +2,27 @@ import Testing
 @testable import SwiftTLA
 
 @Suite struct NativeTypeDiagnosticTests {
+    @Test("deep filter and choice predicates preserve their domains without recursive checking")
+    func nestedSetPredicates() throws {
+        let specification = TLASpec(name: "SetPredicates", variables: [], actions: [], invariants: [])
+        let checker = try NativeTypeInference(plan: .init(compilation: specification.compile()))
+        let domain = CompiledStateExpr.setLiteral([.value(.integer(1))])
+        var layers: [CompiledStateExpr] = [.value(.boolean(true))]
+        defer { while layers.popLast() != nil {} }
+        for index in 0..<1_000 {
+            let predicate = try #require(layers.last)
+            let binder = BinderID(ordinal: index)
+            let nested: CompiledStateExpr = index.isMultiple(of: 2)
+                ? .equal(.choose(domain, binder, predicate), .value(.integer(1)))
+                : .equal(.setFilter(domain, binder, predicate), domain)
+            layers.append(nested)
+        }
+        let checked = try checker.resolutionScope(try #require(layers.last), expected: .bool)
+        #expect(checked.resultType == .bool)
+        #expect(checked.scope.bindings[.init(ordinal: 0)] == .int)
+        #expect(checked.scope.bindings[.init(ordinal: 999)] == .int)
+    }
+
     @Test("deep Boolean expressions retain their Boolean type")
     func longBooleanChains() throws {
         let specification = TLASpec(name: "BooleanChains", variables: [], actions: [], invariants: [])
