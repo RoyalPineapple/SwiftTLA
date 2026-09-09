@@ -235,12 +235,37 @@ private struct NativeCheckedType: Sendable {
     let computationType: NativeType
     /// Context selected while checking operands, in expression order.
     let operandTypes: [NativeType]
+    let call: NativeOperatorCall?
 
-    init(type: NativeType, computationType: NativeType, operandTypes: [NativeType] = []) {
+    init(type: NativeType, computationType: NativeType, operandTypes: [NativeType] = [], call: NativeOperatorCall? = nil) {
         self.type = type
         self.computationType = computationType
         self.operandTypes = operandTypes
+        self.call = call
     }
+}
+
+private struct NativeOperatorBody {
+    let specialization: NativeOperatorSpecialization
+    let parameters: [BinderID]
+    let body: CompiledStateExpr
+    let domain: CompiledStateExpr?
+    let context: NativeType
+    let callbackArguments: [OperatorID: CompiledFormalOperator]
+}
+
+private enum NativeOperatorCheck {
+    case recursive(NativeOperatorCall)
+    case body(NativeOperatorBody)
+}
+
+private struct NativePendingCall {
+    let expression: CompiledStateExpr
+    let operation: CompiledFormalOperator
+    let arguments: [CompiledFormalCallArgument]
+    let checkedArguments: [NativeCallArgument]
+    let callbackID: OperatorID?
+    let expected: NativeType
 }
 
 private enum NativeBoundValueCheck {
@@ -251,6 +276,14 @@ private enum NativeBoundValueCheck {
 
 private enum NativeExpressionCheckTask {
     case check(CompiledStateExpr, expected: NativeType)
+    case call(CompiledStateExpr, CompiledFormalOperator, [CompiledFormalCallArgument], expected: NativeType)
+    case enterCall(CompiledStateExpr, CompiledFormalOperator, [CompiledFormalCallArgument], expected: NativeType)
+    case finishOperator(NativeOperatorBody)
+    case leaveCall(NativePendingCall)
+    case refineCallCaptures(CompiledFormalOperator, NativeOperatorCall)
+    case refineCapture(BinderID, original: NativeType, refined: NativeType)
+    case forwardCallbacks(NativeOperatorCall)
+    case completeCall(CompiledStateExpr, NativeOperatorCall, expected: NativeType)
     case reconcile(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
     case finish(expected: NativeType)
     case comparison(expected: NativeType)
@@ -896,35 +929,9 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func specializeCall(
-        _ requestedOperation: CompiledFormalOperator, arguments: [CompiledFormalCallArgument], expected: NativeType
-    ) throws -> NativeOperatorCall {
-        let checkedArguments = try checkCallArguments(arguments)
-        let callbackID: OperatorID?
-        if case .reference(let id, _) = requestedOperation, boundOperators[id] != nil { callbackID = id }
-        else { callbackID = nil }
-        let callback = callbackID.flatMap { boundOperators[$0] }
-        var scope = callback?.scope ?? self
-        // Recursive activity belongs to the call stack, while value/operator
-        // bindings belong to the callback's lexical declaration scope.
-        scope.activeOperators = activeOperators
-        scope.activeArgumentRefinements = activeArgumentRefinements
-        scope.specializationResults.merge(specializationResults) { _, current in current }
-        let operation = callback?.operation ?? requestedOperation
-        let resolved = try scope.specializeOperation(operation,
-            arguments: checkedArguments, expected: expected)
-        specializationResults.merge(scope.specializationResults) { _, current in current }
-        variables = scope.variables
-        if let callbackID { recordCallback(callbackID, call: resolved) }
-        try refineCall(operation, arguments: arguments, checkedArguments: checkedArguments, using: resolved)
-        return resolved
-    }
-
-    private mutating func checkCallArguments(_ arguments: [CompiledFormalCallArgument]) throws -> [NativeCallArgument] {
-        let argumentTypes = try arguments.map { argument -> NativeType in
-            if case .value(let value) = argument { return try infer(value) }
-            return .unknown
-        }
+    private func captureCallArguments(
+        _ arguments: [CompiledFormalCallArgument], types argumentTypes: [NativeType]
+    ) -> [NativeCallArgument] {
         // Infer every argument before capturing the caller scope: a later
         // argument can establish type information used by an earlier one.
         return zip(arguments, argumentTypes).map { argument, type -> NativeCallArgument in
@@ -946,65 +953,19 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func refineCall(
-        _ operation: CompiledFormalOperator, arguments: [CompiledFormalCallArgument],
-        checkedArguments: [NativeCallArgument], using resolved: NativeOperatorCall
-    ) throws {
-        let valueArguments = zip(arguments, checkedArguments).compactMap { argument, checked -> (expression: CompiledStateExpr, type: NativeType)? in
-            guard case .value(let expression) = argument, case .value(let type, _, _) = checked else { return nil }
-            return (expression, type)
-        }
-        for (argument, parameter) in zip(valueArguments, resolved.parameters) {
-            let refined = resolved.inference.bindings[parameter] ?? .unknown
-            if argument.type != refined {
-                _ = try infer(argument.expression, expected: refined)
-            }
-        }
-        // Local operators can refine values captured from their enclosing
-        // operator, including an initially empty recursive accumulator.
-        if case .reference(let id, _) = operation, let captures = localCaptures[id] {
-            try refineCapturedValues(captures, using: resolved.inference)
-        }
-        // A closure may establish stronger finite-domain evidence for a
-        // captured value. Revalidate that evidence in its declaration scope,
-        // never by copying a callee's BinderID/type pair over the caller.
-        for (parameter, uses) in resolved.callbackUses {
-            guard resolved.callbackArguments[parameter] != nil,
-                  let binding = resolved.inference.boundOperators[parameter],
-                  binding.forwardedFrom == nil else { continue }
-            let lambdaParameters: Set<BinderID>
-            if case .lambda(let lambda) = binding.operation { lambdaParameters = Set(lambda.parameters) }
-            else { lambdaParameters = [] }
-            let captures = binding.scope.bindings.filter { !lambdaParameters.contains($0.key) }
-            for use in uses {
-                try refineCapturedValues(captures, using: use.inference)
-            }
-        }
-        // A forwarded callback remains a value in the caller's lexical scope.
-        // Propagate only the signatures demanded by the nested call.
-        for (parameter, uses) in resolved.callbackUses {
-            if resolved.callbackArguments[parameter] == nil, boundOperators[parameter] != nil {
-                for use in uses { recordCallback(parameter, call: use) }
-            } else if let origin = resolved.inference.boundOperators[parameter]?.forwardedFrom {
-                for use in uses { recordCallback(origin, call: use) }
-            }
-        }
-    }
-
-    private mutating func refineCapturedValues(
+    private func capturedValueChecks(
         _ captures: [BinderID: NativeType], using resolved: NativeTypeInference
-    ) throws {
-        for (binder, original) in captures {
-            guard bindings[binder] == original,
-                  let refined = resolved.bindings[binder], refined != original else { continue }
-            _ = try infer(.boundValue(binder), expected: refined)
+    ) -> [NativeExpressionCheckTask] {
+        captures.compactMap { binder, original in
+            guard let refined = resolved.bindings[binder], refined != original else { return nil }
+            return .refineCapture(binder, original: original, refined: refined)
         }
     }
 
-    private mutating func specializeOperation(
+    private mutating func prepareOperator(
         _ operation: CompiledFormalOperator,
         arguments: [NativeCallArgument], expected: NativeType
-    ) throws -> NativeOperatorCall {
+    ) throws -> NativeOperatorCheck {
         let formalParameters: [CompiledFormalParameter]
         let body: CompiledStateExpr
         let domain: CompiledStateExpr?
@@ -1067,8 +1028,8 @@ struct NativeTypeInference: Sendable {
         }
         let context = try Self.operandContext(specializationResults[key] ?? .unknown, expected)
         if activeOperators.contains(key) {
-            return .init(specialization: key, parameters: parameters, body: body, domain: domain,
-                result: context, inference: self, callbackUses: callbackUses, callbackArguments: callbackArguments)
+            return .recursive(.init(specialization: key, parameters: parameters, body: body, domain: domain,
+                result: context, inference: self, callbackUses: callbackUses, callbackArguments: callbackArguments))
         }
         activeOperators.insert(key)
         specializationResults[key] = context
@@ -1089,15 +1050,8 @@ struct NativeTypeInference: Sendable {
                 throw Self.diagnostic("operator", "argument kind changed after validation")
             }
         }
-        if let domain, let binder = parameters.first {
-            bindings[binder] = try element(infer(domain, expected: .set(bindings[binder] ?? .unknown)))
-        }
-        let result = try infer(body, expected: context)
-        specializationResults[key] = try Self.operandContext(context, result)
-        let scoped = self
-        activeOperators.remove(key)
-        return .init(specialization: key, parameters: parameters, body: body, domain: domain,
-            result: result, inference: scoped, callbackUses: callbackUses, callbackArguments: callbackArguments)
+        return .body(.init(specialization: key, parameters: parameters, body: body, domain: domain,
+            context: context, callbackArguments: callbackArguments))
     }
 
     private func isOperatorApplication(_ expression: CompiledStateExpr) -> Bool {
@@ -1118,7 +1072,7 @@ struct NativeTypeInference: Sendable {
         default: break
         }
         if isOperatorApplication(expression) {
-            return try inferExpression(expression, expected: expected).type
+            return try inferStructuredExpression(expression, expected: expected).type
         }
         do {
             return try inferResolved(expression, expected: expected).type
@@ -1130,42 +1084,22 @@ struct NativeTypeInference: Sendable {
     private mutating func inferExpression(
         _ expression: CompiledStateExpr, expected: NativeType = .unknown
     ) throws -> (type: NativeType, computationType: NativeType, operandTypes: [NativeType], call: NativeOperatorCall?) {
-        guard isOperatorApplication(expression) else {
-            let checked: NativeCheckedType
-            switch expression {
-            case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
-                 .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
-                 .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
-                 .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral:
-                checked = try inferStructuredExpression(expression, expected: expected)
-            default:
-                do { checked = try inferResolved(expression, expected: expected) }
-                catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
-            }
-            return (checked.type, checked.computationType, checked.operandTypes, nil)
+        if isOperatorApplication(expression) {
+            let checked = try inferStructuredExpression(expression, expected: expected)
+            return (checked.type, checked.computationType, checked.operandTypes, checked.call)
         }
-        do {
-            let call: NativeOperatorCall
-            switch expression {
-            case .operatorApplication(let id, let arguments):
-                call = try specializeCall(.reference(id, arity: arguments.count), arguments: arguments, expected: expected)
-            case .recursiveCall(let id, let values):
-                call = try specializeCall(.reference(id, arity: values.count), arguments: values.map { .value($0) }, expected: expected)
-            case .lambdaApplication(let lambda, let values):
-                call = try specializeCall(.lambda(lambda), arguments: values.map { .value($0) }, expected: expected)
-            case .functionApply(.operatorReference(let id), let argument):
-                call = try specializeCall(.reference(id, arity: 1), arguments: [.value(argument)], expected: expected)
-                return (call.result, call.result, [], call)
-            default:
-                let checked = try inferResolved(expression, expected: expected)
-                return (checked.type, checked.computationType, checked.operandTypes, nil)
-            }
-            let checked = try checkedType(call.result, expected: expected)
-            return (checked.type, checked.computationType, checked.operandTypes, call)
+        let checked: NativeCheckedType
+        switch expression {
+        case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
+             .setMap, .forAll, .exists, .add, .subtract, .multiply, .divide,
+             .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
+             .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral:
+            checked = try inferStructuredExpression(expression, expected: expected)
+        default:
+            do { checked = try inferResolved(expression, expected: expected) }
+            catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
         }
-        catch let diagnostic as CompilationDiagnostic {
-            throw annotated(diagnostic, at: expression)
-        }
+        return (checked.type, checked.computationType, checked.operandTypes, checked.call)
     }
 
     private func annotated(_ diagnostic: CompilationDiagnostic, at expression: CompiledStateExpr) -> CompilationDiagnostic {
@@ -1494,6 +1428,7 @@ struct NativeTypeInference: Sendable {
         var ancestors: [CompiledStateExpr] = []
         var completed: NativeCheckedType?
         var suspendedScopes: [NativeTypeInference] = []
+        var checkedCalls: [NativeOperatorCall] = []
         let initialArgumentRefinements = activeArgumentRefinements
         let initialBindingRefinements = activeBindingRefinements
         do {
@@ -1516,6 +1451,18 @@ struct NativeTypeInference: Sendable {
                         }
                     }
                     switch expression {
+                    case .operatorApplication(let id, let arguments):
+                        ancestors.append(expression)
+                        pending.append(.call(expression, .reference(id, arity: arguments.count), arguments, expected: expected))
+                    case .recursiveCall(let id, let arguments):
+                        ancestors.append(expression)
+                        pending.append(.call(expression, .reference(id, arity: arguments.count), arguments.map { .value($0) }, expected: expected))
+                    case .lambdaApplication(let lambda, let arguments):
+                        ancestors.append(expression)
+                        pending.append(.call(expression, .lambda(lambda), arguments.map { .value($0) }, expected: expected))
+                    case .functionApply(.operatorReference(let id), let argument):
+                        ancestors.append(expression)
+                        pending.append(.call(expression, .reference(id, arity: 1), [.value(argument)], expected: expected))
                     case .setLiteral(let elements):
                         ancestors.append(expression)
                         let hint: NativeType = if case .set(let item) = expected { item } else { .unknown }
@@ -1677,6 +1624,121 @@ struct NativeTypeInference: Sendable {
                     default:
                         results.append(try infer(expression, expected: expected))
                     }
+                case .call(let expression, let operation, let arguments, let expected):
+                    pending.append(.enterCall(expression, operation, arguments, expected: expected))
+                    for argument in arguments.reversed() {
+                        switch argument {
+                        case .value(let value): pending.append(.check(value, expected: .unknown))
+                        case .operator: pending.append(.result(.unknown))
+                        }
+                    }
+                case .enterCall(let expression, let requested, let arguments, let expected):
+                    guard results.count >= arguments.count else {
+                        throw Self.diagnostic("checking", "missing checked call arguments")
+                    }
+                    let types = Array(results.suffix(arguments.count))
+                    results.removeLast(arguments.count)
+                    let argumentsWithSources = captureCallArguments(arguments, types: types)
+                    let callbackID: OperatorID?
+                    if case .reference(let id, _) = requested, boundOperators[id] != nil { callbackID = id }
+                    else { callbackID = nil }
+                    let callback = callbackID.flatMap { boundOperators[$0] }
+                    let operation = callback?.operation ?? requested
+                    let call = NativePendingCall(expression: expression, operation: operation,
+                        arguments: arguments, checkedArguments: argumentsWithSources,
+                        callbackID: callbackID, expected: expected)
+                    var callee = callback?.scope ?? self
+                    callee.activeOperators = activeOperators
+                    callee.activeArgumentRefinements = activeArgumentRefinements
+                    callee.specializationResults.merge(specializationResults) { _, current in current }
+                    suspendedScopes.append(self)
+                    self = callee
+                    pending.append(.leaveCall(call))
+                    switch try prepareOperator(operation, arguments: argumentsWithSources, expected: expected) {
+                    case .recursive(let resolved):
+                        checkedCalls.append(resolved)
+                    case .body(let operation):
+                        pending.append(contentsOf: [.finishOperator(operation), .check(operation.body, expected: operation.context)])
+                        if let domain = operation.domain, let binder = operation.parameters.first {
+                            pending.append(contentsOf: [
+                                .bindDomain(binder, retainElement: false),
+                                .check(domain, expected: .set(bindings[binder] ?? .unknown)),
+                            ])
+                        }
+                    }
+                case .finishOperator(let operation):
+                    guard let result = results.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked operator body")
+                    }
+                    specializationResults[operation.specialization] = try Self.operandContext(operation.context, result)
+                    let scoped = self
+                    activeOperators.remove(operation.specialization)
+                    checkedCalls.append(.init(specialization: operation.specialization, parameters: operation.parameters,
+                        body: operation.body, domain: operation.domain, result: result, inference: scoped,
+                        callbackUses: callbackUses, callbackArguments: operation.callbackArguments))
+                case .leaveCall(let call):
+                    guard let resolved = checkedCalls.popLast(), var caller = suspendedScopes.popLast() else {
+                        throw Self.diagnostic("checking", "missing checked call or caller context")
+                    }
+                    caller.specializationResults.merge(specializationResults) { _, current in current }
+                    caller.variables = variables
+                    self = caller
+                    if let callbackID = call.callbackID { recordCallback(callbackID, call: resolved) }
+                    pending.append(contentsOf: [
+                        .completeCall(call.expression, resolved, expected: call.expected),
+                        .refineCallCaptures(call.operation, resolved),
+                    ])
+                    let values = zip(call.arguments, call.checkedArguments).compactMap { argument, checked -> (CompiledStateExpr, NativeType)? in
+                        guard case .value(let value) = argument, case .value(let type, _, _) = checked else { return nil }
+                        return (value, type)
+                    }
+                    for (argument, parameter) in zip(values, resolved.parameters).reversed() {
+                        let refined = resolved.inference.bindings[parameter] ?? .unknown
+                        if argument.1 != refined {
+                            pending.append(contentsOf: [.discard, .check(argument.0, expected: refined)])
+                        }
+                    }
+                case .refineCallCaptures(let operation, let resolved):
+                    var checks: [NativeExpressionCheckTask] = []
+                    if case .reference(let id, _) = operation, let captures = localCaptures[id] {
+                        checks.append(contentsOf: capturedValueChecks(captures, using: resolved.inference))
+                    }
+                    for (parameter, uses) in resolved.callbackUses {
+                        guard resolved.callbackArguments[parameter] != nil,
+                              let binding = resolved.inference.boundOperators[parameter],
+                              binding.forwardedFrom == nil else { continue }
+                        let parameters: Set<BinderID>
+                        if case .lambda(let lambda) = binding.operation { parameters = Set(lambda.parameters) }
+                        else { parameters = [] }
+                        let captures = binding.scope.bindings.filter { !parameters.contains($0.key) }
+                        for use in uses { checks.append(contentsOf: capturedValueChecks(captures, using: use.inference)) }
+                    }
+                    pending.append(.forwardCallbacks(resolved))
+                    pending.append(contentsOf: checks.reversed())
+                case .refineCapture(let binder, let original, let refined):
+                    if bindings[binder] == original {
+                        pending.append(contentsOf: [.discard, .check(.boundValue(binder), expected: refined)])
+                    }
+                case .forwardCallbacks(let resolved):
+                    for (parameter, uses) in resolved.callbackUses {
+                        if resolved.callbackArguments[parameter] == nil, boundOperators[parameter] != nil {
+                            for use in uses { recordCallback(parameter, call: use) }
+                        } else if let origin = resolved.inference.boundOperators[parameter]?.forwardedFrom {
+                            for use in uses { recordCallback(origin, call: use) }
+                        }
+                    }
+                case .completeCall(let expression, let call, let expected):
+                    let checked: NativeCheckedType
+                    if case .functionApply = expression {
+                        checked = .init(type: call.result, computationType: call.result, call: call)
+                    } else {
+                        let result = try checkedType(call.result, expected: expected)
+                        checked = .init(type: result.type, computationType: result.computationType,
+                            operandTypes: result.operandTypes, call: call)
+                    }
+                    results.append(checked.type)
+                    completed = checked
+                    ancestors.removeLast()
                 case .finishArgument(let id, let refinement):
                     guard let refined = results.popLast(), var caller = suspendedScopes.popLast() else {
                         throw Self.diagnostic("checking", "missing suspended argument context")

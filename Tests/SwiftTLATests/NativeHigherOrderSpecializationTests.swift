@@ -71,6 +71,30 @@ import Testing
         }
     }
 
+    @Test("deep call arguments retain checked results without recursive invocation")
+    func deepValueArguments() throws {
+        let plan = NativeMachinePlan(compilation: try TLASpec(name: "DeepCalls",
+            variables: [], actions: [], invariants: [], formalOperatorDefinitions: [
+                .init(name: "Identity", parameters: [.value("value")], body: .variable("value"))
+            ]).compile())
+        let operation = try #require(plan.formalOperatorDefinitions.first)
+        let checker = try NativeTypeInference(plan: plan)
+        // Keep each layer alive so destroying the fixture does not recursively
+        // release the entire expression on the test worker's small stack.
+        var layers: [CompiledStateExpr] = [.value(.integer(7))]
+        defer { while layers.popLast() != nil {} }
+        for _ in 0..<1_000 {
+            layers.append(.operatorApplication(operation.id, [.value(try #require(layers.last))]))
+        }
+        func check(_ expression: CompiledStateExpr) throws {
+            let checked = try checker.resolutionScope(expression, expected: .int)
+            #expect(checked.resultType == .int)
+            #expect(checked.call?.result == .int)
+            #expect(checked.call?.parameters.count == 1)
+        }
+        try check(try #require(layers.last))
+    }
+
     @Test("long lexical binding chains preserve each binding's type")
     func lexicalBindingChain() throws {
         let plan = NativeMachinePlan(compilation: try specification().compile())
