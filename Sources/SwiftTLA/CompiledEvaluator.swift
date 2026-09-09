@@ -933,26 +933,16 @@ struct CompiledEvaluator: Sendable {
                             argumentScope: scope
                         ))
                     }
-                case .add(let lhs, let rhs):
+                case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
+                     .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs), .modulo(let lhs, let rhs):
                     tasks.append(.finish(expression))
-                    tasks.append(.expression(rhs, scope))
-                    tasks.append(.expression(lhs, scope))
-                case .subtract(let lhs, let rhs):
-                    tasks.append(.finish(expression))
-                    tasks.append(.expression(rhs, scope))
-                    tasks.append(.expression(lhs, scope))
-                case .multiply(let lhs, let rhs):
-                    tasks.append(.finish(expression))
-                    tasks.append(.expression(rhs, scope))
-                    tasks.append(.expression(lhs, scope))
-                case .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs):
-                    tasks.append(.finish(expression))
-                    tasks.append(.expression(lhs, scope))
-                    tasks.append(.expression(rhs, scope))
-                case .modulo(let lhs, let rhs):
-                    tasks.append(.finish(expression))
-                    tasks.append(.expression(lhs, scope))
-                    tasks.append(.expression(rhs, scope))
+                    if expression.evaluatesDenominatorFirst {
+                        tasks.append(.expression(lhs, scope))
+                        tasks.append(.expression(rhs, scope))
+                    } else {
+                        tasks.append(.expression(rhs, scope))
+                        tasks.append(.expression(lhs, scope))
+                    }
                 case .assertView(let operand, _), .negate(let operand):
                     tasks.append(.finish(expression))
                     tasks.append(.expression(operand, scope))

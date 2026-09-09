@@ -117,11 +117,7 @@ enum NativeFunctionPlan {
             return .binding(binder, node.children[0], body)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate,
              .union, .intersection, .setDifference, .not:
-            let evaluationOrder: [NativeExpressionID]
-            switch node.expression {
-            case .divide, .integerDivide, .modulo: evaluationOrder = node.children.reversed()
-            default: evaluationOrder = node.children
-            }
+            let evaluationOrder = node.expression.evaluatesDenominatorFirst ? Array(node.children.reversed()) : node.children
             for (index, child) in evaluationOrder.enumerated() {
                 guard let body = lower(child, returningTo: function, visited: visited, program: program, completed: completed) else { continue }
                 let before = evaluationOrder.prefix(index).filter { !completed.contains($0) }

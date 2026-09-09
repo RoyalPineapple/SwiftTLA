@@ -580,7 +580,7 @@ struct NativeSwiftEmitter {
             if let value = expressionValues[id] {
                 code = value
             } else if let operation, id == root || node.resultType == .int {
-                let rightFirst = operation == "divide" || operation == "modulo"
+                let rightFirst = node.expression.evaluatesDenominatorFirst
                 if !expanded {
                     pending.append((id, true))
                     let evaluationOrder = rightFirst ? Array(node.children.reversed()) : node.children

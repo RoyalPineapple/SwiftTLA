@@ -18,6 +18,15 @@ package struct CompiledCaseBranch: Hashable, Sendable {
 }
 
 package indirect enum CompiledStateExpr: Hashable, Sendable {
+    /// Division and modulo evaluate the denominator before the numerator.
+    /// Consumers use this order for strict arithmetic evaluation and suspension.
+    package var evaluatesDenominatorFirst: Bool {
+        switch self {
+        case .divide, .integerDivide, .modulo: true
+        default: false
+        }
+    }
+
     case value(CompiledValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
