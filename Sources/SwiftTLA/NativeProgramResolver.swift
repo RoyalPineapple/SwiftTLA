@@ -228,7 +228,7 @@ private final class NativeProgramResolver {
                 children = [try child(function, shape), try child(argument, key)]
             }
         case .except(let source, let key, let replacement):
-            let sourceID = try child(source)
+            let sourceID = try child(source, computationType)
             let shape = expressions[sourceID.ordinal].resultType
             let keyType: NativeType
             let item: NativeType
