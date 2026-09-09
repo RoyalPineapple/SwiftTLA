@@ -208,7 +208,8 @@ private final class NativeProgramResolver {
                 children = [try child(function, shape), try child(argument, key)]
             }
         case .except(let source, let key, let replacement):
-            let shape = try type(source)
+            let sourceID = try child(source)
+            let shape = expressions[sourceID.ordinal].resultType
             let keyType: NativeType
             let item: NativeType
             switch shape {
@@ -220,7 +221,7 @@ private final class NativeProgramResolver {
                 else { item = try require(fields.first?.type) }
             default: return try require(nil as NativeExpressionID?)
             }
-            children = [try child(source, shape), try child(key, keyType), try child(replacement, item)]
+            children = [sourceID, try child(key, keyType), try child(replacement, item)]
         case .sequenceFromSet(let domain): children = [try child(domain, .set(element(computationType)))]
         case .setSum(let function, let domain): children = [try child(function), try child(domain)]
         case .functionSet(let domain, let range):
