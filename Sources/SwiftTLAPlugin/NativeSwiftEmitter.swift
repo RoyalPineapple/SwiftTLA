@@ -358,6 +358,36 @@ struct NativeSwiftEmitter {
         _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
+        switch program[id].expression {
+        case .value, .stateVariable, .boundValue, .controlLocation, .enabledAction,
+             .assertView, .add, .subtract, .multiply, .divide,
+             .integerDivide, .modulo, .negate, .equal, .notEqual,
+             .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and,
+             .or, .not, .ifThenElse:
+            return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .setLiteral, .tupleLiteral, .in, .subset, .union,
+             .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
+             .setMap, .forAll, .exists, .choose, .sequenceFromSet,
+             .powerSet, .unionAll, .functionSet, .setSum:
+            return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving,
+             .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
+            return try sequenceExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .domain, .functionLiteral, .functionApply:
+            return try functionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .except, .recordLiteral, .recordAccess:
+            return try aggregateExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .caseExpr, .letValue, .letIn, .operatorApplication, .recursiveCall,
+             .lambdaApplication:
+            return try controlExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .operatorReference: throw unsupported("operator reference without an application")
+        }
+    }
+
+    private mutating func scalarExpression(
+        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
         let node = program[id]
         let expression = node.expression
         func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
@@ -407,6 +437,21 @@ struct NativeSwiftEmitter {
         case .not(_): return "(!\(try emit(0)))"
         case .ifThenElse(_, _, _):
             return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
+        default: throw unsupported("scalarExpression operation")
+        }
+    }
+
+    private mutating func collectionExpression(
+        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        let node = program[id]
+        let expression = node.expression
+        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func emit(_ index: Int) throws -> String {
+            try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        switch expression {
         case .setLiteral(let values):
             guard case .set(let element) = node.computationType else { throw unsupported("set literal") }
             return "Set<\(try swiftType(element))>([\(try values.indices.map { try emit($0) }.joined(separator: ", "))])"
@@ -460,6 +505,21 @@ struct NativeSwiftEmitter {
             let functionCode = try emit(0)
             let domainCode = try emit(1)
             return "(try { () throws -> Int in let mapping = \(functionCode); let members = \(domainCode); return try _NativeMachineOperations.sum(try members.map { try _NativeMachineOperations.functionValue(mapping, at: $0) }) }())"
+        default: throw unsupported("collectionExpression operation")
+        }
+    }
+
+    private mutating func sequenceExpression(
+        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        let node = program[id]
+        let expression = node.expression
+        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func emit(_ index: Int) throws -> String {
+            try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        switch expression {
         case .foldFunction(let operation, _, _):
             guard operation.parameters.count == 2 else { throw unsupported("fold arity") }
             var nested = substitutions
@@ -542,6 +602,21 @@ struct NativeSwiftEmitter {
                 return _leftElements + _rightElements
             }())
             """
+        default: throw unsupported("sequenceExpression operation")
+        }
+    }
+
+    private mutating func functionExpression(
+        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        let node = program[id]
+        let expression = node.expression
+        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func emit(_ index: Int) throws -> String {
+            try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        switch expression {
         case .domain(_):
             switch childType(0) {
             case .dictionary: return "Set(\(try emit(0)).keys)"
@@ -593,6 +668,21 @@ struct NativeSwiftEmitter {
                 \(access)
             }())
             """
+        default: throw unsupported("functionExpression operation")
+        }
+    }
+
+    private mutating func aggregateExpression(
+        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        let node = program[id]
+        let expression = node.expression
+        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func emit(_ index: Int) throws -> String {
+            try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        switch expression {
         case .except(_, let key, _):
             let originalType = childType(0)
             let update: String
@@ -659,6 +749,21 @@ struct NativeSwiftEmitter {
                   let index = fields.firstIndex(where: { $0.name == name }) else { throw unsupported("record access") }
             let field = "\(try emit(0)).\(fieldName(source, index: index))"
             return field
+        default: throw unsupported("aggregateExpression operation")
+        }
+    }
+
+    private mutating func controlExpression(
+        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<NativeFunctionID>
+    ) throws -> String {
+        let node = program[id]
+        let expression = node.expression
+        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func emit(_ index: Int) throws -> String {
+            try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        switch expression {
         case .caseExpr(_, let remaining, let otherwise):
             let result = node.computationType
             var body = ""
@@ -685,7 +790,7 @@ struct NativeSwiftEmitter {
         case .lambdaApplication:
             guard let call = node.call else { throw unsupported("resolved lambda call") }
             return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        default: throw unsupported(String(describing: expression))
+        default: throw unsupported("controlExpression operation")
         }
     }
 
