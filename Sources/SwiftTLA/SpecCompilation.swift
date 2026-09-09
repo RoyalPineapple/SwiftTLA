@@ -658,25 +658,7 @@ public extension TLASpec {
         let emittedActionCallNames = Dictionary(
             uniqueKeysWithValues: emittedActionCalls.map { ($0.call, $0.renderedName) }
         )
-        var renderedActions: [RenderedAction] = []
-        for (call, renderedName) in emittedActionCalls {
-            guard let action = layout.actions.first(where: { $0.id == call.action }) else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .rendering,
-                    path: "actions[\(call.action.ordinal)]",
-                    expected: "a compiled action declaration",
-                    actual: "the rendered action call has no declaration",
-                    nextSafeAction: "Compile the source model again."
-                )
-            }
-            guard !action.declaration.name.isEmpty else { continue }
-            renderedActions.append(RenderedAction(
-                sourceName: action.declaration.name,
-                arguments: try call.arguments.map { try $0.rendered(using: layout) },
-                renderedName: renderedName
-            ))
-        }
+        let callsByAction = Dictionary(grouping: emittedActionCalls, by: { $0.call.action })
         let orderedDefinitionsBeforeInstances = try orderDirectDefinitions(
             definitionsBeforeInstances,
             declared: []
@@ -702,9 +684,8 @@ public extension TLASpec {
                 renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
                 renderedBody: try renderer.action(compiled.body),
-                calls: try emittedActionCalls.compactMap { emitted in
-                    guard emitted.call.action == compiled.id else { return nil }
-                    return RenderedAction(
+                calls: try callsByAction[compiled.id, default: []].map { emitted in
+                    RenderedAction(
                         sourceName: declaration.name,
                         arguments: try emitted.call.arguments.map { try $0.rendered(using: layout) },
                         renderedName: emitted.renderedName
@@ -731,7 +712,7 @@ public extension TLASpec {
                 semantics: semantics,
                 usesSymmetryReduction: false
             ),
-            renderedActions: renderedActions
+            renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls)
         )
     }
 
