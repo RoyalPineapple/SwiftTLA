@@ -104,7 +104,13 @@ PY
         swift_tool="$(xcrun --find swift)"
         test_runner="$(dirname "$swift_tool")/../libexec/swift/pm/swiftpm-testing-helper"
         [[ -x "$test_runner" ]] || { echo "Missing Swift Testing runner: $test_runner" >&2; exit 1; }
+        # Match SwiftPM's test environment so the loader can find XCTest and
+        # Swift Testing in the selected SDK's developer directories.
+        sdk_platform="$(xcrun --sdk macosx --show-sdk-platform-path)"
         if xcrun xctrace record --template Allocations --time-limit 30s \
+            --env "DYLD_FRAMEWORK_PATH=$sdk_platform/Developer/Library/Frameworks" \
+            --env "DYLD_LIBRARY_PATH=$sdk_platform/Developer/usr/lib" \
+            --target-stdout "$destination/allocations-tests.log" \
             --output "$destination/allocations.trace" --launch -- "$test_runner" \
             --test-bundle-path "$test_image" \
             --testing-library swift-testing --filter NativeMachinePerformanceTests \
@@ -138,6 +144,13 @@ except (OSError, ET.ParseError) as error:
 (root / 'allocations-tables.json').write_text(json.dumps({'status': status, 'tables': results}, indent=2))
 PY
         else
+            # Preserve the target's exit status and termination reason even
+            # when recording fails after creating a trace.
+            if [[ -d "$destination/allocations.trace" ]]; then
+                xcrun xctrace export --input "$destination/allocations.trace" --toc \
+                    --output "$destination/allocations-toc.xml" \
+                    > "$destination/allocations-export.log" 2>&1 || true
+            fi
             echo 'Allocation recording unavailable; inspect allocations-record.log. No allocation totals reported.' > "$destination/allocations-status.txt"
         fi
     fi

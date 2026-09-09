@@ -21,7 +21,7 @@ on:
         required: false
         type: string
       record_allocations:
-        description: Attempt a bounded Instruments Allocations trace of the actual test executable
+        description: Attempt a bounded Instruments Allocations trace of the Swift Testing process
         default: true
         type: boolean
 
