@@ -229,19 +229,24 @@ final class NativeOperatorCall: Sendable {
     let parameters: [BinderID]
     let implementation: NativeOperatorImplementation
     let result: NativeType
-    let inference: NativeTypeInference
+    fileprivate let refinedBindings: [BinderID: NativeType]
+    fileprivate let boundOperators: [OperatorID: NativeCallbackBinding]
     let callbackUses: [OperatorID: [NativeOperatorCall]]
     let callbackArguments: [OperatorID: CompiledFormalOperator]
 
-    init(specialization: NativeOperatorSpecialization, parameters: [BinderID],
+    fileprivate init(specialization: NativeOperatorSpecialization, parameters: [BinderID],
          implementation: NativeOperatorImplementation, result: NativeType,
-         inference: NativeTypeInference, callbackUses: [OperatorID: [NativeOperatorCall]],
+         bindings: [BinderID: NativeType], boundOperators: [OperatorID: NativeCallbackBinding],
+         callbackUses: [OperatorID: [NativeOperatorCall]],
          callbackArguments: [OperatorID: CompiledFormalOperator]) {
-        self.specialization = specialization
+        self.specialization = .init(operation: specialization.operation,
+            arguments: parameters.map { bindings[$0] ?? .unknown }, resultContext: result,
+            captures: specialization.captures, callbacks: specialization.callbacks)
         self.parameters = parameters
         self.implementation = implementation
         self.result = result
-        self.inference = inference
+        refinedBindings = bindings
+        self.boundOperators = boundOperators
         self.callbackUses = callbackUses
         self.callbackArguments = callbackArguments
     }
@@ -439,7 +444,7 @@ struct NativeTypeInference: Sendable {
 
     private mutating func recordCallback(_ id: OperatorID, call: NativeOperatorCall) {
         if !(callbackUses[id] ?? []).contains(where: { existing in
-            existing.result == call.result && existing.parameters.map { existing.inference.bindings[$0] } == call.parameters.map { call.inference.bindings[$0] }
+            existing.result == call.result && existing.specialization.arguments == call.specialization.arguments
         }) {
             callbackUses[id, default: []].append(call)
         }
@@ -1064,10 +1069,10 @@ struct NativeTypeInference: Sendable {
     }
 
     private func capturedValueChecks(
-        _ captures: [BinderID: NativeType], using resolved: NativeTypeInference
+        _ captures: [BinderID: NativeType], using resolved: [BinderID: NativeType]
     ) -> [NativeExpressionCheckTask] {
         captures.compactMap { binder, original in
-            guard let refined = resolved.bindings[binder], refined != original else { return nil }
+            guard let refined = resolved[binder], refined != original else { return nil }
             return .refineCapture(binder, original: original, refined: refined)
         }
     }
@@ -1138,7 +1143,7 @@ struct NativeTypeInference: Sendable {
         let context = try Self.operandContext(specializationResults[key] ?? .unknown, expected)
         if activeOperators.contains(key) {
             return .recursive(.init(specialization: key, parameters: parameters, implementation: .recursive,
-                result: context, inference: self, callbackUses: callbackUses, callbackArguments: callbackArguments))
+                result: context, bindings: bindings, boundOperators: boundOperators, callbackUses: callbackUses, callbackArguments: callbackArguments))
         }
         activeOperators.insert(key)
         specializationResults[key] = context
@@ -1702,10 +1707,9 @@ struct NativeTypeInference: Sendable {
                         domainGuard = try checkOperand(.in(.boundValue(parameter), domain), expected: .bool)
                     } else { domainGuard = nil }
                     specializationResults[operation.specialization] = try Self.operandContext(operation.context, result)
-                    let scoped = self
                     activeOperators.remove(operation.specialization)
                     checkedCalls.append(.init(specialization: operation.specialization, parameters: operation.parameters,
-                        implementation: .checked(body: body, domainGuard: domainGuard), result: result, inference: scoped,
+                        implementation: .checked(body: body, domainGuard: domainGuard), result: result, bindings: bindings, boundOperators: boundOperators,
                         callbackUses: callbackUses, callbackArguments: operation.callbackArguments))
                 case .leaveCall(let call):
                     guard let resolved = checkedCalls.popLast(), var caller = suspendedScopes.popLast() else {
@@ -1724,8 +1728,7 @@ struct NativeTypeInference: Sendable {
                         guard case .value(let value) = argument, case .value(let type, _, _) = checked else { return nil }
                         return (index, value, type)
                     }
-                    for (argument, parameter) in zip(values, resolved.parameters).reversed() {
-                        let refined = resolved.inference.bindings[parameter] ?? .unknown
+                    for (argument, refined) in zip(values, resolved.specialization.arguments).reversed() {
                         if argument.2 != refined {
                             pending.append(contentsOf: [.discard, .retainOperand(argument.0), .check(argument.1, expected: refined)])
                         }
@@ -1733,17 +1736,17 @@ struct NativeTypeInference: Sendable {
                 case .refineCallCaptures(let operation, let resolved):
                     var checks: [NativeExpressionCheckTask] = []
                     if case .reference(let id, _) = operation, let captures = localCaptures[id] {
-                        checks.append(contentsOf: capturedValueChecks(captures, using: resolved.inference))
+                        checks.append(contentsOf: capturedValueChecks(captures, using: resolved.refinedBindings))
                     }
                     for (parameter, uses) in resolved.callbackUses {
                         guard resolved.callbackArguments[parameter] != nil,
-                              let binding = resolved.inference.boundOperators[parameter],
+                              let binding = resolved.boundOperators[parameter],
                               binding.forwardedFrom == nil else { continue }
                         let parameters: Set<BinderID>
                         if case .lambda(let lambda) = binding.operation { parameters = Set(lambda.parameters) }
                         else { parameters = [] }
                         let captures = binding.scope.bindings.filter { !parameters.contains($0.key) }
-                        for use in uses { checks.append(contentsOf: capturedValueChecks(captures, using: use.inference)) }
+                        for use in uses { checks.append(contentsOf: capturedValueChecks(captures, using: use.refinedBindings)) }
                     }
                     pending.append(.forwardCallbacks(resolved))
                     pending.append(contentsOf: checks.reversed())
@@ -1755,7 +1758,7 @@ struct NativeTypeInference: Sendable {
                     for (parameter, uses) in resolved.callbackUses {
                         if resolved.callbackArguments[parameter] == nil, boundOperators[parameter] != nil {
                             for use in uses { recordCallback(parameter, call: use) }
-                        } else if let origin = resolved.inference.boundOperators[parameter]?.forwardedFrom {
+                        } else if let origin = resolved.boundOperators[parameter]?.forwardedFrom {
                             for use in uses { recordCallback(origin, call: use) }
                         }
                     }

@@ -10,7 +10,7 @@ private struct NativeCallbackUseKey: Hashable {
     let result: NativeType
     init(_ operation: OperatorID, _ call: NativeOperatorCall) {
         self.operation = operation
-        parameters = call.parameters.map { call.inference.bindings[$0] ?? .unknown }
+        parameters = call.specialization.arguments
         result = call.result
     }
 }
@@ -192,13 +192,7 @@ private final class NativeProgramResolver {
                 captures[key] = try require(callbackScope[key])
             }
         }
-        let specialization = NativeOperatorSpecialization(
-            operation: call.specialization.operation,
-            arguments: try call.parameters.map { try require(call.inference.bindings[$0]) },
-            resultContext: call.result,
-            captures: call.specialization.captures,
-            callbacks: call.specialization.callbacks)
-        let key = NativeResolvedFunctionKey(specialization: specialization, capturedCallbacks: captures)
+        let key = NativeResolvedFunctionKey(specialization: call.specialization, capturedCallbacks: captures)
         if let id = functionIDs[key] { return id }
         let id = NativeFunctionID(ordinal: functions.count)
         functionIDs[key] = id
@@ -209,8 +203,7 @@ private final class NativeProgramResolver {
             guard call.callbackArguments[operation] != nil else { continue }
             for use in call.callbackUses[operation] ?? [] {
                 let callback = NativeCallbackID(ordinal: callbacks.count)
-                let types = try use.parameters.map { try require(use.inference.bindings[$0]) }
-                callbacks.append(.init(parameters: types, result: use.result))
+                callbacks.append(.init(parameters: use.specialization.arguments, result: use.result))
                 nested[.init(operation, use)] = callback
                 demands.append((operation, use, callback))
             }
@@ -222,7 +215,7 @@ private final class NativeProgramResolver {
         let body = try expression(checkedBody, callbackScope: nested)
         let domainGuard = try checkedGuard.map { try expression($0, callbackScope: nested) }
         functions[id.ordinal] = .init(parameters: call.parameters,
-            parameterTypes: try call.parameters.map { try require(call.inference.bindings[$0]) },
+            parameterTypes: call.specialization.arguments,
             resultType: call.result,
             callbacks: demands.map { $0.2 }, body: body, domainGuard: domainGuard)
         return id
