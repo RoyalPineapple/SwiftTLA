@@ -513,12 +513,12 @@ struct NativeSwiftEmitter {
             return "(try _NativeMachineOperations.sequenceHead(\(try nativeSequenceElements(emit(0), source: source))))"
         case .tupleTail(_):
             let result = node.computationType
-            guard case .array(let element) = result else { throw unsupported("sequence tail result") }
+            guard case .array = result else { throw unsupported("sequence tail result") }
             let source = childType(0)
             return "(try _NativeMachineOperations.sequenceTail(\(try nativeSequenceElements(emit(0), source: source))))"
         case .tupleAppend(_, _):
             let result = node.computationType
-            guard case .array(let element) = result else { throw unsupported("sequence append result") }
+            guard case .array = result else { throw unsupported("sequence append result") }
             let source = childType(0)
             let elements = try nativeSequenceElements("_sequenceValue", source: source)
             return """
@@ -530,7 +530,7 @@ struct NativeSwiftEmitter {
             """
         case .tupleConcatenate(_, _):
             let result = node.computationType
-            guard case .array(let element) = result else { throw unsupported("sequence concatenation result") }
+            guard case .array = result else { throw unsupported("sequence concatenation result") }
             let left = childType(0)
             let right = childType(1)
             return """
@@ -557,7 +557,7 @@ struct NativeSwiftEmitter {
         case .functionLiteral(_, let binding, _):
             guard case .dictionary(let input, let result) = node.computationType else { throw unsupported("function literal") }
             return "Dictionary(uniqueKeysWithValues: try \(try emit(0)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(1))) })"
-        case .functionApply(let function, let argument):
+        case .functionApply(_, let argument):
             if let call = node.call { return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions) }
             let result = node.computationType
             let source = childType(0)
@@ -593,7 +593,7 @@ struct NativeSwiftEmitter {
                 \(access)
             }())
             """
-        case .except(let original, let key, let value):
+        case .except(_, let key, _):
             let originalType = childType(0)
             let update: String
             switch originalType {

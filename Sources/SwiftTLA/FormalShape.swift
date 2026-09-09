@@ -13,7 +13,10 @@ public indirect enum FormalValueShape: Hashable, Sendable {
     public struct Field: Hashable, Sendable {
         public let name: String
         public let shape: FormalValueShape
-        public init(name: String, shape: FormalValueShape) { self.name = name; self.shape = shape }
+        public init(name: String, shape: FormalValueShape) {
+            self.name = name
+            self.shape = shape
+        }
     }
 
     package var isSupported: Bool {
@@ -24,7 +27,9 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         case .tuple(let items): return items.allSatisfy(\.isSupported)
         case .function(let key, let value): return key.isSupported && value.isSupported
         case .union:
-            return alternatives.allSatisfy(\.isSupported) && Set(alternatives.filter { !$0.isScalar }).count <= 1
+            let hasSupportedAlternatives = alternatives.allSatisfy(\.isSupported)
+            let structuralAlternatives = Set(alternatives.filter { !$0.isScalar })
+            return hasSupportedAlternatives && structuralAlternatives.count <= 1
         case .record(let fields):
             let hasUniqueNames = Set(fields.map(\.name)).count == fields.count
             let hasSupportedFields = fields.allSatisfy { $0.shape.isSupported }
