@@ -52,6 +52,25 @@ import Testing
         }
     }
 
+    @Test("nested calls retain checked argument types and reject incompatible result contexts")
+    func nestedValueArguments() throws {
+        let compilation = try TLASpec(name: "NestedCalls", variables: [
+            .init(name: "number", initialization: .value(.int(0)), origin: .compiler)
+        ], actions: [], invariants: [], formalOperatorDefinitions: [
+            .init(name: "Identity", parameters: [.value("value")], body: .variable("value"))
+        ]).compile()
+        let plan = NativeMachinePlan(compilation: compilation)
+        let operation = try #require(plan.formalOperatorDefinitions.first)
+        let inference = try NativeTypeInference(plan: plan)
+        let expression = (0..<8).reduce(CompiledStateExpr.value(.integer(7))) { nested, _ in
+            .operatorApplication(operation.id, [.value(nested)])
+        }
+        #expect(try inference.type(of: expression) == .int)
+        #expect(throws: CompilationDiagnostic.self) {
+            try inference.type(of: expression, expected: .string)
+        }
+    }
+
     @Test("Shared lowering assigns deterministic identities to anonymous functions")
     func loweredFunctionIdentities() throws {
         let spec = TLASpec(name: "AnonymousFunctions", variables: [

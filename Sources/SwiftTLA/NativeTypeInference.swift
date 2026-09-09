@@ -951,11 +951,15 @@ struct NativeTypeInference: Sendable {
         specializationResults.merge(scope.specializationResults) { _, current in current }
         variables = scope.variables
         if let callbackID { recordCallback(callbackID, call: resolved) }
-        let valueArguments = arguments.compactMap { argument -> CompiledStateExpr? in
-            if case .value(let value) = argument { return value }; return nil
+        let valueArguments = zip(arguments, argumentTypes).compactMap { argument, type -> (expression: CompiledStateExpr, type: NativeType)? in
+            guard case .value(let expression) = argument else { return nil }
+            return (expression, type)
         }
-        for (index, parameter) in resolved.parameters.enumerated() {
-            _ = try infer(valueArguments[index], expected: resolved.inference.bindings[parameter] ?? .unknown)
+        for (argument, parameter) in zip(valueArguments, resolved.parameters) {
+            let refined = resolved.inference.bindings[parameter] ?? .unknown
+            if argument.type != refined {
+                _ = try infer(argument.expression, expected: refined)
+            }
         }
         // Local operators can refine values captured from their enclosing
         // operator, including an initially empty recursive accumulator.
