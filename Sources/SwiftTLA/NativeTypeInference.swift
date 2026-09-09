@@ -1124,7 +1124,12 @@ struct NativeTypeInference: Sendable {
             _ = try infer(a, expected: .int); _ = try infer(b, expected: .int); result = .bool
         case .ifThenElse(let condition, let a, let b):
             _ = try infer(condition, expected: .bool)
-            let left = try infer(a, expected: expected); result = try infer(b, expected: left)
+            if expected == .unknown {
+                result = try comparisonOperands(a, b)
+            } else {
+                _ = try infer(a, expected: expected)
+                result = try infer(b, expected: expected)
+            }
         case .setLiteral(let expressions):
             let hint: NativeType = if case .set(let value) = expected { value } else { .unknown }
             var value = hint
