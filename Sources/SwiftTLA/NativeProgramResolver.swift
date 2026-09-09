@@ -153,7 +153,7 @@ private final class NativeProgramResolver {
         }
         switch value {
         case .value, .controlLocation, .enabledAction: break
-        case .assertView(let source, _): children = [try child(source)]
+        case .assertView(let source, _): children = try checkedChildren([source])
         case .stateVariable(let id): computationType = try require(scope.variables[id])
         case .boundValue(let id): computationType = try require(scope.bindings[id])
         case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .modulo(let a, let b), .integerDivide(let a, let b), .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b): try pair(a, b, .int)
@@ -165,7 +165,7 @@ private final class NativeProgramResolver {
         case .ifThenElse(let condition, let a, let b): children = [try child(condition, .bool), try child(a, computationType), try child(b, computationType)]
         case .setLiteral(let values): children = try values.map { try child($0, element(computationType)) }
         case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): try pair(a, b, computationType)
-        case .cardinality(let a): children = [try child(a)]
+        case .cardinality(let a): children = try checkedChildren([a])
         case .sequenceSelect(let sequence, let id, let predicate):
             let item = try element(computationType)
             bindings[id] = item
@@ -173,19 +173,17 @@ private final class NativeProgramResolver {
         case .setFilter(let domain, let id, let body), .choose(let domain, let id, let body):
             let item: NativeType = if case .setFilter = value { try element(computationType) } else { computationType }
             bindings[id] = item
-            children = [try child(domain, .set(item)), try child(body, .bool)]
+            children = try checkedChildren([domain, body])
         case .setMap(let body, let id, let domain):
             let item = try require(scope.bindings[id]); bindings[id] = item
             children = [try child(body, element(computationType)), try child(domain, .set(item))]
         case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
             let item = try require(scope.bindings[id]); bindings[id] = item
             children = [try child(domain, .set(item)), try child(body, .bool)]
-        case .powerSet(let domain): children = [try child(domain, element(computationType))]
-        case .unionAll(let domain): children = [try child(domain, .set(computationType))]
+        case .powerSet(let domain), .unionAll(let domain): children = try checkedChildren([domain])
         case .integerRange(let a, let b): try pair(a, b, .int)
         case .tupleLiteral(let values):
-            if case .tuple(let types) = computationType { children = try zip(values, types).map { try child($0, $1) } }
-            else { children = try values.map { try child($0, element(computationType)) } }
+            children = try checkedChildren(values)
         case .tupleAccess(let source, _), .tupleLength(let source), .tupleHead(let source), .tupleTail(let source),
              .recordAccess(let source, _, _), .domain(let source):
             children = try checkedChildren([source])
@@ -194,11 +192,7 @@ private final class NativeProgramResolver {
         case .tupleAppend(let source, let item), .tupleConcatenate(let source, let item):
             children = try checkedChildren([source, item])
         case .recordLiteral(let record):
-            guard case .record(let fields) = computationType else { return try require(nil as NativeExpressionID?) }
-            children = try record.fields.map { field in
-                guard case .string(let name) = field.key else { return try require(nil as NativeExpressionID?) }
-                return try child(field.value, require(fields.first { $0.name == name }?.type))
-            }
+            children = try checkedChildren(record.fields.map(\.value))
         case .functionLiteral(let domain, let id, let body):
             guard case .dictionary(let key, let item) = computationType else { return try require(nil as NativeExpressionID?) }
             bindings[id] = key; children = [try child(domain, .set(key)), try child(body, item)]
@@ -211,11 +205,10 @@ private final class NativeProgramResolver {
             }
         case .except(let source, let key, let replacement):
             children = try checkedChildren([source, key, replacement])
-        case .sequenceFromSet(let domain): children = [try child(domain, .set(element(computationType)))]
-        case .setSum(let function, let domain): children = [try child(function), try child(domain)]
+        case .sequenceFromSet(let domain): children = try checkedChildren([domain])
+        case .setSum(let function, let domain): children = try checkedChildren([function, domain])
         case .functionSet(let domain, let range):
-            guard case .set(.dictionary(let key, let item)) = computationType else { return try require(nil as NativeExpressionID?) }
-            children = [try child(domain, .set(key)), try child(range, .set(item))]
+            children = try checkedChildren([domain, range])
         case .foldFunction(let operation, let initial, let sequence):
             children = try checkedChildren([operation.body, initial, sequence])
             let source = expressions[children[2].ordinal].resultType

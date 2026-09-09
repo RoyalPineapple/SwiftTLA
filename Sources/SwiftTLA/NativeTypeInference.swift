@@ -457,25 +457,26 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func unionResultType(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeType? {
+    private mutating func checkUnionConstructor(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType? {
         guard case .union(let alternatives) = expected else { return nil }
         switch expression {
         case .value, .setLiteral, .tupleLiteral, .recordLiteral, .functionLiteral,
              .union, .intersection, .setDifference: break
         default: return nil
         }
-        var matches: [(NativeTypeInference, NativeType)] = []
+        var matches: [(scope: NativeTypeInference, checked: NativeCheckedType)] = []
         for alternative in alternatives {
             var candidate = self
-            if let type = try? candidate.infer(expression, expected: alternative) {
-                matches.append((candidate, type))
+            if let checked = try? candidate.inferExpression(expression, expected: alternative) {
+                matches.append((candidate, checked))
             }
         }
         guard matches.count == 1, let match = matches.first else {
             throw Self.diagnostic("union", "expression must belong to exactly one declared union alternative")
         }
-        self = match.0
-        return match.1
+        self = match.scope
+        return .init(type: expected, computationType: match.checked.type,
+            operandTypes: match.checked.operandTypes, call: match.checked.call)
     }
 
     func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> (scope: NativeTypeInference, resultType: NativeType, computationType: NativeType, operandTypes: [NativeType], call: NativeOperatorCall?) {
@@ -1083,10 +1084,10 @@ struct NativeTypeInference: Sendable {
 
     private mutating func inferExpression(
         _ expression: CompiledStateExpr, expected: NativeType = .unknown
-    ) throws -> (type: NativeType, computationType: NativeType, operandTypes: [NativeType], call: NativeOperatorCall?) {
+    ) throws -> NativeCheckedType {
         if isOperatorApplication(expression) {
             let checked = try inferStructuredExpression(expression, expected: expected)
-            return (checked.type, checked.computationType, checked.operandTypes, checked.call)
+            return checked
         }
         let checked: NativeCheckedType
         switch expression {
@@ -1099,7 +1100,7 @@ struct NativeTypeInference: Sendable {
             do { checked = try inferResolved(expression, expected: expected) }
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
         }
-        return (checked.type, checked.computationType, checked.operandTypes, checked.call)
+        return checked
     }
 
     private func annotated(_ diagnostic: CompilationDiagnostic, at expression: CompiledStateExpr) -> CompilationDiagnostic {
@@ -1173,7 +1174,14 @@ struct NativeTypeInference: Sendable {
             else if hint == .unknown, let first = types.first, types.contains(where: { $0 != first }) { result = .tuple(types) }
             else { result = .array(try types.reduce(hint, Self.merge)) }
         }
-        return try checkedType(result, expected: expected)
+        let checked = try checkedType(result, expected: expected)
+        let operands: [NativeType]
+        switch checked.computationType {
+        case .tuple(let types): operands = types
+        case .array(let item): operands = Array(repeating: item, count: expressions.count)
+        default: throw Self.diagnostic("tuple", "expected tuple or sequence representation")
+        }
+        return .init(type: checked.type, computationType: checked.computationType, operandTypes: operands)
     }
 
     private mutating func inferRecordLiteral(_ record: CompiledRecordExpression, expected: NativeType) throws -> NativeCheckedType {
@@ -1185,7 +1193,7 @@ struct NativeTypeInference: Sendable {
             return .init(name: name, type: try infer(field.value, expected: expectedType))
         }
         result = .record(fields.sorted { $0.name < $1.name })
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: fields.map(\.type))
     }
 
     private mutating func inferFunctionApplication(_ function: CompiledStateExpr, key: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1309,7 +1317,7 @@ struct NativeTypeInference: Sendable {
         result = try infer(domain, expected: .set(refined))
         // A predicate can prove a stronger nominal representation than an
         // earlier raw context. Its collection retains that representation.
-        return .init(type: result, computationType: result)
+        return .init(type: result, computationType: result, operandTypes: [result, .bool])
     }
 
     private mutating func inferChoice(_ domain: CompiledStateExpr, binder id: BinderID, predicate body: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1318,8 +1326,9 @@ struct NativeTypeInference: Sendable {
         bindingDomains[id] = literalDomain(domain)
         let initial = try element(infer(domain, expected: .set(expected))); bindings[id] = initial
         _ = try infer(body, expected: .bool)
-        result = try element(infer(domain, expected: .set(bindings[id] ?? initial)))
-        return .init(type: result, computationType: result)
+        let source = try infer(domain, expected: .set(bindings[id] ?? initial))
+        result = try element(source)
+        return .init(type: result, computationType: result, operandTypes: [source, .bool])
     }
 
     private mutating func inferFunctionSet(_ domain: CompiledStateExpr, range: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1330,7 +1339,7 @@ struct NativeTypeInference: Sendable {
         let inferredKey = try element(infer(domain, expected: .set(key)))
         let inferredValue = try element(infer(range, expected: .set(value)))
         result = .set(.dictionary(inferredKey, inferredValue))
-        return try checkedType(result, expected: expected)
+        return try checkedType(result, expected: expected, operandTypes: [.set(inferredKey), .set(inferredValue)])
     }
 
     private mutating func inferFold(_ operation: CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
@@ -1452,8 +1461,7 @@ struct NativeTypeInference: Sendable {
                         switch expression {
                         case .functionLiteral, .setLiteral, .union, .intersection, .setDifference:
                             ancestors.append(expression)
-                            if let constructor = try unionResultType(expression, expected: expected) {
-                                let checked = NativeCheckedType(type: expected, computationType: constructor)
+                            if let checked = try checkUnionConstructor(expression, expected: expected) {
                                 results.append(checked.type)
                                 completed = checked
                                 ancestors.removeLast()
@@ -1901,14 +1909,15 @@ struct NativeTypeInference: Sendable {
     }
 
     private mutating func inferResolved(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedType {
-        if case .union = expected, let constructor = try unionResultType(expression, expected: expected) {
-            return .init(type: expected, computationType: constructor)
+        if case .union = expected, let checked = try checkUnionConstructor(expression, expected: expected) {
+            return checked
         }
         let result: NativeType
         switch expression {
         case .assertView(let value, let shape):
-            _ = try infer(value)
+            let source = try infer(value)
             result = try viewType(shape)
+            return try checkedType(result, expected: expected, operandTypes: [source])
         case .value(let value):
             let type = try literal(value, expected: expected)
             return .init(type: type, computationType: type)
@@ -1922,7 +1931,9 @@ struct NativeTypeInference: Sendable {
             let item = try membershipElement(value: value, domain: domain)
             let checked = try checkedType(.bool, expected: expected)
             return .init(type: checked.type, computationType: checked.computationType, operandTypes: [item, .set(item)])
-        case .cardinality(let value): _ = try infer(value, expected: .set(.unknown)); result = .int
+        case .cardinality(let value):
+            let source = try infer(value, expected: .set(.unknown))
+            return try checkedType(.int, expected: expected, operandTypes: [source])
         case .sequenceSelect(let sequence, let id, let predicate):
             return try inferSequenceSelection(sequence, binder: id, predicate: predicate, expected: expected)
         case .setFilter(let domain, let id, let predicate):
@@ -1931,18 +1942,26 @@ struct NativeTypeInference: Sendable {
             return try inferChoice(domain, binder: id, predicate: body, expected: expected)
         case .sequenceFromSet(let domain):
             let hint: NativeType = if case .array(let value) = expected { value } else { .unknown }
-            result = .array(try element(infer(domain, expected: .set(hint))))
+            let source = try infer(domain, expected: .set(hint))
+            result = .array(try element(source))
+            return try checkedType(result, expected: expected, operandTypes: [source])
         case .powerSet(let domain):
             let hint: NativeType = if case .set(let value) = expected { value } else { .set(.unknown) }
-            result = .set(try infer(domain, expected: hint))
+            let source = try infer(domain, expected: hint)
+            result = .set(source)
+            return try checkedType(result, expected: expected, operandTypes: [source])
         case .unionAll(let domain):
             let hint: NativeType = expected == .unknown ? .set(.unknown) : expected
-            result = try element(infer(domain, expected: .set(hint)))
+            let source = try infer(domain, expected: .set(hint))
+            result = try element(source)
+            return try checkedType(result, expected: expected, operandTypes: [source])
         case .functionSet(let domain, let range):
             return try inferFunctionSet(domain, range: range, expected: expected)
         case .setSum(let function, let domain):
-            let key = try element(infer(domain, expected: .set(.unknown)))
-            _ = try infer(function, expected: .dictionary(key, .int)); result = .int
+            let source = try infer(domain, expected: .set(.unknown))
+            let key = try element(source)
+            let operation = try infer(function, expected: .dictionary(key, .int))
+            return try checkedType(.int, expected: expected, operandTypes: [operation, source])
         case .foldFunction(let operation, let initial, let sequence):
             return try inferFold(operation, initial: initial, sequence: sequence, expected: expected)
         case .tupleLiteral(let expressions): return try inferTupleLiteral(expressions, expected: expected)

@@ -45,6 +45,21 @@ import Testing
         }
     }
 
+    @Test("sequence constructors inside unions preserve nominal member types")
+    func sequenceConstructor() throws {
+        let type = "OneOf<Missing,TupleExpr<Node>>"
+        let program = try resolve(type: type, initial: .tupleLiteral([.int(1), .int(2)]))
+        let root = try #require(program.initializations.values.first)
+        #expect(program[root].computationType == .array(.named("Node")))
+        #expect(program[root].children.count == 2)
+        for child in program[root].children {
+            #expect(program[child].resultType == .named("Node"))
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try resolve(type: type, initial: .tupleLiteral([.int(3)]))
+        }
+    }
+
     @Test("finite-only unions retain deduplicated finite storage")
     func finiteStorage() throws {
         let program = try resolve(type: "OneOf<Node,Node>", initial: .int(1))
