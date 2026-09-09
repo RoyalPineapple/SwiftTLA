@@ -309,6 +309,7 @@ private enum NativeBoundValueCheck {
 
 private enum NativeExpressionCheckTask {
     case check(CompiledStateExpr, expected: NativeType)
+    case boundValue(BinderID, NativeBoundValueCheck, expected: NativeType)
     case call(CompiledStateExpr, CompiledFormalOperator, [CompiledFormalCallArgument], expected: NativeType)
     case enterCall(CompiledStateExpr, CompiledFormalOperator, [CompiledFormalCallArgument], expected: NativeType)
     case finishOperator(NativeOperatorBody)
@@ -1140,13 +1141,19 @@ struct NativeTypeInference: Sendable {
 
     private mutating func checkExpression(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedType {
         switch expression {
-        case .boundValue, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
+        case .boundValue(let id):
+            let check: NativeBoundValueCheck
+            do { check = try checkBoundValue(id, expected: expected) }
+            catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
+            if case .checked(let result) = check { return result }
+            return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
+        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
              .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide,
              .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
              .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral,
              .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate,
              .operatorApplication, .recursiveCall, .lambdaApplication, .functionApply(.operatorReference, _):
-            return try inferStructuredExpression(expression, expected: expected)
+            return try checkWorklist(startingWith: .check(expression, expected: expected))
         default: break
         }
         do {
@@ -1181,7 +1188,7 @@ struct NativeTypeInference: Sendable {
         }
         if expected != .unknown, existing != expected, let evidence = argumentSources[id] {
             let refinement = NativeArgumentRefinement(expression: evidence.expression, bindings: evidence.scope.bindings, expected: expected)
-            if activeArgumentRefinements.insert(refinement).inserted {
+            if !activeArgumentRefinements.contains(refinement) {
                 return .argument(evidence, refinement)
             }
             // Recursive construction proofs share the active obligation's
@@ -1192,7 +1199,7 @@ struct NativeTypeInference: Sendable {
             return .checked(.init(type: expected, computationType: expected))
         }
         if expected != .unknown, existing != expected, let domain = bindingSources[id],
-           activeBindingRefinements.insert(id).inserted {
+           !activeBindingRefinements.contains(id) {
             return .domain(domain)
         }
         if case .finite(let values) = expected, let domain = bindingDomains[id], domain.isSubset(of: Set(values)) {
@@ -1429,9 +1436,9 @@ struct NativeTypeInference: Sendable {
     }
 
     /// Visit operands in source order and retain ancestry for diagnostics.
-    private mutating func inferStructuredExpression(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
+    private mutating func checkWorklist(startingWith task: NativeExpressionCheckTask) throws -> NativeCheckedType {
         // Tasks are appended in reverse execution order.
-        var pending: [NativeExpressionCheckTask] = [.check(expression, expected: expected)]
+        var pending = [task]
         var results: [NativeType] = []
         var ancestors: [CompiledStateExpr] = []
         var completed: NativeCheckedExpression?
@@ -1523,28 +1530,10 @@ struct NativeTypeInference: Sendable {
                             .setElements(elements[...], element: hint),
                         ])
                     case .boundValue(let id):
-                        ancestors.append(expression)
-                        operandFrames.append([:])
-                        switch try checkBoundValue(id, expected: expected) {
-                        case .checked(let checked):
-                            results.append(checked.type)
-                            try finish(checked, in: &self)
-                        case .argument(let source, let refinement):
-                            suspendedScopes.append(self)
-                            var caller = source.scope
-                            caller.activeArgumentRefinements = activeArgumentRefinements
-                            caller.activeOperators = activeOperators
-                            caller.specializationResults.merge(specializationResults) { _, current in current }
-                            self = caller
-                            pending.append(contentsOf: [
-                                .finishArgument(id, refinement),
-                                .check(source.expression, expected: expected),
-                            ])
-                        case .domain(let domain):
-                            pending.append(contentsOf: [
-                                .finishBindingDomain(id),
-                                .check(domain, expected: .set(expected)),
-                            ])
+                        do {
+                            pending.append(.boundValue(id, try checkBoundValue(id, expected: expected), expected: expected))
+                        } catch let diagnostic as CompilationDiagnostic {
+                            throw annotated(diagnostic, at: expression)
                         }
                     case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
                          .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs), .modulo(let lhs, let rhs),
@@ -1987,6 +1976,32 @@ struct NativeTypeInference: Sendable {
                     let checked = try finishExpression(expression, result: result, expected: expected)
                     results.append(checked.type)
                     try finish(checked, in: &self)
+                case .boundValue(let id, let check, let expected):
+                    ancestors.append(.boundValue(id))
+                    operandFrames.append([:])
+                    switch check {
+                    case .checked(let checked):
+                        results.append(checked.type)
+                        try finish(checked, in: &self)
+                    case .argument(let source, let refinement):
+                        activeArgumentRefinements.insert(refinement)
+                        suspendedScopes.append(self)
+                        var caller = source.scope
+                        caller.activeArgumentRefinements = activeArgumentRefinements
+                        caller.activeOperators = activeOperators
+                        caller.specializationResults.merge(specializationResults) { _, current in current }
+                        self = caller
+                        pending.append(contentsOf: [
+                            .finishArgument(id, refinement),
+                            .check(source.expression, expected: expected),
+                        ])
+                    case .domain(let domain):
+                        activeBindingRefinements.insert(id)
+                        pending.append(contentsOf: [
+                            .finishBindingDomain(id),
+                            .check(domain, expected: .set(expected)),
+                        ])
+                    }
                 case .sequenceContext(let element):
                     guard let source = completed, let type = results.popLast() else {
                         throw Self.diagnostic("sequence", "missing checked sequence")
