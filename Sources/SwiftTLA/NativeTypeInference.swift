@@ -321,6 +321,17 @@ private enum NativeExpressionCheckTask {
     case reconcile(CompiledStateExpr, CompiledStateExpr, expected: NativeType)
     case finish(expected: NativeType)
     case completeOccurrence(NativeCheckedType)
+    case recordFields(ArraySlice<CompiledRecordExpression.Field>, expected: NativeType)
+    case finishRecord(expected: NativeType)
+    case updateKey(expected: NativeType)
+    case updateValue(expected: NativeType)
+    case finishUpdate(expected: NativeType)
+    case applicationKey(expected: NativeType)
+    case applicationSource(expected: NativeType)
+    case finishApplication(expected: NativeType)
+    case recordContext(expected: NativeType)
+    case finishRecordAccess(expected: NativeType)
+    case finishSequenceOperation(expected: NativeType)
     case sequenceContext(element: NativeType)
     case sequenceValue(CompiledStateExpr, expected: NativeType)
     case finishSequenceConstruction(expected: NativeType)
@@ -715,17 +726,6 @@ struct NativeTypeInference: Sendable {
     private func projectionStorageType(_ source: NativeType, expected: NativeType) throws -> NativeType {
         if canProjectRead(source, to: expected) { return source }
         return try Self.operandContext(source, expected)
-    }
-
-    private mutating func inferRecordProjectionSource(_ value: CompiledStateExpr, key: CompiledValue, expected: NativeType) throws -> NativeCheckedExpression {
-        let source = try checkOperand(value)
-        if source.resultType == .unknown { return source }
-        guard case .string(let name) = key, case .record(var fields) = source.resultType,
-              let index = fields.firstIndex(where: { $0.name == name }) else {
-            throw Self.diagnostic("recordAccess", "unknown record field")
-        }
-        fields[index] = .init(name: name, type: try projectionStorageType(fields[index].type, expected: expected))
-        return try refineOperand(source, expected: .record(fields))
     }
 
     private mutating func inferDomainSource(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedExpression {
@@ -1173,12 +1173,13 @@ struct NativeTypeInference: Sendable {
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
             if case .checked(let result) = check { return result }
             return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral,
+        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except,
+             .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving,
              .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide,
              .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual,
              .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral,
              .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate,
-             .operatorApplication, .recursiveCall, .lambdaApplication, .functionApply(.operatorReference, _):
+             .operatorApplication, .recursiveCall, .lambdaApplication, .functionApply:
             return try checkWorklist(startingWith: .check(expression, expected: expected))
         default: break
         }
@@ -1272,109 +1273,6 @@ struct NativeTypeInference: Sendable {
         return try retaining(children, in: .init(type: checked.type, computationType: checked.computationType, operandTypes: operands))
     }
 
-    private mutating func inferRecordLiteral(_ record: CompiledRecordExpression, expected: NativeType) throws -> NativeCheckedType {
-        let hints: [NativeField] = if case .record(let fields) = expected { fields } else { [] }
-        var children: [NativeCheckedExpression] = []
-        let fields = try record.fields.map { field -> NativeField in
-            guard case .string(let name) = field.key else { throw Self.diagnostic("record", "non-string field") }
-            let child = try checkOperand(field.value, expected: hints.first { $0.name == name }?.type ?? .unknown)
-            children.append(child)
-            return .init(name: name, type: child.resultType)
-        }
-        return try checkedType(.record(fields.sorted { $0.name < $1.name }), expected: expected, children: children)
-    }
-
-    private mutating func inferFunctionApplication(_ function: CompiledStateExpr, key: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        var source = try checkOperand(function)
-        let base = source.resultType
-        let functionType: NativeType
-        if base == .unknown {
-            source = try checkOperand(function, expected: .dictionary(checkExpression(key).type, expected))
-            functionType = source.resultType
-        }
-        else { functionType = base }
-        var sourceType = functionType
-        let checkedKey: NativeCheckedExpression
-        switch functionType {
-        case .dictionary(let domain, let value):
-            checkedKey = try checkOperand(key, expected: domain)
-            result = try Self.operandContext(value, expected)
-            sourceType = .dictionary(domain, result)
-        case .array(let value):
-            checkedKey = try checkOperand(key, expected: .int)
-            result = try Self.operandContext(value, expected)
-            sourceType = .array(result)
-        case .tuple(let elements):
-            checkedKey = try checkOperand(key, expected: .int)
-            if case .value(.integer(let index)) = key, index >= 1, index <= elements.count {
-                var hints = elements
-                hints[index - 1] = try Self.operandContext(elements[index - 1], expected)
-                sourceType = .tuple(hints)
-                result = hints[index - 1]
-            } else if case .value(.integer) = key, expected != .unknown {
-                result = expected
-            } else {
-                result = try elements.reduce(expected, Self.merge)
-                sourceType = .tuple(elements.map { _ in result })
-            }
-        case .record(let fields):
-            checkedKey = try checkOperand(key, expected: .string)
-            if case .value(.string(let name)) = key {
-                if let selected = fields.first(where: { $0.name == name }) {
-                    result = try Self.operandContext(selected.type, expected)
-                    sourceType = .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) })
-                } else { result = expected }
-            } else {
-                result = try fields.map(\.type).reduce(expected, Self.merge)
-                sourceType = .record(fields.map { .init(name: $0.name, type: result) })
-            }
-        default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
-        }
-        if sourceType != functionType {
-            source = try refineOperand(source, expected: sourceType)
-        }
-        return try checkedType(result, expected: expected, children: [source, checkedKey])
-    }
-
-    private mutating func inferFunctionUpdate(_ function: CompiledStateExpr, key: CompiledStateExpr, value: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        let result: NativeType
-        let checkedKey: NativeCheckedExpression
-        let checkedValue: NativeCheckedExpression
-        let source = try checkOperand(function, expected: expected)
-        let base = source.resultType
-        switch base {
-        case .array(let item):
-            checkedKey = try checkOperand(key, expected: .int)
-            checkedValue = try checkOperand(value, expected: item)
-            result = .array(checkedValue.resultType)
-        case .dictionary(let domain, let item):
-            checkedKey = try checkOperand(key, expected: domain)
-            checkedValue = try checkOperand(value, expected: item)
-            result = .dictionary(domain, checkedValue.resultType)
-        case .record(let fields):
-            checkedKey = try checkOperand(key, expected: .string)
-            if case .value(.string(let name)) = key {
-                checkedValue = try checkOperand(value, expected: fields.first { $0.name == name }?.type ?? .unknown)
-            } else {
-                let replacementType = fields.first?.type ?? .unknown
-                guard fields.allSatisfy({ $0.type == replacementType }) else {
-                    throw Self.diagnostic("except", "dynamic record keys require homogeneous field types")
-                }
-                checkedValue = try checkOperand(value, expected: replacementType)
-            }
-            result = base
-        case .unknown:
-            checkedKey = try checkOperand(key)
-            checkedValue = try checkOperand(value)
-            result = .dictionary(checkedKey.resultType, checkedValue.resultType)
-        default: throw Self.diagnostic("except", "unsupported update shape \(base.swiftType)")
-        }
-        let checked = try checkedType(result, expected: expected)
-        return try retaining([source, checkedKey, checkedValue], in: .init(type: checked.type, computationType: checked.computationType,
-            operandTypes: [checked.computationType, checkedKey.resultType, checkedValue.resultType]))
-    }
-
     private mutating func inferSequenceSelection(_ sequence: CompiledStateExpr, binder id: BinderID, predicate: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
         let hint: NativeType = if case .array(let item) = expected { item } else { .unknown }
         let initial = try inferSequence(sequence)
@@ -1403,48 +1301,11 @@ struct NativeTypeInference: Sendable {
         return try checkedType(body.resultType, expected: expected, children: [body, accumulator, source])
     }
 
-    private mutating func inferSequenceOperation(_ expression: CompiledStateExpr, expected: NativeType) throws -> NativeCheckedType {
-        switch expression {
-        case .tupleDynamicAccess(let value, let index):
-            let index = try checkOperand(index, expected: .int)
-            let source = try inferSequence(value, element: expected)
-            return try checkedType(sequenceElementType(source.resultType), expected: expected, children: [source, index])
-        case .tupleLength(let value):
-            let initial = try checkOperand(value)
-            let source: NativeCheckedExpression
-            if case .tuple = initial.resultType { source = initial }
-            else { source = try refineSequence(initial) }
-            return try checkedType(.int, expected: expected, children: [source])
-        case .tupleHead(let value):
-            let source = try inferSequence(value, element: expected)
-            return try checkedType(sequenceElementType(source.resultType), expected: expected, children: [source])
-        case .tupleTail(let value):
-            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-            let source = try inferSequence(value, element: hint)
-            return try checkedType(.array(sequenceElementType(source.resultType)), expected: expected, children: [source])
-        case .tupleRemoving(let sequence, let index):
-            let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
-            let source = try inferSequence(sequence, element: hint)
-            let index = try checkOperand(index, expected: .int)
-            return try checkedType(.array(sequenceElementType(source.resultType)), expected: expected, children: [source, index])
-        default: throw Self.diagnostic("sequence", "expected a sequence access, length, tail, or removal")
-        }
-    }
-
     private mutating func inferTupleAccess(_ value: CompiledStateExpr, index: Int, expected: NativeType) throws -> NativeCheckedType {
         let source = try inferProjectionSource(value, index: index, expected: expected)
         let result: NativeType
         if case .tuple(let elements) = source.resultType { result = elements[index - 1] }
         else { result = try sequenceElementType(source.resultType) }
-        return try checkedType(result, expected: expected, children: [source])
-    }
-
-    private mutating func inferRecordAccess(_ record: CompiledStateExpr, key: CompiledValue, expected: NativeType) throws -> NativeCheckedType {
-        let source = try inferRecordProjectionSource(record, key: key, expected: expected)
-        let result: NativeType
-        if case .string(let name) = key, case .record(let fields) = source.resultType,
-           let field = fields.first(where: { $0.name == name }) { result = field.type }
-        else { result = .unknown }
         return try checkedType(result, expected: expected, children: [source])
     }
 
@@ -1509,7 +1370,7 @@ struct NativeTypeInference: Sendable {
                 case .check(let expression, let expected):
                     if case .union = expected {
                         switch expression {
-                        case .functionLiteral, .setLiteral, .union, .intersection, .setDifference:
+                        case .functionLiteral, .setLiteral, .recordLiteral, .union, .intersection, .setDifference:
                             ancestors.append(expression)
                             operandFrames.append([:])
                             if let checked = try checkUnionConstructor(expression, expected: expected) {
@@ -1523,6 +1384,47 @@ struct NativeTypeInference: Sendable {
                         }
                     }
                     switch expression {
+                    case .recordAccess(let source, _, _):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [.recordContext(expected: expected), .discard, .retainOperand(0), .check(source, expected: .unknown)])
+                    case .tupleDynamicAccess(let source, let index):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [
+                            .finishSequenceOperation(expected: expected), .discard, .retainOperand(0),
+                            .sequenceContext(element: expected), .check(source, expected: .unknown),
+                            .discard, .retainOperand(1), .check(index, expected: .int)
+                        ])
+                    case .tupleRemoving(let source, let index):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        let hint = if case .array(let element) = expected { element } else { NativeType.unknown }
+                        pending.append(contentsOf: [
+                            .finishSequenceOperation(expected: expected), .discard, .retainOperand(1), .check(index, expected: .int),
+                            .discard, .retainOperand(0), .sequenceContext(element: hint), .check(source, expected: .unknown)
+                        ])
+                    case .tupleLength(let source), .tupleHead(let source), .tupleTail(let source):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        let hint: NativeType
+                        switch expression {
+                        case .tupleHead: hint = expected
+                        case .tupleTail: hint = if case .array(let element) = expected { element } else { .unknown }
+                        default: hint = .unknown
+                        }
+                        pending.append(contentsOf: [
+                            .finishSequenceOperation(expected: expected), .discard, .retainOperand(0),
+                            .sequenceContext(element: hint), .check(source, expected: .unknown)
+                        ])
+                    case .except(let source, _, _):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [.updateKey(expected: expected), .discard, .retainOperand(0), .check(source, expected: expected)])
+                    case .recordLiteral(let record):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [.finishRecord(expected: expected), .recordFields(record.fields[...], expected: expected)])
                     case .tupleAppend(let sequence, let value), .tupleConcatenate(let sequence, let value):
                         ancestors.append(expression)
                         operandFrames.append([:])
@@ -1547,6 +1449,10 @@ struct NativeTypeInference: Sendable {
                         ancestors.append(expression)
                         operandFrames.append([:])
                         pending.append(.call(expression, .reference(id, arity: 1), [.value(argument)], expected: expected))
+                    case .functionApply(let source, _):
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [.applicationKey(expected: expected), .discard, .retainOperand(0), .check(source, expected: .unknown)])
                     case .setLiteral(let elements):
                         ancestors.append(expression)
                         operandFrames.append([:])
@@ -2028,9 +1934,194 @@ struct NativeTypeInference: Sendable {
                             .check(domain, expected: .set(expected)),
                         ])
                     }
+                case .recordContext(let expected):
+                    guard case .recordAccess(_, _, let key) = ancestors.last, let source = operandFrames.last?[0] else {
+                        throw Self.diagnostic("recordAccess", "missing checked record source")
+                    }
+                    pending.append(.finishRecordAccess(expected: expected))
+                    if source.resultType == .unknown { continue }
+                    guard case .string(let name) = key, case .record(var fields) = source.resultType,
+                          let index = fields.firstIndex(where: { $0.name == name }) else {
+                        throw Self.diagnostic("recordAccess", "unknown record field")
+                    }
+                    fields[index] = .init(name: name, type: try projectionStorageType(fields[index].type, expected: expected))
+                    let context = NativeType.record(fields)
+                    if source.resultType != context {
+                        pending.append(contentsOf: [.discard, .retainOperand(0), .check(source.expression, expected: context)])
+                    }
+                case .finishRecordAccess(let expected):
+                    guard case .recordAccess(_, _, let key) = ancestors.last, let source = operandFrames.last?[0] else {
+                        throw Self.diagnostic("recordAccess", "missing checked record source")
+                    }
+                    let result: NativeType
+                    if case .string(let name) = key, case .record(let fields) = source.resultType,
+                       let field = fields.first(where: { $0.name == name }) { result = field.type }
+                    else { result = .unknown }
+                    let checked = try checkedType(result, expected: expected, operandTypes: [source.resultType])
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
+                case .finishSequenceOperation(let expected):
+                    guard let expression = ancestors.last, let operands = operandFrames.last, let source = operands[0] else {
+                        throw Self.diagnostic("sequence", "missing checked sequence source")
+                    }
+                    let result: NativeType
+                    switch expression {
+                    case .tupleLength: result = .int
+                    case .tupleHead, .tupleDynamicAccess: result = try sequenceElementType(source.resultType)
+                    case .tupleTail, .tupleRemoving: result = try .array(sequenceElementType(source.resultType))
+                    default: throw Self.diagnostic("sequence", "unexpected sequence operation")
+                    }
+                    let operandTypes = operands.sorted { $0.key < $1.key }.map { $0.value.resultType }
+                    let checked = try checkedType(result, expected: expected, operandTypes: operandTypes)
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
+                case .applicationKey(let expected):
+                    guard case .functionApply(_, let key) = ancestors.last, let source = operandFrames.last?[0] else {
+                        throw Self.diagnostic("function", "missing checked application source")
+                    }
+                    let keyType: NativeType
+                    switch source.resultType {
+                    case .unknown:
+                        pending.append(contentsOf: [.applicationSource(expected: expected), .check(key, expected: .unknown)])
+                        continue
+                    case .dictionary(let domain, _): keyType = domain
+                    case .array, .tuple: keyType = .int
+                    case .record: keyType = .string
+                    default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
+                    }
+                    pending.append(contentsOf: [.finishApplication(expected: expected), .discard, .retainOperand(1), .check(key, expected: keyType)])
+                case .applicationSource(let expected):
+                    guard case .functionApply(let source, _) = ancestors.last, let keyType = results.popLast() else {
+                        throw Self.diagnostic("function", "missing inferred application domain")
+                    }
+                    pending.append(contentsOf: [
+                        .applicationKey(expected: expected), .discard, .retainOperand(0),
+                        .check(source, expected: .dictionary(keyType, expected))
+                    ])
+                case .finishApplication(let expected):
+                    guard case .functionApply(_, let key) = ancestors.last,
+                          let operands = operandFrames.last, let source = operands[0], let checkedKey = operands[1] else {
+                        throw Self.diagnostic("function", "missing checked application operands")
+                    }
+                    let result: NativeType
+                    var sourceType = source.resultType
+                    switch source.resultType {
+                    case .dictionary(let domain, let value):
+                        result = try Self.operandContext(value, expected)
+                        sourceType = .dictionary(domain, result)
+                    case .array(let value):
+                        result = try Self.operandContext(value, expected)
+                        sourceType = .array(result)
+                    case .tuple(let elements):
+                        if case .value(.integer(let index)) = key, index >= 1, index <= elements.count {
+                            var hints = elements
+                            hints[index - 1] = try Self.operandContext(elements[index - 1], expected)
+                            sourceType = .tuple(hints)
+                            result = hints[index - 1]
+                        } else if case .value(.integer) = key, expected != .unknown {
+                            result = expected
+                        } else {
+                            result = try elements.reduce(expected, Self.merge)
+                            sourceType = .tuple(elements.map { _ in result })
+                        }
+                    case .record(let fields):
+                        if case .value(.string(let name)) = key {
+                            if let selected = fields.first(where: { $0.name == name }) {
+                                result = try Self.operandContext(selected.type, expected)
+                                sourceType = .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) })
+                            } else { result = expected }
+                        } else {
+                            result = try fields.map(\.type).reduce(expected, Self.merge)
+                            sourceType = .record(fields.map { .init(name: $0.name, type: result) })
+                        }
+                    default: throw Self.diagnostic("function", "expected a native dictionary, sequence, or record")
+                    }
+                    let checked = try checkedType(result, expected: expected, operandTypes: [sourceType, checkedKey.resultType])
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
+                case .updateKey(let expected):
+                    guard case .except(_, let key, _) = ancestors.last, let source = operandFrames.last?[0] else {
+                        throw Self.diagnostic("except", "missing checked update source")
+                    }
+                    let keyType: NativeType
+                    switch source.resultType {
+                    case .array: keyType = .int
+                    case .dictionary(let domain, _): keyType = domain
+                    case .record: keyType = .string
+                    case .unknown: keyType = .unknown
+                    default: throw Self.diagnostic("except", "unsupported update shape \(source.resultType.swiftType)")
+                    }
+                    pending.append(contentsOf: [.updateValue(expected: expected), .discard, .retainOperand(1), .check(key, expected: keyType)])
+                case .updateValue(let expected):
+                    guard case .except(_, let key, let value) = ancestors.last, let source = operandFrames.last?[0] else {
+                        throw Self.diagnostic("except", "missing checked update key")
+                    }
+                    let valueType: NativeType
+                    switch source.resultType {
+                    case .array(let item), .dictionary(_, let item): valueType = item
+                    case .record(let fields):
+                        if case .value(.string(let name)) = key {
+                            valueType = fields.first { $0.name == name }?.type ?? .unknown
+                        } else {
+                            let item = fields.first?.type ?? .unknown
+                            guard fields.allSatisfy({ $0.type == item }) else {
+                                throw Self.diagnostic("except", "dynamic record keys require homogeneous field types")
+                            }
+                            valueType = item
+                        }
+                    case .unknown: valueType = .unknown
+                    default: throw Self.diagnostic("except", "unsupported update shape \(source.resultType.swiftType)")
+                    }
+                    pending.append(contentsOf: [.finishUpdate(expected: expected), .discard, .retainOperand(2), .check(value, expected: valueType)])
+                case .finishUpdate(let expected):
+                    guard let operands = operandFrames.last,
+                          let source = operands[0], let key = operands[1], let value = operands[2] else {
+                        throw Self.diagnostic("except", "missing checked update operands")
+                    }
+                    let result: NativeType
+                    switch source.resultType {
+                    case .array: result = .array(value.resultType)
+                    case .dictionary(let domain, _): result = .dictionary(domain, value.resultType)
+                    case .record: result = source.resultType
+                    case .unknown: result = .dictionary(key.resultType, value.resultType)
+                    default: throw Self.diagnostic("except", "unsupported update shape \(source.resultType.swiftType)")
+                    }
+                    let checked = try checkedType(result, expected: expected)
+                    results.append(checked.type)
+                    try finish(.init(type: checked.type, computationType: checked.computationType,
+                        operandTypes: [checked.computationType, key.resultType, value.resultType]), in: &self)
+                case .recordFields(var remaining, let expected):
+                    guard let field = remaining.popFirst() else { continue }
+                    guard case .string(let name) = field.key else {
+                        throw Self.diagnostic("record", "non-string field")
+                    }
+                    let hints: [NativeField] = if case .record(let fields) = expected { fields } else { [] }
+                    pending.append(contentsOf: [
+                        .recordFields(remaining, expected: expected), .discard,
+                        .retainOperand(remaining.startIndex - 1),
+                        .check(field.value, expected: hints.first { $0.name == name }?.type ?? .unknown)
+                    ])
+                case .finishRecord(let expected):
+                    guard case .recordLiteral(let record) = ancestors.last, let operands = operandFrames.last else {
+                        throw Self.diagnostic("record", "missing checked record")
+                    }
+                    let fields = try record.fields.enumerated().map { index, field -> NativeField in
+                        guard case .string(let name) = field.key, let child = operands[index] else {
+                            throw Self.diagnostic("record", "missing checked field")
+                        }
+                        return .init(name: name, type: child.resultType)
+                    }
+                    let operandTypes = fields.map(\.type)
+                    let checked = try checkedType(.record(fields.sorted { $0.name < $1.name }), expected: expected, operandTypes: operandTypes)
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
                 case .sequenceContext(let element):
                     guard let source = completed, let type = results.popLast() else {
                         throw Self.diagnostic("sequence", "missing checked sequence")
+                    }
+                    if case .tupleLength = ancestors.last, case .tuple = type {
+                        results.append(type)
+                        continue
                     }
                     let context = try sequenceContext(type, element: element)
                     if type == context { results.append(type) }
@@ -2188,13 +2279,6 @@ struct NativeTypeInference: Sendable {
         case .tupleLiteral(let expressions): return try inferTupleLiteral(expressions, expected: expected)
         case .tupleAccess(let value, let index):
             return try inferTupleAccess(value, index: index, expected: expected)
-        case .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving:
-            return try inferSequenceOperation(expression, expected: expected)
-        case .recordLiteral(let record): return try inferRecordLiteral(record, expected: expected)
-        case .recordAccess(let record, _, let key):
-            return try inferRecordAccess(record, key: key, expected: expected)
-        case .functionApply(let function, let key): return try inferFunctionApplication(function, key: key, expected: expected)
-        case .except(let function, let key, let value): return try inferFunctionUpdate(function, key: key, value: value, expected: expected)
         case .domain(let function):
             return try inferDomain(function, expected: expected)
         case .caseExpr(let first, let rest, let otherwise):

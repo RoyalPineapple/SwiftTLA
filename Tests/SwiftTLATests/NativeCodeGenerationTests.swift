@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 import SwiftParser
@@ -155,5 +156,15 @@ extension NativeCodeGenerationTests {
         let syntax = Parser.parse(source: "struct Expansion {\n\(generated)\n}")
         let diagnostics = ParseDiagnosticsGenerator.diagnostics(for: syntax).map(\.message)
         #expect(!syntax.hasError, "\(diagnostics)")
+    }
+}
+
+extension NativeCodeGenerationTests {
+    @Test("KVsnap type checking handles nested collection operators on a test worker")
+    func kvsnapTypeChecking() throws {
+        let sourceURL = packageRoot().appendingPathComponent("Sources/UpstreamParity/CanonicalCorpus/KVsnap.swift")
+        let source = Parser.parse(source: try String(contentsOf: sourceURL, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap { $0.item.as(StructDeclSyntax.self) }.first)
+        _ = try TLASpecVerifier.parseAndVerify(declaration)
     }
 }
