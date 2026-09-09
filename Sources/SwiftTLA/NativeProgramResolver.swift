@@ -123,7 +123,6 @@ private final class NativeProgramResolver {
             guard checked.children.count == resolved.parameters.count else { return try require(nil) }
             call = try resolveCall(resolved, operation: operation, operatorParameters: checked.operatorParameters, callbackScope: callbackScope)
         } else {
-            guard checked.children.count == checked.operandTypes.count else { return try require(nil) }
             call = nil
         }
         let children = try checked.children.map { try expression($0, callbackScope: callbackScope) }

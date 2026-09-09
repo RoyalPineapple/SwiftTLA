@@ -101,7 +101,7 @@ struct NativeTypeEvidenceTests {
         let literal = CompiledStateExpr.value(.string("a"))
         for expression in [CompiledStateExpr.equal(literal, member), .equal(member, literal)] {
             let checked = try evidence.resolutionScope(expression, expected: .bool)
-            #expect(checked.operandTypes == [.named("Member"), .named("Member")])
+            #expect(checked.children.map(\.resultType) == [.named("Member"), .named("Member")])
         }
         #expect(throws: CompilationDiagnostic.self) {
             try evidence.type(of: .add(member, .value(.integer(1))))
@@ -216,11 +216,11 @@ struct NativeTypeEvidenceTests {
         let evidence = try NativeTypeInference(compilation: canonicalTestSpec().compile(), sourceTypes: .init(enums: ["Process": [.int(1)]]))
         let namedTuple = CompiledStateExpr.tupleLiteral([.value(.integer(1)), .value(.string("other"))])
         let namedRead = try evidence.resolutionScope(.tupleAccess(namedTuple, 1), expected: .named("Process"))
-        #expect(namedRead.operandTypes == [.tuple([.named("Process"), .string])])
+        #expect(namedRead.children.map(\.resultType) == [.tuple([.named("Process"), .string])])
         let finite = NativeType.finite([.constant("member")])
         let finiteTuple = CompiledStateExpr.value(.tuple([.constant("member"), .integer(1)]))
         let finiteRead = try evidence.resolutionScope(.tupleAccess(finiteTuple, 1), expected: finite)
-        #expect(finiteRead.operandTypes == [.tuple([finite, .int])])
+        #expect(finiteRead.children.map(\.resultType) == [.tuple([finite, .int])])
     }
 
     @Test("Recursive record schema metadata fails with a typed diagnostic")

@@ -76,7 +76,7 @@ struct NativeMembershipContextTests {
         #expect(evidence.variables[compilation.layout.variables[0].id] == .tuple([.int, .named("Value")]))
         let constraint = try #require(compilation.semantics.constraint)
         let checked = try evidence.resolutionScope(constraint, expected: .bool)
-        #expect(checked.operandTypes == [.named("Value"), .set(.named("Value"))])
+        #expect(checked.children.map(\.resultType) == [.named("Value"), .set(.named("Value"))])
     }
 
     @Test("Membership context rejects a literal outside its declared enum domain")

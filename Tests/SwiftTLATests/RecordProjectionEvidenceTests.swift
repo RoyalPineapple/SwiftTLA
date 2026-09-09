@@ -7,7 +7,7 @@ import Testing
         let compilation = try compileSpecification(key: .value(.constant("first")))
         let inference = try NativeTypeInference(compilation: compilation, sourceTypes: metadata)
         let checked = try inference.resolutionScope(compilation.semantics.formalOperatorDefinitions[0].body, expected: .named("Key"))
-        let source = try #require(checked.operandTypes.first)
+        let source = try #require(checked.children.first?.resultType)
         #expect(source == .record([
             .init(name: "key", type: .named("Key")),
             .init(name: "valid", type: .bool)

@@ -270,17 +270,14 @@ struct NativeCheckedType: Sendable {
     }
 }
 
-/// A checked occurrence retains operand types; lexical scopes belong to the checker.
+/// The finished occurrence owns its types; operand types belong to its children.
 struct NativeCheckedExpression: Sendable {
     let expression: CompiledStateExpr
     let operatorParameters: Set<OperatorID>
-    let annotation: NativeCheckedType
-
-    var resultType: NativeType { annotation.type }
-    var computationType: NativeType { annotation.computationType }
-    var operandTypes: [NativeType] { annotation.operandTypes }
-    var call: NativeOperatorCall? { annotation.call }
-    var children: [NativeCheckedExpression] { annotation.children }
+    let resultType: NativeType
+    let computationType: NativeType
+    let call: NativeOperatorCall?
+    let children: [NativeCheckedExpression]
 }
 
 private struct NativeOperatorBody {
@@ -558,19 +555,19 @@ struct NativeTypeInference: Sendable {
              .union, .intersection, .setDifference: break
         default: return nil
         }
-        var matches: [(scope: NativeTypeInference, checked: NativeCheckedType)] = []
+        var matches: [(scope: NativeTypeInference, checked: NativeCheckedExpression)] = []
         for alternative in alternatives {
             var candidate = self
             if let checked = try? candidate.checkOperand(expression, expected: alternative) {
-                matches.append((candidate, checked.annotation))
+                matches.append((candidate, checked))
             }
         }
         guard matches.count == 1, let match = matches.first else {
             throw Self.diagnostic("union", "expression must belong to exactly one declared union alternative")
         }
         self = match.scope
-        return .init(type: expected, computationType: match.checked.type,
-            operandTypes: match.checked.operandTypes, call: match.checked.call, children: match.checked.children)
+        return .init(type: expected, computationType: match.checked.resultType,
+            operandTypes: match.checked.children.map(\.resultType), call: match.checked.call, children: match.checked.children)
     }
 
     func resolutionScope(_ expression: CompiledStateExpr, expected: NativeType?) throws -> NativeCheckedExpression {
@@ -586,7 +583,9 @@ struct NativeTypeInference: Sendable {
     }
 
     private func checkedOccurrence(_ expression: CompiledStateExpr, annotation: NativeCheckedType) -> NativeCheckedExpression {
-        .init(expression: expression, operatorParameters: annotation.call == nil ? [] : Set(boundOperators.keys), annotation: annotation)
+        .init(expression: expression, operatorParameters: annotation.call == nil ? [] : Set(boundOperators.keys),
+            resultType: annotation.type, computationType: annotation.computationType,
+            call: annotation.call, children: annotation.children)
     }
 
     private mutating func refineOperand(_ checked: NativeCheckedExpression, expected: NativeType) throws -> NativeCheckedExpression {

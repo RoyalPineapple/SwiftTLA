@@ -20,7 +20,7 @@ import Testing
             #expect(checked.resultType == .int)
             #expect(checked.computationType == .named("Node"))
             if case .functionApply = expression {
-                #expect(checked.operandTypes == [.dictionary(.int, .named("Node")), .int])
+                #expect(checked.children.map(\.resultType) == [.dictionary(.int, .named("Node")), .int])
             }
         }
     }
@@ -76,7 +76,7 @@ import Testing
         let checked = try checker.resolutionScope(function, expected: expected)
         #expect(checked.resultType == expected)
         #expect(checked.computationType == .dictionary(.int, .int))
-        #expect(checked.operandTypes == [.set(.int), .int])
+        #expect(checked.children.map(\.resultType) == [.set(.int), .int])
     }
 
     @Test("predicate operands retain nominal context in the resolved graph")
