@@ -100,6 +100,32 @@ import Testing
         }
     }
 
+    @Test("unused enclosing arguments do not duplicate local function specializations")
+    func localFunctionsCaptureOnlyReferencedValues() throws {
+        let operation = FormalOperatorDefinition(name: "Outer", parameters: [.value("value"), .value("unused")], body: .letIn([
+            .init("Read", parameters: [], body: .variable("value")),
+            .init("Forward", parameters: [], body: .recursiveCall("Read", []))
+        ], .recursiveCall("Forward", [])))
+        let first = StateExpr.operatorApplication(.reference("Outer", arity: 2), [.value(.int(1)), .value(.bool(true))])
+        let second = StateExpr.operatorApplication(.reference("Outer", arity: 2), [.value(.int(2)), .value(.value(.string("unused")))])
+        let plan = NativeMachinePlan(compilation: try TLASpec(name: "LocalCaptures", variables: [], actions: [],
+            invariants: [.init(name: "Comparison", body: .lessThan(first, second))],
+            formalOperatorDefinitions: [operation]).compile())
+        let outer = try #require(plan.formalOperatorDefinitions.first)
+        guard case .letIn(let definitions, _) = outer.body,
+              case .value(let value) = outer.parameters[0] else {
+            Issue.record("Expected local definitions inside a value-parameterized operator")
+            return
+        }
+        #expect(definitions[0].capturedBindings == [value])
+        #expect(definitions[1].capturedBindings.isEmpty)
+        #expect(definitions[1].referencedOperators == [definitions[0].id])
+        let program = try NativeResolvedProgram(plan: plan)
+        let locals = program.functions.filter { $0.parameters.isEmpty }
+        #expect(locals.count == 2)
+        #expect(locals.allSatisfy { $0.resultType == .int })
+    }
+
     @Test("recursive calls reference a finite registered function graph")
     func recursiveBodiesUseBackReferences() throws {
         let operation = FormalOperatorDefinition(name: "CountDown", parameters: [.value("value")], body: .ifThenElse(

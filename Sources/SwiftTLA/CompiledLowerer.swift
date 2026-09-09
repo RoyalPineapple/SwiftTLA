@@ -10,6 +10,13 @@ private enum StateLoweringTask {
 private struct LoweredStateExpression {
     let expression: CompiledStateExpr
     let operatorReferences: Set<OperatorID>
+    let bindingReferences: Set<BinderID>
+
+    init(expression: CompiledStateExpr, operatorReferences: Set<OperatorID>, bindingReferences: Set<BinderID> = []) {
+        self.expression = expression
+        self.operatorReferences = operatorReferences
+        self.bindingReferences = bindingReferences
+    }
 }
 
 private enum ActionLoweringTask {
@@ -860,7 +867,10 @@ struct CompiledLowerer {
                     let references: Set<OperatorID>
                     if case .operatorReference(let operation) = expression { references = [operation] }
                     else { references = [] }
-                    lowered.append(.init(expression: expression, operatorReferences: references))
+                    let bindings: Set<BinderID>
+                    if case .boundValue(let binder) = expression { bindings = [binder] }
+                    else { bindings = [] }
+                    lowered.append(.init(expression: expression, operatorReferences: references, bindingReferences: bindings))
                 case .controlLocation(let reference):
                     let matches = layout.controlLocations.filter { location in
                         location.sourceName == reference.sourceName
@@ -1190,6 +1200,7 @@ struct CompiledLowerer {
                     }
                     children.append((body, "\(path).body"))
                     childScopes.append(nested)
+                    let enclosingBindings = Set(scope.values.values)
                     tasks.append(.build(childCount: children.count, path: path) { plans in
                         var index = 0
                         var declarations: [(
@@ -1197,7 +1208,8 @@ struct CompiledLowerer {
                             parameters: [BinderID],
                             domain: CompiledStateExpr?,
                             body: CompiledStateExpr,
-                            references: Set<OperatorID>
+                            references: Set<OperatorID>,
+                            captures: Set<BinderID>
                         )] = []
                         for binding in bindings {
                             let domain: LoweredStateExpression?
@@ -1214,7 +1226,8 @@ struct CompiledLowerer {
                                 binding.parameters,
                                 domain?.expression,
                                 body.expression,
-                                body.operatorReferences.union(domain?.operatorReferences ?? [])
+                                body.operatorReferences.union(domain?.operatorReferences ?? []),
+                                body.bindingReferences.union(domain?.bindingReferences ?? []).intersection(enclosingBindings)
                             ))
                         }
                         guard index == plans.count - 1, let body = plans.last else {
@@ -1246,12 +1259,15 @@ struct CompiledLowerer {
                                         parameters: $0.parameters,
                                         domain: $0.domain,
                                         body: $0.body,
-                                        isRecursive: recursive.contains($0.id)
+                                        isRecursive: recursive.contains($0.id),
+                                        capturedBindings: $0.captures,
+                                        referencedOperators: $0.references
                                     )
                                 },
                                 body.expression
                             ),
-                            operatorReferences: references
+                            operatorReferences: references,
+                            bindingReferences: plans.reduce(into: Set<BinderID>()) { $0.formUnion($1.bindingReferences) }
                         )
                     })
                     for (index, child) in children.enumerated().reversed() {
@@ -1288,12 +1304,15 @@ struct CompiledLowerer {
     ) {
         tasks.append(.build(childCount: children.count, path: path) { children in
             var references = operatorReferences
+            var bindings: Set<BinderID> = []
             for child in children {
                 references.formUnion(child.operatorReferences)
+                bindings.formUnion(child.bindingReferences)
             }
             return .init(
                 expression: try build(children.map(\.expression)),
-                operatorReferences: references
+                operatorReferences: references,
+                bindingReferences: bindings
             )
         })
         for (index, child) in children.enumerated().reversed() {

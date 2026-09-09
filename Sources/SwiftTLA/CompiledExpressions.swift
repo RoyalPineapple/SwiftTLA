@@ -509,6 +509,10 @@ package struct CompiledLocalOperator: Hashable, Sendable {
     package let domain: CompiledStateExpr?
     package let body: CompiledStateExpr
     package let isRecursive: Bool
+    /// Lexically enclosing values read by this declaration, including nested bodies.
+    package let capturedBindings: Set<BinderID>
+    /// Calls can also depend on the captures of other local declarations.
+    package let referencedOperators: Set<OperatorID>
 }
 
 package indirect enum CompiledActionExpr: Sendable {

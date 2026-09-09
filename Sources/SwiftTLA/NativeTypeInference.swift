@@ -1543,9 +1543,10 @@ struct NativeTypeInference: Sendable {
                 scopes.append(body)
                 body = next
             case .letIn(let definitions, let next):
+                for definition in definitions { localOperators[definition.id] = definition }
                 for definition in definitions {
-                    localOperators[definition.id] = definition
-                    localCaptures[definition.id] = bindings
+                    let captures = capturedBindings(of: definition)
+                    localCaptures[definition.id] = bindings.filter { captures.contains($0.key) }
                 }
                 scopes.append(body)
                 body = next
@@ -1557,6 +1558,18 @@ struct NativeTypeInference: Sendable {
                 }
             }
         }
+    }
+
+    private func capturedBindings(of definition: CompiledLocalOperator) -> Set<BinderID> {
+        var captures = definition.capturedBindings
+        var pending = Array(definition.referencedOperators)
+        var visited: Set<OperatorID> = [definition.id]
+        while let id = pending.popLast() {
+            guard visited.insert(id).inserted, let referenced = localOperators[id] else { continue }
+            captures.formUnion(referenced.capturedBindings)
+            pending.append(contentsOf: referenced.referencedOperators)
+        }
+        return captures
     }
 
     private mutating func inferSetLiteral(_ expressions: [CompiledStateExpr], expected: NativeType) throws -> NativeCheckedType {
