@@ -1860,10 +1860,10 @@ struct NativeTypeInference: Sendable {
                     completed = checked
                     ancestors.removeLast()
                 case .finish(let expected):
-                    guard let result = results.popLast() else {
+                    guard let result = results.popLast(), let expression = ancestors.last else {
                         throw Self.diagnostic("checking", "missing checked expression type")
                     }
-                    let checked = try checkedType(result, expected: expected)
+                    let checked = try finishExpression(expression, result: result, expected: expected)
                     results.append(checked.type)
                     completed = checked
                     ancestors.removeLast()
@@ -1888,6 +1888,40 @@ struct NativeTypeInference: Sendable {
         return completed
     }
 
+    private func finishExpression(
+        _ expression: CompiledStateExpr, result: NativeType, expected: NativeType
+    ) throws -> NativeCheckedType {
+        let checked = try checkedType(result, expected: expected)
+        let type = checked.computationType
+        let operands: [NativeType]
+        switch expression {
+        case .add, .subtract, .multiply, .divide, .integerDivide, .modulo,
+             .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange:
+            operands = [.int, .int]
+        case .negate: operands = [.int]
+        case .and, .or: operands = [.bool, .bool]
+        case .not: operands = [.bool]
+        case .ifThenElse: operands = [.bool, type, type]
+        case .union, .intersection, .setDifference: operands = [type, type]
+        case .setLiteral(let values):
+            operands = Array(repeating: try element(type), count: values.count)
+        case .letValue(let id, _, _): operands = [bindings[id] ?? .unknown, type]
+        case .letIn: operands = [type]
+        case .functionLiteral:
+            guard case .dictionary(let key, let value) = type else {
+                throw Self.diagnostic("function", "expected dictionary representation")
+            }
+            operands = [.set(key), value]
+        case .setMap(_, let id, _):
+            operands = [try element(type), .set(bindings[id] ?? .unknown)]
+        case .forAll(_, let id, _), .exists(_, let id, _):
+            operands = [.set(bindings[id] ?? .unknown), .bool]
+        default:
+            throw Self.diagnostic("checking", "missing operand types for \(expression.diagnosticName)")
+        }
+        return .init(type: checked.type, computationType: type, operandTypes: operands)
+    }
+
     private func capturedBindings(of definition: CompiledLocalOperator) -> Set<BinderID> {
         var captures = definition.capturedBindings
         var pending = Array(definition.referencedOperators)
@@ -1905,7 +1939,10 @@ struct NativeTypeInference: Sendable {
         var type = expected
         for branch in [first] + rest { _ = try infer(branch.condition, expected: .bool); type = try infer(branch.value, expected: type) }
         if let otherwise { type = try infer(otherwise, expected: type) }; result = type
-        return try checkedType(result, expected: expected)
+        let checked = try checkedType(result, expected: expected)
+        let operands = ([first] + rest).flatMap { _ in [NativeType.bool, checked.computationType] }
+            + (otherwise == nil ? [] : [checked.computationType])
+        return .init(type: checked.type, computationType: checked.computationType, operandTypes: operands)
     }
 
     private mutating func inferResolved(_ expression: CompiledStateExpr, expected: NativeType = .unknown) throws -> NativeCheckedType {

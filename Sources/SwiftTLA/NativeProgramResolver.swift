@@ -135,12 +135,11 @@ private final class NativeProgramResolver {
         var children: [NativeExpressionID] = []
         var bindings: [BinderID: NativeType] = [:]
         var call: NativeResolvedCall?
-        func child(_ expression: CompiledStateExpr, _ type: NativeType? = nil) throws -> NativeExpressionID {
-            try self.expression(expression, expected: type, scope: scope, callbackScope: callbackScope)
-        }
         func checkedChildren(_ values: [CompiledStateExpr]) throws -> [NativeExpressionID] {
             guard values.count == resolution.operandTypes.count else { return try require(nil) }
-            return try zip(values, resolution.operandTypes).map { try child($0, $1) }
+            return try zip(values, resolution.operandTypes).map { expression, type in
+                try self.expression(expression, expected: type, scope: scope, callbackScope: callbackScope)
+            }
         }
         func element(_ source: NativeType) throws -> NativeType {
             switch source {
@@ -148,23 +147,20 @@ private final class NativeProgramResolver {
             default: return try require(nil as NativeType?)
             }
         }
-        func pair(_ lhs: CompiledStateExpr, _ rhs: CompiledStateExpr, _ type: NativeType) throws {
-            children = [try child(lhs, type), try child(rhs, type)]
-        }
         switch value {
         case .value, .controlLocation, .enabledAction: break
         case .assertView(let source, _): children = try checkedChildren([source])
         case .stateVariable(let id): computationType = try require(scope.variables[id])
         case .boundValue(let id): computationType = try require(scope.bindings[id])
-        case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .modulo(let a, let b), .integerDivide(let a, let b), .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b): try pair(a, b, .int)
-        case .negate(let a): children = [try child(a, .int)]
-        case .and(let a, let b), .or(let a, let b): try pair(a, b, .bool)
-        case .not(let a): children = [try child(a, .bool)]
+        case .add(let a, let b), .subtract(let a, let b), .multiply(let a, let b), .divide(let a, let b), .modulo(let a, let b), .integerDivide(let a, let b), .lessThan(let a, let b), .lessOrEqual(let a, let b), .greaterThan(let a, let b), .greaterOrEqual(let a, let b): children = try checkedChildren([a, b])
+        case .negate(let a): children = try checkedChildren([a])
+        case .and(let a, let b), .or(let a, let b): children = try checkedChildren([a, b])
+        case .not(let a): children = try checkedChildren([a])
         case .equal(let a, let b), .notEqual(let a, let b), .subset(let a, let b), .in(let a, let b):
             children = try checkedChildren([a, b])
-        case .ifThenElse(let condition, let a, let b): children = [try child(condition, .bool), try child(a, computationType), try child(b, computationType)]
-        case .setLiteral(let values): children = try values.map { try child($0, element(computationType)) }
-        case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): try pair(a, b, computationType)
+        case .ifThenElse(let condition, let a, let b): children = try checkedChildren([condition, a, b])
+        case .setLiteral(let values): children = try checkedChildren(values)
+        case .union(let a, let b), .intersection(let a, let b), .setDifference(let a, let b): children = try checkedChildren([a, b])
         case .cardinality(let a): children = try checkedChildren([a])
         case .sequenceSelect(let sequence, let id, let predicate):
             let item = try element(computationType)
@@ -176,12 +172,12 @@ private final class NativeProgramResolver {
             children = try checkedChildren([domain, body])
         case .setMap(let body, let id, let domain):
             let item = try require(scope.bindings[id]); bindings[id] = item
-            children = [try child(body, element(computationType)), try child(domain, .set(item))]
+            children = try checkedChildren([body, domain])
         case .forAll(let domain, let id, let body), .exists(let domain, let id, let body):
             let item = try require(scope.bindings[id]); bindings[id] = item
-            children = [try child(domain, .set(item)), try child(body, .bool)]
+            children = try checkedChildren([domain, body])
         case .powerSet(let domain), .unionAll(let domain): children = try checkedChildren([domain])
-        case .integerRange(let a, let b): try pair(a, b, .int)
+        case .integerRange(let a, let b): children = try checkedChildren([a, b])
         case .tupleLiteral(let values):
             children = try checkedChildren(values)
         case .tupleAccess(let source, _), .tupleLength(let source), .tupleHead(let source), .tupleTail(let source),
@@ -194,8 +190,9 @@ private final class NativeProgramResolver {
         case .recordLiteral(let record):
             children = try checkedChildren(record.fields.map(\.value))
         case .functionLiteral(let domain, let id, let body):
-            guard case .dictionary(let key, let item) = computationType else { return try require(nil as NativeExpressionID?) }
-            bindings[id] = key; children = [try child(domain, .set(key)), try child(body, item)]
+            guard case .dictionary(let key, _) = computationType else { return try require(nil as NativeExpressionID?) }
+            bindings[id] = key
+            children = try checkedChildren([domain, body])
         case .functionApply(let function, let argument):
             if case .operatorReference(let id) = function {
                 let resolved = try require(resolution.call)
@@ -226,11 +223,12 @@ private final class NativeProgramResolver {
             call = try resolveCall(resolved, operation: nil, values: values, scope: scope, callbackScope: callbackScope, arguments: &children)
         case .letValue(let id, let rhs, let body):
             let item = try require(scope.bindings[id]); bindings[id] = item
-            children = [try child(rhs, item), try child(body, computationType)]
-        case .letIn(_, let body): children = [try child(body, computationType)]
+            children = try checkedChildren([rhs, body])
+        case .letIn(_, let body): children = try checkedChildren([body])
         case .caseExpr(let first, let rest, let otherwise):
-            for branch in [first] + rest { children += [try child(branch.condition, .bool), try child(branch.value, computationType)] }
-            if let otherwise { children.append(try child(otherwise, computationType)) }
+            let values = ([first] + rest).flatMap { [$0.condition, $0.value] }
+                + (otherwise.map { [$0] } ?? [])
+            children = try checkedChildren(values)
         case .operatorReference: return try require(nil as NativeExpressionID?)
         }
         guard computationType == resultType || scope.canProjectRead(computationType, to: resultType) else { return try require(nil as NativeExpressionID?) }

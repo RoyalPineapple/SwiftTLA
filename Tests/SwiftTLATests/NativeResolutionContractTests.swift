@@ -73,6 +73,7 @@ import Testing
         let checked = try checker.resolutionScope(function, expected: expected)
         #expect(checked.resultType == expected)
         #expect(checked.computationType == .dictionary(.int, .int))
+        #expect(checked.operandTypes == [.set(.int), .int])
     }
 
     @Test("predicate operands retain nominal context in the resolved graph")
