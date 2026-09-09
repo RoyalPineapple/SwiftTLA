@@ -373,11 +373,10 @@ extension NativeSwiftEmitter {
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
         let filtering: String
         if let constraint = compilation.semantics.constraint {
-            let condition = try expression(program.constraint!)
             let dependencies = compilation.enabledActionDependencies(in: constraint)
             let enabled = dependencies.isEmpty ? "" : "let enabled = \(enabledActionsCall(dependencies, state: "state", collectionArguments: collectionArguments))\n"
-            let effect = nativeCodeContainsTry(condition) || !enabled.isEmpty ? "try " : ""
-            filtering = "let candidates = \(effect)updates.map { $0.applying(to: state) }.filter { state in\n\(enabled)return \(condition)\n}"
+            let enabledArgument = dependencies.isEmpty ? "[]" : "enabled"
+            filtering = "let candidates = try updates.map { $0.applying(to: state) }.filter { state in\n\(enabled)return try Self._constraintHolds(in: state\(collectionArguments), enabled: \(enabledArgument))\n}"
         } else {
             filtering = "let candidates = updates.map { $0.applying(to: state) }"
         }
@@ -478,6 +477,13 @@ extension NativeSwiftEmitter {
         let arguments = model.compilation.machineSurfacePlan.collections.map { ", \($0.swiftIdentifier): \(nativeCollectionBinding($0, in: model))" }.joined()
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
+        if let constraint = program.constraint {
+            declarations += try nativeDeclarations("""
+            private static func _constraintHolds(in state: _ExecutionState\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+                \(try expression(constraint))
+            }
+            """)
+        }
         for invariant in compilation.semantics.invariants {
             declarations += try nativeDeclarations("""
             private static func _invariant\(invariant.id.ordinal)(in state: _ExecutionState\(collectionParameters), enabled: Set<Int>) throws -> Bool {
@@ -522,11 +528,5 @@ private func nativeDeclarations(_ source: String) throws -> [DeclSyntax] {
             )
         }
         return declaration
-    }
-}
-
-private func nativeCodeContainsTry(_ source: String) -> Bool {
-    Parser.parse(source: source).tokens(viewMode: .sourceAccurate).contains {
-        $0.tokenKind == .keyword(.try)
     }
 }
