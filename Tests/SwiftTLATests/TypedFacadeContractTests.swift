@@ -207,13 +207,13 @@ struct TypedFacadeContractTests {
 
     #expect(build.status != 0)
     for expected in [
-      "InvalidTypedDSL.swift:41:",
+      "InvalidTypedDSL.swift:27:",
       "parameter 'person' requires an explicitly written finite values array",
-      "InvalidTypedDSL.swift:58:",
+      "InvalidTypedDSL.swift:44:",
       "parameter 'car' requires a non-empty finite values array",
-      "InvalidTypedDSL.swift:75:",
+      "InvalidTypedDSL.swift:61:",
       "parameter 'direction' has duplicate finite-domain values",
-      "InvalidTypedDSL.swift:96:",
+      "InvalidTypedDSL.swift:98:",
       "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
     ] {
       #expect(build.output.contains(expected))

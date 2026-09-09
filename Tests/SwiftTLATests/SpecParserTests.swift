@@ -2808,7 +2808,11 @@ private let cameraModeDefinition = parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDefinitions: enumDefinitions
+            enumDefinitions: enumDefinitions,
+            sourceTypes: .init(records: ["CarSchema": [
+                .init(sourceName: "floor", name: "floor", swiftType: "Int"),
+                .init(sourceName: "doorsOpen", name: "doorsOpen", swiftType: "Bool")
+            ]])
         )
 
         let floor = Var<Int>("floor")
