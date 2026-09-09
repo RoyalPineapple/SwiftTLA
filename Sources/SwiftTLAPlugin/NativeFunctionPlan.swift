@@ -1,6 +1,6 @@
 import SwiftTLA
 
-/// Evaluation and tail-call decisions over the checked function graph.
+/// Evaluation order and recursive-call lowering over the checked function graph.
 enum NativeFunctionPlan {
     indirect enum Body {
         case result(NativeExpressionID)
@@ -8,6 +8,21 @@ enum NativeFunctionPlan {
         case binding(BinderID, NativeExpressionID, Body)
         case call(NativeFunctionID, [NativeExpressionID], Body)
         case repeatCall([NativeExpressionID])
+        /// Freeze earlier operands, then apply the surrounding expression on return.
+        case resume(NativeExpressionID, operand: NativeExpressionID, before: [NativeExpressionID], Body)
+
+        var hasPendingReturns: Bool {
+            var pending = [self]
+            while let body = pending.popLast() {
+                switch body {
+                case .resume: return true
+                case .condition(_, let yes, let no): pending.append(contentsOf: [yes, no])
+                case .binding(_, _, let body), .call(_, _, let body): pending.append(body)
+                case .result, .repeatCall: break
+                }
+            }
+            return false
+        }
     }
 
     case ordinary(parameterOrder: [BinderID])
@@ -99,7 +114,42 @@ enum NativeFunctionPlan {
         case .letValue(let binder, _, _):
             guard let body = lower(node.children[1], returningTo: function, visited: visited, program: program) else { return nil }
             return .binding(binder, node.children[0], body)
+        case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate,
+             .union, .intersection, .setDifference, .not:
+            let evaluationOrder: [NativeExpressionID]
+            switch node.expression {
+            case .divide, .integerDivide, .modulo: evaluationOrder = node.children.reversed()
+            default: evaluationOrder = node.children
+            }
+            for (index, child) in evaluationOrder.enumerated() {
+                guard let body = lower(child, returningTo: function, visited: visited, program: program) else { continue }
+                let siblings = evaluationOrder.filter { $0 != child }
+                guard !siblings.contains(where: { references(function, from: $0, program: program) }) else { return nil }
+                return .resume(expression, operand: child, before: Array(evaluationOrder.prefix(index)), body)
+            }
+            return nil
         default: return nil
         }
+    }
+
+    /// A suspended return must not start another call into the same cycle.
+    private static func references(_ function: NativeFunctionID, from expression: NativeExpressionID, program: NativeResolvedProgram) -> Bool {
+        var pending = [expression]
+        var visited: Set<NativeExpressionID> = []
+        while let id = pending.popLast() {
+            guard visited.insert(id).inserted else { continue }
+            let node = program[id]
+            pending.append(contentsOf: node.children)
+            guard let call = node.call else { continue }
+            if !call.callbacks.isEmpty { return true }
+            switch call.target {
+            case .callback: return true
+            case .function(let target):
+                if target == function { return true }
+                pending.append(program[target].body)
+                if let domain = program[target].domainGuard { pending.append(domain) }
+            }
+        }
+        return false
     }
 }

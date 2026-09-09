@@ -13,6 +13,7 @@ struct NativeSwiftEmitter {
     var atoms: [String] = []
     var finiteValues: [[CompiledValue]] = []
     var unions: [[NativeType]] = []
+    private var expressionValues: [NativeExpressionID: String] = [:]
     private var hasDepthScope = false
     private var callbackFunctions: [NativeCallbackID: String] = [:]
     private var functionPlans: [NativeFunctionID: NativeFunctionPlan] = [:]
@@ -367,10 +368,15 @@ struct NativeSwiftEmitter {
             for parameter in resolved.parameters {
                 tailBindings[parameter] = "_tailValue\(parameter.ordinal)"
             }
-            let statements = try tailBody(tailPlan, function: id, depthGuard: depthGuard,
-                state: state, substitutions: tailBindings, activeFunctions: activeFunctions.union([id]))
+            let hasPendingReturns = tailPlan.hasPendingReturns
+            let statements = try recursiveBody(tailPlan, function: id, depthGuard: depthGuard,
+                state: state, substitutions: tailBindings, activeFunctions: activeFunctions.union([id]), hasPendingReturns: hasPendingReturns)
+            let resultType = try swiftType(resolved.resultType)
+            let pendingReturns = hasPendingReturns
+                ? "var _pendingReturns: [(depth: Int, apply: (\(resultType)) throws -> \(resultType))] = []" : ""
             body = """
             \(inputs)
+            \(pendingReturns)
             let entryDepth = _nativeDepth
             defer { _nativeDepth = entryDepth }
             while true {
@@ -426,13 +432,42 @@ struct NativeSwiftEmitter {
         return ExprSyntax(stringLiteral: unindented).formatted().description
     }
 
-    private mutating func tailBody(
+    private mutating func recursiveBody(
         _ body: NativeFunctionPlan.Body, function: NativeFunctionID, depthGuard: String,
-        state: String, substitutions: [BinderID: String], activeFunctions: Set<NativeFunctionID>
+        state: String, substitutions: [BinderID: String], activeFunctions: Set<NativeFunctionID>, hasPendingReturns: Bool
     ) throws -> String {
         switch body {
         case .result(let value):
-            return "return \(try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions))"
+            if !hasPendingReturns {
+                return "return \(try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions))"
+            }
+            return """
+            var _returnedValue: \(try swiftType(program[function].resultType)) = \(try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions))
+            while let frame = _pendingReturns.popLast() {
+                _nativeDepth = frame.depth
+                _returnedValue = try frame.apply(_returnedValue)
+            }
+            return _returnedValue
+            """
+        case .resume(let value, let operand, let before, let body):
+            var captures: [String] = []
+            let outerValues = expressionValues
+            defer { expressionValues = outerValues }
+            for id in before {
+                let name = "_returnOperand\(id.ordinal)"
+                captures.append("let \(name): \(try swiftType(program[id].resultType)) = \(try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions))")
+                expressionValues[id] = name
+            }
+            expressionValues[operand] = "_returnedValue"
+            let resumed = try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            expressionValues = outerValues
+            let next = try recursiveBody(body, function: function, depthGuard: depthGuard,
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
+            return """
+            \(captures.joined(separator: "\n"))
+            _pendingReturns.append((depth: _nativeDepth, apply: { _returnedValue in \(resumed) }))
+            \(next)
+            """
         case .repeatCall(let arguments):
             let assignments = try zip(program[function].parameters, arguments).map { parameter, argument in
                 let value = try expression(argument, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
@@ -441,17 +476,17 @@ struct NativeSwiftEmitter {
             return (assignments + ["continue"]).joined(separator: "\n")
         case .condition(let condition, let yes, let no):
             let predicate = try expression(condition, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-            let yesBody = try tailBody(yes, function: function, depthGuard: depthGuard,
-                state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-            let noBody = try tailBody(no, function: function, depthGuard: depthGuard,
-                state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            let yesBody = try recursiveBody(yes, function: function, depthGuard: depthGuard,
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
+            let noBody = try recursiveBody(no, function: function, depthGuard: depthGuard,
+                state: state, substitutions: substitutions, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
             return "if \(predicate) {\n\(yesBody)\n} else {\n\(noBody)\n}"
         case .binding(let binderID, let value, let body):
             let valueCode = try expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
             var nested = substitutions
             nested[binderID] = "(try \(binder(binderID))())"
-            let bodyCode = try tailBody(body, function: function, depthGuard: depthGuard,
-                state: state, substitutions: nested, activeFunctions: activeFunctions)
+            let bodyCode = try recursiveBody(body, function: function, depthGuard: depthGuard,
+                state: state, substitutions: nested, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
             let binding = try cachedBinding(named: binder(binderID), type: program[value].resultType, value: valueCode)
             return "\(binding)\n\(bodyCode)"
         case .call(let target, let arguments, let body):
@@ -467,8 +502,8 @@ struct NativeSwiftEmitter {
             let domainGuard = try callee.domainGuard.map {
                 "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions)) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
             } ?? ""
-            let bodyCode = try tailBody(body, function: function, depthGuard: depthGuard,
-                state: state, substitutions: nested, activeFunctions: activeFunctions)
+            let bodyCode = try recursiveBody(body, function: function, depthGuard: depthGuard,
+                state: state, substitutions: nested, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
             return "\(depthGuard)\n\(bindings.joined(separator: "\n"))\n\(domainGuard)\n\(bodyCode)"
         }
     }
@@ -477,6 +512,7 @@ struct NativeSwiftEmitter {
         _ id: NativeExpressionID, state: String = "state.", substitutions: [BinderID: String] = [:],
         activeFunctions: Set<NativeFunctionID> = []
     ) throws -> String {
+        if let value = expressionValues[id] { return value }
         let node = program[id]
         let value = try expressionBody(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         return try projected(value, from: node.computationType, to: node.resultType)
@@ -534,7 +570,9 @@ struct NativeSwiftEmitter {
             default: operation = nil
             }
             let code: String
-            if let operation, id == root || node.resultType == .int {
+            if let value = expressionValues[id] {
+                code = value
+            } else if let operation, id == root || node.resultType == .int {
                 let rightFirst = operation == "divide" || operation == "modulo"
                 if !expanded {
                     pending.append((id, true))
