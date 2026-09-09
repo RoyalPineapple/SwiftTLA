@@ -20,7 +20,64 @@ private struct MeasuredExecutionCounter {
     }
 }
 
-@Suite struct NativeMachinePerformanceTests {
+@TLAModel
+private struct MeasuredSequenceHistory {
+    enum Step: String, CaseIterable { case append }
+    static var spec: TLASpec {
+        #spec("MeasuredSequenceHistory") {
+            Algorithm("MeasuredSequenceHistory", scoped: { scope in
+                let history = scope.sharedVar("history", initial: TupleExpr<Int>.literal(0))
+                let next = scope.sharedVar("next", initial: 1)
+                let checksum = scope.sharedVar("checksum", initial: 0)
+                While(Step.append, true) {
+                    Assign(history, to: history.expr.appending(next.expr))
+                    Assign(checksum, to: checksum + history.expr.at(next.expr))
+                    Assign(next, to: next + 1)
+                }
+            })
+        }
+    }
+}
+
+@Suite(.serialized) struct NativeMachinePerformanceTests {
+    @Test("sequence growth reports native and formal transition measurements with equal contents")
+    func sequenceGrowthMeasurements() throws {
+        let operationCount = 512
+        let compilation = try MeasuredSequenceHistory.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let action = try #require(compilation.layout.actions.first { $0.declaration.name == "append" }?.id)
+        let checksum = try #require(compilation.layout.variables.first { $0.declaration.name == "checksum" }?.id)
+        let history = try #require(compilation.layout.variables.first { $0.declaration.name == "history" }?.id)
+        let initial = try #require(try runtime.initialStates().first)
+        var warm = try MeasuredSequenceHistory.makeMachine()
+        for _ in 0..<3 {
+            _ = try warm.send(.append)
+            _ = try runtime.successors(for: action, from: initial)
+        }
+        var native = try MeasuredSequenceHistory.makeMachine()
+        let nativeChecksum = try measure("generated sequence send", iterations: operationCount) {
+            try native.send(.append).after.checksum
+        }
+        var formal = initial
+        let formalChecksum = try measure("formal sequence successors + selection", iterations: operationCount) {
+            let successors = try runtime.successors(for: action, from: formal)
+            guard successors.count == 1, let successor = successors.first,
+                  case .integer(let value) = try successor.state.value(for: checksum) else {
+                Issue.record("The measured sequence action must have one successor with an integer checksum")
+                return -1
+            }
+            formal = successor.state
+            return value
+        }
+        // Every transition reads the preceding sequence element into the checksum,
+        // keeping collection contents observable in both generated representations.
+        #expect(nativeChecksum == operationCount * (operationCount + 1) * (operationCount - 1) / 6)
+        #expect(formalChecksum == nativeChecksum)
+        #expect(native.state.next == operationCount + 1)
+        #expect(native.state.checksum == operationCount * (operationCount - 1) / 2)
+        #expect(try formal.value(for: history) == .tuple((0...operationCount).map(CompiledValue.integer)))
+    }
+
     @Test("native construction and execution report bounded comparative measurements")
     func constructionAndExecutionMeasurements() throws {
         let constructionCount = 16

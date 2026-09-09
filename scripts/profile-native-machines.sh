@@ -21,6 +21,7 @@ Build time includes macro-expansion dump instrumentation; dependency resolution 
 Binary size is the focused test executable, not an application or the complete repository test suite.
 Generated-source bytes sum captured macro expansion bodies; per-expansion names and byte counts are retained.
 ContinuousClock measurements follow warmup, with equal semantic checksums and no timing thresholds.
+The serialized workloads cover a scalar counter and a growing sequence whose contents feed a checksum.
 Construction retains every result through the allocation snapshot; outer retention buffers are preallocated. Non-inlined consumers exercise retained state/control after timing.
 Malloc snapshots measure process-wide retained live blocks/bytes in the default zone, not total allocations or peaks.
 Optional Instruments traces launch the Swift Testing helper that loads the test bundle, not swift test. Raw traces and export tables require attribution review before reporting allocation totals.
