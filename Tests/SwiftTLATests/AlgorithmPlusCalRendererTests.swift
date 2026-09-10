@@ -214,7 +214,7 @@ struct AlgorithmPlusCalRendererTests {
         #expect(semantics.invariants.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1)])
         #expect(semantics.temporalProperties.map(\.id) == [.init(ordinal: 2)])
         #expect(plan.properties.map(\.id) == [.init(ordinal: 1), .init(ordinal: 2)])
-        #expect(plan.properties.map(\.name) == ["AuthoredInvariant", "AuthoredTemporal"])
+        #expect(plan.properties.map(\.declaration.name) == ["AuthoredInvariant", "AuthoredTemporal"])
     }
 
     @Test("compilation leaves standard process termination to the PlusCal translator")

@@ -179,7 +179,7 @@ extension TLASpec {
     let sourceProperties = plusCalAlgorithm.properties
     let sourcePropertyIDs = Set(sourceProperties.map(\.id))
     let topLevelPropertyNames = layout.stateProperties.filter { !sourcePropertyIDs.contains($0.id) }.map { $0.declaration.name }
-    let sourcePropertyNames = sourceProperties.map(\.name)
+    let sourcePropertyNames = sourceProperties.map(\.declaration.name)
     let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
     guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
           Set(topLevelPropertyNames).count == topLevelPropertyNames.count,

@@ -399,7 +399,7 @@ struct CompiledLowerer {
 
     private func authoredPlusCalProperties(
         in algorithm: AlgorithmModel
-    ) throws -> (properties: [CompiledAuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
+    ) throws -> (properties: [CompiledPropertyLayout], translatorOwnedNames: Set<String>) {
         func isTranslatorTermination(_ temporal: NamedTemporal) -> Bool {
             guard temporal.name == "Termination", algorithm.processes.count == 1,
                   case .eventually(let expression) = temporal.expr,
@@ -415,32 +415,29 @@ struct CompiledLowerer {
             }
         }
 
-        func propertyID(
+        func property(
             kind: CompiledDeclaration.Kind,
             named name: String,
             at path: String
-        ) throws -> PropertyID {
+        ) throws -> CompiledPropertyLayout {
             let properties = kind == .invariant ? layout.stateProperties : layout.temporalProperties
             guard let property = properties.first(where: { $0.declaration.name == name }) else {
                 throw diagnostic(path: path, actual: "unresolved property '\(name)'")
             }
-            return property.id
+            return property
         }
 
         func collect(
             _ components: [AlgorithmComponentModel],
             path: String
-        ) throws -> (properties: [CompiledAuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
-            var properties: [CompiledAuthoredPlusCalProperty] = []
+        ) throws -> (properties: [CompiledPropertyLayout], translatorOwnedNames: Set<String>) {
+            var properties: [CompiledPropertyLayout] = []
             var translatorOwnedNames: Set<String> = []
             for (index, component) in components.enumerated() {
                 let componentPath = "\(path)[\(index)]"
                 switch component {
                 case .invariant(let invariant):
-                    properties.append(.invariant(
-                        id: try propertyID(kind: .invariant, named: invariant.name, at: componentPath),
-                        name: invariant.name
-                    ))
+                    properties.append(try property(kind: .invariant, named: invariant.name, at: componentPath))
                 case .temporal(let temporal):
                     if isTranslatorTermination(temporal) {
                         translatorOwnedNames.insert(temporal.name)
@@ -454,10 +451,7 @@ struct CompiledLowerer {
                             nextSafeAction: "Give the property a distinct name, or declare the standard process termination property."
                         )
                     } else {
-                        properties.append(.temporal(
-                            id: try propertyID(kind: .temporalProperty, named: temporal.name, at: componentPath),
-                            name: temporal.name
-                        ))
+                        properties.append(try property(kind: .temporalProperty, named: temporal.name, at: componentPath))
                     }
                 case .process(let process):
                     let nested = try collect(process.components, path: "\(componentPath).components")
