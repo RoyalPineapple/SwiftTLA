@@ -11,7 +11,7 @@ private struct InjectiveSequenceExecution {
             Algorithm("InjectiveSequenceExecution", scoped: { scope in
                 let history = scope.sharedVar("history", initial: TupleExpr<Int>.literal(0))
                 Do(Step.append) {
-                    Assign(history, to: history.expr.concatenating(
+                    Assign(history, to: history.concatenating(
                         InjectiveSequence(from: SetExpr<Int>.literal(1, 2))
                     ))
                 }

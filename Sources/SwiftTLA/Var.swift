@@ -76,8 +76,16 @@ extension StateExprConvertible where Self: TLAValueType {
 
 // MARK: - Expr<T>
 
+/// A formal expression whose value type is known to Swift.
+public protocol TypedExpression<Value>: StateExprConvertible, Sendable {
+  associatedtype Value: TLAValueType
+  var expr: Expr<Value> { get }
+}
+
 /// Phantom-typed expression: `Expr<Int>` can only be assigned to `Var<Int>`.
-public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
+public struct Expr<T: TLAValueType>: TypedExpression {
+  public typealias Value = T
+  public var expr: Self { self }
   public let raw: StateExpr
   public init(_ raw: StateExpr) { self.raw = raw }
   public init(_ value: T) { raw = value.sourceIssue.map(StateExpr.sourceIssue) ?? .value(value.tlaValue) }

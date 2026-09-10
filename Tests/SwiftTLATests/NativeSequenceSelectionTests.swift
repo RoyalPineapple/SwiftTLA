@@ -10,11 +10,11 @@ private struct OrderedSequenceSelection {
             Algorithm("OrderedSequenceSelection", scoped: { scope in
                 let items = scope.sharedVar("items", initial: TupleExpr<Int>.literal(3, 2, 2, 1))
                 Do(Step.select) {
-                    Assign(items, to: items.expr.selecting { member in member >= 2 })
+                    Assign(items, to: items.selecting { member in member >= 2 })
                     Goto(Step.empty)
                 }
                 Do(Step.empty) {
-                    Assign(items, to: items.expr.selecting { member in member > 99 })
+                    Assign(items, to: items.selecting { member in member > 99 })
                     Goto(Step.empty)
                 }
             })

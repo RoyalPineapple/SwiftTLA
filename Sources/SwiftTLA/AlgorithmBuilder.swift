@@ -64,7 +64,7 @@ extension FiniteDomain {
     }
 }
 
-public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: StateExprConvertible, Sendable {
+public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: TypedExpression {
     fileprivate let expression: StateExpr
 
     public var stateExpr: StateExpr {
@@ -90,7 +90,7 @@ public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: StateExprConvertib
 /// A value bound for one atomic `With` body.
 ///
 /// It carries a scoped formal action binding while the algorithm IR is built.
-public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct WithValue<Value: TLAValueType>: TypedExpression {
     let expression: StateExpr
 
     public var stateExpr: StateExpr { expression }
@@ -120,42 +120,6 @@ public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
 
     public static func != (lhs: WithValue<Value>, rhs: WithValue<Value>) -> StateExpr {
         .notEqual(lhs.stateExpr, rhs.stateExpr)
-    }
-}
-
-extension WithValue {
-    public func first<First: TLAValueType, Second: TLAValueType>() -> Expr<First>
-    where Value == Pair<First, Second> {
-        Expr<First>(.tupleAccess(stateExpr, 1))
-    }
-
-    public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
-    where Value == Pair<First, Second> {
-        Expr<Second>(.tupleAccess(stateExpr, 2))
-    }
-
-    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
-    where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(field.recordAccess(stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-}
-
-extension Expr {
-    /// Reads a finite formal function using a value selected by `With`.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
-    where T == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(raw, index.stateExpr))
-    }
-
-    /// Reads a finite function using process-local formal state.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
-    where T == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(raw, index.stateExpr))
     }
 }
 
@@ -195,7 +159,7 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
 ///
 /// Its body is substituted into the surrounding `Do` block before the
 /// algorithm lowers.
-public struct MacroParameter<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct MacroParameter<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -207,7 +171,7 @@ public struct MacroParameter<Value: TLAValueType>: StateExprConvertible, Sendabl
 }
 
 /// A typed formal input of a PlusCal procedure.
-public struct ProcedureParameter<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct ProcedureParameter<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     public var stateExpr: StateExpr { .variable(name) }
     public var expr: Expr<Value> { Expr(stateExpr) }
@@ -366,7 +330,7 @@ public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
 /// A typed shared variable declaration.
 ///
 /// Declare it through the scope supplied by `TLASpec` or `Algorithm`.
-public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct SharedVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
     fileprivate let swiftTypeName: String
@@ -440,7 +404,7 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
 /// A typed process-local algorithm variable.
 ///
 /// Declare it through the scope supplied by `Each` or `Procedure`.
-public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct LocalVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
     fileprivate let swiftTypeName: String
@@ -614,340 +578,6 @@ extension SharedVariable where Value: FiniteTLAValueDomain {
 
     public static func != (_ lhs: SharedVariable, _ rhs: WithValue<Value>) -> StateExpr {
         .notEqual(lhs.stateExpr, rhs.stateExpr)
-    }
-}
-
-extension SharedVariable {
-    public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
-    where Value == SetExpr<Element> {
-        .in(.value(element.tlaValue), stateExpr)
-    }
-
-    /// Tests membership of a value selected by `With`.
-    public func contains<Element: TLAValueType>(_ element: WithValue<Element>) -> StateExpr
-    where Value == SetExpr<Element> {
-        .in(element.stateExpr, stateExpr)
-    }
-
-    public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr(.setDifference(stateExpr, .setLiteral([element.raw])))
-    }
-
-    public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleAppend(stateExpr, .value(element.tlaValue)))
-    }
-
-    public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleAccess(stateExpr, index))
-    }
-
-    /// Reads a formal sequence at a one-based formal index.
-    public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleDynamicAccess(stateExpr, index.raw))
-    }
-
-    /// Reads a formal sequence at a one-based shared formal index.
-    public subscript<Element: TLAValueType>(_ index: SharedVariable<Int>) -> Expr<Element>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleDynamicAccess(stateExpr, index.stateExpr))
-    }
-
-    /// Reads a zero-based formal sequence at a formal index.
-    public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
-    where Value == ZeroBasedSequence<Element> {
-        Expr(.functionApply(stateExpr, index.raw))
-    }
-
-    public subscript<Element: TLAValueType>(_ index: Int) -> Expr<Element>
-    where Value == ZeroBasedSequence<Element> {
-        Expr(.functionApply(stateExpr, .int(index)))
-    }
-
-    /// Replaces one value in a zero-based formal sequence.
-    public func updating<Element: TLAValueType>(
-        _ index: Expr<Int>,
-        to value: Expr<Element>
-    ) -> Expr<ZeroBasedSequence<Element>> where Value == ZeroBasedSequence<Element> {
-        Expr(.except(stateExpr, index.raw, value.raw))
-    }
-
-    public func updating<Element: TLAValueType>(
-        _ index: Int,
-        to value: Expr<Element>
-    ) -> Expr<ZeroBasedSequence<Element>> where Value == ZeroBasedSequence<Element> {
-        Expr(.except(stateExpr, .int(index), value.raw))
-    }
-
-    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
-    where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(field.recordAccess(stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
-    }
-
-    /// Reads a finite function at the current PlusCal process identifier.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    /// Reads a finite function using a process-local formal key.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    /// Reads a finite function using a typed statement-macro parameter.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: MacroParameter<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.raw))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
-    where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.raw))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Domain,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        let selected = self[index]
-        return Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.tlaValue.stateExpr, update(selected).raw)
-        )
-    }
-
-    /// Updates a finite function at the current PlusCal process identifier.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: ProcessIdentifier<Domain>,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        let selected = self[index]
-        return Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.stateExpr, update(selected).raw)
-        )
-    }
-
-    /// Replaces a finite function value at the current PlusCal process identifier.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: ProcessIdentifier<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: ProcessIdentifier<Domain>,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    /// Replaces a finite function value using a process-local formal key.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: LocalVariable<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
-    }
-
-    /// Replaces a finite function value using a typed statement-macro parameter.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: MacroParameter<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
-    }
-
-    /// Replaces a finite function value using a typed statement-macro parameter.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: MacroParameter<Domain>,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.raw, update(Expr<Range>(.functionApply(stateExpr, index.raw))).raw)
-        )
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: WithValue<Domain>,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.stateExpr, update(Expr<Range>(.functionApply(stateExpr, index.stateExpr))).raw)
-        )
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.raw, value.raw))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func overriding<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        with value: Expr<Range>
-    ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        Expr(.partialFunctionOverriding(stateExpr, key: index.raw, value: value.raw))
-    }
-
-    public func overriding<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        with value: Range
-    ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        overriding(index, with: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Domain,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.tlaValue.stateExpr, value.raw))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Domain,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func inserting<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([.value(element.tlaValue)])))
-    }
-
-    public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.raw])))
-    }
-
-    /// Inserts the current identifier of a finite PlusCal process into a
-    /// shared formal set.
-    public func inserting<Element: FiniteTLAValueDomain>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func inserting<Element: FiniteTLAValueDomain>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func contains<Element: TLAValueType>(_ element: Expr<Element>) -> StateExpr
-    where Value == SetExpr<Element> {
-        .in(element.raw, stateExpr)
-    }
-}
-
-extension SharedVariable where Value: FormalZeroBasedSequenceValue {
-    /// The formal number of elements in a zero-based sequence.
-    public var count: Expr<Int> {
-        Expr(.cardinality(.domain(stateExpr)))
-    }
-}
-
-extension SharedVariable where Value: FormalSetValue {
-    public var isEmpty: StateExpr {
-        .equal(.cardinality(stateExpr), .value(.int(0)))
-    }
-
-    /// Tests whether this formal set is contained in another formal set.
-    public func isSubset(of other: some StateExprConvertible) -> StateExpr {
-        stateExpr.isSubset(of: other)
-    }
-
-    public var cardinality: Expr<Int> {
-        Expr(.cardinality(stateExpr))
-    }
-}
-
-extension SharedVariable where Value: FormalTupleValue {
-    public var count: Expr<Int> {
-        Expr(.tupleLength(stateExpr))
-    }
-}
-
-extension LocalVariable {
-    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
-    where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(field.recordAccess(stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
-    }
-
-    /// Reads a finite function at the current PlusCal process identifier.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.raw))
-    }
-}
-
-extension LocalVariable where Value: FormalSetValue {
-    /// Tests whether the current process-local formal set is empty.
-    public var isEmpty: StateExpr {
-        .equal(.cardinality(stateExpr), .value(.int(0)))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr(.setDifference(stateExpr, .setLiteral([element.raw])))
     }
 }
 
