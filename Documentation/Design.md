@@ -46,10 +46,11 @@ The compiled runtime executes compiled action identities against slot-backed
 state. `CompiledEvaluator` evaluates compiled expressions and values.
 `ModelChecker` performs bounded reachable-state exploration.
 
-`@TLAModel` derives generated `State`, `Action`, and `Transition` types from
-the compiled specification. The generated machine stores one complete state
-and applies one typed action atomically. The generated `Actor` serializes
-access to that machine.
+`@TLAModel` resolves Swift types from the compiled specification and emits
+`State`, `Action`, `Transition`, initialization, guards, updates and predicates.
+The generated machine stores typed state and executes generated Swift directly.
+It does not compile the source or invoke the formal evaluator at runtime.
+The generated `Actor` serializes access to that machine.
 
 ## Rendering and linking
 

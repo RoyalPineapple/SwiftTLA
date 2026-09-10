@@ -14,10 +14,11 @@ source model
        └→ rendered bundles
 ```
 
-Compilation accepts a declaration only when every supported output preserves
-its compiled meaning. Executable declarations are typed. One compiled runtime
-executes them. Applications use generated typed state and actions. Formal text
-exists at rendering and external-tool boundaries.
+Compilation validates formal meaning; native generation additionally checks
+that the model has a supported Swift representation. Applications execute
+generated typed state and actions directly. The compiled runtime executes the
+formal model for verification. Formal text exists at rendering and external-tool
+boundaries.
 
 The supported application execution API contains one generated-machine route.
 A successful compilation supplies every executable model fact to that route.
