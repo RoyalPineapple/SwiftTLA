@@ -25,6 +25,24 @@ A successful compilation supplies every executable model fact to that route.
 The `@TLAModel` expansion uses an underscored compiler-support ABI whose state
 is private inside each generated machine.
 
+## Check a candidate
+
+The finite-graph and temporal/symmetry workflows accept an exact candidate SHA
+with `admission_mode=candidate`. Run the workflow from the candidate branch
+when validating workflow changes:
+
+```sh
+gh workflow run finite-graph.yml --ref "$candidate_branch" \
+  -f swift_tla_sha="$candidate_sha" -f admission_mode=candidate
+
+gh workflow run temporal-symmetry-conformance.yml --ref "$candidate_branch" \
+  -f swift_tla_sha="$candidate_sha" -f admission_mode=candidate
+```
+
+Candidate artifacts include `candidate` in their names. Release admission runs
+from `main` and requires the requested SHA to be an ancestor of `main`.
+Scheduled runs and manual runs without an explicit mode use admission.
+
 ## Qualify a release commit
 
 1. Merge the candidate commit to `main`.

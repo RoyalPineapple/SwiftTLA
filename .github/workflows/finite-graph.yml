@@ -6,9 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       swift_tla_sha:
-        description: Immutable merged SwiftTLA SHA
+        description: Immutable SwiftTLA SHA
         required: true
         type: string
+      admission_mode:
+        description: Candidate checks are pre-merge; admission requires a merged SHA
+        required: true
+        default: admission
+        type: choice
+        options: [candidate, admission]
 
 permissions:
   contents: read
@@ -20,6 +26,8 @@ jobs:
   finite-graph:
     runs-on: macos-15
     env:
+      ADMISSION_MODE: ${{ inputs.admission_mode || 'admission' }}
+      VALIDATION_REF: ${{ github.ref }}
       SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
     steps:
@@ -33,11 +41,18 @@ jobs:
           submodules: false
 
       - id: revision
-        name: Verify merged SwiftTLA revision
+        name: Verify SwiftTLA revision and evidence mode
         run: |
           resolved_sha="$(git rev-parse HEAD)"
           [ "$resolved_sha" = "$SWIFT_TLA_SHA" ]
-          git merge-base --is-ancestor "$resolved_sha" refs/remotes/origin/main
+          case "$ADMISSION_MODE" in
+            candidate) ;;
+            admission)
+              [ "$VALIDATION_REF" = refs/heads/main ]
+              git merge-base --is-ancestor "$resolved_sha" refs/remotes/origin/main
+              ;;
+            *) exit 1 ;;
+          esac
           echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
 
       - name: Run exact finite graph comparison
@@ -49,7 +64,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: finite-graph-${{ steps.revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: finite-graph-${{ env.ADMISSION_MODE }}-${{ steps.revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .build/finite-graph-evidence
           if-no-files-found: error
