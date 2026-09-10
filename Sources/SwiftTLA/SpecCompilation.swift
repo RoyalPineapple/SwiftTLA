@@ -147,6 +147,8 @@ private struct CompiledModule: Sendable {
     let refinements: [CompiledRefinement]
     let authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?
     let requiredStandardModules: Set<StandardModule>
+    let definitionsBeforeInstances: [Int]
+    let definitionsAfterInstances: [Int]
 }
 
 /// The immutable compiled specification and validated outputs produced by compilation.
@@ -595,41 +597,6 @@ public extension TLASpec {
         let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let renderedRefinements = try refinements.map(renderer.refinement)
         let renderedFormalModuleReplacements = try semantics.formalModuleReplacements.map(renderer.formalModuleReplacement)
-        let formalDefinitions = try formalOperatorDefinitions.enumerated()
-            .map { index, definition in
-                RenderedModuleDefinition(
-                    name: definition.name,
-                    text: try renderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
-                    dependencies: definition.plusCalDependencies
-                )
-            }
-        let allDefinitions = formalDefinitions
-        try validateUnique(
-            allDefinitions.compactMap(\.name),
-            code: .duplicateRenderedModuleDefinition,
-            path: "definitions"
-        )
-        let instanceNames = Set(moduleInstances.map(\.name))
-        let declaredNames = instanceNames
-            .union(allDefinitions.compactMap(\.name))
-        for definition in allDefinitions {
-            for dependency in definition.dependencies where !declaredNames.contains(dependency) {
-                throw CompilationDiagnostic(
-                    code: .unresolvedDirectModuleDependency,
-                    stage: .linking,
-                    path: "definitions.\(definition.name ?? definition.text).dependencies.\(dependency)",
-                    expected: "a definition or INSTANCE declared by this module",
-                    actual: "no declaration named '\(dependency)'",
-                    nextSafeAction: "Declare the dependency or remove it from dependsOn, then compile again."
-                )
-            }
-        }
-        let definitionsBeforeInstances = allDefinitions.filter {
-            instanceNames.isDisjoint(with: $0.dependencies)
-        }
-        let definitionsAfterInstances = allDefinitions.filter {
-            !instanceNames.isDisjoint(with: $0.dependencies)
-        }
         let emittedActionNamesByID = Dictionary(
             uniqueKeysWithValues: layout.actions.map { ($0.id, $0.renderedName) }
         )
@@ -641,14 +608,6 @@ public extension TLASpec {
             uniqueKeysWithValues: emittedActionCalls.map { ($0.call, $0.renderedName) }
         )
         let callsByAction = Dictionary(grouping: emittedActionCalls, by: { $0.call.action })
-        let orderedDefinitionsBeforeInstances = try orderDirectDefinitions(
-            definitionsBeforeInstances,
-            declared: []
-        )
-        let orderedDefinitionsAfterInstances = try orderDirectDefinitions(
-            definitionsAfterInstances,
-            declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
-        )
         let directModuleActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
             let compiled = semantics.actions[index]
             guard let renderedName = emittedActionNamesByID[compiled.id] else {
@@ -677,8 +636,8 @@ public extension TLASpec {
         }
         return DirectModuleSectionPlan(
             renderedModuleSource: try renderedDirectModuleSource(
-                definitionsBeforeInstances: orderedDefinitionsBeforeInstances,
-                definitionsAfterInstances: orderedDefinitionsAfterInstances,
+                definitionsBeforeInstances: try module.definitionsBeforeInstances.map { try renderer.formalDefinition(semantics.formalOperatorDefinitions[$0]) },
+                definitionsAfterInstances: try module.definitionsAfterInstances.map { try renderer.formalDefinition(semantics.formalOperatorDefinitions[$0]) },
                 renderedActions: directModuleActions,
                 emittedActionNamesByID: emittedActionNamesByID,
                 emittedActionCallNames: emittedActionCallNames,
@@ -719,6 +678,7 @@ public extension TLASpec {
         try validateModelCollectionDeclarations()
         try validateSymmetryDeclarations()
         try validateRefinements()
+        let definitionOrder = try orderedDirectDefinitions()
         let layout = CompiledLayout(spec: self, closure: closure)
         var lowerer = CompiledLowerer(
             spec: self, closure: closure, layout: layout,
@@ -732,7 +692,9 @@ public extension TLASpec {
         return CompiledModule(
             layout: layout, bindings: lowerer.bindings, semantics: semantics,
             refinements: refinements, authoredAlgorithm: authoredAlgorithm,
-            requiredStandardModules: lowerer.requiredStandardModules
+            requiredStandardModules: lowerer.requiredStandardModules,
+            definitionsBeforeInstances: definitionOrder.beforeInstances,
+            definitionsAfterInstances: definitionOrder.afterInstances
         )
     }
 
@@ -751,8 +713,8 @@ public extension TLASpec {
     }
 
     private func renderedDirectModuleSource(
-        definitionsBeforeInstances: [RenderedModuleDefinition],
-        definitionsAfterInstances: [RenderedModuleDefinition],
+        definitionsBeforeInstances: [String],
+        definitionsAfterInstances: [String],
         renderedActions: [DirectModuleAction],
         emittedActionNamesByID: [ActionID: String],
         emittedActionCallNames: [CompiledActionCall: String],
@@ -826,7 +788,7 @@ public extension TLASpec {
             lines.append("")
         }
         for definition in definitionsBeforeInstances {
-            lines.append(definition.text)
+            lines.append(definition)
             lines.append("")
         }
         for function in semantics.recursiveFunctions.prefix(recursiveFuncs.count) {
@@ -840,7 +802,7 @@ public extension TLASpec {
             lines.append("")
         }
         for definition in definitionsAfterInstances {
-            lines.append(definition.text)
+            lines.append(definition)
             lines.append("")
         }
         for refinement in renderedRefinements {
@@ -968,33 +930,51 @@ public extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func orderDirectDefinitions(
-        _ definitions: [RenderedModuleDefinition],
-        declared: Set<String>
-    ) throws -> [RenderedModuleDefinition] {
-        var pending = definitions
-        var emitted = declared
-        var ordered: [RenderedModuleDefinition] = []
-        while let index = pending.firstIndex(where: { definition in
-            definition.dependencies.allSatisfy(emitted.contains)
-        }) {
-            let definition = pending.remove(at: index)
-            ordered.append(definition)
-            if let name = definition.name {
-                emitted.insert(name)
+    /// Resolve declaration order before a renderer consumes the compiled module.
+    private func orderedDirectDefinitions() throws -> (beforeInstances: [Int], afterInstances: [Int]) {
+        let definitions = formalOperatorDefinitions
+        try validateUnique(definitions.map(\.name), code: .duplicateRenderedModuleDefinition, path: "definitions")
+        let instanceNames = Set(moduleInstances.map(\.name))
+        let declaredNames = instanceNames.union(definitions.map(\.name))
+        for definition in definitions {
+            for dependency in definition.plusCalDependencies where !declaredNames.contains(dependency) {
+                throw CompilationDiagnostic(
+                    code: .unresolvedDirectModuleDependency,
+                    stage: .linking,
+                    path: "definitions.\(definition.name).dependencies.\(dependency)",
+                    expected: "a definition or INSTANCE declared by this module",
+                    actual: "no declaration named '\(dependency)'",
+                    nextSafeAction: "Declare the dependency or remove it from dependsOn, then compile again."
+                )
             }
         }
-        guard pending.isEmpty else {
-            throw CompilationDiagnostic(
-                code: .cyclicDirectModuleDependency,
-                stage: .linking,
-                path: "definitions",
-                expected: "an acyclic declaration dependency graph",
-                actual: pending.compactMap(\.name).joined(separator: ", "),
-                nextSafeAction: "Break the declaration cycle, then compile again."
-            )
+        let before = definitions.indices.filter { instanceNames.isDisjoint(with: definitions[$0].plusCalDependencies) }
+        let after = definitions.indices.filter { !instanceNames.isDisjoint(with: definitions[$0].plusCalDependencies) }
+        func ordered(_ indices: [Int], declared: Set<String>) throws -> [Int] {
+            var pending = indices
+            var emitted = declared
+            var result: [Int] = []
+            while let index = pending.firstIndex(where: { definitions[$0].plusCalDependencies.allSatisfy(emitted.contains) }) {
+                let definition = pending.remove(at: index)
+                result.append(definition)
+                emitted.insert(definitions[definition].name)
+            }
+            guard pending.isEmpty else {
+                throw CompilationDiagnostic(
+                    code: .cyclicDirectModuleDependency,
+                    stage: .linking,
+                    path: "definitions",
+                    expected: "an acyclic declaration dependency graph",
+                    actual: pending.map { definitions[$0].name }.joined(separator: ", "),
+                    nextSafeAction: "Break the declaration cycle, then compile again."
+                )
+            }
+            return result
         }
-        return ordered
+        return (
+            try ordered(before, declared: []),
+            try ordered(after, declared: Set(before.map { definitions[$0].name }).union(instanceNames))
+        )
     }
 
     private func validateUnique(

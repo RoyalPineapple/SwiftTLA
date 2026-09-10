@@ -216,17 +216,6 @@ extension Array where Element == ConstantDecl {
     filter { current in !replacements.contains { $0.name == current.name } } + replacements
   }
 }
-struct RenderedModuleDefinition: Sendable, Equatable {
-  let name: String?
-  let text: String
-  let dependencies: [String]
-
-  init(name: String? = nil, text: String, dependencies: [String] = []) {
-    self.name = name
-    self.text = text
-    self.dependencies = dependencies
-  }
-}
 public enum StandardModule: String, Sendable, Hashable, CaseIterable {
   case integers = "Integers"
   case naturals = "Naturals"
