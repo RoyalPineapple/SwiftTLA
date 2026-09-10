@@ -98,12 +98,15 @@ public struct ModuleDescription: Sendable, Equatable {
     public let structuralPath: [String]
 }
 
-/// The legal direct-module declaration order, resolved before rendering.
-struct DirectModuleSectionPlan: Sendable, Equatable {
+/// TLA+ output and declaration text shared with authored PlusCal rendering.
+struct RenderedModule: Sendable, Equatable {
     let renderedModuleSource: String
     let renderedConfiguration: String
     let renderedConfigurationWithoutSymmetry: String
     let renderedActions: [RenderedAction]
+    let definitions: [String]
+    let instances: [String]
+    let refinements: [String]
 }
 
 package struct RenderedAction: Sendable, Equatable {
@@ -166,11 +169,11 @@ public struct CompiledSpecification: Sendable {
     /// Render verification artifacts from the existing program without compiling it again.
     public func render() throws -> RenderedSpecification {
         let source = module.source
-        let rootPlan = try source.directModuleSectionPlan(module)
+        let rootPlan = try source.renderModule(module)
         let renderedBundle = TLAModuleBundle(
             root: .init(name: source.name, tla: rootPlan.renderedModuleSource, cfg: rootPlan.renderedConfiguration),
             imports: try imports.map { imported in
-                let plan = try imported.source.directModuleSectionPlan(imported)
+                let plan = try imported.source.renderModule(imported)
                 return .init(name: imported.source.name, tla: plan.renderedModuleSource, cfg: nil)
             },
             provenance: provenance
@@ -181,7 +184,7 @@ public struct CompiledSpecification: Sendable {
             try source.authoredPlusCalModule(
                 algorithm: authored.plan, declarationOrder: authored.declarations,
                 semantics: module.semantics, layout: module.layout,
-                formalRenderer: renderer, renderedRefinements: try module.refinements.map(renderer.refinement)
+                formalRenderer: renderer, declarations: rootPlan
             )
         }
         let plusCalBundle = try algorithm.map { algorithm in
@@ -505,7 +508,7 @@ public extension TLASpec {
         return CompiledSpecification(description: description, module: module, imports: imports, provenance: provenance)
     }
 
-    fileprivate func directModuleSectionPlan(_ module: CompiledModule) throws -> DirectModuleSectionPlan {
+    fileprivate func renderModule(_ module: CompiledModule) throws -> RenderedModule {
         let layout = module.layout
         let bindings = module.bindings
         let semantics = module.semantics
@@ -524,6 +527,8 @@ public extension TLASpec {
             )
         }
         let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
+        let definitions = try semantics.formalOperatorDefinitions.prefix(formalOperatorDefinitions.count).map(renderer.formalDefinition)
+        let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
         let renderedRefinements = try refinements.map(renderer.refinement)
         let renderedFormalModuleReplacements = try semantics.formalModuleReplacements.map(renderer.formalModuleReplacement)
         let emittedActionNamesByID = Dictionary(
@@ -563,10 +568,11 @@ public extension TLASpec {
                 }
             )
         }
-        return DirectModuleSectionPlan(
+        return RenderedModule(
             renderedModuleSource: try renderedDirectModuleSource(
-                definitionsBeforeInstances: try module.definitionsBeforeInstances.map { try renderer.formalDefinition(semantics.formalOperatorDefinitions[$0]) },
-                definitionsAfterInstances: try module.definitionsAfterInstances.map { try renderer.formalDefinition(semantics.formalOperatorDefinitions[$0]) },
+                definitionsBeforeInstances: module.definitionsBeforeInstances.map { definitions[$0] },
+                definitionsAfterInstances: module.definitionsAfterInstances.map { definitions[$0] },
+                renderedInstances: instances,
                 renderedActions: directModuleActions,
                 emittedActionNamesByID: emittedActionNamesByID,
                 emittedActionCallNames: emittedActionCallNames,
@@ -582,7 +588,8 @@ public extension TLASpec {
                 semantics: semantics,
                 usesSymmetryReduction: false
             ),
-            renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls)
+            renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
+            definitions: definitions, instances: instances, refinements: renderedRefinements
         )
     }
 
@@ -637,6 +644,7 @@ public extension TLASpec {
     private func renderedDirectModuleSource(
         definitionsBeforeInstances: [String],
         definitionsAfterInstances: [String],
+        renderedInstances: [String],
         renderedActions: [DirectModuleAction],
         emittedActionNamesByID: [ActionID: String],
         emittedActionCallNames: [CompiledActionCall: String],
@@ -719,8 +727,8 @@ public extension TLASpec {
             lines.append(rendered.body)
             lines.append("")
         }
-        for instance in semantics.moduleInstances {
-            lines.append(try renderer.moduleInstance(instance))
+        for instance in renderedInstances {
+            lines.append(instance)
             lines.append("")
         }
         for definition in definitionsAfterInstances {

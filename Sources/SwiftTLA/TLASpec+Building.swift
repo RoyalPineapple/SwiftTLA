@@ -204,12 +204,9 @@ extension TLASpec {
     semantics: CompiledSemantics,
     layout: CompiledLayout,
     formalRenderer: CompiledTLARenderer,
-    renderedRefinements: [String]
+    declarations: RenderedModule
   ) throws -> AuthoredPlusCalModule {
-    let declarationSections = try authoredPlusCalDeclarationSections(
-      order: declarationOrder, semantics: semantics,
-      formalRenderer: formalRenderer
-    )
+    let declarationSections = authoredPlusCalDeclarationSections(order: declarationOrder, declarations: declarations)
     let sourceProperties = plusCalAlgorithm.properties
     let invariantsByID = Dictionary(uniqueKeysWithValues: semantics.invariants.map { ($0.id, $0) })
     let temporalPropertiesByID = Dictionary(uniqueKeysWithValues: semantics.temporalProperties.map { ($0.id, $0) })
@@ -248,7 +245,7 @@ extension TLASpec {
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: postTranslationDeclarations,
-      refinements: renderedRefinements
+      refinements: declarations.refinements
     )
     return module
   }
@@ -277,17 +274,16 @@ extension TLASpec {
 
   private func authoredPlusCalDeclarationSections(
     order: AuthoredPlusCalDeclarationOrder,
-    semantics: CompiledSemantics,
-    formalRenderer: CompiledTLARenderer
-  ) throws -> AuthoredPlusCalDeclarationSections {
-    func render(_ declaration: AuthoredPlusCalDeclarationOrder.Reference) throws -> String {
+    declarations: RenderedModule
+  ) -> AuthoredPlusCalDeclarationSections {
+    func text(_ declaration: AuthoredPlusCalDeclarationOrder.Reference) -> String {
       switch declaration {
-      case .definition(let index): return try formalRenderer.formalDefinition(semantics.formalOperatorDefinitions[index])
-      case .instance(let index): return try formalRenderer.moduleInstance(semantics.moduleInstances[index])
+      case .definition(let index): return declarations.definitions[index]
+      case .instance(let index): return declarations.instances[index]
       }
     }
-    return try .init(prelude: order.prelude.map(render), define: order.define.map(render),
-                     postTranslation: order.postTranslation.map(render))
+    return .init(prelude: order.prelude.map(text), define: order.define.map(text),
+                 postTranslation: order.postTranslation.map(text))
   }
 
   private var authoredPlusCalSymmetry: [String] {
