@@ -2,7 +2,7 @@
   "schema": "TLCReferencePin",
   "tlc": {
     "tag": "v1.8.0",
-    "commit": "b123b22654942bd7f8b1bcadcc47da4ee2cf4c0e",
+    "commit": "ede5b88221f942cd1113758e9aa3b30097a3a856",
     "standardModules": [
       "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
       "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
@@ -11,8 +11,8 @@
     ],
     "jar": {
       "repository": "tlaplus/tlaplus",
-      "assetID": 544648411,
-      "sha256": "b658b4e504fdf0b721caf7066320f6b6fe5805f4dd2f717d0e47baba4097205e"
+      "assetID": 553619847,
+      "sha256": "8836549e83db7f0b3f9fdde679ab56270d18e06198366d217d960738c02b9dbe"
     }
   },
   "java": {

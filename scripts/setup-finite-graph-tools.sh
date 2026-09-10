@@ -204,14 +204,19 @@ download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 [ "$(sha256 "$BRIDGE_SOURCE")" = "$BRIDGE_SOURCE_SHA256" ] || fail "bridge source digest mismatch"
 
 python3 - "$TLC_JAR" "$TOOLCHAIN" <<'PY'
+from email.parser import Parser
 import json
 import sys
 import zipfile
 
 jar_path, toolchain_path = sys.argv[1:]
 with open(toolchain_path, encoding="utf-8") as source:
-    modules = json.load(source)["tlc"]["standardModules"]
+    reference = json.load(source)["tlc"]
+    modules = reference["standardModules"]
 with zipfile.ZipFile(jar_path) as jar:
+    manifest = Parser().parsestr(jar.read("META-INF/MANIFEST.MF").decode("utf-8"))
+    if manifest["X-Git-Revision"] != reference["commit"]:
+        raise SystemExit("TLC JAR source revision differs from the toolchain lock")
     actual = sorted(
         name.removeprefix("tla2sany/StandardModules/").removesuffix(".tla")
         for name in jar.namelist()
