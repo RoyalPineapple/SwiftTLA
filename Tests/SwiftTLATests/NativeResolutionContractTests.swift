@@ -309,7 +309,13 @@ extension NativeResolutionContractTests {
             .init(name: "Nonempty", body: .greaterThan(.cardinality(.variable("members")), .int(0)))
         ]).compile()
         let inference = try NativeTypeInference(compilation: compilation)
-        #expect(inference.checkedRoots.map(\.resultType) == [.set(.int), .set(.int), .bool])
+        #expect(inference.initializations.map(\.expression.resultType) == [.set(.int)])
+        #expect(inference.invariants.map(\.expression.resultType) == [.bool])
+        guard case .assign(_, let checkedValue) = try #require(inference.actions.first).body else {
+            Issue.record("Expected the checked assignment")
+            return
+        }
+        #expect(checkedValue.resultType == .set(.int))
         let program = try NativeResolvedProgram(compilation: compilation)
         let initial = try #require(program.initializations.values.first)
         #expect(program[initial].resultType == .set(.int))

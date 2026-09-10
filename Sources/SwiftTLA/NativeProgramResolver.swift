@@ -1,6 +1,6 @@
 extension NativeResolvedProgram {
     package init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
-        self = try NativeProgramResolver(compilation: compilation, sourceTypes: sourceTypes).resolve()
+        self = try NativeProgramResolver(inference: .init(compilation: compilation, sourceTypes: sourceTypes)).resolve()
     }
 }
 
@@ -23,35 +23,29 @@ private struct NativeResolvedFunctionKey: Hashable {
 /// Builds immutable occurrence annotations. All type decisions remain owned by
 /// NativeTypeInference; code generation receives only this builder's result.
 private final class NativeProgramResolver {
-    let compilation: CompiledSpecification
     let inference: NativeTypeInference
-    var checkedRoots: ArraySlice<NativeCheckedExpression>
     var expressions: [NativeResolvedExpression] = []
     var functions: [NativeResolvedFunction?] = []
     var functionIDs: [NativeResolvedFunctionKey: NativeFunctionID] = [:]
     var functionCallbacks: [NativeFunctionID: [(OperatorID, NativeOperatorCall, NativeCallbackID)]] = [:]
     var callbacks: [NativeResolvedCallback] = []
 
-    init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata) throws {
-        self.compilation = compilation
-        inference = try .init(compilation: compilation, sourceTypes: sourceTypes)
-        checkedRoots = inference.checkedRoots[...]
+    init(inference: NativeTypeInference) {
+        self.inference = inference
     }
 
     func resolve() throws -> NativeResolvedProgram {
-        var initializations: [VariableID: NativeExpressionID] = [:]
-        for item in compilation.semantics.variableInitializations {
-            initializations[item.variable] = try nextExpression()
-        }
-        var actionRoots: [ActionID: CompiledActionExpr<NativeExpressionID>] = [:]
-        for item in compilation.semantics.actions { actionRoots[item.id] = try item.body.map { _ in try nextExpression() } }
-        var invariantRoots: [PropertyID: NativeExpressionID] = [:]
-        for item in compilation.semantics.invariants { invariantRoots[item.id] = try nextExpression() }
-        let constraint = try compilation.semantics.constraint.map { _ in try nextExpression() }
-        let assume = try compilation.semantics.assume.map { _ in try nextExpression() }
-        guard checkedRoots.isEmpty else {
-            throw NativeTypeInference.diagnostic("resolution", "unconsumed checked roots")
-        }
+        let initializations = try Dictionary(uniqueKeysWithValues: inference.initializations.map {
+            ($0.variable, try root($0.expression))
+        })
+        let actionRoots = try Dictionary(uniqueKeysWithValues: inference.actions.map {
+            ($0.id, try $0.body.map(root))
+        })
+        let invariantRoots = try Dictionary(uniqueKeysWithValues: inference.invariants.map {
+            ($0.id, try root($0.expression))
+        })
+        let constraint = try inference.constraint.map(root)
+        let assume = try inference.assume.map(root)
         var checks: [NativeProjectionPair: Bool] = [:]
         for node in expressions {
             collectProjection(node.computationType, to: node.resultType, checks: &checks)
@@ -99,9 +93,7 @@ private final class NativeProgramResolver {
         return value
     }
 
-    /// Consume roots in the shared program's initialization/action/predicate order.
-    func nextExpression() throws -> NativeExpressionID {
-        let checked = try require(checkedRoots.popFirst())
+    func root(_ checked: NativeCheckedExpression) throws -> NativeExpressionID {
         for type in [checked.resultType, checked.computationType] where !type.resolved {
             throw NativeTypeInference.unresolvedDiagnostic(type, at: "resolution")
         }

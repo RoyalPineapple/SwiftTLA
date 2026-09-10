@@ -392,7 +392,11 @@ struct NativeTypeInference: Sendable {
 
     static let maximumActiveSpecializations = 256
 
-    private(set) var checkedRoots: [NativeCheckedExpression] = []
+    private(set) var initializations: [(variable: VariableID, expression: NativeCheckedExpression)] = []
+    private(set) var actions: [(id: ActionID, body: CompiledActionExpr<NativeCheckedExpression>)] = []
+    private(set) var invariants: [(id: PropertyID, expression: NativeCheckedExpression)] = []
+    private(set) var constraint: NativeCheckedExpression?
+    private(set) var assume: NativeCheckedExpression?
     private(set) var variables: [VariableID: NativeType] = [:]
     private(set) var bindings: [BinderID: NativeType] = [:]
     private(set) var collectionDomains: [VariableID: Set<CompiledValue>] = [:]
@@ -474,9 +478,15 @@ struct NativeTypeInference: Sendable {
         }
         // Each pass can refine an unresolved component through another variable
         // or binder; stop at the fixed point rather than imposing a pass budget.
-        var roots: [NativeCheckedExpression] = []
+        var initializations: [(variable: VariableID, expression: NativeCheckedExpression)] = []
+        var actions: [(id: ActionID, body: CompiledActionExpr<NativeCheckedExpression>)] = []
+        var invariants: [(id: PropertyID, expression: NativeCheckedExpression)] = []
+        var constraint: NativeCheckedExpression?
+        var assume: NativeCheckedExpression?
         while true {
-            roots.removeAll(keepingCapacity: true)
+            initializations.removeAll(keepingCapacity: true)
+            actions.removeAll(keepingCapacity: true)
+            invariants.removeAll(keepingCapacity: true)
             let previousVariables = variables
             let previousBindings = bindings
             let previousOperators = specializationResults
@@ -486,34 +496,34 @@ struct NativeTypeInference: Sendable {
                 switch initialization.initialization {
                 case .value(let value):
                     let checked = try checkOperand(.value(value), expected: expected)
-                    roots.append(checked)
+                    initializations.append((initialization.variable, checked))
                     inferred = checked.resultType
                 case .expression(let expression):
                     let checked = try checkOperand(expression, expected: expected)
-                    roots.append(checked)
+                    initializations.append((initialization.variable, checked))
                     inferred = checked.resultType
                 case .memberOf(let domain):
                     let checked = try checkOperand(domain, expected: .set(expected))
-                    roots.append(checked)
+                    initializations.append((initialization.variable, checked))
                     inferred = try element(checked.resultType)
                 }
                 variables[initialization.variable] = try Self.merge(expected, inferred)
             }
             for action in compilation.semantics.actions {
-                do { try actionTypes(action.body, roots: &roots) }
+                do { actions.append((action.id, try checkAction(action.body))) }
                 catch let diagnostic as CompilationDiagnostic {
                     let name = compilation.layout.actions.first { $0.id == action.id }?.declaration.name ?? String(action.id.ordinal)
                     throw Self.diagnostic("actions.\(name)", causedBy: diagnostic)
                 }
             }
             for invariant in compilation.semantics.invariants {
-                do { roots.append(try checkOperand(invariant.body, expected: .bool)) }
+                do { invariants.append((invariant.id, try checkOperand(invariant.body, expected: .bool))) }
                 catch let diagnostic as CompilationDiagnostic {
                     throw Self.diagnostic("invariants.\(invariant.name)", causedBy: diagnostic)
                 }
             }
-            if let constraint = compilation.semantics.constraint { roots.append(try checkOperand(constraint, expected: .bool)) }
-            if let assume = compilation.semantics.assume { roots.append(try checkOperand(assume, expected: .bool)) }
+            constraint = try compilation.semantics.constraint.map { try checkOperand($0, expected: .bool) }
+            assume = try compilation.semantics.assume.map { try checkOperand($0, expected: .bool) }
             if variables == previousVariables && bindings == previousBindings && specializationResults == previousOperators { break }
         }
         for variable in compilation.layout.variables {
@@ -524,7 +534,11 @@ struct NativeTypeInference: Sendable {
         }
         // Attach roots after convergence so deferred argument and callback scopes
         // do not retain expression graphs from earlier passes.
-        checkedRoots = roots
+        self.initializations = initializations
+        self.actions = actions
+        self.invariants = invariants
+        self.constraint = constraint
+        self.assume = assume
     }
 
     private func viewType(_ shape: FormalValueShape) throws -> NativeType {
@@ -1011,35 +1025,32 @@ struct NativeTypeInference: Sendable {
         }
     }
 
-    private mutating func actionTypes(_ action: CompiledActionExpr<CompiledStateExpr>, roots: inout [NativeCheckedExpression]) throws {
+    private mutating func checkAction(
+        _ action: CompiledActionExpr<CompiledStateExpr>
+    ) throws -> CompiledActionExpr<NativeCheckedExpression> {
         switch action {
         case .assign(let id, let expression):
             let checked = try checkOperand(expression, expected: variables[id] ?? .unknown)
-            roots.append(checked)
             variables[id] = try Self.merge(variables[id] ?? .unknown, checked.resultType)
-        case .unchanged: break
-        case .guard_(let expression): roots.append(try checkOperand(expression, expected: .bool))
-        case .and(let lhs, let rhs), .or(let lhs, let rhs):
-            try actionTypes(lhs, roots: &roots)
-            try actionTypes(rhs, roots: &roots)
+            return .assign(id, checked)
+        case .unchanged(let id): return .unchanged(id)
+        case .guard_(let expression): return .guard_(try checkOperand(expression, expected: .bool))
+        case .and(let lhs, let rhs): return .and(try checkAction(lhs), try checkAction(rhs))
+        case .or(let lhs, let rhs): return .or(try checkAction(lhs), try checkAction(rhs))
         case .ifElse(let condition, let lhs, let rhs):
-            roots.append(try checkOperand(condition, expected: .bool))
-            try actionTypes(lhs, roots: &roots)
-            try actionTypes(rhs, roots: &roots)
+            return .ifElse(try checkOperand(condition, expected: .bool), try checkAction(lhs), try checkAction(rhs))
         case .define(let id, let value, let body):
             bindingSources[id] = .setLiteral([value])
             bindingDomains[id] = literalValues(value)
             let checked = try checkOperand(value, expected: bindings[id] ?? .unknown)
-            roots.append(checked)
             bindings[id] = checked.resultType
-            try actionTypes(body, roots: &roots)
+            return .define(id, checked, try checkAction(body))
         case .existsAction(let id, let domain, let body):
             bindingSources[id] = domain
             bindingDomains[id] = literalDomain(domain)
             let checked = try checkOperand(domain, expected: .set(bindings[id] ?? .unknown))
-            roots.append(checked)
             bindings[id] = try element(checked.resultType)
-            try actionTypes(body, roots: &roots)
+            return .existsAction(id, checked, try checkAction(body))
         }
     }
 
