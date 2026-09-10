@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import Testing
 @testable import SwiftTLA
 import SwiftTLAMacros

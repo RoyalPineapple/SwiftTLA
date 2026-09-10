@@ -682,7 +682,7 @@ public func SortedSequences(
 
 /// The finite sequence-domain expansion shared by the builder and source
 /// parser.
-func formalSequenceExpressions(
+package func formalSequenceExpressions(
   members: [StateExpr],
   lengths: ClosedRange<Int>
 ) -> [StateExpr] {
@@ -701,7 +701,7 @@ func formalSequenceExpressions(
   return sequences
 }
 
-func formalZeroBasedSequenceExpressions(
+package func formalZeroBasedSequenceExpressions(
   members: [StateExpr],
   lengths: ClosedRange<Int>
 ) -> [StateExpr] {
@@ -721,7 +721,7 @@ func formalZeroBasedSequenceExpressions(
   }
 }
 
-func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
+package func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
   guard case .tupleLiteral(let values) = expression else { return false }
   let integers = values.compactMap { value -> Int? in
     guard case .value(.int(let integer)) = value else { return nil }

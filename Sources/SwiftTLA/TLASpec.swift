@@ -27,8 +27,8 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
-  let generatedSwiftType: String?
-  let origin: VariableOrigin
+  package let generatedSwiftType: String?
+  package let origin: VariableOrigin
 
   public init(
     name: String, initial: TLAValue, collectionType: CollectionVarType = .scalar
@@ -42,7 +42,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     )
   }
 
-  init(
+  package init(
     name: String, initialization: VariableInitialization,
     collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil,
@@ -65,13 +65,13 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
 public struct ActionBinding: Sendable, Hashable {
   public let name: String
   public let values: [TLAValue]
-  let generatedSwiftType: String?
+  package let generatedSwiftType: String?
 
   public init(name: String, values: [TLAValue]) {
     self.init(name: name, values: values, generatedSwiftType: nil)
   }
 
-  init(name: String, values: [TLAValue], generatedSwiftType: String?) {
+  package init(name: String, values: [TLAValue], generatedSwiftType: String?) {
     self.name = name
     self.values = values
     self.generatedSwiftType = generatedSwiftType
@@ -134,7 +134,7 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     self.init(name: name, body: body, bindings: bindings, controlOwner: nil)
   }
 
-  init(
+  package init(
     name: String,
     body: ActionExpr,
     bindings: [ActionBinding] = [],
@@ -208,7 +208,7 @@ public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
 }
 
 extension Array where Element == ConstantDecl {
-  func value(named name: String) -> TLAValue? {
+  package func value(named name: String) -> TLAValue? {
     first { $0.name == name }?.value
   }
 
@@ -235,14 +235,14 @@ public enum StandardModule: String, Sendable, Hashable, CaseIterable {
   case tlc = "TLC"
 }
 
-func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
+package func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
   modules.reduce(into: []) { orderedModules, module in
     if orderedModules.contains(module) == false { orderedModules.append(module) }
   }
 }
 
 public struct TLASpec: Sendable {
-  enum AlgorithmPhase: Sendable, Equatable {
+  package enum AlgorithmPhase: Sendable, Equatable {
     case source
     case lowered
   }
@@ -274,7 +274,7 @@ public struct TLASpec: Sendable {
   /// The authored Algorithm declaration that supplies the compiled PlusCal plan.
   package var sourceAlgorithms: [Algorithm]
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
-  var algorithmPhase: AlgorithmPhase
+  package var algorithmPhase: AlgorithmPhase
   package var diagnostics: [SourceParseDiagnostic] = []
 
   package init(
@@ -350,7 +350,7 @@ struct AuthoredPlusCalDeclaration: Sendable, Equatable {
   let phase: AuthoredPlusCalDeclarationPhase
   let dependencies: [String]
 
-  init(name: String? = nil, text: String, phase: AuthoredPlusCalDeclarationPhase = .prelude, dependencies: [String] = []) {
+  package init(name: String? = nil, text: String, phase: AuthoredPlusCalDeclarationPhase = .prelude, dependencies: [String] = []) {
     self.name = name
     self.text = text
     self.phase = phase
@@ -361,8 +361,8 @@ public struct VarDecl: SpecComponent, Sendable {
   public let name: String
   public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
-  let generatedSwiftType: String?
-  init(
+  package let generatedSwiftType: String?
+  package init(
     _ name: String,
     _ initial: TLAValue,
     collectionType: CollectionVarType = .scalar,
@@ -373,7 +373,7 @@ public struct VarDecl: SpecComponent, Sendable {
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
   }
-  init(
+  package init(
     _ name: String, memberOf set: StateExpr,
     collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil
@@ -383,7 +383,7 @@ public struct VarDecl: SpecComponent, Sendable {
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
   }
-  init(
+  package init(
     _ name: String,
     expression: StateExpr,
     collectionType: CollectionVarType = .scalar,
@@ -399,7 +399,7 @@ public struct ActionDecl: SpecComponent, Sendable {
   public let name: String
   public let body: ActionExpr
   public let bindings: [ActionBinding]
-  init(
+  package init(
     _ name: String,
     _ body: ActionExpr,
     bindings: [ActionBinding] = []
@@ -412,7 +412,7 @@ public struct ActionDecl: SpecComponent, Sendable {
 public struct InvDecl: SpecComponent {
   public let name: String
   public let body: StateExpr
-  init(_ name: String, _ body: StateExpr) {
+  package init(_ name: String, _ body: StateExpr) {
     self.name = name
     self.body = body
   }
@@ -420,14 +420,14 @@ public struct InvDecl: SpecComponent {
 public struct TemporalDecl: SpecComponent {
   public let name: String
   public let expr: TemporalExpr
-  init(_ name: String, _ expr: TemporalExpr) {
+  package init(_ name: String, _ expr: TemporalExpr) {
     self.name = name
     self.expr = expr
   }
 }
 public struct FairnessDecl: SpecComponent {
   public let condition: FairnessCondition
-  init(_ condition: FairnessCondition) { self.condition = condition }
+  package init(_ condition: FairnessCondition) { self.condition = condition }
 }
 public struct ConstantDecl: SpecComponent, Sendable, Equatable {
   public let name: String
@@ -530,7 +530,7 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
     case liveSpec
     case liveSpecEquals
 
-    init?(sourceName: String) {
+    package init?(sourceName: String) {
       switch sourceName {
       case "spec": self = .spec
       case "liveSpec": self = .liveSpec
@@ -545,7 +545,7 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
   public let `operator`: Operator
   public let mappings: [RefinementMapping]
 
-  init(
+  package init(
     name: String,
     instance: FormalModuleInstanceReference,
     operator: Operator,
@@ -573,7 +573,7 @@ public struct RefinementMapping: Sendable, Equatable {
     self.source = source.stateExpr
   }
 
-  init(target: String, source: StateExpr) {
+  package init(target: String, source: StateExpr) {
     self.target = target
     self.source = source
   }
@@ -603,15 +603,15 @@ extension TLASpec {
 }
 public struct AssumeDecl: SpecComponent, Equatable {
   public let expr: StateExpr
-  init(_ expr: StateExpr) { self.expr = expr }
+  package init(_ expr: StateExpr) { self.expr = expr }
 }
 public struct ExtendsDecl: SpecComponent, Equatable {
   public let modules: [StandardModule]
-  init(_ modules: [StandardModule]) { self.modules = modules }
+  package init(_ modules: [StandardModule]) { self.modules = modules }
 }
 public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
-  init(_ body: StateExpr) { self.body = body }
+  package init(_ body: StateExpr) { self.body = body }
 }
 public struct RecursiveFunc: Sendable, Equatable {
   public let name: String
@@ -625,7 +625,7 @@ public struct RecursiveFunc: Sendable, Equatable {
 }
 public struct RecursiveFuncDecl: SpecComponent, Equatable {
   public let funcDef: RecursiveFunc
-  init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
+  package init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
 }
 @resultBuilder
 public enum SpecBuilder {

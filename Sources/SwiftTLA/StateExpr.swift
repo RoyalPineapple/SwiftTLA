@@ -6,7 +6,7 @@ package enum CompilerControlSymbol: String, Sendable {
     case terminatingAction = "Terminating"
 }
 
-func generatedBinderName(
+package func generatedBinderName(
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column
@@ -347,7 +347,7 @@ extension StateExpr {
     public static func int(_ value: Int) -> StateExpr { .value(.int(value)) }
     public static func bool(_ value: Bool) -> StateExpr { .value(.bool(value)) }
 
-    static func partialFunctionOverriding(
+    package static func partialFunctionOverriding(
         _ function: StateExpr,
         key: StateExpr,
         value: StateExpr

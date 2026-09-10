@@ -1,5 +1,5 @@
-enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
-    enum ValueShape: String, Equatable, Sendable {
+package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
+    package enum ValueShape: String, Equatable, Sendable {
         case integer
         case boolean
         case set
@@ -14,13 +14,13 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case recordField = "record field"
     }
 
-    enum Callable: String, Equatable, Sendable {
+    package enum Callable: String, Equatable, Sendable {
         case foldFunction = "FoldFunction"
         case formalOperator = "formal operator"
         case recursiveOperator = "recursive operator"
     }
 
-    enum FormalArgumentKind: Equatable, Sendable {
+    package enum FormalArgumentKind: Equatable, Sendable {
         case value
         case `operator`(arity: Int)
     }
@@ -44,7 +44,7 @@ enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
 
-    var description: String {
+    package var description: String {
         switch self {
         case .expected(let expected, let actual):
             return "Expected \(expected.rawValue); received \(actual.map(\.kindDescription).joined(separator: ", "))"

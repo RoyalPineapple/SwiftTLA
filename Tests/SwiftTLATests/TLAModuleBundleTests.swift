@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import Testing
 import Foundation
 import SwiftParser

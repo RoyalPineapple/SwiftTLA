@@ -1,4 +1,3 @@
-import SwiftSyntaxMacros
 
 public protocol TLAValueType: TLAValueConvertible, StateExprConvertible, Sendable {
   static var defaultValue: Self { get }

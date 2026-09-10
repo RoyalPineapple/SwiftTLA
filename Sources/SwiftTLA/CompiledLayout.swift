@@ -133,14 +133,14 @@ public struct ControlLocationReference: Hashable, Sendable {
     let owner: ControlOwner?
     let sourceName: String
 
-    static let done = Self(CompilerControlSymbol.done.rawValue)
+    package static let done = Self(CompilerControlSymbol.done.rawValue)
 
-    init(_ sourceName: String) {
+    package init(_ sourceName: String) {
         self.owner = nil
         self.sourceName = sourceName
     }
 
-    init(owner: ControlOwner, sourceName: String) {
+    package init(owner: ControlOwner, sourceName: String) {
         self.owner = owner
         self.sourceName = sourceName
     }

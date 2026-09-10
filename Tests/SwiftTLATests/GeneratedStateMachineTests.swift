@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import Foundation
 import Testing
 @testable import SwiftTLA

@@ -1,5 +1,6 @@
+import SwiftTLA
 extension NativeResolvedProgram {
-    package init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
+    init(compilation: CompiledSpecification, sourceTypes: NativeSourceTypeMetadata = .init()) throws {
         self = try NativeProgramResolver(inference: .init(compilation: compilation, sourceTypes: sourceTypes)).resolve()
     }
 }

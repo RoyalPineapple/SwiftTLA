@@ -903,7 +903,7 @@ public enum DoBuilder {
 }
 
 public struct Algorithm: Sendable, SpecComponent {
-    internal let model: AlgorithmModel
+    package let model: AlgorithmModel
 
     public init(
         _ name: String,
@@ -927,7 +927,7 @@ public struct Algorithm: Sendable, SpecComponent {
         )
     }
 
-    internal init(model: AlgorithmModel) {
+    package init(model: AlgorithmModel) {
         self.model = model
     }
 
@@ -1653,8 +1653,8 @@ public func Skip() -> StepStatement {
     StepStatement(model: .skip)
 }
 
-internal enum AlgorithmValidator {
-    static func validate(_ model: AlgorithmModel) -> [AlgorithmDiagnostic] {
+package enum AlgorithmValidator {
+    package static func validate(_ model: AlgorithmModel) -> [AlgorithmDiagnostic] {
         var diagnostics: [AlgorithmDiagnostic] = []
         validateName(model.name, at: .algorithm, diagnostics: &diagnostics)
         let procedureNames = model.procedures.map(\.name)

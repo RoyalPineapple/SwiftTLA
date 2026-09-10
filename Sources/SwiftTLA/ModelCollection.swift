@@ -63,7 +63,7 @@ public struct ModelCollectionDecl: SpecComponent, Sendable {
   public var verificationScope: Int { metadata.verificationScope }
   public var initial: TLAValue { metadata.initial }
 
-  init(
+  package init(
     name: String,
     verificationScope: Int,
     initial: TLAValue,
@@ -79,7 +79,7 @@ public struct ModelCollectionDecl: SpecComponent, Sendable {
     self.generatedValueType = generatedValueType
   }
 
-  var variable: NamedVar {
+  package var variable: NamedVar {
     NamedVar(
       name: name,
       initialization: .value(.function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) }))),
@@ -87,6 +87,7 @@ public struct ModelCollectionDecl: SpecComponent, Sendable {
       origin: .source
     )
   }
+
 }
 
 package struct ModelCollectionMetadata: Equatable, Sendable {

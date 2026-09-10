@@ -1,3 +1,4 @@
+import SwiftTLA
 import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
@@ -2523,6 +2524,32 @@ extension ParserSession {
     func actionReference(_ expression: ExprSyntax?) -> NamedAction? {
         guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
         return specBindings.actions[reference.baseName.text]
+    }
+
+}
+
+extension SourceParseDiagnostic {
+    init<Node: SyntaxProtocol>(
+        message: String,
+        source: Node,
+        expected: String = "a supported SwiftTLA declaration or expression",
+        actual: String = "",
+        nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
+    ) {
+        let fragment = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.init(
+            code: nil,
+            message: message,
+            source: fragment,
+            sourcePath: [],
+            sourceSpan: CompilerSourceSpan(
+                location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
+                utf8Length: fragment.utf8.count
+            ),
+            expected: expected,
+            actual: actual,
+            nextSafeAction: nextSafeAction
+        )
     }
 
 }

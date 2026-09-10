@@ -108,7 +108,7 @@ struct CompiledBindings: Sendable {
     }
 }
 
-enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
+package enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
     case uninitializedVariable(VariableID)
@@ -120,7 +120,7 @@ enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
     case unresolvedOperator
     case conflictingAssignment(VariableID)
 
-    var description: String {
+    package var description: String {
         switch self {
         case .invalidStateLayout(let expected, let actual):
             "Compiled state requires \(expected) slots; received \(actual)"

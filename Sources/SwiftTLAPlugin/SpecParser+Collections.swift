@@ -1,3 +1,4 @@
+import SwiftTLA
 import SwiftSyntax
 
 extension ParserSession {

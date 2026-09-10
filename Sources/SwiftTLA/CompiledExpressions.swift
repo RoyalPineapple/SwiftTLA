@@ -142,7 +142,7 @@ struct CompiledStateRequirements: Sendable {
 
 extension CompiledStateExpr {
     /// Diagnostic-only reflection of the outer case, without rendering its payload.
-    var diagnosticName: String {
+    package var diagnosticName: String {
         Mirror(reflecting: self).children.first?.label ?? "expression"
     }
 

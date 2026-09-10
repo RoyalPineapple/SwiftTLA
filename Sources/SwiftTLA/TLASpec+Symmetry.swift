@@ -7,17 +7,17 @@ public struct SymmetrySetDecl: SpecComponent, Sendable {
   public let variableName: String
   let domain: Domain
 
-  init(_ variableName: String, _ values: Set<TLAValue>) {
+  package init(_ variableName: String, _ values: Set<TLAValue>) {
     self.variableName = variableName
     domain = .values(values)
   }
 
-  init(collectionName: String) {
+  package init(collectionName: String) {
     variableName = collectionName
     domain = .collection
   }
 
-  func resolved(in collections: [ModelCollectionDecl]) -> SymmetrySet {
+  package func resolved(in collections: [ModelCollectionDecl]) -> SymmetrySet {
     let values: Set<TLAValue>
     switch domain {
     case .values(let members): values = members
