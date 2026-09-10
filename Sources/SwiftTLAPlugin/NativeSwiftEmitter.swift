@@ -10,6 +10,7 @@ struct NativeSwiftEmitter {
     var compilation: CompiledSpecification { model.compilation }
     let program: NativeResolvedProgram
     let stateMemberNames: [VariableID: String]
+    private let variableNames: [VariableID: String]
     var records: [NativeType] = []
     var atoms: [String] = []
     var finiteValues: [[CompiledValue]] = []
@@ -24,6 +25,15 @@ struct NativeSwiftEmitter {
     init(model: MacroCompilation) {
         self.model = model
         program = model.nativeProgram
+        variableNames = Dictionary(uniqueKeysWithValues: model.compilation.layout.variables.map { variable in
+            let name = String(variable.declaration.name.unicodeScalars.map { scalar -> Character in
+                switch scalar.value {
+                case 65...90, 97...122, 48...57, 95: Character(String(scalar))
+                default: "_"
+                }
+            })
+            return (variable.id, "_value_\(name)_\(variable.id.ordinal)")
+        })
         expressionOrdinals = Dictionary(uniqueKeysWithValues: model.nativeProgram.expressions.enumerated().map { ($0.element, $0.offset) })
         stateMemberNames = Dictionary(uniqueKeysWithValues: model.surface.variables.map {
             (model.compilation.layout.variables[$0.storageOrdinal].id, $0.swiftIdentifier)
@@ -67,16 +77,7 @@ struct NativeSwiftEmitter {
         }
     }
 
-    func variable(_ id: VariableID) -> String {
-        let declaration = compilation.layout.variables.first { $0.id == id }?.declaration.name ?? "variable"
-        let name = String(declaration.unicodeScalars.map { scalar -> Character in
-            switch scalar.value {
-            case 65...90, 97...122, 48...57, 95: Character(String(scalar))
-            default: "_"
-            }
-        })
-        return "_value_\(name)_\(id.ordinal)"
-    }
+    func variable(_ id: VariableID) -> String { variableNames[id]! }
     func stateValue(_ id: VariableID, prefix: String = "state.") -> String {
         guard !prefix.isEmpty, let field = stateMemberNames[id] else { return prefix + variable(id) }
         return prefix + "state." + field
