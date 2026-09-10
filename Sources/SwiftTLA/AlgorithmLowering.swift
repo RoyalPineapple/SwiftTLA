@@ -612,7 +612,7 @@ enum AlgorithmLowerer {
     private static func callAction(
         target: String,
         arguments: [StateExpr],
-        returnTo: StateExpr,
+        returnTo: StateExpr?,
         procedures: [AlgorithmProcedureModel],
         control: ControlFlow
     ) -> ActionExpr {
@@ -622,17 +622,19 @@ enum AlgorithmLowerer {
         }
         // A frame captures every procedure-owned slot. A tail call reuses the
         // caller's continuation, and return restores the pre-call environment.
-        let frameFields = [
-            (CompilerControlSymbol.procedure.rawValue, StateExpr.value(.string(procedure.name))),
-            (CompilerControlSymbol.programCounter.rawValue, returnTo)
-        ]
-            + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
-        let push = ActionExpr.assign(
-            .procedureStack,
-            .tupleConcatenate(.tupleLiteral([.recordLiteral(.init(orderedFields: frameFields.map {
-                .init(name: $0.0, value: $0.1)
-            }))]), .procedureStack)
-        )
+        let push = returnTo.map { returnTo in
+            let frameFields = [
+                (CompilerControlSymbol.procedure.rawValue, StateExpr.value(.string(procedure.name))),
+                (CompilerControlSymbol.programCounter.rawValue, returnTo)
+            ]
+                + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
+            return ActionExpr.assign(
+                .procedureStack,
+                .tupleConcatenate(.tupleLiteral([.recordLiteral(.init(orderedFields: frameFields.map {
+                    .init(name: $0.0, value: $0.1)
+                }))]), .procedureStack)
+            )
+        }
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign(.named($0.0.root), $0.1)
         }
@@ -642,8 +644,10 @@ enum AlgorithmLowerer {
                 deterministicInitialization($0.initialization, path: "procedures.\(procedure.name).locals.\($0.root)")
             )
         }
-        return (parameterAssignments + localAssignments + [push, sequentialTransfer(to: control.procedure(procedure, location: entry))])
-            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
+        var assignments = parameterAssignments + localAssignments
+        if let push { assignments.append(push) }
+        assignments.append(sequentialTransfer(to: control.procedure(procedure, location: entry)))
+        return assignments.reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
 
     private static func returnAction(
@@ -664,33 +668,10 @@ enum AlgorithmLowerer {
         )
     }
 
-    private static func tailCallAction(
-        target: String,
-        arguments: [StateExpr],
-        procedures: [AlgorithmProcedureModel],
-        control: ControlFlow
-    ) -> ActionExpr {
-        guard let procedure = procedures.first(where: { $0.name == target }),
-              let entry = procedure.steps.first?.label.name else {
-            return .guard_(.value(.bool(false)))
-        }
-        let parameterAssignments = zip(procedure.parameters, arguments).map {
-            ActionExpr.assign(.named($0.0.root), $0.1)
-        }
-        let localAssignments = procedure.locals.map {
-            ActionExpr.assign(
-                .named($0.root),
-                deterministicInitialization($0.initialization, path: "procedures.\(procedure.name).locals.\($0.root)")
-            )
-        }
-        return (parameterAssignments + localAssignments + [sequentialTransfer(to: control.procedure(procedure, location: entry))])
-            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
-    }
-
     private static func processCallAction(
         target: String,
         arguments: [StateExpr],
-        returnTo: StateExpr,
+        returnTo: StateExpr?,
         procedures: [AlgorithmProcedureModel],
         control: ControlFlow
     ) -> ActionExpr {
@@ -700,23 +681,25 @@ enum AlgorithmLowerer {
         }
         let process = StateExpr.variable(processBinding.rawValue)
         let stack = StateExpr.functionApply(.procedureStack, process)
-        let frameFields = [
-            (CompilerControlSymbol.procedure.rawValue, StateExpr.value(.string(procedure.name))),
-            (CompilerControlSymbol.programCounter.rawValue, returnTo)
-        ]
-            + procedureSlots(procedures).map {
-                ($0.root, StateExpr.functionApply(.variable($0.root), process))
-            }
-        let push = ActionExpr.assign(
-            .procedureStack,
-            .except(
+        let push = returnTo.map { returnTo in
+            let frameFields = [
+                (CompilerControlSymbol.procedure.rawValue, StateExpr.value(.string(procedure.name))),
+                (CompilerControlSymbol.programCounter.rawValue, returnTo)
+            ]
+                + procedureSlots(procedures).map {
+                    ($0.root, StateExpr.functionApply(.variable($0.root), process))
+                }
+            return ActionExpr.assign(
                 .procedureStack,
-                process,
-                .tupleConcatenate(.tupleLiteral([.recordLiteral(.init(orderedFields: frameFields.map {
-                    .init(name: $0.0, value: $0.1)
-                }))]), stack)
+                .except(
+                    .procedureStack,
+                    process,
+                    .tupleConcatenate(.tupleLiteral([.recordLiteral(.init(orderedFields: frameFields.map {
+                        .init(name: $0.0, value: $0.1)
+                    }))]), stack)
+                )
             )
-        )
+        }
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign(.named($0.0.root), .except(.variable($0.0.root), process, $0.1))
         }
@@ -728,8 +711,10 @@ enum AlgorithmLowerer {
             )
             return ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite(initial, localRoots: localRoots)))
         }
-        return (parameterAssignments + localAssignments + [push, transfer(to: control.procedure(procedure, location: entry))])
-            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
+        var assignments = parameterAssignments + localAssignments
+        if let push { assignments.append(push) }
+        assignments.append(transfer(to: control.procedure(procedure, location: entry)))
+        return assignments.reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
 
     private static func processReturnAction(
@@ -750,32 +735,6 @@ enum AlgorithmLowerer {
             .guard_(.greaterThan(.tupleLength(stack), .int(0))),
             ActionExpr.and
         )
-    }
-
-    private static func processTailCallAction(
-        target: String,
-        arguments: [StateExpr],
-        procedures: [AlgorithmProcedureModel],
-        control: ControlFlow
-    ) -> ActionExpr {
-        guard let procedure = procedures.first(where: { $0.name == target }),
-              let entry = procedure.steps.first?.label.name else {
-            return .guard_(.value(.bool(false)))
-        }
-        let process = StateExpr.variable(processBinding.rawValue)
-        let parameterAssignments = zip(procedure.parameters, arguments).map {
-            ActionExpr.assign(.named($0.0.root), .except(.variable($0.0.root), process, $0.1))
-        }
-        let localRoots = Set(procedureSlots(procedures).map(\.root))
-        let localAssignments = procedure.locals.map {
-            let initial = deterministicInitialization(
-                $0.initialization,
-                path: "procedures.\(procedure.name).locals.\($0.root)"
-            )
-            return ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite(initial, localRoots: localRoots)))
-        }
-        return (parameterAssignments + localAssignments + [transfer(to: control.procedure(procedure, location: entry))])
-            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
 
     private static func procedureSlots(
@@ -861,9 +820,9 @@ enum AlgorithmLowerer {
                index + 1 < statements.count,
                case .return = statements[index + 1] {
                 let tailCall = if let roots = processLocalRoots {
-                    processTailCallAction(target: target, arguments: arguments.map { rewrite($0, localRoots: roots) }, procedures: procedures, control: control)
+                    processCallAction(target: target, arguments: arguments.map { rewrite($0, localRoots: roots) }, returnTo: nil, procedures: procedures, control: control)
                 } else {
-                    tailCallAction(target: target, arguments: arguments, procedures: procedures, control: control)
+                    callAction(target: target, arguments: arguments, returnTo: nil, procedures: procedures, control: control)
                 }
                 action = .and(action, tailCall)
                 index += 2
