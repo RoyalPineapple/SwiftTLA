@@ -107,6 +107,8 @@ struct RenderedModule: Sendable, Equatable {
     let definitions: [String]
     let instances: [String]
     let refinements: [String]
+    let properties: [PropertyID: String]
+    let constraint: String?
 }
 
 package struct RenderedAction: Sendable, Equatable {
@@ -169,9 +171,9 @@ public struct CompiledSpecification: Sendable {
     /// Render verification artifacts from the existing program without compiling it again.
     public func render() throws -> RenderedSpecification {
         let source = module.source
-        let rootPlan = try source.renderModule(module)
+        let rootModule = try source.renderModule(module)
         let renderedBundle = TLAModuleBundle(
-            root: .init(name: source.name, tla: rootPlan.renderedModuleSource, cfg: rootPlan.renderedConfiguration),
+            root: .init(name: source.name, tla: rootModule.renderedModuleSource, cfg: rootModule.renderedConfiguration),
             imports: try imports.map { imported in
                 let plan = try imported.source.renderModule(imported)
                 return .init(name: imported.source.name, tla: plan.renderedModuleSource, cfg: nil)
@@ -183,8 +185,7 @@ public struct CompiledSpecification: Sendable {
         let algorithm = try module.authoredAlgorithm.map { authored in
             try source.authoredPlusCalModule(
                 algorithm: authored.plan, declarationOrder: authored.declarations,
-                semantics: module.semantics, layout: module.layout,
-                formalRenderer: renderer, declarations: rootPlan
+                layout: module.layout, declarations: rootModule
             )
         }
         let plusCalBundle = try algorithm.map { algorithm in
@@ -199,8 +200,8 @@ public struct CompiledSpecification: Sendable {
         }
         return RenderedSpecification(
             tlaBundle: renderedBundle,
-            renderedConfigurationWithoutSymmetry: rootPlan.renderedConfigurationWithoutSymmetry,
-            actions: rootPlan.renderedActions, renderedPlusCalModuleBundle: plusCalBundle
+            renderedConfigurationWithoutSymmetry: rootModule.renderedConfigurationWithoutSymmetry,
+            actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle
         )
     }
 }
@@ -520,7 +521,7 @@ public extension TLASpec {
             throw CompilationDiagnostic(
                 code: .compilationIdentityMismatch,
                 stage: .rendering,
-                path: "directModuleSectionPlan",
+                path: "module",
                 expected: "compiled declarations aligned with this source model",
                 actual: "actions \(semantics.actions.count)/\(actions.count), definitions \(semantics.formalOperatorDefinitions.count)/\(formalOperatorDefinitions.count), recursive functions \(semantics.recursiveFunctions.count)/\(recursiveFuncs.count)",
                 nextSafeAction: "Compile the source model again."
@@ -529,6 +530,9 @@ public extension TLASpec {
         let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let definitions = try semantics.formalOperatorDefinitions.prefix(formalOperatorDefinitions.count).map(renderer.formalDefinition)
         let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
+        let invariants = try semantics.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.body))") }
+        let temporalProperties = try semantics.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0.expression))") }
+        let constraint = try semantics.constraint.map { "StateConstraint == \(try renderer.state($0))" }
         let renderedRefinements = try refinements.map(renderer.refinement)
         let renderedFormalModuleReplacements = try semantics.formalModuleReplacements.map(renderer.formalModuleReplacement)
         let emittedActionNamesByID = Dictionary(
@@ -573,6 +577,9 @@ public extension TLASpec {
                 definitionsBeforeInstances: module.definitionsBeforeInstances.map { definitions[$0] },
                 definitionsAfterInstances: module.definitionsAfterInstances.map { definitions[$0] },
                 renderedInstances: instances,
+                renderedInvariants: invariants.map(\.1),
+                renderedTemporalProperties: temporalProperties.map(\.1),
+                renderedConstraint: constraint,
                 renderedActions: directModuleActions,
                 emittedActionNamesByID: emittedActionNamesByID,
                 emittedActionCallNames: emittedActionCallNames,
@@ -589,7 +596,8 @@ public extension TLASpec {
                 usesSymmetryReduction: false
             ),
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
-            definitions: definitions, instances: instances, refinements: renderedRefinements
+            definitions: definitions, instances: instances, refinements: renderedRefinements,
+            properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint
         )
     }
 
@@ -645,6 +653,9 @@ public extension TLASpec {
         definitionsBeforeInstances: [String],
         definitionsAfterInstances: [String],
         renderedInstances: [String],
+        renderedInvariants: [String],
+        renderedTemporalProperties: [String],
+        renderedConstraint: String?,
         renderedActions: [DirectModuleAction],
         emittedActionNamesByID: [ActionID: String],
         emittedActionCallNames: [CompiledActionCall: String],
@@ -744,12 +755,10 @@ public extension TLASpec {
             lines.append("vars == \(varsTuple)")
             lines.append("")
         }
-        for invariant in semantics.invariants {
-            lines.append("\(invariant.name) == \(try renderer.state(invariant.body))")
-        }
-        if !semantics.invariants.isEmpty { lines.append("") }
-        if let constraint = semantics.constraint {
-            lines.append("StateConstraint == \(try renderer.state(constraint))")
+        lines.append(contentsOf: renderedInvariants)
+        if !renderedInvariants.isEmpty { lines.append("") }
+        if let renderedConstraint {
+            lines.append(renderedConstraint)
             lines.append("")
         }
         guard !isLibraryModule else {
@@ -823,10 +832,8 @@ public extension TLASpec {
             lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionNames: emittedActionNamesByID, actionCalls: emittedActionCallNames))")
         }
         lines.append("")
-        for temporal in semantics.temporalProperties {
-            lines.append("\(temporal.name) == \(try renderer.temporal(temporal.expression))")
-        }
-        if !semantics.temporalProperties.isEmpty { lines.append("") }
+        lines.append(contentsOf: renderedTemporalProperties)
+        if !renderedTemporalProperties.isEmpty { lines.append("") }
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }
