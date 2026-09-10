@@ -16,7 +16,7 @@ sw_vers >> "$output_root/toolchain.txt"
 uname -m >> "$output_root/toolchain.txt"
 shasum -a 256 "$fixture" > "$output_root/fixture-sha256.txt"
 cat > "$output_root/measurement-scope.txt" <<'SCOPE'
-Both revisions build the same focused release SwiftPM harness and test source.
+Both revisions build the same focused release test source, preserving each revision’s compiler target dependencies.
 Build time includes macro-expansion dump instrumentation; dependency resolution is excluded.
 Binary size is the focused test executable, not an application or the complete repository test suite.
 Generated-source bytes sum captured macro expansion bodies; per-expansion names and byte counts are retained.
@@ -40,36 +40,16 @@ for revision in baseline candidate; do
     done
     cp "$fixture" "$harness/Tests/SwiftTLATests/NativeMachinePerformanceTests.swift"
     if [[ -f "$candidate_root/Package.resolved" ]]; then cp "$candidate_root/Package.resolved" "$harness/Package.resolved"; fi
-    cat > "$harness/Package.swift" <<'MANIFEST'
-// swift-tools-version: 5.9
-import PackageDescription
-import CompilerPluginSupport
-let settings: [SwiftSetting] = [.enableExperimentalFeature("StrictConcurrency")]
-let package = Package(
-    name: "SwiftTLA",
-    platforms: [.macOS(.v14)],
-    dependencies: [.package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0")],
-    targets: [
-        .target(name: "SwiftTLA", dependencies: [
-            .product(name: "SwiftParser", package: "swift-syntax"),
-            .product(name: "SwiftBasicFormat", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxMacros", package: "swift-syntax")
-        ], swiftSettings: settings),
-        .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"], swiftSettings: settings),
-        .macro(name: "SwiftTLAPlugin", dependencies: [
-            "SwiftTLA",
-            .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-            .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-            .product(name: "SwiftParser", package: "swift-syntax")
-        ], swiftSettings: settings),
-        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings)
-    ]
-)
+    cp "$source_root/Package.swift" "$harness/Package.swift"
+    cat >> "$harness/Package.swift" <<'MANIFEST'
+// Preserve this revision's compiler dependency graph in the focused harness.
+package.products = []
+package.targets.removeAll { !["SwiftTLA", "SwiftTLAMacros", "SwiftTLAPlugin"].contains($0.name) }
+package.targets.append(.testTarget(
+    name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings
+))
 MANIFEST
+
     (
         cd "$harness"
         swift package resolve > "$destination/resolve.log" 2>&1
