@@ -8,9 +8,9 @@ import Testing
         let compilation = try compileSpecification()
         let program = try NativeResolvedProgram(compilation: compilation, sourceTypes: metadata)
         let root = try #require(program.invariants.values.first)
-        let domain = program[program[root].children[0]]
+        let domain = root.children[0]
         #expect(domain.resultType == .set(.named("Key")))
-        #expect(program[domain.children[0]].resultType == .dictionary(.named("Key"), .int))
+        #expect(domain.children[0].resultType == .dictionary(.named("Key"), .int))
     }
 
     @Test("DOMAIN context does not reinterpret raw dictionary storage or admit unknown keys")

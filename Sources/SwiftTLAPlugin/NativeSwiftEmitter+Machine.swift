@@ -275,12 +275,12 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    mutating func actionFunctions(_ root: CompiledActionExpr<NativeExpressionID>) throws -> String {
-        var pending: [(node: CompiledActionExpr<NativeExpressionID>, id: Int, bindings: [BinderID])] = [(root, 0, [])]
+    mutating func actionFunctions(_ root: CompiledActionExpr<NativeCheckedExpression>) throws -> String {
+        var pending: [(node: CompiledActionExpr<NativeCheckedExpression>, id: Int, bindings: [BinderID])] = [(root, 0, [])]
         var nextID = 1
         var declarations: [String] = []
         while let (node, id, bindings) = pending.popLast() {
-            func childCall(_ child: CompiledActionExpr<NativeExpressionID>, binding: BinderID? = nil) -> String {
+            func childCall(_ child: CompiledActionExpr<NativeCheckedExpression>, binding: BinderID? = nil) -> String {
                 let childBindings = bindings + (binding.map { [$0] } ?? [])
                 let childID = nextID
                 nextID += 1

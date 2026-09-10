@@ -97,8 +97,8 @@ import Testing
         let program = try NativeResolvedProgram(compilation: compilation, sourceTypes: .init(enums: ["Member": [.int(1), .int(2)]]))
         for invariant in compilation.semantics.invariants {
             let root = try #require(program.invariants[invariant.id])
-            let node = program[root]
-            let operands = node.children.map { program[$0].resultType }
+            let node = root
+            let operands = node.children.map { $0.resultType }
             #expect(node.resultType == .bool)
             switch node.expression {
             case .equal, .notEqual:
@@ -132,10 +132,10 @@ import Testing
             ], actions: [], invariants: []).compile()
             let program = try NativeResolvedProgram(compilation: compilation)
             let root = try #require(program.initializations.values.first)
-            let node = program[root]
+            let node = root
             let source = try #require(node.children.first)
             #expect(node.resultType == operation.type)
-            #expect(program[source].resultType == .dictionary(.int, .int))
+            #expect(source.resultType == .dictionary(.int, .int))
         }
     }
 
@@ -156,9 +156,9 @@ import Testing
             ], actions: [], invariants: []).compile()
             let program = try NativeResolvedProgram(compilation: compilation)
             let root = try #require(program.initializations.values.first)
-            let node = program[root]
+            let node = root
             #expect(node.resultType == .int)
-            #expect(node.children.map { program[$0].resultType } == [.int, .int, sourceType])
+            #expect(node.children.map { $0.resultType } == [.int, .int, sourceType])
         }
     }
 
@@ -192,13 +192,13 @@ import Testing
         #expect(program.functions.count == 2)
         #expect(Set(program.functions.map(\.resultType)) == [.int, .string])
         for function in program.functions {
-            #expect(program[function.body].resultType == function.resultType)
+            #expect(function.body.resultType == function.resultType)
             #expect(function.parameterTypes == [function.resultType])
         }
         #expect(program.expressions.allSatisfy { $0.resultType.resolved && $0.computationType.resolved })
         for expression in program.expressions {
-            #expect(expression.children.allSatisfy { program.expressions.indices.contains($0.ordinal) })
-            if let call = expression.call {
+            #expect(expression.children.allSatisfy { program.expressions.contains($0) })
+            for (site, call) in program.calls where site.expression === expression {
                 switch call.target {
                 case .function(let id): #expect(program.functions.indices.contains(id.ordinal))
                 case .callback(let id): #expect(program.callbacks.indices.contains(id.ordinal))
@@ -241,8 +241,8 @@ import Testing
         ))
         let program = try NativeResolvedProgram(compilation: compileSpecification(operation: operation, arguments: [.value(.int(2))], boolean: false))
         #expect(program.functions.count == 1)
-        #expect(program.expressions.contains { expression in
-            guard let call = expression.call, case .function(let id) = call.target else { return false }
+        #expect(program.calls.values.contains { call in
+            guard case .function(let id) = call.target else { return false }
             return program[id].resultType == .int
         })
     }
@@ -283,10 +283,10 @@ import Testing
         ], actions: [], invariants: []).compile()
         let program = try NativeResolvedProgram(compilation: compilation)
         let root = try #require(program.initializations.values.first)
-        let node = program[root]
+        let node = root
         #expect(node.resultType == .array(.int))
-        #expect(program[node.children[0]].resultType == .dictionary(.int, .int))
-        #expect(program[node.children[1]].resultType == .bool)
+        #expect(node.children[0].resultType == .dictionary(.int, .int))
+        #expect(node.children[1].resultType == .bool)
     }
 
     private func compileSpecification(operation: FormalOperatorDefinition, arguments: [FormalCallArgument], boolean: Bool) throws -> CompiledSpecification {
@@ -319,14 +319,14 @@ extension NativeResolutionContractTests {
         #expect(checkedValue.resultType == .set(.int))
         let program = try NativeResolvedProgram(compilation: compilation)
         let initial = try #require(program.initializations.values.first)
-        #expect(program[initial].resultType == .set(.int))
+        #expect(initial.resultType == .set(.int))
         let action = try #require(program.actions.values.first)
         guard case .assign(_, let assigned) = action else {
             Issue.record("Expected the checked assignment")
             return
         }
-        #expect(program[assigned].resultType == .set(.int))
+        #expect(assigned.resultType == .set(.int))
         let invariant = try #require(program.invariants.values.first)
-        #expect(program[invariant].resultType == .bool)
+        #expect(invariant.resultType == .bool)
     }
 }

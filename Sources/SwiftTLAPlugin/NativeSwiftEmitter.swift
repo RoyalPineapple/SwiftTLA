@@ -14,7 +14,9 @@ struct NativeSwiftEmitter {
     var atoms: [String] = []
     var finiteValues: [[CompiledValue]] = []
     var unions: [[NativeType]] = []
-    private var expressionValues: [NativeExpressionID: String] = [:]
+    private var expressionValues: [NativeCallSite: String] = [:]
+    private var currentFunction: NativeFunctionID?
+    let expressionOrdinals: [NativeCheckedExpression: Int]
     private var hasDepthScope = false
     private var callbackFunctions: [NativeCallbackID: String] = [:]
     private var functionPlans: [NativeFunctionID: NativeFunctionPlan] = [:]
@@ -22,6 +24,7 @@ struct NativeSwiftEmitter {
     init(model: MacroCompilation) {
         self.model = model
         program = model.nativeProgram
+        expressionOrdinals = Dictionary(uniqueKeysWithValues: model.nativeProgram.expressions.enumerated().map { ($0.element, $0.offset) })
         stateMemberNames = Dictionary(uniqueKeysWithValues: model.surface.variables.map {
             (model.compilation.layout.variables[$0.storageOrdinal].id, $0.swiftIdentifier)
         })
@@ -286,7 +289,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func resolvedCall(
-        _ call: NativeResolvedCall, argumentRoots: [NativeExpressionID], state: String, substitutions: [BinderID: String],
+        _ call: NativeResolvedCall, argumentRoots: [NativeCheckedExpression], state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
         let ownsDepth = !hasDepthScope
@@ -347,8 +350,13 @@ struct NativeSwiftEmitter {
         let call = "try \(function)(\(arguments.joined(separator: ", ")))"
         if activeFunctions.contains(id) { return "(\(call))" }
         let outerCallbacks = callbackFunctions
+        let outerFunction = currentFunction
         callbackFunctions = nestedCallbacks
-        defer { callbackFunctions = outerCallbacks }
+        currentFunction = id
+        defer {
+            callbackFunctions = outerCallbacks
+            currentFunction = outerFunction
+        }
         let domainGuard = try resolved.domainGuard.map {
             "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
         } ?? ""
@@ -491,12 +499,12 @@ struct NativeSwiftEmitter {
             let outerValues = expressionValues
             defer { expressionValues = outerValues }
             for id in before {
-                let name = "_returnOperand\(id.ordinal)"
-                captures.append("let \(name): \(try swiftType(program[id].resultType)) = \(try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions))")
-                expressionValues[id] = name
+                let name = "_returnOperand\(expressionOrdinals[id]!)"
+                captures.append("let \(name): \(try swiftType(id.resultType)) = \(try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions))")
+                expressionValues[.init(expression: id, function: currentFunction)] = name
             }
-            let returnedOperand = "_returnedOperand\(operand.ordinal)"
-            expressionValues[operand] = returnedOperand
+            let returnedOperand = "_returnedOperand\(expressionOrdinals[operand]!)"
+            expressionValues[.init(expression: operand, function: currentFunction)] = returnedOperand
             let resumed = try recursiveBody(continuation, function: function, depthGuard: depthGuard,
                 state: state, substitutions: substitutions, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
             expressionValues = outerValues
@@ -532,7 +540,7 @@ struct NativeSwiftEmitter {
             nested[binderID] = "(try \(binder(binderID))())"
             let bodyCode = try recursiveBody(body, function: function, depthGuard: depthGuard,
                 state: state, substitutions: nested, activeFunctions: activeFunctions, hasPendingReturns: hasPendingReturns)
-            let binding = try cachedBinding(named: binder(binderID), type: program[value].resultType, value: valueCode)
+            let binding = try cachedBinding(named: binder(binderID), type: value.resultType, value: valueCode)
             return "\(binding)\n\(bodyCode)"
         case .call(let target, let arguments, let body):
             let callee = program[target]
@@ -544,6 +552,9 @@ struct NativeSwiftEmitter {
                 bindings.append(try cachedBinding(named: getter, type: type, value: value))
                 nested[parameter] = "(try \(getter)())"
             }
+            let outerFunction = currentFunction
+            currentFunction = target
+            defer { currentFunction = outerFunction }
             let domainGuard = try callee.domainGuard.map {
                 "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions)) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
             } ?? ""
@@ -554,20 +565,20 @@ struct NativeSwiftEmitter {
     }
 
     mutating func expression(
-        _ id: NativeExpressionID, state: String = "state.", substitutions: [BinderID: String] = [:],
+        _ id: NativeCheckedExpression, state: String = "state.", substitutions: [BinderID: String] = [:],
         activeFunctions: Set<NativeFunctionID> = []
     ) throws -> String {
-        if let value = expressionValues[id] { return value }
-        let node = program[id]
+        if let value = expressionValues[.init(expression: id, function: currentFunction)] { return value }
+        let node = id
         let value = try expressionBody(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         return try projected(value, from: node.computationType, to: node.resultType)
     }
 
     private mutating func expressionBody(
-        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ id: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        switch program[id].expression {
+        switch id.expression {
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
             return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .value, .stateVariable, .boundValue, .controlLocation, .enabledAction,
@@ -596,14 +607,14 @@ struct NativeSwiftEmitter {
     /// Keep checked arithmetic in evaluation order without nesting Swift calls
     /// according to the depth of the formal expression tree.
     private mutating func arithmeticExpression(
-        _ root: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ root: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        var pending: [(id: NativeExpressionID, expanded: Bool)] = [(root, false)]
+        var pending: [(id: NativeCheckedExpression, expanded: Bool)] = [(root, false)]
         var values: [String] = []
         var statements: [String] = []
         while let (id, expanded) = pending.popLast() {
-            let node = program[id]
+            let node = id
             let operation: String?
             switch node.expression {
             case .add: operation = "add"
@@ -615,7 +626,7 @@ struct NativeSwiftEmitter {
             default: operation = nil
             }
             let code: String
-            if let value = expressionValues[id] {
+            if let value = expressionValues[.init(expression: id, function: currentFunction)] {
                 code = value
             } else if let operation, id == root || node.resultType == .int {
                 let rightFirst = node.expression.evaluatesDenominatorFirst
@@ -646,12 +657,12 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func scalarExpression(
-        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ id: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        let node = program[id]
+        let node = id
         let expression = node.expression
-        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func childType(_ index: Int) -> NativeType { node.children[index].resultType }
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
@@ -684,12 +695,12 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func collectionExpression(
-        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ id: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        let node = program[id]
+        let node = id
         let expression = node.expression
-        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func childType(_ index: Int) -> NativeType { node.children[index].resultType }
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
@@ -752,12 +763,12 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func sequenceExpression(
-        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ id: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        let node = program[id]
+        let node = id
         let expression = node.expression
-        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func childType(_ index: Int) -> NativeType { node.children[index].resultType }
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
@@ -849,12 +860,12 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func functionExpression(
-        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ id: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        let node = program[id]
+        let node = id
         let expression = node.expression
-        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func childType(_ index: Int) -> NativeType { node.children[index].resultType }
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
@@ -875,7 +886,7 @@ struct NativeSwiftEmitter {
             guard case .dictionary(let input, let result) = node.computationType else { throw unsupported("function literal") }
             return "Dictionary(uniqueKeysWithValues: try \(try emit(0)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(1))) })"
         case .functionApply(_, let argument):
-            if let call = node.call { return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions) }
+            if let call = program.calls[.init(expression: node, function: currentFunction)] { return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions) }
             let result = node.computationType
             let source = childType(0)
             let access: String
@@ -915,12 +926,12 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func aggregateExpression(
-        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ id: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        let node = program[id]
+        let node = id
         let expression = node.expression
-        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func childType(_ index: Int) -> NativeType { node.children[index].resultType }
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
@@ -996,12 +1007,12 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func controlExpression(
-        _ id: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ id: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
-        let node = program[id]
+        let node = id
         let expression = node.expression
-        func childType(_ index: Int) -> NativeType { program[node.children[index]].resultType }
+        func childType(_ index: Int) -> NativeType { node.children[index].resultType }
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
@@ -1025,13 +1036,13 @@ struct NativeSwiftEmitter {
             return "(try { () throws -> \(try swiftType(result)) in\n\(declaration)\nreturn \(bodyCode)\n}())"
         case .letIn: return try emit(0)
         case .operatorApplication:
-            guard let call = node.call else { throw unsupported("resolved call") }
+            guard let call = program.calls[.init(expression: node, function: currentFunction)] else { throw unsupported("resolved call") }
             return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .recursiveCall:
-            guard let call = node.call else { throw unsupported("resolved call") }
+            guard let call = program.calls[.init(expression: node, function: currentFunction)] else { throw unsupported("resolved call") }
             return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .lambdaApplication:
-            guard let call = node.call else { throw unsupported("resolved lambda call") }
+            guard let call = program.calls[.init(expression: node, function: currentFunction)] else { throw unsupported("resolved lambda call") }
             return try resolvedCall(call, argumentRoots: node.children, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         default: throw unsupported("controlExpression operation")
         }

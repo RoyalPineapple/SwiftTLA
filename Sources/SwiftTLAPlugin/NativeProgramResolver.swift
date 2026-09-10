@@ -21,11 +21,13 @@ private struct NativeResolvedFunctionKey: Hashable {
     let capturedCallbacks: [NativeCallbackUseKey: NativeCallbackID]
 }
 
-/// Builds immutable occurrence annotations. All type decisions remain owned by
-/// NativeTypeInference; code generation receives only this builder's result.
+/// Links specialized functions and callbacks without copying checked expressions.
 private final class NativeProgramResolver {
     let inference: NativeTypeInference
-    var expressions: [NativeResolvedExpression] = []
+    var expressions: [NativeCheckedExpression] = []
+    var retainedExpressions: Set<NativeCheckedExpression> = []
+    var visited: Set<NativeCallSite> = []
+    var calls: [NativeCallSite: NativeResolvedCall] = [:]
     var functions: [NativeResolvedFunction?] = []
     var functionIDs: [NativeResolvedFunctionKey: NativeFunctionID] = [:]
     var functionCallbacks: [NativeFunctionID: [(OperatorID, NativeOperatorCall, NativeCallbackID)]] = [:]
@@ -51,12 +53,12 @@ private final class NativeProgramResolver {
         for node in expressions {
             collectProjection(node.computationType, to: node.resultType, checks: &checks)
             if case .assertView = node.expression, let source = node.children.first {
-                collectProjection(expressions[source.ordinal].resultType, to: node.computationType, checks: &checks)
+                collectProjection(source.resultType, to: node.computationType, checks: &checks)
             }
         }
         let projections = Set(checks.compactMap { pair, allowed in allowed ? pair : nil })
         return .init(projections: projections, variableTypes: inference.variables, bindingTypes: inference.bindings,
-            expressions: expressions, functions: try functions.map { try require($0) }, callbacks: callbacks,
+            expressions: expressions, calls: calls, functions: try functions.map { try require($0) }, callbacks: callbacks,
             initializations: initializations, actions: actionRoots, invariants: invariantRoots, constraint: constraint, assume: assume)
     }
 
@@ -94,19 +96,20 @@ private final class NativeProgramResolver {
         return value
     }
 
-    func root(_ checked: NativeCheckedExpression) throws -> NativeExpressionID {
+    func root(_ checked: NativeCheckedExpression) throws -> NativeCheckedExpression {
         for type in [checked.resultType, checked.computationType] where !type.resolved {
             throw NativeTypeInference.unresolvedDiagnostic(type, at: "resolution")
         }
-        return try expression(checked, callbackScope: [:])
+        return try expression(checked, function: nil, callbackScope: [:])
     }
 
     func expression(
-        _ checked: NativeCheckedExpression,
+        _ checked: NativeCheckedExpression, function: NativeFunctionID?,
         callbackScope: [NativeCallbackUseKey: NativeCallbackID]
-    ) throws -> NativeExpressionID {
+    ) throws -> NativeCheckedExpression {
+        let site = NativeCallSite(expression: checked, function: function)
+        guard visited.insert(site).inserted else { return checked }
         let value = checked.expression
-        let call: NativeResolvedCall?
         if let resolved = checked.call {
             let operation: OperatorID?
             switch value {
@@ -114,15 +117,13 @@ private final class NativeProgramResolver {
             default: operation = nil
             }
             guard checked.children.count == resolved.parameters.count else { return try require(nil) }
-            call = try resolveCall(resolved, operation: operation, operatorParameters: checked.operatorParameters, callbackScope: callbackScope)
-        } else {
-            call = nil
+            calls[site] = try resolveCall(resolved, operation: operation, operatorParameters: checked.operatorParameters, callbackScope: callbackScope)
         }
-        let children = try checked.children.map { try expression($0, callbackScope: callbackScope) }
-        let id = NativeExpressionID(ordinal: expressions.count)
-        expressions.append(.init(expression: value, resultType: checked.resultType,
-            computationType: checked.computationType, children: children, call: call))
-        return id
+        for child in checked.children {
+            _ = try expression(child, function: function, callbackScope: callbackScope)
+        }
+        if retainedExpressions.insert(checked).inserted { expressions.append(checked) }
+        return checked
     }
 
     func resolveCall(
@@ -180,8 +181,8 @@ private final class NativeProgramResolver {
         guard case .checked(let checkedBody, let checkedGuard) = call.implementation else {
             return try require(nil)
         }
-        let body = try expression(checkedBody, callbackScope: nested)
-        let domainGuard = try checkedGuard.map { try expression($0, callbackScope: nested) }
+        let body = try expression(checkedBody, function: id, callbackScope: nested)
+        let domainGuard = try checkedGuard.map { try expression($0, function: id, callbackScope: nested) }
         functions[id.ordinal] = .init(parameters: call.parameters,
             parameterTypes: call.specialization.arguments,
             resultType: call.result,

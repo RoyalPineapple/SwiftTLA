@@ -23,8 +23,8 @@ import Testing
     func collectionConstructor() throws {
         let program = try resolve(type: "Choice", initial: .setLiteral([.int(1)]))
         let root = try #require(program.initializations.values.first)
-        #expect(program[root].computationType == .set(.named("Node")))
-        #expect(program[program[root].children[0]].resultType == .named("Node"))
+        #expect(root.computationType == .set(.named("Node")))
+        #expect(root.children[0].resultType == .named("Node"))
         #expect(throws: CompilationDiagnostic.self) {
             try resolve(type: "Choice", initial: .setLiteral([.int(3)]))
         }
@@ -39,10 +39,10 @@ import Testing
     func collectionOperations(expression: StateExpr) throws {
         let program = try resolve(type: "Choice", initial: expression)
         let root = try #require(program.initializations.values.first)
-        #expect(program[root].computationType == .set(.named("Node")))
-        #expect(program[root].resultType == program.variableTypes.values.first)
-        for child in program[root].children {
-            #expect(program[child].resultType == .set(.named("Node")))
+        #expect(root.computationType == .set(.named("Node")))
+        #expect(root.resultType == program.variableTypes.values.first)
+        for child in root.children {
+            #expect(child.resultType == .set(.named("Node")))
         }
     }
 
@@ -51,10 +51,10 @@ import Testing
         let type = "OneOf<Missing,TupleExpr<Node>>"
         let program = try resolve(type: type, initial: .tupleLiteral([.int(1), .int(2)]))
         let root = try #require(program.initializations.values.first)
-        #expect(program[root].computationType == .array(.named("Node")))
-        #expect(program[root].children.count == 2)
-        for child in program[root].children {
-            #expect(program[child].resultType == .named("Node"))
+        #expect(root.computationType == .array(.named("Node")))
+        #expect(root.children.count == 2)
+        for child in root.children {
+            #expect(child.resultType == .named("Node"))
         }
         #expect(throws: CompilationDiagnostic.self) {
             try resolve(type: type, initial: .tupleLiteral([.int(3)]))
@@ -86,9 +86,9 @@ import Testing
         let program = try resolve(type: "OneOf<Node,Missing>", initial: .value(.constant("none")),
                                   invariant: .equal(.assertView(.variable("value"), shape), .int(1)))
         let root = try #require(program.invariants.values.first)
-        let view = program[program[root].children[0]]
+        let view = root.children[0]
         #expect(view.computationType == .named("Node"))
-        let source = program[view.children[0]].resultType
+        let source = view.children[0].resultType
         let checker = try typeChecker()
         #expect(!checker.canProjectRead(source, to: .named("Node")))
     }
@@ -108,7 +108,7 @@ import Testing
         let program = try resolve(type: "Node", initial: .int(2),
             invariant: .equal(.assertView(.variable("value"), shape), .int(1)))
         let root = try #require(program.invariants.values.first)
-        let view = program[program[root].children[0]]
+        let view = root.children[0]
         #expect(view.computationType == .finite([.integer(1)]))
         let checker = try typeChecker()
         #expect(!checker.canProjectRead(.named("Node"), to: view.computationType))

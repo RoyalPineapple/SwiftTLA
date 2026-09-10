@@ -171,13 +171,27 @@ struct NativeCheckedType: Sendable {
 }
 
 /// The finished occurrence owns its types; operand types belong to its children.
-struct NativeCheckedExpression: Sendable {
+final class NativeCheckedExpression: Hashable, Sendable {
     let expression: CompiledStateExpr
     let operatorParameters: Set<OperatorID>
     let resultType: NativeType
     let computationType: NativeType
     let call: NativeOperatorCall?
     let children: [NativeCheckedExpression]
+
+    init(expression: CompiledStateExpr, operatorParameters: Set<OperatorID>, resultType: NativeType,
+         computationType: NativeType, call: NativeOperatorCall?, children: [NativeCheckedExpression]) {
+        self.expression = expression
+        self.operatorParameters = operatorParameters
+        self.resultType = resultType
+        self.computationType = computationType
+        self.call = call
+        self.children = children
+    }
+
+    static func == (lhs: NativeCheckedExpression, rhs: NativeCheckedExpression) -> Bool { lhs === rhs }
+    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
+
 }
 
 private struct NativeOperatorBody {

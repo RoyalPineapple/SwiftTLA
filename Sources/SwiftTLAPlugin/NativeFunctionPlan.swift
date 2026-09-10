@@ -3,13 +3,13 @@ import SwiftTLA
 /// Evaluation order and recursive-call lowering over the checked function graph.
 enum NativeFunctionPlan {
     indirect enum Body {
-        case result(NativeExpressionID)
-        case condition(NativeExpressionID, Body, Body)
-        case binding(BinderID, NativeExpressionID, Body)
-        case call(NativeFunctionID, [NativeExpressionID], Body)
-        case repeatCall([NativeExpressionID])
+        case result(NativeCheckedExpression)
+        case condition(NativeCheckedExpression, Body, Body)
+        case binding(BinderID, NativeCheckedExpression, Body)
+        case call(NativeFunctionID, [NativeCheckedExpression], Body)
+        case repeatCall([NativeCheckedExpression])
         /// Freeze earlier operands, then continue evaluation when this operand returns.
-        case resume(operand: NativeExpressionID, before: [NativeExpressionID], evaluate: Body, then: Body)
+        case resume(operand: NativeCheckedExpression, before: [NativeCheckedExpression], evaluate: Body, then: Body)
 
         var hasPendingReturns: Bool {
             var pending = [self]
@@ -41,14 +41,14 @@ enum NativeFunctionPlan {
             return
         }
         let parameters = Set(resolved.parameters)
-        let prefix = Self.entryReads(resolved.body, parameters: parameters, program: program)
+        let prefix = Self.entryReads(resolved.body, parameters: parameters)
         var seen: Set<BinderID> = []
         let order = prefix.bindings.filter { seen.insert($0).inserted }
         // Forcing these arguments preserves the original first-use order. Once
         // forced, a tail argument captures values instead of a chain of thunks.
-        guard let body = Self.lower(resolved.body, returningTo: function, visited: [function], program: program),
+        guard let body = Self.lower(resolved.body, returningTo: function, scope: function, visited: [function], program: program),
               seen == parameters || Self.canDeferArguments(in: body, parameters: resolved.parameters,
-                  deferred: parameters.subtracting(seen), program: program)
+                  deferred: parameters.subtracting(seen))
         else {
             self = .ordinary(parameterOrder: order)
             return
@@ -59,22 +59,22 @@ enum NativeFunctionPlan {
     /// A deferred update must demand its own previous value first. Independent
     /// updates can then be composed and evaluated iteratively when demanded.
     private static func canDeferArguments(
-        in body: Body, parameters: [BinderID], deferred: Set<BinderID>, program: NativeResolvedProgram
+        in body: Body, parameters: [BinderID], deferred: Set<BinderID>
     ) -> Bool {
         switch body {
         case .result: return true
         case .condition(_, let yes, let no):
-            return canDeferArguments(in: yes, parameters: parameters, deferred: deferred, program: program)
-                && canDeferArguments(in: no, parameters: parameters, deferred: deferred, program: program)
+            return canDeferArguments(in: yes, parameters: parameters, deferred: deferred)
+                && canDeferArguments(in: no, parameters: parameters, deferred: deferred)
         case .repeatCall(let arguments):
             return zip(parameters, arguments).allSatisfy { parameter, argument in
                 let isDeferred = deferred.contains(parameter)
-                if isDeferred && entryReads(argument, parameters: Set(parameters), program: program).bindings.first != parameter {
+                if isDeferred && entryReads(argument, parameters: Set(parameters)).bindings.first != parameter {
                     return false
                 }
                 var pending = [argument]
                 while let id = pending.popLast() {
-                    let node = program[id]
+                    let node = id
                     // Calls can capture bindings not present in their argument list.
                     guard node.call == nil else { return false }
                     if case .boundValue(let binding) = node.expression, deferred.contains(binding),
@@ -88,28 +88,28 @@ enum NativeFunctionPlan {
     }
 
     private static func entryReads(
-        _ expression: NativeExpressionID, parameters: Set<BinderID>, program: NativeResolvedProgram
+        _ expression: NativeCheckedExpression, parameters: Set<BinderID>
     ) -> (bindings: [BinderID], continues: Bool) {
-        let node = program[expression]
+        let node = expression
         switch node.expression {
         case .boundValue(let binder) where parameters.contains(binder):
             return ([binder], node.computationType == node.resultType)
         case .value(.integer), .value(.boolean), .value(.string): return ([], true)
         case .ifThenElse, .and, .or, .letIn,
              .setFilter, .forAll, .exists, .choose, .functionLiteral, .sequenceSelect:
-            return (entryReads(node.children[0], parameters: parameters, program: program).bindings, false)
+            return (entryReads(node.children[0], parameters: parameters).bindings, false)
         case .setMap:
             // The IR stores the mapped expression first; evaluation starts with the domain.
-            return (entryReads(node.children[1], parameters: parameters, program: program).bindings, false)
+            return (entryReads(node.children[1], parameters: parameters).bindings, false)
         case .letValue:
-            return entryReads(node.children[1], parameters: parameters, program: program)
+            return entryReads(node.children[1], parameters: parameters)
         case .add, .subtract, .multiply, .negate,
              .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
              .recordLiteral, .tupleLiteral, .setLiteral,
              .cardinality, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .powerSet, .unionAll:
             var bindings: [BinderID] = []
             for child in node.children {
-                let prefix = entryReads(child, parameters: parameters, program: program)
+                let prefix = entryReads(child, parameters: parameters)
                 bindings.append(contentsOf: prefix.bindings)
                 guard prefix.continues else { break }
             }
@@ -121,39 +121,39 @@ enum NativeFunctionPlan {
     }
 
     private static func lower(
-        _ expression: NativeExpressionID, returningTo function: NativeFunctionID,
-        visited: Set<NativeFunctionID>, program: NativeResolvedProgram, completed: Set<NativeExpressionID> = []
+        _ expression: NativeCheckedExpression, returningTo function: NativeFunctionID, scope: NativeFunctionID,
+        visited: Set<NativeFunctionID>, program: NativeResolvedProgram, completed: Set<NativeCheckedExpression> = []
     ) -> Body? {
         guard !completed.contains(expression) else { return nil }
-        let node = program[expression]
+        let node = expression
         guard node.computationType == node.resultType,
               node.resultType == program[function].resultType else { return nil }
-        if let call = node.call, call.callbacks.isEmpty, case .function(let target) = call.target {
+        if let call = program.calls[.init(expression: node, function: scope)], call.callbacks.isEmpty, case .function(let target) = call.target {
             if target == function { return .repeatCall(node.children) }
             let callee = program[target]
             guard callee.callbacks.isEmpty, !visited.contains(target),
-                  let body = lower(callee.body, returningTo: function, visited: visited.union([target]), program: program)
+                  let body = lower(callee.body, returningTo: function, scope: target, visited: visited.union([target]), program: program)
             else { return nil }
             return .call(target, node.children, body)
         }
         switch node.expression {
         case .ifThenElse:
-            let yes = lower(node.children[1], returningTo: function, visited: visited, program: program)
-            let no = lower(node.children[2], returningTo: function, visited: visited, program: program)
+            let yes = lower(node.children[1], returningTo: function, scope: scope, visited: visited, program: program)
+            let no = lower(node.children[2], returningTo: function, scope: scope, visited: visited, program: program)
             guard yes != nil || no != nil else { return nil }
             return .condition(node.children[0], yes ?? .result(node.children[1]), no ?? .result(node.children[2]))
         case .letIn:
-            return lower(node.children[0], returningTo: function, visited: visited, program: program)
+            return lower(node.children[0], returningTo: function, scope: scope, visited: visited, program: program)
         case .letValue(let binder, _, _):
-            guard let body = lower(node.children[1], returningTo: function, visited: visited, program: program) else { return nil }
+            guard let body = lower(node.children[1], returningTo: function, scope: scope, visited: visited, program: program) else { return nil }
             return .binding(binder, node.children[0], body)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate,
              .union, .intersection, .setDifference, .not:
             let evaluationOrder = node.expression.evaluatesDenominatorFirst ? Array(node.children.reversed()) : node.children
             for (index, child) in evaluationOrder.enumerated() {
-                guard let body = lower(child, returningTo: function, visited: visited, program: program, completed: completed) else { continue }
+                guard let body = lower(child, returningTo: function, scope: scope, visited: visited, program: program, completed: completed) else { continue }
                 let before = evaluationOrder.prefix(index).filter { !completed.contains($0) }
-                let continuation = lower(expression, returningTo: function, visited: visited, program: program,
+                let continuation = lower(expression, returningTo: function, scope: scope, visited: visited, program: program,
                     completed: completed.union(before).union([child])) ?? .result(expression)
                 return .resume(operand: child, before: before, evaluate: body, then: continuation)
             }

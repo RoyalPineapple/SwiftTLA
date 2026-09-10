@@ -3,13 +3,15 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     /// Keep predicate trees shallow in generated Swift while preserving lazy operands.
     mutating func booleanExpression(
-        _ root: NativeExpressionID, state: String, substitutions: [BinderID: String],
+        _ root: NativeCheckedExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<NativeFunctionID>
     ) throws -> String {
         var pending = [root]
         var declarations: [String] = []
+        var emitted: Set<NativeCheckedExpression> = []
         while let id = pending.popLast() {
-            let node = program[id]
+            guard emitted.insert(id).inserted else { continue }
+            let node = id
             let body: String
             switch node.expression {
             case .and, .or:
@@ -19,9 +21,9 @@ extension NativeSwiftEmitter {
                 let condition = conjunction ? "left" : "!left"
                 let earlyResult = conjunction ? "false" : "true"
                 body = """
-                let left = try _predicate\(left.ordinal)()
+                let left = try _predicate\(expressionOrdinals[left]!)()
                 guard \(condition) else { return \(earlyResult) }
-                return try _predicate\(right.ordinal)()
+                return try _predicate\(expressionOrdinals[right]!)()
                 """
                 pending.append(contentsOf: [right, left])
             default:
@@ -29,7 +31,7 @@ extension NativeSwiftEmitter {
                 body = "return \(value)"
             }
             declarations.append("""
-            func _predicate\(id.ordinal)() throws -> Bool {
+            func _predicate\(expressionOrdinals[id]!)() throws -> Bool {
                 \(body)
             }
             """)
@@ -37,7 +39,7 @@ extension NativeSwiftEmitter {
         return """
         (try { () throws -> Bool in
             \(declarations.joined(separator: "\n"))
-            return try _predicate\(root.ordinal)()
+            return try _predicate\(expressionOrdinals[root]!)()
         }())
         """
     }

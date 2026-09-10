@@ -17,7 +17,7 @@ import Testing
             let program = try NativeResolvedProgram(compilation: specification.compile(),
                 sourceTypes: .init(enums: ["Node": [.int(1)], "Missing": [.int(2)]]))
             let root = try #require(program.invariants.values.first)
-            let application = program[program[root].children[0]]
+            let application = root.children[0]
             #expect(application.resultType == .finite([.integer(1), .integer(2)]))
         }
     }

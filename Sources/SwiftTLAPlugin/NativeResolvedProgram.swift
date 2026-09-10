@@ -1,18 +1,14 @@
 import SwiftTLA
 
 /// Immutable expansion-time annotations over the existing compiled program.
-/// Expression IDs identify uses, so one formal body can have several Swift shapes.
-struct NativeExpressionID: Hashable, Sendable { let ordinal: Int }
+/// Function identities distinguish specializations of the same formal body.
 struct NativeFunctionID: Hashable, Sendable { let ordinal: Int }
 struct NativeCallbackID: Hashable, Sendable { let ordinal: Int }
 
-struct NativeResolvedExpression: Sendable {
-    let expression: CompiledStateExpr
-    let resultType: NativeType
-    let computationType: NativeType
-    /// Children follow structural IR order, independent of evaluation scheduling.
-    let children: [NativeExpressionID]
-    let call: NativeResolvedCall?
+/// A shared expression may call different callbacks in different specializations.
+struct NativeCallSite: Hashable, Sendable {
+    let expression: NativeCheckedExpression
+    let function: NativeFunctionID?
 }
 
 enum NativeResolvedCallTarget: Sendable {
@@ -40,8 +36,8 @@ struct NativeResolvedFunction: Sendable {
     let parameterTypes: [NativeType]
     let resultType: NativeType
     let callbacks: [NativeCallbackID]
-    let body: NativeExpressionID
-    let domainGuard: NativeExpressionID?
+    let body: NativeCheckedExpression
+    let domainGuard: NativeCheckedExpression?
 }
 
 struct NativeProjectionPair: Hashable, Sendable {
@@ -58,17 +54,17 @@ struct NativeResolvedProgram: Sendable {
 
     let variableTypes: [VariableID: NativeType]
     let bindingTypes: [BinderID: NativeType]
-    let expressions: [NativeResolvedExpression]
+    let expressions: [NativeCheckedExpression]
+    let calls: [NativeCallSite: NativeResolvedCall]
     let functions: [NativeResolvedFunction]
     let callbacks: [NativeResolvedCallback]
     /// A value initializer is represented by its existing `.value` expression.
-    let initializations: [VariableID: NativeExpressionID]
-    let actions: [ActionID: CompiledActionExpr<NativeExpressionID>]
-    let invariants: [PropertyID: NativeExpressionID]
-    let constraint: NativeExpressionID?
-    let assume: NativeExpressionID?
+    let initializations: [VariableID: NativeCheckedExpression]
+    let actions: [ActionID: CompiledActionExpr<NativeCheckedExpression>]
+    let invariants: [PropertyID: NativeCheckedExpression]
+    let constraint: NativeCheckedExpression?
+    let assume: NativeCheckedExpression?
 
-    subscript(_ id: NativeExpressionID) -> NativeResolvedExpression { expressions[id.ordinal] }
     subscript(_ id: NativeFunctionID) -> NativeResolvedFunction { functions[id.ordinal] }
     subscript(_ id: NativeCallbackID) -> NativeResolvedCallback { callbacks[id.ordinal] }
 }

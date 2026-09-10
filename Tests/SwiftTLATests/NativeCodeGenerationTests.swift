@@ -8,6 +8,27 @@ import SwiftBasicFormat
 @testable import SwiftTLAPlugin
 
 struct NativeCodeGenerationTests {
+    @Test("Shared predicates emit one local function per checked expression")
+    func sharedPredicateDeclarations() throws {
+        let compilation = try TLASpec(name: "SharedPredicates", variables: [], actions: [], invariants: []).compile()
+        let leaf = NativeCheckedExpression(expression: .value(.boolean(true)), operatorParameters: [],
+            resultType: .bool, computationType: .bool, call: nil, children: [])
+        let root = NativeCheckedExpression(expression: .and(leaf.expression, leaf.expression), operatorParameters: [],
+            resultType: .bool, computationType: .bool, call: nil, children: [leaf, leaf])
+        let program = NativeResolvedProgram(projections: [], variableTypes: [:], bindingTypes: [:],
+            expressions: [leaf, root], calls: [:], functions: [], callbacks: [], initializations: [:],
+            actions: [:], invariants: [:], constraint: nil, assume: nil)
+        let model = MacroCompilation(typeName: "SharedPredicates", compilation: compilation, enumInfos: [],
+            surface: try MachineSurfacePlan(layout: compilation.layout, semantics: compilation.semantics),
+            nativeProgram: program)
+        var emitter = NativeSwiftEmitter(model: model)
+        let source = try emitter.booleanExpression(root, state: "state.", substitutions: [:], activeFunctions: [])
+        #expect(source.components(separatedBy: "func _predicate0()").count == 2)
+        #expect(source.contains("let left = try _predicate0()"))
+        #expect(source.contains("return try _predicate0()"))
+        #expect(!Parser.parse(source: source).hasError)
+    }
+
     @Test("Generated execution uses typed Swift without formal runtime machinery")
     func emittedMachineExecutesSwift() throws {
         let source = Parser.parse(source: """
