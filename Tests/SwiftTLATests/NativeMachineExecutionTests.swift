@@ -59,13 +59,15 @@ private struct AmbiguousExecutionChoice {
     static var spec: TLASpec {
         #spec("AmbiguousExecutionChoice") {
             Algorithm("AmbiguousExecutionChoice", scoped: { scope in
-                let selected = scope.sharedVar("selected", initial: 0)
+                let selected = scope.sharedVar("selected", in: 0...1)
                 While(Step.select, true) {
+                    When(selected < 2)
                     Choose(1...3) { choice in
                         Assign(selected, to: choice.expr)
                     }
                 }
                 StateConstraint(selected <= 2)
+                Invariant("BelowTwo") { selected < 2 }
             })
         }
     }
@@ -73,8 +75,12 @@ private struct AmbiguousExecutionChoice {
 
 private extension AmbiguousExecutionChoice {
     // Exercise the generated relation before send applies its uniqueness rule.
-    func candidateStates(for action: Action) throws -> [State] {
-        try _successors(for: action).map(\.state)
+    static func initialMachines() throws -> [Self] {
+        try _initialStates().map { Self(execution: $0) }
+    }
+
+    func candidates(for action: Action) throws -> [Self] {
+        try _successors(for: action).map { Self(execution: $0) }
     }
 }
 
@@ -156,30 +162,75 @@ struct NativeMachineExecutionTests {
         #expect(try successor.state.value(for: selected) == .integer(machine.state.selected))
     }
 
-    @Test("Multiple formal successors remain ambiguous without committing a partial state")
-    func ambiguousChoiceIsTransactional() throws {
+    @Test("Every initial state and branching edge agrees, including disabled actions and invariant failures")
+    func completeChoiceGraphMatchesFormalExecution() throws {
         let compilation = try AmbiguousExecutionChoice.spec.compile()
         let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().only)
-        let select = try #require(compilation.layout.testActionID(named: "select"))
-        let successors = try runtime.successors(for: select, from: initial)
-        #expect(Set(successors.map(\.state)).count == 2)
-        var machine = try AmbiguousExecutionChoice.makeMachine()
-        let before = machine.state
         let selected = try #require(compilation.layout.testVariableID(named: "selected"))
-        let formalValues = try Set(successors.map { try $0.state.value(for: selected) })
-        let nativeValues = try Set(machine.candidateStates(for: .select).map {
-            CompiledValue.integer($0.selected)
-        })
-        #expect(nativeValues == formalValues)
-        #expect(try machine.isEnabled(.select))
-        #expect(try machine.enabledActions() == [.select])
-        do {
-            _ = try machine.send(.select)
-            Issue.record("Distinct successors must remain ambiguous")
-        } catch GeneratedMachineError.ambiguousAction {}
-        #expect(machine.state == before)
+        let select = try #require(compilation.layout.testActionID(named: "select"))
+        func value(_ state: CompiledState) throws -> Int {
+            guard case .integer(let value) = try state.value(for: selected) else {
+                throw GeneratedMachineStateDiagnostic.typeMismatch(path: "selected", expected: "Int", actual: "formal value")
+            }
+            return value
+        }
+        let formalInitial = try runtime.initialStates()
+        let nativeInitial = try AmbiguousExecutionChoice.initialMachines()
+        #expect(try Set(formalInitial.map(value)) == Set(nativeInitial.map { $0.state.selected }))
+        #expect(nativeInitial.count == 2)
+        var pending = try formalInitial.map { state in
+            let selected = try value(state)
+            return (state, try #require(nativeInitial.first { $0.state.selected == selected }))
+        }
+        var visited: Set<CompiledState> = []
+        var edges: Set<[Int]> = []
+        var violations: Set<Int> = []
+        var disabled: Set<Int> = []
+        while let (formal, machine) = pending.popLast() {
+            guard visited.insert(formal).inserted else { continue }
+            // This model has one control location; selected identifies its states.
+            let source = try value(formal)
+            #expect(machine.state.selected == source)
+            let formalNext = try runtime.successors(for: select, from: formal)
+            let nativeNext = try machine.candidates(for: .select)
+            #expect(try Set(formalNext.map { try value($0.state) }) == Set(nativeNext.map { $0.state.selected }))
+            #expect(nativeNext.count == Set(formalNext.map(\.state)).count)
+            #expect(try machine.enabledActions() == (formalNext.isEmpty ? [] : [.select]))
+            #expect(try machine.isEnabled(.select) == !formalNext.isEmpty)
+            let failed = try compilation.semantics.invariants.filter { try !runtime.invariantHolds($0, in: formal) }.map(\.name)
+            #expect(try machine.violatedInvariants() == failed)
+            if !failed.isEmpty { violations.insert(source) }
+            var sending = machine
+            switch nativeNext.count {
+            case 0:
+                disabled.insert(source)
+                do {
+                    _ = try sending.send(.select)
+                    Issue.record("A disabled action must fail")
+                } catch GeneratedMachineError.noMatchingSuccessor {}
+                #expect(sending.state == machine.state)
+            case 1:
+                _ = try sending.send(.select)
+                #expect(sending.state == nativeNext[0].state)
+            default:
+                do {
+                    _ = try sending.send(.select)
+                    Issue.record("An ambiguous action must fail")
+                } catch GeneratedMachineError.ambiguousAction {}
+                #expect(sending.state == machine.state)
+            }
+            for successor in formalNext {
+                let target = try value(successor.state)
+                edges.insert([source, target])
+                pending.append((successor.state, try #require(nativeNext.first { $0.state.selected == target })))
+            }
+        }
+        #expect(try Set(visited.map(value)) == [0, 1, 2])
+        #expect(edges == [[0, 1], [0, 2], [1, 1], [1, 2]])
+        #expect(disabled == [2])
+        #expect(violations == [2])
     }
+
 }
 
 private extension Array {
