@@ -199,18 +199,15 @@ extension TLASpec {
   }
 
   func authoredPlusCalModule(
-    algorithm plusCalAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?,
+    algorithm plusCalAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan,
+    declarationOrder: AuthoredPlusCalDeclarationOrder,
     semantics: CompiledSemantics,
     layout: CompiledLayout,
     formalRenderer: CompiledTLARenderer,
     renderedRefinements: [String]
-  ) throws -> AuthoredPlusCalModule? {
-    guard sourceAlgorithms.count == 1, let plusCalAlgorithm
-    else {
-      return nil
-    }
+  ) throws -> AuthoredPlusCalModule {
     let declarationSections = try authoredPlusCalDeclarationSections(
-      semantics: semantics,
+      order: declarationOrder, semantics: semantics,
       formalRenderer: formalRenderer
     )
     let sourceProperties = plusCalAlgorithm.properties
@@ -279,47 +276,18 @@ extension TLASpec {
   }
 
   private func authoredPlusCalDeclarationSections(
+    order: AuthoredPlusCalDeclarationOrder,
     semantics: CompiledSemantics,
     formalRenderer: CompiledTLARenderer
   ) throws -> AuthoredPlusCalDeclarationSections {
-    guard formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count else {
-      throw CompilationDiagnostic(
-        code: .compilationIdentityMismatch,
-        stage: .rendering,
-        path: "authoredPlusCal.definitions",
-        expected: "compiled definitions aligned with this source model",
-        actual: "\(semantics.formalOperatorDefinitions.count) compiled definitions for \(formalOperatorDefinitions.count) declared definitions",
-        nextSafeAction: "Compile the model again from its current source."
-      )
+    func render(_ declaration: AuthoredPlusCalDeclarationOrder.Reference) throws -> String {
+      switch declaration {
+      case .definition(let index): return try formalRenderer.formalDefinition(semantics.formalOperatorDefinitions[index])
+      case .instance(let index): return try formalRenderer.moduleInstance(semantics.moduleInstances[index])
+      }
     }
-    let definitions = try formalOperatorDefinitions.enumerated().map { index, definition in
-      AuthoredPlusCalDeclaration(
-        name: definition.name,
-        text: try formalRenderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
-        phase: definition.plusCalPhase,
-        dependencies: definition.plusCalDependencies
-      )
-    }
-    guard moduleInstances.count == semantics.moduleInstances.count else {
-      throw CompilationDiagnostic(
-        code: .compilationIdentityMismatch,
-        stage: .rendering,
-        path: "authoredPlusCal.instances",
-        expected: "compiled module instances aligned with this source model",
-        actual: "\(semantics.moduleInstances.count) compiled instances for \(moduleInstances.count) declared instances",
-        nextSafeAction: "Compile the model again from its current source."
-      )
-    }
-    let instances = try zip(moduleInstances, semantics.moduleInstances).map { pair in
-      let (source, compiled) = pair
-      return AuthoredPlusCalDeclaration(
-        name: source.name,
-        text: try formalRenderer.moduleInstance(compiled),
-        phase: source.plusCalPhase,
-        dependencies: source.plusCalDependencies
-      )
-    }
-    return try AuthoredPlusCalDeclarationSections(definitions + instances)
+    return try .init(prelude: order.prelude.map(render), define: order.define.map(render),
+                     postTranslation: order.postTranslation.map(render))
   }
 
   private var authoredPlusCalSymmetry: [String] {
@@ -332,42 +300,64 @@ extension TLASpec {
   }
 }
 
-struct AuthoredPlusCalDeclarationSections {
+private struct AuthoredPlusCalDeclarationSections {
   let prelude: [String]
   let define: [String]
   let postTranslation: [String]
+}
 
-  init(_ declarations: [AuthoredPlusCalDeclaration]) throws {
+/// Declaration identities in each legal PlusCal phase, resolved before rendering.
+struct AuthoredPlusCalDeclarationOrder: Sendable {
+  enum Reference: Sendable {
+    case definition(Int)
+    case instance(Int)
+  }
+  private struct Entry {
+    let reference: Reference
+    let name: String
+    let phase: AuthoredPlusCalDeclarationPhase
+    let dependencies: [String]
+  }
+  let prelude: [Reference]
+  let define: [Reference]
+  let postTranslation: [Reference]
+
+  init(source: TLASpec) throws {
+    let declarations = source.formalOperatorDefinitions.enumerated().map { index, definition in
+      Entry(reference: .definition(index), name: definition.name,
+            phase: definition.plusCalPhase, dependencies: definition.plusCalDependencies)
+    } + source.moduleInstances.enumerated().map { index, instance in
+      Entry(reference: .instance(index), name: instance.name,
+            phase: instance.plusCalPhase, dependencies: instance.plusCalDependencies)
+    }
+    let declared = Set(declarations.map(\.name))
     var emitted: Set<String> = []
-    func order(_ phase: AuthoredPlusCalDeclarationPhase) throws -> [String] {
+    func order(_ phase: AuthoredPlusCalDeclarationPhase) throws -> [Reference] {
       var pending = declarations.filter { $0.phase == phase }
-      var ordered: [String] = []
-      let declared = Set(declarations.compactMap(\.name))
-      if let unresolved = pending.first(where: { $0.dependencies.contains(where: { declared.contains($0) == false }) }) {
-        throw CompilationDiagnostic(
-          code: .invalidAuthoredPlusCalPlan,
-          stage: .lowering,
-          path: unresolved.name ?? "unnamed",
-          expected: "a declared dependency",
-          actual: unresolved.dependencies.joined(separator: ", "),
-          nextSafeAction: "Declare the dependency or remove its placement edge."
-        )
+      let available = emitted.union(pending.map(\.name))
+      for declaration in pending {
+        for dependency in declaration.dependencies where !available.contains(dependency) {
+          let isLaterPhase = declared.contains(dependency)
+          throw CompilationDiagnostic(
+            code: .invalidAuthoredPlusCalPlan, stage: .lowering, path: declaration.name,
+            expected: "a dependency declared in the same or an earlier PlusCal phase",
+            actual: isLaterPhase ? "dependency '\(dependency)' is declared in a later phase" : "no declaration named '\(dependency)'",
+            nextSafeAction: "Declare the dependency in the same or an earlier phase, or remove its placement edge."
+          )
+        }
       }
-      while let index = pending.firstIndex(where: { declaration in
-        declaration.dependencies.allSatisfy(emitted.contains)
-      }) {
+      var ordered: [Reference] = []
+      while let index = pending.firstIndex(where: { $0.dependencies.allSatisfy(emitted.contains) }) {
         let declaration = pending.remove(at: index)
-        ordered.append(declaration.text)
-        if let name = declaration.name { emitted.insert(name) }
+        ordered.append(declaration.reference)
+        emitted.insert(declaration.name)
       }
-      if pending.isEmpty == false {
+      guard pending.isEmpty else {
         throw CompilationDiagnostic(
-          code: .invalidAuthoredPlusCalPlan,
-          stage: .lowering,
-          path: pending.compactMap(\.name).joined(separator: ","),
-          expected: "an acyclic declaration dependency graph",
-          actual: "cyclic dependencies",
-          nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase."
+          code: .invalidAuthoredPlusCalPlan, stage: .lowering,
+          path: pending.map(\.name).joined(separator: ","),
+          expected: "an acyclic declaration dependency graph", actual: "cyclic dependencies",
+          nextSafeAction: "Break the declaration cycle."
         )
       }
       return ordered

@@ -332,20 +332,6 @@ public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
   case postTranslation
 }
 
-/// Structural placement and dependency metadata retained for authored PlusCal.
-struct AuthoredPlusCalDeclaration: Sendable, Equatable {
-  let name: String?
-  let text: String
-  let phase: AuthoredPlusCalDeclarationPhase
-  let dependencies: [String]
-
-  package init(name: String? = nil, text: String, phase: AuthoredPlusCalDeclarationPhase = .prelude, dependencies: [String] = []) {
-    self.name = name
-    self.text = text
-    self.phase = phase
-    self.dependencies = dependencies
-  }
-}
 public struct VarDecl: SpecComponent, Sendable {
   public let name: String
   public let initialization: VariableInitialization

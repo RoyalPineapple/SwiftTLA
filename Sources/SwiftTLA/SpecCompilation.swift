@@ -146,7 +146,7 @@ fileprivate struct CompiledModule: Sendable {
     let bindings: CompiledBindingTable
     let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
-    let authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?
+    let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
     let requiredStandardModules: Set<StandardModule>
     let definitionsBeforeInstances: [Int]
     let definitionsAfterInstances: [Int]
@@ -177,10 +177,13 @@ public struct CompiledSpecification: Sendable {
         )
         try renderedBundle.validateDeclaredClosure()
         let renderer = CompiledTLARenderer(layout: module.layout, bindings: module.bindings)
-        let algorithm = try source.authoredPlusCalModule(
-            algorithm: module.authoredAlgorithm, semantics: module.semantics, layout: module.layout,
-            formalRenderer: renderer, renderedRefinements: try module.refinements.map(renderer.refinement)
-        )
+        let algorithm = try module.authoredAlgorithm.map { authored in
+            try source.authoredPlusCalModule(
+                algorithm: authored.plan, declarationOrder: authored.declarations,
+                semantics: module.semantics, layout: module.layout,
+                formalRenderer: renderer, renderedRefinements: try module.refinements.map(renderer.refinement)
+            )
+        }
         let plusCalBundle = try algorithm.map { algorithm in
             let bundle = TLAModuleBundle(
                 root: .init(name: source.name,
@@ -600,11 +603,14 @@ public extension TLASpec {
             incomingModuleParameters: incomingModuleParameters
         )
         let semantics = try lowerer.lower(spec: self)
-        let authoredAlgorithm = try authoredPlusCalAlgorithmPlan.map {
-            try lowerer.authoredPlusCalPlan($0)
+        let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
+        if sourceAlgorithms.count == 1, let plan = authoredPlusCalAlgorithmPlan {
+            authoredAlgorithm = (try lowerer.authoredPlusCalPlan(plan), try AuthoredPlusCalDeclarationOrder(source: self))
+        } else {
+            authoredAlgorithm = nil
         }
         let refinements = try compiledRefinements(lowerer: &lowerer, layout: layout, semantics: semantics)
-        try validateAuthoredProperties(algorithm: authoredAlgorithm, layout: layout)
+        try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
         return CompiledModule(
             source: self, layout: layout, bindings: lowerer.bindings, semantics: semantics,
             refinements: refinements, authoredAlgorithm: authoredAlgorithm,

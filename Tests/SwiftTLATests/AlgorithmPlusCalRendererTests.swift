@@ -329,22 +329,24 @@ struct AlgorithmPlusCalRendererTests {
         #expect(definition.contains("\(binders[0]) = \(binders[1])"))
     }
 
-    @Test("rejects unresolved authored declaration dependencies")
-    func rejectsMissingDeclarationDependency() {
-        #expect(throws: CompilationDiagnostic.self) {
-            try AuthoredPlusCalDeclarationSections([
-                .init(name: "UsesMissing", text: "UsesMissing == TRUE", phase: .define, dependencies: ["Missing"])
-            ])
+    @Test("compilation rejects dependencies on later PlusCal phases before rendering")
+    func rejectsLaterPhaseDependencyDuringCompilation() throws {
+        let spec = TLASpec("PhaseDependency") {
+            FormalDefinition("Early", parameters: [], body: true, plusCalPhase: .prelude, dependsOn: ["Late"])
+            FormalDefinition("Late", parameters: [], body: true, plusCalPhase: .define)
+            Algorithm("PhaseDependency", scoped: { scope in
+                let value = scope.sharedVar("value", initial: 0)
+                Do(TestControlLabel.stay) { Assign(value, to: value) }
+            })
         }
-    }
-
-    @Test("rejects cyclic authored declaration dependencies")
-    func rejectsCyclicDeclarationDependency() {
-        #expect(throws: CompilationDiagnostic.self) {
-            try AuthoredPlusCalDeclarationSections([
-                .init(name: "First", text: "First == TRUE", phase: .define, dependencies: ["Second"]),
-                .init(name: "Second", text: "Second == TRUE", phase: .define, dependencies: ["First"])
-            ])
+        do {
+            _ = try spec.compile()
+            Issue.record("Compilation must reject the invalid declaration phase")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAuthoredPlusCalPlan)
+            #expect(diagnostic.stage == .lowering)
+            #expect(diagnostic.path == "Early")
+            #expect(diagnostic.actual.contains("later phase"))
         }
     }
 
