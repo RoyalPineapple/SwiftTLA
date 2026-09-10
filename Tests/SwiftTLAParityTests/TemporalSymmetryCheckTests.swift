@@ -50,7 +50,7 @@ struct TemporalSymmetryCheckTests {
 
       #expect(raw.graph.states.count == 1 << scope)
       #expect(reduced.states.count == scope + 1)
-      let rawBundle = compilation.renderedTLAModuleBundle(
+      let rawBundle = try compilation.render().tlaBundle(
         symmetryReduction: symmetryCase.rawExploration.symmetryReduction)
       #expect(rawBundle.cfg.contains("SYMMETRY") == false)
       #expect(raw.initialStateIDs.count == 1)
@@ -60,7 +60,7 @@ struct TemporalSymmetryCheckTests {
       let members = try #require(chosen.collection?.members)
       let allZero = CompiledValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, .integer(0)) }))
       #expect(try initial.value(for: chosen.id) == allZero)
-      #expect(compilation.renderedTLAModuleBundle(
+      #expect(try compilation.render().tlaBundle(
         symmetryReduction: symmetryCase.reducedExploration.symmetryReduction
       ).cfg.contains("SYMMETRY"))
     }

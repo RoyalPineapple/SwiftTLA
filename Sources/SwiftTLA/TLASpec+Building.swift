@@ -174,6 +174,30 @@ extension TLASpec {
     }
   }
 
+  func validateAuthoredProperties(algorithm: CompiledAuthoredPlusCalAlgorithmPlan?, layout: CompiledLayout) throws {
+    guard sourceAlgorithms.count == 1, let plusCalAlgorithm = algorithm else { return }
+    let sourceProperties = plusCalAlgorithm.properties
+    let sourcePropertyIDs = Set(sourceProperties.map(\.id))
+    let topLevelPropertyNames = layout.stateProperties.filter { !sourcePropertyIDs.contains($0.id) }.map { $0.declaration.name }
+    let sourcePropertyNames = sourceProperties.map(\.name)
+    let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
+    guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
+          Set(topLevelPropertyNames).count == topLevelPropertyNames.count,
+          Set(loweredPropertyNames).count == loweredPropertyNames.count,
+          Set(sourcePropertyNames + topLevelPropertyNames)
+            .union(plusCalAlgorithm.translatorOwnedPropertyNames) == Set(loweredPropertyNames)
+    else {
+        throw CompilationDiagnostic(
+          code: .invalidAuthoredPlusCalPlan,
+          stage: .lowering,
+          path: "TLASpec.properties",
+          expected: "one rendered typed property for every lowered property",
+          actual: "Algorithm properties \(sourcePropertyNames); top-level typed properties \(topLevelPropertyNames); lowered properties \(loweredPropertyNames)",
+          nextSafeAction: "Give each property a unique name and use a supported typed property expression."
+        )
+    }
+  }
+
   func authoredPlusCalModule(
     algorithm plusCalAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?,
     semantics: CompiledSemantics,
@@ -213,24 +237,6 @@ extension TLASpec {
         guard let invariant = invariantsByID[property.id] else { throw propertyMissing(property.id) }
         return (property.declaration.name, "\(property.declaration.name) == \(try formalRenderer.state(invariant.body))")
       }
-    let topLevelPropertyNames = topLevelProperties.map(\.name)
-    let sourcePropertyNames = sourceProperties.map(\.name)
-    let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
-    guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
-          Set(topLevelPropertyNames).count == topLevelPropertyNames.count,
-          Set(loweredPropertyNames).count == loweredPropertyNames.count,
-          Set(sourcePropertyNames + topLevelPropertyNames)
-            .union(plusCalAlgorithm.translatorOwnedPropertyNames) == Set(loweredPropertyNames)
-    else {
-        throw CompilationDiagnostic(
-          code: .invalidAuthoredPlusCalPlan,
-          stage: .lowering,
-          path: "TLASpec.properties",
-          expected: "one rendered typed property for every lowered property",
-          actual: "Algorithm properties \(sourcePropertyNames); top-level typed properties \(topLevelPropertyNames); lowered properties \(loweredPropertyNames)",
-          nextSafeAction: "Give each property a unique name and use a supported typed property expression."
-        )
-    }
     let constraint = try semantics.constraint.map { "StateConstraint == \(try formalRenderer.state($0))" }
     let renderedProperties = (renderedSourceProperties + topLevelProperties).map(\.definition)
     let postTranslationDeclarations = declarationSections.postTranslation

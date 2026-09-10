@@ -57,7 +57,7 @@ struct TypedFiniteConstantTests {
         }
 
         #expect(spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
+        #expect(try spec.compile().render().tlaBundle.tla.contains("ASSUME Value = {1, 2}"))
     }
 
     @Test func parserRetainsTheSameTypedFiniteSet() throws {
@@ -76,7 +76,7 @@ struct TypedFiniteConstantTests {
 
     @Test func macroExpansionRetainsTheTypedFiniteSet() throws {
         #expect(TypedFiniteConstantGeneratedModel.spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
-        #expect(try TypedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
+        #expect(try TypedFiniteConstantGeneratedModel.spec.compile().render().tlaBundle.tla.contains("ASSUME Value = {1, 2}"))
     }
 
     @Test func macroExpansionRetainsNestedFiniteEnumConstants() throws {
@@ -88,8 +88,8 @@ struct TypedFiniteConstantTests {
                 .set([.string("a2"), .string("a3")])
             ]))
         ])
-        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
-        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
+        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().render().tlaBundle.tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
+        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().render().tlaBundle.tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
     }
 
     @Test func parserDiagnosesDynamicConstantValues() throws {

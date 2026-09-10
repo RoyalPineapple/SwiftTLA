@@ -88,8 +88,9 @@ do {
         let specification = item.specification()
         let compilation = try specification.compile()
         try item.validateConfigurationReferences(in: compilation)
-        let bundle = compilation.renderedTLAModuleBundle()
-        let plusCalBundle = try compilation.renderedPlusCalBundle()
+        let rendered = try compilation.render()
+        let bundle = rendered.tlaBundle
+        let plusCalBundle = try rendered.plusCalBundle()
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))

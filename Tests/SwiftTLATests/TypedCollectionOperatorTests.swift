@@ -325,7 +325,7 @@ private struct FoldGeneratedModel {
 
         #expect(transition.before.values == [1, 2, 3, 4])
         #expect(transition.after.values == [4, 16])
-        #expect(try TypedCollectionGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("keepEvenSquares"))
+        #expect(try TypedCollectionGeneratedModel.spec.compile().render().tlaBundle.tla.contains("keepEvenSquares"))
     }
 
     @Test("typed conditional values parse without losing their result type")
@@ -374,9 +374,9 @@ private struct FoldGeneratedModel {
         let compilation = try FoldGeneratedModel.spec.compile()
 
         #expect(transition.after.total == 6)
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("FoldFunction(LAMBDA"))
-        #expect(try compilation.renderedPlusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
-        #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
+        #expect(try compilation.render().tlaBundle.tla.contains("FoldFunction(LAMBDA"))
+        #expect(try compilation.render().plusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
+        #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
     }
 
     @Test("authored PlusCal folds translate into valid TLA+")
@@ -399,7 +399,7 @@ private struct FoldGeneratedModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let bundle = try FoldGeneratedModel.spec.compile().renderedPlusCalBundle()
+        let bundle = try FoldGeneratedModel.spec.compile().render().plusCalBundle()
         for file in bundle.files {
             try file.tla.write(
                 to: directory.appendingPathComponent("\(file.name).tla"),
@@ -458,7 +458,7 @@ private struct FoldGeneratedModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let bundle = try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle()
+        let bundle = try KeyValueStoreUtil.module.compile().render().tlaBundle
         for file in bundle.files {
             try file.tla.write(
                 to: directory.appendingPathComponent("\(file.name).tla"),
@@ -538,7 +538,7 @@ private struct FoldGeneratedModel {
             let sequence = Var<ZeroBasedSequence<Int>>("sequence")
             Variable(sequence, empty)
         }
-        #expect(try emptySpec.compile().renderedTLAModuleBundle().tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
+        #expect(try emptySpec.compile().render().tlaBundle.tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
 
         let input = [0: 0]
         let table = [0: -1, 1: -1, 2: -1]
@@ -549,7 +549,7 @@ private struct FoldGeneratedModel {
         let tableValue = try #require(transition.after.table[0])
         let inputValue = try #require(transition.after.input[0])
         #expect(tableValue == inputValue)
-        #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("0.."))
+        #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().render().tlaBundle.tla.contains("0.."))
     }
 
     @Test("non-empty subset domains parse and exclude the empty formal set")
@@ -575,7 +575,7 @@ private struct FoldGeneratedModel {
             try $0.value(for: selectedKeys).rendered(using: compilation.layout)
         })
         #expect(initialValues == expectedMembers)
-        #expect(try NonEmptySubsetGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("SUBSET"))
+        #expect(try NonEmptySubsetGeneratedModel.spec.compile().render().tlaBundle.tla.contains("SUBSET"))
     }
 
     @Test("typed bounded quantifiers parse, evaluate, and generate")
@@ -592,6 +592,6 @@ private struct FoldGeneratedModel {
         var machine = try TypedQuantifierGeneratedModel.makeMachine()
         let transition = try machine.send(.findEven)
         #expect(transition.after.result == true)
-        #expect(try TypedQuantifierGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("\\E"))
+        #expect(try TypedQuantifierGeneratedModel.spec.compile().render().tlaBundle.tla.contains("\\E"))
     }
 }

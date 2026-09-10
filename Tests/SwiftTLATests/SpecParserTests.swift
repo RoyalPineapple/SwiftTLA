@@ -338,7 +338,7 @@ private func parserEnum(
         let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let module = try compile(parsed, named: "TupleCount").renderedTLAModuleBundle().tla
+        let module = try compile(parsed, named: "TupleCount").render().tlaBundle.tla
         #expect(module.contains("Len(values)"))
     }
 
@@ -362,7 +362,7 @@ private func parserEnum(
         let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let module = try compile(parsed, named: "ZeroBasedCount").renderedTLAModuleBundle().tla
+        let module = try compile(parsed, named: "ZeroBasedCount").render().tlaBundle.tla
         #expect(module.contains("Cardinality(DOMAIN input)"))
         #expect(!module.contains("Len(input)"))
     }
@@ -395,7 +395,7 @@ private func parserEnum(
         let parsed = parseAlgorithm(try parseClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let module = try compile(parsed, named: "BoundTupleCount").renderedTLAModuleBundle().tla
+        let module = try compile(parsed, named: "BoundTupleCount").render().tlaBundle.tla
         #expect(module.components(separatedBy: "Len(").count == 3)
     }
 
@@ -430,7 +430,7 @@ private func parserEnum(
         let parsed = parseAlgorithm(try parseClosure(source), enumDefinitions: [nodes])
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let module = try compile(parsed, named: "TupleDomain").renderedTLAModuleBundle().tla
+        let module = try compile(parsed, named: "TupleDomain").render().tlaBundle.tla
         #expect(module.contains("frontier \\in {<<1, 2>>, <<2, 1>>}"))
     }
 
@@ -833,8 +833,8 @@ private func parserEnum(
         let specification = try loweredSource(parsed, named: "ScopedFormalLambda")
         #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
         let compilation = try specification.compile()
-        let direct = compilation.renderedTLAModuleBundle().root.tla
-        let authored = try compilation.renderedPlusCalBundle().root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let authored = try compilation.render().plusCalBundle().root.tla
         #expect(direct.contains("LET value == counters[_process] IN (value + 1)"))
         #expect(direct.contains("LAMBDA") == false)
         #expect(authored.contains("counters[self] + 1"))
@@ -893,7 +893,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ThreeWith")
-        let rendered = try specification.compile().renderedTLAModuleBundle().tla
+        let rendered = try specification.compile().render().tlaBundle.tla
         #expect(rendered.components(separatedBy: "\\E ").count == 4)
     }
 
@@ -922,7 +922,7 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "MacroLock")
         #expect(specification.actions.map(\.name) == ["acquire", "Terminating"])
-        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("lock"))
+        #expect(try specification.compile().render().tlaBundle.tla.contains("lock"))
     }
 
     @Test("parser expands every statement macro parameter in caller scope")
@@ -944,7 +944,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "CopyValue")
-        let rendered = try specification.compile().renderedTLAModuleBundle().tla
+        let rendered = try specification.compile().render().tlaBundle.tla
         #expect(rendered.contains("destination' = source"))
         #expect(rendered.contains("__pcal_macro_parameter") == false)
     }
@@ -968,7 +968,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "OffsetValue")
-        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("destination' = (source + 1)"))
+        #expect(try specification.compile().render().tlaBundle.tla.contains("destination' = (source + 1)"))
     }
 
     @Test("parser retains typed pair projections and formal calls in a statement macro")
@@ -994,7 +994,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "PairVote")
-        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains(
+        #expect(try specification.compile().render().tlaBundle.tla.contains(
             "SafeAt(<<1, 2>>[1], <<1, 2>>[2])"
         ))
     }
@@ -1089,7 +1089,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "ParameterlessMacro")
-        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("count' = (count + 1)"))
+        #expect(try specification.compile().render().tlaBundle.tla.contains("count' = (count + 1)"))
     }
 
     @Test("parser retains a filtered formal function initial domain")
@@ -1126,7 +1126,7 @@ private func parserEnum(
             Issue.record("Expected successors to retain its initial domain")
             return
         }
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("Cardinality"))
+        #expect(try compilation.render().tlaBundle.tla.contains("Cardinality"))
     }
 
     @Test("Algorithm parser decodes scoped function-set invariants")
@@ -1261,7 +1261,7 @@ private func parserEnum(
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "FiniteFunction")
-        #expect(try specification.compile().renderedTLAModuleBundle().tla.contains("CASE"))
+        #expect(try specification.compile().render().tlaBundle.tla.contains("CASE"))
     }
 
     @Test("source model compiles a static formal selection")
@@ -1932,7 +1932,7 @@ private enum ParserNode: String, FiniteTLAValueDomain {
             actions: [],
             invariants: [],
             formalOperatorDefinitions: [definition]
-        ).compile().renderedTLAModuleBundle().tla.contains("SA["))
+        ).compile().render().tlaBundle.tla.contains("SA["))
     }
 
     @Test func typedFormalDefinitionParsesPairLiterals() throws {
@@ -2975,7 +2975,7 @@ private struct DefinePhaseGeneratedModel {
 @Suite(.serialized) struct DefinePhaseGeneratedModelTests {
     @Test("#spec retains definitions in the authored PlusCal define section")
     func keepsDefinePhaseDeclaration() throws {
-        let plusCal = try DefinePhaseGeneratedModel.spec.compile().renderedPlusCalBundle().root.tla
+        let plusCal = try DefinePhaseGeneratedModel.spec.compile().render().plusCalBundle().root.tla
         let define = try #require(plusCal.range(of: "define {"))
         let visible = try #require(plusCal.range(of: "Visible == TRUE"))
         #expect(define.lowerBound < visible.lowerBound)

@@ -20,7 +20,7 @@ private func renderedLocalOperatorExpression(_ body: StateExpr) throws -> String
     actions: [],
     invariants: [],
     formalOperatorDefinitions: [.init(name: "Rendered", parameters: [], body: body)]
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
 private func compiledLocalOperatorExpression(_ body: StateExpr) throws -> CompiledStateExpr {
@@ -40,7 +40,7 @@ private func renderedLocalOperatorDefinitions(_ definitions: [FormalOperatorDefi
     actions: [],
     invariants: [],
     formalOperatorDefinitions: definitions
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
 @TLAModel
@@ -230,7 +230,7 @@ struct LocalOperatorTests {
       return
     }
     #expect(callID == compiledOperators.first?.id)
-    let rendered = compilation.renderedTLAModuleBundle().tla
+    let rendered = try compilation.render().tlaBundle.tla
     #expect(rendered.contains("LET Count["))
     #expect(!rendered.contains("LET RECURSIVE Count"))
 
@@ -262,7 +262,7 @@ struct LocalOperatorTests {
       GeneratedTopLevelTypedFormalDefinitionModel.spec.formalOperatorDefinitions.first
     )
     #expect(definition.parameters == [.value("value0")])
-    let rendered = try GeneratedTopLevelTypedFormalDefinitionModel.spec.compile().renderedTLAModuleBundle().tla
+    let rendered = try GeneratedTopLevelTypedFormalDefinitionModel.spec.compile().render().tlaBundle.tla
     #expect(rendered.contains("0..bound"))
     #expect(rendered.contains("SA[value0]"))
 
@@ -314,7 +314,7 @@ struct LocalOperatorTests {
       return
     }
     #expect(callID == compiledOperators.first?.id)
-    let rendered = compilation.renderedTLAModuleBundle().tla
+    let rendered = try compilation.render().tlaBundle.tla
     #expect(rendered.contains("\\E"))
     #expect(rendered.contains("\\A"))
     #expect(rendered.contains("AtMost[value0]"))
@@ -461,11 +461,11 @@ struct LocalOperatorTests {
       FormalDefinition("Answer", parameters: [], body: .letIn([local], .recursiveCall("AddOne", [.int(41)])))
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains(
+    #expect(try spec.compile().render().tlaBundle.tla.contains(
       "Answer == LET AddOne(number) == (number + 1)"
     ))
-    #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("RECURSIVE AddOne")))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("IN AddOne(41)"))
+    #expect(!(try spec.compile().render().tlaBundle.tla.contains("RECURSIVE AddOne")))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("IN AddOne(41)"))
   }
 
   @Test("compiled rendering declares recursive LET operators")
@@ -484,7 +484,7 @@ struct LocalOperatorTests {
     }
 
     let compilation = try spec.compile()
-    #expect(compilation.renderedTLAModuleBundle().tla.contains("LET RECURSIVE SumTo(_)"))
+    #expect(try compilation.render().tlaBundle.tla.contains("LET RECURSIVE SumTo(_)"))
 
     let definition = try #require(compilation.semantics.formalOperatorDefinitions.first)
     guard case .letIn(let operators, _) = definition.body else {

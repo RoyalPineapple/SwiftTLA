@@ -263,18 +263,18 @@ Compile the source model before inspection or exploration:
 
 ```swift
 let compilation = try BoundedCounter.spec.compile()
-let bundle = compilation.renderedTLAModuleBundle()
+let bundle = try compilation.render().tlaBundle
 ```
 
 Compilation validates declarations, binds names, links modules, lowers
-behavior, allocates private identities, renders TLA+/PlusCal text, and
-assembles the formal bundles before it publishes the compiled specification.
-Rendering is the text conversion within that pipeline. At build time, the macro
+behavior, and allocates private identities. `render()` consumes the resulting
+program to produce TLA+/PlusCal text and formal bundles. Reuse that rendered
+result when exporting multiple artifacts. At build time, the macro
 uses the resolved compiler program to emit typed Swift initialization, guards,
 updates, and property checks. Generated machines execute that Swift directly;
 construction and transitions do not compile the specification or interpret
 formal values. Explicit compiled specifications drive bounded exploration and
-expose the rendered bundles.
+can be rendered separately for verification.
 
 The inline specification is authoritative. Its getter must contain one direct
 `#spec` declaration (or return that declaration), with statically admitted model

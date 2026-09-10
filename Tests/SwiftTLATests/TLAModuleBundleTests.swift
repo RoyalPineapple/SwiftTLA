@@ -75,7 +75,7 @@ struct TLAModuleBundleTests {
 
   @Test("a compiled bundle rejects an undeclared source file")
   func compiledBundleRejectsUndeclaredSource() throws {
-    let compiled = try TLASpec("Root") {}.compile().renderedTLAModuleBundle()
+    let compiled = try TLASpec("Root") {}.compile().render().tlaBundle
     let bundle = TLAModuleBundle(
       root: compiled.root,
       imports: compiled.imports + [
@@ -94,7 +94,7 @@ struct TLAModuleBundleTests {
 
   @Test("#spec compilation preserves its imported module")
   func compiledSpecRetainsImportedModule() throws {
-    let bundle = try ImportedFormalModuleGeneratedModel.spec.compile().renderedTLAModuleBundle()
+    let bundle = try ImportedFormalModuleGeneratedModel.spec.compile().render().tlaBundle
 
     #expect(bundle.imports.map(\.name) == ["ZSequences"])
     #expect(try #require(bundle.root.cfg).contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
@@ -141,7 +141,7 @@ struct TLAModuleBundleTests {
 
   @Test("#spec compilation preserves a named module instance")
   func compiledSpecRetainsNamedModuleInstance() throws {
-    let bundle = try InstancedFormalModuleGeneratedModel.spec.compile().renderedTLAModuleBundle()
+    let bundle = try InstancedFormalModuleGeneratedModel.spec.compile().render().tlaBundle
 
     #expect(bundle.imports.map(\.name) == ["Folds"])
     #expect(bundle.root.tla.contains("Folding == INSTANCE Folds"))
@@ -188,8 +188,8 @@ struct TLAModuleBundleTests {
       }
     }
 
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("EXTENDS Integers, FiniteSets, Sequences, ZSequences"))
-    let bundle = try consumer.compile().renderedTLAModuleBundle()
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, ZSequences"))
+    let bundle = try consumer.compile().render().tlaBundle
     #expect(bundle.imports.map { $0.name } == ["ZSequences"])
     let importedModule = try #require(bundle.imports.first)
     #expect(importedModule.tla.contains("Rotation("))
@@ -208,9 +208,9 @@ struct TLAModuleBundleTests {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
     }
 
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("ZSequencesNat == 0..2"))
-    #expect(try consumer.compile().renderedTLAModuleBundle().cfg.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
-    let bundle = try consumer.compile().renderedTLAModuleBundle()
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("ZSequencesNat == 0..2"))
+    #expect(try consumer.compile().render().tlaBundle.cfg.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+    let bundle = try consumer.compile().render().tlaBundle
     #expect(bundle.imports.map(\.name) == ["ZSequences"])
     #expect(!bundle.root.tla.contains("ZSeq(elements) =="))
 
@@ -250,9 +250,9 @@ struct TLAModuleBundleTests {
       }
     }
 
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("EXTENDS Integers, FiniteSets, Sequences, FormalArithmetic"))
-    #expect(!(try consumer.compile().renderedTLAModuleBundle().tla.contains("Twice(value) ==")))
-    let bundle = try consumer.compile().renderedTLAModuleBundle()
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, FormalArithmetic"))
+    #expect(!(try consumer.compile().render().tlaBundle.tla.contains("Twice(value) ==")))
+    let bundle = try consumer.compile().render().tlaBundle
     #expect(bundle.imports.map { $0.name } == ["FormalArithmetic"])
     #expect(bundle.imports.first?.tla.contains("Twice(") == true)
     let check = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
@@ -278,10 +278,10 @@ struct TLAModuleBundleTests {
       Invariant("ValueIsTwoTimesOne") { math.call("Twice", value.stateExpr) == 2 }
     }
 
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math == INSTANCE InstanceArithmetic"))
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("ValueIsTwoTimesOne == (Math!Twice(value) = 2)"))
-    #expect(!(try consumer.compile().renderedTLAModuleBundle().tla.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic")))
-    let bundle = try consumer.compile().renderedTLAModuleBundle()
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("Math == INSTANCE InstanceArithmetic"))
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("ValueIsTwoTimesOne == (Math!Twice(value) = 2)"))
+    #expect(!(try consumer.compile().render().tlaBundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic")))
+    let bundle = try consumer.compile().render().tlaBundle
     #expect(bundle.imports.map(\.name) == ["InstanceArithmetic"])
     let importedModule = try #require(bundle.imports.first)
     #expect(importedModule.tla.contains("Twice(value) =="))
@@ -317,7 +317,7 @@ struct TLAModuleBundleTests {
     let resolved = try FormalModuleClosure.resolve(root: consumer)
       .linkedOperators.recursiveFunctions
     #expect(resolved.map(\.name) == ["Math!CountDown"])
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math\u{21}CountDown"))
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("Math\u{21}CountDown"))
     let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
     guard case .ok = outcome else {
       Issue.record("The checker did not resolve recursive instance calls.")
@@ -342,8 +342,8 @@ struct TLAModuleBundleTests {
       Invariant("AddsBase") { math.call("AddBase", value.stateExpr) == 5 }
     }
 
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math == INSTANCE ParameterizedArithmetic WITH Base <- 2"))
-    let bundle = try consumer.compile().renderedTLAModuleBundle()
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("Math == INSTANCE ParameterizedArithmetic WITH Base <- 2"))
+    let bundle = try consumer.compile().render().tlaBundle
     let importedModule = try #require(bundle.imports.first)
     #expect(importedModule.tla.contains("CONSTANTS Base"))
     #expect(importedModule.tla.contains("ASSUME Base") == false)
@@ -374,8 +374,8 @@ struct TLAModuleBundleTests {
       Invariant("AddsItsStateParameter") { math.call("AddBase", value.stateExpr) == 6 }
     }
 
-    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math == INSTANCE VariableParameterizedArithmetic WITH Base <- value"))
-    #expect(try consumer.compile().renderedTLAModuleBundle().imports[0].tla.contains("VARIABLES Base"))
+    #expect(try consumer.compile().render().tlaBundle.tla.contains("Math == INSTANCE VariableParameterizedArithmetic WITH Base <- value"))
+    #expect(try consumer.compile().render().tlaBundle.imports[0].tla.contains("VARIABLES Base"))
     let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
     guard case .ok = outcome else {
       Issue.record("The checker did not substitute the state parameter.")

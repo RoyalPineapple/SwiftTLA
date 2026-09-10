@@ -788,7 +788,7 @@ struct GeneratedStateMachineTests {
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 20, amount: 200)))
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 30, amount: 200)) == false)
 
-        let renderedCalls = try sourceSpecification.compile().renderedActions()
+        let renderedCalls = try sourceSpecification.compile().render().actions
         #expect(renderedCalls.map(\.sourceName) == Array(repeating: "transfer", count: 8))
         #expect(renderedCalls.map(\.arguments) == expectedArguments)
         #expect(renderedCalls.map(\.renderedName) == [

@@ -43,7 +43,7 @@ private func renderedStateExpression(
     variables: variables.map { NamedVar(name: $0, initial: .int(0)) },
     actions: [NamedAction(name: "Tick", body: .guard_(.bool(true)))],
     invariants: [NamedInvariant(name: "Rendered", body: expression)]
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
 private func renderedActionExpression(_ expression: ActionExpr) throws -> String {
@@ -52,7 +52,7 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     variables: [NamedVar(name: "x", initial: .int(0))],
     actions: [NamedAction(name: "Rendered", body: expression)],
     invariants: []
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
 private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
@@ -465,8 +465,8 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
       [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
     ]
     #expect(try labels.map { try $0.formalArguments(using: compilation.layout) } == expectedArguments)
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__0_0_0 == transfer(1, 10, 100)"))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__1_1_1 == transfer(2, 20, 200)"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("transfer__0_0_0 == transfer(1, 10, 100)"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("transfer__1_1_1 == transfer(2, 20, 200)"))
 
     let action = try #require(compilation.layout.testActionID(named: "transfer"))
     let runtime = CompiledRuntime(compilation: compilation)
@@ -505,8 +505,8 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     #expect(try labels.map { try $0.formalArguments(using: compilation.layout) } == [[.int(1)], [.int(2)]])
     #expect(
       Set(transitions.map(\.action)) == ["select(1)", "select(2)"])
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("select(choice) =="))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("select__0 == select(1)"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("select(choice) =="))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("select__0 == select(1)"))
   }
 
   @Test("parameterized invocations retain every label when they discover one successor")
@@ -674,7 +674,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     let expectedValues: Set<TLAValue> = [.int(1), .int(2), .int(3)]
     #expect(Set(initialValues) == expectedValues)
     #expect(try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph().states.count == 3)
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("Init == x \\in {1, 2, 3}"))
   }
 
 }
@@ -938,7 +938,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     let spec = TLASpec("FunctionLiteral") {
       FormalDefinition("Double", parameters: [], body: fun)
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("Double == [p \\in {1, 2} |-> (p * 10)]"))
   }
 }

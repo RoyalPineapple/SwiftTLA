@@ -20,7 +20,7 @@ import SwiftSyntax
     func ordinaryCollections() throws {
         let compilation = try model(symmetric: false).compile()
         #expect(compilation.semantics.symmetrySets.isEmpty)
-        let bundle = compilation.renderedTLAModuleBundle()
+        let bundle = try compilation.render().tlaBundle
         #expect(!bundle.tla.contains("Permutations("))
         #expect(!bundle.cfg.contains("SYMMETRY"))
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionWithoutDeclarations) {
@@ -38,7 +38,7 @@ import SwiftSyntax
         #expect(ordinary.states.count == 4)
         #expect(reduced.states.count == 3)
         #expect(compilation.semantics.symmetrySets.count == 1)
-        #expect(compilation.renderedTLAModuleBundle().cfg.contains("SYMMETRY Symmdevices"))
+        #expect(try compilation.render().tlaBundle.cfg.contains("SYMMETRY Symmdevices"))
     }
 
     @Test("Collection symmetry parsing agrees with the builder independently of declaration order")

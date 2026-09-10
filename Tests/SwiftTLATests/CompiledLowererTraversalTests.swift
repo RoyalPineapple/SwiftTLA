@@ -63,7 +63,7 @@ struct CompiledLowererTraversalTests {
             let value = level == 0 ? "value" : "bound\(level - 1)"
             renderedBody = "LET bound\(level) == \(value) IN \(renderedBody)"
         }
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("deep == \(renderedBody)"))
+        #expect(try compilation.render().tlaBundle.tla.contains("deep == \(renderedBody)"))
     }
 
     @Test("local operator calls retain their bound compiler identities")

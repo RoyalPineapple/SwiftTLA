@@ -226,11 +226,12 @@ package struct TemporalSymmetryCheck: Sendable {
     try RetainedFiles.createDirectory(outputDirectory, beneath: projectRoot)
     let rawRunID = UUID()
     let reducedRunID = UUID()
-    let rawBundle = compilation.renderedTLAModuleBundle(
+    let rendered = try compilation.render()
+    let rawBundle = rendered.tlaBundle(
       symmetryReduction: symmetryCase.rawExploration.symmetryReduction)
-    let reducedBundle = compilation.renderedTLAModuleBundle(
+    let reducedBundle = rendered.tlaBundle(
       symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
-    let renderedActions = compilation.renderedActions()
+    let renderedActions = rendered.actions
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(symmetryCase.id, isDirectory: true)
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
     let rawCase = try makeFiniteGraphCase(

@@ -5,7 +5,7 @@ import UpstreamParity
 struct FiniteGraphCompilationTests {
   @Test("bounded elevator action wrappers come from compilation")
   func compilesOrderedElevatorActionWrappers() throws {
-    let calls = try MultiCarElevator.spec.compile().renderedActions()
+    let calls = try MultiCarElevator.spec.compile().render().actions
 
     #expect(calls.count == 80)
     #expect(calls.first?.renderedName == "request__0_0_0")

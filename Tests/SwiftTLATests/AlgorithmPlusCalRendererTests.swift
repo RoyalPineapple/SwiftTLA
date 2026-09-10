@@ -126,8 +126,8 @@ struct AlgorithmPlusCalRendererTests {
         })
 
         let compilation = try TLASpec("QuantifiedBinder") { algorithm }.compile()
-        let rendered = try compilation.renderedPlusCalBundle().root.tla
-        let renderedTLA = compilation.renderedTLAModuleBundle().root.tla
+        let rendered = try compilation.render().plusCalBundle().root.tla
+        let renderedTLA = try compilation.render().tlaBundle.root.tla
 
         #expect(rendered.contains("await \\A item_1 \\in {0, 1} : (item_1 >= count);"))
         #expect(renderedTLA.contains("\\A item_1 \\in {0, 1}"))
@@ -149,7 +149,7 @@ struct AlgorithmPlusCalRendererTests {
             })
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let algorithmRange = try #require(rendered.range(of: "(*--algorithm Sections"))
         let preludeRange = try #require(rendered.range(of: "Bound == 2"))
         let defineRange = try #require(rendered.range(of: "define {"))
@@ -188,7 +188,7 @@ struct AlgorithmPlusCalRendererTests {
             Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
 
         #expect(rendered.contains("CountIsZero =="))
     }
@@ -267,7 +267,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("Distinct ==") })
         let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
             clause.split(separator: " ").first.map(String.init)
@@ -293,7 +293,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("StateConstraint ==") })
         let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
             clause.split(separator: " ").first.map(String.init)
@@ -318,7 +318,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("Distinct ==") })
         let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
             clause.split(separator: " ").first.map(String.init)
@@ -364,8 +364,8 @@ struct AlgorithmPlusCalRendererTests {
         })
 
         let compilation = try TLASpec("Procedures") { algorithm }.compile()
-        let rendered = try compilation.renderedPlusCalBundle().root.tla
-        let renderedTLA = compilation.renderedTLAModuleBundle().root.tla
+        let rendered = try compilation.render().plusCalBundle().root.tla
+        let renderedTLA = try compilation.render().tlaBundle.root.tla
 
         #expect(rendered.contains("procedure work(parameter0)"))
         #expect(rendered.contains("enter:"))
@@ -431,7 +431,7 @@ struct AlgorithmPlusCalRendererTests {
         }
 
         let compilation = try spec.compile()
-        let module = try compilation.renderedPlusCalBundle().root.tla
+        let module = try compilation.render().plusCalBundle().root.tla
 
         #expect(module.contains("(*--algorithm Retained {"))
         #expect(module.contains("} *)\nStateConstraint == (count < 2)\n===="))
@@ -453,7 +453,7 @@ struct AlgorithmPlusCalRendererTests {
             })
         }
 
-        let module = try spec.compile().renderedPlusCalBundle().root.tla
+        let module = try spec.compile().render().plusCalBundle().root.tla
 
         #expect(module.contains("CONSTANTS N"))
         #expect(module.contains("TLC"))
@@ -478,7 +478,7 @@ struct AlgorithmPlusCalRendererTests {
         }
 
         #expect(spec.extendsModules == [StandardModule.integers, .naturals, .finiteSets])
-        #expect(try spec.compile().renderedPlusCalBundle().root.tla.contains(
+        #expect(try spec.compile().render().plusCalBundle().root.tla.contains(
             "EXTENDS Integers, Naturals, FiniteSets, Sequences"
         ))
     }
@@ -501,7 +501,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
+        let rendered = try specification.compile().render().plusCalBundle().root.tla
 
         #expect(rendered.contains("RECURSIVE First, Second"))
     }
@@ -523,7 +523,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
+        let rendered = try specification.compile().render().plusCalBundle().root.tla
 
         #expect(rendered.components(separatedBy: "RECURSIVE Repeat").count == 2)
     }

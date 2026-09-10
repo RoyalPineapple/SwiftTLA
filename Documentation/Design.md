@@ -53,14 +53,15 @@ access to that machine.
 
 ## Rendering and linking
 
-Compilation owns module order, rendered names, configuration, ownership, and
-provenance. `CompiledTLARenderer` prints the compiled declaration plan.
+Compilation owns module order, declaration dependencies, names, ownership, and
+provenance. It returns the validated program without generating text. `CompiledTLARenderer` prints the compiled declaration plan.
 `AlgorithmPlusCalRenderer` prints the authored algorithm from its compiled
 render plan.
 
-`renderedTLAModuleBundle()` returns the linked TLA+ bundle.
-`renderedPlusCalBundle()` returns PlusCal for a compilation with one authored
-algorithm.
+`compilation.render()` produces reusable verification artifacts from that program.
+The result owns `tlaBundle` and provides `plusCalBundle()` for a model with one
+authored algorithm. Native generation and formal execution consume the compiled
+program directly.
 
 ## Exact finite comparison
 

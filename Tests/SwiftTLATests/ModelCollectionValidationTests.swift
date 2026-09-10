@@ -108,10 +108,10 @@ struct ModelCollectionValidationTests {
       Variable(counter, 0)
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("TLC") == false)
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Permutations(") == false)
-    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY") == false)
-    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("Member0") == false)
+    #expect(try spec.compile().render().tlaBundle.tla.contains("TLC") == false)
+    #expect(try spec.compile().render().tlaBundle.tla.contains("Permutations(") == false)
+    #expect(try spec.compile().render().tlaBundle.cfg.contains("SYMMETRY") == false)
+    #expect(try spec.compile().render().tlaBundle.cfg.contains("Member0") == false)
   }
 
   @Test("A collection variable must retain its declared uniform member domain")

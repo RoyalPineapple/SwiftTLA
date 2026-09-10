@@ -9,7 +9,7 @@ struct TLCMCCorpusConformanceTests {
         let entry = try #require(CanonicalCorpus.entries.first { $0.id == "tlcmc-graph-1" })
         let compilation = try entry.specification().compile()
         let resolved = try TLCMCModel.spec.compile()
-        let bundle = compilation.renderedTLAModuleBundle()
+        let bundle = try compilation.render().tlaBundle
 
         #expect(compilation.identity == resolved.identity)
         #expect(compilation.description.actions.map(\.name).contains("returnToDequeue") == false)

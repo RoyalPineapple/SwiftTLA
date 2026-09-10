@@ -42,7 +42,7 @@ struct AlgorithmBuilderTests {
 
         #expect(specialized.algorithmPhase == .lowered)
         #expect(specialized.authoredPlusCalAlgorithmPlan?.name == "SpecializedAlgorithm")
-        let rendered = try specialized.compile().renderedPlusCalBundle().root.tla
+        let rendered = try specialized.compile().render().plusCalBundle().root.tla
         #expect(rendered.components(separatedBy: "(*--algorithm SpecializedAlgorithm").count == 2)
     }
 
@@ -249,7 +249,7 @@ struct AlgorithmBuilderTests {
 
         let module = try TLASpec("BoundProcessHeader") { algorithm }
             .compile()
-            .renderedTLAModuleBundle()
+            .render().tlaBundle
             .tla
         #expect(module.contains("advance(_process) =="))
         #expect(module.contains("__swift_tla_binder_") == false)
@@ -509,7 +509,7 @@ struct AlgorithmBuilderTests {
         let rendered = try TLASpec("ProcedureBuilderExport") {
             FormalDefinition("Marker", parameters: [], body: .value(.string("procedure.work.enter")))
             algorithm
-        }.compile().renderedTLAModuleBundle().tla
+        }.compile().render().tlaBundle.tla
         #expect(rendered.contains("Marker == \"procedure.work.enter\""))
         #expect(rendered.contains("pc' = \"enter\""))
         #expect(!rendered.contains("pc' = \"procedure.work.enter\""))
@@ -648,8 +648,8 @@ struct AlgorithmBuilderTests {
             .string("second"): .string("stringProcess"),
             .string("other"): .string("otherProcess")
         ]))
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("({\"first\", \"second\"} \\cup {\"other\"})"))
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("__pcal_initial_process =") == false)
+        #expect(try spec.compile().render().tlaBundle.tla.contains("({\"first\", \"second\"} \\cup {\"other\"})"))
+        #expect(try spec.compile().render().tlaBundle.tla.contains("__pcal_initial_process =") == false)
     }
 
     @Test("a begin-style algorithm keeps a scalar program counter")
@@ -703,7 +703,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
         #expect(spec.fairness == [.weakFairnessNext])
         #expect(try renderedSourceAlgorithmPlusCal(algorithm).contains("--fair algorithm FairSequential"))
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("WF_<<pc, value>>(Next)"))
+        #expect(try spec.compile().render().tlaBundle.tla.contains("WF_<<pc, value>>(Next)"))
     }
 
     @Test("sequential Algorithm fairness rejects process and empty bodies")
@@ -920,7 +920,7 @@ struct AlgorithmBuilderTests {
 
         let compilation = try TLASpec("ReadAfterWrite") { algorithm }.compile()
         let rendered = try compilation
-            .renderedPlusCalBundle()
+            .render().plusCalBundle()
             .root.tla
         let guardRange = try #require(rendered.range(of: "await (value > 0);"))
         let assignmentRange = try #require(rendered.range(of: "value := (value + 1);"))
@@ -949,7 +949,7 @@ struct AlgorithmBuilderTests {
 
         let compilation = try TLASpec("SeparatedUpdates") { algorithm }.compile()
         let rendered = try compilation
-            .renderedPlusCalBundle()
+            .render().plusCalBundle()
             .root.tla
         #expect(rendered.contains("first := (first + 1) || second := (first + 1);"))
 
@@ -1015,7 +1015,7 @@ struct AlgorithmBuilderTests {
         #expect(algorithm.validate().isEmpty)
         let rendered = try TLASpec("NestedUpdates") { algorithm }
             .compile()
-            .renderedPlusCalBundle()
+            .render().plusCalBundle()
             .root.tla
         #expect(rendered.components(separatedBy: "common := (common + 1)").count == 3)
         #expect(rendered.contains("common := (common + 1) || first := __binder_"))
@@ -1163,7 +1163,7 @@ struct AlgorithmBuilderTests {
         let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["value"])
         #expect(spec.actions.map(\.name) == ["pcalProcess1"])
-        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        let rendered = try spec.compile().render().tlaBundle.tla
         #expect(rendered.contains("VARIABLES pc") == false)
 
         let (compilation, initial) = try initialState(of: spec)
@@ -1357,7 +1357,7 @@ struct AlgorithmBuilderTests {
 
         let spec = TLASpec("FormalOperators") { algorithm }
         #expect(try spec.loweredSourceModel().formalOperatorDefinitions == lowered.formalOperatorDefinitions)
-        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        let rendered = try spec.compile().render().tlaBundle.tla
         #expect(rendered.components(separatedBy: "same(").count == 2)
     }
 
@@ -1384,7 +1384,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.fairness == [FairnessCondition.weakFairnessActionCall(.init(name: "choose", arguments: [.string("first")])),
             .weakFairnessActionCall(.init(name: "choose", arguments: [.string("second")]))
         ])
-        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        let rendered = try spec.compile().render().tlaBundle.tla
         #expect(rendered.contains("WF_<<pc, count, selected>>(choose__0)"))
         #expect(rendered.contains("WF_<<pc, count, selected>>(choose__1)"))
 

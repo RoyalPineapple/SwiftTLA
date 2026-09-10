@@ -142,7 +142,7 @@ struct UpstreamParityTests {
 
     @Test("HourClock TLA+ module is TLC-shaped")
     func hourClockTLA() throws {
-        let tla = try Example.hourClock.spec.compile().renderedTLAModuleBundle().tla
+        let tla = try Example.hourClock.spec.compile().render().tlaBundle.tla
         #expect(tla.contains("MODULE HourClock"))
         #expect(tla.contains("hr \\in"))
         #expect(tla.contains("HCnxt"))
@@ -151,7 +151,7 @@ struct UpstreamParityTests {
 
     @Test("DieHard actions match upstream names")
     func dieHardNames() throws {
-        let tla = try Example.dieHardTypeOK.spec.compile().renderedTLAModuleBundle().tla
+        let tla = try Example.dieHardTypeOK.spec.compile().render().tlaBundle.tla
         for name in ["FillSmallJug", "FillBigJug", "EmptySmallJug", "EmptyBigJug", "SmallToBig", "BigToSmall", "TypeOK"] {
             #expect(tla.contains(name), "missing \(name)")
         }
@@ -201,7 +201,7 @@ struct UpstreamParityTests {
     func binarySearchParity() throws {
         let exploration = try explore(BinarySearchModel.spec, maximumStateLimit: 100_000)
         #expect(exploration.graph.states.count == Example.binarySearch.expectedDistinct)
-        let tla = try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla
+        let tla = try BinarySearchModel.spec.compile().render().tlaBundle.tla
         #expect(tla.contains("WF_<<pc, seq, val, low, high, result>>(Next)"))
     }
 

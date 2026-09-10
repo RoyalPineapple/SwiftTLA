@@ -126,7 +126,7 @@ struct ExplicitUnionViewContractTests {
             let specification = TLASpec(name: "ViewModules", variables: [], actions: [],
                 invariants: [.init(name: "View", body: .equal(.assertView(value, shape), value))],
                 extendsModules: [])
-            let rendered = try specification.compile().renderedTLAModuleBundle().root.tla
+            let rendered = try specification.compile().render().tlaBundle.root.tla
             let imports = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("EXTENDS ") })
             #expect(imports.contains("Integers") == (shape == .set(.integer)))
         }

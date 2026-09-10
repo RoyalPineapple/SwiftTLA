@@ -25,7 +25,7 @@ struct ModelCollectionCompilationParityTests {
 
       #expect(reduced.graph.states.count == scope + 1)
       #expect({ if case .ok = reduced.outcome { true } else { false } }())
-      let bundle = compilation.renderedTLAModuleBundle()
+      let bundle = try compilation.render().tlaBundle
       #expect(bundle.tla.contains("DevicesKeys == {DevicesMember0"))
       #expect(bundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))
       #expect(bundle.cfg.contains("SYMMETRY Symmdevices"))

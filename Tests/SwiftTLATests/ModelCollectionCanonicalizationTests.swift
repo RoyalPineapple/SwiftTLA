@@ -265,7 +265,7 @@ struct ModelCollectionCanonicalizationTests {
       Symmetry(members)
     }
 
-    let bundle = try spec.compile().renderedTLAModuleBundle()
+    let bundle = try spec.compile().render().tlaBundle
     #expect(bundle.tla.contains("CONSTANTS DevicePhasesMember0, DevicePhasesMember1"))
     #expect(bundle.tla.contains("DevicePhasesKeys == {DevicePhasesMember0, DevicePhasesMember1}"))
     #expect(bundle.tla.contains("SymmdevicePhases == Permutations({DevicePhasesMember0, DevicePhasesMember1})"))

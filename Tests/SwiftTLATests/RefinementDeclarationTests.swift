@@ -19,7 +19,7 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
     }
 
-    let source = try concrete.compile().renderedTLAModuleBundle().tla
+    let source = try concrete.compile().render().tlaBundle.tla
     let instanceRange = try #require(source.range(of: "C == INSTANCE Abstract WITH state <- 0"))
     let refinementRange = try #require(source.range(of: "Refines == C!Spec"))
     #expect(instanceRange.lowerBound < refinementRange.lowerBound)

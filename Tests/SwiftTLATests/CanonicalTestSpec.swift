@@ -7,7 +7,7 @@ func loweredSourceSpecification(_ algorithm: Algorithm) throws -> TLASpec {
 func renderedSourceAlgorithmPlusCal(_ algorithm: Algorithm) throws -> String {
     try TLASpec(algorithm.model.name) { algorithm }
         .compile()
-        .renderedPlusCalBundle()
+        .render().plusCalBundle()
         .root
         .tla
 }

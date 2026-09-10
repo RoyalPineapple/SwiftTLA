@@ -140,7 +140,8 @@ struct CompiledRefinement: Sendable {
 }
 
 /// The result of lowering one module in its resolved import context.
-private struct CompiledModule: Sendable {
+fileprivate struct CompiledModule: Sendable {
+    let source: TLASpec
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
     let semantics: CompiledSemantics
@@ -151,68 +152,81 @@ private struct CompiledModule: Sendable {
     let definitionsAfterInstances: [Int]
 }
 
-/// The immutable compiled specification and validated outputs produced by compilation.
+/// The validated program consumed by native generation, formal execution, and rendering.
 public struct CompiledSpecification: Sendable {
     public let description: CompilationDescription
     public var identity: CompilationIdentity { description.identity }
-    package let layout: CompiledLayout
-    package let semantics: CompiledSemantics
-    let refinements: [CompiledRefinement]
-    private let renderedBundle: TLAModuleBundle
-    private let renderedConfigurationWithoutSymmetry: String
-    private let renderedActionPlan: [RenderedAction]
-    private let renderedPlusCalModuleBundle: TLAModuleBundle?
+    package var layout: CompiledLayout { module.layout }
+    package var semantics: CompiledSemantics { module.semantics }
+    var refinements: [CompiledRefinement] { module.refinements }
+    fileprivate let module: CompiledModule
+    fileprivate let imports: [CompiledModule]
+    fileprivate let provenance: TLAModuleBundle.Provenance
 
-    package func renderedActions() -> [RenderedAction] {
-        renderedActionPlan
+    /// Render verification artifacts from the existing program without compiling it again.
+    public func render() throws -> RenderedSpecification {
+        let source = module.source
+        let rootPlan = try source.directModuleSectionPlan(module)
+        let renderedBundle = TLAModuleBundle(
+            root: .init(name: source.name, tla: rootPlan.renderedModuleSource, cfg: rootPlan.renderedConfiguration),
+            imports: try imports.map { imported in
+                let plan = try imported.source.directModuleSectionPlan(imported)
+                return .init(name: imported.source.name, tla: plan.renderedModuleSource, cfg: nil)
+            },
+            provenance: provenance
+        )
+        try renderedBundle.validateDeclaredClosure()
+        let renderer = CompiledTLARenderer(layout: module.layout, bindings: module.bindings)
+        let algorithm = try source.authoredPlusCalModule(
+            algorithm: module.authoredAlgorithm, semantics: module.semantics, layout: module.layout,
+            formalRenderer: renderer, renderedRefinements: try module.refinements.map(renderer.refinement)
+        )
+        let plusCalBundle = try algorithm.map { algorithm in
+            let bundle = TLAModuleBundle(
+                root: .init(name: source.name,
+                    tla: try AlgorithmPlusCalRenderer(module: algorithm, formalRenderer: renderer).render(),
+                    cfg: renderedBundle.root.cfg),
+                imports: renderedBundle.imports, provenance: provenance
+            )
+            try bundle.validateDeclaredClosure()
+            return bundle
+        }
+        return RenderedSpecification(
+            tlaBundle: renderedBundle,
+            renderedConfigurationWithoutSymmetry: rootPlan.renderedConfigurationWithoutSymmetry,
+            actions: rootPlan.renderedActions, renderedPlusCalModuleBundle: plusCalBundle
+        )
     }
+}
 
-    fileprivate init(
-        description: CompilationDescription,
-        layout: CompiledLayout,
-        semantics: CompiledSemantics,
-        refinements: [CompiledRefinement],
-        renderedBundle: TLAModuleBundle,
-        renderedConfigurationWithoutSymmetry: String,
-        renderedActionPlan: [RenderedAction],
-        renderedPlusCalModuleBundle: TLAModuleBundle?
-    ) {
-        self.description = description
-        self.layout = layout
-        self.semantics = semantics
-        self.refinements = refinements
-        self.renderedBundle = renderedBundle
-        self.renderedConfigurationWithoutSymmetry = renderedConfigurationWithoutSymmetry
-        self.renderedActionPlan = renderedActionPlan
-        self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
-    }
+/// Verification output rendered once and reusable by exporters and TLC checks.
+public struct RenderedSpecification: Sendable {
+    public let tlaBundle: TLAModuleBundle
+    fileprivate let renderedConfigurationWithoutSymmetry: String
+    package let actions: [RenderedAction]
+    fileprivate let renderedPlusCalModuleBundle: TLAModuleBundle?
 
-    /// Returns the complete TLA+/CFG bundle produced by compilation.
-    public func renderedTLAModuleBundle() -> TLAModuleBundle {
-        renderedBundle
-    }
-
-    package func renderedTLAModuleBundle(
+    package func tlaBundle(
         symmetryReduction: SymmetryReduction
     ) -> TLAModuleBundle {
         switch symmetryReduction {
         case .enabled:
-            return renderedBundle
+            return tlaBundle
         case .disabled:
             return TLAModuleBundle(
                 root: .init(
-                    name: renderedBundle.root.name,
-                    tla: renderedBundle.root.tla,
+                    name: tlaBundle.root.name,
+                    tla: tlaBundle.root.tla,
                     cfg: renderedConfigurationWithoutSymmetry
                 ),
-                imports: renderedBundle.imports,
-                provenance: renderedBundle.provenance
+                imports: tlaBundle.imports,
+                provenance: tlaBundle.provenance
             )
         }
     }
 
-    /// Returns the source-faithful PlusCal bundle produced by compilation.
-    public func renderedPlusCalBundle() throws -> TLAModuleBundle {
+    /// Returns the source-faithful PlusCal bundle produced by rendering.
+    public func plusCalBundle() throws -> TLAModuleBundle {
         guard let renderedPlusCalModuleBundle else {
             throw CompilationDiagnostic(
                 code: .invalidAuthoredPlusCalPlan,
@@ -429,101 +443,22 @@ public extension TLASpec {
         let module = try compileModule(in: closure)
         let layout = module.layout
         let semantics = module.semantics
-        let bindings = module.bindings
         let compiledRefinements = module.refinements
         let identity = compilationIdentity
-        let directModuleSections = try directModuleSectionPlan(module)
-        var moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan] = [:]
-        for entry in closure.entries {
-            if entry.id == closure.root.id {
-                moduleSectionPlans[entry.id] = directModuleSections
-                continue
+        let imports = try closure.entries.filter { $0.id != closure.root.id }.map { entry in
+            let source = try entry.module.loweredSourceModel()
+            let context = closure.planContext(for: entry)
+            return try source.compileModule(in: context.closure, incomingModuleParameters: context.incomingModuleParameters)
+        }
+        let provenance = TLAModuleBundle.Provenance.compiled(
+            identity: identity,
+            ownership: closure.entries.map {
+                .init(moduleName: $0.module.name, owningRoot: $0.owningRoot, structuralPath: $0.structuralPath)
+            },
+            dependencies: closure.edges.map {
+                .init(importingModule: $0.fromModule, importedModule: $0.toModule, structuralPath: $0.structuralPath)
             }
-            moduleSectionPlans[entry.id] = try entry.module.directModuleSectionPlan(
-                in: closure.planContext(for: entry)
-            )
-        }
-        let formalRenderer = CompiledTLARenderer(layout: layout, bindings: bindings)
-        let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
-        let authoredPlusCalModule = try authoredPlusCalModule(
-            algorithm: module.authoredAlgorithm,
-            semantics: semantics,
-            layout: layout,
-            formalRenderer: formalRenderer,
-            renderedRefinements: renderedRefinements
         )
-        guard let rootPlan = moduleSectionPlans[closure.root.id] else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "moduleClosure.\(closure.root.module.name)",
-                expected: "a rendered root module plan",
-                actual: "no rendered root module plan",
-                nextSafeAction: "Compile the source model again."
-            )
-        }
-        let renderedFiles = try closure.entries.map { entry in
-            guard let plan = moduleSectionPlans[entry.id] else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .rendering,
-                    path: "moduleClosure.\(entry.module.name)",
-                    expected: "a rendered module plan",
-                    actual: "no rendered module plan",
-                    nextSafeAction: "Compile the source model again."
-                )
-            }
-            return TLAModuleFile(
-                name: entry.module.name,
-                tla: plan.renderedModuleSource,
-                cfg: entry.id == closure.root.id ? plan.renderedConfiguration : nil
-            )
-        }
-        guard let renderedRoot = renderedFiles.last else {
-            throw CompilationDiagnostic(
-                code: .emptyFormalModuleClosure,
-                stage: .linking,
-                path: "moduleClosure",
-                expected: "a linked root module",
-                actual: "an empty module closure",
-                nextSafeAction: "Compile a source model with one root module."
-            )
-        }
-        let renderedBundle = TLAModuleBundle(
-            root: renderedRoot,
-            imports: Array(renderedFiles.dropLast()),
-            provenance: .compiled(
-                identity: identity,
-                ownership: closure.entries.map {
-                    .init(
-                        moduleName: $0.module.name,
-                        owningRoot: $0.owningRoot,
-                        structuralPath: $0.structuralPath
-                    )
-                },
-                dependencies: closure.edges.map {
-                    .init(
-                        importingModule: $0.fromModule,
-                        importedModule: $0.toModule,
-                        structuralPath: $0.structuralPath
-                    )
-                }
-            )
-        )
-        try renderedBundle.validateDeclaredClosure()
-        let renderedPlusCalModuleBundle = try authoredPlusCalModule.map { module in
-            let bundle = TLAModuleBundle(
-                root: .init(
-                    name: renderedRoot.name,
-                    tla: try AlgorithmPlusCalRenderer(module: module, formalRenderer: formalRenderer).render(),
-                    cfg: renderedRoot.cfg
-                ),
-                imports: renderedBundle.imports,
-                provenance: renderedBundle.provenance
-            )
-            try bundle.validateDeclaredClosure()
-            return bundle
-        }
         let description = CompilationDescription(
             name: name,
             identity: identity,
@@ -564,19 +499,10 @@ public extension TLASpec {
                 )
             }
         )
-        return CompiledSpecification(
-            description: description,
-            layout: layout,
-            semantics: semantics,
-            refinements: compiledRefinements,
-            renderedBundle: renderedBundle,
-            renderedConfigurationWithoutSymmetry: rootPlan.renderedConfigurationWithoutSymmetry,
-            renderedActionPlan: rootPlan.renderedActions,
-            renderedPlusCalModuleBundle: renderedPlusCalModuleBundle
-        )
+        return CompiledSpecification(description: description, module: module, imports: imports, provenance: provenance)
     }
 
-    private func directModuleSectionPlan(_ module: CompiledModule) throws -> DirectModuleSectionPlan {
+    fileprivate func directModuleSectionPlan(_ module: CompiledModule) throws -> DirectModuleSectionPlan {
         let layout = module.layout
         let bindings = module.bindings
         let semantics = module.semantics
@@ -657,17 +583,6 @@ public extension TLASpec {
         )
     }
 
-    private func directModuleSectionPlan(
-        in context: FormalModuleClosure.ModulePlanContext
-    ) throws -> DirectModuleSectionPlan {
-        let source = try loweredSourceModel()
-        let module = try source.compileModule(
-            in: context.closure,
-            incomingModuleParameters: context.incomingModuleParameters
-        )
-        return try source.directModuleSectionPlan(module)
-    }
-
     private func compileModule(
         in closure: FormalModuleClosure,
         incomingModuleParameters: [FormalModuleReplacement] = []
@@ -689,8 +604,9 @@ public extension TLASpec {
             try lowerer.authoredPlusCalPlan($0)
         }
         let refinements = try compiledRefinements(lowerer: &lowerer, layout: layout, semantics: semantics)
+        try validateAuthoredProperties(algorithm: authoredAlgorithm, layout: layout)
         return CompiledModule(
-            layout: layout, bindings: lowerer.bindings, semantics: semantics,
+            source: self, layout: layout, bindings: lowerer.bindings, semantics: semantics,
             refinements: refinements, authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,
             definitionsBeforeInstances: definitionOrder.beforeInstances,

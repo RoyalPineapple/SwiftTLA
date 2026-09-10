@@ -28,7 +28,7 @@ struct CompiledSpecificationRendererTests {
             importConfigurations: [.init(moduleName: "Missing", replacements: [])]
         )
         #expect(throws: CompilationDiagnostic.self) {
-            try invalid.compile().renderedTLAModuleBundle()
+            try invalid.compile().render().tlaBundle
         }
     }
 
@@ -39,7 +39,7 @@ struct CompiledSpecificationRendererTests {
         let right = TLASpec(name: "Right", variables: [], actions: [], invariants: [], imports: [support])
         let root = TLASpec(name: "Root", variables: [], actions: [], invariants: [], imports: [left, right])
 
-        let bundle = try root.compile().renderedTLAModuleBundle()
+        let bundle = try root.compile().render().tlaBundle
 
         #expect(bundle.files.map(\.name) == ["Support", "Left", "Right", "Root"])
         #expect(Set(bundle.files.map(\.name)).count == bundle.files.count)
@@ -66,8 +66,8 @@ struct CompiledSpecificationRendererTests {
         }
         let compilation = try specification.compile()
 
-        let bundle = try compilation.renderedPlusCalBundle()
-        let directBundle = compilation.renderedTLAModuleBundle()
+        let bundle = try compilation.render().plusCalBundle()
+        let directBundle = try compilation.render().tlaBundle
         #expect(bundle.root.tla.contains("--algorithm Authored"))
         #expect(bundle.root.cfg == directBundle.root.cfg)
         #expect(bundle.imports.map(\.name) == ["Support"])
@@ -85,7 +85,7 @@ struct CompiledSpecificationRendererTests {
         ).compile()
 
         #expect(throws: CompilationDiagnostic.self) {
-            try compilation.renderedPlusCalBundle()
+            try compilation.render().plusCalBundle()
         }
     }
 

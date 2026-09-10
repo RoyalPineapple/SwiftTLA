@@ -178,7 +178,7 @@ struct CompilerPipelineCanonicalizationTests {
             Var("value", SecondGeneratedSurfaceValue.value)
         }.compile()
 
-        #expect(first.renderedTLAModuleBundle().tla == second.renderedTLAModuleBundle().tla)
+        #expect(try first.render().tlaBundle.tla == second.render().tlaBundle.tla)
         #expect(first.layout.variables.filter { $0.declaration.origin == .source }.map(\.generatedSwiftType) == ["FirstGeneratedSurfaceValue"])
         #expect((first.identity == second.identity) == false)
 
@@ -197,7 +197,7 @@ struct CompilerPipelineCanonicalizationTests {
             ) { StateExpr.value(.bool(true)) }
         }.compile()
 
-        #expect(firstAction.renderedTLAModuleBundle().tla == secondAction.renderedTLAModuleBundle().tla)
+        #expect(try firstAction.render().tlaBundle.tla == secondAction.render().tlaBundle.tla)
         #expect((firstAction.identity == secondAction.identity) == false)
     }
 
@@ -214,8 +214,8 @@ struct CompilerPipelineCanonicalizationTests {
         let first = try sourceModel().compile()
         _ = sourceModel()
         let second = try sourceModel().compile()
-        let firstModule = first.renderedTLAModuleBundle().root.tla
-        let secondModule = second.renderedTLAModuleBundle().root.tla
+        let firstModule = try first.render().tlaBundle.root.tla
+        let secondModule = try second.render().tlaBundle.root.tla
 
         #expect(first.identity == second.identity)
         #expect(firstModule == secondModule)
@@ -239,7 +239,7 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected nested compiled quantifiers")
             return
         }
-        let module = compilation.renderedTLAModuleBundle().root.tla
+        let module = try compilation.render().tlaBundle.root.tla
 
         #expect(Set([first, second]).count == 2)
         #expect(module.contains("\\A value \\in"))
@@ -259,7 +259,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+        let module = try spec.compile().render().tlaBundle.root.tla
 
         #expect(module.contains("VARIABLES value"))
         #expect(module.contains("\\A value_1 \\in value"))
@@ -279,7 +279,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+        let module = try spec.compile().render().tlaBundle.root.tla
 
         #expect(spec.temporalProperties.map(\.name) == ["value"])
         #expect(module.contains("\\A value_1 \\in"))
@@ -294,7 +294,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+        let module = try spec.compile().render().tlaBundle.root.tla
 
         #expect(module.contains("stay(_process_1) =="))
     }
@@ -314,7 +314,7 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected nested compiled value binders")
             return
         }
-        let module = compilation.renderedTLAModuleBundle().root.tla
+        let module = try compilation.render().tlaBundle.root.tla
 
         #expect(Set([outer, inner]).count == 2)
         #expect(outerReference == outer)
@@ -1174,8 +1174,8 @@ struct CompilerPipelineCanonicalizationTests {
     func scopedAlgorithmMatchesGeneratedExecution() throws {
         let compilation = try CompilerPipelineAlgorithmModel.spec.compile()
         let repeated = try CompilerPipelineAlgorithmModel.spec.compile()
-        let rendered = compilation.renderedTLAModuleBundle().tla
-        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
+        let rendered = try compilation.render().tlaBundle.tla
+        let repeatedRendered = try repeated.render().tlaBundle.tla
         var machine = try CompilerPipelineAlgorithmModel.makeMachine()
         let transition = try machine.send(.increment)
 
@@ -1254,7 +1254,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
 
         #expect(alphaKey(sum) == expectedKey)
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("PositiveSum == (\(expectedSum) > 0)"))
+        #expect(try compilation.render().tlaBundle.tla.contains("PositiveSum == (\(expectedSum) > 0)"))
     }
 
     @Test("state identity traverses structured expressions and preserves lexical scope")
@@ -1461,8 +1461,8 @@ struct CompilerPipelineCanonicalizationTests {
     func macroGeneratedConsumersUseCompiledPayload() throws {
         let compilation = try CompilerPipelineGeneratedModel.spec.compile()
         let repeated = try CompilerPipelineGeneratedModel.spec.compile()
-        let rendered = compilation.renderedTLAModuleBundle().tla
-        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
+        let rendered = try compilation.render().tlaBundle.tla
+        let repeatedRendered = try repeated.render().tlaBundle.tla
 
         #expect(repeated.identity == compilation.identity)
         #expect(rendered == repeatedRendered)
@@ -2229,9 +2229,9 @@ struct CompilerPipelineCanonicalizationTests {
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let successors = try CompiledRuntime(compilation: compilation)
             .successors(for: compiledAction.id, from: initialState)
-        let rendered = compilation.renderedTLAModuleBundle().tla
+        let rendered = try compilation.render().tlaBundle.tla
         let repeated = try CompilerPipelineCollectionModel.spec.compile()
-        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
+        let repeatedRendered = try repeated.render().tlaBundle.tla
         let hasOuterExistential: Bool
         if case .existsAction = action.body {
             hasOuterExistential = true
@@ -2354,7 +2354,7 @@ struct CompilerPipelineCanonicalizationTests {
             "procedure_work_enter",
             "procedure_work_enter__2"
         ])
-        let source = compilation.renderedTLAModuleBundle().tla
+        let source = try compilation.render().tlaBundle.tla
         #expect(source.contains("procedure_work_enter =="))
         #expect(source.contains("procedure_work_enter__2 =="))
     }

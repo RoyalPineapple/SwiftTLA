@@ -45,7 +45,7 @@ struct CompilerBundleOwnershipTests {
     let closure = try FormalModuleClosure.resolve(root: root)
     let imported = try #require(closure.entries.first { $0.module.name == ZSequences.module.name })
     let context = closure.planContext(for: imported)
-    let bundle = try root.compile().renderedTLAModuleBundle()
+    let bundle = try root.compile().render().tlaBundle
 
     #expect(context.closure.entries.map(\.module.name) == ["ZSequences"])
     #expect(context.incomingModuleParameters == configuration.replacements)
