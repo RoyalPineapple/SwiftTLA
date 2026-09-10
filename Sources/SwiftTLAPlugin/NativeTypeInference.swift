@@ -171,7 +171,9 @@ struct NativeCheckedType: Sendable {
 }
 
 /// The finished occurrence owns its types; operand types belong to its children.
-final class NativeCheckedExpression: Hashable, Sendable {
+struct NativeCheckedExpression: Hashable, Sendable {
+    // Copies retain occurrence identity without recursively owned class instances.
+    private let identity = UUID()
     let expression: CompiledStateExpr
     let operatorParameters: Set<OperatorID>
     let resultType: NativeType
@@ -189,8 +191,8 @@ final class NativeCheckedExpression: Hashable, Sendable {
         self.children = children
     }
 
-    static func == (lhs: NativeCheckedExpression, rhs: NativeCheckedExpression) -> Bool { lhs === rhs }
-    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
+    static func == (lhs: NativeCheckedExpression, rhs: NativeCheckedExpression) -> Bool { lhs.identity == rhs.identity }
+    func hash(into hasher: inout Hasher) { hasher.combine(identity) }
 
 }
 

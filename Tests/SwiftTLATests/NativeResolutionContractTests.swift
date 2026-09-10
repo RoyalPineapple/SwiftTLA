@@ -198,7 +198,7 @@ import Testing
         #expect(program.expressions.allSatisfy { $0.resultType.resolved && $0.computationType.resolved })
         for expression in program.expressions {
             #expect(expression.children.allSatisfy { program.expressions.contains($0) })
-            for (site, call) in program.calls where site.expression === expression {
+            for (site, call) in program.calls where site.expression == expression {
                 switch call.target {
                 case .function(let id): #expect(program.functions.indices.contains(id.ordinal))
                 case .callback(let id): #expect(program.callbacks.indices.contains(id.ordinal))
