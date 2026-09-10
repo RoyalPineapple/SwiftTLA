@@ -139,6 +139,16 @@ struct CompiledRefinement: Sendable {
     let variableMappings: [CompiledStateExpr]
 }
 
+/// The result of lowering one module in its resolved import context.
+private struct CompiledModule: Sendable {
+    let layout: CompiledLayout
+    let bindings: CompiledBindingTable
+    let semantics: CompiledSemantics
+    let refinements: [CompiledRefinement]
+    let authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?
+    let requiredStandardModules: Set<StandardModule>
+}
+
 /// The immutable compiled specification and validated outputs produced by compilation.
 public struct CompiledSpecification: Sendable {
     public let description: CompilationDescription
@@ -410,39 +420,17 @@ public extension TLASpec {
     }
 
     private func compileLowered() throws -> CompiledSpecification {
-        try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
-        try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
-        try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
-        try validateModelCollectionDeclarations()
-        try validateSymmetryDeclarations()
-        try validateRefinements()
         let closure = try FormalModuleClosure.resolve(root: self)
         for entry in closure.entries where entry.id != closure.root.id {
             try entry.module.validateSourceDeclarationNames()
         }
-        let layout = CompiledLayout(spec: self, closure: closure)
-        var lowerer = CompiledLowerer(spec: self, closure: closure, layout: layout)
-        let semantics = try lowerer.lower(spec: self)
-        let compiledAuthoredPlusCalPlan: CompiledAuthoredPlusCalAlgorithmPlan?
-        if let authoredPlusCalAlgorithmPlan {
-            compiledAuthoredPlusCalPlan = try lowerer.authoredPlusCalPlan(authoredPlusCalAlgorithmPlan)
-        } else {
-            compiledAuthoredPlusCalPlan = nil
-        }
-        let compiledRefinements = try compiledRefinements(
-            lowerer: &lowerer,
-            layout: layout,
-            semantics: semantics
-        )
-        let bindings = lowerer.bindings
+        let module = try compileModule(in: closure)
+        let layout = module.layout
+        let semantics = module.semantics
+        let bindings = module.bindings
+        let compiledRefinements = module.refinements
         let identity = compilationIdentity
-        let directModuleSections = try directModuleSectionPlan(
-            layout: layout,
-            bindings: bindings,
-            semantics: semantics,
-            refinements: compiledRefinements,
-            requiredStandardModules: lowerer.requiredStandardModules
-        )
+        let directModuleSections = try directModuleSectionPlan(module)
         var moduleSectionPlans: [FormalModuleClosure.ModuleID: DirectModuleSectionPlan] = [:]
         for entry in closure.entries {
             if entry.id == closure.root.id {
@@ -456,7 +444,7 @@ public extension TLASpec {
         let formalRenderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
         let authoredPlusCalModule = try authoredPlusCalModule(
-            algorithm: compiledAuthoredPlusCalPlan,
+            algorithm: module.authoredAlgorithm,
             semantics: semantics,
             layout: layout,
             formalRenderer: formalRenderer,
@@ -586,13 +574,12 @@ public extension TLASpec {
         )
     }
 
-    private func directModuleSectionPlan(
-        layout: CompiledLayout,
-        bindings: CompiledBindingTable,
-        semantics: CompiledSemantics,
-        refinements: [CompiledRefinement],
-        requiredStandardModules: Set<StandardModule>
-    ) throws -> DirectModuleSectionPlan {
+    private func directModuleSectionPlan(_ module: CompiledModule) throws -> DirectModuleSectionPlan {
+        let layout = module.layout
+        let bindings = module.bindings
+        let semantics = module.semantics
+        let refinements = module.refinements
+        let requiredStandardModules = module.requiredStandardModules
         guard actions.count == semantics.actions.count,
               formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count,
               recursiveFuncs.count <= semantics.recursiveFunctions.count else {
@@ -715,31 +702,36 @@ public extension TLASpec {
         in context: FormalModuleClosure.ModulePlanContext
     ) throws -> DirectModuleSectionPlan {
         let source = try loweredSourceModel()
-        try source.validateUnique(source.variables.map(\.name), code: .duplicateVariable, path: "variables")
-        try source.validateUnique(source.actions.map(\.name), code: .duplicateAction, path: "actions")
-        try source.validateUnique(source.invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
-        try source.validateModelCollectionDeclarations()
-        try source.validateSymmetryDeclarations()
-        try source.validateRefinements()
-        let layout = CompiledLayout(spec: source, closure: context.closure)
-        var lowerer = CompiledLowerer(
-            spec: source,
-            closure: context.closure,
-            layout: layout,
+        let module = try source.compileModule(
+            in: context.closure,
             incomingModuleParameters: context.incomingModuleParameters
         )
-        let semantics = try lowerer.lower(spec: source)
-        let refinements = try source.compiledRefinements(
-            lowerer: &lowerer,
-            layout: layout,
-            semantics: semantics
+        return try source.directModuleSectionPlan(module)
+    }
+
+    private func compileModule(
+        in closure: FormalModuleClosure,
+        incomingModuleParameters: [FormalModuleReplacement] = []
+    ) throws -> CompiledModule {
+        try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
+        try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
+        try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
+        try validateModelCollectionDeclarations()
+        try validateSymmetryDeclarations()
+        try validateRefinements()
+        let layout = CompiledLayout(spec: self, closure: closure)
+        var lowerer = CompiledLowerer(
+            spec: self, closure: closure, layout: layout,
+            incomingModuleParameters: incomingModuleParameters
         )
-        let bindings = lowerer.bindings
-        return try source.directModuleSectionPlan(
-            layout: layout,
-            bindings: bindings,
-            semantics: semantics,
-            refinements: refinements,
+        let semantics = try lowerer.lower(spec: self)
+        let authoredAlgorithm = try authoredPlusCalAlgorithmPlan.map {
+            try lowerer.authoredPlusCalPlan($0)
+        }
+        let refinements = try compiledRefinements(lowerer: &lowerer, layout: layout, semantics: semantics)
+        return CompiledModule(
+            layout: layout, bindings: lowerer.bindings, semantics: semantics,
+            refinements: refinements, authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules
         )
     }
