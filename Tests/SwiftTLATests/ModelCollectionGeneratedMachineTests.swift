@@ -142,11 +142,15 @@ struct ModelCollectionGeneratedMachineTests {
     _ = try machine.send(.begin(member: ids[0]))
     let token = try #require(TLAStateProjection.Token(validating: "devices"))
     let members = GeneratedScopedSymmetricMachine.spec.collections[0].metadata.members
+    #expect(try machine.formalCall(for: .begin(member: ids[0])) == FormalActionCall(name: "begin", arguments: [members[0]]))
     let expected = TLAValue.function(Dictionary(uniqueKeysWithValues: zip(members, [TLAValue.int(1), .int(0)])))
     #expect(try machine.formalProjection(of: machine.snapshot).value(for: token) == expected)
     let other = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["different-a", "different-b"])
     #expect(throws: TLAStateProjectionDiagnostic.invalidValue(path: "devices")) {
       try other.formalProjection(of: machine.snapshot)
+    }
+    #expect(throws: TLAStateProjectionDiagnostic.invalidValue(path: "devices")) {
+      try other.formalCall(for: .begin(member: ids[0]))
     }
   }
 

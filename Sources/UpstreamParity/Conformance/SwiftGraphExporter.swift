@@ -74,20 +74,8 @@ package struct SwiftGraphExporter: Sendable {
   ) throws -> [StateGraph.StateID: CanonicalState] {
     try Dictionary(
       uniqueKeysWithValues: exploration.graph.states.map { identifier, projection in
-        (identifier, try canonicalState(projection))
+        (identifier, try CanonicalState(projection))
       })
-  }
-
-  private func canonicalState(
-    _ projection: TLAStateProjection
-  ) throws -> CanonicalState {
-    var canonicalBindings: [String: CanonicalValue] = [:]
-    for entry in projection.entries {
-      let binding = entry.token.description
-      let value = entry.value
-      canonicalBindings[binding] = try CanonicalValue(value)
-    }
-    return CanonicalState(bindings: canonicalBindings)
   }
 
   private func canonicalOutcome(
@@ -100,7 +88,7 @@ package struct SwiftGraphExporter: Sendable {
     case .invariantViolated(let invariant, _, _):
       return .invariantViolation(invariant)
     case .deadlocked(let state):
-      let canonical = try canonicalState(state)
+      let canonical = try CanonicalState(state)
       guard states.values.contains(canonical) else {
         throw SwiftGraphExporterError.traceStateMissing
       }
@@ -130,7 +118,7 @@ package struct SwiftGraphExporter: Sendable {
     return GraphTrace(
       id: "swift-invariant-trace",
       steps: try trace.map { step in
-        let canonical = try canonicalState(step.state)
+        let canonical = try CanonicalState(step.state)
         guard states.values.contains(canonical) else {
           throw SwiftGraphExporterError.traceStateMissing
         }

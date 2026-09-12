@@ -19,7 +19,7 @@ extension NativeSwiftEmitter {
         """)]
     }
 
-    private func formalValue(_ value: String, type: CompiledValueType) throws -> String {
+    func formalValue(_ value: String, type: CompiledValueType) throws -> String {
         func switching(_ cases: [String]) -> String {
             "try { () throws -> TLAValue in switch \(value) {\n\(cases.joined(separator: "\n"))\n} }()"
         }

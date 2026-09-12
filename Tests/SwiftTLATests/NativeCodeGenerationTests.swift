@@ -444,11 +444,14 @@ struct NativeCodeGenerationTests {
                           "CompiledState", "CompiledValue", "Decoder", "_GeneratedMachineStorage"] {
             #expect(!generated.contains(forbidden), "Execution unexpectedly references \(forbidden)")
         }
+        let exportMethods: Set<String> = ["formalProjection", "formalCall"]
         let execution = members.filter {
-            $0.as(FunctionDeclSyntax.self)?.name.text != "formalProjection"
+            guard let function = $0.as(FunctionDeclSyntax.self) else { return true }
+            return !exportMethods.contains(function.name.text)
         }.map(\.description).joined(separator: "\n")
         #expect(!execution.contains("TLAValue"))
         #expect(!execution.contains("formalProjection("))
+        #expect(!execution.contains("formalCall("))
         #expect(generated.contains("_NativeMachineOperations.add"))
         #expect(generated.contains("switch action"))
         #expect(generated.contains("guard"))

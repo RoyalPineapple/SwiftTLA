@@ -5,6 +5,9 @@ public protocol StateMachine: Sendable {
 
     /// Complete execution state, including compiler-owned control state.
     var snapshot: Snapshot { get }
+    /// Explicit conversions used by independent validation and export.
+    func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
+    func formalCall(for action: Action) throws -> FormalActionCall
     static var checksDeadlock: Bool { get }
     func isTerminated() throws -> Bool
     func assumptionsHold() throws -> Bool

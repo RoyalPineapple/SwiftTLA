@@ -390,9 +390,11 @@ extension NativeSwiftEmitter {
             return try nativeDeclarations("""
             public func enabledActions() throws -> [Action] { [] }
             public func successors() throws -> [(action: Action, machine: Self)] { [] }
+            public func formalCall(for action: Action) throws -> FormalActionCall {}
             """)
         }
         var cases: [String] = []
+        var formalCases: [String] = []
         var enumeration: [String] = []
         for api in model.api.actions {
             let action = program[api.compiledAction]
@@ -400,6 +402,7 @@ extension NativeSwiftEmitter {
             var invocation: [String] = []
             var validations: [String] = []
             var actionArguments: [String] = []
+            var formalArguments: [String] = []
             var loops = ""
             var closing = ""
             for (binding, apiBinding) in zip(action.bindings, api.bindings) {
@@ -417,6 +420,13 @@ extension NativeSwiftEmitter {
                         actionArguments.append("\(apiBinding.swiftIdentifier): \(name)")
                     }
                 }
+                let argumentValue: String
+                if apiBinding.isPublic || api.collection != nil {
+                    argumentValue = name
+                } else {
+                    argumentValue = try literal(binding.values[0], as: type)
+                }
+                formalArguments.append(try formalValue(argumentValue, type: type))
                 if apiBinding.isPublic || api.collection != nil {
                     if let collection = api.collection {
                         validations.append("""
@@ -439,6 +449,8 @@ extension NativeSwiftEmitter {
                 }
             }
             let label = ".\(api.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
+            let formalName = program.layout.actions[action.id.ordinal].renderedName
+            formalCases.append("case \(label): return FormalActionCall(name: \(String(reflecting: formalName)), arguments: [\(formalArguments.joined(separator: ", "))])")
             let enabled = enabledActionsCall(program.behavior.enabledActionDependencies[action.id] ?? [],
                 state: "_execution", collectionArguments: collectionArguments)
             cases.append("""
@@ -450,6 +462,11 @@ extension NativeSwiftEmitter {
             enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
         }
         return try nativeDeclarations("""
+        public func formalCall(for action: Action) throws -> FormalActionCall {
+            switch action {
+                \(formalCases.joined(separator: "\n"))
+            }
+        }
         private func _successors(for action: Action) throws -> [Snapshot] {
             switch action {
                 \(cases.joined(separator: "\n"))

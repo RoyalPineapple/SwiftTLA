@@ -8,12 +8,16 @@ import SwiftSyntax
 
 struct GeneratedAlgorithmMachineTests {
     @Test("generated actions retain collision-safe Swift cases")
-    func sanitizesGeneratedActions() {
+    func sanitizesGeneratedActions() throws {
         let dotted = SanitizedActionModel.Action.procedure_work_enter
         let underscored = SanitizedActionModel.Action.procedure_work_enter_2
         let dashed = SanitizedActionModel.Action.step_2
         #expect((dotted == underscored) == false)
         #expect((underscored == dashed) == false)
+        let machine = try SanitizedActionModel.makeMachine()
+        #expect(try machine.formalCall(for: dotted).name == "procedure_work_enter")
+        #expect(try machine.formalCall(for: underscored).name == "procedure_work_enter__2")
+        #expect(try machine.formalCall(for: dashed).name == "step_2")
         #expect((dashed == dotted) == false)
     }
 
