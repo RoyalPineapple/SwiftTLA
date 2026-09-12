@@ -7,7 +7,7 @@ import SwiftTLA
 /// This object exists only while expanding the macro.
 struct NativeSwiftEmitter {
     let model: MacroCompilation
-    var program: ResolvedProgram { model.program }
+    var program: CompiledProgram { model.program }
     let typeDeclarations: NativeTypeDeclarations
     private(set) var functionPlans: [ResolvedFunctionID: NativeFunctionPlan] = [:]
     let stateMemberNames: [VariableID: String]

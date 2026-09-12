@@ -42,7 +42,7 @@ package struct ResolvedProjectionPair: Hashable, Sendable {
     package let target: CompiledValueType
 }
 
-package struct ResolvedProgram: Sendable {
+package struct CompiledProgram: Sendable {
     package let identity: CompilationIdentity
     package let layout: CompiledLayout
     package let behavior: CompiledBehavior

@@ -9,7 +9,7 @@ struct NativeTypeDeclarations: Sendable {
     let atoms: [String]
     let atomIndices: [String: Int]
 
-    init(program: ResolvedProgram) {
+    init(program: CompiledProgram) {
         let variableTypes = program.variableTypes.sorted { $0.key.ordinal < $1.key.ordinal }.map(\.value)
         let bindingTypes = program.bindingTypes.sorted { $0.key.ordinal < $1.key.ordinal }.map(\.value)
         var pending = program.behavior.initializations.map { initialization in

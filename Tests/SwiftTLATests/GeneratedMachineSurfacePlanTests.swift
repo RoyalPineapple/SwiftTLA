@@ -27,7 +27,7 @@ struct GeneratedMachineSurfacePlanTests {
         let value = Var<TLAValue>("value")
         let specification = TLASpec("RawGeneratedState") { Variable(value, TLAValue.int(0)) }
         let compilation = try specification.compile()
-        #expect(throws: CompilationDiagnostic.self) { try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation)) }
+        #expect(throws: CompilationDiagnostic.self) { try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)) }
     }
 
     @Test("raw structured formal values cannot enter a generated state")
@@ -35,7 +35,7 @@ struct GeneratedMachineSurfacePlanTests {
         let value = Var<TLAValue>("value")
         let specification = TLASpec("StructuredGeneratedState") { Variable(value, TLAValue.tuple([.int(0)])) }
         let compilation = try specification.compile()
-        #expect(throws: CompilationDiagnostic.self) { try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation)) }
+        #expect(throws: CompilationDiagnostic.self) { try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)) }
     }
 
     @Test("raw formal values are rejected through qualification, aliases, and containers")
@@ -51,7 +51,7 @@ struct GeneratedMachineSurfacePlanTests {
                 .init(name: "value", initialization: .value(initial), generatedSwiftType: type, origin: .compiler)
             ], actions: [], invariants: []).compile()
             do {
-                _ = try ResolvedProgram(inputs: SourceTypeResolver(metadata: .init(aliases: ["Raw": "TLAValue"])).resolve(in: compilation))
+                _ = try CompiledProgram(inputs: SourceTypeResolver(metadata: .init(aliases: ["Raw": "TLAValue"])).resolve(in: compilation))
                 Issue.record("Generated state admitted raw formal type: \(type)")
             } catch let diagnostic as CompilationDiagnostic {
                 #expect(diagnostic.actual.contains("raw TLAValue"))

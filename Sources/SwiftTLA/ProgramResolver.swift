@@ -1,6 +1,7 @@
-extension ResolvedProgram {
+extension CompiledProgram {
     package init(inputs: CompiledTypeInputs) throws {
-        self = try ProgramResolver(checked: CheckedProgram(inputs: inputs)).resolve()
+        var checker = try CompiledTypeChecker(inputs: inputs)
+        self = try ProgramResolver(checked: checker.checkProgram(), types: inputs.types).resolve()
     }
 }
 
@@ -27,7 +28,8 @@ private struct CheckedCallSite: Hashable {
 
 /// Consumes checking annotations and retains only resolved calls for generation.
 private final class ProgramResolver {
-    let checked: CheckedProgram
+    let checked: CompiledProgram
+    let types: CompiledTypeContext
     var projectionChecks: [ResolvedProjectionPair: Bool] = [:]
     var resolvedExpressions: [CheckedCallSite: CompiledExpression] = [:]
     var functions: [ResolvedFunction?] = []
@@ -35,11 +37,12 @@ private final class ProgramResolver {
     var functionCallbacks: [ResolvedFunctionID: [(OperatorID, CheckedOperatorCall, ResolvedCallbackID)]] = [:]
     var callbacks: [ResolvedCallback] = []
 
-    init(checked: CheckedProgram) {
+    init(checked: CompiledProgram, types: CompiledTypeContext) {
         self.checked = checked
+        self.types = types
     }
 
-    func resolve() throws -> ResolvedProgram {
+    func resolve() throws -> CompiledProgram {
         let behavior = try checked.behavior.map(root)
         let projections = Set(projectionChecks.compactMap { pair, allowed in allowed ? pair : nil })
         let resolvedFunctions = try functions.map { try require($0) }
@@ -52,7 +55,7 @@ private final class ProgramResolver {
             }
         }
         return .init(identity: checked.identity, layout: checked.layout,
-            behavior: behavior, enums: checked.types.enums,
+            behavior: behavior, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes,
             functions: resolvedFunctions, callbacks: callbacks)
     }
@@ -95,10 +98,10 @@ private final class ProgramResolver {
                 }
                 let operation = task.call.map(CompiledOperation.call) ?? node.operation
                 if case .assertView = operation, let source = children.first {
-                    _ = self.checked.types.canProjectRead(source.resultType, to: node.resultType, checks: &projectionChecks)
+                    _ = types.canProjectRead(source.resultType, to: node.resultType, checks: &projectionChecks)
                 }
                 if case .convert = operation, let source = children.first {
-                    guard self.checked.types.canProjectRead(source.resultType, to: node.resultType, checks: &projectionChecks) else {
+                    guard types.canProjectRead(source.resultType, to: node.resultType, checks: &projectionChecks) else {
                         throw CompiledValueType.diagnostic("conversion", "the checked expression requires an unsupported conversion")
                     }
                 }

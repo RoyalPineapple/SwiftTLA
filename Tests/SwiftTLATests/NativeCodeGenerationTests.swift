@@ -21,7 +21,7 @@ struct NativeCodeGenerationTests {
             .init(name: "Read", body: .equal(.recordAccess(.recordLiteral(record), "z"), .int(0)))
         ])
         let compilation = try specification.compile()
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let predicate = try #require(program.behavior.invariants.first).predicate.expression
         let constructor = try #require(predicate.children.first)
         guard case .recordLiteral(let fields) = constructor.operation else {
@@ -58,7 +58,7 @@ struct NativeCodeGenerationTests {
             .init(name: "advance", body: .assign(.named("record"), .except(
                 .variable("record"), .value(.string("count")), .int(1))))
         ], invariants: [])
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         let model = try MacroCompilation(typeName: "RecordUpdate", program: program)
         var emitter = NativeSwiftEmitter(model: model)
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
@@ -74,7 +74,7 @@ struct NativeCodeGenerationTests {
         let specification = TLASpec(name: "CheckedView", variables: [], actions: [], invariants: [
             .init(name: "Valid", body: .equal(.assertView(.int(1), .integer), .int(1)))
         ])
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         let predicate = try #require(program.behavior.invariants.first).predicate.expression
         let view = try #require(predicate.children.first)
         #expect(view.operation == .assertView(.integer))
@@ -96,7 +96,7 @@ struct NativeCodeGenerationTests {
             .init(name: "Small", body: .lessThan(.variable("number"), .int(2)))
         ])
         let types = SourceTypeResolver(metadata: .init(enums: [.init(typeName: "Number", cases: [(name: "one", value: .int(1))])]))
-        let program = try ResolvedProgram(inputs: types.resolve(in: specification.compile()))
+        let program = try CompiledProgram(inputs: types.resolve(in: specification.compile()))
         let predicate = try #require(program.behavior.invariants.first).predicate.expression
         let conversion = try #require(predicate.children.first)
         #expect(conversion.operation == .convert)
@@ -116,7 +116,7 @@ struct NativeCodeGenerationTests {
                 LocalOperator("Valid", body: .value(.bool(true)))
             ], .recursiveCall("Valid", []))))
         ])
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         let predicate = try #require(program.behavior.invariants.first).predicate.expression
         guard case .call = predicate.operation else {
             Issue.record("Expected the resolved call without enclosing declaration scopes")
@@ -144,7 +144,7 @@ struct NativeCodeGenerationTests {
                      .assign(.named("first"), .divide(.value(.int(1)), .value(.int(0)))))))
         ], invariants: [])
         let compilation = try specification.compile()
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let runtime = CompiledRuntime(compilation: compilation)
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(program.behavior.actions.first)
@@ -178,7 +178,7 @@ struct NativeCodeGenerationTests {
             Always("PositiveCount", FormalCall("Positive", count))
         }
         let compilation = try specification.compile()
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         #expect(program.functions.count == 2)
         let property = try #require(program.behavior.temporalProperties.first)
         guard case .always(let predicate) = property.expression,
@@ -217,7 +217,7 @@ struct NativeCodeGenerationTests {
         let advance = try #require(compilation.layout.testActionID(named: "advance"))
         let invariant = try #require(compilation.semantics.behavior.invariants.first)
         #expect(invariant.predicate.enabledActions == [ready, advance])
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let resolved = try #require(program.behavior.invariants.first)
         #expect(resolved.id == invariant.id)
         #expect(resolved.name == "CanAdvance")
@@ -252,7 +252,7 @@ struct NativeCodeGenerationTests {
     @Test("Enum emission uses resolved formal order rather than declaration order")
     func resolvedEnumOrdering() throws {
         let compilation = try TLASpec(name: "EnumOrdering", variables: [], actions: [], invariants: []).compile()
-        let program = try ResolvedProgram(inputs: SourceTypeResolver(metadata: .init(enums: [
+        let program = try CompiledProgram(inputs: SourceTypeResolver(metadata: .init(enums: [
             .init(typeName: "Priority", cases: [(name: "high", value: .int(10)), (name: "low", value: .int(1))])
         ])).resolve(in: compilation))
         let model = try MacroCompilation(typeName: "EnumOrdering",
@@ -306,7 +306,7 @@ struct NativeCodeGenerationTests {
             initializations: [], actions: [], enabledActionIndices: [], enabledActionDependencies: [:],
             invariants: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
             constraint: nil, assume: nil)
-        let program = ResolvedProgram(identity: compilation.identity, layout: compilation.layout,
+        let program = CompiledProgram(identity: compilation.identity, layout: compilation.layout,
             behavior: behavior, enums: .init(), projections: [], variableTypes: [:], bindingTypes: [:],
             functions: [], callbacks: [])
         let model = try MacroCompilation(typeName: "SharedPredicates",
@@ -332,7 +332,7 @@ struct NativeCodeGenerationTests {
                 flag.becomes(FormalCall("Identity", true))
             }
         }
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         var calls: [CompiledExpression] = []
         for action in program.behavior.actions {
             _ = action.map { expression in
@@ -360,7 +360,7 @@ struct NativeCodeGenerationTests {
         }
         let compilation = try specification.compile()
         let model = try MacroCompilation(typeName: "StateOnly",
-            program: ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
+            program: CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         var emitter = NativeSwiftEmitter(model: model)
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         #expect(generated.contains("func enabledActions()"))
@@ -468,7 +468,7 @@ extension NativeCodeGenerationTests {
         ).compile()
         let model = try MacroCompilation(
             typeName: "NestedPredicates",
-            program: try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         )
         var emitter = NativeSwiftEmitter(model: model)
         let declarations = try emitter.machineMembers()
@@ -523,7 +523,7 @@ extension NativeCodeGenerationTests {
         ).compile()
         let model = try MacroCompilation(
             typeName: "NestedUpdate",
-            program: try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         )
         var emitter = NativeSwiftEmitter(model: model)
         let members = try emitter.machineMembers()

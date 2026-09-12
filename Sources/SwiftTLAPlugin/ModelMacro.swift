@@ -13,9 +13,9 @@ import SwiftTLA
 struct MacroCompilation {
     let typeName: String
     let surface: MachineSurfacePlan
-    let program: ResolvedProgram
+    let program: CompiledProgram
 
-    init(typeName: String, program: ResolvedProgram) throws {
+    init(typeName: String, program: CompiledProgram) throws {
         self.typeName = typeName
         self.program = program
         surface = try MachineSurfacePlan(layout: program.layout, actions: program.behavior.actions)
@@ -45,7 +45,7 @@ enum TLASpecVerifier {
 
         return try MacroCompilation(
             typeName: typeName,
-            program: try ResolvedProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+            program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
         )
     }
 

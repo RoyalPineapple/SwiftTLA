@@ -210,23 +210,6 @@ private enum ExpressionCheckTask {
     case retainOperand(Int)
 }
 
-/// Immutable output of checking; mutable inference caches stay in the checker.
-package struct CheckedProgram: Sendable {
-    package let identity: CompilationIdentity
-    package let layout: CompiledLayout
-    package let types: CompiledTypeContext
-    package let behavior: CompiledBehavior
-    package let variableTypes: [VariableID: CompiledValueType]
-    package let bindingTypes: [BinderID: CompiledValueType]
-}
-
-extension CheckedProgram {
-    package init(inputs: CompiledTypeInputs) throws {
-        var checker = try CompiledTypeChecker(inputs: inputs)
-        self = try checker.checkProgram()
-    }
-}
-
 /// Checks declaration-local types and resolves dependent expressions before generation.
 package struct CompiledTypeChecker: Sendable {
     package static let maximumActiveSpecializations = 256
@@ -294,7 +277,7 @@ package struct CompiledTypeChecker: Sendable {
         }
     }
 
-    package mutating func checkProgram() throws -> CheckedProgram {
+    package mutating func checkProgram() throws -> CompiledProgram {
         var initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
         var actions: [CompiledAction] = []
         var invariants: [CompiledInvariant] = []
@@ -410,8 +393,9 @@ package struct CompiledTypeChecker: Sendable {
             fairness: inputs.semantics.behavior.fairness,
             constraint: constraint,
             assume: assume)
-        return CheckedProgram(identity: inputs.identity, layout: inputs.layout, types: inputs.types, behavior: behavior,
-            variableTypes: variables, bindingTypes: bindingTypes)
+        return CompiledProgram(identity: inputs.identity, layout: inputs.layout, behavior: behavior,
+            enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes,
+            functions: [], callbacks: [])
     }
 
     private mutating func checkUnionConstructor(_ expression: CompiledExpression, expected: CompiledValueType) throws -> CheckedType? {

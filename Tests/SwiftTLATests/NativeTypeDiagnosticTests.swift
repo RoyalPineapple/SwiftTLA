@@ -19,7 +19,7 @@ import Testing
         #expect(parsed.diagnostics.isEmpty)
         let compilation = try parsed.compile()
         #expect(throws: CompilationDiagnostic.self) {
-            try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         }
     }
 
@@ -32,7 +32,7 @@ import Testing
             }
         }
         let compilation = try specification.compile()
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let function = try #require(program.functions.first)
         #expect(function.parameters.map(\.type) == [.set(.int)])
     }
@@ -51,10 +51,11 @@ import Testing
         }
         let compilation = try specification.compile()
         weak var previousInputs: CompiledTypeInputs?
-        let checked = try { () throws -> CheckedProgram in
+        let checked = try { () throws -> CompiledProgram in
             let inputs = try SourceTypeResolver().resolve(in: compilation)
             previousInputs = inputs
-            return try CheckedProgram(inputs: inputs)
+            var checker = try CompiledTypeChecker(inputs: inputs)
+            return try checker.checkProgram()
         }()
         withExtendedLifetime(checked) {
             #expect(previousInputs == nil)
@@ -334,7 +335,7 @@ import Testing
             .init(name: "count", initial: .int(0))
         ], actions: [], invariants: [], temporalProperties: [.init(name: "Progress", expr: property)])
         let compilation = try specification.compile()
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let declaration = try #require(compilation.semantics.behavior.temporalProperties.first)
         let propertyDeclaration = try #require(program.behavior.temporalProperties.first { $0.id == declaration.id })
         let resolved = propertyDeclaration.expression
@@ -371,7 +372,7 @@ import Testing
             temporalProperties: [.init(name: "Progress", expr: property)])
         let compilation = try specification.compile()
         do {
-            _ = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
             Issue.record("A temporal predicate must be Boolean")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.contains("temporalProperties.Progress"))
@@ -539,7 +540,7 @@ import Testing
         ], actions: [], invariants: [])
         let compilation = try specification.compile()
         do {
-            _ = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
             Issue.record("A Boolean initializer must not initialize an integer variable")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("nativeMachine.variables.count.initialization → "))
@@ -559,13 +560,14 @@ import Testing
         }
         let untyped = try specification(type: nil).compile()
         do {
-            _ = try CheckedProgram(inputs: SourceTypeResolver().resolve(in: untyped))
+            var checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: untyped))
+            _ = try checker.checkProgram()
             Issue.record("An unresolved action binder must not reach program resolution")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .unresolvedGeneratedValueShape)
             #expect(diagnostic.path == "nativeMachine.bindings.choice")
         }
-        let typed = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification(type: "Set<Int>").compile()))
+        let typed = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification(type: "Set<Int>").compile()))
         #expect(Array(typed.bindingTypes.values) == [.set(.int)])
     }
 
@@ -579,13 +581,13 @@ import Testing
             ], actions: [], invariants: [])
         }
         do {
-            _ = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification(type: nil).compile()))
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification(type: nil).compile()))
             Issue.record("The membership test must not infer the earlier collection's element type")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .unresolvedGeneratedValueShape)
             #expect(diagnostic.path == "nativeMachine.variables.items")
         }
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification(type: "Set<Int>").compile()))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification(type: "Set<Int>").compile()))
         #expect(program.variableTypes[VariableID(ordinal: 0)] == .set(.int))
         #expect(program.variableTypes[VariableID(ordinal: 1)] == .bool)
     }
@@ -597,7 +599,7 @@ import Testing
             .init(name: "items", initial: .set([]))
         ], actions: [action], invariants: [])
         do {
-            _ = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: untyped.compile()))
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: untyped.compile()))
             Issue.record("An action must not infer the element type of an empty initializer")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .unresolvedGeneratedValueShape)
@@ -606,7 +608,7 @@ import Testing
         let typed = TLASpec(name: "KnownContext", variables: [
             .init(name: "items", initialization: .value(.set([])), generatedSwiftType: "Set<Int>", origin: .source)
         ], actions: [action], invariants: [])
-        let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: typed.compile()))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: typed.compile()))
         #expect(program.variableTypes.values.contains(.set(.int)))
     }
 
@@ -780,7 +782,7 @@ import Testing
                 .recordLiteral(.init(["execution": .tupleLiteral([])]))), origin: .compiler)
         ], actions: [], invariants: [])
         do {
-            _ = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
             Issue.record("An unresolved element type must not reach Swift emission")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .unresolvedGeneratedValueShape)
