@@ -61,32 +61,18 @@ struct NQueensCorpusStateGraphTests {
                 }
             }
         }
-        var pending = try NQueensModel.initialMachines()
-        let action = try #require(pending.first?.enabledActions().first)
-        func position(_ machine: NQueensModel) throws -> Position {
-            let actions = try machine.enabledActions()
-            #expect(actions.isEmpty || actions == [action])
-            // This algorithm has exactly two control locations. Visible state alone
-            // cannot distinguish the empty worklist before and after termination.
-            return Position(state: machine.state, finished: actions.isEmpty)
+        let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
+        func position(_ snapshot: NQueensModel.Snapshot) throws -> Position {
+            let successors = try #require(native.transitions[snapshot])
+            return Position(state: snapshot.state, finished: successors.isEmpty)
         }
-        #expect(try Set(pending.map(position)) == Set(exploration.initialStateIDs.map {
+        #expect(try Set(native.initialStates.map(position)) == Set(exploration.initialStateIDs.map {
             try #require(formalPositions[$0])
         }))
-        var nativePositions: Set<Position> = []
-        var nativeEdges: Set<Edge> = []
-        while let machine = pending.popLast() {
-            let source = try position(machine)
-            guard nativePositions.insert(source).inserted else { continue }
-            try #require(nativePositions.count <= 5_000)
-            #expect(try machine.violatedInvariants().isEmpty)
-            let successors = try machine.successors(for: action)
-            #expect(successors.isEmpty == source.finished)
-            for successor in successors {
-                nativeEdges.insert(try Edge(source: source, target: position(successor)))
-                pending.append(successor)
-            }
-        }
+        let nativePositions = try Set(native.transitions.keys.map(position))
+        let nativeEdges = try Set(native.transitions.flatMap { source, transitions in
+            try transitions.map { Edge(source: try position(source), target: try position($0.target)) }
+        })
         #expect(terminalStutters == 1)
         #expect(nativePositions.count == 786)
         #expect(nativePositions == Set(formalPositions.values))

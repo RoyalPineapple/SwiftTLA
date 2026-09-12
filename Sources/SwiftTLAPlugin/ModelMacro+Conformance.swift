@@ -13,6 +13,6 @@ extension ModelMacro: ExtensionMacro {
         // Swift supplies only conformances the declaration does not already have.
         // Restrict to the same struct hosts accepted by the member expansion.
         guard declaration.is(StructDeclSyntax.self), !protocols.isEmpty else { return [] }
-        return [try ExtensionDeclSyntax("extension \(type): Swift.Sendable {}")]
+        return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.StateMachine {}")]
     }
 }

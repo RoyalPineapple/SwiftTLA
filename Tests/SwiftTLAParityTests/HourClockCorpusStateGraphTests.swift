@@ -32,26 +32,12 @@ struct HourClockCorpusStateGraphTests {
             }
         }
 
-        // The pinned HourClock configuration admits every hour as an initial state.
-        var pending = try HourClockModel.initialMachines()
-        let nativeInitial = Set(pending.map { $0.state.hr })
-        var nativeHours: Set<Int> = []
-        var nativeEdges: Set<Edge> = []
-        while let machine = pending.popLast() {
-            try #require((1...12).contains(machine.state.hr), "Native execution escaped the bounded hour domain")
-            guard nativeHours.insert(machine.state.hr).inserted else { continue }
-            #expect(try machine.violatedInvariants().isEmpty)
-            let actions = try machine.enabledActions()
-            #expect(actions == [.HCnxt])
-            for action in actions {
-                var next = machine
-                let transition = try next.send(action)
-                #expect(transition.before == machine.state)
-                #expect(transition.after == next.state)
-                nativeEdges.insert(Edge(source: machine.state.hr, action: String(describing: action), target: next.state.hr))
-                pending.append(next)
-            }
-        }
+        let native = try ReachabilityGraph(initialMachines: HourClockModel.initialMachines(), maximumStates: 100)
+        let nativeInitial = Set(native.initialStates.map { $0.state.hr })
+        let nativeHours = Set(native.transitions.keys.map { $0.state.hr })
+        let nativeEdges = Set(native.transitions.flatMap { source, transitions in
+            transitions.map { Edge(source: source.state.hr, action: String(describing: $0.action), target: $0.target.state.hr) }
+        })
         #expect(nativeInitial == formalInitial)
         #expect(nativeHours == Set(formalHours.values))
         #expect(nativeEdges == formalEdges)

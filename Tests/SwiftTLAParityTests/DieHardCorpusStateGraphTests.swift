@@ -36,30 +36,12 @@ struct DieHardCorpusStateGraphTests {
             }
         }
 
-        var pending = [try DieHardModel.makeMachine()]
-        #expect(Set(pending.map(\.state)) == formalInitial)
-        let allActions: Set<DieHardModel.Action> = [
-            .FillSmallJug, .FillBigJug, .EmptySmallJug, .EmptyBigJug, .SmallToBig, .BigToSmall
-        ]
-        var nativeStates: Set<DieHardModel.State> = []
-        var nativeEdges: Set<Edge> = []
-        while let machine = pending.popLast() {
-            try #require((0...5).contains(machine.state.big) && (0...3).contains(machine.state.small),
-                "Native execution escaped the bounded jug capacities")
-            guard nativeStates.insert(machine.state).inserted else { continue }
-            #expect(try machine.violatedInvariants().isEmpty)
-            let actions = try machine.enabledActions()
-            #expect(Set(actions) == allActions)
-            for action in actions {
-                #expect(try machine.isEnabled(action))
-                var next = machine
-                let transition = try next.send(action)
-                #expect(transition.before == machine.state)
-                #expect(transition.after == next.state)
-                nativeEdges.insert(Edge(source: machine.state, action: String(describing: action), target: next.state))
-                pending.append(next)
-            }
-        }
+        let native = try ReachabilityGraph(initialMachines: DieHardModel.initialMachines(), maximumStates: 100)
+        #expect(Set(native.initialStates.map(\.state)) == formalInitial)
+        let nativeStates = Set(native.transitions.keys.map(\.state))
+        let nativeEdges = Set(native.transitions.flatMap { source, transitions in
+            transitions.map { Edge(source: source.state, action: String(describing: $0.action), target: $0.target.state) }
+        })
         #expect(nativeStates == Set(formalStates.values))
         #expect(nativeEdges == formalEdges)
         #expect(nativeStates.count == 16)

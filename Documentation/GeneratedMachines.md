@@ -61,6 +61,7 @@ struct BoundedCounter {
 Each generated machine exposes these value types:
 
 - `State` is an immutable value with the declared variables and their native Swift types.
+- `Snapshot` retains the complete execution state, including compiler-owned control state.
 - `Action` contains declared actions and their typed parameters.
 - `Transition` contains the action and the state before and after it.
 
@@ -264,9 +265,24 @@ func runGeneratedMachineTesting() throws {
 }
 ```
 
+## Native exploration
+
+Generated models conform to `StateMachine`. `successors()` enumerates every
+action and successor using the same functions that `send(_:)` calls.
+`ReachabilityGraph(initialMachines: Model.initialMachines(), maximumStates: limit)`
+explores those native successors without compiling or interpreting expressions
+and without invoking TLC. Supply initial machines from one finite configuration.
+
+The graph retains all initial snapshots and labeled transitions. Snapshot identity
+includes control state: two equal public `State` values can still have different
+successors. Exploration throws on exhaustion of the state limit or cancellation;
+it never returns a truncated graph as complete. Graph construction alone does not
+check assumptions, invariants, deadlocks, or temporal properties and is not an
+equivalence verdict.
+
 ## Compile and render
 
-Compile the source model before inspection or exploration:
+Compile the source model when exporting formal artifacts:
 
 ```swift
 let compilation = try BoundedCounter.spec.compile()
@@ -280,8 +296,7 @@ result when exporting multiple artifacts. At build time, the macro
 uses the resolved compiler program to emit typed Swift initialization, guards,
 updates, and property checks. Generated machines execute that Swift directly;
 construction and transitions do not compile the specification or interpret
-formal values. Explicit compiled specifications drive bounded exploration and
-can be rendered separately for verification.
+formal values. Formal artifacts are exported separately for independent validation.
 
 The inline specification is authoritative. Its getter must contain one direct
 `#spec` declaration (or return that declaration), with statically admitted model
