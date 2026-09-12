@@ -641,13 +641,26 @@ extension ParserSession {
             }
         case "Invariant":
             parseInvariant(call, into: &components)
-        case "Constraint":
-            if let argument = call.arguments.first,
-               let expression = decodeStateExpr(argument.expression) {
-                components.constraint = components.constraint.map { .and($0, expression) } ?? expression
+        case "DeadlockCheck":
+            if call.arguments.isEmpty, call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty {
+                components.checkDeadlock = true
             } else {
                 components.diagnostics.append(.init(
-                    message: "Constraint requires a supported state expression.",
+                    message: "DeadlockCheck takes no arguments or closures.",
+                    source: call
+                ))
+            }
+        case "Constraint", "Assume":
+            if call.arguments.count == 1, let argument = call.arguments.first,
+               let expression = decodeStateExpr(argument.expression) {
+                if name == "Assume" {
+                    components.assume = components.assume.map { .and($0, expression) } ?? expression
+                } else {
+                    components.constraint = components.constraint.map { .and($0, expression) } ?? expression
+                }
+            } else {
+                components.diagnostics.append(.init(
+                    message: "\(name) requires one supported state expression.",
                     source: call
                 ))
             }
