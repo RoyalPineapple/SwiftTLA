@@ -1574,7 +1574,7 @@ struct CompiledLowerer {
         _ expression: TemporalExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledTemporalExpr<CompiledExpression> {
+    ) throws -> TemporalCondition<CompiledExpression> {
         switch expression {
         case .always(let predicate):
             return .always(try lower(predicate, at: "\(path).body", scope: scope))

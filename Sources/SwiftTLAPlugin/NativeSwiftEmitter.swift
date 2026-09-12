@@ -27,6 +27,9 @@ struct NativeSwiftEmitter {
         for invariant in program.behavior.invariants {
             enabledActionIDs.formUnion(invariant.predicate.enabledActions)
         }
+        for predicate in program.behavior.temporalProperties.flatMap({ $0.expression.predicates }) {
+            enabledActionIDs.formUnion(predicate.enabledActions)
+        }
         self.enabledActionIDs = enabledActionIDs
         typeDeclarations = NativeTypeDeclarations(program: program)
         variableNames = Dictionary(uniqueKeysWithValues: program.layout.variables.map { variable in

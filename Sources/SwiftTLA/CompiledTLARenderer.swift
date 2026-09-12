@@ -61,7 +61,7 @@ struct CompiledTLARenderer {
     }
 
     func temporal(
-        _ expression: CompiledTemporalExpr<CompiledStateQuery>
+        _ expression: TemporalCondition<CompiledStateQuery>
     ) throws -> String {
         switch expression {
         case .always(let predicate): return "[]\(try state(predicate.expression))"

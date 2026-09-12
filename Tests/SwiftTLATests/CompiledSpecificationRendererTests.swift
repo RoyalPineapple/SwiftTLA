@@ -58,7 +58,7 @@ struct CompiledSpecificationRendererTests {
             == #"\E selected \in {1}: LET saved == 1 IN IF TRUE THEN ((count' = 1 /\ UNCHANGED count)) ELSE ((FALSE \/ count' = 1))"#)
         let trueQuery = CompiledStateQuery(expression: yes, enabledActions: [])
         let falseQuery = CompiledStateQuery(expression: no, enabledActions: [])
-        let properties: [(CompiledTemporalExpr<CompiledStateQuery>, String)] = [
+        let properties: [(TemporalCondition<CompiledStateQuery>, String)] = [
             (.always(trueQuery), "[]TRUE"), (.eventually(trueQuery), "<>TRUE"),
             (.alwaysEventually(trueQuery), "[]<>TRUE"), (.eventuallyAlways(trueQuery), "<>[]TRUE"),
             (.leadsTo(trueQuery, falseQuery), "(TRUE ~> FALSE)")

@@ -540,6 +540,37 @@ extension NativeSwiftEmitter {
             \(checks.isEmpty ? "return []" : "var result: [String] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
         }
         """)
+        var temporalProperties: [String] = []
+        let captures = model.api.collections.map(\.membersIdentifier).joined(separator: ", ")
+        let captureList = captures.isEmpty ? "" : "[\(captures)] "
+        for property in program.behavior.temporalProperties {
+            var index = 0
+            let predicates = try property.expression.map { query in
+                let function = "_temporal\(property.id.ordinal)_\(index)"
+                index += 1
+                declarations += try nativeDeclarations("""
+                private static func \(function)(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+                    \(try expression(query.expression))
+                }
+                """)
+                let enabled = enabledActionsCall(query.enabledActions, state: "state", collectionArguments: arguments)
+                return "{ \(captureList)state in try Self.\(function)(in: state\(arguments), enabled: \(enabled)) }"
+            }
+            let condition: String
+            switch predicates {
+            case .always(let predicate): condition = ".always(\(predicate))"
+            case .eventually(let predicate): condition = ".eventually(\(predicate))"
+            case .alwaysEventually(let predicate): condition = ".alwaysEventually(\(predicate))"
+            case .eventuallyAlways(let predicate): condition = ".eventuallyAlways(\(predicate))"
+            case .leadsTo(let source, let target): condition = ".leadsTo(\(source), \(target))"
+            }
+            temporalProperties.append("\(String(reflecting: property.name)): \(condition)")
+        }
+        declarations += try nativeDeclarations("""
+        public func temporalProperties() -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
+            [\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]
+        }
+        """)
         if let assume = program.behavior.assume {
             declarations += try nativeDeclarations("""
             private static func _assumptionsHold(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {

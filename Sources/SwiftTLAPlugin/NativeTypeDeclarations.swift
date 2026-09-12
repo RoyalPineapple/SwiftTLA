@@ -16,6 +16,7 @@ struct NativeTypeDeclarations: Sendable {
             case .value(let expression), .memberOf(let expression): expression
             }
         }
+        pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.expression.predicates.map(\.expression) })
         pending.append(contentsOf: program.behavior.invariants.map { $0.predicate.expression })
         pending.append(contentsOf: [program.behavior.constraint, program.behavior.assume].compactMap { $0?.expression })
         var actions = program.behavior.actions.map(\.body)

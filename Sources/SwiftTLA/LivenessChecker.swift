@@ -76,63 +76,10 @@ package struct LivenessChecker {
     let actions: Set<ActionID>
 
     func analyze(
-        _ property: CompiledTemporalExpr<@Sendable (StateGraph.StateID) throws -> Bool>,
+        _ property: TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool>,
         fairness: [CompiledFairnessCondition],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true,
-        renderScope: (CompiledFairnessCondition.Scope) throws -> String
-    ) throws -> TemporalAnalysis {
-        let form: TemporalForm
-        let predicate: @Sendable (StateGraph.StateID) throws -> Bool
-        let trigger: (@Sendable (StateGraph.StateID) throws -> Bool)?
-        switch property {
-        case .always(let value): form = .always; predicate = value; trigger = nil
-        case .eventually(let value): form = .eventually; predicate = value; trigger = nil
-        case .alwaysEventually(let value): form = .alwaysEventually; predicate = value; trigger = nil
-        case .eventuallyAlways(let value): form = .eventuallyAlways; predicate = value; trigger = nil
-        case .leadsTo(let from, let to): form = .leadsTo; predicate = to; trigger = from
-        }
-        return try analyze(
-            form: form,
-            fairness: fairness,
-            initialStateIDs: initialStateIDs,
-            isComplete: isComplete,
-            predicate: predicate,
-            trigger: trigger,
-            renderScope: renderScope
-        )
-    }
-
-    public func computeSCCs() -> [Set<StateGraph.StateID>] {
-        stronglyConnectedComponents(in: Set(graph.states.keys))
-    }
-
-    public func terminalSCCs(from sccs: [Set<StateGraph.StateID>]) -> [Set<StateGraph.StateID>] {
-        let nodeToSCC = Dictionary(uniqueKeysWithValues: sccs.enumerated().flatMap { index, component in
-            component.map { ($0, index) }
-        })
-        return sccs.filter { component in
-            !component.contains { state in
-                explicitEdges(from: state).contains { edge in nodeToSCC[edge.target] != nodeToSCC[state] }
-            }
-        }
-    }
-
-    private enum TemporalForm {
-        case always
-        case eventually
-        case alwaysEventually
-        case eventuallyAlways
-        case leadsTo
-    }
-
-    private func analyze(
-        form: TemporalForm,
-        fairness: [CompiledFairnessCondition],
-        initialStateIDs: [StateGraph.StateID],
-        isComplete: Bool,
-        predicate: (StateGraph.StateID) throws -> Bool,
-        trigger: ((StateGraph.StateID) throws -> Bool)?,
         renderScope: (CompiledFairnessCondition.Scope) throws -> String
     ) throws -> TemporalAnalysis {
         guard isComplete else {
@@ -152,6 +99,12 @@ package struct LivenessChecker {
             return .init(status: .unavailable, reason: .unknownAction)
         }
 
+        let predicate: @Sendable (StateGraph.StateID) throws -> Bool
+        switch property {
+        case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value):
+            predicate = value
+        case .leadsTo(_, let target): predicate = target
+        }
         let values = try Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
             (state, try predicate(state))
         })
@@ -160,7 +113,7 @@ package struct LivenessChecker {
         let negative = Set(values.compactMap { $0.value ? nil : $0.key })
         let search: LassoSearch
 
-        switch form {
+        switch property {
         case .always:
             search = .init(cycleStates: allStates, prefixStates: negative)
         case .eventually:
@@ -169,17 +122,7 @@ package struct LivenessChecker {
             search = .init(cycleStates: negative)
         case .eventuallyAlways:
             search = .init(cycleStates: allStates, cycleRequiredStates: negative)
-        case .leadsTo:
-            guard let trigger else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .checking,
-                    path: "liveness.leadsTo.trigger",
-                    expected: "a compiled trigger predicate",
-                    actual: "the leads-to trigger is absent",
-                    nextSafeAction: "Compile the temporal property again before checking liveness."
-                )
-            }
+        case .leadsTo(let trigger, _):
             let triggers = Set(try graph.states.keys.compactMap { state in
                 try trigger(state) ? state : nil
             }).intersection(negative)
@@ -205,6 +148,21 @@ package struct LivenessChecker {
             fairComponents: components.fair,
             rejectedComponents: components.rejected
         )
+    }
+
+    public func computeSCCs() -> [Set<StateGraph.StateID>] {
+        stronglyConnectedComponents(in: Set(graph.states.keys))
+    }
+
+    public func terminalSCCs(from sccs: [Set<StateGraph.StateID>]) -> [Set<StateGraph.StateID>] {
+        let nodeToSCC = Dictionary(uniqueKeysWithValues: sccs.enumerated().flatMap { index, component in
+            component.map { ($0, index) }
+        })
+        return sccs.filter { component in
+            !component.contains { state in
+                explicitEdges(from: state).contains { edge in nodeToSCC[edge.target] != nodeToSCC[state] }
+            }
+        }
     }
 
     private func renderedEnabledness(

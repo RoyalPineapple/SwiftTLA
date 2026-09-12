@@ -11,6 +11,7 @@ public protocol StateMachine: Sendable {
     static var checksDeadlock: Bool { get }
     func isTerminated() throws -> Bool
     func assumptionsHold() throws -> Bool
+    func temporalProperties() -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
     func violatedInvariants() throws -> [String]
     func successors() throws -> [(action: Action, machine: Self)]
 }

@@ -198,7 +198,7 @@ struct NativeCodeGenerationTests {
         #expect(try resolved.map { try $0.state.value(for: second) } == [.integer(2), .integer(3)])
     }
 
-    @Test("Native emission plans execution functions without planning temporal-only functions")
+    @Test("Native emission plans each execution and temporal function once")
     func plansReachableFunctions() throws {
         let count = Var<Int>("count", 0)
         let specification = TLASpec("FunctionPlanning") {
@@ -223,12 +223,12 @@ struct NativeCodeGenerationTests {
             program: program)
         var emitter = NativeSwiftEmitter(model: model)
         #expect(emitter.functionPlans.isEmpty)
-        #expect(emitter.typeDeclarations.records == [.tuple([.int, .int])])
+        #expect(Set(emitter.typeDeclarations.records) == [.tuple([.int, .int]), .tuple([.int, .string])])
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        #expect(emitter.functionPlans.count == 1)
-        #expect(!generated.contains("NativeRecord1"))
-        #expect(emitter.functionPlans[temporalFunction] == nil)
-        #expect(!generated.contains("func _operator\(temporalFunction.ordinal)("))
+        #expect(emitter.functionPlans.count == 2)
+        #expect(generated.contains("NativeRecord1"))
+        #expect(emitter.functionPlans[temporalFunction] != nil)
+        #expect(generated.contains("func _operator\(temporalFunction.ordinal)("))
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
     }
 

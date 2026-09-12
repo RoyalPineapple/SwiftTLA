@@ -35,7 +35,7 @@ extension CompiledSpecification {
             }
         }
         return try semantics.behavior.temporalProperties.map { property in
-            let expression: CompiledTemporalExpr<@Sendable (StateGraph.StateID) throws -> Bool>
+            let expression: TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool>
             if case .leadsTo(let trigger, let target) = property.expression {
                 expression = .leadsTo(predicate(trigger, isTrigger: true), predicate(target))
             } else {

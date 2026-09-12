@@ -401,30 +401,10 @@ package struct CompiledInvariant: Sendable {
     }
 }
 
-package enum CompiledTemporalExpr<Expression: Sendable>: Sendable {
-    case always(Expression)
-    case eventually(Expression)
-    case alwaysEventually(Expression)
-    case eventuallyAlways(Expression)
-    case leadsTo(Expression, Expression)
-
-    package func map<Result: Sendable>(
-        _ transform: (Expression) throws -> Result
-    ) rethrows -> CompiledTemporalExpr<Result> {
-        switch self {
-        case .always(let predicate): .always(try transform(predicate))
-        case .eventually(let predicate): .eventually(try transform(predicate))
-        case .alwaysEventually(let predicate): .alwaysEventually(try transform(predicate))
-        case .eventuallyAlways(let predicate): .eventuallyAlways(try transform(predicate))
-        case .leadsTo(let source, let target): .leadsTo(try transform(source), try transform(target))
-        }
-    }
-}
-
 package struct CompiledTemporal<Expression: Sendable>: Sendable {
     package let id: PropertyID
     package let name: String
-    package let expression: CompiledTemporalExpr<Expression>
+    package let expression: TemporalCondition<Expression>
 
     package func map<Result: Sendable>(
         _ transform: (Expression) throws -> Result
