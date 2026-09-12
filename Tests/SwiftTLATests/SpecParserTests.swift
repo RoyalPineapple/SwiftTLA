@@ -2847,13 +2847,15 @@ private let cameraModeDefinition = parserEnum(
         """
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+        #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.actions.count == 1)
-        #expect(parsed.actions[0].bindings.map(\.name) == ["source", "destination", "amount"])
-        #expect(parsed.actions[0].bindings.map(\.values) == [
+        let action = try #require(parsed.actions.first)
+        #expect(action.bindings.map(\.name) == ["source", "destination", "amount"])
+        #expect(action.bindings.map(\.values) == [
             [.int(1), .int(2)], [.int(10), .int(20)], [.int(100), .int(200)]
         ])
-        #expect(parsed.actions[0].bindings.map(\.generatedSwiftType) == ["Int", "Int", "Int"])
-        #expect(parsed.actions[0].body == .assign(.named("floor"), .value(.int(1))))
+        #expect(action.bindings.map(\.generatedSwiftType) == ["Int", "Int", "Int"])
+        #expect(action.body == .assign(.named("floor"), .value(.int(1))))
     }
 
     @Test func declaredActionParametersRetainSourceAndFormalNames() throws {

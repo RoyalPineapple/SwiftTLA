@@ -1263,6 +1263,10 @@ final class ParserSession {
             if let value = scope.value(for: reference) { return value }
             if let constant = constants.value(named: name) { return .value(constant) }
             if let state = sourceScope.value(for: reference) { return state }
+            // Unresolved value names belong to the binding pass. A local value
+            // must not prevent references to the enclosing model's variables.
+            guard scope.recursiveOperator(for: reference) == nil else { return nil }
+            return .variable(name)
         }
 
         if let literal = expression.as(BooleanLiteralExprSyntax.self) {
