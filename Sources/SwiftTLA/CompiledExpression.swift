@@ -48,8 +48,8 @@ package enum CompiledOperation: Hashable, Sendable {
     case tupleConcatenate
     case tupleRemoving
     case sequenceSelect(BinderID)
-    case recordLiteral([CompiledRecordField])
-    case recordAccess(CompiledRecordField)
+    case recordLiteral([String])
+    case recordAccess(String)
     case domain
     case functionLiteral(BinderID)
     case functionApply
@@ -171,9 +171,9 @@ extension CompiledExpression {
         .init(operation: .sequenceSelect(binder), children: [sequence, predicate])
     }
     package static func recordLiteral(_ fields: [CompiledRecordEntry]) -> Self {
-        .init(operation: .recordLiteral(fields.map(\.declaration)), children: fields.map(\.value))
+        .init(operation: .recordLiteral(fields.map(\.name)), children: fields.map(\.value))
     }
-    package static func recordAccess(_ record: Self, _ field: CompiledRecordField) -> Self {
+    package static func recordAccess(_ record: Self, _ field: String) -> Self {
         .init(operation: .recordAccess(field), children: [record])
     }
     package static func functionLiteral(_ domain: Self, _ binder: BinderID, _ value: Self) -> Self {

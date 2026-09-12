@@ -143,7 +143,7 @@ struct CompiledTLARenderer {
 
         func schedule(_ operation: CompiledOperation, _ operands: [CompiledExpression]) throws {
             let syntax = try operation.tlaSyntax(operandCount: operands.count,
-                binderName: binderName, fieldName: fieldName)
+                binderName: binderName)
             for part in syntax.reversed() {
                 switch part {
                 case .text(let text): tasks.append(.text(text))
@@ -307,11 +307,6 @@ struct CompiledTLARenderer {
         return location.sourceName
     }
 
-    private func fieldName(_ id: FieldID) throws -> String {
-        guard let field = layout.field(id) else { throw missing("field", id.ordinal) }
-        return field.renderedName
-    }
-
     private func operatorName(_ id: OperatorID) throws -> String {
         guard let name = bindings.operatorName(id) else { throw missing("operator", id.ordinal) }
         return name
@@ -390,8 +385,7 @@ enum TLAExpressionPart: Equatable, Sendable {
 extension CompiledOperation {
     func tlaSyntax(
         operandCount: Int,
-        binderName: (BinderID) throws -> String,
-        fieldName: (FieldID) throws -> String
+        binderName: (BinderID) throws -> String
     ) throws -> [TLAExpressionPart] {
         if let syntax = tlaOperandSyntax {
             var parts: [TLAExpressionPart] = [.text(syntax.prefix)]
@@ -427,12 +421,12 @@ extension CompiledOperation {
             var record: [TLAExpressionPart] = [.text("[")]
             for (index, field) in fields.enumerated() {
                 if index > 0 { record.append(.text(", ")) }
-                record += [.text("\(try fieldName(field.id)) |-> "), .operand(index)]
+                record += [.text("\(field) |-> "), .operand(index)]
             }
             record.append(.text("]"))
             parts = record
         case .recordAccess(let field):
-            parts = [.text("("), .operand(0), .text(").\(try fieldName(field.id))")]
+            parts = [.text("("), .operand(0), .text(").\(field)")]
         case .functionLiteral(let binder):
             parts = [.text("[\(try binderName(binder)) \\in "), .operand(0), .text(" |-> "), .operand(1), .text("]")]
         case .except:

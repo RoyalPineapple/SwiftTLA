@@ -8,8 +8,8 @@ import SwiftBasicFormat
 @testable import SwiftTLAPlugin
 
 struct NativeCodeGenerationTests {
-    @Test("Resolved record construction carries field identities across execution and rendering")
-    func recordFieldIdentity() throws {
+    @Test("Record construction preserves field names across execution and rendering")
+    func recordFieldNames() throws {
         let record = StateRecordExpression([
             .init(name: "z", value: .variable("count")),
             .init(name: "a", value: .int(2))
@@ -28,12 +28,10 @@ struct NativeCodeGenerationTests {
             Issue.record("Expected resolved record construction")
             return
         }
-        #expect(fields.map(\.id) == compilation.layout.fields.map(\.id))
-        #expect(fields.map(\.key) == [.string("a"), .string("z")])
+        #expect(fields == ["a", "z"])
         #expect(constructor.children.map(\.resultType) == [.int, .int])
         let syntax = try constructor.operation.tlaSyntax(operandCount: constructor.children.count,
-            binderName: { _ in "unused" },
-            fieldName: { id in try #require(compilation.layout.field(id)).renderedName })
+            binderName: { _ in "unused" })
         #expect(syntax == [.text("["), .text("a |-> "), .operand(0), .text(", "),
             .text("z |-> "), .operand(1), .text("]")])
         var values: [CompiledValue] = [.integer(2), .integer(0)]

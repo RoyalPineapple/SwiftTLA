@@ -1,11 +1,5 @@
-/// A resolved field identity shared by expression operands and executable operations.
-package struct CompiledRecordField: Hashable, Sendable {
-    package let id: FieldID
-    package let key: CompiledValue
-}
-
 package struct CompiledRecordEntry: Hashable, Sendable {
-    package let declaration: CompiledRecordField
+    package let name: String
     package let value: CompiledExpression
 }
 

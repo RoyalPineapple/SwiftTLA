@@ -429,7 +429,7 @@ struct CompilerPipelineCanonicalizationTests {
         var lowerer = CompiledLowerer(
             spec: layoutSource,
             closure: closure,
-            layout: CompiledLayout(spec: layoutSource, closure: closure)
+            layout: CompiledLayout(source: layoutSource)
         )
 
         do {
@@ -980,11 +980,16 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         ).compile()
 
-        #expect(compilation.layout.fields.map(\.renderedName) == ["a", "z"])
+        guard case .guard_(let predicate) = compilation.semantics.behavior.actions[0].body,
+              case .recordLiteral(let names) = predicate.children[0].operation else {
+            Issue.record("Expected a compiled record constructor")
+            return
+        }
+        #expect(names == ["a", "z"])
     }
 
-    @Test("compiled record fields retain their bound identity beside like-named variables")
-    func compiledRecordFieldsUseBoundIdentity() throws {
+    @Test("compiled record field names are separate from variable bindings")
+    func compiledRecordFieldsRemainSeparateFromVariables() throws {
         let compilation = try TLASpec(
             name: "RecordFieldBinding",
             variables: [.init(name: "value", initial: .int(1))],
@@ -1004,14 +1009,14 @@ struct CompilerPipelineCanonicalizationTests {
               case .guard_(let expression16) = expression15,
               case .equal = expression16.operation,
               case .recordLiteral(let expression17) = expression16.children[0].operation,
-              case let record = zip(expression17, expression16.children[0].children).map({ CompiledRecordEntry(declaration: $0, value: $1) }),
+              case let record = zip(expression17, expression16.children[0].children).map({ CompiledRecordEntry(name: $0, value: $1) }),
               case .unchanged = expression18,
               case .stateVariable(let variable) = record[0].value.operation else {
             Issue.record("Expected a compiled record with a bound variable value")
             return
         }
 
-        #expect(record[0].declaration.id == compilation.layout.fields[0].id)
+        #expect(record[0].name == "value")
         #expect(variable == compilation.layout.variables[0].id)
     }
 
@@ -1096,8 +1101,22 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(counter == .integer(2))
     }
 
-    @Test("compiled record access uses a field identity")
-    func compiledRecordAccessUsesFieldIdentity() throws {
+    @Test("Record names are validated when expressions are lowered", arguments: ["", "bad name", "1field", "é"])
+    func rejectsInvalidRecordNames(_ name: String) {
+        let expressions: [StateExpr] = [
+            .recordLiteral(.init([.init(name: name, value: .int(1))])),
+            .recordAccess(.variable("record"), name)
+        ]
+        for expression in expressions {
+            let specification = TLASpec(name: "InvalidRecordName", variables: [
+                .init(name: "record", initial: .record(["valid": .int(1)]))
+            ], actions: [], invariants: [.init(name: "Valid", body: .equal(expression, expression))])
+            #expect(throws: CompilationDiagnostic.self) { try specification.compile() }
+        }
+    }
+
+    @Test("compiled record access retains its field name")
+    func compiledRecordAccessRetainsFieldName() throws {
         let recordInitial: TLARecord = ["count": .int(1)]
         let state = Var<TLARecord>("state", recordInitial)
         let spec = TLASpec("CompiledRecordAccess") {
@@ -1116,7 +1135,7 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected a compiled record access")
             return
         }
-        #expect(field.id.ordinal == 0)
+        #expect(field == "count")
         let initial = try firstCompiledState(in: compilation)
         let successors = try compiledSuccessors(named: "step", arguments: [], in: compilation, from: initial)
         #expect(successors.count == 1)

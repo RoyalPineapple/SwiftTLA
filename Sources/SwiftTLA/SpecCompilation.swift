@@ -544,7 +544,7 @@ public extension TLASpec {
         try validateSymmetryDeclarations()
         try validateRefinements()
         let definitionOrder = try orderedDirectDefinitions()
-        let layout = CompiledLayout(spec: self, closure: closure)
+        let layout = CompiledLayout(source: self)
         var lowerer = CompiledLowerer(
             spec: self, closure: closure, layout: layout,
             incomingModuleParameters: incomingModuleParameters

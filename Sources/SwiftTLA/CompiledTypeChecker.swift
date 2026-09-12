@@ -1137,7 +1137,7 @@ package struct CompiledTypeChecker: Sendable {
                         operandFrames.append([:])
                         pending.append(contentsOf: [.updateKey(expected: expected), .discard, .retainOperand(0), .check(source, expected: expected)])
                     case .recordLiteral(let declarations):
-                        let record = zip(declarations, expression.children).map { CompiledRecordEntry(declaration: $0, value: $1) }
+                        let record = zip(declarations, expression.children).map { CompiledRecordEntry(name: $0, value: $1) }
 
                         ancestors.append(expression)
                         operandFrames.append([:])
@@ -1715,12 +1715,12 @@ package struct CompiledTypeChecker: Sendable {
                         ])
                     }
                 case .recordContext(let expected):
-                    guard let expression = ancestors.last, case .recordAccess(let declaration) = expression.operation, let source = operandFrames.last?[0] else {
+                    guard let expression = ancestors.last, case .recordAccess(let name) = expression.operation, let source = operandFrames.last?[0] else {
                         throw CompiledValueType.diagnostic("recordAccess", "missing checked record source")
                     }
                     pending.append(.finishRecordAccess(expected: expected))
                     if source.resultType == .unknown { continue }
-                    guard case .string(let name) = declaration.key, case .record(var fields) = source.resultType,
+                    guard case .record(var fields) = source.resultType,
                           let index = fields.firstIndex(where: { $0.name == name }) else {
                         throw CompiledValueType.diagnostic("recordAccess", "unknown record field")
                     }
@@ -1730,11 +1730,11 @@ package struct CompiledTypeChecker: Sendable {
                         pending.append(contentsOf: [.discard, .retainOperand(0), .check(expression.children[0], expected: context)])
                     }
                 case .finishRecordAccess(let expected):
-                    guard let expression = ancestors.last, case .recordAccess(let declaration) = expression.operation, let source = operandFrames.last?[0] else {
+                    guard let expression = ancestors.last, case .recordAccess(let name) = expression.operation, let source = operandFrames.last?[0] else {
                         throw CompiledValueType.diagnostic("recordAccess", "missing checked record source")
                     }
                     let result: CompiledValueType
-                    if case .string(let name) = declaration.key, case .record(let fields) = source.resultType,
+                    if case .record(let fields) = source.resultType,
                        let field = fields.first(where: { $0.name == name }) { result = field.type }
                     else { result = .unknown }
                     let checked = try checkedType(result, expected: expected, operandContexts: [source.resultType])
@@ -1872,21 +1872,18 @@ package struct CompiledTypeChecker: Sendable {
                         operandContexts: [checked.computationType, key.resultType, value.resultType]), in: &self)
                 case .recordFields(var remaining, let expected):
                     guard let field = remaining.popFirst() else { continue }
-                    guard case .string(let name) = field.declaration.key else {
-                        throw CompiledValueType.diagnostic("record", "non-string field")
-                    }
                     let hints: [CompiledFieldType] = if case .record(let fields) = expected { fields } else { [] }
                     pending.append(contentsOf: [
                         .recordFields(remaining, expected: expected), .discard,
                         .retainOperand(remaining.startIndex - 1),
-                        .check(field.value, expected: hints.first { $0.name == name }?.type ?? .unknown)
+                        .check(field.value, expected: hints.first { $0.name == field.name }?.type ?? .unknown)
                     ])
                 case .finishRecord(let expected):
                     guard case .recordLiteral(let record) = ancestors.last?.operation, let operands = operandFrames.last else {
                         throw CompiledValueType.diagnostic("record", "missing checked record")
                     }
-                    let fields = try record.enumerated().map { index, field -> CompiledFieldType in
-                        guard case .string(let name) = field.key, let child = operands[index] else {
+                    let fields = try record.enumerated().map { index, name -> CompiledFieldType in
+                        guard let child = operands[index] else {
                             throw CompiledValueType.diagnostic("record", "missing checked field")
                         }
                         return .init(name: name, type: child.resultType)

@@ -205,7 +205,7 @@ struct AlgorithmPlusCalRendererTests {
         }
         let lowered = try source.loweredSourceModel()
         let closure = try FormalModuleClosure.resolve(root: lowered)
-        let layout = CompiledLayout(spec: lowered, closure: closure)
+        let layout = CompiledLayout(source: lowered)
         var lowerer = CompiledLowerer(spec: lowered, closure: closure, layout: layout)
         let semantics = try lowerer.lower(spec: lowered)
         let sourcePlan = try #require(lowered.authoredPlusCalAlgorithmPlan)

@@ -1045,20 +1045,19 @@ struct CompiledLowerer {
                             )
                         }
                         return (
-                            id: try field(named: item.name, at: "\(fieldPath).declaration"),
-                            key: CompiledValue.string(item.name),
+                            name: try fieldName(item.name, at: "\(fieldPath).declaration"),
                             expression: item.value,
                             path: "\(fieldPath).value"
                         )
                     }
                     schedule(fields.map { ($0.expression, $0.path) }, at: path, scope: scope, build: { values in
                         .recordLiteral(zip(fields, values).map { field, value in
-                            .init(declaration: .init(id: field.id, key: field.key), value: value.expression)
+                            .init(name: field.name, value: value.expression)
                         })
                     }, on: &tasks)
                 case .recordAccess(let value, let name):
-                    let id = try field(named: name, at: "\(path).field")
-                    schedule([(value, "\(path).value")], at: path, scope: scope, build: { .recordAccess($0[0].expression, .init(id: id, key: .string(name))) }, on: &tasks)
+                    let name = try fieldName(name, at: "\(path).field")
+                    schedule([(value, "\(path).value")], at: path, scope: scope, build: { .recordAccess($0[0].expression, name) }, on: &tasks)
                 case .except(let function, let key, let value):
                     schedule([(function, "\(path).function"), (key, "\(path).key"), (value, "\(path).value")], at: path, scope: scope, build: { .except($0[0].expression, $0[1].expression, $0[2].expression) }, on: &tasks)
                 case .caseExpr(let branches, let otherwise):
@@ -1818,7 +1817,7 @@ struct CompiledLowerer {
         return location
     }
 
-    private func field(named name: String, at path: String) throws -> FieldID {
+    private func fieldName(_ name: String, at path: String) throws -> String {
         guard isFormalIdentifier(name) else {
             throw CompilationDiagnostic(
                 code: .invalidFormalDeclaration,
@@ -1829,10 +1828,7 @@ struct CompiledLowerer {
                 nextSafeAction: "Use an ASCII identifier beginning with a letter or underscore."
             )
         }
-        guard let field = layout.fields.first(where: { $0.renderedName == name })?.id else {
-            throw diagnostic(path: path, actual: "unresolved field '\(name)'")
-        }
-        return field
+        return name
     }
 
     private func operatorID(

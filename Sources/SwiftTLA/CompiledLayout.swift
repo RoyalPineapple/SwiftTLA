@@ -1,12 +1,3 @@
-private enum FieldDiscoveryTask {
-    case value(TLAValue)
-    case expression(StateExpr)
-    case operation(FormalOperator)
-    case argument(FormalCallArgument)
-    case action(ActionExpr)
-    case name(String)
-}
-
 package struct VariableID: Hashable, Sendable {
     package let ordinal: Int
 }
@@ -39,10 +30,6 @@ struct ProcedureID: Hashable, Sendable {
 
 struct ModuleInstanceID: Hashable, Sendable {
     let ordinal: Int
-}
-
-package struct FieldID: Hashable, Sendable {
-    package let ordinal: Int
 }
 
 package struct CompiledDeclaration: Hashable, Sendable {
@@ -93,11 +80,6 @@ package struct CompiledActionLayout: Hashable, Sendable {
 struct CompiledPropertyLayout: Hashable, Sendable {
     let id: PropertyID
     let declaration: CompiledDeclaration
-}
-
-package struct CompiledFieldLayout: Hashable, Sendable {
-    package let id: FieldID
-    package let renderedName: String
 }
 
 struct CompiledProcedureLayout: Hashable, Sendable {
@@ -181,21 +163,12 @@ package struct CompiledLayout: Hashable, Sendable {
     package let actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
     let temporalProperties: [CompiledPropertyLayout]
-    let fields: [CompiledFieldLayout]
     let procedures: [CompiledProcedureLayout]
     package let controlLocations: [CompiledControlLocation]
     let moduleInstances: [CompiledModuleInstanceLayout]
     let declarations: [CompiledDeclaration]
 
     init(source spec: TLASpec) {
-        self.init(spec: spec, modules: [spec])
-    }
-
-    init(spec: TLASpec, closure: FormalModuleClosure) {
-        self.init(spec: spec, modules: closure.entries.map(\.module))
-    }
-
-    private init(spec: TLASpec, modules: [TLASpec]) {
         variables = spec.variables.enumerated().map { ordinal, variable in
             let collection = spec.collections.first { $0.name == variable.name }
             return CompiledVariableLayout(
@@ -237,9 +210,6 @@ package struct CompiledLayout: Hashable, Sendable {
                 id: .init(ordinal: statePropertyCount + ordinal),
                 declaration: .init(kind: .temporalProperty, name: temporal.name, sourceOffset: nil)
             )
-        }
-        fields = Self.fields(in: modules).enumerated().map { ordinal, name in
-            .init(id: .init(ordinal: ordinal), renderedName: name)
         }
         procedures = spec.sourceAlgorithms.flatMap { algorithm in
             algorithm.model.procedures.enumerated().map { ordinal, procedure in
@@ -286,10 +256,6 @@ package struct CompiledLayout: Hashable, Sendable {
         return procedures[id.ordinal]
     }
 
-    func field(_ id: FieldID) -> CompiledFieldLayout? {
-        fields.first { $0.id == id }
-    }
-
     func controlLocation(_ id: ControlLocationID) -> CompiledControlLocation? {
         controlLocations.first { $0.id == id }
     }
@@ -317,196 +283,10 @@ package struct CompiledLayout: Hashable, Sendable {
         let procedureEncoding = procedures.map { procedure in
             "\(procedure.algorithm.utf8.count):\(procedure.algorithm)\(procedure.name.utf8.count):\(procedure.name)"
         }.joined(separator: "|")
-        let fieldEncoding = fields.map { field in
-            "\(field.id.ordinal):\(field.renderedName.utf8.count):\(field.renderedName)"
-        }.joined(separator: "|")
         let instanceEncoding = moduleInstances.map {
             "\($0.id.ordinal):\($0.namespace.utf8.count):\($0.namespace)\($0.moduleName.utf8.count):\($0.moduleName)"
         }.joined(separator: "|")
-        return "declarations[\(declarationEncoding)]actions[\(actionEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]instances[\(instanceEncoding)]"
-    }
-
-    private static func fields(in modules: [TLASpec]) -> [String] {
-        var names: [String] = []
-        var seen: Set<String> = []
-
-        func append(_ name: String) {
-            guard seen.insert(name).inserted else { return }
-            names.append(name)
-        }
-
-        func visit(_ initial: FieldDiscoveryTask) {
-            var pending = [initial]
-            while let task = pending.popLast() {
-                switch task {
-                case .name(let name):
-                    append(name)
-                case .value(let value):
-                    switch value {
-                    case .int, .bool, .string, .constant:
-                        break
-                    case .set(let values):
-                        pending.append(contentsOf: values.sorted().reversed().map(FieldDiscoveryTask.value))
-                    case .tuple(let values):
-                        pending.append(contentsOf: values.reversed().map(FieldDiscoveryTask.value))
-                    case .record(let record):
-                        for field in record.fields.reversed() {
-                            pending.append(.value(field.value))
-                            pending.append(.name(field.name))
-                        }
-                    case .function(let values):
-                        for entry in values.sorted(by: { $0.key < $1.key }).reversed() {
-                            pending.append(.value(entry.value))
-                            pending.append(.value(entry.key))
-                        }
-                    }
-                case .operation(let operation):
-                    if case .lambda(let lambda) = operation {
-                        pending.append(.expression(lambda.body))
-                    }
-                case .argument(let argument):
-                    switch argument {
-                    case .value(let expression): pending.append(.expression(expression))
-                    case .operator(let operation): pending.append(.operation(operation))
-                    }
-                case .action(let action):
-                    switch action {
-                    case .assign(_, let value), .guard_(let value):
-                        pending.append(.expression(value))
-                    case .unchanged:
-                        break
-                    case .existsAction(_, let set, let body), .define(_, let set, let body):
-                        pending.append(.action(body))
-                        pending.append(.expression(set))
-                    case .ifElse(let condition, let then, let otherwise):
-                        pending.append(.action(otherwise))
-                        pending.append(.action(then))
-                        pending.append(.expression(condition))
-                    case .and(let lhs, let rhs), .or(let lhs, let rhs):
-                        pending.append(.action(rhs))
-                        pending.append(.action(lhs))
-                    }
-                case .expression(let expression):
-                    switch expression {
-                    case .sourceIssue, .variable, .processLocalFamily, .currentProcess, .programCounter,
-                         .procedureStack, .controlLocation, .enabledAction:
-                        break
-                    case .value(let value):
-                        pending.append(.value(value))
-                    case .assertView(let value, _), .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
-                         .unionAll(let value), .tupleAccess(let value, _), .tupleLength(let value),
-                         .tupleHead(let value), .tupleTail(let value), .domain(let value),
-                         .sequenceFromSet(let value):
-                        pending.append(.expression(value))
-                    case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
-                         .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
-                         .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
-                         .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
-                         .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
-                         .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
-                         .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
-                         .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
-                         .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs),
-                         .integerRange(let lhs, let rhs):
-                        pending.append(.expression(rhs))
-                        pending.append(.expression(lhs))
-                    case .ifThenElse(let condition, let then, let otherwise):
-                        pending.append(.expression(otherwise))
-                        pending.append(.expression(then))
-                        pending.append(.expression(condition))
-                    case .setLiteral(let values), .tupleLiteral(let values):
-                        pending.append(contentsOf: values.reversed().map(FieldDiscoveryTask.expression))
-                    case .recordLiteral(let record):
-                        for field in record.fields.reversed() {
-                            pending.append(.expression(field.value))
-                            pending.append(.name(field.name))
-                        }
-                    case .recordAccess(let value, let field):
-                        pending.append(.name(field))
-                        pending.append(.expression(value))
-                    case .except(let function, let key, let value):
-                        pending.append(.expression(value))
-                        pending.append(.expression(key))
-                        pending.append(.expression(function))
-                    case .caseExpr(let branches, let otherwise):
-                        if let otherwise { pending.append(.expression(otherwise)) }
-                        pending.append(contentsOf: branches.reversed().map(FieldDiscoveryTask.expression))
-                    case .setFilter(let domain, _, let body), .functionLiteral(let domain, _, let body),
-                         .forAll(let domain, _, let body), .exists(let domain, _, let body),
-                         .choose(let domain, _, let body):
-                        pending.append(.expression(body))
-                        pending.append(.expression(domain))
-                    case .setMap(let body, _, let domain):
-                        pending.append(.expression(domain))
-                        pending.append(.expression(body))
-                    case .sequenceSelect(let sequence, _, let predicate):
-                        pending.append(.expression(predicate))
-                        pending.append(.expression(sequence))
-                    case .tupleRemoving(let tuple, let index):
-                        pending.append(.expression(index))
-                        pending.append(.expression(tuple))
-                    case .foldFunction(let lambda, let initial, let sequence):
-                        pending.append(.expression(sequence))
-                        pending.append(.expression(initial))
-                        pending.append(.expression(lambda.body))
-                    case .operatorApplication(let operation, let arguments):
-                        pending.append(contentsOf: arguments.reversed().map(FieldDiscoveryTask.argument))
-                        pending.append(.operation(operation))
-                    case .recursiveCall(_, let arguments):
-                        pending.append(contentsOf: arguments.reversed().map(FieldDiscoveryTask.expression))
-                    case .letValue(_, let value, let body):
-                        pending.append(.expression(body))
-                        pending.append(.expression(value))
-                    case .letIn(let definitions, let body):
-                        pending.append(.expression(body))
-                        for definition in definitions.reversed() {
-                            pending.append(.expression(definition.body))
-                            if let domain = definition.domain { pending.append(.expression(domain)) }
-                        }
-                    }
-                }
-            }
-        }
-
-        func visit(_ value: TLAValue) { visit(FieldDiscoveryTask.value(value)) }
-        func visit(_ expression: StateExpr) { visit(FieldDiscoveryTask.expression(expression)) }
-        func visit(_ action: ActionExpr) { visit(FieldDiscoveryTask.action(action)) }
-
-        for module in modules {
-            module.constants.forEach { visit($0.value) }
-            for variable in module.variables {
-                switch variable.initialization {
-                case .value(let value): visit(value)
-                case .expression(let expression), .memberOf(let expression): visit(expression)
-                }
-            }
-            for action in module.actions {
-                action.bindings.flatMap(\.values).forEach(visit)
-                visit(action.body)
-            }
-            module.invariants.forEach { visit($0.body) }
-            module.temporalProperties.forEach { temporal in
-                switch temporal.expr {
-                case .always(let expression), .eventually(let expression), .alwaysEventually(let expression), .eventuallyAlways(let expression):
-                    visit(expression)
-                case .leadsTo(let lhs, let rhs):
-                    visit(lhs)
-                    visit(rhs)
-                }
-            }
-            if let constraint = module.constraint { visit(constraint) }
-            if let assume = module.assume { visit(assume) }
-            module.formalOperatorDefinitions.forEach { definition in
-                visit(definition.body)
-            }
-            module.recursiveFuncs.forEach { function in
-                visit(function.body)
-            }
-            module.importConfigurations.flatMap(\.replacements).forEach { replacement in
-                visit(replacement.expression)
-            }
-        }
-        return names
+        return "declarations[\(declarationEncoding)]actions[\(actionEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]instances[\(instanceEncoding)]"
     }
 
     private static func controlLocations(

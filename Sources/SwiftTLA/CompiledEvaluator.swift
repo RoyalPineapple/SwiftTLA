@@ -843,12 +843,12 @@ extension CompiledOperation {
         case .recordLiteral(let fields):
             let fieldValues = try popValues(fields.count, from: &values)
             values.append(.record(CompiledRecord(zip(fields, fieldValues).map {
-                .init(key: $0.0.key, value: $0.1)
+                .init(key: .string($0.0), value: $0.1)
             })))
         case .recordAccess(let field):
             let recordValue = try popValue(from: &values)
             guard case .record(let record) = recordValue,
-                  let value = record.value(for: field.key)
+                  let value = record.value(for: .string(field))
             else {
                 throw EvalError.expected(.recordField, actual: [recordValue])
             }

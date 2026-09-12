@@ -996,7 +996,7 @@ struct NativeSwiftEmitter {
                 "let _recordField\(index): \(try swiftType(childType(index))) = \(try emit(index))"
             }
             let arguments = try fields.enumerated().map { index, field in
-                guard let sourceIndex = declarations.firstIndex(where: { $0.key == .string(field.name) }) else { throw unsupported("record field") }
+                guard let sourceIndex = declarations.firstIndex(of: field.name) else { throw unsupported("record field") }
                 return "\(fieldName(result, index: index, escaped: false)): _recordField\(sourceIndex)"
             }
             return """
@@ -1005,8 +1005,7 @@ struct NativeSwiftEmitter {
                 return \(try swiftType(result))(\(arguments.joined(separator: ", ")))
             }())
             """
-        case .recordAccess(let field):
-            guard case .string(let name) = field.key else { throw unsupported("record field name") }
+        case .recordAccess(let name):
             return "\(try emit(0)).`\(name)`"
         default: throw unsupported("aggregateExpression operation")
         }

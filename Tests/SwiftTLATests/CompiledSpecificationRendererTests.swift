@@ -17,7 +17,7 @@ struct CompiledSpecificationRendererTests {
         ]
         for (operation, operands, expected) in cases {
             let syntax = try operation.tlaSyntax(operandCount: operands.count,
-                binderName: { _ in "item" }, fieldName: { _ in "field" })
+                binderName: { _ in "item" })
             let rendered = syntax.map { part in
                 switch part {
                 case .text(let text): text
@@ -28,7 +28,7 @@ struct CompiledSpecificationRendererTests {
         }
         #expect(throws: CompilationDiagnostic.self) {
             try CompiledOperation.caseExpr(hasOtherwise: false).tlaSyntax(
-                operandCount: 3, binderName: { _ in "item" }, fieldName: { _ in "field" })
+                operandCount: 3, binderName: { _ in "item" })
         }
     }
 
