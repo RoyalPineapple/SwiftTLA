@@ -1,3 +1,8 @@
+enum TemporalEvaluationError: Error, Equatable {
+    case predicate(state: StateGraph.StateID, cause: EvalError)
+    case leadsToTrigger(state: StateGraph.StateID, cause: EvalError)
+}
+
 extension FiniteExploration {
     package func analyzeTemporalProperties(in compilation: CompiledSpecification) throws -> [TemporalAnalysis] {
         try validate(for: compilation)
@@ -8,6 +13,33 @@ extension FiniteExploration {
 }
 
 extension CompiledSpecification {
+    func livenessChecker(graph: StateGraph) -> LivenessChecker<CompiledActionCall, CompiledFairnessCondition.Scope> {
+        let knownActions = Set(semantics.behavior.actions.map(\.id))
+        return LivenessChecker(
+            states: Set(graph.states.keys),
+            transitions: Dictionary(uniqueKeysWithValues: graph.transitions.map { source, successors in
+                (source, successors.map { successor in
+                    let call = successor.label.actionID.flatMap { action in
+                        knownActions.contains(action)
+                            ? CompiledActionCall(action: action, arguments: successor.label.arguments) : nil
+                    }
+                    return GraphEdge(source: source, action: call, renderedAction: successor.action, target: successor.target)
+                })
+            }),
+            matches: { call, scope in
+                switch scope {
+                case .next: return true
+                case .action(let action): return call.action == action
+                case .actionCall(let expected): return call == expected
+                }
+            },
+            actionOrder: { lhs, rhs in
+                if lhs.action != rhs.action { return lhs.action.ordinal < rhs.action.ordinal }
+                return lhs.arguments.lexicographicallyPrecedes(rhs.arguments)
+            }
+        )
+    }
+
     func analyzeTemporalProperties(
         graph: StateGraph,
         states: [StateGraph.StateID: CompiledState],
@@ -15,7 +47,7 @@ extension CompiledSpecification {
         isComplete: Bool = true
     ) throws -> [TemporalAnalysis] {
         let runtime = CompiledRuntime(compilation: self)
-        let checker = LivenessChecker(graph: graph, actions: Set(semantics.behavior.actions.map(\.id)))
+        let checker = livenessChecker(graph: graph)
         func predicate(_ query: CompiledStateQuery, isTrigger: Bool = false) -> @Sendable (StateGraph.StateID) throws -> Bool {
             { state in
                 guard let compiled = states[state] else {
@@ -42,7 +74,7 @@ extension CompiledSpecification {
                 expression = property.expression.map { predicate($0) }
             }
             return try checker.analyze(
-                expression, fairness: semantics.behavior.fairness,
+                expression, fairness: semantics.behavior.fairness.map { ($0.scope, $0.isStrong) },
                 initialStateIDs: initialStateIDs, isComplete: isComplete,
                 renderScope: { scope in
                     switch scope {

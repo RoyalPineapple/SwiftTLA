@@ -11,7 +11,7 @@ struct LivenessCheckerTests {
   func singleCycleSCC() throws {
     let compilation = try Example.hourClock.spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = LivenessChecker(graph: exploration.graph, actions: Set(compilation.semantics.behavior.actions.map(\.id)))
+    let lc = compilation.livenessChecker(graph: exploration.graph)
     let sccs = lc.computeSCCs()
     #expect(sccs.count == 1)
     #expect(sccs[0].count == 12)
@@ -21,7 +21,7 @@ struct LivenessCheckerTests {
   func terminalSCC() throws {
     let compilation = try Example.hourClock.spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = LivenessChecker(graph: exploration.graph, actions: Set(compilation.semantics.behavior.actions.map(\.id)))
+    let lc = compilation.livenessChecker(graph: exploration.graph)
     let sccs = lc.computeSCCs()
     let terminals = lc.terminalSCCs(from: sccs)
     #expect(terminals.count == 1)

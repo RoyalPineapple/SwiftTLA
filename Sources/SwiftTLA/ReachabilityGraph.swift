@@ -11,6 +11,7 @@ public protocol StateMachine: Sendable {
     static var checksDeadlock: Bool { get }
     func isTerminated() throws -> Bool
     func assumptionsHold() throws -> Bool
+    func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
     func temporalProperties() -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
     func violatedInvariants() throws -> [String]
     func successors() throws -> [(action: Action, machine: Self)]
@@ -85,5 +86,41 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         }
         path.append((nil, current))
         return path.reversed()
+    }
+}
+
+extension ReachabilityGraph {
+    /// Analyze generated predicates over the same native transitions used by applications.
+    package func analyzeTemporalProperties(using machine: Machine) throws -> [String: TemporalAnalysis] {
+        let snapshots = Array(transitions.keys)
+        let identities = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map {
+            ($0.element, StateGraph.StateID($0.offset))
+        })
+        let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
+            ($0, String(describing: $0))
+        })
+        let fairness = machine.fairnessConditions()
+        let checker = LivenessChecker<Machine.Action, Int>(
+            states: Set(identities.values),
+            transitions: Dictionary(uniqueKeysWithValues: transitions.map { source, successors in
+                let sourceID = identities[source]!
+                return (sourceID, successors.map { successor in
+                    GraphEdge(source: sourceID, action: successor.action,
+                        renderedAction: actionNames[successor.action]!, target: identities[successor.target]!)
+                })
+            }),
+            matches: { action, scope in fairness[scope].matches(action) },
+            actionOrder: { actionNames[$0]! < actionNames[$1]! }
+        )
+        return try machine.temporalProperties().mapValues { property in
+            let predicates = property.map { predicate -> @Sendable (StateGraph.StateID) throws -> Bool in
+                { try predicate(snapshots[$0.id]) }
+            }
+            return try checker.analyze(
+                predicates, fairness: fairness.indices.map { ($0, fairness[$0].isStrong) },
+                initialStateIDs: initialStates.map { identities[$0]! },
+                renderScope: { fairness[$0].name }
+            )
+        }
     }
 }

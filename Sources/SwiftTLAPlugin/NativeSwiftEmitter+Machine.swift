@@ -571,6 +571,39 @@ extension NativeSwiftEmitter {
             [\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]
         }
         """)
+        let fairness = try program.behavior.fairness.map { condition in
+            let name: String
+            let matcher: String
+            switch condition.scope {
+            case .next:
+                name = "Next"
+                matcher = "{ _ in true }"
+            case .action(let id):
+                let action = model.api.actions.first { $0.compiledAction == id }!
+                name = program.layout.actions[id.ordinal].renderedName
+                matcher = "{ action in if case .\(action.swiftIdentifier) = action { return true }; return false }"
+            case .actionCall(let call):
+                let action = model.api.actions.first { $0.compiledAction == call.action }!
+                let bindings = program[call.action].bindings
+                let arguments = try zip(bindings.indices, call.arguments).compactMap { index, value -> String? in
+                    guard action.bindings[index].isPublic || action.collection != nil else { return nil }
+                    let name = action.collection == nil ? action.bindings[index].swiftIdentifier : "member"
+                    return "\(name): \(try literal(value, as: program.bindingTypes[bindings[index].binder]!))"
+                }
+                let value = ".\(action.swiftIdentifier)" + (arguments.isEmpty ? "" : "(\(arguments.joined(separator: ", ")))")
+                name = FormalActionCall(
+                    name: program.layout.actions[call.action.ordinal].renderedName,
+                    arguments: try call.arguments.map { try $0.rendered(using: program.layout) }
+                ).description
+                matcher = "{ \(captureList)action in action == \(value) }"
+            }
+            return "(name: \(String(reflecting: name)), isStrong: \(condition.isStrong), matches: \(matcher))"
+        }
+        declarations += try nativeDeclarations("""
+        public func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)] {
+            [\(fairness.joined(separator: ",\n"))]
+        }
+        """)
         if let assume = program.behavior.assume {
             declarations += try nativeDeclarations("""
             private static func _assumptionsHold(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {

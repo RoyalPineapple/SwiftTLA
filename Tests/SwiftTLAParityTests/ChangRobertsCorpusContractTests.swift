@@ -22,6 +22,7 @@ struct ChangRobertsCorpusContractTests {
         let machine = try #require(initial.first)
         let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 500)
         #expect(native.safetyViolations.isEmpty)
+        #expect(try native.analyzeTemporalProperties(using: machine)["Liveness"]?.status == .satisfied)
         let exported = try CanonicalGraph(native, using: machine)
         let formal = try SwiftGraphExporter().export(exploration)
         #expect(exported == formal.graph)
