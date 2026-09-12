@@ -397,7 +397,8 @@ struct NativeCodeGenerationTests {
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         #expect(generated.contains("func enabledActions()"))
         #expect(!generated.contains("func isEnabled("))
-        #expect(!generated.contains("func successors("))
+        #expect(generated.contains("func successors()"))
+        #expect(!generated.contains("func successors(for:"))
         #expect(!generated.contains("func send("))
         #expect(!generated.contains("switch action"))
     }
@@ -426,9 +427,14 @@ struct NativeCodeGenerationTests {
         let members = try emitter.machineMembers()
         let generated = members.map(\.description).joined(separator: "\n")
         for forbidden in ["Self.spec", ".compile()", "CompiledRuntime", "CompiledEvaluator",
-                          "CompiledState", "CompiledValue", "TLAValue", "Decoder", "_GeneratedMachineStorage"] {
+                          "CompiledState", "CompiledValue", "Decoder", "_GeneratedMachineStorage"] {
             #expect(!generated.contains(forbidden), "Execution unexpectedly references \(forbidden)")
         }
+        let execution = members.filter {
+            $0.as(FunctionDeclSyntax.self)?.name.text != "formalProjection"
+        }.map(\.description).joined(separator: "\n")
+        #expect(!execution.contains("TLAValue"))
+        #expect(!execution.contains("formalProjection("))
         #expect(generated.contains("_NativeMachineOperations.add"))
         #expect(generated.contains("switch action"))
         #expect(generated.contains("guard"))
@@ -436,7 +442,8 @@ struct NativeCodeGenerationTests {
         let terminal = try #require(model.program.layout.actions.first {
             $0.declaration.name == CompilerControlSymbol.terminatingAction.rawValue
         })
-        #expect(!generated.contains("func _updates\(terminal.id.ordinal)("))
+        #expect(generated.contains("func isTerminated()"))
+        #expect(generated.contains("func _updates\(terminal.id.ordinal)("))
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
         print("native-code-generation model=counter declarations=\(members.count) sourceBytes=\(generated.utf8.count)")
     }
