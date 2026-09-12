@@ -1,5 +1,5 @@
 import Foundation
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 import UpstreamParity
 
@@ -42,19 +42,25 @@ struct TemporalSymmetryCheckTests {
       let raw = try ModelChecker(
         compilation: compilation,
         configuration: symmetryCase.rawExploration
-      ).explore().graph
+      ).explore()
       let reduced = try ModelChecker(
         compilation: compilation,
         configuration: symmetryCase.reducedExploration
       ).explore().graph
 
-      #expect(raw.states.count == 1 << scope)
+      #expect(raw.graph.states.count == 1 << scope)
       #expect(reduced.states.count == scope + 1)
-      let rawBundle = compilation.renderedTLAModuleBundle(
+      let rawBundle = try compilation.render().tlaBundle(
         symmetryReduction: symmetryCase.rawExploration.symmetryReduction)
       #expect(rawBundle.cfg.contains("SYMMETRY") == false)
-      #expect(rawBundle.tla.contains("Init == chosen = [member \\in ChosenKeys |-> 0]"))
-      #expect(compilation.renderedTLAModuleBundle(
+      #expect(raw.initialStateIDs.count == 1)
+      let initialID = try #require(raw.initialStateIDs.first)
+      let initial = try #require(raw.compiledStates[initialID])
+      let chosen = try #require(compilation.layout.variables.first { $0.declaration.name == "chosen" })
+      let members = try #require(chosen.collection?.members)
+      let allZero = CompiledValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, .integer(0)) }))
+      #expect(try initial.value(for: chosen.id) == allZero)
+      #expect(try compilation.render().tlaBundle(
         symmetryReduction: symmetryCase.reducedExploration.symmetryReduction
       ).cfg.contains("SYMMETRY"))
     }

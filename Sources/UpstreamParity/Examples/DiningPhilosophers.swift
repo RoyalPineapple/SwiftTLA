@@ -157,8 +157,8 @@ package struct DiningPhilosophersModel: Sendable {
                 })
 
                 Invariant("ExclusiveAccess") {
-                    All(Philosopher.all) { first in
-                        All(Philosopher.all) { second in
+                    ForAll(Philosopher.all) { first in
+                        ForAll(Philosopher.all) { second in
                             first == second
                                 || !(At(Step.eat, first) && At(Step.eat, second)
                                     && ((first == Philosopher.one && second == Philosopher.two)

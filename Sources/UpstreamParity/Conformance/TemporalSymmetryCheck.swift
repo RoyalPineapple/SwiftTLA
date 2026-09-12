@@ -214,22 +214,24 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TemporalSymmetryOutcome {
     let scope = symmetryCase.scope
-    guard compilation.machineSurfacePlan.symmetricCollections.count == 1,
-          let collection = compilation.machineSurfacePlan.symmetricCollections.first,
+    let collections = compilation.layout.variables.filter { $0.declaration.origin == .source }.compactMap(\.collection)
+    guard collections.count == 1,
+          let collection = collections.first,
           collection.members.count == scope else {
       throw EvidenceFormatError.invalidField(
         record: symmetryCase.id, field: "symmetric collection")
     }
-    let generators = try symmetryGenerators(members: collection.members)
+    let generators = try symmetryGenerators(members: try collection.members.map { try $0.rendered(using: compilation.layout) })
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     try RetainedFiles.createDirectory(outputDirectory, beneath: projectRoot)
     let rawRunID = UUID()
     let reducedRunID = UUID()
-    let rawBundle = compilation.renderedTLAModuleBundle(
+    let rendered = try compilation.render()
+    let rawBundle = rendered.tlaBundle(
       symmetryReduction: symmetryCase.rawExploration.symmetryReduction)
-    let reducedBundle = compilation.renderedTLAModuleBundle(
+    let reducedBundle = rendered.tlaBundle(
       symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
-    let renderedActions = compilation.renderedActions()
+    let renderedActions = rendered.actions
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(symmetryCase.id, isDirectory: true)
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
     let rawCase = try makeFiniteGraphCase(
@@ -472,15 +474,15 @@ package func temporalConformanceSpec(configuration: TemporalCaseConfiguration) -
   let x = Var<Int>("x")
   let p = x == 2
   let q = x == 1
-  let temporal = temporalProperty(property: configuration.property, p: p, q: q)
+  let temporal = temporalProperty(property: configuration.property, p: p.stateExpr, q: q.stateExpr)
   return TLASpec(
     name: "TemporalMatrix",
     variables: [NamedVar(name: x.name, initial: 0)],
     actions: [
-      NamedAction(name: "A", body: .and(.guard_(x == 0), x.becomes(2))),
-      NamedAction(name: "B", body: .and(.guard_(x == 0), x.becomes(1))),
-      NamedAction(name: "C", body: .and(.guard_(x == 1), x.becomes(0))),
-      NamedAction(name: "Stay", body: .and(.guard_(x == 2), x.becomes(2)))
+      NamedAction(name: "A", body: x.becomes(2).when(x == 0)),
+      NamedAction(name: "B", body: x.becomes(1).when(x == 0)),
+      NamedAction(name: "C", body: x.becomes(0).when(x == 1)),
+      NamedAction(name: "Stay", body: x.becomes(2).when(x == 2))
     ],
     invariants: [],
     temporalProperties: [NamedTemporal(name: temporal.0, expr: temporal.1)],
@@ -508,9 +510,10 @@ private func fairness(_ fairness: TemporalFairnessMode) -> [FairnessCondition] {
 }
 
 package func symmetryConformanceSpec(scope: Int) -> TLASpec {
-  let chosen = SymmetricCollectionVar<ConformanceMember, Int>("chosen")
-  return TLASpec("SymmetricCollection\(scope)") {
-    SymmetricCollection(chosen, verificationScope: scope, initial: 0)
+  let chosen = CollectionVar<ConformanceMember, Int>("chosen")
+  return TLASpec("ModelCollection\(scope)") {
+    ModelCollection(chosen, verificationScope: scope, initial: 0)
+    Symmetry(chosen)
     CollectionAction("Choose", on: chosen) { member in
       chosen[member] == 0 && chosen.update(member, to: 1)
     }

@@ -578,7 +578,7 @@ struct LivenessConformanceTests {
         )
 
         let compilation = try spec.compile()
-        guard case .action(let action) = try #require(compilation.semantics.fairness.first).scope else {
+        guard case .action(let action) = try #require(compilation.semantics.behavior.fairness.first).scope else {
             Issue.record("Expected fairness to bind an action identity")
             return
         }

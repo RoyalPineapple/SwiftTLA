@@ -132,11 +132,11 @@ struct SymmetryReductionTests {
       Invariant("TypeOK") { x >= 1 }
       Symmetry("x", [1, 2, 3] as Set<Int>)
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("EXTENDS Integers, FiniteSets, Sequences, TLC"))
     #expect(tla.contains("Symmx == Permutations({1, 2, 3})"))
     #expect(tla.contains("Symmx"))
-    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY Symmx"))
+    #expect(try spec.compile().render().tlaBundle.cfg.contains("SYMMETRY Symmx"))
   }
 
   @Test("Direct symmetry names and domains are validated during compilation")
@@ -194,7 +194,7 @@ struct SymmetryReductionTests {
       actions: [], invariants: [],
       symmetrySets: [.init(variableName: "value", values: [.int(2), .int(1)])]
     ).compile()
-    let rendered = compilation.renderedTLAModuleBundle().tla
+    let rendered = try compilation.render().tlaBundle.tla
     #expect(rendered.contains("Symmvalue == Permutations({1, 2})"))
     let plan = try SymmetryPlan(compilation: compilation, reduction: .enabled(maximumPermutationCount: 2))
     let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
@@ -322,7 +322,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (mode == Mode.active) && mode.becomes(Mode.idle)
       }
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("mode = 0"))
     #expect(tla.contains("toggle =="))
   }
@@ -337,7 +337,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (state == Status.off) && state.becomes(Status.on)
       }
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("state = \"on\""))
     #expect(tla.contains("toggle =="))
   }
@@ -372,7 +372,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       }
       Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
     }
-    let bundle = try spec.compile().renderedTLAModuleBundle()
+    let bundle = try spec.compile().render().tlaBundle
     #expect(bundle.tla.contains("MODULE"))
     #expect(bundle.tla.contains("VARIABLES mode"))
     #expect(bundle.cfg.contains("INVARIANT TypeOK"))
@@ -400,7 +400,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
         (phase == Mode.idle) && phase.stays
       }
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("UNCHANGED phase"))
   }
 

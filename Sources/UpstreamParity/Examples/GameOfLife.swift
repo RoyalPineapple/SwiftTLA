@@ -46,11 +46,7 @@ extension GameOfLifeModel {
                 "grid",
                 initial: Function<Position, Bool>.mapping { boundPosition in
                     let position = boundPosition.expr
-                    return Expr(
-                        position.column == 2
-                            && position.row >= 2
-                            && position.row <= 4
-                    )
+                    return position.column == 2 && position.row >= 2 && position.row <= 4
                 }
             )
 
@@ -75,7 +71,7 @@ extension GameOfLifeModel {
         in grid: SharedVariable<Function<Position, Bool>>,
         at position: Expr<Position>
     ) -> Expr<Bool> {
-        var neighborCount = StateExpr.int(0)
+        var neighborCount = Expr<Int>(0)
         let neighborOffsets = [
             (-1, -1), (-1, 0), (-1, 1),
             (0, -1), (0, 1),
@@ -100,9 +96,7 @@ extension GameOfLifeModel {
         }
 
         let alive = grid[position]
-        return Expr(
-            alive == true && neighborCount >= 2 && neighborCount <= 3
-                || alive == false && neighborCount == 3
-        )
+        return alive == true && neighborCount >= 2 && neighborCount <= 3
+            || alive == false && neighborCount == 3
     }
 }

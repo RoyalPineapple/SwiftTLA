@@ -6,15 +6,9 @@ struct CompiledRuntime {
 
     func initialStates() throws -> [CompiledState] {
         var assignments: [[VariableID: CompiledValue]] = [[:]]
-        for (variable, initialization) in semantics.variableInitializations {
+        for (variable, initialization) in semantics.behavior.initializations {
             switch initialization {
-            case .value(let value):
-                assignments = assignments.map { values in
-                    var values = values
-                    values[variable] = value
-                    return values
-                }
-            case .expression(let expression):
+            case .value(let expression):
                 assignments = try assignments.map { values in
                     var values = values
                     values[variable] = try CompiledEvaluator(
@@ -55,14 +49,18 @@ struct CompiledRuntime {
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {
         try state.requireIdentity(compilation.identity)
         let enabledActions = try enabledActions(in: state)
-        return try semantics.actions.flatMap { action in
+        return try semantics.behavior.actions.flatMap { action in
             try successors(for: action.id, from: state, enabledActions: enabledActions)
         }
     }
 
     func successors(for actionID: ActionID, from state: CompiledState) throws -> [CompiledSuccessor] {
         try state.requireIdentity(compilation.identity)
-        return try successors(for: actionID, from: state, enabledActions: try enabledActions(in: state))
+        guard let action = semantics.behavior.actions.first(where: { $0.id == actionID }) else {
+            throw CompiledEvaluationError.unresolvedOperator
+        }
+        return try successors(for: actionID, from: state,
+            enabledActions: enabledActions(in: state, required: semantics.behavior.enabledActionDependencies[action.id] ?? []))
     }
 
     private func successors(
@@ -70,67 +68,79 @@ struct CompiledRuntime {
         from state: CompiledState,
         enabledActions: Set<ActionID>
     ) throws -> [CompiledSuccessor] {
-        guard let action = semantics.actions.first(where: { $0.id == actionID }) else {
+        guard let action = semantics.behavior.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
-        return try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout, enabledActions: enabledActions)
+        return try actionEnumerator(in: state, enabledActions: enabledActions)
             .enumerateSuccessors(action)
             .filter { successor in try constraintHolds(in: successor.state) }
     }
 
     func assumeHolds(in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
-        guard let assume = semantics.assume else { return true }
+        guard let assume = semantics.behavior.assume else { return true }
         return try boolean(assume, in: state)
     }
 
-    func invariantHolds(_ invariant: CompiledInvariant, in state: CompiledState) throws -> Bool {
+    func invariantHolds(_ invariant: CompiledInvariant<CompiledStateExpr>, in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
-        return try boolean(invariant.body, in: state, enabledActions: try enabledActions(in: state))
+        return try boolean(invariant.predicate, in: state)
     }
 
-    func predicateHolds(_ predicate: CompiledStateExpr, in state: CompiledState) throws -> Bool {
+    func predicateHolds(_ predicate: CompiledStateQuery<CompiledStateExpr>, in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
-        return try boolean(predicate, in: state, enabledActions: try enabledActions(in: state))
+        return try boolean(predicate, in: state)
     }
 
-    func evaluate(_ expressions: [CompiledStateExpr], in state: CompiledState) throws -> [CompiledValue] {
+    func evaluate(_ queries: [CompiledStateQuery<CompiledStateExpr>], in state: CompiledState) throws -> [CompiledValue] {
         try state.requireIdentity(compilation.identity)
         let evaluator = CompiledEvaluator(
             state: state,
             semantics: semantics,
             layout: layout,
-            enabledActions: try enabledActions(in: state)
+            enabledActions: try enabledActions(in: state, required: queries.reduce(into: Set<ActionID>()) {
+                $0.formUnion($1.enabledActions)
+            })
         )
-        return try expressions.map(evaluator.evaluate)
+        return try queries.map { try evaluator.evaluate($0.expression) }
     }
 
     private func constraintHolds(in state: CompiledState) throws -> Bool {
-        guard let constraint = semantics.constraint else { return true }
+        guard let constraint = semantics.behavior.constraint else { return true }
         return try boolean(constraint, in: state)
     }
 
-    private func enabledActions(in state: CompiledState) throws -> Set<ActionID> {
+    private func enabledActions(in state: CompiledState, required: Set<ActionID>? = nil) throws -> Set<ActionID> {
         var enabled = Set<ActionID>()
-        for action in semantics.actions {
-            if try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout).enumerate(action).isEmpty == false {
+        for index in semantics.behavior.enabledActionIndices {
+            let action = semantics.behavior.actions[index]
+            if let required, !required.contains(action.id) { continue }
+            if try actionEnumerator(in: state, enabledActions: enabled).enumerate(action).isEmpty == false {
                 enabled.insert(action.id)
             }
         }
         return enabled
     }
 
+    private func actionEnumerator(
+        in state: CompiledState, enabledActions: Set<ActionID>
+    ) -> CompiledActionEnumerator<CompiledStateExpr> {
+        .init(state: state) { expression, bindings in
+            try CompiledEvaluator(state: state, semantics: semantics, layout: layout,
+                bindings: bindings, enabledActions: enabledActions).evaluate(expression)
+        }
+    }
+
     private func boolean(
-        _ expression: CompiledStateExpr,
-        in state: CompiledState,
-        enabledActions: Set<ActionID> = []
+        _ predicate: CompiledStateQuery<CompiledStateExpr>,
+        in state: CompiledState
     ) throws -> Bool {
         let value = try CompiledEvaluator(
             state: state,
             semantics: semantics,
             layout: layout,
-            enabledActions: enabledActions
-        ).evaluate(expression)
+            enabledActions: try enabledActions(in: state, required: predicate.enabledActions)
+        ).evaluate(predicate.expression)
         guard case .boolean(let boolean) = value else {
             throw EvalError.expected(.boolean, actual: [value])
         }

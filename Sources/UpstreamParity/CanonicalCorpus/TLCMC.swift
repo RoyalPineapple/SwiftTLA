@@ -107,7 +107,7 @@ package struct TLCMCModel: Sendable {
                         Goto(Step.dequeue)
                     } else: {
                         With(successors) { successor in
-                            let current = currentState.expr.assumingFirst(Node.self)
+                            let current = currentState.expr.assuming(Node.self)
                             Assign(successors, to: successors.removing(successor.expr))
                             Assign(closed, to: closed.inserting(successor.expr))
                             Assign(frontier, to: frontier.expr.appending(successor.expr))

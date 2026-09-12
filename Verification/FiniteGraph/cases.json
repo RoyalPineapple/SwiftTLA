@@ -54,8 +54,59 @@
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
       },
-      "moduleSHA256": "0b7dd6242996ea4cd1f1a55deabd2f434cc98a5732e861ddd24f601b6bf83a0c",
+      "moduleSHA256": "0a2644a88f4caf9521dc188d712d3776db6e6f3220c4b815e2014c4e16db0fc7",
       "cfgSHA256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87"
+    },
+    {
+      "sourceModel": "n-queens-four",
+      "module": "n-queens-four/QueensPluscal.tla",
+      "configuration": "n-queens-four/QueensPluscal.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/N-Queens/QueensPluscal.tla",
+        "sha256": "289aee93c983706e825f30bdf438747cc76049a09ee6db143ea65d0ec3fa81a8"
+      },
+      "exploration": {
+        "maximumStateLimit": 5000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "72930a0df9675c8bc140091f67404c785d4b1db7bb61335354affe9218fd03de",
+      "cfgSHA256": "e0e287b855faadf8ae708b4740447183407b5beffa36d90742c7589a1c13c056"
+    },
+    {
+      "sourceModel": "asynch-interface",
+      "module": "asynch-interface/AsynchInterface.tla",
+      "configuration": "asynch-interface/AsynchInterface.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
+        "sha256": "86adf068c65219ebe140e047dece85a9d04b9492d508e4aa4d5f86685ada09d4"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "86adf068c65219ebe140e047dece85a9d04b9492d508e4aa4d5f86685ada09d4",
+      "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f"
+    },
+    {
+      "sourceModel": "channel",
+      "module": "channel/Channel.tla",
+      "configuration": "channel/Channel.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/Channel.tla",
+        "sha256": "8b2cbd4533a157ae0760e3117e3c008fb9a31dc3673005fc8b537d3879de1bfc"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "8b2cbd4533a157ae0760e3117e3c008fb9a31dc3673005fc8b537d3879de1bfc",
+      "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f"
     }
   ]
 }

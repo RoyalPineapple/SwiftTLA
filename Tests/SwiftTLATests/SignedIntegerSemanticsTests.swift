@@ -2,6 +2,26 @@
 import Testing
 
 @Suite struct SignedIntegerSemanticsTests {
+    @Test("Right-first operations preserve the first operand failure")
+    func rightOperandFailurePrecedesLeft() {
+        let overflow = StateExpr.add(.int(Int.max), .int(1))
+        let divisionByZero = StateExpr.divide(.int(1), .int(0))
+        let expressions: [StateExpr] = [
+            .divide(overflow, divisionByZero),
+            .integerDivide(overflow, divisionByZero),
+            .modulo(overflow, divisionByZero),
+            .in(overflow, .setLiteral([divisionByZero]))
+        ]
+        for expression in expressions {
+            #expect(throws: EvalError.divisionByZero) {
+                try compiledValue(expression)
+            }
+        }
+        #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try compiledValue(.add(overflow, divisionByZero))
+        }
+    }
+
     @Test("integer division rounds toward negative infinity")
     func floorDivision() throws {
         let cases: [(Int, Int, Int)] = [
@@ -12,6 +32,11 @@ import Testing
         for (dividend, divisor, expected) in cases {
             #expect(try compiledValue(.divide(.int(dividend), .int(divisor))) == .int(expected))
             #expect(try compiledValue(.integerDivide(.int(dividend), .int(divisor))) == .int(expected))
+            for operation in [ResolvedOperation.divide, .integerDivide] {
+                var stack: [CompiledValue] = [.boolean(true), .integer(divisor), .integer(dividend)]
+                try operation.apply(to: &stack, operandCount: 2)
+                #expect(stack == [.boolean(true), .integer(expected)])
+            }
         }
     }
 
@@ -23,6 +48,9 @@ import Testing
         ]
         for (dividend, divisor, expected) in cases {
             #expect(try compiledValue(.modulo(.int(dividend), .int(divisor))) == .int(expected))
+            var stack: [CompiledValue] = [.boolean(true), .integer(divisor), .integer(dividend)]
+            try ResolvedOperation.modulo.apply(to: &stack, operandCount: 2)
+            #expect(stack == [.boolean(true), .integer(expected)])
         }
     }
 

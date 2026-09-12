@@ -21,7 +21,7 @@ struct GeneratedStorageAccess {
 }
 
 let generatedMachine = try GeneratedStorageAccess.makeMachine()
-_ = generatedMachine._storage
+_ = generatedMachine._execution
 
 func inspect(_ actor: GeneratedStorageAccess.Actor) async {
   _ = await actor.machine

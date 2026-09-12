@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import Foundation
 import SwiftParser
 import SwiftSyntax
@@ -21,7 +22,7 @@ private func compiledSuccessors(
     CompiledValue(formal: try #require(values.first { $0.0 == variable }?.1))
   }
   let state = try CompiledState(values: compiledValues, compilation: compilation)
-  let action = try #require(compilation.semantics.actions.first)
+  let action = try #require(compilation.semantics.behavior.actions.first)
   return try CompiledRuntime(compilation: compilation)
     .successors(for: action.id, from: state)
     .map { try $0.state.projection(using: compilation.layout) }
@@ -42,7 +43,7 @@ private func renderedStateExpression(
     variables: variables.map { NamedVar(name: $0, initial: .int(0)) },
     actions: [NamedAction(name: "Tick", body: .guard_(.bool(true)))],
     invariants: [NamedInvariant(name: "Rendered", body: expression)]
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
 private func renderedActionExpression(_ expression: ActionExpr) throws -> String {
@@ -51,7 +52,7 @@ private func renderedActionExpression(_ expression: ActionExpr) throws -> String
     variables: [NamedVar(name: "x", initial: .int(0))],
     actions: [NamedAction(name: "Rendered", body: expression)],
     invariants: []
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
 private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
@@ -98,17 +99,17 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     ])
   func comparison(_ op: String, _ val: Int, _ expected: String) throws {
     let x = Var<Int>("x")
-    let expression: StateExpr
+    let expression: Expr<Bool>
     switch op {
     case "==": expression = x == val
-    case "\u{21}=": expression = .notEqual(x.stateExpr, .int(val))
+    case "\u{21}=": expression = x != val
     case "<": expression = x < val
     case "<=": expression = x <= val
     case ">": expression = x > val
     case ">=": expression = x >= val
-    default: expression = .bool(false)
+    default: expression = false
     }
-    #expect(try renderedStateExpression(expression).contains("Rendered == \(expected)"))
+    #expect(try renderedStateExpression(expression.raw).contains("Rendered == \(expected)"))
   }
 
   @Test(
@@ -206,9 +207,9 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
   @Test func varVsVar() throws {
     let a = Var<Int>("a")
     let b = Var<Int>("b")
-    #expect(try renderedStateExpression(a == b).contains("Rendered == (a = b)"))
+    #expect(try renderedStateExpression((a == b).raw).contains("Rendered == (a = b)"))
     #expect(try renderedStateExpression(.notEqual(a.stateExpr, b.stateExpr)).contains("Rendered == (a /= b)"))
-    #expect(try renderedStateExpression(a < b).contains("Rendered == (a < b)"))
+    #expect(try renderedStateExpression((a < b).raw).contains("Rendered == (a < b)"))
   }
 
   @Test func prefix() throws {
@@ -218,7 +219,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
 
   @Test func stringComparison() throws {
     let s = Var<String>("s")
-    #expect(try renderedStateExpression(s == "right").contains("Rendered == (s = \"right\")"))
+    #expect(try renderedStateExpression((s == "right").raw).contains("Rendered == (s = \"right\")"))
   }
 
   @Test func assignmentAndWhen() throws {
@@ -374,7 +375,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
       actions: [NamedAction(name: "Foo", body: .guard_(.bool(true)))],
       invariants: cases.enumerated().map { .init(name: "Case\($0.offset)", body: $0.element) }
     )
-    #expect(try spec.compile().semantics.invariants.count == cases.count)
+    #expect(try spec.compile().semantics.behavior.invariants.count == cases.count)
   }
 
   @Test("StateExpr evaluates correctly in state")
@@ -464,8 +465,8 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
       [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
     ]
     #expect(try labels.map { try $0.formalArguments(using: compilation.layout) } == expectedArguments)
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__0_0_0 == transfer(1, 10, 100)"))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("transfer__1_1_1 == transfer(2, 20, 200)"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("transfer__0_0_0 == transfer(1, 10, 100)"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("transfer__1_1_1 == transfer(2, 20, 200)"))
 
     let action = try #require(compilation.layout.testActionID(named: "transfer"))
     let runtime = CompiledRuntime(compilation: compilation)
@@ -504,8 +505,8 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     #expect(try labels.map { try $0.formalArguments(using: compilation.layout) } == [[.int(1)], [.int(2)]])
     #expect(
       Set(transitions.map(\.action)) == ["select(1)", "select(2)"])
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("select(choice) =="))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("select__0 == select(1)"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("select(choice) =="))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("select__0 == select(1)"))
   }
 
   @Test("parameterized invocations retain every label when they discover one successor")
@@ -673,7 +674,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     let expectedValues: Set<TLAValue> = [.int(1), .int(2), .int(3)]
     #expect(Set(initialValues) == expectedValues)
     #expect(try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph().states.count == 3)
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("Init == x \\in {1, 2, 3}"))
   }
 
 }
@@ -830,7 +831,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
       Variable(seq, TupleExpr<Int>())
       Variable(result, 0)
       Action("push") {
-        seq.becomes(Expr<TupleExpr<Int>>(seq.stateExpr.appending(42))).when(seq.stateExpr.count == 0)
+        seq.becomes(Expr<TupleExpr<Int>>(seq.stateExpr.appending(42))).when(seq.expr.count == 0)
           && result.stays
       }
       Action("pop") { seq.stateExpr.count > 0 && result.becomes(Expr<Int>(seq.stateExpr.at(1))) }
@@ -937,7 +938,7 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     let spec = TLASpec("FunctionLiteral") {
       FormalDefinition("Double", parameters: [], body: fun)
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("Double == [p \\in {1, 2} |-> (p * 10)]"))
   }
 }

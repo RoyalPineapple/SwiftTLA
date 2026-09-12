@@ -114,7 +114,7 @@ package struct BakeryN2Model: Sendable {
                                 Goto(Step.w1)
                             } or: {
                                 When(num[process] == num[next.expr])
-                                When(process.stateExpr < next.expr)
+                                When(process < next)
                                 Assign(unchecked, to: unchecked.expr.removing(next.expr))
                                 Goto(Step.w1)
                             }

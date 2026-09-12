@@ -5,14 +5,14 @@ struct KVsnapCorpusRenderingTests {
     @Test("KVsnap compiled bundles preserve module closure and properties")
     func compiledBundlesPreserveModuleClosureAndProperties() throws {
 
-        let bundle = try KVsnapModel.spec.compile().renderedTLAModuleBundle()
+        let bundle = try KVsnapModel.spec.compile().render().tlaBundle
         #expect(bundle.root.tla.contains("CC == INSTANCE ClientCentric"))
         #expect(bundle.imports.map(\.name).contains("ClientCentric"))
         #expect(bundle.root.tla.contains("CONSTANTS NoVal, k1, k2, t1, t2, t3"))
         #expect(bundle.cfg.contains("CONSTANT k1 = k1"))
         #expect(bundle.cfg.contains("SYMMETRY SymmTxId"))
 
-        let plusCalBundle = try KVsnapModel.spec.compile().renderedPlusCalBundle()
+        let plusCalBundle = try KVsnapModel.spec.compile().render().plusCalBundle()
         let plusCal = plusCalBundle.root.tla
         #expect(plusCal.contains("EXTENDS"))
         #expect(plusCalBundle.imports.map(\.name).contains("Util"))

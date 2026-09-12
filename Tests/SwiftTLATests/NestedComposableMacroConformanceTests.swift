@@ -152,7 +152,7 @@ struct NestedComposableMacroConformanceTests {
         let build = try buildExternalConsumer("InvalidGeneratedStorageAccess")
 
         #expect(build.status != 0)
-        #expect(build.output.contains("'_storage' is inaccessible due to 'private' protection level"))
+        #expect(build.output.contains("'_execution' is inaccessible due to 'private' protection level"))
         #expect(build.output.contains("'machine' is inaccessible due to 'private' protection level"))
     }
 

@@ -116,7 +116,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         }
         let preparedCases = try selected.map { declaration in
             let compilation = try declaration.sourceModel.spec.compile()
-            return (declaration, compilation, compilation.renderedActions())
+            return (declaration, compilation, try compilation.render().actions)
         }
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)

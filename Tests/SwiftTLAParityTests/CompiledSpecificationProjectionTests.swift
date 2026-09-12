@@ -21,8 +21,8 @@ struct CompiledSpecificationProjectionTests {
         }
         let compilation = try specification.compile()
 
-        let tla = compilation.renderedTLAModuleBundle()
-        let plusCal = try compilation.renderedPlusCalBundle()
+        let tla = try compilation.render().tlaBundle
+        let plusCal = try compilation.render().plusCalBundle()
         let exploration = try ModelChecker(
             compilation: compilation,
             configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)

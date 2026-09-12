@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 import SwiftTLAMacros
 import SwiftParser
@@ -7,6 +8,43 @@ import Foundation
 
 private func parseExpression(_ source: String) throws -> ExprSyntax {
     try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
+}
+
+private struct DecodedLiteral: TLAValueType {
+    let number: Int
+    let decodingID = UUID()
+    let invalid: Bool
+
+    init(_ number: Int, invalid: Bool = false) {
+        self.number = number
+        self.invalid = invalid
+    }
+
+    init?(formalValue: TLAValue) {
+        guard case .int(let number) = formalValue else { return nil }
+        self.init(number, invalid: number < 0)
+    }
+
+    static var defaultValue: Self { Self(0) }
+    var tlaValue: TLAValue { .int(number) }
+    var sourceIssue: SourceModelIssue? {
+        invalid ? .finiteDomainValue(type: "DecodedLiteral", value: String(number)) : nil
+    }
+}
+
+private enum DecodedRecordSchema: TLARecordSchema {
+    struct Fields {
+        let member: DecodedLiteral
+    }
+
+    static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
+        field == \Fields.member ? "member" : nil
+    }
+
+    static let member = field(\Fields.member)
+    static let fields = [
+        TLARecordFieldDeclaration(member, default: DecodedLiteral(1, invalid: true))
+    ]
 }
 
 private enum InvalidLiteralDomain: String, CaseIterable, FiniteTLAValueDomain {
@@ -143,6 +181,40 @@ private struct ZeroBasedSequenceGeneratedModel {
 }
 
 @TLAModel
+private struct ContextualCollectionModel {
+    enum Key: String, CaseIterable, FiniteTLAValueDomain {
+        case first = "key-first", second = "key-second"
+        static var defaultValue: Self { .first }
+        static let finiteValues = allCases
+    }
+    enum Entry: String, CaseIterable, FiniteTLAValueDomain {
+        case first = "entry-first", second = "entry-second"
+        static var defaultValue: Self { .first }
+        static let finiteValues = allCases
+    }
+    enum Step: String, CaseIterable { case update, read }
+
+    static var spec: TLASpec {
+        #spec("ContextualCollectionModel") {
+            Algorithm("ContextualCollectionModel", scoped: { scope in
+                let table = scope.sharedVar("table", initial: Function<Key, Entry>.literal(
+                    (Key.first, Entry.first), (Key.second, Entry.first)))
+                let selected: SharedVariable<Entry> = scope.sharedVar("selected", initial: .first)
+                Do(Step.update) {
+                    Await(selected == .first)
+                    Assign(table, to: table.updating(.first) { current in
+                        If(current == .first, then: .second, else: current)
+                    })
+                }
+                Do(Step.read) {
+                    Assign(selected, to: table.updating(.second, to: .second)[.first])
+                }
+            })
+        }
+    }
+}
+
+@TLAModel
 private struct FoldGeneratedModel {
     enum Step: String, CaseIterable { case sum }
 
@@ -163,6 +235,228 @@ private struct FoldGeneratedModel {
 }
 
 @Suite(.serialized) struct TypedCollectionOperatorTests {
+    @Test("record construction and updates accept typed action parameters")
+    func recordActionParameters() throws {
+        let record = Var<Record<InvalidLiteralSchema>>("record")
+        let input = ActionParameter("input", values: [1, 2])
+        let specification = TLASpec("RecordActionParameters") {
+            Variable(record, Record<InvalidLiteralSchema>())
+            Action("construct", parameters: [input]) {
+                record.becomes(Record<InvalidLiteralSchema>.literal(
+                    .init(InvalidLiteralSchema.count, input), .init(InvalidLiteralSchema.enabled, false)))
+            }
+            Action("update", parameters: [input]) {
+                record.becomes(record.updating(InvalidLiteralSchema.count, to: input))
+            }
+        }
+        let compilation = try specification.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let token = try #require(TLAStateProjection.Token(validating: "record"))
+        for action in compilation.layout.actions {
+            let successors = try runtime.successors(for: action.id, from: initial)
+            let records = try successors.map { successor in
+                let projection = try successor.state.projection(using: compilation.layout)
+                return try #require(projection.value(for: token).flatMap(Record<InvalidLiteralSchema>.init(formalValue:)))
+            }
+            #expect(records.count == 2)
+            #expect(try Set(records.map { try #require($0.value(for: InvalidLiteralSchema.count)) }) == [1, 2])
+            #expect(records.allSatisfy { $0.value(for: InvalidLiteralSchema.enabled) == false })
+        }
+    }
+
+    @Test("Collection values retain typed elements without decoding them again")
+    func collectionElementsDecodeOnce() throws {
+        let tuple = try #require(TupleExpr<DecodedLiteral>(formalValue: .tuple([.int(1), .int(2)])))
+        let tupleIDs = tuple.elements.map(\.decodingID)
+        #expect(tuple.elements.map(\.decodingID) == tupleIDs)
+        #expect(tuple.tlaValue == .tuple([.int(1), .int(2)]))
+
+        let first = DecodedLiteral(1)
+        let set = SetExpr(first, DecodedLiteral(1), DecodedLiteral(2))
+        #expect(set.elements.count == 2)
+        #expect(set.elements.contains { $0.decodingID == first.decodingID })
+        let decoded = try #require(SetExpr<DecodedLiteral>(formalValue: .set([.int(1), .int(2)])))
+        let setIDs = Set(decoded.elements.map(\.decodingID))
+        #expect(Set(decoded.elements.map(\.decodingID)) == setIDs)
+        #expect(Set([set, decoded]).count == 1)
+        #expect(set.tlaValue == .set([.int(1), .int(2)]))
+    }
+
+    @Test("Invalid modeled values fail through every constant-expression boundary")
+    func invalidValuesCannotLoseTheirDiagnostics() throws {
+        let invalid = DecodedLiteral(1, invalid: true)
+        let expressions: [StateExpr] = [
+            invalid.stateExpr,
+            invalid.expr.raw,
+            SetExpr(DecodedLiteral(1), invalid).stateExpr,
+            SetExpr<DecodedLiteral>.literal(invalid).raw,
+            TupleExpr<DecodedLiteral>.literal(invalid).raw,
+            Pair(first: invalid, second: 1).stateExpr,
+            Pair<DecodedLiteral, Int>.literal(invalid, 1).raw,
+            ZeroBasedSequence<DecodedLiteral>.literal(invalid).raw,
+            ZeroBasedSequence<DecodedLiteral>.filled(length: 1.expr, with: invalid).raw,
+            PartialFunction<PartialFiniteDomain, DecodedLiteral>.literal((.first, invalid)).raw,
+            Function<PartialFiniteDomain, DecodedLiteral>.literal(
+                (.first, invalid), (.second, DecodedLiteral(2))
+            ).raw,
+            SetExpr<DecodedLiteral>().expr.removing(invalid).raw,
+            Function<DuplicateFiniteDomain, Int>().stateExpr
+        ]
+        for expression in expressions {
+            let specification = TLASpec(name: "InvalidValue", variables: [
+                .init(name: "value", initialization: .expression(expression), origin: .source)
+            ], actions: [], invariants: [])
+            #expect(throws: CompilationDiagnostic.self) { try specification.compile() }
+        }
+        #expect(SetExpr<DecodedLiteral>(formalValue: .set([.int(-1)])) == nil)
+        #expect(TupleExpr<DecodedLiteral>(formalValue: .tuple([.int(-1)])) == nil)
+        #expect(Pair<DecodedLiteral, Int>(formalValue: .tuple([.int(-1), .int(1)])) == nil)
+    }
+
+    @Test("Function and zero-based sequence reads retain decoded values")
+    func indexedValuesDecodeOnce() throws {
+        let raw: TLAValue = .function([.string("first"): .int(1)])
+        let total = try #require(Function<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        let partial = try #require(PartialFunction<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        let totalValue = try #require(total[.first])
+        let partialValue = try #require(partial[.first])
+        #expect(total[.first]?.decodingID == totalValue.decodingID)
+        #expect(partial[.first]?.decodingID == partialValue.decodingID)
+        #expect(total[.second] == nil)
+        #expect(partial[.second] == nil)
+        #expect(total.tlaValue == raw)
+        #expect(partial.tlaValue == raw)
+        let anotherTotal = try #require(Function<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        let anotherPartial = try #require(PartialFunction<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        #expect(Set([total, anotherTotal]).count == 1)
+        #expect(Set([partial, anotherPartial]).count == 1)
+
+        let sequenceValue: TLAValue = .function([.int(0): .int(1), .int(1): .int(2)])
+        let sequence = try #require(ZeroBasedSequence<DecodedLiteral>(formalValue: sequenceValue))
+        let first = try #require(sequence.element(at: 0))
+        #expect(sequence.element(at: 0)?.decodingID == first.decodingID)
+        #expect(sequence.element(at: 1)?.number == 2)
+        #expect(sequence.element(at: -1) == nil)
+        #expect(sequence.element(at: 2) == nil)
+        #expect(sequence.tlaValue == sequenceValue)
+        let anotherSequence = try #require(ZeroBasedSequence<DecodedLiteral>(formalValue: sequenceValue))
+        #expect(Set([sequence, anotherSequence]).count == 1)
+    }
+
+    @Test("Indexed values reject invalid decoded members and malformed domains")
+    func indexedValuesRejectInvalidData() {
+        let invalid: TLAValue = .function([.string("first"): .int(-1)])
+        #expect(Function<PartialFiniteDomain, DecodedLiteral>(formalValue: invalid) == nil)
+        #expect(PartialFunction<PartialFiniteDomain, DecodedLiteral>(formalValue: invalid) == nil)
+        let malformedSequences: [TLAValue] = [
+            .function([.int(0): .int(-1)]),
+            .function([.int(-1): .int(1)]),
+            .function([.int(1): .int(1)]),
+            .function([.int(0): .int(1), .int(2): .int(2)]),
+            .function([.string("0"): .int(1)]),
+            .function([.int(0): .bool(true)])
+        ]
+        for value in malformedSequences {
+            #expect(ZeroBasedSequence<DecodedLiteral>(formalValue: value) == nil)
+        }
+        #expect(ZeroBasedSequence<DecodedLiteral>(formalValue: .function([:])) != nil)
+    }
+
+    @Test("Record field reads retain the validated Swift value")
+    func recordFieldsDecodeOnce() throws {
+        let raw: TLAValue = .record(["member": .int(1)])
+        let record = try #require(Record<DecodedRecordSchema>(formalValue: raw))
+        let value = try #require(record.value(for: DecodedRecordSchema.member))
+        #expect(record.value(for: DecodedRecordSchema.member)?.decodingID == value.decodingID)
+        #expect(record.sourceIssue == nil)
+        #expect(record.tlaValue == raw)
+        let another = try #require(Record<DecodedRecordSchema>(formalValue: raw))
+        #expect(Set([record, another]).count == 1)
+    }
+
+    @Test("Records reject invalid decoded fields and preserve invalid defaults")
+    func recordsRejectInvalidData() throws {
+        let invalidRecords: [TLAValue] = [
+            .record(["member": .int(-1)]),
+            .record(["member": .bool(true)]),
+            .record([:]),
+            .record(["member": .int(1), "extra": .int(2)]),
+            .record(TLARecord([.init("member", .int(1)), .init("member", .int(2))]))
+        ]
+        for raw in invalidRecords {
+            #expect(Record<DecodedRecordSchema>(formalValue: raw) == nil)
+        }
+        let defaultRecord = Record<DecodedRecordSchema>()
+        let defaultMember = try #require(defaultRecord.value(for: DecodedRecordSchema.member))
+        #expect(defaultRecord.sourceIssue == defaultMember.sourceIssue)
+        #expect(defaultRecord.sourceIssue != nil)
+        let specification = TLASpec(name: "InvalidRecordDefault", variables: [
+            .init(name: "value", initialization: .expression(defaultRecord.stateExpr), origin: .source)
+        ], actions: [], invariants: [])
+        #expect(throws: CompilationDiagnostic.self) { try specification.compile() }
+    }
+
+    @Test("Swift set deduplication cannot erase a modeled value's validation failure")
+    func deduplicationPreservesValidationFailures() throws {
+        func check<Value: TLAValueType & Hashable>(_ valid: Value, _ invalid: Value) throws {
+            #expect(valid.tlaValue == invalid.tlaValue)
+            #expect(valid.sourceIssue == nil)
+            #expect(invalid.sourceIssue != nil)
+            #expect(valid != invalid)
+            for members in [Set([valid, invalid]), Set([invalid, valid])] {
+                #expect(members.count == 2)
+                #expect(members.filter { $0.sourceIssue != nil }.count == 1)
+                let expression = StateExpr.setLiteral(members.map(\.stateExpr))
+                let specification = TLASpec(name: "InvalidSetMember", variables: [
+                    .init(name: "value", initialization: .expression(expression), origin: .source)
+                ], actions: [], invariants: [])
+                #expect(throws: CompilationDiagnostic.self) { try specification.compile() }
+            }
+        }
+        try check(SetExpr(DecodedLiteral(1)), SetExpr(DecodedLiteral(1, invalid: true)))
+        try check(Pair(first: DecodedLiteral(1), second: 2),
+                  Pair(first: DecodedLiteral(1, invalid: true), second: 2))
+        let rawRecord: TLAValue = .record(["member": .int(1)])
+        let record = try #require(Record<DecodedRecordSchema>(formalValue: rawRecord))
+        try check(record, Record<DecodedRecordSchema>())
+        let function = try #require(Function<PartialFiniteDomain, Record<DecodedRecordSchema>>(
+            formalValue: .function([.string("first"): rawRecord])))
+        try check(function, Function<PartialFiniteDomain, Record<DecodedRecordSchema>>())
+    }
+
+    @Test("Native collection access uses contextual enum keys and values")
+    func contextualCollectionAccessExecutesNatively() throws {
+        var machine = try ContextualCollectionModel.makeMachine()
+        _ = try machine.send(.update)
+        #expect(machine.state.table[.first] == .second)
+        #expect(machine.state.table[.second] == .first)
+        _ = try machine.send(.read)
+        #expect(machine.state.selected == .second)
+    }
+
+    @Test("Constants preserve validation failures even when unused")
+    func invalidConstantsFailCompilation() throws {
+        let constants = [
+            Constant("invalid", DecodedLiteral(1, invalid: true)),
+            Constant("invalid", Pair(first: DecodedLiteral(1, invalid: true), second: 2)),
+            Constant("invalid", SetExpr(DecodedLiteral(1), DecodedLiteral(1, invalid: true)))
+        ]
+        for constant in constants {
+            let specification = TLASpec(name: "InvalidConstant", variables: [],
+                                        constants: [constant], actions: [], invariants: [])
+            do {
+                _ = try specification.compile()
+                Issue.record("Compilation accepted an invalid constant")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "constants.invalid")
+            }
+        }
+        let valid = TLASpec(name: "ValidConstant", variables: [],
+                            constants: [Constant("valid", DecodedLiteral(1))], actions: [], invariants: [])
+        _ = try valid.compile()
+    }
+
     @Test("concrete functions and pairs preserve typed values and fail closed")
     func concreteTypedValuesFailClosed() throws {
         let function = try #require(Function<PartialFiniteDomain, Int>(formalValue: .function([
@@ -210,10 +504,6 @@ private struct FoldGeneratedModel {
             (
                 Function<InvalidLiteralDomain, Int>.literal((.first, 0), (.first, 1)).raw,
                 .invalidTypedFunctionLiteral
-            ),
-            (
-                Select(from: SetExpr<Int>.literal(1), matching: { _ in .value(.bool(false)) }).raw,
-                .invalidStaticSelection
             ),
             (
                 Sequences(of: Expr<SetExpr<Int>>(.variable("values")), lengths: 0...1).raw,
@@ -272,6 +562,23 @@ private struct FoldGeneratedModel {
         }
     }
 
+    @Test("Integer ranges accept typed and literal endpoints and preserve empty ranges")
+    func integerRangeEndpoints() throws {
+        func range(_ lower: some TypedExpression<Int>, _ upper: some TypedExpression<Int>) -> Expr<SetExpr<Int>> {
+            IntRange(lower, through: upper)
+        }
+        let ranges = [
+            IntRange(1, through: 3),
+            IntRange(Expr<Int>(1), through: 3),
+            IntRange(1, through: Expr<Int>(3)),
+            range(Expr<Int>(1), Expr<Int>(3))
+        ]
+        for expression in ranges {
+            #expect(try compiledValue(expression.raw) == .set([.int(1), .int(2), .int(3)]))
+        }
+        #expect(try compiledValue(range(Expr<Int>(3), Expr<Int>(1)).raw) == .set([]))
+    }
+
     @Test("typed interval, filter, map, and dynamic tuple access evaluate")
     func typedOperatorsEvaluate() throws {
         let values = IntRange(1, through: 4)
@@ -322,9 +629,9 @@ private struct FoldGeneratedModel {
         var machine = try TypedCollectionGeneratedModel.makeMachine()
         let transition = try machine.send(.keepEvenSquares)
 
-        #expect(Set(transition.before.values.elements) == Set([1, 2, 3, 4]))
-        #expect(Set(transition.after.values.elements) == Set([4, 16]))
-        #expect(try TypedCollectionGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("keepEvenSquares"))
+        #expect(transition.before.values == [1, 2, 3, 4])
+        #expect(transition.after.values == [4, 16])
+        #expect(try TypedCollectionGeneratedModel.spec.compile().render().tlaBundle.tla.contains("keepEvenSquares"))
     }
 
     @Test("typed conditional values parse without losing their result type")
@@ -373,9 +680,9 @@ private struct FoldGeneratedModel {
         let compilation = try FoldGeneratedModel.spec.compile()
 
         #expect(transition.after.total == 6)
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("FoldFunction(LAMBDA"))
-        #expect(try compilation.renderedPlusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
-        #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
+        #expect(try compilation.render().tlaBundle.tla.contains("FoldFunction(LAMBDA"))
+        #expect(try compilation.render().plusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
+        #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
     }
 
     @Test("authored PlusCal folds translate into valid TLA+")
@@ -398,7 +705,7 @@ private struct FoldGeneratedModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let bundle = try FoldGeneratedModel.spec.compile().renderedPlusCalBundle()
+        let bundle = try FoldGeneratedModel.spec.compile().render().plusCalBundle()
         for file in bundle.files {
             try file.tla.write(
                 to: directory.appendingPathComponent("\(file.name).tla"),
@@ -457,7 +764,7 @@ private struct FoldGeneratedModel {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let bundle = try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle()
+        let bundle = try KeyValueStoreUtil.module.compile().render().tlaBundle
         for file in bundle.files {
             try file.tla.write(
                 to: directory.appendingPathComponent("\(file.name).tla"),
@@ -537,24 +844,18 @@ private struct FoldGeneratedModel {
             let sequence = Var<ZeroBasedSequence<Int>>("sequence")
             Variable(sequence, empty)
         }
-        #expect(try emptySpec.compile().renderedTLAModuleBundle().tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
+        #expect(try emptySpec.compile().render().tlaBundle.tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
 
-        let input = try #require(ZeroBasedSequence<Int>(formalValue: .function([
-            .int(0): .int(0)
-        ])))
-        let table = try #require(ZeroBasedSequence<Int>(formalValue: .function([
-            .int(0): .int(-1),
-            .int(1): .int(-1),
-            .int(2): .int(-1)
-        ])))
+        let input = [0: 0]
+        let table = [0: -1, 1: -1, 2: -1]
         var machine = try ZeroBasedSequenceGeneratedModel.makeMachine(
             .init(input: input, table: table)
         )
         let transition = try machine.send(.writeFirst)
-        let tableValue = try #require(transition.after.table.element(at: 0))
-        let inputValue = try #require(transition.after.input.element(at: 0))
+        let tableValue = try #require(transition.after.table[0])
+        let inputValue = try #require(transition.after.input[0])
         #expect(tableValue == inputValue)
-        #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("0.."))
+        #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().render().tlaBundle.tla.contains("0.."))
     }
 
     @Test("non-empty subset domains parse and exclude the empty formal set")
@@ -580,7 +881,7 @@ private struct FoldGeneratedModel {
             try $0.value(for: selectedKeys).rendered(using: compilation.layout)
         })
         #expect(initialValues == expectedMembers)
-        #expect(try NonEmptySubsetGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("SUBSET"))
+        #expect(try NonEmptySubsetGeneratedModel.spec.compile().render().tlaBundle.tla.contains("SUBSET"))
     }
 
     @Test("typed bounded quantifiers parse, evaluate, and generate")
@@ -597,6 +898,30 @@ private struct FoldGeneratedModel {
         var machine = try TypedQuantifierGeneratedModel.makeMachine()
         let transition = try machine.send(.findEven)
         #expect(transition.after.result == true)
-        #expect(try TypedQuantifierGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("\\E"))
+        #expect(try TypedQuantifierGeneratedModel.spec.compile().render().tlaBundle.tla.contains("\\E"))
+    }
+}
+
+
+private enum StringEncodedMember: String, TLAValueType {
+    case first
+    static var defaultValue: Self { .first }
+}
+
+private enum ModelValueEncodedMember: String, TLAValueType {
+    case first
+    static var defaultValue: Self { .first }
+    var tlaValue: TLAValue { .constant(rawValue) }
+}
+
+extension TypedCollectionOperatorTests {
+    @Test("raw enum decoding preserves its declared formal encoding")
+    func enumDecodingPreservesEncoding() {
+        #expect(StringEncodedMember(formalValue: .string("first")) == .first)
+        #expect(StringEncodedMember(formalValue: .constant("first")) == nil)
+        #expect(ModelValueEncodedMember(formalValue: .constant("first")) == .first)
+        #expect(ModelValueEncodedMember(formalValue: .string("first")) == nil)
+        #expect(ModelValueEncodedMember(formalValue: .constant("missing")) == nil)
+        #expect(ModelValueEncodedMember(formalValue: .int(1)) == nil)
     }
 }

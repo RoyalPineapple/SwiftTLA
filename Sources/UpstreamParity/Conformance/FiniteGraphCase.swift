@@ -305,17 +305,23 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 }
 
 package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, Sendable {
+    case channel
+    case asynchInterface = "asynch-interface"
     case hourClock = "hour-clock"
     case dieHardTypeOK = "die-hard-type-ok"
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
+    case nQueensFour = "n-queens-four"
 
     package var spec: TLASpec {
         switch self {
+        case .channel: ChannelModel.spec
+        case .asynchInterface: AsynchInterfaceModel.spec
         case .hourClock: Example.hourClock.spec
         case .dieHardTypeOK: Example.dieHardTypeOK.spec
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec
+        case .nQueensFour: NQueensModel.spec
         }
     }
 }

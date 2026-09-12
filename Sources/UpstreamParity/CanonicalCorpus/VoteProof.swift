@@ -64,7 +64,7 @@ package struct VoteProofModel: Sendable {
                             .when(chosen == SetExpr<Value>())
                     }
                 }
-                Eventually("Success", Expr<SetExpr<Value>>(chosen.stateExpr).isEmpty == false)
+                Eventually("Success", !chosen.isEmpty)
             }
             let consensus = Instance(
                 "C",
@@ -137,7 +137,7 @@ package struct VoteProofModel: Sendable {
                     body: values.filtering { value in
                         Exists(in: ballots) { ballot in
                             FormalCall(as: Bool.self, "ChosenIn", ballot.expr, value.expr)
-                        }.stateExpr
+                        }
                     },
                     plusCalPhase: .define,
                     dependsOn: ["ChosenIn"]

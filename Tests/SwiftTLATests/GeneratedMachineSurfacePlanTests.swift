@@ -1,25 +1,61 @@
+import SwiftSyntaxBuilder
 import Testing
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 
 @Suite("Generated machine surface planning")
 struct GeneratedMachineSurfacePlanTests {
-    @Test("raw formal values cannot enter a generated state")
-    func rejectsRawFormalState() throws {
-        let value = Var<TLAValue>("value")
+    @Test("formal collections compile without Swift API metadata")
+    func formalCompilationDoesNotRequireSwiftSurface() throws {
+        let specification = TLASpec("FormalCollection") {
+            ModelCollectionDecl(name: "members", verificationScope: 2, initial: .int(0),
+                generatedElementType: nil, generatedValueType: nil)
+        }
+        let compilation = try specification.compile()
+        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let variable = try #require(compilation.layout.variables.first)
+        let members = try #require(variable.collection?.members)
+        #expect(try initial.value(for: variable.id) == .function(Dictionary(
+            uniqueKeysWithValues: members.map { ($0, .integer(0)) })))
         #expect(throws: CompilationDiagnostic.self) {
-            try TLASpec("RawGeneratedState") {
-                Variable(value, TLAValue.int(0))
-            }.compile()
+            try MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions)
         }
     }
 
-    @Test("structured formal values require a declared generated type")
+    @Test("raw formal values cannot enter a generated state")
+    func rejectsRawFormalState() throws {
+        let value = Var<TLAValue>("value")
+        let specification = TLASpec("RawGeneratedState") { Variable(value, TLAValue.int(0)) }
+        let compilation = try specification.compile()
+        #expect(throws: CompilationDiagnostic.self) { try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation)) }
+    }
+
+    @Test("raw structured formal values cannot enter a generated state")
     func rejectsUntypedStructuredState() throws {
         let value = Var<TLAValue>("value")
-        #expect(throws: CompilationDiagnostic.self) {
-            try TLASpec("StructuredGeneratedState") {
-                Variable(value, TLAValue.tuple([.int(0)]))
-            }.compile()
+        let specification = TLASpec("StructuredGeneratedState") { Variable(value, TLAValue.tuple([.int(0)])) }
+        let compilation = try specification.compile()
+        #expect(throws: CompilationDiagnostic.self) { try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: compilation)) }
+    }
+
+    @Test("raw formal values are rejected through qualification, aliases, and containers")
+    func rawStateCannotHideInsideDeclaredTypes() throws {
+        let declarations: [(String, TLAValue)] = [
+            ("SwiftTLA.TLAValue", .int(0)),
+            ("Raw", .int(0)),
+            ("Set<Raw>", .set([.int(0)])),
+            ("[String: TLAValue]", .function([.string("key"): .int(0)]))
+        ]
+        for (type, initial) in declarations {
+            let compilation = try TLASpec(name: "RawState", variables: [
+                .init(name: "value", initialization: .value(initial), generatedSwiftType: type, origin: .compiler)
+            ], actions: [], invariants: []).compile()
+            do {
+                _ = try ResolvedProgram(inputs: SourceTypeResolver(metadata: .init(aliases: ["Raw": "TLAValue"])).resolve(in: compilation))
+                Issue.record("Generated state admitted raw formal type: \(type)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.actual.contains("raw TLAValue"))
+            }
         }
     }
 

@@ -98,7 +98,7 @@ struct ModelCheckOutcomeTests {
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("CONSTANTS N"))
     #expect(tla.contains("ASSUME"))
   }
@@ -110,7 +110,7 @@ struct ModelCheckOutcomeTests {
       Action("advance") { x.becomes(x + 1).when(x < 3) }
       WeakFairnessNext()
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("WF_x(Next)"))  // single var → no tuple brackets
   }
 
@@ -124,9 +124,9 @@ struct ModelCheckOutcomeTests {
       WeakFairnessNext()
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTRAINT StateConstraint"))
-    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTRAINT (")))
-    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("WF_")))
+    #expect(try spec.compile().render().tlaBundle.cfg.contains("CONSTRAINT StateConstraint"))
+    #expect(!(try spec.compile().render().tlaBundle.cfg.contains("CONSTRAINT (")))
+    #expect(!(try spec.compile().render().tlaBundle.cfg.contains("WF_")))
   }
 
   @Test func generatedCfgAssignsConstants() throws {
@@ -136,7 +136,7 @@ struct ModelCheckOutcomeTests {
       Variable(x, 0)
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTANT N = 3"))
+    #expect(try spec.compile().render().tlaBundle.cfg.contains("CONSTANT N = 3"))
   }
 
   @Test func invariantOutput() throws {
@@ -146,7 +146,7 @@ struct ModelCheckOutcomeTests {
       Action("inc") { x.becomes(x + 1).when(x < 3) }
       Invariant("Safety") { x >= 0 }
     }
-    let bundle = try spec.compile().renderedTLAModuleBundle()
+    let bundle = try spec.compile().render().tlaBundle
     #expect(bundle.tla.contains("Safety == (x >= 0)"))
     #expect(bundle.cfg.contains("INVARIANT Safety"))
   }
@@ -158,7 +158,7 @@ struct ModelCheckOutcomeTests {
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("Min(m, n) == (IF (m < n) THEN m ELSE n)"))
   }
 
@@ -169,7 +169,7 @@ struct ModelCheckOutcomeTests {
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let tla = try spec.compile().renderedTLAModuleBundle().tla
+    let tla = try spec.compile().render().tlaBundle.tla
     #expect(tla.contains("Naturals"))
   }
 }
@@ -223,6 +223,13 @@ struct ModelCheckOutcomeTests {
     let compilation = try Example.chameneosM4N4.spec.compile()
     let states = try CompiledRuntime(compilation: compilation).initialStates()
     #expect(states.count == 81)
+    #expect(throws: GeneratedMachineError.ambiguousInitialState) { try ChameneosModel.makeMachine() }
+    let native = try ChameneosModel.makeMachine(.init(chameneoses: [
+      .one: .init(first: .blue, second: 0), .two: .init(first: .red, second: 0),
+      .three: .init(first: .yellow, second: 0), .four: .init(first: .blue, second: 0)
+    ], meetingPlace: 0, numMeetings: 0))
+    #expect(try native.violatedInvariants().isEmpty)
+    #expect(try native.enabledActions().count == 4)
   }
 
   @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
@@ -355,7 +362,7 @@ struct ModelCheckOutcomeTests {
     }
     let compilation = try spec.compile()
     let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    let invariant = try #require(compilation.semantics.invariants.first)
+    let invariant = try #require(compilation.semantics.behavior.invariants.first)
     #expect(try CompiledRuntime(compilation: compilation).invariantHolds(invariant, in: state))
   }
 
@@ -455,7 +462,7 @@ struct ModelCheckOutcomeTests {
     let counter = Var<Int>("counter")
     let spec = TLASpec("InvalidAvailability") {
       Variable(counter, 0)
-      Action("advance") { counter.becomes(counter + 1).when(StateExpr.variable("missing")) }
+      Action("advance") { counter.becomes(counter + 1).when(Expr<Bool>(.variable("missing"))) }
     }
     do {
       _ = try spec.compile()

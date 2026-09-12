@@ -2,24 +2,22 @@
 
 **SwiftTLA turns typed state rules into a typed Swift machine.**
 
-Write one Swift source model for state, actions, and invariants. `compile()`
-validates declarations, binds names, links modules, lowers behavior, allocates
-private identities, renders TLA+/PlusCal text, assembles the formal bundles,
-and publishes one immutable compiled specification.
-`@TLAModel` generates typed `State`, `Action`, and `Transition` values from that
-meaning. SwiftUI stores the generated machine directly. The generated `Actor`
-serializes access to that machine.
+Write one Swift source model for state, actions, and invariants. At build time,
+`@TLAModel` compiles that model and generates typed `State`, `Action`, and
+`Transition` values together with native Swift initialization, guards, and
+updates. The generated machine executes this Swift code directly. SwiftUI
+stores the machine as a value; the generated `Actor` serializes access to it.
+For formal verification, `compile()` uses the same compiler to produce an
+immutable specification for bounded exploration and TLA+/PlusCal rendering.
 
 **One source model. Typed application state. Bounded formal evidence.**
 
 ```text
-Swift source model
-        │ compile()
-        ▼
-CompiledSpecification
- ├── generated State, Action, Transition, and machine
- ├── compiled runtime and bounded exploration
- └── rendered TLA+ bundle and, for one authored Algorithm, PlusCal bundle
+Swift source model → validated, resolved compiler representation
+ ├── @TLAModel → native Swift State, Action, Transition, and machine
+ └── compile() → CompiledSpecification
+                 ├── formal runtime and bounded exploration
+                 └── TLA+ bundle and, for one authored Algorithm, PlusCal bundle
 
 Generated machine
  ├── value stored in SwiftUI @State

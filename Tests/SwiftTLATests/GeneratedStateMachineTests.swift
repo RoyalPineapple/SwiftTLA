@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import Foundation
 import Testing
 @testable import SwiftTLA
@@ -183,7 +184,7 @@ struct GeneratedRestrictedProcessDomainTests {
     @Test("a process declaration keeps its explicit member subset")
     func compiledProcessUsesOnlyDeclaredMembers() throws {
         let compilation = try GeneratedRestrictedProcessDomain.spec.compile()
-        let binding = try #require(compilation.semantics.actions.first?.bindings.first)
+        let binding = try #require(compilation.semantics.behavior.actions.first?.bindings.first)
         #expect(binding.sourceName == "process")
         #expect(binding.values == [.integer(1)])
     }
@@ -291,6 +292,13 @@ struct GeneratedPairPatternTests {
             Issue.record("Expected ambiguous action, received \(error)")
         }
         #expect(machine.state.selected == 0)
+        let successors = try machine.successors(for: .choose)
+        #expect(Set(successors.map { $0.state.selected }) == [1, 2])
+        for successor in successors {
+            #expect(try successor.enabledActions().isEmpty)
+            #expect(try successor.successors(for: .choose).isEmpty)
+        }
+        #expect(try machine.isEnabled(.choose))
     }
 }
 
@@ -423,7 +431,7 @@ struct GeneratedAlgorithmStateConstraintTests {
     @Test("compiled exploration enforces an algorithm state constraint")
     func compiledExplorationPreservesStateConstraint() throws {
         let compilation = try GeneratedAlgorithmStateConstraint.spec.compile()
-        #expect(compilation.semantics.constraint != nil)
+        #expect(compilation.semantics.behavior.constraint != nil)
         let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("count", in: $0) }) == [.int(0), .int(1)])
     }
@@ -466,7 +474,7 @@ struct GeneratedProcessLocalInvariantTests {
     @Test("compilation preserves process-local invariants")
     func compilationPreservesProcessLocalInvariant() throws {
         let compilation = try GeneratedProcessLocalInvariant.spec.compile()
-        #expect(compilation.semantics.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
+        #expect(compilation.semantics.behavior.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
     }
 }
 
@@ -728,6 +736,8 @@ struct GeneratedStateMachineTests {
     func threeParameterActionIsConsistentAcrossEveryExecutionPath() throws {
         let sourceText = """
         {
+            let value = Var<Int>("value")
+            Variable(value, 0)
             Action("transfer", parameters: [
                 ActionParameter("source", values: [1, 2]),
                 ActionParameter("destination", values: [10, 20]),
@@ -738,7 +748,7 @@ struct GeneratedStateMachineTests {
         }
         """
         let closure = try #require(Parser.parse(source: sourceText).statements.first?.item.as(ClosureExprSyntax.self))
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
         let value = Var<Int>("value")
         let source = Expr<Int>(.variable("source"))
         let destination = Expr<Int>(.variable("destination"))
@@ -756,9 +766,10 @@ struct GeneratedStateMachineTests {
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.actions.count == 1)
-        #expect(parsed.actions[0].name == sourceSpecification.actions[0].name)
-        #expect(parsed.actions[0].body == sourceSpecification.actions[0].body)
-        #expect(parsed.actions[0].bindings == sourceSpecification.actions[0].bindings)
+        let parsedAction = try #require(parsed.actions.first)
+        #expect(parsedAction.name == sourceSpecification.actions[0].name)
+        #expect(parsedAction.body == sourceSpecification.actions[0].body)
+        #expect(parsedAction.bindings == sourceSpecification.actions[0].bindings)
         #expect(EndToEndThreeParameterActionMachine.spec.actions == sourceSpecification.actions)
 
         let expectedArguments: [[TLAValue]] = [
@@ -787,7 +798,7 @@ struct GeneratedStateMachineTests {
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 20, amount: 200)))
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 30, amount: 200)) == false)
 
-        let renderedCalls = try sourceSpecification.compile().renderedActions()
+        let renderedCalls = try sourceSpecification.compile().render().actions
         #expect(renderedCalls.map(\.sourceName) == Array(repeating: "transfer", count: 8))
         #expect(renderedCalls.map(\.arguments) == expectedArguments)
         #expect(renderedCalls.map(\.renderedName) == [

@@ -56,7 +56,7 @@ struct SpecBuilderTests {
       )
     }.compile()
 
-    #expect(compilation.machineSurfacePlan.variables.map(\.swiftType) == ["Int"])
+    #expect(compilation.layout.variables.filter { $0.declaration.origin == .source }.map(\.generatedSwiftType) == ["Int"])
   }
 
   @Test("literal and typed-expression initializers have one compilation identity")

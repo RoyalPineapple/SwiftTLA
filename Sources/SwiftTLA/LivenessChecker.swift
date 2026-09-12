@@ -43,7 +43,7 @@ extension FiniteExploration {
     package func analyzeTemporalProperties(
         in compilation: CompiledSpecification
     ) throws -> [TemporalAnalysis] {
-        try requireValidEvidence(in: compilation)
+        try validate(for: compilation)
         return try LivenessChecker(
             compilation: compilation,
             graph: graph,
@@ -106,10 +106,10 @@ package struct LivenessChecker {
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
     ) throws -> [TemporalAnalysis] {
-        try compilation.semantics.temporalProperties.map {
+        try compilation.semantics.behavior.temporalProperties.map {
             try analyze(
                 $0.expression,
-                fairness: compilation.semantics.fairness,
+                fairness: compilation.semantics.behavior.fairness,
                 initialStateIDs: initialStateIDs,
                 isComplete: isComplete,
                 compilation: compilation
@@ -118,15 +118,15 @@ package struct LivenessChecker {
     }
 
     private func analyze(
-        _ property: CompiledTemporalExpr,
+        _ property: CompiledTemporalExpr<CompiledStateQuery<CompiledStateExpr>>,
         fairness: [CompiledFairnessCondition],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool,
         compilation: CompiledSpecification
     ) throws -> TemporalAnalysis {
         let form: TemporalForm
-        let predicate: CompiledStateExpr
-        let trigger: CompiledStateExpr?
+        let predicate: CompiledStateQuery<CompiledStateExpr>
+        let trigger: CompiledStateQuery<CompiledStateExpr>?
         switch property {
         case .always(let value): form = .always; predicate = value; trigger = nil
         case .eventually(let value): form = .eventually; predicate = value; trigger = nil
@@ -289,7 +289,7 @@ package struct LivenessChecker {
     }
 
     private func predicateHolds(
-        _ predicate: CompiledStateExpr,
+        _ predicate: CompiledStateQuery<CompiledStateExpr>,
         in state: CompiledState,
         compilation: CompiledSpecification
     ) throws -> Bool {
@@ -311,7 +311,7 @@ package struct LivenessChecker {
     }
 
     private func graphHasOnlyCompiledActions() -> Bool {
-        let actions = Set(compilation.semantics.actions.map(\.id))
+        let actions = Set(compilation.semantics.behavior.actions.map(\.id))
         return graph.transitions.values.allSatisfy { transitions in
             transitions.allSatisfy { transition in
                 guard let call = compiledAction(for: transition.label) else { return false }

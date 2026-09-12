@@ -1,6 +1,7 @@
 // swiftlint:disable identifier_name
 
-public struct FiniteDomain<Value: FiniteTLAValueDomain>: Sendable {
+public struct FiniteDomain<Value: FiniteTLAValueDomain>: TypedExpression {
+    public typealias ExpressionValue = SetExpr<Value>
     fileprivate let values: [Value]
 
     public init() {
@@ -10,6 +11,13 @@ public struct FiniteDomain<Value: FiniteTLAValueDomain>: Sendable {
     public init(_ values: [Value]) {
         self.values = values
     }
+
+    public var stateExpr: StateExpr {
+        if let issue = Value.sourceIssue { return .sourceIssue(issue) }
+        return .setLiteral(values.map(\.stateExpr))
+    }
+
+    public var expr: Expr<SetExpr<Value>> { Expr(stateExpr) }
 
     public var members: [Value] {
         values
@@ -34,28 +42,14 @@ extension FiniteDomain {
     /// The declaration order is the formal order. This gives an ordered
     /// process algorithm an explicit, finite set whose elements retain typed
     /// formal values.
-    public func members(before current: ProcessIdentifier<Value>) -> Expr<SetExpr<Value>> {
-        members(before: current.stateExpr)
-    }
-
-    /// The declared members before a process-local member.
-    public func members(before current: LocalVariable<Value>) -> Expr<SetExpr<Value>> {
-        members(before: current.stateExpr)
-    }
-
-    /// The declared members before a value selected by `With`.
-    public func members(before current: WithValue<Value>) -> Expr<SetExpr<Value>> {
-        members(before: current.stateExpr)
-    }
-
-    private func members(before current: StateExpr) -> Expr<SetExpr<Value>> {
+    public func members(before current: some TypedExpression<Value>) -> Expr<SetExpr<Value>> {
         var preceding = Expr<SetExpr<Value>>(.setLiteral([]))
         for (index, candidate) in values.enumerated().reversed() {
             let earlier = Expr<SetExpr<Value>>(
                 .setLiteral(values.prefix(index).map { .value($0.tlaValue) })
             )
             preceding = If(
-                StateExpr.equal(current, .value(candidate.tlaValue)),
+                current == candidate,
                 then: earlier,
                 else: preceding
             )
@@ -64,7 +58,7 @@ extension FiniteDomain {
     }
 }
 
-public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: StateExprConvertible, Sendable {
+public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: TypedExpression {
     fileprivate let expression: StateExpr
 
     public var stateExpr: StateExpr {
@@ -76,95 +70,27 @@ public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: StateExprConvertib
         Expr(expression)
     }
 
-    /// Compares the current process identifier with a typed formal value.
-    public static func == (lhs: ProcessIdentifier<Value>, rhs: Value) -> StateExpr {
-        .equal(lhs.stateExpr, .value(rhs.tlaValue))
-    }
-
-    /// Compares the current process identifier with a typed formal value.
-    public static func != (lhs: ProcessIdentifier<Value>, rhs: Value) -> StateExpr {
-        .notEqual(lhs.stateExpr, .value(rhs.tlaValue))
-    }
 }
 
 /// A value bound for one atomic `With` body.
 ///
 /// It carries a scoped formal action binding while the algorithm IR is built.
-public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct WithValue<Value: TLAValueType>: TypedExpression {
     let expression: StateExpr
 
     public var stateExpr: StateExpr { expression }
 
     public var expr: Expr<Value> { Expr(expression) }
 
-    /// Keep a typed enum literal contextual when it is compared to a `With` value.
-    public static func == (lhs: WithValue<Value>, rhs: Value) -> StateExpr {
-        .equal(lhs.stateExpr, .value(rhs.tlaValue))
-    }
-
-    public static func == (lhs: Value, rhs: WithValue<Value>) -> StateExpr {
-        .equal(.value(lhs.tlaValue), rhs.stateExpr)
-    }
-
-    public static func != (lhs: WithValue<Value>, rhs: Value) -> StateExpr {
-        .notEqual(lhs.stateExpr, .value(rhs.tlaValue))
-    }
-
-    public static func != (lhs: Value, rhs: WithValue<Value>) -> StateExpr {
-        .notEqual(.value(lhs.tlaValue), rhs.stateExpr)
-    }
-
-    public static func == (lhs: WithValue<Value>, rhs: WithValue<Value>) -> StateExpr {
-        .equal(lhs.stateExpr, rhs.stateExpr)
-    }
-
-    public static func != (lhs: WithValue<Value>, rhs: WithValue<Value>) -> StateExpr {
-        .notEqual(lhs.stateExpr, rhs.stateExpr)
-    }
-}
-
-extension WithValue {
-    public func first<First: TLAValueType, Second: TLAValueType>() -> Expr<First>
-    where Value == Pair<First, Second> {
-        Expr<First>(.tupleAccess(stateExpr, 1))
-    }
-
-    public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
-    where Value == Pair<First, Second> {
-        Expr<Second>(.tupleAccess(stateExpr, 2))
-    }
-
-    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
-    where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(field.recordAccess(stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-}
-
-extension Expr {
-    /// Reads a finite formal function using a value selected by `With`.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
-    where T == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(raw, index.stateExpr))
-    }
-
-    /// Reads a finite function using process-local formal state.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
-    where T == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(raw, index.stateExpr))
-    }
 }
 
 extension Function where Domain: FiniteTLAValueDomain {
     /// Builds a total finite formal function from a concrete typed value.
     public static func mapping(
+        file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
         _ body: (WithValue<Domain>) -> Range
     ) -> Expr<Self> {
-        mapping { key in Expr(body(key)) }
+        mapping(file: file, line: line, column: column) { key in Expr(body(key)) }
     }
 
     /// Builds a total finite formal function from an expression over each key.
@@ -172,15 +98,16 @@ extension Function where Domain: FiniteTLAValueDomain {
     /// This is useful for dependent initial state: the body may read an
     /// earlier shared variable. Its executable meaning is the returned typed
     /// expression.
-    public static func mapping(
-        _ body: (WithValue<Domain>) -> Expr<Range>
+    public static func mapping<Result: TypedExpression<Range>>(
+        file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+        _ body: (WithValue<Domain>) -> Result
     ) -> Expr<Self> {
-        let binding = "__pcal_function_key"
+        let binding = generatedBinderName(file: file, line: line, column: column)
         let key = WithValue<Domain>(expression: .variable(binding))
         return Expr<Self>(.functionLiteral(
             .setLiteral(Domain.tlaValues.map(StateExpr.value)),
             binding,
-            body(key).raw
+            body(key).stateExpr
         ))
     }
 }
@@ -193,7 +120,7 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
 ///
 /// Its body is substituted into the surrounding `Do` block before the
 /// algorithm lowers.
-public struct MacroParameter<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct MacroParameter<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -205,46 +132,18 @@ public struct MacroParameter<Value: TLAValueType>: StateExprConvertible, Sendabl
 }
 
 /// A typed formal input of a PlusCal procedure.
-public struct ProcedureParameter<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct ProcedureParameter<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     public var stateExpr: StateExpr { .variable(name) }
     public var expr: Expr<Value> { Expr(stateExpr) }
     public var algorithmLValue: AlgorithmLValue<Value> { AlgorithmLValue(model: .root(name)) }
 }
 
-extension MacroParameter where Value == Int {
-    public static func == (lhs: MacroParameter, rhs: Int) -> StateExpr {
-        .equal(lhs.stateExpr, .value(.int(rhs)))
-    }
-
-    public static func > (lhs: MacroParameter, rhs: Int) -> StateExpr {
-        .greaterThan(lhs.stateExpr, .value(.int(rhs)))
-    }
-
-    public static func + (lhs: MacroParameter, rhs: Int) -> Expr<Int> {
-        Expr(.add(lhs.stateExpr, .value(.int(rhs))))
-    }
-
-    public static func - (lhs: MacroParameter, rhs: Int) -> Expr<Int> {
-        Expr(.subtract(lhs.stateExpr, .value(.int(rhs))))
-    }
-}
-
-extension MacroParameter where Value: FiniteTLAValueDomain {
-    public static func == (lhs: MacroParameter, rhs: Value) -> StateExpr {
-        .equal(lhs.stateExpr, rhs.tlaValue.stateExpr)
-    }
-
-    public static func != (lhs: MacroParameter, rhs: Value) -> StateExpr {
-        .notEqual(lhs.stateExpr, rhs.tlaValue.stateExpr)
-    }
-}
-
 /// A PlusCal statement macro.
 ///
 /// Declare it inside `Algorithm`, then call it inside a `Do` body. The macro
 /// expands to formal statements in the same atomic step.
-public struct StatementMacro: Sendable {
+public struct StatementMacro<Arguments: Sendable>: Sendable {
     private let parameterNames: [String]
     private let statements: [AlgorithmStatementModel]
 
@@ -253,89 +152,35 @@ public struct StatementMacro: Sendable {
         self.statements = statements
     }
 
-    public func callAsFunction<Value: TLAValueType>(_ argument: SharedVariable<Value>) -> [StepStatement] {
-        expand([.variable(argument.name)])
-    }
-
-    public func callAsFunction<Value: TLAValueType>(_ argument: LocalVariable<Value>) -> [StepStatement] {
-        expand([.variable(argument.name)])
-    }
-
-    /// Expands a macro with a formal expression. The expression is substituted
-    /// into read positions only; a macro parameter assigned by its body still
-    /// requires a variable argument.
-    public func callAsFunction<Value: TLAValueType>(_ argument: Expr<Value>) -> [StepStatement] {
-        expand([argument.raw])
-    }
-
-    /// Expands a macro using the current process identifier as its formal
-    /// argument. The expansion stays in its surrounding atomic `Do` block.
-    public func callAsFunction<Value: FiniteTLAValueDomain>(_ argument: ProcessIdentifier<Value>) -> [StepStatement] {
-        expand([argument.stateExpr])
-    }
-
-    public func callAsFunction() -> [StepStatement] {
+    public func callAsFunction() -> [StepStatement] where Arguments == Void {
         expand([])
     }
 
-    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
-        _ first: SharedVariable<First>, _ second: SharedVariable<Second>
-    ) -> [StepStatement] {
-        expand([.variable(first.name), .variable(second.name)])
+    /// Arguments retain the declaration's types through substitution.
+    /// Assigned parameters still require variable expressions.
+    public func callAsFunction(_ argument: some TypedExpression<Arguments>) -> [StepStatement]
+    where Arguments: TLAValueType {
+        expand([argument.stateExpr])
     }
 
     public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
-        _ first: LocalVariable<First>, _ second: LocalVariable<Second>
-    ) -> [StepStatement] {
-        expand([.variable(first.name), .variable(second.name)])
-    }
-
-    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
-        _ first: SharedVariable<First>, _ second: LocalVariable<Second>
-    ) -> [StepStatement] {
-        expand([.variable(first.name), .variable(second.name)])
-    }
-
-    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
-        _ first: LocalVariable<First>, _ second: SharedVariable<Second>
-    ) -> [StepStatement] {
-        expand([.variable(first.name), .variable(second.name)])
-    }
-
-    /// Expands a macro while retaining formal expression arguments in the
-    /// algorithm IR.
-    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
-        _ first: Expr<First>, _ second: Expr<Second>
-    ) -> [StepStatement] {
-        expand([first.raw, second.raw])
-    }
-
-    /// Expands a macro with any supported formal expressions. This is the
-    /// general form for mixed variable and expression arguments.
-    public func callAsFunction(_ arguments: any StateExprConvertible...) -> [StepStatement] {
-        expand(arguments.map(\.stateExpr))
+        _ first: some TypedExpression<First>, _ second: some TypedExpression<Second>
+    ) -> [StepStatement] where Arguments == (First, Second) {
+        expand([first.stateExpr, second.stateExpr])
     }
 
     private func expand(_ arguments: [StateExpr]) -> [StepStatement] {
-        guard parameterNames.count == arguments.count else {
-            return [.init(model: .rejected(.statementMacroArgumentCount))]
+        let arguments = Dictionary(uniqueKeysWithValues: zip(parameterNames, arguments))
+        return statements.map {
+            StepStatement(model: $0.substitutingVariables(arguments, assignmentTargets: .reject(.statementMacroAssignmentTarget)))
         }
-        return parameterNames.enumerated().reduce(statements) { expanded, binding in
-            expanded.map {
-                $0.substitutingVariable(
-                    binding.element,
-                    with: arguments[binding.offset],
-                    assignmentTargets: .reject(.statementMacroAssignmentTarget)
-                )
-            }
-        }.map(StepStatement.init(model:))
     }
 }
 
 /// Declares a one-argument PlusCal statement macro.
 public func Macro<Value: TLAValueType>(
     @DoBuilder _ body: (MacroParameter<Value>) -> [StepStatement]
-) -> StatementMacro {
+) -> StatementMacro<Value> {
     let parameterName = "__pcal_macro_parameter"
     return StatementMacro(
         parameterNames: [parameterName],
@@ -347,7 +192,7 @@ public func Macro<Value: TLAValueType>(
 /// formal handles until expansion inside the caller's atomic `Do` block.
 public func Macro<First: TLAValueType, Second: TLAValueType>(
     @DoBuilder _ body: (MacroParameter<First>, MacroParameter<Second>) -> [StepStatement]
-) -> StatementMacro {
+) -> StatementMacro<(First, Second)> {
     let firstName = "__pcal_macro_parameter_0"
     let secondName = "__pcal_macro_parameter_1"
     return StatementMacro(
@@ -357,45 +202,40 @@ public func Macro<First: TLAValueType, Second: TLAValueType>(
 }
 
 /// Declares a parameterless PlusCal statement macro.
-public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
+public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro<Void> {
     StatementMacro(parameterNames: [], statements: body().map(\.model))
 }
 
 /// A typed shared variable declaration.
 ///
 /// Declare it through the scope supplied by `TLASpec` or `Algorithm`.
-public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct SharedVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
-    fileprivate let swiftTypeName: String
 
-    fileprivate init(name: String, initialization: VariableInitialization, swiftTypeName: String) {
+    fileprivate init(name: String, initialization: VariableInitialization) {
         self.name = name
         self.initialization = initialization
-        self.swiftTypeName = swiftTypeName
     }
 
     fileprivate init(name: String, initial: Value) {
         self.init(
             name: name,
-            initialization: .value(initial.tlaValue),
-            swiftTypeName: swiftSurfaceTypeName(for: Value.self)
+            initialization: .value(initial.tlaValue)
         )
     }
 
-    fileprivate init(name: String, in values: Expr<SetExpr<Value>>) {
+    fileprivate init(name: String, in values: some TypedExpression<SetExpr<Value>>) {
         self.init(
             name: name,
-            initialization: .memberOf(values.raw),
-            swiftTypeName: swiftSurfaceTypeName(for: Value.self)
+            initialization: .memberOf(values.stateExpr)
         )
     }
 
-    fileprivate init(name: String, initial: Expr<Value>) {
+    fileprivate init(name: String, initial: some TypedExpression<Value>) {
         self.init(
             name: name,
-            initialization: .expression(initial.raw),
-            swiftTypeName: swiftSurfaceTypeName(for: Value.self)
+            initialization: .expression(initial.stateExpr)
         )
     }
 
@@ -414,22 +254,8 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
     }
 
     @discardableResult
-    public func becomes(_ value: Expr<Value>) -> ActionExpr {
-        .assign(.named(name), value.raw)
-    }
-
-    /// Assigns the current value of another shared formal variable of the
-    /// same type. This keeps direct PlusCal-style state transfer typed.
-    @discardableResult
-    public func becomes(_ other: SharedVariable<Value>) -> ActionExpr {
-        .assign(.named(name), other.stateExpr)
-    }
-
-    /// Assigns the current value of a process-local formal variable of the
-    /// same type.
-    @discardableResult
-    public func becomes(_ other: LocalVariable<Value>) -> ActionExpr {
-        .assign(.named(name), other.stateExpr)
+    public func becomes(_ value: some TypedExpression<Value>) -> ActionExpr {
+        .assign(.named(name), value.stateExpr)
     }
 
     public var stays: ActionExpr { .unchanged(.named(name)) }
@@ -438,30 +264,26 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
 /// A typed process-local algorithm variable.
 ///
 /// Declare it through the scope supplied by `Each` or `Procedure`.
-public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
+public struct LocalVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
-    fileprivate let swiftTypeName: String
 
-    fileprivate init(name: String, initialization: VariableInitialization, swiftTypeName: String) {
+    fileprivate init(name: String, initialization: VariableInitialization) {
         self.name = name
         self.initialization = initialization
-        self.swiftTypeName = swiftTypeName
     }
 
     fileprivate init(name: String, initial: Value) {
         self.init(
             name: name,
-            initialization: .value(initial.tlaValue),
-            swiftTypeName: swiftSurfaceTypeName(for: Value.self)
+            initialization: .value(initial.tlaValue)
         )
     }
 
-    fileprivate init(name: String, initial: Expr<Value>) {
+    fileprivate init(name: String, initial: some TypedExpression<Value>) {
         self.init(
             name: name,
-            initialization: .expression(initial.raw),
-            swiftTypeName: swiftSurfaceTypeName(for: Value.self)
+            initialization: .expression(initial.stateExpr)
         )
     }
 
@@ -488,465 +310,11 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
     }
 
     @discardableResult
-    public func becomes(_ value: Expr<Value>) -> ActionExpr {
-        .assign(.named(name), value.raw)
-    }
-
-    @discardableResult
-    public func becomes(_ other: SharedVariable<Value>) -> ActionExpr {
-        .assign(.named(name), other.stateExpr)
-    }
-
-    @discardableResult
-    public func becomes(_ other: LocalVariable<Value>) -> ActionExpr {
-        .assign(.named(name), other.stateExpr)
+    public func becomes(_ value: some TypedExpression<Value>) -> ActionExpr {
+        .assign(.named(name), value.stateExpr)
     }
 
     public var stays: ActionExpr { .unchanged(.named(name)) }
-}
-
-// These operators give `SharedVariable` the expression syntax of its typed
-// variable.
-extension SharedVariable where Value == Int {
-    public static func + (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
-        Expr(.add(lhs.stateExpr, .int(rhs)))
-    }
-
-    public static func + (_ lhs: SharedVariable, _ rhs: SharedVariable) -> Expr<Int> {
-        Expr(.add(lhs.stateExpr, rhs.stateExpr))
-    }
-
-    public static func + (_ lhs: SharedVariable, _ rhs: Expr<Int>) -> Expr<Int> {
-        Expr(.add(lhs.stateExpr, rhs.raw))
-    }
-
-    public static func - (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
-        Expr(.subtract(lhs.stateExpr, .int(rhs)))
-    }
-
-    public static func - (_ lhs: SharedVariable, _ rhs: SharedVariable) -> Expr<Int> {
-        Expr(.subtract(lhs.stateExpr, rhs.stateExpr))
-    }
-
-    public static func - (_ lhs: SharedVariable, _ rhs: Expr<Int>) -> Expr<Int> {
-        Expr(.subtract(lhs.stateExpr, rhs.raw))
-    }
-
-    public static func % (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
-        Expr(.modulo(lhs.stateExpr, .int(rhs)))
-    }
-
-    public static func - (_ lhs: Int, _ rhs: SharedVariable) -> Expr<Int> {
-        Expr(.subtract(.int(lhs), rhs.stateExpr))
-    }
-
-    public static func < (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
-        .lessThan(lhs.stateExpr, .int(rhs))
-    }
-
-    public static func > (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
-        .greaterThan(lhs.stateExpr, .int(rhs))
-    }
-
-    public static func <= (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
-        .lessOrEqual(lhs.stateExpr, .int(rhs))
-    }
-
-    public static func >= (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
-        .greaterOrEqual(lhs.stateExpr, .int(rhs))
-    }
-
-}
-
-// Process-local and shared formal variables use the same typed arithmetic
-// surface. Their scopes determine lowering.
-extension LocalVariable where Value == Int {
-    public static func + (_ lhs: LocalVariable, _ rhs: Int) -> Expr<Int> {
-        Expr(.add(lhs.stateExpr, .int(rhs)))
-    }
-
-    public static func - (_ lhs: LocalVariable, _ rhs: Int) -> Expr<Int> {
-        Expr(.subtract(lhs.stateExpr, .int(rhs)))
-    }
-
-    public static func == (_ lhs: LocalVariable, _ rhs: Int) -> StateExpr {
-        .equal(lhs.stateExpr, .int(rhs))
-    }
-
-    public static func != (_ lhs: LocalVariable, _ rhs: Int) -> StateExpr {
-        .notEqual(lhs.stateExpr, .int(rhs))
-    }
-}
-
-extension SharedVariable {
-    public static func == (_ lhs: SharedVariable, _ rhs: Value) -> StateExpr {
-        .equal(lhs.stateExpr, .value(rhs.tlaValue))
-    }
-
-    public static func != (_ lhs: SharedVariable, _ rhs: Value) -> StateExpr {
-        .notEqual(lhs.stateExpr, .value(rhs.tlaValue))
-    }
-
-    public static func == (_ lhs: SharedVariable, _ rhs: Expr<Value>) -> StateExpr {
-        .equal(lhs.stateExpr, rhs.raw)
-    }
-
-    public static func != (_ lhs: SharedVariable, _ rhs: Expr<Value>) -> StateExpr {
-        .notEqual(lhs.stateExpr, rhs.raw)
-    }
-
-}
-
-extension SharedVariable where Value: FiniteTLAValueDomain {
-    public static func == (_ lhs: SharedVariable, _ rhs: ProcessIdentifier<Value>) -> StateExpr {
-        .equal(lhs.stateExpr, rhs.stateExpr)
-    }
-
-    public static func != (_ lhs: SharedVariable, _ rhs: ProcessIdentifier<Value>) -> StateExpr {
-        .notEqual(lhs.stateExpr, rhs.stateExpr)
-    }
-
-    public static func == (_ lhs: SharedVariable, _ rhs: WithValue<Value>) -> StateExpr {
-        .equal(lhs.stateExpr, rhs.stateExpr)
-    }
-
-    public static func != (_ lhs: SharedVariable, _ rhs: WithValue<Value>) -> StateExpr {
-        .notEqual(lhs.stateExpr, rhs.stateExpr)
-    }
-}
-
-extension SharedVariable {
-    public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
-    where Value == SetExpr<Element> {
-        .in(.value(element.tlaValue), stateExpr)
-    }
-
-    /// Tests membership of a value selected by `With`.
-    public func contains<Element: TLAValueType>(_ element: WithValue<Element>) -> StateExpr
-    where Value == SetExpr<Element> {
-        .in(element.stateExpr, stateExpr)
-    }
-
-    public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr(.setDifference(stateExpr, .setLiteral([element.raw])))
-    }
-
-    public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleAppend(stateExpr, .value(element.tlaValue)))
-    }
-
-    public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleAccess(stateExpr, index))
-    }
-
-    /// Reads a formal sequence at a one-based formal index.
-    public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleDynamicAccess(stateExpr, index.raw))
-    }
-
-    /// Reads a formal sequence at a one-based shared formal index.
-    public subscript<Element: TLAValueType>(_ index: SharedVariable<Int>) -> Expr<Element>
-    where Value == TupleExpr<Element> {
-        Expr(.tupleDynamicAccess(stateExpr, index.stateExpr))
-    }
-
-    /// Reads a zero-based formal sequence at a formal index.
-    public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
-    where Value == ZeroBasedSequence<Element> {
-        Expr(.functionApply(stateExpr, index.raw))
-    }
-
-    public subscript<Element: TLAValueType>(_ index: Int) -> Expr<Element>
-    where Value == ZeroBasedSequence<Element> {
-        Expr(.functionApply(stateExpr, .int(index)))
-    }
-
-    /// Replaces one value in a zero-based formal sequence.
-    public func updating<Element: TLAValueType>(
-        _ index: Expr<Int>,
-        to value: Expr<Element>
-    ) -> Expr<ZeroBasedSequence<Element>> where Value == ZeroBasedSequence<Element> {
-        Expr(.except(stateExpr, index.raw, value.raw))
-    }
-
-    public func updating<Element: TLAValueType>(
-        _ index: Int,
-        to value: Expr<Element>
-    ) -> Expr<ZeroBasedSequence<Element>> where Value == ZeroBasedSequence<Element> {
-        Expr(.except(stateExpr, .int(index), value.raw))
-    }
-
-    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
-    where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(field.recordAccess(stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
-    }
-
-    /// Reads a finite function at the current PlusCal process identifier.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    /// Reads a finite function using a process-local formal key.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    /// Reads a finite function using a typed statement-macro parameter.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: MacroParameter<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.raw))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
-    where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.raw))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: WithValue<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Domain,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        let selected = self[index]
-        return Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.tlaValue.stateExpr, update(selected).raw)
-        )
-    }
-
-    /// Updates a finite function at the current PlusCal process identifier.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: ProcessIdentifier<Domain>,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        let selected = self[index]
-        return Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.stateExpr, update(selected).raw)
-        )
-    }
-
-    /// Replaces a finite function value at the current PlusCal process identifier.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: ProcessIdentifier<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: ProcessIdentifier<Domain>,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    /// Replaces a finite function value using a process-local formal key.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: LocalVariable<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
-    }
-
-    /// Replaces a finite function value using a typed statement-macro parameter.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: MacroParameter<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
-    }
-
-    /// Replaces a finite function value using a typed statement-macro parameter.
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: MacroParameter<Domain>,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.raw, update(Expr<Range>(.functionApply(stateExpr, index.raw))).raw)
-        )
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: WithValue<Domain>,
-        _ update: (Expr<Range>) -> Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(
-            .except(stateExpr, index.stateExpr, update(Expr<Range>(.functionApply(stateExpr, index.stateExpr))).raw)
-        )
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.raw, value.raw))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func overriding<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        with value: Expr<Range>
-    ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        Expr(.partialFunctionOverriding(stateExpr, key: index.raw, value: value.raw))
-    }
-
-    public func overriding<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Expr<Domain>,
-        with value: Range
-    ) -> Expr<PartialFunction<Domain, Range>> where Value == PartialFunction<Domain, Range>, Range: TLAValueType {
-        overriding(index, with: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Domain,
-        to value: Expr<Range>
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Function<Domain, Range>>(.except(stateExpr, index.tlaValue.stateExpr, value.raw))
-    }
-
-    public func updating<Domain: FiniteTLAValueDomain, Range>(
-        _ index: Domain,
-        to value: Range
-    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
-        updating(index, to: Expr<Range>(.value(value.tlaValue)))
-    }
-
-    public func inserting<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([.value(element.tlaValue)])))
-    }
-
-    public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.raw])))
-    }
-
-    /// Inserts the current identifier of a finite PlusCal process into a
-    /// shared formal set.
-    public func inserting<Element: FiniteTLAValueDomain>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func inserting<Element: FiniteTLAValueDomain>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func contains<Element: TLAValueType>(_ element: Expr<Element>) -> StateExpr
-    where Value == SetExpr<Element> {
-        .in(element.raw, stateExpr)
-    }
-}
-
-extension SharedVariable where Value: FormalZeroBasedSequenceValue {
-    /// The formal number of elements in a zero-based sequence.
-    public var count: Expr<Int> {
-        Expr(.cardinality(.domain(stateExpr)))
-    }
-}
-
-extension SharedVariable where Value: FormalSetValue {
-    public var isEmpty: StateExpr {
-        .equal(.cardinality(stateExpr), .value(.int(0)))
-    }
-
-    /// Tests whether this formal set is contained in another formal set.
-    public func isSubset(of other: some StateExprConvertible) -> StateExpr {
-        stateExpr.isSubset(of: other)
-    }
-
-    public var cardinality: Expr<Int> {
-        Expr(.cardinality(stateExpr))
-    }
-}
-
-extension SharedVariable where Value: FormalTupleValue {
-    public var count: Expr<Int> {
-        Expr(.tupleLength(stateExpr))
-    }
-}
-
-extension LocalVariable {
-    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
-    where Value == Record<Schema>, Field: TLAValueType {
-        Expr<Field>(field.recordAccess(stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
-    }
-
-    /// Reads a finite function at the current PlusCal process identifier.
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-    }
-
-    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
-    where Value == Function<Domain, Range>, Range: TLAValueType {
-        Expr<Range>(.functionApply(stateExpr, index.raw))
-    }
-}
-
-extension LocalVariable where Value: FormalSetValue {
-    /// Tests whether the current process-local formal set is empty.
-    public var isEmpty: StateExpr {
-        .equal(.cardinality(stateExpr), .value(.int(0)))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
-    }
-
-    public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-    where Value == SetExpr<Element> {
-        Expr(.setDifference(stateExpr, .setLiteral([element.raw])))
-    }
 }
 
 /// Scheduling policy for one `Each` process family.
@@ -985,34 +353,17 @@ public struct AlgorithmElement: Sendable {
     fileprivate let model: AlgorithmComponentModel
 }
 
-private struct SharedVariableDeclaration: Sendable {
-    let name: String
-    let initialization: VariableInitialization
-    let swiftTypeName: String
-
-    init<Value>(_ variable: SharedVariable<Value>) {
-        name = variable.name
-        initialization = variable.initialization
-        swiftTypeName = variable.swiftTypeName
-    }
-
+private extension SharedVariable {
     var algorithmElement: AlgorithmElement {
         AlgorithmElement(model: .shared(.init(
             root: name,
             initialization: initialization,
-            swiftTypeName: swiftTypeName
+            swiftTypeName: swiftSurfaceTypeName(for: Value.self)
         )))
     }
 
     var specificationDeclaration: VarDecl {
-        switch initialization {
-        case .value(let value):
-            VarDecl(name, value, generatedSwiftType: swiftTypeName)
-        case .expression(let expression):
-            VarDecl(name, expression: expression, generatedSwiftType: swiftTypeName)
-        case .memberOf(let set):
-            VarDecl(name, memberOf: set, generatedSwiftType: swiftTypeName)
-        }
+        VarDecl(name, initialization: initialization, generatedSwiftType: swiftSurfaceTypeName(for: Value.self))
     }
 }
 
@@ -1026,35 +377,34 @@ public final class SpecificationScope {
         initial: Value
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
-        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        declarations.append(variable.specificationDeclaration)
         return variable
     }
 
     public func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
-            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) })),
-            swiftTypeName: "Int"
+            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) }))
         )
-        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        declarations.append(variable.specificationDeclaration)
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _ name: String,
-        in values: Expr<SetExpr<Value>>
+        in values: some TypedExpression<SetExpr<Value>>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, in: values)
-        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        declarations.append(variable.specificationDeclaration)
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _ name: String,
-        initial: Expr<Value>
+        initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
-        declarations.append(SharedVariableDeclaration(variable).specificationDeclaration)
+        declarations.append(variable.specificationDeclaration)
         return variable
     }
 }
@@ -1069,35 +419,34 @@ public final class AlgorithmScope {
         initial: Value
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
-        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
+        declarations.append(variable.algorithmElement)
         return variable
     }
 
     public func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
-            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) })),
-            swiftTypeName: "Int"
+            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) }))
         )
-        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
+        declarations.append(variable.algorithmElement)
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _ name: String,
-        in values: Expr<SetExpr<Value>>
+        in values: some TypedExpression<SetExpr<Value>>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, in: values)
-        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
+        declarations.append(variable.algorithmElement)
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _ name: String,
-        initial: Expr<Value>
+        initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
-        declarations.append(SharedVariableDeclaration(variable).algorithmElement)
+        declarations.append(variable.algorithmElement)
         return variable
     }
 }
@@ -1116,14 +465,8 @@ public final class ProcessScope {
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
+    public func localVar<Value: TLAValueType>(_ name: String, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
         let variable = LocalVariable(name: name, initial: initial)
-        declarations.append(localDeclaration(variable))
-        return variable
-    }
-
-    public func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
-        let variable = LocalVariable<Bool>(name: name, initialization: .expression(initial), swiftTypeName: "Bool")
         declarations.append(localDeclaration(variable))
         return variable
     }
@@ -1143,14 +486,8 @@ public final class ProcedureScope {
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_ name: String, initial: Expr<Value>) -> LocalVariable<Value> {
+    public func localVar<Value: TLAValueType>(_ name: String, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
         let variable = LocalVariable(name: name, initial: initial)
-        declarations.append(localDeclaration(variable))
-        return variable
-    }
-
-    public func localVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
-        let variable = LocalVariable<Bool>(name: name, initialization: .expression(initial), swiftTypeName: "Bool")
         declarations.append(localDeclaration(variable))
         return variable
     }
@@ -1160,7 +497,7 @@ private func localDeclaration<Value>(_ variable: LocalVariable<Value>) -> Algori
     AlgorithmElement(model: .local(.init(
         root: variable.name,
         initialization: variable.initialization,
-        swiftTypeName: variable.swiftTypeName
+        swiftTypeName: swiftSurfaceTypeName(for: Value.self)
     )))
 }
 
@@ -1235,7 +572,7 @@ public enum AlgorithmBuilder {
 /// Put this beside the algorithm state it refers to. It is deliberately named
 /// differently from a correctness `Invariant`: a state constraint limits
 /// exploration, while an invariant is checked in every retained state.
-public func StateConstraint(_ expression: some StateExprConvertible) -> AlgorithmElement {
+public func StateConstraint(_ expression: some TypedExpression<Bool>) -> AlgorithmElement {
     AlgorithmElement(model: .stateConstraint(expression.stateExpr))
 }
 
@@ -1271,7 +608,7 @@ public enum DoBuilder {
 }
 
 public struct Algorithm: Sendable, SpecComponent {
-    internal let model: AlgorithmModel
+    package let model: AlgorithmModel
 
     public init(
         _ name: String,
@@ -1295,7 +632,7 @@ public struct Algorithm: Sendable, SpecComponent {
         )
     }
 
-    internal init(model: AlgorithmModel) {
+    package init(model: AlgorithmModel) {
         self.model = model
     }
 
@@ -1371,7 +708,7 @@ public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
 /// false, control advances to the next `Do` or `While` block.
 public func While<Name: CaseIterable & RawRepresentable & Sendable>(
     _ label: Name,
-    _ condition: some StateExprConvertible,
+    _ condition: some TypedExpression<Bool>,
     @DoBuilder _ body: () -> [StepStatement]
 ) -> AlgorithmElement where Name.RawValue == String {
     AlgorithmElement(model: .step(AlgorithmStepModel(
@@ -1381,19 +718,19 @@ public func While<Name: CaseIterable & RawRepresentable & Sendable>(
     )))
 }
 
-public func Await(_ condition: some StateExprConvertible) -> StepStatement {
+public func Await(_ condition: some TypedExpression<Bool>) -> StepStatement {
     StepStatement(model: .await(condition.stateExpr))
 }
 
 /// PlusCal `when`: a guarded atomic step. `When` and `Await` have the same
 /// transition semantics; the different spelling is author intent only.
-public func When(_ condition: some StateExprConvertible) -> StepStatement {
+public func When(_ condition: some TypedExpression<Bool>) -> StepStatement {
     Await(condition)
 }
 
 /// A PlusCal assertion. A false assertion creates a compiled safety
 /// check at this atomic program-counter location.
-public func Assert(_ condition: some StateExprConvertible) -> StepStatement {
+public func Assert(_ condition: some TypedExpression<Bool>) -> StepStatement {
     StepStatement(model: .assert(condition.stateExpr))
 }
 
@@ -1507,7 +844,7 @@ public func Procedure<Name: CaseIterable & RawRepresentable & Sendable, A: TLAVa
 /// Binds a nondeterministically chosen member of a bounded formal set for one
 /// atomic block. An empty set disables that block, as PlusCal `with (x \in S)`.
 public func With<Value: TLAValueType>(
-    _ source: Expr<SetExpr<Value>>,
+    _ source: some TypedExpression<SetExpr<Value>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1515,7 +852,7 @@ public func With<Value: TLAValueType>(
 ) -> StepStatement {
     let variable = generatedBinderName(file: file, line: line, column: column)
     let value = WithValue<Value>(expression: .variable(variable))
-    return StepStatement(model: .with(variable: variable, source: source.raw, body(value).map(\.model)))
+    return StepStatement(model: .with(variable: variable, source: source.stateExpr, body(value).map(\.model)))
 }
 
 /// Binds two independent members for one atomic block.
@@ -1524,8 +861,8 @@ public func With<Value: TLAValueType>(
 /// It lowers to nested formal binders, so each choice remains independently
 /// scoped and an empty source disables the whole block.
 public func With<First: TLAValueType, Second: TLAValueType>(
-    _ first: Expr<SetExpr<First>>,
-    _ second: Expr<SetExpr<Second>>,
+    _ first: some TypedExpression<SetExpr<First>>,
+    _ second: some TypedExpression<SetExpr<Second>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1540,9 +877,9 @@ public func With<First: TLAValueType, Second: TLAValueType>(
 
 /// Binds three independent members in formal left-to-right scope order.
 public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>(
-    _ first: Expr<SetExpr<First>>,
-    _ second: Expr<SetExpr<Second>>,
-    _ third: Expr<SetExpr<Third>>,
+    _ first: some TypedExpression<SetExpr<First>>,
+    _ second: some TypedExpression<SetExpr<Second>>,
+    _ third: some TypedExpression<SetExpr<Third>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1559,10 +896,10 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>
 
 /// Binds four independent members in formal left-to-right scope order.
 public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType, Fourth: TLAValueType>(
-    _ first: Expr<SetExpr<First>>,
-    _ second: Expr<SetExpr<Second>>,
-    _ third: Expr<SetExpr<Third>>,
-    _ fourth: Expr<SetExpr<Fourth>>,
+    _ first: some TypedExpression<SetExpr<First>>,
+    _ second: some TypedExpression<SetExpr<Second>>,
+    _ third: some TypedExpression<SetExpr<Third>>,
+    _ fourth: some TypedExpression<SetExpr<Fourth>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1581,7 +918,7 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
 /// `with <<first, second>> \in Pairs`. The generated bindings are formal
 /// expressions.
 public func With<First: TLAValueType, Second: TLAValueType>(
-    _ pairs: Expr<SetExpr<Pair<First, Second>>>,
+    _ pairs: some TypedExpression<SetExpr<Pair<First, Second>>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1600,7 +937,7 @@ public func With<First: TLAValueType, Second: TLAValueType>(
 /// block. It lowers to a scoped TLA+ `LET name == expression IN ...`
 /// expression.
 public func Let<Value: TLAValueType>(
-    _ value: Expr<Value>,
+    _ value: some TypedExpression<Value>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1608,7 +945,7 @@ public func Let<Value: TLAValueType>(
 ) -> StepStatement {
     let variable = generatedBinderName(file: file, line: line, column: column)
     let bound = WithValue<Value>(expression: .variable(variable))
-    return StepStatement(model: .letBinding(variable: variable, value: value.raw, body(bound).map(\.model)))
+    return StepStatement(model: .letBinding(variable: variable, value: value.stateExpr, body(bound).map(\.model)))
 }
 
 public func Let<Value: TLAValueType>(
@@ -1624,15 +961,15 @@ public func Let<Value: TLAValueType>(
 /// Tests whether a bounded formal set has a member that satisfies `predicate`.
 ///
 /// This is the typed Swift spelling of TLA+ `\\E value \\in domain : predicate`.
-public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
-    in domain: Expr<SetExpr<Value>>,
+public func Exists<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
+    in domain: some TypedExpression<SetExpr<Value>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
     where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
     let variable = generatedBinderName(file: file, line: line, column: column)
-    return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
+    return Expr(.exists(domain.stateExpr, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
 /// Tests a predicate for two independently bound members.
@@ -1640,9 +977,9 @@ public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
 /// This is the Swift spelling of nested TLA+ existential quantifiers. The
 /// nested AST preserves the same scope and short-circuit semantics as the
 /// source language's multi-binder form.
-public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
-    in first: Expr<SetExpr<First>>,
-    and second: Expr<SetExpr<Second>>,
+public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: TypedExpression<Bool>>(
+    in first: some TypedExpression<SetExpr<First>>,
+    and second: some TypedExpression<SetExpr<Second>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1658,21 +995,21 @@ public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
 /// Tests whether every bounded formal set member satisfies `predicate`.
 ///
 /// This is the typed Swift spelling of TLA+ `\\A value \\in domain : predicate`.
-public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
-    in domain: Expr<SetExpr<Value>>,
+public func ForAll<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
+    in domain: some TypedExpression<SetExpr<Value>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
     where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
     let variable = generatedBinderName(file: file, line: line, column: column)
-    return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
+    return Expr(.forAll(domain.stateExpr, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
 /// Tests a predicate for every pair of independently bound members.
-public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
-    in first: Expr<SetExpr<First>>,
-    and second: Expr<SetExpr<Second>>,
+public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: TypedExpression<Bool>>(
+    in first: some TypedExpression<SetExpr<First>>,
+    and second: some TypedExpression<SetExpr<Second>>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
@@ -1685,83 +1022,48 @@ public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateEx
     }
 }
 
-/// States that every member of a bounded formal set satisfies `predicate`.
-///
-/// This `All(in:)` form returns a formal condition directly, which makes it
-/// natural inside `Invariant` and `When` blocks.
-public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
-    in domain: Expr<SetExpr<Value>>,
-    file: StaticString = #fileID,
-    line: UInt = #line,
-    column: UInt = #column,
-    where predicate: (WithValue<Value>) -> Predicate
-) -> StateExpr {
-    let variable = generatedBinderName(file: file, line: line, column: column)
-    return .forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr)
-}
-
-/// States that a predicate holds for every independently chosen pair of
-/// members from two bounded formal sets.
-///
-/// This is the direct condition-valued counterpart to `ForAll(in:and:where:)`.
-/// It lowers to nested universal binders, preserving each binder's scope.
-public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
-    in first: Expr<SetExpr<First>>,
-    and second: Expr<SetExpr<Second>>,
-    file: StaticString = #fileID,
-    line: UInt = #line,
-    column: UInt = #column,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
-) -> StateExpr {
-    All(in: first, file: file, line: line, column: column) { firstValue in
-        All(in: second, file: file, line: line, column: column + 1) { secondValue in
-            predicate(firstValue, secondValue)
-        }
-    }
-}
-
 /// Tests a predicate for every member of a declared finite domain.
 ///
 /// This is the typed Swift spelling of a bounded TLA+ `\\A value \\in Type`
 /// predicate. It is useful for properties over a PlusCal process family.
-public func All<Value: FiniteTLAValueDomain>(
+public func ForAll<Value: FiniteTLAValueDomain, Predicate: TypedExpression<Bool>>(
     _ domain: FiniteDomain<Value>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    where predicate: (WithValue<Value>) -> StateExpr
-) -> StateExpr {
+    where predicate: (WithValue<Value>) -> Predicate
+) -> Expr<Bool> {
     let variable = generatedBinderName(file: file, line: line, column: column)
-    return .forAll(
+    return Expr(.forAll(
         .setLiteral(domain.values.map { .value($0.tlaValue) }),
         variable,
-        predicate(WithValue(expression: .variable(variable)))
-    )
+        predicate(WithValue(expression: .variable(variable))).stateExpr
+    ))
 }
 
 /// True when a process in the surrounding `Algorithm` has reached `Done`.
 /// The program counter remains lowerer-owned; this avoids raw string-keyed
 /// inspection of generated control state.
-public func Finished() -> StateExpr {
-    .equal(.programCounter, .controlLocation(.done))
+public func Finished() -> Expr<Bool> {
+    Expr(.equal(.programCounter, .controlLocation(.done)))
 }
 
 /// True when one member of a process family has reached `Done`.
 /// The program counter remains lowerer-owned; this avoids raw string-keyed
 /// inspection of generated control state.
-public func Finished<Value: FiniteTLAValueDomain>(_ process: WithValue<Value>) -> StateExpr {
-    .equal(
+public func Finished<Value: FiniteTLAValueDomain>(_ process: WithValue<Value>) -> Expr<Bool> {
+    Expr(.equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.done)
-    )
+    ))
 }
 
 /// True when the current `Each` process has reached `Done`.
-public func Finished<Value: FiniteTLAValueDomain>(_ process: ProcessIdentifier<Value>) -> StateExpr {
-    .equal(
+public func Finished<Value: FiniteTLAValueDomain>(_ process: ProcessIdentifier<Value>) -> Expr<Bool> {
+    Expr(.equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.done)
-    )
+    ))
 }
 
 /// True when one process is at a named PlusCal label.
@@ -1771,110 +1073,53 @@ public func Finished<Value: FiniteTLAValueDomain>(_ process: ProcessIdentifier<V
 public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: FiniteTLAValueDomain>(
     _ label: Label,
     _ process: WithValue<Value>
-) -> StateExpr where Label.RawValue == String {
-    .equal(
+) -> Expr<Bool> where Label.RawValue == String {
+    Expr(.equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.init(label.rawValue))
-    )
+    ))
 }
 
 /// True when the current `Each` process is at a named PlusCal label.
 public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: FiniteTLAValueDomain>(
     _ label: Label,
     _ process: ProcessIdentifier<Value>
-) -> StateExpr where Label.RawValue == String {
-    .equal(
+) -> Expr<Bool> where Label.RawValue == String {
+    Expr(.equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.init(label.rawValue))
-    )
-}
-
-public func With<Value: TLAValueType>(
-    _ source: Var<SetExpr<Value>>,
-    file: StaticString = #fileID,
-    line: UInt = #line,
-    column: UInt = #column,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
-) -> StepStatement {
-    With(Expr<SetExpr<Value>>(source.stateExpr), file: file, line: line, column: column) { body($0) }
-}
-
-public func With<Value: TLAValueType>(
-    _ source: SharedVariable<SetExpr<Value>>,
-    file: StaticString = #fileID,
-    line: UInt = #line,
-    column: UInt = #column,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
-) -> StepStatement {
-    With(Expr<SetExpr<Value>>(source.stateExpr), file: file, line: line, column: column) { body($0) }
-}
-
-/// Binds one member of a process-local formal set.
-public func With<Value: TLAValueType>(
-    _ source: LocalVariable<SetExpr<Value>>,
-    file: StaticString = #fileID,
-    line: UInt = #line,
-    column: UInt = #column,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
-) -> StepStatement {
-    With(source.expr, file: file, line: line, column: column) { body($0) }
-}
-
-/// Binds one member of a finite Swift domain. This is the most direct Swift
-/// spelling of PlusCal `with (value \in Type)`.
-public func With<Value: FiniteTLAValueDomain>(
-    _ source: FiniteDomain<Value>,
-    file: StaticString = #fileID,
-    line: UInt = #line,
-    column: UInt = #column,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
-) -> StepStatement {
-    let variable = generatedBinderName(file: file, line: line, column: column)
-    let value = WithValue<Value>(expression: .variable(variable))
-    return StepStatement(model: .with(
-        variable: variable,
-        source: .setLiteral(source.values.map { .value($0.tlaValue) }),
-        body(value).map(\.model)
     ))
 }
 
-public func Assign<Value: TLAValueType>(
-    _ target: AlgorithmLValue<Value>,
-    to value: some StateExprConvertible
-) -> StepStatement {
-    StepStatement(model: .set(target: target.model, value: value.stateExpr))
+
+
+/// A writable model location with a statically known value type.
+public protocol AssignmentTarget<Value>: Sendable {
+    associatedtype Value: TLAValueType
+    var algorithmLValue: AlgorithmLValue<Value> { get }
 }
 
-public func Assign<Value: TLAValueType>(
-    _ variable: Var<Value>,
-    to value: some StateExprConvertible
-) -> StepStatement {
-    Assign(variable.algorithmLValue, to: value)
+extension AlgorithmLValue: AssignmentTarget {
+    public var algorithmLValue: Self { self }
+}
+extension Var: AssignmentTarget {}
+extension SharedVariable: AssignmentTarget {}
+extension LocalVariable: AssignmentTarget {}
+extension MacroParameter: AssignmentTarget {}
+
+public func Assign<Target: AssignmentTarget, Expression: TypedExpression>(
+    _ target: Target,
+    to value: Expression
+) -> StepStatement where Target.Value == Expression.ExpressionValue {
+    StepStatement(model: .set(target: target.algorithmLValue.model, value: value.stateExpr))
 }
 
-public func Assign<Value: TLAValueType>(
-    _ variable: SharedVariable<Value>,
-    to value: some StateExprConvertible
-) -> StepStatement {
-    Assign(variable.algorithmLValue, to: value)
-}
-
-public func Assign<Value: TLAValueType>(
-    _ variable: LocalVariable<Value>,
-    to value: some StateExprConvertible
-) -> StepStatement {
-    Assign(variable.algorithmLValue, to: value)
-}
-
-public func Assign<Value: TLAValueType>(
-    _ parameter: MacroParameter<Value>,
-    to value: some StateExprConvertible
-) -> StepStatement {
-    Assign(parameter.algorithmLValue, to: value)
+public func Assign<Target: AssignmentTarget>(_ target: Target, to value: Target.Value) -> StepStatement {
+    Assign(target, to: value.expr)
 }
 
 public func If(
-    _ condition: some StateExprConvertible,
+    _ condition: some TypedExpression<Bool>,
     @DoBuilder _ then: () -> [StepStatement],
     @DoBuilder else otherwise: @escaping () -> [StepStatement] = { [] }
 ) -> StepStatement {
@@ -1884,47 +1129,30 @@ public func If(
 /// Builds a typed formal conditional value.
 ///
 /// This is distinct from the statement-builder `If(condition) { ... } else: { ... }` form.
-public func If(
-    _ condition: some StateExprConvertible,
-    then: StateExpr,
-    else otherwise: StateExpr
-) -> StateExpr {
-    .ifThenElse(condition.stateExpr, then.stateExpr, otherwise.stateExpr)
-}
-
-/// Builds a typed formal conditional value.
-///
-/// This is distinct from the statement-builder `If(condition) { ... } else: { ... }` form.
-public func If<Value: TLAValueType>(
-    _ condition: some StateExprConvertible,
-    then: Value,
-    else otherwise: Value
-) -> Expr<Value> {
-    Expr(.ifThenElse(condition.stateExpr, .value(then.tlaValue), .value(otherwise.tlaValue)))
+public func If<Then: TypedExpression, Otherwise: TypedExpression>(
+    _ condition: some TypedExpression<Bool>,
+    then: Then,
+    else otherwise: Otherwise
+) -> Expr<Then.ExpressionValue> where Then.ExpressionValue == Otherwise.ExpressionValue {
+    Expr(.ifThenElse(condition.stateExpr, then.stateExpr, otherwise.stateExpr))
 }
 
 public func If<Value: TLAValueType>(
-    _ condition: some StateExprConvertible,
-    then: Value,
-    else otherwise: Expr<Value>
+    _ condition: some TypedExpression<Bool>, then: Value, else otherwise: Value
 ) -> Expr<Value> {
-    Expr(.ifThenElse(condition.stateExpr, .value(then.tlaValue), otherwise.raw))
+    If(condition, then: then.expr, else: otherwise.expr)
 }
 
-public func If<Value: TLAValueType>(
-    _ condition: some StateExprConvertible,
-    then: Expr<Value>,
-    else otherwise: Value
-) -> Expr<Value> {
-    Expr(.ifThenElse(condition.stateExpr, then.raw, .value(otherwise.tlaValue)))
+public func If<Expression: TypedExpression>(
+    _ condition: some TypedExpression<Bool>, then: Expression.ExpressionValue, else otherwise: Expression
+) -> Expr<Expression.ExpressionValue> {
+    If(condition, then: then.expr, else: otherwise)
 }
 
-public func If<Value: TLAValueType>(
-    _ condition: some StateExprConvertible,
-    then: Expr<Value>,
-    else otherwise: Expr<Value>
-) -> Expr<Value> {
-    Expr(.ifThenElse(condition.stateExpr, then.raw, otherwise.raw))
+public func If<Expression: TypedExpression>(
+    _ condition: some TypedExpression<Bool>, then: Expression, else otherwise: Expression.ExpressionValue
+) -> Expr<Expression.ExpressionValue> {
+    If(condition, then: then, else: otherwise.expr)
 }
 
 public func Either(
@@ -2021,8 +1249,8 @@ public func Skip() -> StepStatement {
     StepStatement(model: .skip)
 }
 
-internal enum AlgorithmValidator {
-    static func validate(_ model: AlgorithmModel) -> [AlgorithmDiagnostic] {
+package enum AlgorithmValidator {
+    package static func validate(_ model: AlgorithmModel) -> [AlgorithmDiagnostic] {
         var diagnostics: [AlgorithmDiagnostic] = []
         validateName(model.name, at: .algorithm, diagnostics: &diagnostics)
         let procedureNames = model.procedures.map(\.name)

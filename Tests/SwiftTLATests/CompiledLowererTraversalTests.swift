@@ -26,7 +26,7 @@ struct CompiledLowererTraversalTests {
             actions: [NamedAction(name: "deep", body: action)],
             invariants: []
         ).compile()
-        let compiledAction = try #require(compilation.semantics.actions.first)
+        let compiledAction = try #require(compilation.semantics.behavior.actions.first)
         let value = try #require(compilation.layout.testVariableID(named: "value"))
         var compiled = compiledAction.body
         var previousBinder: BinderID?
@@ -63,7 +63,7 @@ struct CompiledLowererTraversalTests {
             let value = level == 0 ? "value" : "bound\(level - 1)"
             renderedBody = "LET bound\(level) == \(value) IN \(renderedBody)"
         }
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("deep == \(renderedBody)"))
+        #expect(try compilation.render().tlaBundle.tla.contains("deep == \(renderedBody)"))
     }
 
     @Test("local operator calls retain their bound compiler identities")
@@ -78,18 +78,19 @@ struct CompiledLowererTraversalTests {
             actions: [],
             invariants: [.init(name: "Identity", body: expression)]
         ).compile()
-        let invariant = try #require(compilation.semantics.invariants.first)
+        let invariant = try #require(compilation.semantics.behavior.invariants.first)
         guard case .letIn(
             let operations,
-            .operatorApplication(let reference, let arguments)
-        ) = invariant.body,
+            .operatorApplication(.reference(let reference, _), let arguments)
+        ) = invariant.predicate.expression,
         operations.count == 1,
-        let operation = operations.first,
+        let id = operations.first,
+        let operation = compilation.semantics.operators[id],
         arguments.count == 1,
         let argument = arguments.first,
         case .value(.value(.integer(3))) = argument,
         case .boundValue(let bodyBinder) = operation.body,
-        let parameter = operation.parameters.first
+        case .value(let parameter, _) = operation.parameters.first
         else {
             Issue.record("Expected one bound local operator call")
             return
@@ -122,6 +123,6 @@ struct CompiledLowererTraversalTests {
             invariants: []
         ).compile()
 
-        #expect(compilation.semantics.actions.count == 1)
+        #expect(compilation.semantics.behavior.actions.count == 1)
     }
 }

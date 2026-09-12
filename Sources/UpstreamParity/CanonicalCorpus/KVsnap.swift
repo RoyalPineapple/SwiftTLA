@@ -234,7 +234,7 @@ package struct KVsnapModel: Sendable {
                             to: Subsets(of: SetExpr<Key>.literal(.k1, .k2))
                         ).contains(missed.expr)
                 }
-                Eventually("Termination", All(Transaction.all) { Finished($0) })
+                Eventually("Termination", ForAll(Transaction.all) { Finished($0) })
             })
         }
     }

@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import SwiftParser
 import SwiftSyntax
 import Testing
@@ -18,7 +19,7 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
     }
 
-    let source = try concrete.compile().renderedTLAModuleBundle().tla
+    let source = try concrete.compile().render().tlaBundle.tla
     let instanceRange = try #require(source.range(of: "C == INSTANCE Abstract WITH state <- 0"))
     let refinementRange = try #require(source.range(of: "Refines == C!Spec"))
     #expect(instanceRange.lowerBound < refinementRange.lowerBound)
@@ -81,7 +82,7 @@ struct RefinementDeclarationTests {
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.moduleInstances.count == 1)
@@ -105,7 +106,7 @@ struct RefinementDeclarationTests {
       ])
     }
     #expect(parsed.moduleInstances == builder.moduleInstances)
-    let parsedCompilation = try parsed.compile(specificationName: "Parsed")
+    let parsedCompilation = try parsed.compile()
     let builderCompilation = try builder.compile()
     #expect(parsedCompilation.identity == builderCompilation.identity)
   }
@@ -125,7 +126,7 @@ struct RefinementDeclarationTests {
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.refinements.first?.operator == .liveSpec)
@@ -167,23 +168,40 @@ struct RefinementDeclarationTests {
       }
     }
     let concreteValue = Var<Int>("concreteValue", 0)
+    let concreteReady = Action("ready") {
+      ActionExpr.unchanged(.named(concreteValue.name)).when(concreteValue < 1)
+    }
     let concreteAdvance = Action("advance") {
-      concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
+      ActionExpr.and(.guard_(StateExpr.enabled(concreteReady)), concreteValue.becomes(concreteValue + 1))
     }
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
       Variable(concreteValue)
+      concreteReady
       concreteAdvance
+      FormalDefinition("CanAdvance", parameters: [], body: StateExpr.enabled(concreteAdvance))
       instance
       Refinement(
         name: "Refines",
         instance: instance,
-        mappings: [.init(abstractEnabled, from: StateExpr.enabled(concreteAdvance))]
+        mappings: [.init(abstractEnabled, from: StateExpr.letIn([
+          LocalOperator("Here", parameters: [], body: FormalCall(as: Bool.self, "CanAdvance").stateExpr)
+        ], .recursiveCall("Here", [])))]
       )
     }
 
+    let compilation = try concrete.compile()
+    let refinement = try #require(compilation.refinements.first)
+    let mapping = try #require(refinement.variableMappings.first)
+    #expect(mapping.enabledActions == Set(compilation.semantics.behavior.actions.map(\.id)))
+    let runtime = CompiledRuntime(compilation: compilation)
+    let initial = try #require(try runtime.initialStates().first)
+    #expect(try runtime.evaluate(refinement.variableMappings, in: initial) == [.boolean(true)])
+    let advanced = try #require(try runtime.successors(from: initial).first { $0.state != initial })
+    #expect(try runtime.evaluate(refinement.variableMappings, in: advanced.state) == [.boolean(false)])
+
     guard case .ok = try ModelChecker(
-      compilation: try concrete.compile(),
+      compilation: compilation,
       configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
     ).check() else {
       Issue.record("Expected action enabledness to preserve the abstract transition.")

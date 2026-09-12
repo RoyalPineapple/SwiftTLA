@@ -66,8 +66,9 @@ public struct SpecExpressionMacro: ExpressionMacro {
 private final class BinderLocationRewriter: SyntaxRewriter {
     private let context: any MacroExpansionContext
     private static let helperNames: Set<String> = [
-        "All", "Choose", "Exists", "ForAll", "Let", "LetRec", "With"
+        "Choose", "Exists", "Fold", "ForAll", "Let", "LetRec", "Select", "Where", "With"
     ]
+    private static let memberHelperNames: Set<String> = ["filtering", "forAll", "mapping", "selecting"]
 
     init(context: some MacroExpansionContext) {
         self.context = context
@@ -75,9 +76,11 @@ private final class BinderLocationRewriter: SyntaxRewriter {
 
     override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
         let visited = super.visit(node).as(FunctionCallExprSyntax.self) ?? node
+        let hasClosure = visited.trailingClosure != nil
+            || visited.arguments.contains { $0.expression.is(ClosureExprSyntax.self) }
         guard let location = context.location(of: node),
               let name = helperName(in: visited),
-              Self.helperNames.contains(name),
+              Self.helperNames.contains(name) || (Self.memberHelperNames.contains(name) && hasClosure),
               visited.arguments.contains(where: { $0.label?.text == "file" }) == false
         else {
             return ExprSyntax(visited)
@@ -86,7 +89,7 @@ private final class BinderLocationRewriter: SyntaxRewriter {
         var arguments = Array(visited.arguments)
         let insertionIndex = name == "LetRec"
             ? arguments.firstIndex(where: { $0.label?.text == "in" }) ?? arguments.endIndex
-            : arguments.endIndex
+            : arguments.firstIndex(where: { $0.expression.is(ClosureExprSyntax.self) }) ?? arguments.endIndex
         arguments.insert(argument("file", location.file), at: insertionIndex)
         arguments.insert(argument("line", location.line), at: insertionIndex + 1)
         arguments.insert(argument("column", location.column), at: insertionIndex + 2)
@@ -94,13 +97,17 @@ private final class BinderLocationRewriter: SyntaxRewriter {
             arguments[index].trailingComma = index == arguments.indices.last ? nil : .commaToken()
         }
 
-        return ExprSyntax(visited.with(\.arguments, LabeledExprListSyntax(arguments)))
+        return ExprSyntax(visited
+            .with(\.leftParen, visited.leftParen ?? .leftParenToken())
+            .with(\.arguments, LabeledExprListSyntax(arguments))
+            .with(\.rightParen, visited.rightParen ?? .rightParenToken()))
     }
 
     private func helperName(in call: FunctionCallExprSyntax) -> String? {
-        call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
-            ?? call.calledExpression.as(GenericSpecializationExprSyntax.self)?
-                .expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+        let expression = call.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression
+            ?? call.calledExpression
+        return expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+            ?? expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
     }
 
     private func argument(_ label: String, _ expression: ExprSyntax) -> LabeledExprSyntax {

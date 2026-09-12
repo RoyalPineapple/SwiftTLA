@@ -166,9 +166,9 @@ public enum ZSequences {
   }
 
   public static func indices<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>
+    of sequence: some TypedExpression<ZeroBasedSequence<Element>>
   ) -> Expr<SetExpr<Int>> {
-    Expr(.recursiveCall("ZIndices", [sequence.raw]))
+    Expr(.recursiveCall("ZIndices", [sequence.stateExpr]))
   }
 
   /// The bounded set of zero-indexed sequences over `elements`.
@@ -176,37 +176,37 @@ public enum ZSequences {
   /// `Import(ZSequences.module, configuring: ...)` supplies the finite `Nat`
   /// domain used by the upstream `ZSeq` definition.
   public static func sequences<Element: TLAValueType>(
-    over elements: Expr<SetExpr<Element>>
+    over elements: some TypedExpression<SetExpr<Element>>
   ) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
-    Expr(.recursiveCall("ZSeq", [elements.raw]))
+    Expr(.recursiveCall("ZSeq", [elements.stateExpr]))
   }
 
   public static func length<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>
+    of sequence: some TypedExpression<ZeroBasedSequence<Element>>
   ) -> Expr<Int> {
-    Expr(.recursiveCall("ZLen", [sequence.raw]))
+    Expr(.recursiveCall("ZLen", [sequence.stateExpr]))
   }
 
   public static func rotation<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>,
-    leftBy shift: Expr<Int>
+    of sequence: some TypedExpression<ZeroBasedSequence<Element>>,
+    leftBy shift: some TypedExpression<Int>
   ) -> Expr<ZeroBasedSequence<Element>> {
-    Expr(.recursiveCall("Rotation", [sequence.raw, shift.raw]))
+    Expr(.recursiveCall("Rotation", [sequence.stateExpr, shift.stateExpr]))
   }
 
   /// Every left rotation of a zero-indexed sequence, as the upstream record
   /// set `{ [shift |-> r, seq |-> Rotation(s, r)] : r \in ZIndices(s) }`.
   public static func rotations<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>
+    of sequence: some TypedExpression<ZeroBasedSequence<Element>>
   ) -> Expr<SetExpr<Record<Rotation<Element>>>> {
-    Expr(.recursiveCall("Rotations", [sequence.raw]))
+    Expr(.recursiveCall("Rotations", [sequence.stateExpr]))
   }
 
   public static func lexicographicallyPrecedesOrEquals(
-    _ left: Expr<ZeroBasedSequence<Int>>,
-    _ right: Expr<ZeroBasedSequence<Int>>
+    _ left: some TypedExpression<ZeroBasedSequence<Int>>,
+    _ right: some TypedExpression<ZeroBasedSequence<Int>>
   ) -> StateExpr {
-    .recursiveCall("LexicographicallyPrecedesOrEquals", [left.raw, right.raw])
+    .recursiveCall("LexicographicallyPrecedesOrEquals", [left.stateExpr, right.stateExpr])
   }
 
   /// Gives the imported module's `Nat` operator a finite TLC model domain.

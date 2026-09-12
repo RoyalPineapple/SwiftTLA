@@ -1,4 +1,5 @@
 import Testing
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 import SwiftTLAMacros
 
@@ -105,8 +106,8 @@ private struct CompilerPipelineInitializationModel {
 private struct CompilerPipelineCollectionModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineCollectionModel") {
-            let devices = SymmetricCollectionVar<CompilerPipelineMember, Int>("devices")
-            SymmetricCollection(devices, verificationScope: 2, initial: 0)
+            let devices = CollectionVar<CompilerPipelineMember, Int>("devices")
+            ModelCollection(devices, verificationScope: 2, initial: 0)
             CollectionAction("advance", on: devices) { member in
                 devices[member] == 0 && devices.update(member, to: 1)
             }
@@ -177,8 +178,8 @@ struct CompilerPipelineCanonicalizationTests {
             Var("value", SecondGeneratedSurfaceValue.value)
         }.compile()
 
-        #expect(first.renderedTLAModuleBundle().tla == second.renderedTLAModuleBundle().tla)
-        #expect(first.machineSurfacePlan.variables.map(\.swiftType) == ["FirstGeneratedSurfaceValue"])
+        #expect(try first.render().tlaBundle.tla == second.render().tlaBundle.tla)
+        #expect(first.layout.variables.filter { $0.declaration.origin == .source }.map(\.generatedSwiftType) == ["FirstGeneratedSurfaceValue"])
         #expect((first.identity == second.identity) == false)
 
         let firstAction = try TLASpec("GeneratedActionSurfaceIdentity") {
@@ -196,7 +197,7 @@ struct CompilerPipelineCanonicalizationTests {
             ) { StateExpr.value(.bool(true)) }
         }.compile()
 
-        #expect(firstAction.renderedTLAModuleBundle().tla == secondAction.renderedTLAModuleBundle().tla)
+        #expect(try firstAction.render().tlaBundle.tla == secondAction.render().tlaBundle.tla)
         #expect((firstAction.identity == secondAction.identity) == false)
     }
 
@@ -205,7 +206,7 @@ struct CompilerPipelineCanonicalizationTests {
         func sourceModel() -> TLASpec {
             TLASpec("StableBinders") {
                 Invariant("allPositive") {
-                    All(in: SetExpr<Int>.literal(1, 2)) { value in value >= 1 }
+                    ForAll(in: SetExpr<Int>.literal(1, 2)) { value in value >= 1 }
                 }
             }
         }
@@ -213,8 +214,8 @@ struct CompilerPipelineCanonicalizationTests {
         let first = try sourceModel().compile()
         _ = sourceModel()
         let second = try sourceModel().compile()
-        let firstModule = first.renderedTLAModuleBundle().root.tla
-        let secondModule = second.renderedTLAModuleBundle().root.tla
+        let firstModule = try first.render().tlaBundle.root.tla
+        let secondModule = try second.render().tlaBundle.root.tla
 
         #expect(first.identity == second.identity)
         #expect(firstModule == secondModule)
@@ -233,12 +234,12 @@ struct CompilerPipelineCanonicalizationTests {
         }
 
         let compilation = try spec.compile()
-        let invariant = try #require(compilation.semantics.invariants.first)
-        guard case .forAll(_, let first, .forAll(_, let second, _)) = invariant.body else {
+        let invariant = try #require(compilation.semantics.behavior.invariants.first)
+        guard case .forAll(_, let first, .forAll(_, let second, _)) = invariant.predicate.expression else {
             Issue.record("Expected nested compiled quantifiers")
             return
         }
-        let module = compilation.renderedTLAModuleBundle().root.tla
+        let module = try compilation.render().tlaBundle.root.tla
 
         #expect(Set([first, second]).count == 2)
         #expect(module.contains("\\A value \\in"))
@@ -258,7 +259,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+        let module = try spec.compile().render().tlaBundle.root.tla
 
         #expect(module.contains("VARIABLES value"))
         #expect(module.contains("\\A value_1 \\in value"))
@@ -268,7 +269,7 @@ struct CompilerPipelineCanonicalizationTests {
     @Test("compiled binder rendered names remain distinct from temporal properties")
     func compiledBinderRenderedNamesRemainDistinctFromTemporalProperties() throws {
         let spec = TLASpec("BinderPropertyCollision") {
-            Always("value", .value(.bool(true)))
+            Always("value", true)
             Invariant("Safe") {
                 .forAll(
                     .setLiteral([.value(.int(1))]),
@@ -278,7 +279,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+        let module = try spec.compile().render().tlaBundle.root.tla
 
         #expect(spec.temporalProperties.map(\.name) == ["value"])
         #expect(module.contains("\\A value_1 \\in"))
@@ -293,7 +294,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let module = try spec.compile().renderedTLAModuleBundle().root.tla
+        let module = try spec.compile().render().tlaBundle.root.tla
 
         #expect(module.contains("stay(_process_1) =="))
     }
@@ -308,12 +309,13 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try TLASpec("NestedBinderIdentity") {
             FormalDefinition("Value", parameters: [], body: expression)
         }.compile()
-        let definition = try #require(compilation.semantics.formalOperatorDefinitions.first)
+        let definitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
+    let definition = try #require(compilation.semantics.operators[definitionID])
         guard case .letValue(let outer, _, .letValue(let inner, .boundValue(let outerReference), .boundValue(let innerReference))) = definition.body else {
             Issue.record("Expected nested compiled value binders")
             return
         }
-        let module = compilation.renderedTLAModuleBundle().root.tla
+        let module = try compilation.render().tlaBundle.root.tla
 
         #expect(Set([outer, inner]).count == 2)
         #expect(outerReference == outer)
@@ -351,7 +353,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let graph = try checker.exploreGraph()
         #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(1))
-        let invariant = try #require(compilation.semantics.invariants.first)
+        let invariant = try #require(compilation.semantics.behavior.invariants.first)
         #expect(invariant.name == "NonNegative")
         #expect(try CompiledRuntime(compilation: compilation).invariantHolds(invariant, in: initial))
         #expect(graph.states.count == 3)
@@ -365,7 +367,7 @@ struct CompilerPipelineCanonicalizationTests {
             let spec = TLASpec("StateLimitBoundary") {
                 Variable(counter, 0)
                 Action("increment") {
-                    guarded ? ActionExpr.guard_(counter < 2) && action : action
+                    guarded ? action.when(counter < 2) : action
                 }
             }
             return try ModelChecker(
@@ -590,7 +592,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .existsAction(let binder, _, .assign(let variable, .boundValue(let value))) = compilation.semantics.actions[0].body else {
+        guard case .existsAction(let binder, _, .assign(let variable, .boundValue(let value))) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected a compiled binder assignment")
             return
         }
@@ -612,7 +614,8 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .eventually(.equal(.stateVariable(let variable), .value(.integer(0)))) = compilation.semantics.temporalProperties[0].expression else {
+        guard case .eventually(let predicate) = compilation.semantics.behavior.temporalProperties[0].expression,
+              case .equal(.stateVariable(let variable), .value(.integer(0))) = predicate.expression else {
             Issue.record("Expected a compiled temporal predicate")
             return
         }
@@ -657,7 +660,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(values: [.integer(0), .integer(0)], compilation: compilation)
-        let action = try #require(compilation.semantics.actions.first)
+        let action = try #require(compilation.semantics.behavior.actions.first)
         let nextStates = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
@@ -685,7 +688,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(values: [.integer(0)], compilation: compilation)
-        let action = try #require(compilation.semantics.actions.first)
+        let action = try #require(compilation.semantics.behavior.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
@@ -718,17 +721,17 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(values: [.integer(0)], compilation: compilation)
-        let action = try #require(compilation.semantics.actions.first)
+        let action = try #require(compilation.semantics.behavior.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
 
-        guard case .assign(_, .operatorApplication(let id, _)) = compilation.semantics.actions[0].body else {
+        guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected an operator identity")
             return
         }
         let counter = try #require(next.first).value(for: .init(ordinal: 0))
-        #expect(compilation.semantics.formalOperatorDefinitions.contains { $0.id == id })
+        #expect(compilation.semantics.operators.formalDefinitionIDs.contains(id))
         #expect(counter == .integer(4))
     }
 
@@ -769,7 +772,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(values: [.integer(0)], compilation: compilation)
-        let action = try #require(compilation.semantics.actions.first)
+        let action = try #require(compilation.semantics.behavior.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
@@ -806,7 +809,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(initial.count == 2)
         let firstSuccessor = try runtime.successors(from: try #require(initial.first))
-        let invariantHolds = try runtime.invariantHolds(compilation.semantics.invariants[0], in: firstSuccessor[0].state)
+        let invariantHolds = try runtime.invariantHolds(compilation.semantics.behavior.invariants[0], in: firstSuccessor[0].state)
         #expect(firstSuccessor.count == 1)
         #expect(invariantHolds)
 
@@ -830,15 +833,17 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .and(.guard_(.lambdaApplication(let lambda, _)), .unchanged) = compilation.semantics.actions[0].body else {
+        guard case .and(.guard_(.operatorApplication(.lambda(let id, let arity), _)), .unchanged) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected a compiled higher-order call")
             return
         }
+        let lambda = try #require(compilation.semantics.operators[id])
+        #expect(arity == lambda.parameters.count)
         guard case .equal(.boundValue(let value), _) = lambda.body else {
             Issue.record("Expected a compiled lambda binder")
             return
         }
-        #expect(value == lambda.parameters[0])
+        #expect(lambda.parameters == [.value(value)])
     }
 
     @Test("compiled ranges retain their bound variable identities")
@@ -855,7 +860,7 @@ struct CompilerPipelineCanonicalizationTests {
         guard case .and(
             .guard_(.in(_, .integerRange(.stateVariable(let value), _))),
             .unchanged
-        ) = compilation.semantics.actions[0].body else {
+        ) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected a compiled integer range")
             return
         }
@@ -934,7 +939,7 @@ struct CompilerPipelineCanonicalizationTests {
             let binder,
             _,
             .and(.guard_(let expression), .unchanged)
-        ) = compilation.semantics.actions[0].body else {
+        ) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected a compiled action binder")
             return
         }
@@ -984,13 +989,13 @@ struct CompilerPipelineCanonicalizationTests {
         guard case .and(
             .guard_(.equal(.recordLiteral(let record), _)),
             .unchanged
-        ) = compilation.semantics.actions[0].body,
-              case .stateVariable(let variable) = record.fields[0].value else {
+        ) = compilation.semantics.behavior.actions[0].body,
+              case .stateVariable(let variable) = record[0].value else {
             Issue.record("Expected a compiled record with a bound variable value")
             return
         }
 
-        #expect(record.fields[0].id == compilation.layout.fields[0].id)
+        #expect(record[0].declaration.id == compilation.layout.fields[0].id)
         #expect(variable == compilation.layout.variables[0].id)
     }
 
@@ -1034,7 +1039,7 @@ struct CompilerPipelineCanonicalizationTests {
             .equal(.recursiveCall("increment", [.int(1)]), .int(2))
         )
         let spec = TLASpec(
-            name: "CompiledLocalOperator",
+            name: "CompiledOperatorDefinition",
             variables: [],
             actions: [.init(name: "step", body: .guard_(expression))],
             invariants: []
@@ -1042,7 +1047,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let state = try CompiledState(values: [], compilation: compilation)
 
-        guard case .guard_(let compiled) = compilation.semantics.actions[0].body else {
+        guard case .guard_(let compiled) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected a compiled guard")
             return
         }
@@ -1065,7 +1070,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let state = try CompiledState(values: [.integer(1)], compilation: compilation)
 
-        let action = compilation.semantics.actions[0]
+        let action = compilation.semantics.behavior.actions[0]
         let successors = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
             .map(\.state)
@@ -1088,13 +1093,13 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
 
         guard case .and(
-            .guard_(.equal(.recordAccess(_, let field, _), _)),
+            .guard_(.equal(.recordAccess(_, let field), _)),
             .unchanged
-        ) = compilation.semantics.actions[0].body else {
+        ) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected a compiled record access")
             return
         }
-        #expect(field.ordinal == 0)
+        #expect(field.id.ordinal == 0)
         let initial = try firstCompiledState(in: compilation)
         let successors = try compiledSuccessors(named: "step", arguments: [], in: compilation, from: initial)
         #expect(successors.count == 1)
@@ -1173,8 +1178,8 @@ struct CompilerPipelineCanonicalizationTests {
     func scopedAlgorithmMatchesGeneratedExecution() throws {
         let compilation = try CompilerPipelineAlgorithmModel.spec.compile()
         let repeated = try CompilerPipelineAlgorithmModel.spec.compile()
-        let rendered = compilation.renderedTLAModuleBundle().tla
-        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
+        let rendered = try compilation.render().tlaBundle.tla
+        let repeatedRendered = try repeated.render().tlaBundle.tla
         var machine = try CompilerPipelineAlgorithmModel.makeMachine()
         let transition = try machine.send(.increment)
 
@@ -1219,7 +1224,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
 
         #expect(compilation.layout.testVariableID(named: "counter") == .init(ordinal: 0))
-        let action = try #require(compilation.semantics.actions.first)
+        let action = try #require(compilation.semantics.behavior.actions.first)
         guard case .and(
             .guard_(.forAll(_, let outer, .exists(_, let inner, .equal(.boundValue(let reference), _)))),
             .unchanged(let variable)
@@ -1253,7 +1258,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
 
         #expect(alphaKey(sum) == expectedKey)
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("PositiveSum == (\(expectedSum) > 0)"))
+        #expect(try compilation.render().tlaBundle.tla.contains("PositiveSum == (\(expectedSum) > 0)"))
     }
 
     @Test("state identity traverses structured expressions and preserves lexical scope")
@@ -1460,8 +1465,8 @@ struct CompilerPipelineCanonicalizationTests {
     func macroGeneratedConsumersUseCompiledPayload() throws {
         let compilation = try CompilerPipelineGeneratedModel.spec.compile()
         let repeated = try CompilerPipelineGeneratedModel.spec.compile()
-        let rendered = compilation.renderedTLAModuleBundle().tla
-        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
+        let rendered = try compilation.render().tlaBundle.tla
+        let repeatedRendered = try repeated.render().tlaBundle.tla
 
         #expect(repeated.identity == compilation.identity)
         #expect(rendered == repeatedRendered)
@@ -1507,7 +1512,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         ).compile()
         let states = try CompiledRuntime(compilation: compilation).initialStates()
-        let initializationOrder = compilation.semantics.variableInitializations.map { initialization in
+        let initializationOrder = compilation.semantics.behavior.initializations.map { initialization in
             compilation.layout.variables.first { $0.id == initialization.variable }?.declaration.name
         }
 
@@ -2035,7 +2040,7 @@ struct CompilerPipelineCanonicalizationTests {
                 )
             ]
         ).compile()
-        let initializationOrder = compilation.semantics.variableInitializations.map { initialization in
+        let initializationOrder = compilation.semantics.behavior.initializations.map { initialization in
             compilation.layout.variables.first { $0.id == initialization.variable }?.declaration.name
         }
         let state = try firstCompiledState(in: compilation)
@@ -2096,7 +2101,7 @@ struct CompilerPipelineCanonicalizationTests {
                 )
             ]
         ).compile()
-        let initializationOrder = compilation.semantics.variableInitializations.map { initialization in
+        let initializationOrder = compilation.semantics.behavior.initializations.map { initialization in
             compilation.layout.variables.first { $0.id == initialization.variable }?.declaration.name
         }
         let state = try firstCompiledState(in: compilation)
@@ -2213,24 +2218,24 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try renderedValue(named: "nestedValue", in: state, compilation: compilation) == .int(3))
     }
 
-    @Test("symmetric collection actions lower to the declared finite member binding")
-    func symmetricCollectionActionsUseDeclaredMemberBindings() throws {
+    @Test("typed collection actions lower to the declared finite member binding")
+    func collectionActionsUseDeclaredMemberBindings() throws {
         let source = try CompilerPipelineCollectionModel.spec.loweredSourceModel()
         let compilation = try source.compile()
         let devices = try #require(source.variables.first { $0.name == "devices" })
-        let declaration = try #require(source.symmetricCollections.first { $0.name == "devices" })
+        let declaration = try #require(source.collections.first { $0.name == "devices" })
         let action = try #require(source.actions.first { $0.name == "advance" })
-        let compiledAction = try #require(compilation.semantics.actions.first)
+        let compiledAction = try #require(compilation.semantics.behavior.actions.first)
         let machineVariable = try #require(
-            compilation.machineSurfacePlan.variables.first { $0.formalName == "devices" }
+            MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).variables.first { $0.formalName == "devices" }
         )
         let machineCollection = try #require(machineVariable.collection)
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let successors = try CompiledRuntime(compilation: compilation)
             .successors(for: compiledAction.id, from: initialState)
-        let rendered = compilation.renderedTLAModuleBundle().tla
+        let rendered = try compilation.render().tlaBundle.tla
         let repeated = try CompilerPipelineCollectionModel.spec.compile()
-        let repeatedRendered = repeated.renderedTLAModuleBundle().tla
+        let repeatedRendered = try repeated.render().tlaBundle.tla
         let hasOuterExistential: Bool
         if case .existsAction = action.body {
             hasOuterExistential = true
@@ -2248,9 +2253,15 @@ struct CompilerPipelineCanonicalizationTests {
                 == declaration.metadata.members.map(CompiledValue.init(formal:))
         )
         #expect(compiledAction.collection == compilation.layout.testVariableID(named: "devices"))
-        #expect(machineVariable.swiftType == "[CompilerPipelineMember.ID: Int]")
+        let types = try SourceTypeResolver().resolve(in: compilation)
+        let collectionID = try #require(compiledAction.collection)
+        let memberID = try #require(compiledAction.bindings.first?.binder)
+        #expect(types.variableTypes[collectionID] == .dictionary(
+            try #require(types.bindingTypes[memberID]), .int))
+        #expect(machineCollection.elementType == "CompilerPipelineMember")
+        #expect(machineCollection.valueType == "Int")
         #expect(machineCollection.formalName == "devices")
-        #expect(compilation.machineSurfacePlan.symmetricCollections == [machineCollection])
+        #expect(try MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).collections == [machineCollection])
         #expect(hasOuterExistential)
         #expect(try successors.map { successor in
             try successor.arguments.map { try $0.rendered(using: compilation.layout) }
@@ -2265,9 +2276,9 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("lowered collection actions retain nested existential bodies")
     func loweredCollectionActionsRetainNestedExistentials() throws {
-        let devices = SymmetricCollectionVar<CompilerPipelineMember, Int>("devices")
+        let devices = CollectionVar<CompilerPipelineMember, Int>("devices")
         let specification = TLASpec("NestedCollectionExistential") {
-            SymmetricCollection(devices, verificationScope: 2, initial: 0)
+            ModelCollection(devices, verificationScope: 2, initial: 0)
             CollectionAction("advance", on: devices) { member in
                 .existsAction(
                     "choice",
@@ -2283,13 +2294,13 @@ struct CompilerPipelineCanonicalizationTests {
         let secondAction = try #require(second.actions.first)
         let firstCompilation = try first.compile()
         let secondCompilation = try second.compile()
-        let compiledAction = try #require(firstCompilation.semantics.actions.first)
+        let compiledAction = try #require(firstCompilation.semantics.behavior.actions.first)
 
         #expect(firstAction == secondAction)
         #expect(firstAction.bindings.isEmpty)
         #expect(
             compiledAction.bindings[0].values
-                == specification.symmetricCollections[0].metadata.members.map(CompiledValue.init(formal:))
+                == specification.collections[0].metadata.members.map(CompiledValue.init(formal:))
         )
         guard case .existsAction = compiledAction.body else {
             Issue.record("Expected the authored nested existential to remain in the compiled body")
@@ -2311,7 +2322,7 @@ struct CompilerPipelineCanonicalizationTests {
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], temporalProperties: [.init(name: "Safety", expr: .always(.value(.bool(true))))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
             {
-                let collection = SymmetricCollectionDecl(
+                let collection = ModelCollectionDecl(
                     name: "members",
                     verificationScope: 1,
                     initial: .int(0),
@@ -2323,7 +2334,7 @@ struct CompilerPipelineCanonicalizationTests {
                     variables: base.variables + [collection.variable],
                     actions: base.actions,
                     invariants: [],
-                    symmetricCollections: [collection]
+                    collections: [collection]
                 )
             }(),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], extendsModules: [.naturals])
@@ -2352,7 +2363,7 @@ struct CompilerPipelineCanonicalizationTests {
             "procedure_work_enter",
             "procedure_work_enter__2"
         ])
-        let source = compilation.renderedTLAModuleBundle().tla
+        let source = try compilation.render().tlaBundle.tla
         #expect(source.contains("procedure_work_enter =="))
         #expect(source.contains("procedure_work_enter__2 =="))
     }

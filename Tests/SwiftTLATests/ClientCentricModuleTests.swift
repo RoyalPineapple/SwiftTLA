@@ -25,10 +25,10 @@ struct ClientCentricModuleTests {
     let compilation = try consumer.compile()
     let runtime = CompiledRuntime(compilation: compilation)
     let state = try #require(try runtime.initialStates().first)
-    let invariant = try #require(compilation.semantics.invariants.first)
+    let invariant = try #require(compilation.semantics.behavior.invariants.first)
     #expect(try runtime.invariantHolds(invariant, in: state))
-    #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
-    #expect(compilation.renderedTLAModuleBundle().tla.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
+    #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
+    #expect(try compilation.render().tlaBundle.tla.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
   }
 
   @Test("a selected injective function can concatenate as a TLA sequence")

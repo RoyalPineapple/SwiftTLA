@@ -18,7 +18,7 @@ struct RefinementChecker {
 
     func check(_ exploration: FiniteExploration) throws -> ModelCheckOutcome? {
         guard !compilation.refinements.isEmpty else { return nil }
-        try exploration.requireValidEvidence(in: compilation)
+        try exploration.validate(for: compilation)
         guard exploration.isComplete else {
             guard case .depthExceeded = exploration.outcome else { return nil }
             return compilation.refinements.first.map {
@@ -125,14 +125,10 @@ struct RefinementChecker {
 extension TLASpec {
     func specializing(parameters: [String: StateExpr]) -> TLASpec {
         func state(_ expression: StateExpr) -> StateExpr {
-            parameters.reduce(expression) { substitutedExpression, binding in
-                StateExpr.substituteVariable(binding.key, with: binding.value, in: substitutedExpression)
-            }
+            StateExpr.substituteVariables(parameters, in: expression)
         }
         func action(_ expression: ActionExpr) -> ActionExpr {
-            parameters.reduce(expression) { substitutedExpression, binding in
-                substitutedExpression.substitutingVariable(binding.key, with: binding.value)
-            }
+            expression.substitutingVariables(parameters)
         }
         func initialization(_ value: VariableInitialization) -> VariableInitialization {
             switch value {
@@ -148,10 +144,10 @@ extension TLASpec {
             invariants: invariants.map { .init(name: $0.name, body: state($0.body)) }, temporalProperties: temporalProperties,
             fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
             extendsModules: extendsModules, constraint: constraint.map(state),
-            recursiveFuncs: recursiveFuncs.map { .init(name: $0.name, params: $0.params, body: state($0.body)) },
-            formalOperatorDefinitions: formalOperatorDefinitions.map { .init(name: $0.name, parameters: $0.parameters, body: state($0.body), plusCalPhase: $0.plusCalPhase, plusCalDependencies: $0.plusCalDependencies) },
+            recursiveFuncs: recursiveFuncs.map { $0.substitutingVariables(parameters) },
+            formalOperatorDefinitions: formalOperatorDefinitions.map { $0.substitutingVariables(parameters) },
             imports: imports, importConfigurations: importConfigurations, moduleInstances: moduleInstances, refinements: [],
-            symmetrySets: symmetrySets, symmetricCollections: symmetricCollections,
+            symmetrySets: symmetrySets, collections: collections,
             sourceAlgorithms: sourceAlgorithms
         )
         specialized.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan

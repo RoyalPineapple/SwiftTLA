@@ -64,17 +64,17 @@ public enum GeneratedDemoTestSuite {
             }),
             check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Generated state", action: { () throws -> Void in
                 let machine = try ChangRoberts.makeMachine()
-                guard machine.state.leader == 0, machine.state.messages.elements.count == 12 else {
+                guard machine.state.leader == 0, machine.state.messages.count == 12 else {
                     throw GeneratedDemoSuiteError.unexpectedInitialState
                 }
             }),
             check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Typed delivery", action: { () throws -> Void in
                 var machine = try ChangRoberts.makeMachine()
                 _ = try machine.send(.deliver(process: .six))
-                guard machine.state.messages.elements.contains(where: {
-                    $0.value(for: ChangRoberts.MessageSchema.candidate) == 12 &&
-                    $0.value(for: ChangRoberts.MessageSchema.from) == .six &&
-                    $0.value(for: ChangRoberts.MessageSchema.to) == .seven
+                guard machine.state.messages.contains(where: {
+                    $0.candidate == 12 &&
+                    $0.from == .six &&
+                    $0.to == .seven
                 }) else {
                     throw GeneratedDemoSuiteError.deliveryWasNotForwarded
                 }

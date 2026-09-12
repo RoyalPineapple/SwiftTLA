@@ -26,7 +26,7 @@ struct MultiBindingChooseTests {
         let selected = try #require(compilation.layout.testVariableID(named: "selected"))
         let values = try Set(successors.map { try $0.value(for: selected).rendered(using: compilation.layout) })
         #expect(values == [.int(110), .int(111), .int(210), .int(211)])
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("\\E"))
+        #expect(try compilation.render().tlaBundle.tla.contains("\\E"))
     }
 
     @Test("macro parser produces the same nested choice model as the builder")

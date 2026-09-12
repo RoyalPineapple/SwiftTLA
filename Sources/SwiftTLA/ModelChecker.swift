@@ -111,7 +111,7 @@ package struct FiniteExplorationConfiguration: Sendable, Equatable, Codable {
 
     func validatePropertySupport(in compilation: CompiledSpecification) throws {
         if case .enabled = symmetryReduction,
-           !compilation.semantics.temporalProperties.isEmpty || !compilation.refinements.isEmpty {
+           !compilation.semantics.behavior.temporalProperties.isEmpty || !compilation.refinements.isEmpty {
             throw FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly
         }
     }
@@ -144,10 +144,10 @@ package struct ModelChecker {
     func checkLiveness() throws -> ModelCheckOutcome {
         let exploration = try explore()
         guard case .ok = exploration.outcome else { return exploration.outcome }
-        guard compilation.semantics.temporalProperties.isEmpty == false else { return exploration.outcome }
+        guard compilation.semantics.behavior.temporalProperties.isEmpty == false else { return exploration.outcome }
 
         let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-        for (property, analysis) in zip(compilation.semantics.temporalProperties, analyses) {
+        for (property, analysis) in zip(compilation.semantics.behavior.temporalProperties, analyses) {
             switch analysis.status {
             case .satisfied:
                 continue
@@ -198,7 +198,7 @@ package struct ModelChecker {
             runtime: runtime,
             seeds: initialStates,
             layout: compilation.layout,
-            checkDeadlock: compilation.semantics.checkDeadlock,
+            checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             specificationName: compilation.description.name,
             configuration: configuration,
             symmetry: symmetry
@@ -346,7 +346,7 @@ private func compiledBFS(
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.compilation.semantics.invariants {
+        for invariant in runtime.compilation.semantics.behavior.invariants {
             guard try runtime.invariantHolds(invariant, in: current) else {
                 let counterexample = try trace(to: current)
                 guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {

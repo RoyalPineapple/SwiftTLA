@@ -7,28 +7,30 @@ private enum FieldDiscoveryTask {
     case name(String)
 }
 
-struct VariableID: Hashable, Sendable {
-    let ordinal: Int
+package struct VariableID: Hashable, Sendable {
+    package let ordinal: Int
 }
 
-struct BinderID: Hashable, Sendable {
-    let ordinal: Int
+package struct BinderID: Hashable, Sendable {
+    package let ordinal: Int
 }
 
-struct ActionID: Hashable, Sendable {
-    let ordinal: Int
+package struct ActionID: Hashable, Sendable {
+    package let ordinal: Int
 }
 
-struct PropertyID: Hashable, Sendable {
-    let ordinal: Int
+package struct PropertyID: Hashable, Sendable {
+    package let ordinal: Int
 }
 
-struct ControlLocationID: Hashable, Sendable {
-    let ordinal: Int
+package struct ControlLocationID: Hashable, Sendable {
+    package let ordinal: Int
 }
 
-struct OperatorID: Hashable, Sendable {
-    let ordinal: Int
+
+
+package struct OperatorID: Hashable, Sendable {
+    package let ordinal: Int
 }
 
 struct ProcedureID: Hashable, Sendable {
@@ -39,22 +41,22 @@ struct ModuleInstanceID: Hashable, Sendable {
     let ordinal: Int
 }
 
-struct FieldID: Hashable, Sendable {
-    let ordinal: Int
+package struct FieldID: Hashable, Sendable {
+    package let ordinal: Int
 }
 
-struct CompiledDeclaration: Hashable, Sendable {
-    enum Kind: String, Hashable, Sendable {
+package struct CompiledDeclaration: Hashable, Sendable {
+    package enum Kind: String, Hashable, Sendable {
         case variable
         case action
         case invariant
         case temporalProperty
     }
 
-    let kind: Kind
-    let name: String
-    let sourceOffset: Int?
-    let origin: VariableOrigin
+    package let kind: Kind
+    package let name: String
+    package let sourceOffset: Int?
+    package let origin: VariableOrigin
 
     init(
         kind: Kind,
@@ -69,23 +71,23 @@ struct CompiledDeclaration: Hashable, Sendable {
     }
 }
 
-struct CompiledVariableLayout: Hashable, Sendable {
-    let id: VariableID
-    let declaration: CompiledDeclaration
-    let generatedSwiftType: String?
-    let collection: CompiledSymmetricCollectionLayout?
+package struct CompiledVariableLayout: Hashable, Sendable {
+    package let id: VariableID
+    package let declaration: CompiledDeclaration
+    package let generatedSwiftType: String?
+    package let collection: CompiledModelCollectionLayout?
 }
 
-struct CompiledSymmetricCollectionLayout: Hashable, Sendable {
-    let members: [CompiledValue]
-    let elementType: String?
-    let valueType: String?
+package struct CompiledModelCollectionLayout: Hashable, Sendable {
+    package let members: [CompiledValue]
+    package let elementType: String?
+    package let valueType: String?
 }
 
-struct CompiledActionLayout: Hashable, Sendable {
-    let id: ActionID
-    let declaration: CompiledDeclaration
-    let renderedName: String
+package struct CompiledActionLayout: Hashable, Sendable {
+    package let id: ActionID
+    package let declaration: CompiledDeclaration
+    package let renderedName: String
 }
 
 struct CompiledPropertyLayout: Hashable, Sendable {
@@ -93,9 +95,9 @@ struct CompiledPropertyLayout: Hashable, Sendable {
     let declaration: CompiledDeclaration
 }
 
-struct CompiledFieldLayout: Hashable, Sendable {
-    let id: FieldID
-    let renderedName: String
+package struct CompiledFieldLayout: Hashable, Sendable {
+    package let id: FieldID
+    package let renderedName: String
 }
 
 struct CompiledProcedureLayout: Hashable, Sendable {
@@ -105,13 +107,13 @@ struct CompiledProcedureLayout: Hashable, Sendable {
     let sourceOffset: Int?
 }
 
-enum ControlOwner: Hashable, Sendable {
+package enum ControlOwner: Hashable, Sendable {
     case sequential(algorithm: String)
     case process(algorithm: String, ordinal: Int, typeName: String)
     case procedure(algorithm: String, name: String)
     case generated(algorithm: String, purpose: String)
 
-    var canonicalEncoding: String {
+    package var canonicalEncoding: String {
         switch self {
         case .sequential(let algorithm):
             return "sequential:\(algorithm)"
@@ -129,14 +131,14 @@ public struct ControlLocationReference: Hashable, Sendable {
     let owner: ControlOwner?
     let sourceName: String
 
-    static let done = Self(CompilerControlSymbol.done.rawValue)
+    package static let done = Self(CompilerControlSymbol.done.rawValue)
 
-    init(_ sourceName: String) {
+    package init(_ sourceName: String) {
         self.owner = nil
         self.sourceName = sourceName
     }
 
-    init(owner: ControlOwner, sourceName: String) {
+    package init(owner: ControlOwner, sourceName: String) {
         self.owner = owner
         self.sourceName = sourceName
     }
@@ -161,11 +163,11 @@ extension ControlOwner {
     }
 }
 
-struct CompiledControlLocation: Hashable, Sendable {
-    let id: ControlLocationID
-    let owner: ControlOwner
-    let sourceName: String
-    let renderedName: String
+package struct CompiledControlLocation: Hashable, Sendable {
+    package let id: ControlLocationID
+    package let owner: ControlOwner
+    package let sourceName: String
+    package let renderedName: String
 }
 
 struct CompiledModuleInstanceLayout: Hashable, Sendable {
@@ -174,14 +176,14 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
     let moduleName: String
 }
 
-struct CompiledLayout: Hashable, Sendable {
-    let variables: [CompiledVariableLayout]
-    let actions: [CompiledActionLayout]
+package struct CompiledLayout: Hashable, Sendable {
+    package let variables: [CompiledVariableLayout]
+    package let actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
     let temporalProperties: [CompiledPropertyLayout]
     let fields: [CompiledFieldLayout]
     let procedures: [CompiledProcedureLayout]
-    let controlLocations: [CompiledControlLocation]
+    package let controlLocations: [CompiledControlLocation]
     let moduleInstances: [CompiledModuleInstanceLayout]
     let declarations: [CompiledDeclaration]
 
@@ -195,7 +197,7 @@ struct CompiledLayout: Hashable, Sendable {
 
     private init(spec: TLASpec, modules: [TLASpec]) {
         variables = spec.variables.enumerated().map { ordinal, variable in
-            let collection = spec.symmetricCollections.first { $0.name == variable.name }
+            let collection = spec.collections.first { $0.name == variable.name }
             return CompiledVariableLayout(
                 id: VariableID(ordinal: ordinal),
                 declaration: .init(
@@ -391,7 +393,7 @@ struct CompiledLayout: Hashable, Sendable {
                         break
                     case .value(let value):
                         pending.append(.value(value))
-                    case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
+                    case .assertView(let value, _), .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
                          .unionAll(let value), .tupleAccess(let value, _), .tupleLength(let value),
                          .tupleHead(let value), .tupleTail(let value), .domain(let value),
                          .sequenceFromSet(let value):
