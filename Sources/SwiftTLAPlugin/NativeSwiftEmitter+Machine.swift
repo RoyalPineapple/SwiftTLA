@@ -53,6 +53,7 @@ extension NativeSwiftEmitter {
             public let after: State
         }
         """)
+        declarations += try formalProjectionDeclarations()
         declarations += try actionDeclarations()
         declarations += try updateDeclarations()
         declarations += try collectionValidationDeclarations(parameters: appendedParameters)

@@ -284,6 +284,14 @@ shortest native execution from the discovery predecessors. False assumptions and
 evaluation errors throw. Temporal checking and independent equivalence validation
 remain separate; empty safety results do not establish liveness or equivalence.
 
+For independent validation, `machine.formalProjection(of: snapshot)` converts the
+complete native snapshot to a validated `TLAStateProjection`. The macro emits
+this conversion from resolved types, including compiler-owned control state.
+Collection members use the machine's configured correspondence to formal IDs;
+unknown members and malformed formal values throw. Use one finite configuration
+for the entire graph. This explicit serialization boundary does not execute the
+formal interpreter or invoke TLC.
+
 ## Compile and render
 
 Compile the source model when exporting formal artifacts:

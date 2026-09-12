@@ -132,6 +132,24 @@ public struct GeneratedContainsPredicateMachine {
 
 @Suite(.serialized)
 struct ModelCollectionGeneratedMachineTests {
+  @Test("Formal projection uses configured collection identities rather than application IDs")
+  func projectsConfiguredCollectionMembers() throws {
+    let ids = ["device-z", "device-a"]
+    var machine = try GeneratedScopedSymmetricMachine.makeMachine(devices: ids)
+    let compilation = try GeneratedScopedSymmetricMachine.spec.compile()
+    let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+    #expect(try machine.formalProjection(of: machine.snapshot) == initial.projection(using: compilation.layout))
+    _ = try machine.send(.begin(member: ids[0]))
+    let token = try #require(TLAStateProjection.Token(validating: "devices"))
+    let members = GeneratedScopedSymmetricMachine.spec.collections[0].metadata.members
+    let expected = TLAValue.function(Dictionary(uniqueKeysWithValues: zip(members, [TLAValue.int(1), .int(0)])))
+    #expect(try machine.formalProjection(of: machine.snapshot).value(for: token) == expected)
+    let other = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["different-a", "different-b"])
+    #expect(throws: TLAStateProjectionDiagnostic.invalidValue(path: "devices")) {
+      try other.formalProjection(of: machine.snapshot)
+    }
+  }
+
   private func compiledSuccessors(
     in compilation: CompiledSpecification,
     from values: [CompiledValue]

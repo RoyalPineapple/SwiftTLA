@@ -1,5 +1,5 @@
 
-package enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
+public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidKey(path: String)
     case invalidConstant(path: String)
     case invalidValue(path: String)
@@ -16,8 +16,8 @@ package enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStr
     }
 }
 
-/// An opaque, safe view of formal-engine state for application-facing APIs.
-package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
+/// Validated state at the explicit native-to-TLA serialization boundary.
+public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
     /// A validated identifier for a value in a formal state projection.
     public struct Token: Sendable, Hashable, CustomStringConvertible {
         fileprivate let identifier: String
@@ -37,7 +37,7 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
     }
 
     /// One validated value in a state projection.
-    public struct Entry: Sendable, Equatable {
+    public struct Entry: Sendable, Hashable {
         public let token: Token
         public let value: TLAValue
 

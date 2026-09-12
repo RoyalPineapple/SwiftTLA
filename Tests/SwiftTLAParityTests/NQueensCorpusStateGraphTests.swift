@@ -3,14 +3,9 @@ import Testing
 @testable import UpstreamParity
 
 struct NQueensCorpusStateGraphTests {
-    private struct Position: Hashable {
-        let state: NQueensModel.State
-        let finished: Bool
-    }
-
     private struct Edge: Hashable {
-        let source: Position
-        let target: Position
+        let source: TLAStateProjection
+        let target: TLAStateProjection
     }
 
     @Test("FourQueens native choices preserve the complete formal graph and invariants")
@@ -24,28 +19,7 @@ struct NQueensCorpusStateGraphTests {
         #expect(compilation.semantics.behavior.temporalProperties.map(\.name) == ["Termination"])
         let temporal = try exploration.analyzeTemporalProperties(in: compilation)
         #expect(temporal.map(\.status) == [.satisfied])
-        let todo = try #require(TLAStateProjection.Token(validating: "todo"))
-        let sols = try #require(TLAStateProjection.Token(validating: "sols"))
-        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
-        func boards(_ value: TLAValue?) throws -> Set<[Int]> {
-            guard case .set(let values) = value else {
-                throw TLAStateProjectionDiagnostic.invalidValue(path: "boards")
-            }
-            return try Set(values.map { value in
-                guard case .tuple(let columns) = value else {
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: "board")
-                }
-                return try columns.map { try #require(Int(formalValue: $0)) }
-            })
-        }
-        let formalPositions = try exploration.graph.states.mapValues { projection in
-            let location = try #require(projection.value(for: pc).flatMap(String.init(formalValue:)))
-            try #require(location == "nxtQ" || location == "Done")
-            return try Position(
-                state: .init(todo: boards(projection.value(for: todo)), sols: boards(projection.value(for: sols))),
-                finished: location == "Done"
-            )
-        }
+        let formalPositions = exploration.graph.states
         var formalEdges: Set<Edge> = []
         var terminalStutters = 0
         for (sourceID, transitions) in exploration.graph.transitions {
@@ -53,7 +27,7 @@ struct NQueensCorpusStateGraphTests {
             for transition in transitions {
                 let target = try #require(formalPositions[transition.target])
                 if transition.label.action == "Terminating" {
-                    #expect(source.finished && source == target)
+                    #expect(source == target)
                     terminalStutters += 1
                 } else {
                     #expect(transition.label.action == "nxtQ")
@@ -63,22 +37,23 @@ struct NQueensCorpusStateGraphTests {
         }
         let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
         #expect(native.safetyViolations.isEmpty)
-        func position(_ snapshot: NQueensModel.Snapshot) throws -> Position {
-            let successors = try #require(native.transitions[snapshot])
-            return Position(state: snapshot.state, finished: successors.isEmpty)
-        }
-        #expect(try Set(native.initialStates.map(position)) == Set(exploration.initialStateIDs.map {
-            try #require(formalPositions[$0])
-        }))
-        let nativePositions = try Set(native.transitions.keys.map(position))
+        let machine = try NQueensModel.makeMachine()
+        let nativePositions = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
+            ($0, try machine.formalProjection(of: $0))
+        })
+        let nativeInitials = try Set(native.initialStates.map { try #require(nativePositions[$0]) })
+        let formalInitials = try Set(exploration.initialStateIDs.map { try #require(formalPositions[$0]) })
+        #expect(nativeInitials == formalInitials)
         let nativeEdges = try Set(native.transitions.flatMap { source, transitions in
-            try transitions.map { Edge(source: try position(source), target: try position($0.target)) }
+            try transitions.map {
+                Edge(source: try #require(nativePositions[source]), target: try #require(nativePositions[$0.target]))
+            }
         })
         #expect(terminalStutters == 1)
         #expect(nativePositions.count == 786)
-        #expect(nativePositions == Set(formalPositions.values))
+        #expect(Set(nativePositions.values) == Set(formalPositions.values))
         #expect(nativeEdges == formalEdges)
-        let terminal = try #require(nativePositions.first { $0.finished })
+        let terminal = try #require(native.transitions.first { $0.value.isEmpty }?.key)
         #expect(terminal.state.todo.isEmpty)
         #expect(terminal.state.sols == [[2, 4, 1, 3], [3, 1, 4, 2]])
     }
