@@ -62,6 +62,7 @@ struct NQueensCorpusStateGraphTests {
             }
         }
         let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
+        #expect(native.safetyViolations.isEmpty)
         func position(_ snapshot: NQueensModel.Snapshot) throws -> Position {
             let successors = try #require(native.transitions[snapshot])
             return Position(state: snapshot.state, finished: successors.isEmpty)

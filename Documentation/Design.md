@@ -73,7 +73,9 @@ implementation work; they do not justify removing families from the target.
 
 Generated machines expose their complete typed snapshots and all native
 successors. `ReachabilityGraph` explores those successors and returns a complete
-graph or throws; it does not issue a model-checking verdict.
+graph or throws. It evaluates generated assumptions, invariants, and termination
+guards, retaining safety violations and shortest native traces. Temporal analysis
+and independent equivalence validation remain outstanding.
 
 The earlier `ModelChecker`, expression evaluator, and formal-call representation
 remain in existing validation paths. They are migration work, not a parallel

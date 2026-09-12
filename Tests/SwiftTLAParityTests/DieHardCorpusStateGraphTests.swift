@@ -37,6 +37,7 @@ struct DieHardCorpusStateGraphTests {
         }
 
         let native = try ReachabilityGraph(initialMachines: DieHardModel.initialMachines(), maximumStates: 100)
+        #expect(native.safetyViolations.isEmpty)
         #expect(Set(native.initialStates.map(\.state)) == formalInitial)
         let nativeStates = Set(native.transitions.keys.map(\.state))
         let nativeEdges = Set(native.transitions.flatMap { source, transitions in

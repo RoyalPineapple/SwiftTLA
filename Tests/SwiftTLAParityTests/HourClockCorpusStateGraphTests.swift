@@ -33,6 +33,7 @@ struct HourClockCorpusStateGraphTests {
         }
 
         let native = try ReachabilityGraph(initialMachines: HourClockModel.initialMachines(), maximumStates: 100)
+        #expect(native.safetyViolations.isEmpty)
         let nativeInitial = Set(native.initialStates.map { $0.state.hr })
         let nativeHours = Set(native.transitions.keys.map { $0.state.hr })
         let nativeEdges = Set(native.transitions.flatMap { source, transitions in

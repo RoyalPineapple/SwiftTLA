@@ -276,9 +276,13 @@ and without invoking TLC. Supply initial machines from one finite configuration.
 The graph retains all initial snapshots and labeled transitions. Snapshot identity
 includes control state: two equal public `State` values can still have different
 successors. Exploration throws on exhaustion of the state limit or cancellation;
-it never returns a truncated graph as complete. Graph construction alone does not
-check assumptions, invariants, deadlocks, or temporal properties and is not an
-equivalence verdict.
+it never returns a truncated graph as complete. Exploration evaluates generated
+assumptions and invariant predicates. It retains invariant and deadlock failures in `safetyViolations` while completing the graph;
+`DeadlockCheck()` enables deadlock reporting; normal algorithm termination is
+not a deadlock. `trace(to:)` reconstructs a
+shortest native execution from the discovery predecessors. False assumptions and
+evaluation errors throw. Temporal checking and independent equivalence validation
+remain separate; empty safety results do not establish liveness or equivalence.
 
 ## Compile and render
 
