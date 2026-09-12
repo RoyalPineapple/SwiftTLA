@@ -17,7 +17,7 @@ extension ParserSession {
         let collectionTypes = collectModelCollectionTypes(in: closure)
         sourceScope = collectionTypes.reduce(.empty) { scope, collection in
             let (name, declaration) = collection
-            return typedFacadeScope(scope, binding: name, to: .variable(declaration.formalName),
+            return scope.extending(binding: name, to: .variable(declaration.formalName),
                 shape: typedFacadeValueType(declaration.value).map { .dictionary(.unknown, $0) })
         }
         let declarationScope = closureParameterNames(in: closure).first
@@ -134,7 +134,7 @@ extension ParserSession {
                 ExprSyntax(call),
                 scope: sourceScope
             ) {
-                sourceScope = typedFacadeScope(sourceScope, binding: sourceName, to: value,
+                sourceScope = sourceScope.extending(binding: sourceName, to: value,
                     shape: typedFacadeValueType(ExprSyntax(call), scope: sourceScope))
             } else {
                 components.diagnostics.append(.init(
@@ -244,12 +244,9 @@ extension ParserSession {
                     ))
                     valueType = nil
                 }
-                sourceScope = typedFacadeScope(
-                    sourceScope,
-                    binding: patternName,
+                sourceScope = sourceScope.extending(binding: patternName,
                     to: .variable(variable.name),
-                    shape: valueType
-                )
+                    shape: valueType)
             }
         }
 
@@ -975,7 +972,7 @@ extension ParserSession {
             catch { return nil }
             let formalName = "value\(index)"
             formalParameters.append(.value(formalName, typeName: typeName))
-            scope = typedFacadeScope(scope, binding: pair.0, to: .variable(formalName), shape: shape)
+            scope = scope.extending(binding: pair.0, to: .variable(formalName), shape: shape)
         }
         guard let body = decodeTypedFacadeValue(bodySyntax, scope: scope) else { return nil }
         return FormalOperatorDefinition(
@@ -1232,10 +1229,7 @@ extension ParserSession {
             ))
             return nil
         }
-        let actionScope = typedFacadeScope(
-            sourceScope,
-            bindings: parameterReferences
-        )
+        let actionScope = sourceScope.extending(bindings: parameterReferences)
         do {
             let body = try decodeActionFromClosure(closure, scope: actionScope,
                 context: "Parameterized action '\(actionName)'")
@@ -1417,7 +1411,7 @@ extension ParserSession {
                 guard let binding = typedLocalBinding(declaration, scope: scope) else {
                     throw unsupported(declaration)
                 }
-                scope = typedFacadeScope(scope, binding: binding.name, to: binding.value, shape: binding.shape)
+                scope = scope.extending(binding: binding.name, to: binding.value, shape: binding.shape)
             case .expr(let expression):
                 guard let parsed = decodeTypedFacadeValue(expression, scope: scope) else {
                     throw unsupported(expression)

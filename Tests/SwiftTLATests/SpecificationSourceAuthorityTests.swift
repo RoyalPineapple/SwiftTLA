@@ -18,10 +18,13 @@ struct SpecificationSourceAuthorityTests {
         ("1", "Int")
     ])
     func initializerResultTypes(_ source: String, _ expected: String) throws {
+        let parser = ParserSession(sourceTypes: .init(enums: [
+            .init(typeName: "Mode", cases: [(name: "idle", value: .string("idle"))])
+        ]))
         for depth in [0, 1, 8] {
             let parenthesized = String(repeating: "(", count: depth) + source + String(repeating: ")", count: depth)
             let expression = try #require(Parser.parse(source: parenthesized).statements.first?.item.as(ExprSyntax.self))
-            #expect(ParserSession().initialValueTypeName(from: expression) == expected)
+            #expect(parser.initialValueTypeName(from: expression) == expected)
         }
     }
 
@@ -29,9 +32,9 @@ struct SpecificationSourceAuthorityTests {
     func subscriptsUseLexicalTypes() throws {
         let parser = ParserSession()
         let tupleScope = ParserSession.TypedFacadeScope.empty.extending(
-            sourceName: "items", value: .variable("storedSequence"), shape: .array(.int))
+            binding: "items", to: .variable("storedSequence"), shape: .array(.int))
         let functionScope = tupleScope.extending(
-            sourceName: "items", value: .variable("localFunction"), shape: .dictionary(.int, .array(.int)))
+            binding: "items", to: .variable("localFunction"), shape: .dictionary(.int, .array(.int)))
         func decode(_ source: String, scope: ParserSession.TypedFacadeScope) throws -> StateExpr? {
             let expression = try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
             return parser.decodeTypedFacadeValue(expression, scope: scope)
@@ -49,10 +52,10 @@ struct SpecificationSourceAuthorityTests {
     @Test("Collection predicates retain shadowed collections and captured local values", arguments: ["allSatisfy", "contains"])
     func collectionPredicatesUseLexicalScope(_ operation: String) throws {
         let parser = ParserSession()
-        parser.sourceScope = .empty.extending(sourceName: "items", value: .variable("outer"), shape: nil)
+        parser.sourceScope = .empty.extending(binding: "items", to: .variable("outer"), shape: nil)
         let scope = parser.sourceScope
-            .extending(sourceName: "items", value: .variable("inner"), shape: nil)
-            .extending(sourceName: "bound", value: .variable("limit"), shape: nil)
+            .extending(binding: "items", to: .variable("inner"), shape: nil)
+            .extending(binding: "bound", to: .variable("limit"), shape: nil)
         let source = "items.\(operation) { item in item == bound }"
         let expression = try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
         let predicates = [

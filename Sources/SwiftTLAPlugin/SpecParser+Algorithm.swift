@@ -266,12 +266,9 @@ extension ParserSession {
                 let component = parsedVariable.component
                 algorithmComponents.append(component)
                 if case .shared(let state) = component {
-                    sourceScope = typedFacadeScope(
-                        sourceScope,
-                        binding: parsedVariable.sourceName,
+                    sourceScope = sourceScope.extending(binding: parsedVariable.sourceName,
                         to: .variable(state.root),
-                        shape: parsedVariable.shape
-                    )
+                        shape: parsedVariable.shape)
                 }
                 continue
             }
@@ -280,12 +277,9 @@ extension ParserSession {
                let value = parseAlgorithmLexicalValue(variable) {
                 let constant = ConstantDecl(value.name, value.value)
                 constants.append(constant)
-                sourceScope = typedFacadeScope(
-                    sourceScope,
-                    binding: value.name,
+                sourceScope = sourceScope.extending(binding: value.name,
                     to: .value(value.value),
-                    shape: value.shape
-                )
+                    shape: value.shape)
                 continue
             }
             if let diagnostic = algorithmSourceDiagnostic {
@@ -452,12 +446,9 @@ extension ParserSession {
         let parameters = parameterTypes.enumerated().map { index, type in
             AlgorithmProcedureParameterModel(root: "parameter\(index)", initial: type.defaultValue, swiftTypeName: type.renderedName)
         }
-        var procedureScope = typedFacadeScope(
-            scope,
-            bindings: parameterBindings.enumerated().map { index, sourceName in
-                (sourceName: sourceName, value: .variable(parameters[index].root))
-            }
-        )
+        var procedureScope = scope.extending(bindings: parameterBindings.enumerated().map { index, sourceName in
+            (sourceName: sourceName, value: .variable(parameters[index].root))
+        })
         var components: [AlgorithmComponentModel] = []
         for item in closure.statements {
             if case .decl(let declaration) = item.item,
@@ -470,12 +461,9 @@ extension ParserSession {
                ),
                case .local(let local) = parsedVariable.component {
                 components.append(parsedVariable.component)
-                procedureScope = typedFacadeScope(
-                    procedureScope,
-                    binding: parsedVariable.sourceName,
+                procedureScope = procedureScope.extending(binding: parsedVariable.sourceName,
                     to: .variable(local.root),
-                    shape: parsedVariable.shape
-                )
+                    shape: parsedVariable.shape)
                 continue
             }
             guard case .expr(let expression) = item.item,
@@ -580,7 +568,7 @@ extension ParserSession {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let binding = parseFormalLet(variable, scope: bodyScope) {
-                bodyScope = typedFacadeScope(bodyScope, binding: binding.name, to: binding.value)
+                bodyScope = bodyScope.extending(binding: binding.name, to: binding.value)
                 continue
             }
             let expression: ExprSyntax?
@@ -624,11 +612,8 @@ extension ParserSession {
         let closureParameters = closureParameterNames(in: closure)
         let parameter = closureParameters.first ?? "self"
         let declarationScope = closureParameters.count > 1 ? closureParameters.last : nil
-        var processScope = typedFacadeScope(
-            scope,
-            binding: parameter,
-            to: .currentProcess
-        )
+        var processScope = scope.extending(binding: parameter,
+            to: .currentProcess)
         var components: [AlgorithmComponentModel] = []
         for (index, statement) in closure.statements.enumerated() {
             if case .decl(let declaration) = statement.item,
@@ -645,12 +630,9 @@ extension ParserSession {
                     initialization: state.initialization,
                     swiftTypeName: state.swiftTypeName
                 )))
-                processScope = typedFacadeScope(
-                    processScope,
-                    binding: parsedVariable.sourceName,
+                processScope = processScope.extending(binding: parsedVariable.sourceName,
                     to: .variable(state.root),
-                    shape: parsedVariable.shape
-                )
+                    shape: parsedVariable.shape)
                 continue
             }
             guard case .expr(let expression) = statement.item,
@@ -789,10 +771,7 @@ extension ParserSession {
               let construct = AlgorithmSourceConstruct(initializer.calledExpression),
               construct == .macro
         else { return nil }
-        let macroScope = typedFacadeScope(
-            scope,
-            bindings: parameters.map { (sourceName: $0, value: .variable($0)) }
-        )
+        let macroScope = scope.extending(bindings: parameters.map { (sourceName: $0, value: .variable($0)) })
         guard let statements = parseAlgorithmStatements(
             closure.statements,
             processParameter: "__pcal_macro_no_process",
@@ -909,7 +888,7 @@ extension ParserSession {
                     return nil
                 }
                 let remaining = CodeBlockItemListSyntax(Array(statements.dropFirst(index + 1)))
-                let bodyScope = typedFacadeScope(scope, binding: binding.name, to: binding.value)
+                let bodyScope = scope.extending(binding: binding.name, to: binding.value)
                 guard let body = parseAlgorithmStatements(
                     remaining,
                     processParameter: processParameter,
@@ -1110,7 +1089,7 @@ extension ParserSession {
                 closure.statements,
                 processParameter: processParameter,
                 macros: macros,
-                scope: typedFacadeScope(scope, bindings: choiceBindings)
+                scope: scope.extending(bindings: choiceBindings)
             ) else { return nil }
             for index in choices.indices.reversed() {
                 let replacement = replacements[index]
@@ -1133,12 +1112,9 @@ extension ParserSession {
                     closure.statements,
                     processParameter: processParameter,
                     macros: macros,
-                    scope: typedFacadeScope(
-                        scope,
-                        binding: bindings[0],
+                    scope: scope.extending(binding: bindings[0],
                         to: .variable(replacement),
-                        shape: selectedShapes[0]
-                    )
+                        shape: selectedShapes[0])
                 ) else { return nil }
                 return .with(
                     variable: replacement,
@@ -1153,13 +1129,10 @@ extension ParserSession {
                 let tupleBinding = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
                 let firstBinding = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 1)
                 let secondBinding = generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: 2)
-                let pairScope = typedFacadeScope(
-                    scope,
-                    bindings: [
+                let pairScope = scope.extending(bindings: [
                         (sourceName: bindings[0], value: .variable(firstBinding)),
                         (sourceName: bindings[1], value: .variable(secondBinding))
-                    ]
-                )
+                    ])
                 guard let replacedBody = parseAlgorithmStatements(
                     closure.statements,
                     processParameter: processParameter,
@@ -1194,12 +1167,9 @@ extension ParserSession {
                 let replacements = bindings.indices.map { generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: UInt($0)) }
                 var boundScope = scope
                 for (index, binding) in bindings.enumerated() {
-                    boundScope = typedFacadeScope(
-                        boundScope,
-                        binding: binding,
+                    boundScope = boundScope.extending(binding: binding,
                         to: .variable(replacements[index]),
-                        shape: selectedShapes[index]
-                    )
+                        shape: selectedShapes[index])
                 }
                 guard var boundBody = parseAlgorithmStatements(
                     closure.statements,
@@ -1229,12 +1199,9 @@ extension ParserSession {
                 closure.statements,
                 processParameter: processParameter,
                 macros: macros,
-                scope: typedFacadeScope(
-                    scope,
-                    binding: bound,
+                scope: scope.extending(binding: bound,
                     to: .variable(replacement),
-                    shape: shape
-                )
+                    shape: shape)
             ) else { return nil }
             return .letBinding(
                 variable: replacement,
@@ -1297,10 +1264,7 @@ extension ParserSession {
                 return nil
             }
         }
-        let invocationScope = typedFacadeScope(
-            scope,
-            bindings: zip(macro.parameters, arguments).map { (sourceName: $0.0, value: $0.1) }
-        )
+        let invocationScope = scope.extending(bindings: zip(macro.parameters, arguments).map { (sourceName: $0.0, value: $0.1) })
         return parseAlgorithmStatements(
             macro.body,
             processParameter: processParameter,

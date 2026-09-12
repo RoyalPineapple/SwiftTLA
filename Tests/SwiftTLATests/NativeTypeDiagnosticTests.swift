@@ -159,10 +159,10 @@ import Testing
         let second = StateExpr.value(.string("entry-second"))
         let members = StateExpr.variable("members")
         let sequence = StateExpr.variable("sequence")
-        let scope = parser.typedFacadeScope(.empty, binding: "table", to: table,
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "table", to: table,
             shape: .dictionary(.named("Key"), .named("Entry")))
-            .extending(sourceName: "members", value: members, shape: .set(.named("Entry")))
-            .extending(sourceName: "sequence", value: sequence, shape: .array(.named("Entry")))
+            .extending(binding: "members", to: members, shape: .set(.named("Entry")))
+            .extending(binding: "sequence", to: sequence, shape: .array(.named("Entry")))
         let selected = StateExpr.functionApply(table, key)
         let cases: [(String, StateExpr)] = [
             ("table[.first]", selected),
@@ -199,7 +199,7 @@ import Testing
         let domain = StateExpr.setLiteral([.int(1), .int(2)])
         #expect(parser.decodeTypedFacadeValue(source, scope: .empty) == .forAll(
             domain, "choice", .equal(.variable("choice"), .int(1))))
-        let scope = parser.typedFacadeScope(.empty, binding: "other", to: .variable("target"))
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "other", to: .variable("target"))
         let finished: ExprSyntax = "ForAll(Choice.all) { choice in Finished(other) }"
         #expect(parser.decodeTypedFacadeValue(finished, scope: scope) == .forAll(
             domain, "choice", .equal(.functionApply(.programCounter, .variable("target")), .controlLocation(.done))))
@@ -229,7 +229,7 @@ import Testing
     func setOperationsPreserveElementShapes(_ operation: String) throws {
         let parser = ParserSession()
         let shape = CompiledValueType.set(.array(.int))
-        let scope = parser.typedFacadeScope(.empty, binding: "rows", to: .variable("stored"), shape: shape)
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "rows", to: .variable("stored"), shape: shape)
         let source = ExprSyntax(stringLiteral: "rows.\(operation)(rows)")
         #expect(parser.typedFacadeValueType(source, scope: scope) == shape)
         let predicate = ExprSyntax(stringLiteral: "rows.\(operation)(rows).filtering { row in row.expr.count > 0 }")
@@ -242,14 +242,14 @@ import Testing
         let rows = StateExpr.variable("storedRows")
         let row = StateExpr.variable("row")
         let predicate = StateExpr.greaterThan(.tupleLength(row), .int(0))
-        let scope = parser.typedFacadeScope(.empty, binding: "rows", to: rows, shape: .set(.array(.int)))
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "rows", to: rows, shape: .set(.array(.int)))
         let filtering: ExprSyntax = "rows.filtering { row in row.expr.count > 0 }"
         #expect(parser.decodeTypedFacadeValue(filtering, scope: scope) == .setFilter(rows, "row", predicate))
         let mapping: ExprSyntax = "rows.mapping { row in row.expr.count }"
         #expect(parser.decodeTypedFacadeValue(mapping, scope: scope) == .setMap(.tupleLength(row), "row", rows))
         let chained: ExprSyntax = "rows.mapping { row in row.expr }.filtering { row in row.expr.count > 0 }"
         #expect(parser.decodeTypedFacadeValue(chained, scope: scope) == .setFilter(.setMap(row, "row", rows), "row", predicate))
-        let sequenceScope = parser.typedFacadeScope(.empty, binding: "rows", to: rows, shape: .array(.array(.int)))
+        let sequenceScope = ParserSession.TypedFacadeScope.empty.extending(binding: "rows", to: rows, shape: .array(.array(.int)))
         let selecting: ExprSyntax = "rows.selecting { row in row.expr.count > 0 }"
         #expect(parser.decodeTypedFacadeValue(selecting, scope: sequenceScope) == .sequenceSelect(rows, "row", predicate))
     }
@@ -264,7 +264,7 @@ import Testing
         let type: TypeSyntax = "Matrix"
         let shape = parser.typedFacadeValueType(type)
         #expect(shape == .array(.array(.int)))
-        let scope = parser.typedFacadeScope(.empty, binding: "matrix", to: .variable("stored"), shape: shape)
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "matrix", to: .variable("stored"), shape: shape)
         #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral: source), scope: scope) == .tupleLength(selected))
     }
 
@@ -284,7 +284,7 @@ import Testing
         #expect(parser.typedFacadeValueType(table) == (try parser.sourceTypeResolver.resolve(table)))
         #expect(parser.typedFacadeValueType(offsets) == .dictionary(.int, .int))
         #expect(try parser.sourceTypeResolver.resolve("Table") == .dictionary(.int, .set(.array(.int))))
-        let scope = parser.typedFacadeScope(.empty, binding: "board", to: .variable("stored"),
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "board", to: .variable("stored"),
             shape: parser.typedFacadeValueType(board))
         #expect(parser.decodeTypedFacadeValue(ExprSyntax("board.count"), scope: scope) == .tupleLength(.variable("stored")))
     }

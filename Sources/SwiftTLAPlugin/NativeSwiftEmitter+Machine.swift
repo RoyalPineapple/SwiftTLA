@@ -32,12 +32,12 @@ extension NativeSwiftEmitter {
         }
         """)
         let stateFields = try surface.variables.map { variable in
-            "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[program.layout.variables[variable.storageOrdinal].id]!))"
+            "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
         let stateParameters = try surface.variables.map { variable in
-            "\(variable.swiftIdentifier) _value\(variable.storageOrdinal): \(try swiftType(program.variableTypes[program.layout.variables[variable.storageOrdinal].id]!))"
+            "\(variable.swiftIdentifier) _value\(variable.id.ordinal): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: ", ")
-        let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = _value\($0.storageOrdinal)" }.joined(separator: "\n")
+        let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = _value\($0.id.ordinal)" }.joined(separator: "\n")
         declarations += try nativeDeclarations("""
         public struct State: Hashable, Sendable {
             \(stateFields)
@@ -149,11 +149,11 @@ extension NativeSwiftEmitter {
         let checks = model.surface.variables.compactMap { variable -> String? in
             guard let collection = variable.collection else { return nil }
             return """
-            guard Set(\(stateValue(program.layout.variables[variable.storageOrdinal].id)).keys) == Set(\(collection.membersIdentifier)) else {
+            guard Set(\(stateValue(variable.id)).keys) == Set(\(collection.membersIdentifier)) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: \(String(reflecting: collection.formalName)),
                     expected: "exactly the application IDs bound when the machine was created",
-                    actual: String(describing: Array(\(stateValue(program.layout.variables[variable.storageOrdinal].id)).keys))
+                    actual: String(describing: Array(\(stateValue(variable.id)).keys))
                 )
             }
             """
@@ -167,7 +167,7 @@ extension NativeSwiftEmitter {
 
     private func executionState(values: (VariableID) -> String) -> String {
         let publicFields = model.surface.variables.map {
-            "\($0.swiftIdentifier): \(values(program.layout.variables[$0.storageOrdinal].id))"
+            "\($0.swiftIdentifier): \(values($0.id))"
         }.joined(separator: ", ")
         let privateFields = program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
             ", \(variable($0.id)): \(values($0.id))"

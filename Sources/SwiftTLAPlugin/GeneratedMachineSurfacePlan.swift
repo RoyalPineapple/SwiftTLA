@@ -6,30 +6,26 @@ import SwiftSyntax
 /// The emitted-machine view of one compiled specification.
 package struct MachineSurfacePlan: Sendable, Equatable {
     package struct Variable: Sendable, Equatable {
-        package let formalName: String
         package let swiftIdentifier: String
-        package let storageOrdinal: Int
+        package let id: VariableID
         package let collection: Collection?
 
         init(
             formalName: String,
-            storageOrdinal: Int,
+            id: VariableID,
             collection: Collection?
         ) throws {
-            self.formalName = formalName
-            self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
-            self.storageOrdinal = storageOrdinal
+            self.swiftIdentifier = try collection?.swiftIdentifier ?? MachineSurfacePlan.sourceIdentifier(formalName)
+            self.id = id
             self.collection = collection
         }
     }
 
     package struct Binding: Sendable, Equatable {
-        package let formalName: String
         package let swiftIdentifier: String
         package let isPublic: Bool
 
         init(formalName: String, isPublic: Bool) throws {
-            self.formalName = formalName
             self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
             self.isPublic = isPublic
         }
@@ -40,18 +36,6 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let swiftIdentifier: String
         package let bindings: [Binding]
         package let collection: Collection?
-
-        init(
-            compiledAction: ActionID,
-            swiftIdentifier: String,
-            bindings: [Binding],
-            collection: Collection?
-        ) {
-            self.compiledAction = compiledAction
-            self.swiftIdentifier = swiftIdentifier
-            self.bindings = bindings
-            self.collection = collection
-        }
     }
 
     package struct Collection: Sendable, Equatable {
@@ -60,21 +44,18 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let swiftIdentifier: String
         package let members: [CompiledValue]
         package let elementType: String
-        package let valueType: String
 
         init(
             variableID: VariableID,
             formalName: String,
             members: [CompiledValue],
-            elementType: String,
-            valueType: String
+            elementType: String
         ) throws {
             self.formalName = formalName
             self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
             self.membersIdentifier = "_members\(variableID.ordinal)"
             self.members = members
             self.elementType = elementType
-            self.valueType = valueType
         }
     }
 
@@ -87,7 +68,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             uniqueKeysWithValues: layout.variables.compactMap { variable in
                 guard let declaration = variable.collection else { return nil }
                 guard let elementType = declaration.elementType,
-                      let valueType = declaration.valueType
+                      declaration.valueType != nil
                 else {
                     throw CompilationDiagnostic(
                         code: .unsupportedGeneratedValueShape,
@@ -104,8 +85,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                         variableID: variable.id,
                         formalName: variable.declaration.name,
                         members: declaration.members,
-                        elementType: elementType,
-                        valueType: valueType
+                        elementType: elementType
                     )
                 )
             }
@@ -116,7 +96,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             let collection = collectionsByVariableID[variable.id]
             return try Variable(
                 formalName: variable.declaration.name,
-                storageOrdinal: variable.id.ordinal,
+                id: variable.id,
                 collection: collection
             )
         }

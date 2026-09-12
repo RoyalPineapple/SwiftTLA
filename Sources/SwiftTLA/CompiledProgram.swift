@@ -14,14 +14,9 @@ package enum ResolvedCallTarget: Hashable, Sendable {
     case callback(ResolvedCallbackID)
 }
 
-package struct ResolvedCallbackArgument: Hashable, Sendable {
-    package let parameter: ResolvedCallbackID
-    package let target: ResolvedCallTarget
-}
-
 package struct ResolvedCall: Hashable, Sendable {
     package let target: ResolvedCallTarget
-    package let callbacks: [ResolvedCallbackArgument]
+    package let callbacks: [ResolvedCallbackID: ResolvedCallTarget]
 }
 
 package struct ResolvedCallback: Sendable {

@@ -40,7 +40,7 @@ struct NativeSwiftEmitter {
             return (variable.id, "_value_\(name)_\(variable.id.ordinal)")
         })
         stateMemberNames = Dictionary(uniqueKeysWithValues: model.surface.variables.map {
-            (program.layout.variables[$0.storageOrdinal].id, $0.swiftIdentifier)
+            ($0.id, $0.swiftIdentifier)
         })
     }
 
@@ -145,7 +145,7 @@ struct NativeSwiftEmitter {
             throw unsupported("literal outside union")
         }
         if case .collectionMember(let variable, _) = type {
-            guard let collection = model.surface.variables.first(where: { $0.storageOrdinal == variable.ordinal })?.collection,
+            guard let collection = model.surface.variables.first(where: { $0.id == variable })?.collection,
                   let index = collection.members.firstIndex(of: value) else {
                 throw unsupported("literal outside collection domain")
             }
@@ -264,7 +264,7 @@ struct NativeSwiftEmitter {
                 body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
             } else { throw unsupported("ordering opaque type \(name)") }
         case .collectionMember(let variable, _):
-            guard let collection = model.surface.variables.first(where: { $0.storageOrdinal == variable.ordinal })?.collection else {
+            guard let collection = model.surface.variables.first(where: { $0.id == variable })?.collection else {
                 throw unsupported("collection ordering domain")
             }
             let indices = collection.members.indices.sorted { collection.members[$0] < collection.members[$1] }
@@ -323,7 +323,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func emitFunction(
-        _ id: ResolvedFunctionID, arguments valueArguments: [String], callbacks: [ResolvedCallbackArgument],
+        _ id: ResolvedFunctionID, arguments valueArguments: [String], callbacks: [ResolvedCallbackID: ResolvedCallTarget],
         state: String, substitutions: [BinderID: String], activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let resolved = program[id]
@@ -343,7 +343,7 @@ struct NativeSwiftEmitter {
             let result = try swiftType(signature.result)
             declarations.append("_ \(name): @escaping (\(argumentTypes.map { "@escaping () throws -> \($0)" }.joined(separator: ", "))) throws -> \(result)")
             nestedCallbacks[callback] = name
-            guard let target = callbacks.first(where: { $0.parameter == callback })?.target else {
+            guard let target = callbacks[callback] else {
                 guard let captured = callbackFunctions[callback] else { throw unsupported("resolved callback argument") }
                 arguments.append(captured)
                 continue
@@ -355,7 +355,7 @@ struct NativeSwiftEmitter {
             case .function(let target):
                 let names = argumentTypes.indices.map { "_callbackArgument\($0)" }
                 let parameters = zip(names, argumentTypes).map { "\($0.0): @escaping () throws -> \($0.1)" }.joined(separator: ", ")
-                let code = try emitFunction(target, arguments: names, callbacks: [], state: state,
+                let code = try emitFunction(target, arguments: names, callbacks: [:], state: state,
                     substitutions: substitutions, activeFunctions: activeFunctions.union([id]))
                 arguments.append("{ (\(parameters)) throws -> \(result) in return \(code) }")
             }

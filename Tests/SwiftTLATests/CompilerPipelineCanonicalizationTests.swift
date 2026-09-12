@@ -2247,7 +2247,7 @@ struct CompilerPipelineCanonicalizationTests {
         let action = try #require(source.actions.first { $0.name == "advance" })
         let compiledAction = try #require(compilation.semantics.behavior.actions.first)
         let machineVariable = try #require(
-            MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).variables.first { $0.formalName == "devices" }
+            MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).variables.first { $0.swiftIdentifier == "devices" }
         )
         let machineCollection = try #require(machineVariable.collection)
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
@@ -2279,7 +2279,6 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(types.variableTypes[collectionID] == .dictionary(
             try #require(types.bindingTypes[memberID]), .int))
         #expect(machineCollection.elementType == "CompilerPipelineMember")
-        #expect(machineCollection.valueType == "Int")
         #expect(machineCollection.formalName == "devices")
         #expect(try MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).collections == [machineCollection])
         #expect(hasOuterExistential)

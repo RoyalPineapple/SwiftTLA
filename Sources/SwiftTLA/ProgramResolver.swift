@@ -133,10 +133,10 @@ private final class ProgramResolver {
                     path: "native.callback", expected: "a callback with value parameters",
                     actual: "operator-valued callback parameter", nextSafeAction: "Pass operator arguments to a named formal operator specialization.")
             }
-            return .init(target: .callback(try require(callbackScope[.init(operation, call)])), callbacks: [])
+            return .init(target: .callback(try require(callbackScope[.init(operation, call)])), callbacks: [:])
         }
         let id = try function(call, callbackScope: callbackScope)
-        var actuals: [ResolvedCallbackArgument] = []
+        var actuals: [ResolvedCallbackID: ResolvedCallTarget] = [:]
         for (operation, use, parameter) in functionCallbacks[id] ?? [] {
             let actual = try require(call.callbackArguments[operation])
             let target: ResolvedCallTarget
@@ -145,7 +145,7 @@ private final class ProgramResolver {
             } else {
                 target = .function(try function(use, callbackScope: callbackScope))
             }
-            actuals.append(.init(parameter: parameter, target: target))
+            actuals[parameter] = target
         }
         return .init(target: .function(id), callbacks: actuals)
     }

@@ -111,7 +111,7 @@ extension ParserSession {
             action: actionName,
             into: &components
         )
-        let actionScope = typedFacadeScope(sourceScope, binding: memberName, to: .variable(member))
+        let actionScope = sourceScope.extending(binding: memberName, to: .variable(member))
         let actionBody: ActionExpr
         do {
             actionBody = try decodeActionFromClosure(closure, scope: actionScope,

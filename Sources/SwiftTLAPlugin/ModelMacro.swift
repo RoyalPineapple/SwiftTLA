@@ -9,7 +9,6 @@ import SwiftTLA
 
 // MARK: - Shared parsing and verification
 
-
 struct MacroCompilation {
     let typeName: String
     let surface: MachineSurfacePlan
@@ -454,10 +453,15 @@ public struct ValueEnumMacro: MemberMacro {
     }
 }
 
-private struct ModelStoredStateDiagnostic: DiagnosticMessage {
-    let message = "@TLAModel models cannot declare instance stored properties; model state belongs in the static specification"
-    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-instance-stored-state")
+private struct ModelDiagnostic: DiagnosticMessage {
+    let message: String
+    let diagnosticID: MessageID
     let severity: DiagnosticSeverity = .error
+
+    init(_ id: String, message: String) {
+        self.message = message
+        diagnosticID = MessageID(domain: "SwiftTLA", id: id)
+    }
 }
 
 private func diagnoseStoredInstanceState(
@@ -472,7 +476,8 @@ private func diagnoseStoredInstanceState(
         }
         context.diagnose(Diagnostic(
             node: Syntax(binding.pattern),
-            message: ModelStoredStateDiagnostic()
+            message: ModelDiagnostic("model-instance-stored-state", message:
+                "@TLAModel models cannot declare instance stored properties; model state belongs in the static specification")
         ))
         return true
     }
@@ -487,36 +492,6 @@ private func isInstanceStoredBinding(_ binding: PatternBindingSyntax) -> Bool {
     }
 }
 
-
-private struct ParserDiagnosticMessage: DiagnosticMessage {
-    let message: String
-    let diagnosticID = MessageID(domain: "SwiftTLA", id: "unsupported-spec-expression")
-    let severity: DiagnosticSeverity = .error
-}
-
-private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
-    let whatFailed: String
-    let expected: String
-    let actual: String
-    let nextSafeAction: String
-
-    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-compilation-failure")
-    let severity: DiagnosticSeverity = .error
-
-    var message: String {
-        "What failed: \(whatFailed). Where: this @TLAModel declaration. "
-            + "Expected: \(expected). Actual: \(actual). "
-            + "Next safe action: \(nextSafeAction)"
-    }
-}
-
-private struct ModelMacroDiagnosticMessage: DiagnosticMessage {
-    let error: ModelMacroError
-    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-macro-failure")
-    let severity: DiagnosticSeverity = .error
-    var message: String { error.description }
-}
-
 package func parserDiagnostic(
     _ diagnostic: SourceParseDiagnostic,
     in declaration: some DeclGroupSyntax
@@ -527,7 +502,7 @@ package func parserDiagnostic(
     finder.walk(Syntax(declaration))
     return Diagnostic(
         node: finder.resolvedNode() ?? Syntax(declaration),
-        message: ParserDiagnosticMessage(message: diagnostic.renderedMessage)
+        message: ModelDiagnostic("unsupported-spec-expression", message: diagnostic.renderedMessage)
     )
 }
 
@@ -537,12 +512,10 @@ private func modelCompilationDiagnostic(
 ) -> Diagnostic {
     Diagnostic(
         node: Syntax(declaration),
-        message: ModelCompilationDiagnosticMessage(
-            whatFailed: "compilation failed [\(diagnostic.code.rawValue)] at \(diagnostic.stage.rawValue) \(diagnostic.path)",
-            expected: diagnostic.expected,
-            actual: diagnostic.actual,
-            nextSafeAction: diagnostic.nextSafeAction
-        )
+        message: ModelDiagnostic("model-compilation-failure", message:
+            "What failed: compilation failed [\(diagnostic.code.rawValue)] at \(diagnostic.stage.rawValue) \(diagnostic.path). "
+                + "Where: this @TLAModel declaration. Expected: \(diagnostic.expected). "
+                + "Actual: \(diagnostic.actual). Next safe action: \(diagnostic.nextSafeAction)")
     )
 }
 
@@ -552,7 +525,7 @@ private func modelMacroDiagnostic(
 ) -> Diagnostic {
     Diagnostic(
         node: Syntax(declaration),
-        message: ModelMacroDiagnosticMessage(error: error)
+        message: ModelDiagnostic("model-macro-failure", message: error.description)
     )
 }
 

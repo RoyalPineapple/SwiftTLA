@@ -78,7 +78,7 @@ final class ParserSession {
         }
 
         func extending(
-            _ bindings: [(sourceName: String, value: StateExpr)]
+            bindings: [(sourceName: String, value: StateExpr)]
         ) -> Self {
             Self(bindings: self.bindings + bindings.map {
                 Binding(sourceName: $0.sourceName, meaning: .value($0.value), shape: nil)
@@ -86,9 +86,9 @@ final class ParserSession {
         }
 
         func extending(
-            sourceName: String,
-            value: StateExpr,
-            shape: CompiledValueType?
+            binding sourceName: String,
+            to value: StateExpr,
+            shape: CompiledValueType? = nil
         ) -> Self {
             Self(bindings: bindings + [Binding(sourceName: sourceName, meaning: .value(value), shape: shape)])
         }
@@ -101,32 +101,6 @@ final class ParserSession {
             )])
         }
 
-    }
-
-    func typedFacadeScope(
-        _ scope: TypedFacadeScope,
-        binding sourceName: String,
-        to value: StateExpr,
-        shape: CompiledValueType? = nil
-    ) -> TypedFacadeScope {
-        scope.extending(sourceName: sourceName, value: value, shape: shape)
-    }
-
-    func typedFacadeScope(
-        _ scope: TypedFacadeScope,
-        recursiveOperator sourceName: String,
-        named name: String
-    ) -> TypedFacadeScope {
-        scope.extending(recursiveOperator: sourceName, named: name)
-    }
-
-    func typedFacadeScope(
-        _ scope: TypedFacadeScope,
-        bindings: [(sourceName: String, value: StateExpr)]
-    ) -> TypedFacadeScope {
-        bindings.reduce(scope) { scope, binding in
-            typedFacadeScope(scope, binding: binding.sourceName, to: binding.value)
-        }
     }
 
     /// Facts scoped to one syntax tree and macro expansion.
@@ -183,20 +157,11 @@ final class ParserSession {
         guard definitionParameters.count == 2, bodyParameters.count == 1 else { return nil }
 
         let inputName = definitionParameters[1]
-        let definitionScope = typedFacadeScope(
-            typedFacadeScope(
-                scope,
-                recursiveOperator: definitionParameters[0],
-                named: name
-            ),
-            binding: inputName,
-            to: .variable(inputName)
-        )
-        let bodyScope = typedFacadeScope(
-            scope,
-            recursiveOperator: bodyParameters[0],
-            named: name
-        )
+        let definitionScope = scope
+            .extending(recursiveOperator: definitionParameters[0], named: name)
+            .extending(binding: inputName, to: .variable(inputName))
+        let bodyScope = scope.extending(recursiveOperator: bodyParameters[0],
+            named: name)
         guard let decodedDefinition = decodeTypedFacadeValue(
             definitionExpression, scope: definitionScope
         ) else {
@@ -539,7 +504,7 @@ final class ParserSession {
               case .expr(let predicateSyntax) = closure.statements.first?.item,
               let predicate = decodeTypedFacadeValue(
                 predicateSyntax,
-                scope: typedFacadeScope(scope, binding: parameter, to: .variable(canonicalBinding))
+                scope: scope.extending(binding: parameter, to: .variable(canonicalBinding))
               )
         else { return nil }
         return .choose(
@@ -569,7 +534,7 @@ final class ParserSession {
               case .expr(let predicateSyntax) = closure.statements.first?.item,
               let predicate = decodeTypedFacadeValue(
                 predicateSyntax,
-                scope: typedFacadeScope(scope, binding: parameter, to: .variable(canonicalBinding))
+                scope: scope.extending(binding: parameter, to: .variable(canonicalBinding))
               )
         else {
             algorithmParseFailure = "Where requires one parameter and one decodable predicate expression."
@@ -605,7 +570,7 @@ final class ParserSession {
             line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset),
             column: 0
         )
-        let bodyScope = typedFacadeScope(scope, binding: sourceParameter, to: .variable(parameter),
+        let bodyScope = scope.extending(binding: sourceParameter, to: .variable(parameter),
             shape: typedFacadeValueType(domainSyntax, scope: scope)?.selectedElement)
         guard let predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else { return nil }
         return name == "ForAll"
@@ -907,10 +872,7 @@ final class ParserSession {
             ]
             guard let body = decodeTypedFacadeValue(
                 bodySyntax,
-                scope: typedFacadeScope(
-                    scope,
-                    bindings: bindings.map { (sourceName: $0.key, value: $0.value) }
-                )
+                scope: scope.extending(bindings: bindings.map { (sourceName: $0.key, value: $0.value) })
             ) else { return nil }
             return .foldFunction(
                 FormalLambda(parameters: parameters, body: body),
@@ -931,7 +893,7 @@ final class ParserSession {
             let binder = closureParameterNames(in: closure)[0]
             guard let predicate = decodeTypedFacadeValue(
                 bodySyntax,
-                scope: typedFacadeScope(scope, binding: binder, to: .variable(binder),
+                scope: scope.extending(binding: binder, to: .variable(binder),
                     shape: typedFacadeValueType(sequenceSyntax, scope: scope)?.selectedElement)
             ) else { return nil }
             return .sequenceSelect(sequence, binder, predicate)
@@ -1068,12 +1030,9 @@ final class ParserSession {
             let key = generatedBinderName(
                 line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0
             )
-            let functionScope = typedFacadeScope(
-                scope,
-                binding: parameter,
+            let functionScope = scope.extending(binding: parameter,
                 to: .variable(key),
-                shape: .named(domainType)
-            )
+                shape: .named(domainType))
             let body = decodeTypedFacadeValue(
                 bodySyntax,
                 scope: functionScope,
@@ -1188,7 +1147,7 @@ final class ParserSession {
                   closureParameterNames(in: closure).count == 1,
                   let expression = decodeTypedFacadeValue(
                     body,
-                    scope: typedFacadeScope(scope, binding: parameter, to: .variable(parameter),
+                    scope: scope.extending(binding: parameter, to: .variable(parameter),
                         shape: typedFacadeValueType(baseSyntax, scope: scope)?.selectedElement)
                   )
             else { return nil }
@@ -1219,7 +1178,7 @@ final class ParserSession {
             else { return nil }
             guard let value = decodeTypedFacadeValue(
                     body,
-                    scope: typedFacadeScope(scope, binding: parameter, to: selection.value, shape: selection.type),
+                    scope: scope.extending(binding: parameter, to: selection.value, shape: selection.type),
                     expectedEnumType: selection.type?.enumerationType
                   )
             else { return nil }
@@ -1475,7 +1434,7 @@ final class ParserSession {
            case .expr(let body) = closure.statements.first?.item,
            closureParameterNames(in: closure).count == 1,
            let parameter = closureParameterNames(in: closure).first {
-            let bodyScope = typedFacadeScope(scope, binding: parameter, to: .variable(parameter),
+            let bodyScope = scope.extending(binding: parameter, to: .variable(parameter),
                 shape: typedFacadeValueType(base, scope: scope)?.selectedElement)
             return typedFacadeValueType(body, scope: bodyScope).map(CompiledValueType.set)
         }
@@ -2148,7 +2107,7 @@ extension ParserSession {
            case .expr(let bodySyntax) = closure.statements.first?.item,
            let body = decodeActionExpr(
                 bodySyntax,
-                scope: typedFacadeScope(scope, binding: parameter, to: .variable(binder))
+                scope: scope.extending(binding: parameter, to: .variable(binder))
            ) {
             return .existsAction(binder, domain, body)
         }
@@ -2308,7 +2267,7 @@ extension ParserSession {
                 guard let binding = typedLocalBinding(declaration, scope: scope) else {
                     throw unsupported(declaration)
                 }
-                scope = typedFacadeScope(scope, binding: binding.name, to: binding.value, shape: binding.shape)
+                scope = scope.extending(binding: binding.name, to: binding.value, shape: binding.shape)
             case .expr(let expression):
                 guard let action = decodeActionExpr(expression, scope: scope) else {
                     throw unsupported(expression)
@@ -2369,7 +2328,7 @@ extension ParserSession {
         }
         guard let body = decodeTypedFacadeValue(
             bodySyntax,
-            scope: typedFacadeScope(scope, binding: sourceParameter, to: selectedValue, shape: selectedShape)
+            scope: scope.extending(binding: sourceParameter, to: selectedValue, shape: selectedShape)
         ) else { return nil }
 
         let domain = StateExpr.domain(collection)
