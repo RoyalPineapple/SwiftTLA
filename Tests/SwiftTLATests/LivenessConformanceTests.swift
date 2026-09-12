@@ -77,17 +77,14 @@ struct LivenessConformanceTests {
                 )
             }
         }
-        let checker = LivenessChecker(
-            compilation: compilation,
+        return try #require(compilation.analyzeTemporalProperties(
             graph: .init(
                 specName: graph.specName,
                 variableNames: graph.variableNames,
                 transitions: transitions,
                 states: graph.states
             ),
-            states: try compiledStates(for: graph, compilation: compilation)
-        )
-        return try #require(checker.analyze(
+            states: try compiledStates(for: graph, compilation: compilation),
             initialStateIDs: initialStateIDs,
             isComplete: isComplete
         ).first)
@@ -506,12 +503,11 @@ struct LivenessConformanceTests {
         )
         let compilation = try specification.compile()
         let outcome = try #require(
-            LivenessChecker(
-                compilation: compilation,
+            compilation.analyzeTemporalProperties(
                 graph: sourceGraph,
-                states: try compiledStates(for: sourceGraph, compilation: compilation)
+                states: try compiledStates(for: sourceGraph, compilation: compilation),
+                initialStateIDs: [initial]
             )
-                .analyze(initialStateIDs: [initial])
                 .first
         )
 
@@ -532,11 +528,9 @@ struct LivenessConformanceTests {
         let compilation = try specification.compile()
 
         do {
-            _ = try LivenessChecker(
-                compilation: compilation,
-                graph: sourceGraph,
-                states: [:]
-            ).analyze(initialStateIDs: [initial])
+            _ = try compilation.analyzeTemporalProperties(
+                graph: sourceGraph, states: [:], initialStateIDs: [initial]
+            )
             Issue.record("Expected the compiled state identity check to fail")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .compilationIdentityMismatch)

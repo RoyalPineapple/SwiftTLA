@@ -39,22 +39,6 @@ package struct FairLassoWitness: Equatable, Sendable {
     }
 }
 
-extension FiniteExploration {
-    package func analyzeTemporalProperties(
-        in compilation: CompiledSpecification
-    ) throws -> [TemporalAnalysis] {
-        try validate(for: compilation)
-        return try LivenessChecker(
-            compilation: compilation,
-            graph: graph,
-            states: compiledStates
-        ).analyze(
-            initialStateIDs: initialStateIDs,
-            isComplete: isComplete
-        )
-    }
-}
-
 package struct TemporalAnalysis: Equatable, Sendable {
     public let status: TemporalAnalysisStatus
     public let reason: TemporalDiagnosticReason
@@ -89,44 +73,18 @@ package struct TemporalAnalysis: Equatable, Sendable {
 /// explicit, state-changing named-action transitions.
 package struct LivenessChecker {
     public let graph: StateGraph
-    private let compilation: CompiledSpecification
-    private let states: [StateGraph.StateID: CompiledState]
+    let actions: Set<ActionID>
 
-    init(
-        compilation: CompiledSpecification,
-        graph: StateGraph,
-        states: [StateGraph.StateID: CompiledState]
-    ) {
-        self.graph = graph
-        self.compilation = compilation
-        self.states = states
-    }
-
-    public func analyze(
-        initialStateIDs: [StateGraph.StateID],
-        isComplete: Bool = true
-    ) throws -> [TemporalAnalysis] {
-        try compilation.semantics.behavior.temporalProperties.map {
-            try analyze(
-                $0.expression,
-                fairness: compilation.semantics.behavior.fairness,
-                initialStateIDs: initialStateIDs,
-                isComplete: isComplete,
-                compilation: compilation
-            )
-        }
-    }
-
-    private func analyze(
-        _ property: CompiledTemporalExpr<CompiledStateQuery>,
+    func analyze(
+        _ property: CompiledTemporalExpr<@Sendable (StateGraph.StateID) throws -> Bool>,
         fairness: [CompiledFairnessCondition],
         initialStateIDs: [StateGraph.StateID],
-        isComplete: Bool,
-        compilation: CompiledSpecification
+        isComplete: Bool = true,
+        renderScope: (CompiledFairnessCondition.Scope) throws -> String
     ) throws -> TemporalAnalysis {
         let form: TemporalForm
-        let predicate: CompiledStateQuery
-        let trigger: CompiledStateQuery?
+        let predicate: @Sendable (StateGraph.StateID) throws -> Bool
+        let trigger: (@Sendable (StateGraph.StateID) throws -> Bool)?
         switch property {
         case .always(let value): form = .always; predicate = value; trigger = nil
         case .eventually(let value): form = .eventually; predicate = value; trigger = nil
@@ -139,24 +97,9 @@ package struct LivenessChecker {
             fairness: fairness,
             initialStateIDs: initialStateIDs,
             isComplete: isComplete,
-            predicate: { state in
-                let compiledState = try compiledState(for: state)
-                do {
-                    return try predicateHolds(predicate, in: compiledState, compilation: compilation)
-                } catch let error as EvalError {
-                    throw TemporalEvaluationError.predicate(state: state, cause: error)
-                }
-            },
-            trigger: trigger.map { trigger in
-                { state in
-                    let compiledState = try compiledState(for: state)
-                    do {
-                        return try predicateHolds(trigger, in: compiledState, compilation: compilation)
-                    } catch let error as EvalError {
-                        throw TemporalEvaluationError.leadsToTrigger(state: state, cause: error)
-                    }
-                }
-            }
+            predicate: predicate,
+            trigger: trigger,
+            renderScope: renderScope
         )
     }
 
@@ -189,7 +132,8 @@ package struct LivenessChecker {
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool,
         predicate: (StateGraph.StateID) throws -> Bool,
-        trigger: ((StateGraph.StateID) throws -> Bool)?
+        trigger: ((StateGraph.StateID) throws -> Bool)?,
+        renderScope: (CompiledFairnessCondition.Scope) throws -> String
     ) throws -> TemporalAnalysis {
         guard isComplete else {
             return .init(status: .unavailable, reason: .incompleteExploration)
@@ -257,61 +201,24 @@ package struct LivenessChecker {
             reason: witness == nil ? .satisfied : .violatingFairLasso,
             witness: witness,
             propertyValues: values,
-            enabledActions: try renderedEnabledness(enabled),
+            enabledActions: try renderedEnabledness(enabled, renderScope: renderScope),
             fairComponents: components.fair,
             rejectedComponents: components.rejected
         )
     }
 
     private func renderedEnabledness(
-        _ enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
+        _ enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]],
+        renderScope: (CompiledFairnessCondition.Scope) throws -> String
     ) throws -> [String: [StateGraph.StateID: Bool]] {
         var rendered: [String: [StateGraph.StateID: Bool]] = [:]
         for entry in enabled {
-            rendered[try renderedName(for: entry.key)] = entry.value
+            rendered[try renderScope(entry.key)] = entry.value
         }
         return rendered
     }
 
-    private func renderedName(for scope: CompiledFairnessCondition.Scope) throws -> String {
-        switch scope {
-        case .next:
-            return "Next"
-        case .action(let action):
-            return compilation.layout.actions[action.ordinal].declaration.name
-        case .actionCall(let call):
-            let name = compilation.layout.actions[call.action.ordinal].declaration.name
-            return formalActionCall(
-                named: name,
-                arguments: try call.arguments.map { try $0.rendered(using: compilation.layout) }
-            )
-        }
-    }
-
-    private func predicateHolds(
-        _ predicate: CompiledStateQuery,
-        in state: CompiledState,
-        compilation: CompiledSpecification
-    ) throws -> Bool {
-        return try CompiledRuntime(compilation: compilation).predicateHolds(predicate, in: state)
-    }
-
-    private func compiledState(for state: StateGraph.StateID) throws -> CompiledState {
-        guard let compiledState = states[state] else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .checking,
-                path: "liveness.state",
-                expected: "a state produced by this compilation",
-                actual: "state \(state) has no compiled value",
-                nextSafeAction: "Explore the compiled specification again before checking liveness."
-            )
-        }
-        return compiledState
-    }
-
     private func graphHasOnlyCompiledActions() -> Bool {
-        let actions = Set(compilation.semantics.behavior.actions.map(\.id))
         return graph.transitions.values.allSatisfy { transitions in
             transitions.allSatisfy { transition in
                 guard let call = compiledAction(for: transition.label) else { return false }
