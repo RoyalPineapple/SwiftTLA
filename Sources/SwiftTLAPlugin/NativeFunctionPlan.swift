@@ -132,7 +132,7 @@ enum NativeFunctionPlan: Sendable {
         if case .call(let call) = node.operation, call.callbacks.isEmpty, case .function(let target) = call.target {
             if target == function { return .repeatCall(node.children) }
             let callee = functions[target.ordinal]
-            guard callee.callbacks.isEmpty, !visited.contains(target),
+            guard callee.callbacks.isEmpty, callee.domainGuard == nil, !visited.contains(target),
                   let body = lower(callee.body, returningTo: function, visited: visited.union([target]), functions: functions)
             else { return nil }
             return .call(target, node.children, body)
