@@ -237,10 +237,12 @@ extension ParserSession {
         var macros: [String: AlgorithmMacroDefinition] = [:]
         let outerConstants = constants
         let outerSourceScope = sourceScope
-        sourceScope = .empty
+        let outerAllowsUnboundNames = allowsUnboundValueNames
+        allowsUnboundValueNames = false
         let declarationScope = closureParameterNames(in: closure).first
         defer {
             sourceScope = outerSourceScope
+            allowsUnboundValueNames = outerAllowsUnboundNames
             constants = outerConstants
         }
         for statement in closure.statements {

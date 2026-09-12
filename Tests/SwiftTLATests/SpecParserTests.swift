@@ -572,6 +572,44 @@ private func parserEnum(
         #expect(parsed.diagnostics.count == 1)
     }
 
+    @Test("Algorithm properties cannot read an unbound process-local name")
+    func rejectsProcessLocalOutsideProcess() throws {
+        let source = """
+        {
+            Algorithm("LocalProperty") {
+                Each(Node.all, scoped: { node, scope in
+                    let local = scope.localVar("local", initial: 0)
+                    Do(TestControlLabel.done) { Stop() }
+                })
+                Invariant("LeakedLocal") { local == 0 }
+            }
+        }
+        """
+        let parsed = parseAlgorithm(try parseClosure(source),
+            enums: [parserEnum("Node", finiteValues: [.string("only")])])
+        #expect(parsed.sourceAlgorithms.isEmpty)
+        #expect(parsed.diagnostics.count == 1)
+    }
+
+    @Test("Algorithms inherit renamed state from the enclosing specification")
+    func inheritsEnclosingStateBindings() throws {
+        let source = """
+        { scope in
+            let count = scope.sharedVar("storedCount", initial: 0)
+            Algorithm("Counter") {
+                Do(TestControlLabel.increment) {
+                    Assign(count, to: count + 1)
+                    Stop()
+                }
+            }
+        }
+        """
+        let parsed = parseAlgorithm(try parseClosure(source))
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.sourceAlgorithms.count == 1)
+        _ = try parsed.compile()
+    }
+
     @Test("Specification parser binds root scoped shared declarations")
     func parsesRootScopedSharedDeclaration() throws {
         let source = """

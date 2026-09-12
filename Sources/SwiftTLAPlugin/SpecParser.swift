@@ -110,6 +110,7 @@ final class ParserSession {
     var recordSchemas: [String: [SourceRecordField]] { sourceTypes.records }
     /// Source bindings visible to the source expression currently being parsed.
     var sourceScope = TypedFacadeScope.empty
+    var allowsUnboundValueNames = true
     struct SpecBindings {
         var parameters: [String: ActionBinding] = [:]
         var actions: [String: NamedAction] = [:]
@@ -1222,9 +1223,9 @@ final class ParserSession {
             if let value = scope.value(for: reference) { return value }
             if let constant = constants.value(named: name) { return .value(constant) }
             if let state = sourceScope.value(for: reference) { return state }
-            // Unresolved value names belong to the binding pass. A local value
-            // must not prevent references to the enclosing model's variables.
-            guard scope.recursiveOperator(for: reference) == nil else { return nil }
+            // Formal expressions may defer names to binding. Algorithm syntax
+            // must resolve Swift values in the visible lexical scope.
+            guard allowsUnboundValueNames, scope.recursiveOperator(for: reference) == nil else { return nil }
             return .variable(name)
         }
 
@@ -1250,7 +1251,7 @@ final class ParserSession {
         ) {
             return decoded
         }
-        guard scope.isEmpty,
+        guard allowsUnboundValueNames, scope.isEmpty,
               expectedEnumType.flatMap({ enumDefinition(named: $0) }) == nil
         else { return nil }
         return decodeStateExpr(expression)
