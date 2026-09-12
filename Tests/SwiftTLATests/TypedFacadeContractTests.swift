@@ -244,8 +244,7 @@ struct TypedFacadeContractTests {
     #expect(build.output.contains("TLAField"))
     #expect(build.output.contains("InvalidTypedFacade.swift:32:"))
     #expect(build.output.contains("member 'person'"))
-    #expect(build.output.contains("no exact matches in call to instance method 'becomes'"))
-    #expect(build.output.contains("candidate expects value of type 'TLAValue'"))
+    #expect(build.output.contains("requires that 'StateExpr' conform to 'TypedExpression'"))
     #expect(build.output.contains("value of type 'Expr<TLAValue>' has no member 'becomes'"))
     let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
     let rejectedLines = [32, 33, 151, 152, 154, 155, 156, 159, 160, 162, 163] + Array(139...149) + Array(38...41) + Array(43...56) + Array(58...73) + Array(75...86)
@@ -275,7 +274,7 @@ struct TypedFacadeContractTests {
 
     let unknownField = try buildExternalConsumer("InvalidTypedDSLUnknownField")
     #expect(unknownField.status != 0)
-    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:39:"))
+    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:26:"))
     #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
   }
 

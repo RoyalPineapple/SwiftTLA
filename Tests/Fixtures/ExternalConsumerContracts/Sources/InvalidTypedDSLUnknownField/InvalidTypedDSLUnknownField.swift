@@ -1,5 +1,4 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 enum CarID: String, FiniteTLAValueDomain {
   case carA, carB
@@ -22,22 +21,7 @@ enum CarSchema: TLARecordSchema {
   static let fields = [TLARecordFieldDeclaration(floor, default: 0)]
 }
 
-@TLAModel
-struct InvalidTypedField {
-  static var spec: TLASpec {
-    TLASpec("InvalidTypedField") {
-      let floor = Var<Int>("floor")
-      let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
-      Variable(floor, 0)
-      Variable(cars, TLAValue.function([
-        CarID.carA.tlaValue: TLAValue.record(["floor": .int(0)]),
-        CarID.carB.tlaValue: TLAValue.record(["floor": .int(0)])
-      ]))
-      SwiftTLA.Action("unknownField", parameters: [
-        ActionParameter("person", values: ["alice", "bob"])
-      ]) {
-        cars.becomes(cars.updating(CarSchema.person, to: 2))
-      }
-    }
-  }
-}
+let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
+let update = cars.becomes(cars.updating(.carA) { car in
+  car.updating(CarSchema.person, to: 2)
+})
