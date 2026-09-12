@@ -2265,7 +2265,7 @@ struct CompilerPipelineCanonicalizationTests {
         let action = try #require(source.actions.first { $0.name == "advance" })
         let compiledAction = try #require(compilation.semantics.behavior.actions.first)
         let machineVariable = try #require(
-            MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).variables.first { $0.swiftIdentifier == "devices" }
+            GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).variables.first { $0.swiftIdentifier == "devices" }
         )
         let machineCollection = try #require(machineVariable.collection)
         let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
@@ -2298,7 +2298,7 @@ struct CompilerPipelineCanonicalizationTests {
             try #require(types.bindingTypes[memberID]), .int))
         #expect(machineCollection.elementType == "CompilerPipelineMember")
         #expect(machineCollection.formalName == "devices")
-        #expect(try MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).collections == [machineCollection])
+        #expect(try GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).collections == [machineCollection])
         #expect(hasOuterExistential)
         #expect(try successors.map { successor in
             try successor.arguments.map { try $0.rendered(using: compilation.layout) }

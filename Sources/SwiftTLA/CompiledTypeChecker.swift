@@ -469,7 +469,7 @@ package struct CompiledTypeChecker: Sendable {
         return try checkedType(.bool, expected: expected, children: children)
     }
 
-    /// Selects contextual evidence without admitting a conversion. Both
+    /// Selects contextual type information without admitting a conversion. Both
     /// expressions must subsequently prove that they can inhabit this shape.
     private static func operandContext(_ lhs: CompiledValueType, _ rhs: CompiledValueType) throws -> CompiledValueType {
         switch (lhs, rhs) {
@@ -631,8 +631,8 @@ package struct CompiledTypeChecker: Sendable {
         case .integer: result = .int
         case .boolean: result = .bool
         case .string: result = .string
-        case .constant: result = .atom
-        case .controlLocation: result = .control
+        case .constant: result = .modelValue
+        case .controlLocation: result = .controlLocation
         case .set(let values):
             let hint: CompiledValueType = if case .set(let type) = expected { type } else { .unknown }
             result = .set(try values.reduce(hint) { try CompiledValueType.merge($0, literal($1, expected: hint)) })
@@ -663,7 +663,7 @@ package struct CompiledTypeChecker: Sendable {
     }
 
     /// A conservative finite bound obtained from literal set construction only.
-    /// A state's current initializer is not evidence about all future domains.
+    /// A state's current initializer does not determine all future value domains.
     private func literalDomain(_ expression: CompiledExpression) -> Set<CompiledValue>? {
         switch expression.operation {
         case .value(.set(let values)): return values
@@ -906,10 +906,10 @@ package struct CompiledTypeChecker: Sendable {
         if inputs.types.canProjectRead(existing, to: expected) {
             return .checked(.init(type: expected, computationType: existing))
         }
-        if expected != .unknown, existing != expected, let evidence = argumentSources[id] {
-            let refinement = ArgumentRefinement(expression: evidence.expression, bindings: evidence.scope.bindings, expected: expected)
+        if expected != .unknown, existing != expected, let source = argumentSources[id] {
+            let refinement = ArgumentRefinement(expression: source.expression, bindings: source.scope.bindings, expected: expected)
             if !activeArgumentRefinements.contains(refinement) {
-                return .argument(evidence, refinement)
+                return .argument(source, refinement)
             }
             // Recursive construction proofs share the active obligation's
             // provisional type. Its outer invocation still validates every
@@ -2028,7 +2028,7 @@ package struct CompiledTypeChecker: Sendable {
             let existing = variables[id] ?? .unknown
             if inputs.types.canProjectRead(existing, to: expected) { return .init(type: expected, computationType: existing) }
             else { result = try CompiledValueType.merge(existing, expected); variables[id] = result }
-        case .controlLocation: result = .control
+        case .controlLocation: result = .controlLocation
         case .enabledAction: result = .bool
         case .in:
             let value = expression.children[0]

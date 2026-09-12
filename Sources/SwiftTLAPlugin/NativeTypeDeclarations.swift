@@ -6,8 +6,7 @@ struct NativeTypeDeclarations: Sendable {
     let records: [CompiledValueType]
     let unions: [[CompiledValueType]]
     let finiteValues: [[CompiledValue]]
-    let atoms: [String]
-    let atomIndices: [String: Int]
+    let modelValueCases: [String: String]
 
     init(program: CompiledProgram) {
         let variableTypes = program.variableTypes.sorted { $0.key.ordinal < $1.key.ordinal }.map(\.value)
@@ -86,8 +85,8 @@ struct NativeTypeDeclarations: Sendable {
             }
             pending.append(contentsOf: type.components.reversed())
         }
-        var atoms: Set<String> = []
-        if visited.contains(.atom) {
+        var modelValues: Set<String> = []
+        if visited.contains(.modelValue) {
             var values = literals + finiteValues.flatMap { $0 }
             for case .named(let name) in visited {
                 values.append(contentsOf: namedDomains[name] ?? [])
@@ -96,7 +95,7 @@ struct NativeTypeDeclarations: Sendable {
             while let value = values.popLast() {
                 guard visitedValues.insert(value).inserted else { continue }
                 switch value {
-                case .constant(let name): atoms.insert(name)
+                case .constant(let name): modelValues.insert(name)
                 case .set(let members): values.append(contentsOf: members)
                 case .tuple(let members): values.append(contentsOf: members)
                 case .record(let record): values.append(contentsOf: record.fields.map(\.value))
@@ -107,8 +106,9 @@ struct NativeTypeDeclarations: Sendable {
                 }
             }
         }
-        self.atoms = atoms.sorted()
-        atomIndices = Dictionary(uniqueKeysWithValues: self.atoms.enumerated().map { ($0.element, $0.offset) })
+        let values = modelValues.sorted()
+        let caseNames = GeneratedMachineAPI.generatedIdentifiers(values, fallback: "modelValue")
+        modelValueCases = Dictionary(uniqueKeysWithValues: zip(values, caseNames))
         self.names = names
         self.records = records
         self.unions = unions

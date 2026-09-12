@@ -21,7 +21,7 @@ extension NativeSwiftEmitter {
             }.joined(separator: "\n")
             return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in switch value { \(cases) } }(\(value)))"
         }
-        if [.int, .bool, .string, .atom].contains(source) {
+        if [.int, .bool, .string, .modelValue].contains(source) {
             let cases = finiteViewMembers(target).compactMap { member -> String? in
                 guard let pattern = try? literal(member, as: source), let payload = try? literal(member, as: target) else { return nil }
                 return "case \(pattern): return \(payload)"
@@ -96,7 +96,7 @@ extension NativeSwiftEmitter {
         case .int: representative = .integer(0)
         case .bool: representative = .boolean(false)
         case .string: representative = .string("")
-        case .atom: representative = .constant("")
+        case .modelValue: representative = .constant("")
         case .set: representative = .set([])
         case .array, .tuple: representative = .tuple([])
         case .dictionary: representative = .function([:])

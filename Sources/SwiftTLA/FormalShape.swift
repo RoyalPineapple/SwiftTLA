@@ -1,4 +1,4 @@
-/// Immutable structural evidence for an explicitly asserted formal value view.
+/// Structure required by an explicitly asserted formal value view.
 public indirect enum FormalValueShape: Hashable, Sendable {
     case integer, boolean, string
     case finite(typeName: String, values: [TLAValue])

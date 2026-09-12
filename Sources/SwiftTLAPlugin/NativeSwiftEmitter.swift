@@ -21,7 +21,7 @@ struct NativeSwiftEmitter {
         self.model = model
         let program = model.program
         var enabledActionIDs = program.behavior.constraint?.enabledActions ?? []
-        for action in model.surface.actions {
+        for action in model.api.actions {
             enabledActionIDs.formUnion(program.behavior.enabledActionDependencies[action.compiledAction] ?? [])
         }
         for invariant in program.behavior.invariants {
@@ -38,7 +38,7 @@ struct NativeSwiftEmitter {
             })
             return (variable.id, "_value_\(name)_\(variable.id.ordinal)")
         })
-        stateMemberNames = Dictionary(uniqueKeysWithValues: model.surface.variables.map {
+        stateMemberNames = Dictionary(uniqueKeysWithValues: model.api.variables.map {
             ($0.id, $0.swiftIdentifier)
         })
     }
@@ -63,7 +63,7 @@ struct NativeSwiftEmitter {
             code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.\(operation)", expected: "a statically typed native Swift operation",
             actual: operation,
-            nextSafeAction: "Express this operation using the supported typed model surface."
+            nextSafeAction: "Express this operation using the supported typed model API."
         )
     }
 
@@ -72,8 +72,8 @@ struct NativeSwiftEmitter {
         case .int: return "Int"
         case .bool: return "Bool"
         case .string: return "String"
-        case .atom: return "_Atom"
-        case .control: return "_ControlLocation"
+        case .modelValue: return "_ModelValue"
+        case .controlLocation: return "_ControlLocation"
         case .named(let name): return name
         case .collectionMember(_, let name): return name
         case .finite, .union, .record, .tuple:
@@ -113,7 +113,7 @@ struct NativeSwiftEmitter {
         switch type {
         case .record(let fields): return escaped ? "`\(fields[index].name)`" : fields[index].name
         case .tuple(let elements): return elements.count == 2 ? (index == 0 ? "first" : "second") : "element\(index + 1)"
-        default: preconditionFailure("Field naming requires resolved record or tuple evidence")
+        default: preconditionFailure("Field naming requires resolved record or tuple types")
         }
     }
 
@@ -144,7 +144,7 @@ struct NativeSwiftEmitter {
             throw unsupported("literal outside union")
         }
         if case .collectionMember(let variable, _) = type {
-            guard let collection = model.surface.variables.first(where: { $0.id == variable })?.collection,
+            guard let collection = model.api.variables.first(where: { $0.id == variable })?.collection,
                   let index = collection.members.firstIndex(of: value) else {
                 throw unsupported("literal outside collection domain")
             }
@@ -165,12 +165,12 @@ struct NativeSwiftEmitter {
         case (.integer(let value), .int): return value == Int.min ? "Int.min" : String(value)
         case (.boolean(let value), .bool): return String(value)
         case (.string(let value), .string): return String(reflecting: value)
-        case (.constant(let value), .atom):
-            guard let index = typeDeclarations.atomIndices[value] else {
-                throw unsupported("unresolved atom literal")
+        case (.constant(let value), .modelValue):
+            guard let caseName = typeDeclarations.modelValueCases[value] else {
+                throw unsupported("unresolved model value")
             }
-            return "_Atom.atom\(index)"
-        case (.controlLocation(let id), .control): return "_ControlLocation.location\(id.ordinal)"
+            return "_ModelValue.\(caseName)"
+        case (.controlLocation(let id), .controlLocation): return "_ControlLocation.location\(id.ordinal)"
         case (.set(let values), .set(let element)):
             return "Set<\(try swiftType(element))>([\(try values.sorted().map { try literal($0, as: element) }.joined(separator: ", "))])"
         case (.tuple(let values), .array(let element)):
@@ -253,7 +253,7 @@ struct NativeSwiftEmitter {
         switch type {
         case .int, .string: body = "return lhs < rhs"
         case .bool: body = "return !lhs && rhs"
-        case .control, .atom: body = "return lhs.rawValue < rhs.rawValue"
+        case .controlLocation, .modelValue: body = "return lhs.rawValue < rhs.rawValue"
         case .finite(let members):
             let cases = members.indices.map { "case .\(finiteCaseName(members, index: $0)): return \($0)" }.joined(separator: "\n")
             body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
@@ -263,7 +263,7 @@ struct NativeSwiftEmitter {
                 body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
             } else { throw unsupported("ordering opaque type \(name)") }
         case .collectionMember(let variable, _):
-            guard let collection = model.surface.variables.first(where: { $0.id == variable })?.collection else {
+            guard let collection = model.api.variables.first(where: { $0.id == variable })?.collection else {
                 throw unsupported("collection ordering domain")
             }
             let indices = collection.members.indices.sorted { collection.members[$0] < collection.members[$1] }

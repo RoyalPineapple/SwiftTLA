@@ -189,7 +189,7 @@ private func parserEnum(
         #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
         #expect(specification.actions.first?.bindings.map(\.name) == ["process"])
         #expect(specification.actions.first?.bindings.map(\.values) == [[.string("left"), .string("right")]])
-        let increment = try #require(MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).actions.first {
+        let increment = try #require(GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).actions.first {
             $0.swiftIdentifier == "increment"
         })
         #expect(compilation.semantics.behavior.actions.first { $0.id == increment.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])

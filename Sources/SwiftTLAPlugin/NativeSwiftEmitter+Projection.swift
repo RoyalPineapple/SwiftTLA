@@ -27,8 +27,8 @@ extension NativeSwiftEmitter {
         case .int: return "TLAValue.int(\(value))"
         case .bool: return "TLAValue.bool(\(value))"
         case .string: return "TLAValue.string(\(value))"
-        case .atom: return "TLAValue.constant(\(value).rawValue)"
-        case .control:
+        case .modelValue: return "TLAValue.constant(\(value).rawValue)"
+        case .controlLocation:
             return switching(program.layout.controlLocations.map {
                 "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.sourceName)))"
             })
@@ -46,7 +46,7 @@ extension NativeSwiftEmitter {
                 "case .alternative\($0.offset + 1)(let payload): return \(try formalValue("payload", type: $0.element))"
             })
         case .collectionMember(let variable, _):
-            guard let collection = model.surface.variables.first(where: { $0.id == variable })?.collection else {
+            guard let collection = model.api.variables.first(where: { $0.id == variable })?.collection else {
                 throw unsupported("unresolved formal collection")
             }
             let members = try collection.members.map(formalLiteral).joined(separator: ", ")

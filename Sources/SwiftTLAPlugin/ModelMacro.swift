@@ -11,13 +11,13 @@ import SwiftTLA
 
 struct MacroCompilation {
     let typeName: String
-    let surface: MachineSurfacePlan
+    let api: GeneratedMachineAPI
     let program: CompiledProgram
 
     init(typeName: String, program: CompiledProgram) throws {
         self.typeName = typeName
         self.program = program
-        surface = try MachineSurfacePlan(layout: program.layout, actions: program.behavior.actions)
+        api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
     }
 }
 

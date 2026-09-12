@@ -5,8 +5,8 @@ import SwiftTLA
 
 extension NativeSwiftEmitter {
     mutating func machineMembers() throws -> [DeclSyntax] {
-        let surface = model.surface
-        let collections = surface.collections
+        let api = model.api
+        let collections = api.collections
         let collectionParameters = collections.map { "\($0.swiftIdentifier) \($0.membersIdentifier): [\($0.elementType).ID]" }.joined(separator: ", ")
         let collectionArguments = collections.map { "\($0.swiftIdentifier): \($0.membersIdentifier)" }.joined(separator: ", ")
         let appendedParameters = collectionParameters.isEmpty ? "" : ", \(collectionParameters)"
@@ -31,13 +31,13 @@ extension NativeSwiftEmitter {
             \(collections.map { "self.\($0.membersIdentifier) = \($0.membersIdentifier)" }.joined(separator: "\n"))
         }
         """)
-        let stateFields = try surface.variables.map { variable in
+        let stateFields = try api.variables.map { variable in
             "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
-        let stateParameters = try surface.variables.map { variable in
+        let stateParameters = try api.variables.map { variable in
             "\(variable.swiftIdentifier) _value\(variable.id.ordinal): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: ", ")
-        let stateAssignments = surface.variables.map { "self.\($0.swiftIdentifier) = _value\($0.id.ordinal)" }.joined(separator: "\n")
+        let stateAssignments = api.variables.map { "self.\($0.swiftIdentifier) = _value\($0.id.ordinal)" }.joined(separator: "\n")
         declarations += try nativeDeclarations("""
         public struct State: Hashable, Sendable {
             \(stateFields)
@@ -59,14 +59,14 @@ extension NativeSwiftEmitter {
         declarations += try collectionValidationDeclarations(parameters: appendedParameters)
         declarations += try initialDeclarations(parameters: collectionParameters, arguments: collectionArguments)
         let terminalActions = program.layout.actions.filter { $0.declaration.name == CompilerControlSymbol.terminatingAction.rawValue }
-        let emittedActionIDs = Set(surface.actions.map(\.compiledAction)).union(enabledActionIDs).union(terminalActions.map(\.id))
+        let emittedActionIDs = Set(api.actions.map(\.compiledAction)).union(enabledActionIDs).union(terminalActions.map(\.id))
         declarations += try program.behavior.actions.filter { emittedActionIDs.contains($0.id) }.map {
             try updateFunction($0, collectionParameters: appendedParameters)
         }
         declarations += try enabledDeclarations(collectionParameters: appendedParameters, collectionArguments: appendedArguments)
-        let actionFunctions = try surface.actions.map { surfaceAction in
-            let action = program[surfaceAction.compiledAction]
-            return try successorFunction(action, surface: surfaceAction, collectionParameters: appendedParameters, collectionArguments: appendedArguments)
+        let actionFunctions = try api.actions.map { apiAction in
+            let action = program[apiAction.compiledAction]
+            return try successorFunction(action, api: apiAction, collectionParameters: appendedParameters, collectionArguments: appendedArguments)
         }
         declarations += actionFunctions
         declarations += try dispatchDeclarations(collectionArguments: appendedArguments)
@@ -80,12 +80,12 @@ extension NativeSwiftEmitter {
             }
             """)
         }
-        let atoms = typeDeclarations.atoms
-        if !atoms.isEmpty {
+        let modelValues = typeDeclarations.modelValueCases.sorted { $0.key < $1.key }
+        if !modelValues.isEmpty {
             declarations += try nativeDeclarations("""
             @_documentation(visibility: internal)
-            public enum _Atom: String, Hashable, Sendable {
-                \(atoms.enumerated().map { "case atom\($0.offset) = \(String(reflecting: $0.element))" }.joined(separator: "\n"))
+            public enum _ModelValue: String, Hashable, Sendable {
+                \(modelValues.map { "case \($0.value) = \(String(reflecting: $0.key))" }.joined(separator: "\n"))
             }
             """)
         }
@@ -127,19 +127,19 @@ extension NativeSwiftEmitter {
     }
 
     func actionDeclarations() throws -> [DeclSyntax] {
-        let cases = try model.surface.actions.map { surface in
-            let action = program[surface.compiledAction]
-            guard action.bindings.count == surface.bindings.count else {
+        let cases = try model.api.actions.map { api in
+            let action = program[api.compiledAction]
+            guard action.bindings.count == api.bindings.count else {
                 throw unsupported("action binding layout")
             }
-            if let collection = surface.collection {
+            if let collection = api.collection {
                 guard action.bindings.count == 1 else { throw unsupported("collection action binding layout") }
-                return "case \(surface.swiftIdentifier)(member: \(collection.elementType).ID)"
+                return "case \(api.swiftIdentifier)(member: \(collection.elementType).ID)"
             }
-            let parameters = try zip(action.bindings, surface.bindings).filter { $0.1.isPublic }.map { binding, surfaceBinding in
-                "\(surfaceBinding.swiftIdentifier): \(try swiftType(program.bindingTypes[binding.binder]!))"
+            let parameters = try zip(action.bindings, api.bindings).filter { $0.1.isPublic }.map { binding, apiBinding in
+                "\(apiBinding.swiftIdentifier): \(try swiftType(program.bindingTypes[binding.binder]!))"
             }.joined(separator: ", ")
-            return "case \(surface.swiftIdentifier)" + (parameters.isEmpty ? "" : "(\(parameters))")
+            return "case \(api.swiftIdentifier)" + (parameters.isEmpty ? "" : "(\(parameters))")
         }.joined(separator: "\n")
         return try nativeDeclarations("""
         public enum Action: Hashable, Sendable {
@@ -149,7 +149,7 @@ extension NativeSwiftEmitter {
     }
 
     func collectionValidationDeclarations(parameters: String) throws -> [DeclSyntax] {
-        let checks = model.surface.variables.compactMap { variable -> String? in
+        let checks = model.api.variables.compactMap { variable -> String? in
             guard let collection = variable.collection else { return nil }
             return """
             guard Set(\(stateValue(variable.id)).keys) == Set(\(collection.membersIdentifier)) else {
@@ -169,7 +169,7 @@ extension NativeSwiftEmitter {
     }
 
     private func executionState(values: (VariableID) -> String) -> String {
-        let publicFields = model.surface.variables.map {
+        let publicFields = model.api.variables.map {
             "\($0.swiftIdentifier): \(values($0.id))"
         }.joined(separator: ", ")
         let privateFields = program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
@@ -226,7 +226,7 @@ extension NativeSwiftEmitter {
         code += "for state in result { try _validateCollections(state\(validationArguments)) }\nreturn result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
-        let validation = model.surface.collections.map { collection in
+        let validation = model.api.collections.map { collection in
             """
             guard \(collection.membersIdentifier).count == \(collection.members.count), Set(\(collection.membersIdentifier)).count == \(collection.members.count) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
@@ -360,7 +360,7 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    func successorFunction(_ action: CompiledAction, surface: MachineSurfacePlan.Action, collectionParameters: String, collectionArguments: String) throws -> DeclSyntax {
+    func successorFunction(_ action: CompiledAction, api: GeneratedMachineAPI.Action, collectionParameters: String, collectionArguments: String) throws -> DeclSyntax {
         let parameters = try action.bindings.map { binding in
             "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")
@@ -386,7 +386,7 @@ extension NativeSwiftEmitter {
     }
 
     func dispatchDeclarations(collectionArguments: String) throws -> [DeclSyntax] {
-        guard !model.surface.actions.isEmpty else {
+        guard !model.api.actions.isEmpty else {
             return try nativeDeclarations("""
             public func enabledActions() throws -> [Action] { [] }
             public func successors() throws -> [(action: Action, machine: Self)] { [] }
@@ -394,31 +394,31 @@ extension NativeSwiftEmitter {
         }
         var cases: [String] = []
         var enumeration: [String] = []
-        for surface in model.surface.actions {
-            let action = program[surface.compiledAction]
+        for api in model.api.actions {
+            let action = program[api.compiledAction]
             var pattern: [String] = []
             var invocation: [String] = []
             var validations: [String] = []
             var actionArguments: [String] = []
             var loops = ""
             var closing = ""
-            for (binding, surfaceBinding) in zip(action.bindings, surface.bindings) {
+            for (binding, apiBinding) in zip(action.bindings, api.bindings) {
                 let name = binder(binding.binder)
                 let type = program.bindingTypes[binding.binder]!
                 let domain: String
-                if let collection = surface.collection {
+                if let collection = api.collection {
                     domain = collection.membersIdentifier
                     pattern.append("member: let \(name)")
                     actionArguments.append("member: \(name)")
                 } else {
                     domain = "[\(try binding.values.map { try literal($0, as: type) }.joined(separator: ", "))]"
-                    if surfaceBinding.isPublic {
-                        pattern.append("\(surfaceBinding.swiftIdentifier): let \(name)")
-                        actionArguments.append("\(surfaceBinding.swiftIdentifier): \(name)")
+                    if apiBinding.isPublic {
+                        pattern.append("\(apiBinding.swiftIdentifier): let \(name)")
+                        actionArguments.append("\(apiBinding.swiftIdentifier): \(name)")
                     }
                 }
-                if surfaceBinding.isPublic || surface.collection != nil {
-                    if let collection = surface.collection {
+                if apiBinding.isPublic || api.collection != nil {
+                    if let collection = api.collection {
                         validations.append("""
                         guard \(domain).contains(\(name)) else {
                             throw GeneratedMachineStateDiagnostic.typeMismatch(
@@ -438,7 +438,7 @@ extension NativeSwiftEmitter {
                     invocation.append("\(name): \(try literal(binding.values[0], as: type))")
                 }
             }
-            let label = ".\(surface.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
+            let label = ".\(api.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
             let enabled = enabledActionsCall(program.behavior.enabledActionDependencies[action.id] ?? [],
                 state: "_execution", collectionArguments: collectionArguments)
             cases.append("""
@@ -446,7 +446,7 @@ extension NativeSwiftEmitter {
                 \(validations.joined(separator: "\n"))
                 return try Self._successors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments), enabled: \(enabled))
             """)
-            let actionValue = ".\(surface.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
+            let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
             enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
         }
         return try nativeDeclarations("""
@@ -490,7 +490,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func propertyDeclarations(collectionParameters: String) throws -> [DeclSyntax] {
-        let arguments = model.surface.collections.map { ", \($0.swiftIdentifier): \($0.membersIdentifier)" }.joined()
+        let arguments = model.api.collections.map { ", \($0.swiftIdentifier): \($0.membersIdentifier)" }.joined()
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")

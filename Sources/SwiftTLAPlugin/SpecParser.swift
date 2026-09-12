@@ -962,7 +962,7 @@ final class ParserSession {
             return value
         }
 
-        // Preserve the explicit view as checked formal evidence.
+        // Preserve the explicit checked value view.
         if access.declName.baseName.text == "assuming",
            let baseSyntax = access.base,
            let base = decodeTypedFacadeValue(baseSyntax, scope: scope),
@@ -2224,7 +2224,7 @@ extension ParserSession {
         ).map(ActionExpr.guard_)
     }
 
-    /// Guard nodes carry state-expression evidence from operand decoding.
+    /// Guard nodes retain the state expressions decoded from their operands.
     /// Combining two predicates must retain boolean short-circuit semantics;
     /// an operand containing a transition still composes as an action.
     private func combineActionOperands(

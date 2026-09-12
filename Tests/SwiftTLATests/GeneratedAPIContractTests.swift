@@ -3,10 +3,18 @@ import Testing
 @testable import SwiftTLAPlugin
 @testable import SwiftTLA
 
-@Suite("Generated machine surface planning")
-struct GeneratedMachineSurfacePlanTests {
+@Suite("Generated Swift API contracts")
+struct GeneratedAPIContractTests {
+    @Test("Generated cases preserve readable names and disambiguate Swift identifiers")
+    func generatedCaseNames() {
+        let names = ["nodeA", "nodeB", "node-a", "node_a", "class", "init", "1"]
+        #expect(GeneratedMachineAPI.generatedIdentifiers(names, fallback: "modelValue") == [
+            "nodeA", "nodeB", "node_a", "node_a_2", "`class`", "modelValue_init", "modelValue_1"
+        ])
+    }
+
     @Test("formal collections compile without Swift API metadata")
-    func formalCompilationDoesNotRequireSwiftSurface() throws {
+    func formalCompilationDoesNotRequireSwiftAPITypes() throws {
         let specification = TLASpec("FormalCollection") {
             ModelCollectionDecl(name: "members", verificationScope: 2, initial: .int(0),
                 generatedElementType: nil, generatedValueType: nil)
@@ -18,7 +26,7 @@ struct GeneratedMachineSurfacePlanTests {
         #expect(try initial.value(for: variable.id) == .function(Dictionary(
             uniqueKeysWithValues: members.map { ($0, .integer(0)) })))
         #expect(throws: CompilationDiagnostic.self) {
-            try MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions)
+            try GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions)
         }
     }
 

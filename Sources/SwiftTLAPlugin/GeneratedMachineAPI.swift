@@ -3,8 +3,8 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 
-/// The emitted-machine view of one compiled specification.
-package struct MachineSurfacePlan: Sendable, Equatable {
+/// Swift names, parameters, and collections exposed by the generated machine.
+package struct GeneratedMachineAPI: Sendable, Equatable {
     package struct Variable: Sendable, Equatable {
         package let swiftIdentifier: String
         package let id: VariableID
@@ -15,7 +15,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             id: VariableID,
             collection: Collection?
         ) throws {
-            self.swiftIdentifier = try collection?.swiftIdentifier ?? MachineSurfacePlan.sourceIdentifier(formalName)
+            self.swiftIdentifier = try collection?.swiftIdentifier ?? GeneratedMachineAPI.sourceIdentifier(formalName)
             self.id = id
             self.collection = collection
         }
@@ -26,7 +26,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         package let isPublic: Bool
 
         init(formalName: String, isPublic: Bool) throws {
-            self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
+            self.swiftIdentifier = try GeneratedMachineAPI.sourceIdentifier(formalName)
             self.isPublic = isPublic
         }
     }
@@ -52,7 +52,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             elementType: String
         ) throws {
             self.formalName = formalName
-            self.swiftIdentifier = try MachineSurfacePlan.sourceIdentifier(formalName)
+            self.swiftIdentifier = try GeneratedMachineAPI.sourceIdentifier(formalName)
             self.membersIdentifier = "_members\(variableID.ordinal)"
             self.members = members
             self.elementType = elementType
@@ -75,7 +75,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                         stage: .validation,
                         path: "variables.\(variable.declaration.name)",
                         expected: "declared Swift element and value types for the generated API",
-                        actual: "no Swift surface types",
+                        actual: "no Swift API types",
                         nextSafeAction: "Declare the collection through typed Swift source, then compile again."
                     )
                 }
@@ -103,7 +103,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         let executableActions = layout.actions.filter {
             $0.declaration.name != CompilerControlSymbol.terminatingAction.rawValue
         }
-        let actionIdentifiers = Self.generatedActionIdentifiers(executableActions.map(\.declaration.name))
+        let actionIdentifiers = Self.generatedIdentifiers(executableActions.map(\.declaration.name), fallback: "action")
         let compiledActions = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
         let actions = try zip(executableActions, actionIdentifiers).map { layoutAction, identifier in
             guard let action = compiledActions[layoutAction.id] else {
@@ -178,14 +178,14 @@ package struct MachineSurfacePlan: Sendable, Equatable {
         CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape,
             stage: .validation,
-            path: "machineSurfacePlan.identifiers.\(name)",
+            path: "generatedMachineAPI.identifiers.\(name)",
             expected: "one named Swift identifier for a generated state field or action parameter",
             actual: name,
             nextSafeAction: "Choose a named Swift identifier; formal action labels may use arbitrary names."
         )
     }
 
-    private static func generatedActionIdentifiers(_ names: [String]) -> [String] {
+    static func generatedIdentifiers(_ names: [String], fallback: String) -> [String] {
         let reserved: Set<String> = ["_", "init", "deinit", "subscript", "rawValue"]
         var used: Set<String> = []
         return names.map { name in
@@ -196,9 +196,9 @@ package struct MachineSurfacePlan: Sendable, Equatable {
                 }
             }
             var base = String(scalars)
-            if base.isEmpty { base = "action" }
+            if base.isEmpty { base = fallback }
             if base.unicodeScalars.first.map({ (48...57).contains($0.value) }) == true || reserved.contains(base) {
-                base = "action_\(base)"
+                base = "\(fallback)_\(base)"
             }
             var identifier = base
             var suffix = 2

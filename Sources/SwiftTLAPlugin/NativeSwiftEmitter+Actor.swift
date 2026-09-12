@@ -4,7 +4,7 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func actorMembers() -> [DeclSyntax] {
         let typeName = model.typeName
-        let collections = model.surface.collections
+        let collections = model.api.collections
         let collectionParameters = collections.map {
             "\($0.swiftIdentifier) \($0.membersIdentifier): [\($0.elementType).ID]"
         }.joined(separator: ", ")
@@ -14,7 +14,7 @@ extension NativeSwiftEmitter {
         let collectionArguments = collections.map {
             "\($0.swiftIdentifier): \($0.membersIdentifier)"
         }.joined(separator: ", ")
-        let actionMembers = model.surface.actions.isEmpty ? "" : """
+        let actionMembers = model.api.actions.isEmpty ? "" : """
 
                 public func isEnabled(_ action: Action) throws -> Bool {
                     try machine.isEnabled(action)

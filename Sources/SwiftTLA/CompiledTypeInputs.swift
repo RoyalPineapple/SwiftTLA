@@ -82,7 +82,7 @@ package struct CompiledTypeContext: Sendable {
                 case .integer: type = .int
                 case .boolean: type = .bool
                 case .string: type = .string
-                case .constant: type = .atom
+                case .constant: type = .modelValue
                 default: type = .unknown
                 }
                 return try CompiledValueType.merge(result, type)
@@ -148,7 +148,7 @@ package struct CompiledTypeContext: Sendable {
             guard !members.isEmpty else { return false }
             return members.allSatisfy { member in
                 switch (member, expected) {
-                case (.integer, .int), (.boolean, .bool), (.string, .string), (.constant, .atom): true
+                case (.integer, .int), (.boolean, .bool), (.string, .string), (.constant, .modelValue): true
                 default: false
                 }
             }

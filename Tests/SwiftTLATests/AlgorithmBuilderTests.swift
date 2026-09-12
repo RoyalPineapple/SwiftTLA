@@ -1709,7 +1709,7 @@ struct AlgorithmBuilderTests {
         }
 
         let compilation = try loweredSourceSpecification(algorithm).compile()
-        let action = try #require(MachineSurfacePlan(layout: compilation.layout, actions: compilation.semantics.behavior.actions).actions.first { $0.swiftIdentifier == "mark" })
+        let action = try #require(GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).actions.first { $0.swiftIdentifier == "mark" })
         #expect(compilation.semantics.behavior.actions.first { $0.id == action.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])
     }
 }

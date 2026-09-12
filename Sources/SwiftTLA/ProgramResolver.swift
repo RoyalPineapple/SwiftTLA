@@ -62,7 +62,7 @@ private final class ProgramResolver {
     func require<Value>(_ value: Value?) throws -> Value {
         guard let value else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                path: "native.resolution", expected: "complete native annotation", actual: "missing resolved evidence",
+                path: "native.resolution", expected: "complete native annotation", actual: "missing resolved types and bindings",
                 nextSafeAction: "Resolve every expression and callback before generating Swift.")
         }
         return value

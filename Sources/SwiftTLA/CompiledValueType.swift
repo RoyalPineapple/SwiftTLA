@@ -11,7 +11,7 @@ package struct CompiledFieldType: Hashable, Sendable {
 /// Compiler value types carried through checking and backend generation.
 package indirect enum CompiledValueType: Hashable, Sendable {
     case unknown
-    case int, bool, string, atom, control
+    case int, bool, string, modelValue, controlLocation
     case named(String)
     case finite([CompiledValue])
     case union([CompiledValueType])
@@ -55,8 +55,8 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .int: "Int"
         case .bool: "Bool"
         case .string: "String"
-        case .atom: "_Atom"
-        case .control: "_ControlLocation"
+        case .modelValue: "_ModelValue"
+        case .controlLocation: "_ControlLocation"
         case .named(let name): name
         case .finite: "FiniteValue"
         case .union: "UnionValue"
@@ -151,7 +151,7 @@ extension CompiledValueType {
             case .int: 0
             case .bool: 1
             case .string: 2
-            case .atom: 8
+            case .modelValue: 8
             case .set: 4
             case .array, .tuple: 5
             case .record: 6

@@ -298,10 +298,24 @@ struct NativeCodeGenerationTests {
         #expect(ordering.contains("case .`high`: return 1"))
     }
 
-    @Test("Atom declarations include nested literals and referenced domains before emission")
-    func atomDeclarationsAreResolved() {
+    @Test("Native model values use their declared identity in Swift and formal export")
+    func readableModelValueEmission() throws {
+        let specification = TLASpec(name: "ModelValues", variables: [
+            .init(name: "selected", initialization: .value(.constant("nodeA")), origin: .compiler)
+        ], actions: [], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "ModelValues", program: program))
+        let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        #expect(generated.contains("enum _ModelValue"))
+        #expect(generated.contains("case nodeA = \"nodeA\""))
+        #expect(try emitter.literal(.constant("nodeA"), as: .modelValue) == "_ModelValue.nodeA")
+        #expect(generated.contains("TLAValue.constant("))
+    }
+
+    @Test("Model value declarations include nested literals and referenced domains before emission")
+    func modelValuesAreResolved() {
         let declarations = NativeTypeDeclarations(
-            types: [.atom, .named("Choice"), .finite([.constant("finite")])],
+            types: [.modelValue, .named("Choice"), .finite([.constant("finite")])],
             literals: [
                 .function([.constant("key"): .tuple([.constant("nested")])]),
                 .set([.constant("nested"), .constant("set")]),
@@ -309,9 +323,9 @@ struct NativeCodeGenerationTests {
             ],
             namedDomains: ["Choice": [.constant("named")], "Unused": [.constant("unused")]]
         )
-        #expect(declarations.atoms == ["finite", "key", "named", "nested", "record", "set"])
-        #expect(declarations.atomIndices["nested"] == 3)
-        #expect(declarations.atomIndices["unused"] == nil)
+        #expect(declarations.modelValueCases.keys.sorted() == ["finite", "key", "named", "nested", "record", "set"])
+        #expect(declarations.modelValueCases["nested"] == "nested")
+        #expect(declarations.modelValueCases["unused"] == nil)
     }
 
     @Test("Generated type declarations include nested fields once before emission")
@@ -485,7 +499,7 @@ struct NativeCodeGenerationTests {
         #expect(generated.contains("public let value: NativeValue0"))
         #expect(generated.contains("enum NativeValue0: Hashable, Sendable"))
         #expect(!generated.contains("case member_outside"))
-        #expect(!generated.contains("public let value: _Atom"))
+        #expect(!generated.contains("public let value: _ModelValue"))
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
     }
 
